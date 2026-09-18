@@ -57,24 +57,31 @@ export function internetSettingsFrame(mainPage: Page): FrameLocator {
   return mainPage.frameLocator('iframe[title*="Internet" i]');
 }
 
-/** The two connectivity options that are actually selectable (the rest are "Coming soon"). */
+/**
+ * The two connectivity options tests toggle between.
+ *
+ * "Disable all Internet access" is selectable too, but deliberately not offered here. These
+ * settings are machine-wide and shared with any co-installed Paratext 9, so a test that selected it
+ * and then saved would cut ParatextData off from the internet on the developer's machine until
+ * someone noticed and changed it back.
+ */
 export function selectableConnectivityOptions(frame: FrameLocator): {
   unrestricted: Locator;
-  someServicesDisabled: Locator;
+  sensitiveLocations: Locator;
 } {
   return {
     // %paratextRegistration_description_internetUse_option_Enabled_2%
     unrestricted: frame.getByRole('radio', { name: 'Unrestricted' }),
-    // %paratextRegistration_description_internetUse_option_VpnRequired_2%
-    someServicesDisabled: frame.getByRole('radio', {
-      name: 'Disable access to some Bible translation services',
+    // %paratextRegistration_description_internetUse_option_VpnRequired_3%
+    sensitiveLocations: frame.getByRole('radio', {
+      name: 'Block internet when in sensitive locations',
     }),
   };
 }
 
 /**
- * Select whichever of the two selectable connectivity options is not the current one, so the form
- * genuinely holds an unsaved change.
+ * Select whichever of the two options from {@link selectableConnectivityOptions} is not the current
+ * one, so the form genuinely holds an unsaved change.
  *
  * Which one that is depends on the machine: these settings live in ParatextData's own storage and
  * are shared with any co-installed Paratext 9, so a developer box can legitimately start on either.
@@ -84,11 +91,11 @@ export function selectableConnectivityOptions(frame: FrameLocator): {
  * @returns The radio that was selected before the click, so a test can assert a reset restores it
  */
 export async function selectTheOtherConnectivityOption(frame: FrameLocator): Promise<Locator> {
-  const { unrestricted, someServicesDisabled } = selectableConnectivityOptions(frame);
+  const { unrestricted, sensitiveLocations } = selectableConnectivityOptions(frame);
   await expect(unrestricted).toBeEnabled({ timeout: 10_000 });
   const startedUnrestricted = await unrestricted.isChecked();
-  const original = startedUnrestricted ? unrestricted : someServicesDisabled;
-  const target = startedUnrestricted ? someServicesDisabled : unrestricted;
+  const original = startedUnrestricted ? unrestricted : sensitiveLocations;
+  const target = startedUnrestricted ? sensitiveLocations : unrestricted;
   await target.click();
   await expect(target).toBeChecked();
   return original;

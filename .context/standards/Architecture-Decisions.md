@@ -1530,6 +1530,46 @@ step, no automation. Just a record.
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
 
+## adr-internet-access-enforcement-delegated: ParatextData alone enforces the internet-access setting; the UI states its geo-conditional behavior
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** A user who picked the strongest internet option the settings offered could still
+  download DBL resources. The setting is ParatextData's `InternetUse`, saved to the machine-wide
+  `InternetSettings.xml` that a co-installed Paratext 9 also reads. ParatextData enforces it in
+  `RESTClient.VerifyUri` → `InternetAccess.VerifySafety`, which blocks only when the effective
+  `InternetAccess.Status` is `Disabled`. `Status` resolves `VpnRequired` by geolocating the machine's
+  public IP against `CountryStatuses.xml`: `Disabled` where the country is marked `blocked`, **and
+  also wherever the country cannot be determined** (no network, every IP-lookup service failing, a
+  missing file), `Enabled` everywhere else. The options list offered `VpnRequired` under copy that
+  promised an unconditional block, rendered a UI-only "Block internet when in sensitive locations"
+  row that described `VpnRequired` exactly but saved nothing, and greyed out `Disabled` as "Coming
+  soon". `VerifySafety` also throws two different exceptions: an `InvalidOperationException` with a
+  fixed message when the saved value is `Disabled`, and a `VpnDisconnectedException` — which declares
+  no message — when a `VpnRequired` block fires.
+- **Decision:** Keep enforcement wholly in ParatextData; Platform.Bible adds no gate of its own. Make
+  `Disabled` selectable, relabel `VpnRequired` to say it blocks only where the location is flagged as
+  sensitive or cannot be confirmed (Paratext 9's own meaning for it, whose translations the new label
+  takes as its fallback), and delete the duplicate placeholder row. Recognize both exceptions in
+  TypeScript — `isErrorMessageAboutParatextBlockingInternetAccess` by ParatextData's fixed message,
+  `isErrorMessageAboutParatextSensitiveLocationBlock` by the type name in .NET's default message —
+  and give each its own user-facing string.
+- **Alternatives:** **Make `VpnRequired` block unconditionally, as the old copy promised** — rejected:
+  it needs a Platform.Bible-side gate, and a co-installed Paratext 9 reading the same saved value
+  would go on behaving geo-conditionally, so the two apps would disagree about one setting. **Add a
+  Platform.Bible gate in front of DBL calls** — rejected: ParatextData's chain already fires once
+  `Status` is `Disabled`, and a second gate is a second copy of the rules to drift. **Keep the
+  placeholder row and point it at `VpnRequired`** — rejected: two rows saving one value. **Show the
+  existing "internet access is disabled" message for both exceptions** — rejected: the user did not
+  disable internet, and the block also fires where the location lookup merely failed, so its message
+  says the location could not be confirmed rather than that it is flagged.
+- **Consequences:** The sensitive-location detector depends on `VpnDisconnectedException` keeping
+  .NET's default message; `InternetSettingsLogicTests` fails if a ParatextData update changes that.
+  "Disable all Internet access" gates ParatextData's REST layer only — Platform.Bible's own network use
+  (extension installs, for one) is not covered. Get Resources persists its catalog, so after internet
+  is disabled it still lists resources; installs and fresh fetches are what fail.
+- **Source:** PT-4590 implementation.
+
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
 - **Formerly:** ADR-0018

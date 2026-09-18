@@ -220,8 +220,8 @@ function InternetSettingsLoaded({
         </Alert>
       )}
       {/* The step's heading and description already consume vertical space here, so drop the
-          list's footer note to keep the wizard's Next button above the fold. The per-row
-          "Coming soon" badges still mark the unavailable options. */}
+          list's footer note to keep the wizard's Next button above the fold. A "Coming soon"
+          badge still marks any option that is not yet available. */}
       <InternetAccessOptionList
         localizedStrings={localizedStrings}
         value={settings.permittedInternetUse}

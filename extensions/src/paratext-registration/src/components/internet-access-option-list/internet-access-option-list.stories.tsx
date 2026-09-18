@@ -37,17 +37,25 @@ export const Unrestricted: Story = {
   decorators: [createDecorator('Enabled')],
 };
 
-/** Option 2 selected — "Disable access to some Bible translation services". */
-export const DisabledAccess: Story = {
+/**
+ * Option 2 selected — "Block internet when in sensitive locations", which blocks only where the
+ * location is flagged as sensitive or cannot be confirmed.
+ */
+export const SensitiveLocations: Story = {
   decorators: [createDecorator('VpnRequired')],
 };
 
+/** Option 3 selected — "Disable all Internet access". */
+export const AllInternetDisabled: Story = {
+  decorators: [createDecorator('Disabled')],
+};
+
 /**
- * A coming-soon value is the current setting (e.g., from a PT9 migration). The row renders
- * selected-but-disabled; the user cannot interact with it.
+ * A coming-soon value is the current setting (e.g., a proxy configured in Paratext 9, which shares
+ * these settings). The row renders selected-but-disabled; the user cannot interact with it.
  */
 export const ComingSoonSelected: Story = {
-  decorators: [createDecorator('Disabled')],
+  decorators: [createDecorator('ProxyOnly')],
 };
 
 /** All rows non-interactive — simulates the loading or saving state. */
@@ -57,8 +65,8 @@ export const FormDisabled: Story = {
 };
 
 /**
- * Footer note suppressed for space-constrained hosts such as the first-run wizard step. The "Coming
- * soon" badges still mark the unavailable options.
+ * Footer note suppressed for space-constrained hosts such as the first-run wizard step. A "Coming
+ * soon" badge still marks any option that is not yet available.
  */
 export const WithoutFooter: Story = {
   decorators: [createDecorator('VpnRequired')],

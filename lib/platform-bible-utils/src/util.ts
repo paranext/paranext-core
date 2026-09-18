@@ -438,6 +438,26 @@ export function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: 
 
 /**
  * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that Paratext blocked internet access under the "Block internet when in sensitive
+ * locations" setting. ParatextData raises this both where the current location is flagged as
+ * sensitive and where it cannot determine the location at all.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates Paratext blocked internet access because it could not
+ *   confirm the current location is safe, `false` otherwise
+ */
+export function isErrorMessageAboutParatextSensitiveLocationBlock(errorMessage: unknown): boolean {
+  // ParatextData's `VpnDisconnectedException` declares no message, so what arrives is .NET's default
+  // "Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown." The type name is the
+  // only stable part; `InternetSettingsLogicTests` in c-sharp-tests fails if that default changes.
+  const paratextExceptionTypeName = 'VpnDisconnectedException';
+
+  const errorString = isString(errorMessage) ? errorMessage : getErrorMessage(errorMessage);
+  return errorString.includes(paratextExceptionTypeName);
+}
+
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
  * indicating that an authorization failure occurred regarding registry credentials.
  *
  * @param errorMessage Error message or exception to check

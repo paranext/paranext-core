@@ -5,7 +5,6 @@ import { Home as HomeIcon } from 'lucide-react';
 
 import {
   getErrorMessage,
-  isErrorMessageAboutParatextBlockingInternetAccess,
   isErrorMessageAboutRegistryAuthFailure,
   isPlatformError,
   newGuid,
@@ -14,6 +13,7 @@ import {
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS } from './home.component';
+import { getInternetBlockedNotification } from './internet-block-notification.utils';
 import { useLocalProjects } from './use-local-projects.hook';
 
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -168,17 +168,15 @@ globalThis.webViewComponent = function HomeWebView() {
         setIsSendReceiveInProgress(false);
       }
 
-      // The two failures we can recognize get their own notification with a link to the setting
-      // that fixes them, the same way the shared-projects fetch reports them — their raw messages
-      // are ParatextData internals and say nothing a user can act on.
-      if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
-        papi.notifications.send({
-          severity: 'error',
-          message: '%data_loading_error_internetAccess_disabled_2%',
-          clickCommandLabel: '%general_open%',
-          clickCommand: 'paratextRegistration.showInternetSettings',
-          notificationId: sharedProjectErrorNotificationId,
-        });
+      // The failures we can recognize get their own notification with a link to the setting that
+      // fixes them, the same way the shared-projects fetch reports them — their raw messages are
+      // ParatextData internals and say nothing a user can act on.
+      const internetBlockedNotification = getInternetBlockedNotification(
+        errorMessage,
+        sharedProjectErrorNotificationId,
+      );
+      if (internetBlockedNotification) {
+        papi.notifications.send(internetBlockedNotification);
         return;
       }
       if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
@@ -225,14 +223,12 @@ globalThis.webViewComponent = function HomeWebView() {
         }
       } catch (e) {
         const errorMessage = getErrorMessage(e);
-        if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
-          papi.notifications.send({
-            severity: 'error',
-            message: '%data_loading_error_internetAccess_disabled_2%',
-            clickCommandLabel: '%general_open%',
-            clickCommand: 'paratextRegistration.showInternetSettings',
-            notificationId: sharedProjectErrorNotificationId,
-          });
+        const internetBlockedNotification = getInternetBlockedNotification(
+          errorMessage,
+          sharedProjectErrorNotificationId,
+        );
+        if (internetBlockedNotification) {
+          papi.notifications.send(internetBlockedNotification);
         } else if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
           papi.notifications.send({
             severity: 'error',

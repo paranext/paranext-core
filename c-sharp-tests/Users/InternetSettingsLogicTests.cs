@@ -194,4 +194,20 @@ public class InternetSettingsLogicTests
         );
         Assert.That(result, Is.Null);
     }
+
+    // ----- VpnDisconnectedException -----
+
+    [Test]
+    public void VpnDisconnectedException_Message_NamesTheExceptionType()
+    {
+        // ParatextData throws this when the sensitive-locations setting blocks a request. It declares
+        // no message of its own, so .NET's default — which names the type — is the only text that
+        // reaches TypeScript, and platform-bible-utils
+        // `isErrorMessageAboutParatextSensitiveLocationBlock` matches on that type name. If a
+        // ParatextData update gives the exception a real message, update that detector to match.
+        Assert.That(
+            new VpnDisconnectedException().Message,
+            Does.Contain("VpnDisconnectedException")
+        );
+    }
 }

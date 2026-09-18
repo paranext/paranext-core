@@ -68,6 +68,7 @@ export {
   getErrorMessage,
   groupBy,
   isErrorMessageAboutParatextBlockingInternetAccess,
+  isErrorMessageAboutParatextSensitiveLocationBlock,
   isErrorMessageAboutRegistryAuthFailure,
   isString,
   newGuid,

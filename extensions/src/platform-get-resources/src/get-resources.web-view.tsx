@@ -2,7 +2,7 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { useRetryablePromise } from 'platform-bible-react';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, newGuid } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { shouldReportCatalogFailure } from './dbl-catalog.utils';
 import {
@@ -11,6 +11,7 @@ import {
   newResourceActionProviderNotReadyError,
   ResourceAction,
 } from './get-resources.component';
+import { getInternetBlockedNotification } from './internet-block-notification.utils';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -26,6 +27,20 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
+  // One id for every internet-block notification this web view sends, so a repeated failure
+  // replaces the earlier notification rather than stacking a new one per attempt.
+  const internetBlockedNotificationId = useMemo(() => newGuid(), []);
+
+  // The component's own error states say that something failed; this notification is what names
+  // the Internet & connectivity setting that caused it and offers to open it.
+  const notifyIfInternetBlocked = useCallback(
+    (error: unknown) => {
+      const notification = getInternetBlockedNotification(error, internetBlockedNotificationId);
+      if (notification) papi.notifications.send(notification);
+    },
+    [internetBlockedNotificationId],
+  );
+
   const {
     data: catalog,
     isLoading,
@@ -33,10 +48,14 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     hasSettled,
     refetch: refetchResources,
   } = useRetryablePromise(
-    useCallback(
-      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
-      [],
-    ),
+    useCallback(async () => {
+      try {
+        return await papi.commands.sendCommand('platformGetResources.getCachedResources');
+      } catch (e) {
+        notifyIfInternetBlocked(e);
+        throw e;
+      }
+    }, [notifyIfInternetBlocked]),
   );
 
   // `!hasSettled` counts as loading, not just `isLoading`. A retry clears the error synchronously
@@ -132,13 +151,14 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         })
         .catch((error) => {
           logger.debug(getErrorMessage(error));
+          notifyIfInternetBlocked(error);
           // The action failed, so clear its optimistic in-progress entry and re-throw so the
           // component can surface the error to the user.
           setInstallInfo((prevInfo) => prevInfo.filter((info) => info.dblEntryUid !== dblEntryUid));
           throw error;
         });
     },
-    [installResource, uninstallResource, refetchResources],
+    [installResource, uninstallResource, refetchResources, notifyIfInternetBlocked],
   );
 
   /** Removes resources from array of resources that are currently being handled */

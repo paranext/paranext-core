@@ -43,6 +43,8 @@ import type { DblResourceData, LocalizedStringValue, PlatformError } from 'platf
 import {
   FAILED_PRECONDITION,
   getErrorMessage,
+  isErrorMessageAboutParatextBlockingInternetAccess,
+  isErrorMessageAboutParatextSensitiveLocationBlock,
   isPlatformError,
   newPlatformError,
 } from 'platform-bible-utils';
@@ -55,6 +57,8 @@ import { useMemo, useState } from 'react';
  * component.
  */
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
+  '%data_loading_error_internetAccess_disabled_2%',
+  '%data_loading_error_internetAccess_sensitiveLocation%',
   '%general_error_title%',
   '%resources_action%',
   '%resources_any_language%',
@@ -324,6 +328,12 @@ export function GetResources({
   const getLocalizedString = (key: GetResourcesLocalizedStringKey): string =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
+  const internetDisabledText: string = getLocalizedString(
+    '%data_loading_error_internetAccess_disabled_2%',
+  );
+  const locationBlockedText: string = getLocalizedString(
+    '%data_loading_error_internetAccess_sensitiveLocation%',
+  );
   const errorTitleText: string = getLocalizedString('%general_error_title%');
   const actionText: string = getLocalizedString('%resources_action%');
   const anyLanguage: string = getLocalizedString('%resources_any_language%');
@@ -361,20 +371,25 @@ export function GetResources({
   // action callback rejects, so failures are visible rather than only logged by the webview.
   const [actionError, setActionError] = useState<string | undefined>(undefined);
 
+  // Callers signal "the backing provider has not resolved yet" with a sentinel rather than a
+  // message, because the text the user reads has to be localized and this component is the half
+  // that holds the localized strings. ParatextData's two internet blocks are recognized too: their
+  // raw messages describe ParatextData internals, not the setting that caused them. Any other
+  // rejection carries a message worth showing — minus the cross-process prefix, which tells the user
+  // nothing.
+  const getActionErrorText = (error: unknown): string => {
+    if (isResourceActionProviderNotReadyError(error)) return providerNotReadyText;
+    if (isErrorMessageAboutParatextBlockingInternetAccess(error)) return internetDisabledText;
+    if (isErrorMessageAboutParatextSensitiveLocationBlock(error)) return locationBlockedText;
+    return stripCrossProcessPrefix(getErrorMessage(error));
+  };
+
   const handleInstallOrRemoveResource = async (dblEntryUid: string, action: ResourceAction) => {
     setActionError(undefined);
     try {
       await onInstallOrRemoveResource(dblEntryUid, action);
     } catch (e) {
-      // Callers signal "the backing provider has not resolved yet" with a sentinel rather than a
-      // message, because the text the user reads has to be localized and this component is the half
-      // that holds the localized strings. Any other rejection carries a message worth showing —
-      // minus the cross-process prefix, which tells the user nothing.
-      setActionError(
-        isResourceActionProviderNotReadyError(e)
-          ? providerNotReadyText
-          : stripCrossProcessPrefix(getErrorMessage(e)),
-      );
+      setActionError(getActionErrorText(e));
     }
   };
 

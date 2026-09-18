@@ -19,6 +19,9 @@ import {
  */
 
 const STRINGS = {
+  '%data_loading_error_internetAccess_disabled_2%': 'Internet access is disabled, translated',
+  '%data_loading_error_internetAccess_sensitiveLocation%':
+    'Location could not be confirmed, translated',
   '%resources_noResults%': 'No resources found',
   '%resources_noResultsError%': 'Unable to search for resources',
   '%resources_retry%': 'Try again',
@@ -226,4 +229,52 @@ describe('GetResources', () => {
 
     expect(await screen.findByText('This resource is no longer available')).toBeInTheDocument();
   });
+
+  // ParatextData's own texts for its internet blocks describe ParatextData, not the setting the user
+  // can change — and the sensitive-locations one is just .NET's default for an exception with no
+  // message. Installing a resource is the Get Resources action that runs into them.
+  it.each([
+    {
+      block: 'all internet access is disabled',
+      rawMessage:
+        'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+      expectedText: 'Internet access is disabled, translated',
+    },
+    {
+      block: 'the sensitive-locations setting cannot confirm the location',
+      rawMessage:
+        "JSON-RPC Request error (-32000): Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown.",
+      expectedText: 'Location could not be confirmed, translated',
+    },
+  ])(
+    'explains a blocked install when $block instead of showing the raw ParatextData message',
+    async ({ rawMessage, expectedText }) => {
+      const resource = {
+        dblEntryUid: 'uid-1',
+        displayName: 'NIV',
+        fullName: 'New International Version',
+        bestLanguageName: 'English',
+        type: 'ScriptureResource' as const,
+        size: 1000,
+        installed: false,
+        updateAvailable: false,
+        projectId: 'proj-1',
+      };
+
+      render(
+        <GetResources
+          localizedStringsWithLoadingState={[STRINGS, false]}
+          resources={[resource]}
+          selectedTypes={['ScriptureResource']}
+          selectedLanguages={['English']}
+          onInstallOrRemoveResource={() => Promise.reject(new Error(rawMessage))}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+      expect(await screen.findByText(expectedText)).toBeInTheDocument();
+      expect(screen.queryByText(/Paratext/)).not.toBeInTheDocument();
+    },
+  );
 });

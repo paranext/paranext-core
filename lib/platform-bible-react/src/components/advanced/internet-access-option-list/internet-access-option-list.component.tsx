@@ -15,10 +15,7 @@ import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 type InternetUse = 'Enabled' | 'VpnRequired' | 'Disabled' | 'ProxyOnly';
 
 type OptionRow = {
-  // BlockInSensitiveLocations is included here as a UI-only option that the UX spec requires
-  // showing in this list, but it is not part of the InternetUse type that PAPI persists — the
-  // onChange handler filters it out before calling the caller (see the if-guard below).
-  value: InternetUse | 'BlockInSensitiveLocations';
+  value: InternetUse;
   labelKey: LocalizeKey;
   descriptionKey: LocalizeKey;
   isEnabled: boolean;
@@ -32,23 +29,19 @@ const OPTION_ROWS: OptionRow[] = [
     isEnabled: true,
   },
   {
+    // ParatextData blocks for this value only where the machine's location is flagged as sensitive
+    // or cannot be determined at all; everywhere else it behaves like `Enabled`. The label and
+    // description must keep saying so.
     value: 'VpnRequired',
-    labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired_2%',
-    descriptionKey: '%paratextRegistration_description_internetUse_option_VpnRequired_details%',
+    labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired_3%',
+    descriptionKey: '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%',
     isEnabled: true,
   },
   {
     value: 'Disabled',
     labelKey: '%paratextRegistration_description_internetUse_option_Disabled_2%',
     descriptionKey: '%paratextRegistration_description_internetUse_option_Disabled_details%',
-    isEnabled: false,
-  },
-  {
-    value: 'BlockInSensitiveLocations',
-    labelKey: '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%',
-    descriptionKey:
-      '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%',
-    isEnabled: false,
+    isEnabled: true,
   },
   {
     value: 'ProxyOnly',
@@ -58,10 +51,10 @@ const OPTION_ROWS: OptionRow[] = [
   },
 ];
 
+// Radix reports the selection as a plain string; narrowing it against the rows keeps `onChange`
+// typed without a type assertion.
 function isInternetUse(value: string): value is InternetUse {
-  return OPTION_ROWS.some(
-    (row) => row.value !== 'BlockInSensitiveLocations' && row.value === value,
-  );
+  return OPTION_ROWS.some((row) => row.value === value);
 }
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -85,8 +78,8 @@ export type InternetAccessOptionListProps = {
   /**
    * Whether to show the "disabled options are planned for future updates" note below the rows.
    * Defaults to true. Set false where vertical space is tight (the first-run wizard step, whose
-   * heading and Next button compete for the same fold) — the per-row "Coming soon" badges still
-   * convey that those options are not yet available.
+   * heading and Next button compete for the same fold) — a "Coming soon" badge still marks any
+   * option that is not yet available.
    */
   showFooter?: boolean;
 };
@@ -104,7 +97,6 @@ export function InternetAccessOptionList({
       <RadioGroup
         value={value}
         onValueChange={(v) => {
-          // BlockInSensitiveLocations is UI-only; isInternetUse excludes it.
           if (isInternetUse(v)) onChange(v);
         }}
         disabled={disabled}

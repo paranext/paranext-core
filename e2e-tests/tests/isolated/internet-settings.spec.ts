@@ -4,7 +4,7 @@
  * Covers:
  *
  * - Opening via profile popover
- * - Radio row visibility (2 active with descriptions, 3 coming-soon with badges)
+ * - Radio row visibility (3 active with descriptions, 1 coming-soon with a badge)
  * - Reset and Save and restart button state (disabled when no changes, enabled after change)
  * - Reset restores original selection (buttons become disabled again)
  * - Developer section expand/collapse
@@ -39,7 +39,7 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(frame.locator('p').first()).toContainText('only apply to the Paratext app');
   });
 
-  test('shows 2 active radio rows with descriptions and 3 coming-soon rows with badges', async ({
+  test('shows 3 active radio rows with descriptions and 1 coming-soon row with a badge', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
@@ -52,26 +52,30 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(frame.getByRole('radio', { name: 'Unrestricted' })).toBeEnabled({
       timeout: 10_000,
     });
+    // %paratextRegistration_description_internetUse_option_VpnRequired_3%
     await expect(
-      frame.getByRole('radio', { name: /Disable access to some Bible translation services/ }),
+      frame.getByRole('radio', { name: 'Block internet when in sensitive locations' }),
     ).toBeEnabled();
+    // %paratextRegistration_description_internetUse_option_Disabled_2%
+    await expect(frame.getByRole('radio', { name: 'Disable all Internet access' })).toBeEnabled();
 
     // Active rows have always-visible description text (no hover required)
     await expect(
       frame.getByText(/Allows Paratext to use the internet for all services/),
     ).toBeVisible();
-    await expect(frame.getByText(/Disables access to Registry, Send\/Receive/)).toBeVisible();
-
-    // Coming-soon rows have disabled radio buttons
-    // %paratextRegistration_description_internetUse_option_Disabled_2%
-    await expect(frame.getByRole('radio', { name: 'Disable all Internet access' })).toBeDisabled();
+    // %paratextRegistration_description_internetUse_option_VpnRequired_details_2%
     await expect(
-      frame.getByRole('radio', { name: /Block internet when in sensitive locations/ }),
-    ).toBeDisabled();
+      frame.getByText(/Where that location is flagged as sensitive — or cannot be confirmed/),
+    ).toBeVisible();
+    await expect(
+      frame.getByText(/Blocks all internet access within the Paratext app/),
+    ).toBeVisible();
+
+    // The coming-soon row has a disabled radio button
     await expect(frame.getByRole('radio', { name: /Configure proxy/ })).toBeDisabled();
 
-    // Three "Coming soon" badges appear
-    await expect(frame.getByText('Coming soon')).toHaveCount(3);
+    // Exactly one "Coming soon" badge appears
+    await expect(frame.getByText('Coming soon')).toHaveCount(1);
 
     // Footer text is present
     await expect(frame.getByText(/Disabled options are planned for future updates/)).toBeVisible();

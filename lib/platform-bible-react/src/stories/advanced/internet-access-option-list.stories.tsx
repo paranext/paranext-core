@@ -12,17 +12,13 @@ const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
   '%paratextRegistration_description_internetUse_option_Enabled_details%':
     'Allows Paratext to use the internet for all services: Registry, Send/Receive, and resource downloads.',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_2%':
-    'Disable access to some Bible translation services',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details%':
-    'Disables access to Registry, Send/Receive, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_3%':
+    'Block internet when in sensitive locations',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
+    'Paratext checks the location your internet connection appears to come from. Where that location is flagged as sensitive — or cannot be confirmed — access to the Registry, Send/Receive, and the Digital Bible Library is blocked. Elsewhere they work normally.',
   '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL internet access',
   '%paratextRegistration_description_internetUse_option_Disabled_details%':
     'Blocks all internet access within the Paratext app. Other applications on your computer are not affected.',
-  '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
-    'Block internet when in sensitive locations',
-  '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
-    'Automatically blocks Paratext internet access in configured sensitive areas.',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Configure proxy',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%':
     'Routes Paratext internet traffic through a configured proxy server.',
@@ -56,17 +52,25 @@ export const Unrestricted: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
 };
 
-/** Option 2 selected — "Disable access to some Bible translation services". */
-export const DisabledAccess: Story = {
+/**
+ * Option 2 selected — "Block internet when in sensitive locations", which blocks only where the
+ * location is flagged as sensitive or cannot be confirmed.
+ */
+export const SensitiveLocations: Story = {
   render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
 };
 
+/** Option 3 selected — "Disable ALL internet access". */
+export const AllInternetDisabled: Story = {
+  render: (args) => <Controlled {...args} initialValue="Disabled" />,
+};
+
 /**
- * A coming-soon value is the current setting (e.g., persisted from an older PT9 migration). The row
- * renders selected-but-disabled; the user cannot interact with it.
+ * A coming-soon value is the current setting (e.g., a proxy configured in Paratext 9, which shares
+ * these settings). The row renders selected-but-disabled; the user cannot interact with it.
  */
 export const ComingSoonSelected: Story = {
-  render: (args) => <Controlled {...args} initialValue="Disabled" />,
+  render: (args) => <Controlled {...args} initialValue="ProxyOnly" />,
 };
 
 /** All rows non-interactive — simulates the loading or saving state. */
@@ -76,8 +80,8 @@ export const FormDisabled: Story = {
 };
 
 /**
- * Footer note suppressed for space-constrained hosts such as the first-run wizard step. The "Coming
- * soon" badges still mark the unavailable options.
+ * Footer note suppressed for space-constrained hosts such as the first-run wizard step. A "Coming
+ * soon" badge still marks any option that is not yet available.
  */
 export const WithoutFooter: Story = {
   render: (args) => <Controlled {...args} initialValue="VpnRequired" />,

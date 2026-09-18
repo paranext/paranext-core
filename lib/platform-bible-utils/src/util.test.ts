@@ -1,5 +1,10 @@
 import { afterEach, vi } from 'vitest';
-import { debounce, DEBOUNCE_CANCELED_ERROR_MESSAGE, retryUntil } from './util';
+import {
+  debounce,
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
+  isErrorMessageAboutParatextSensitiveLocationBlock,
+  retryUntil,
+} from './util';
 
 /** A promise plus its settlers, so a test can hold an invocation open at a chosen point. */
 function makeDeferred<T>() {
@@ -325,5 +330,32 @@ describe('retryUntil', () => {
     expect(attempt).toHaveBeenCalledTimes(2);
     // Resolves right after attempt 2 without advancing further → no trailing wait after the last.
     await expect(promise).resolves.toBe('retry');
+  });
+});
+
+describe('isErrorMessageAboutParatextSensitiveLocationBlock', () => {
+  // .NET's default message for ParatextData's message-less `VpnDisconnectedException`
+  const sensitiveLocationMessage =
+    "Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown.";
+
+  it('recognizes the exception by the type name in its default message', () => {
+    expect(isErrorMessageAboutParatextSensitiveLocationBlock(sensitiveLocationMessage)).toBe(true);
+  });
+
+  it('recognizes it inside an Error that crossed a process boundary', () => {
+    expect(
+      isErrorMessageAboutParatextSensitiveLocationBlock(
+        new Error(`JSON-RPC Request error (-32000): ${sensitiveLocationMessage}`),
+      ),
+    ).toBe(true);
+  });
+
+  // "Disable all Internet access" has its own detector and its own user-facing message.
+  it('does not claim the "Disable all Internet access" block', () => {
+    expect(
+      isErrorMessageAboutParatextSensitiveLocationBlock(
+        'Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+      ),
+    ).toBe(false);
   });
 });

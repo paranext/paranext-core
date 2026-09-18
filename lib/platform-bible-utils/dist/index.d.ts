@@ -1219,10 +1219,10 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
-	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
-	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
-	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
-	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
@@ -1581,6 +1581,17 @@ export declare function createSyncProxyForAsyncObject<T extends object>(getObjec
  * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
  */
 export declare function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: unknown): boolean;
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that Paratext blocked internet access under the "Block internet when in sensitive
+ * locations" setting. ParatextData raises this both where the current location is flagged as
+ * sensitive and where it cannot determine the location at all.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates Paratext blocked internet access because it could not
+ *   confirm the current location is safe, `false` otherwise
+ */
+export declare function isErrorMessageAboutParatextSensitiveLocationBlock(errorMessage: unknown): boolean;
 /**
  * Indicates if the exception or error message provided appears to be from ParatextData.dll
  * indicating that an authorization failure occurred regarding registry credentials.

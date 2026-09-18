@@ -27,15 +27,12 @@ beforeAll(() => {
 const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
   '%paratextRegistration_description_internetUse_option_Enabled_details%': 'Desc Enabled sentinel',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'Disable access sentinel',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details%': 'Desc VPN sentinel',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_3%': 'Sensitive sentinel',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
+    'Desc Sensitive sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled_details%':
     'Desc Disabled sentinel',
-  '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
-    'Block sensitive sentinel',
-  '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
-    'Desc Sensitive sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Configure proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': 'Desc Proxy sentinel',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
@@ -53,25 +50,30 @@ function renderList(overrides: Partial<InternetAccessOptionListProps> = {}) {
 }
 
 describe('InternetAccessOptionList', () => {
-  test('renders all 5 option labels, their descriptions, and the footer', () => {
+  test('renders all 4 option labels, their descriptions, and the footer', () => {
     renderList();
     expect(screen.getByLabelText('Unrestricted')).toBeInTheDocument();
     expect(screen.getByText('Desc Enabled sentinel')).toBeInTheDocument();
-    expect(screen.getByLabelText('Disable access sentinel')).toBeInTheDocument();
-    expect(screen.getByText('Desc VPN sentinel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sensitive sentinel')).toBeInTheDocument();
+    expect(screen.getByText('Desc Sensitive sentinel')).toBeInTheDocument();
     expect(screen.getByLabelText('Disable ALL sentinel')).toBeInTheDocument();
     expect(screen.getByText('Desc Disabled sentinel')).toBeInTheDocument();
-    expect(screen.getByLabelText('Block sensitive sentinel')).toBeInTheDocument();
-    expect(screen.getByText('Desc Sensitive sentinel')).toBeInTheDocument();
     expect(screen.getByLabelText('Configure proxy sentinel')).toBeInTheDocument();
     expect(screen.getByText('Desc Proxy sentinel')).toBeInTheDocument();
     expect(screen.getByText('Footer text sentinel')).toBeInTheDocument();
   });
 
-  test('showFooter={false} hides the footer but keeps the coming-soon badges', () => {
+  // One row per value ParatextData persists. A second row for an existing value (such as a separate
+  // "sensitive locations" row beside `VpnRequired`) would offer two choices that save the same thing.
+  test('renders exactly one radio per internet use value', () => {
+    renderList();
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
+  });
+
+  test('showFooter={false} hides the footer but keeps the coming-soon badge', () => {
     renderList({ showFooter: false });
     expect(screen.queryByText('Footer text sentinel')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(3);
+    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
   });
 
   test('clicking an active option calls onChange with the correct value', () => {
@@ -81,12 +83,23 @@ describe('InternetAccessOptionList', () => {
     expect(onChange).toHaveBeenCalledWith('Enabled');
   });
 
-  test('coming-soon radio items are disabled (do not fire onChange)', () => {
+  // `Disabled` is the only value that blocks ParatextData's network access unconditionally, so it
+  // must stay selectable.
+  test('disabling all internet access is selectable and reports Disabled', () => {
+    const onChange = vi.fn();
+    renderList({ value: 'Enabled', onChange });
+    const disableAll = screen.getByLabelText('Disable ALL sentinel');
+    expect(disableAll).toBeEnabled();
+    fireEvent.click(disableAll);
+    expect(onChange).toHaveBeenCalledWith('Disabled');
+  });
+
+  test('the coming-soon radio item is disabled (does not fire onChange)', () => {
     const onChange = vi.fn();
     renderList({ onChange });
-    expect(screen.getByLabelText('Disable ALL sentinel')).toBeDisabled();
-    expect(screen.getByLabelText('Block sensitive sentinel')).toBeDisabled();
-    expect(screen.getByLabelText('Configure proxy sentinel')).toBeDisabled();
+    const proxy = screen.getByLabelText('Configure proxy sentinel');
+    expect(proxy).toBeDisabled();
+    fireEvent.click(proxy);
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -96,14 +109,8 @@ describe('InternetAccessOptionList', () => {
     radios.forEach((r) => expect(r).toBeDisabled());
   });
 
-  test('coming-soon badge appears on exactly 3 rows', () => {
+  test('coming-soon badge appears on exactly 1 row', () => {
     renderList();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(3);
-  });
-
-  test('coming-soon badge does not appear on active option rows (options 1 and 2)', () => {
-    renderList({ value: 'Enabled' });
-    // Options 1 and 2 are active; only options 3-5 have badges
-    expect(screen.getAllByText('Coming soon')).toHaveLength(3);
+    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
   });
 });

@@ -23,6 +23,7 @@ import {
   getErrorMessage,
   groupBy,
   isErrorMessageAboutParatextBlockingInternetAccess,
+  isErrorMessageAboutParatextSensitiveLocationBlock,
   isErrorMessageAboutRegistryAuthFailure,
   isString,
   newPlatformError,
@@ -122,6 +123,11 @@ function constructErrorNotification(exception: unknown): PlatformNotification | 
 
   if (isErrorMessageAboutParatextBlockingInternetAccess(exception)) {
     retVal.message = '%data_loading_error_internetAccess_disabled_2%';
+    // TS doesn't realize this is a valid command handler key since it is defined in an extension
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    retVal.clickCommand = 'paratextRegistration.showInternetSettings' as keyof CommandHandlers;
+  } else if (isErrorMessageAboutParatextSensitiveLocationBlock(exception)) {
+    retVal.message = '%data_loading_error_internetAccess_sensitiveLocation%';
     // TS doesn't realize this is a valid command handler key since it is defined in an extension
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     retVal.clickCommand = 'paratextRegistration.showInternetSettings' as keyof CommandHandlers;
