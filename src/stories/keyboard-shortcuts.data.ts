@@ -344,6 +344,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-markers-menu',
     purpose: 'Open the inline markers menu',
     category: 'Editing',
+    // Inert while the editor's right-click menu is open: that menu is the only keyboard mode on
+    // screen while it is up, and the key is swallowed rather than typed into the document.
     context: 'Scripture editor web view',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
@@ -514,15 +516,18 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-paragraph-markers-menu',
     purpose:
-      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style.',
+      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style. While the editor’s right-click menu is open, that menu owns Enter instead: it invokes the highlighted item, or does nothing.',
     category: 'Editing',
     context: 'Scripture editor web view',
     // Enter is claimed in EVERY modifier state, matching PT9's KeyPressEditHandler (no modifier
     // check): any modifier chord with Enter — including Shift+Enter, which would otherwise insert
     // a soft line break with no USFM representation — opens the same menu.
+    // Not claimed while the editor's right-click context menu is open: that menu owns Enter for as
+    // long as it is up (see `isEditorContextMenuOpen`).
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   // The editor's arrow-key caret movement (verse hops, note boundaries, the two caret stops

@@ -24,6 +24,7 @@ import {
 } from 'platform-bible-utils';
 import type { MutableRefObject } from 'react';
 import type {
+  ContextMenuOptionConfig,
   EditorRef,
   MarkerMenuItem as EditorMarkerMenuItem,
   SelectionRange,
@@ -345,4 +346,94 @@ export function shouldSpaceCommitNoteMarker(
 export function parseCallerSequenceSetting(value: string): string[] | undefined {
   const callers = value.split(/\s+/).filter((caller) => caller.length > 0);
   return callers.length > 0 ? callers : undefined;
+}
+
+/** Callbacks the editor context menu's insert items dispatch to. */
+export interface InsertContextMenuActions {
+  insertFootnote: () => void;
+  insertCrossReference: () => void;
+  insertEndnote: () => void;
+  insertComment: () => void;
+}
+
+/**
+ * Editor state that decides which insert items are selectable. `isReadOnly` is the editor's
+ * effective read-only state, which already folds in a sync freeze; `isSyncBlocked` is passed
+ * separately because comment insertion does not go through the editor and so is not covered by it.
+ */
+export interface InsertContextMenuState {
+  isReadOnly: boolean;
+  canUserCreateComments: boolean;
+  isSyncBlocked: boolean;
+}
+
+/**
+ * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu
+ * (`contributions/menus.json`, group `platformScriptureEditor.insertTextualNotes`) — same items,
+ * same order; pinned by the parity test in `platform-scripture-editor.web-view.utils.test.ts`.
+ */
+export function createInsertContextMenuItems(
+  localizedStrings: LanguageStrings,
+  actions: InsertContextMenuActions,
+  state: InsertContextMenuState,
+): ContextMenuOptionConfig[] {
+  const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
+  return [
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertFootnoteAtSelection%'],
+      onSelect: actions.insertFootnote,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertCrossReferenceAtSelection%'],
+      onSelect: actions.insertCrossReference,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertEndnoteAtSelection%'],
+      onSelect: actions.insertEndnote,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
+      onSelect: actions.insertComment,
+      // Disabled while sync-blocked too, so the menu reflects the frozen state.
+      isDisabled: !canUserCreateComments || isSyncBlocked,
+    },
+  ];
+}
+
+/**
+ * Matches the editor's own right-click context menu — `ContextMenuPlugin`'s portal, which carries
+ * both classes on its outer element and is rendered only while the menu is open. The same portal
+ * selector the context-menu e2e spec locates the menu by.
+ */
+const EDITOR_CONTEXT_MENU = '.typeahead-popover.auto-embed-menu';
+
+/**
+ * Whether the editor's right-click context menu is open at all.
+ *
+ * Gates BOTH of this web view's standard-view key triggers. While the menu is up it is the only
+ * keyboard mode on screen: neither the `\\` marker palette nor the Enter paragraph palette may open
+ * underneath it, and neither key may reach the document behind it. The menu has no idea the
+ * palettes exist and stays open across one, and a palette session then claims Escape with
+ * `stopPropagation` on `window` — one capture step above the menu's `document` listener — so a
+ * palette opened underneath survives the dismissal that was meant for the menu, leaving a menu
+ * whose highlighted item silently runs on the next Enter.
+ *
+ * Keyed on the menu being OPEN rather than on a highlighted item, because a menu holding nothing to
+ * invoke still holds the keyboard. The two triggers then stand down differently, because the menu
+ * wants one of the keys and not the other:
+ *
+ * - `\\` is CLAIMED by the caller. The editor keeps DOM focus while the menu is up, so an unclaimed
+ *   `\\` falls through to Lexical and types a backslash into the document behind the menu. The menu
+ *   has no use for the key either, so nothing acts on it at all.
+ * - Enter is HANDED DOWN to the menu, which owns it outright while it is open — invoking its
+ *   highlighted item when it has an enabled one and swallowing the press otherwise.
+ *   `ContextMenuPlugin` claims Enter from a CAPTURE-phase listener on `document` while this web
+ *   view's is on `window`; capture descends window → document, so a `stopPropagation()` here would
+ *   end the press before the menu's listener ran at all.
+ */
+export function isEditorContextMenuOpen(): boolean {
+  return !!document.querySelector(EDITOR_CONTEXT_MENU);
 }
