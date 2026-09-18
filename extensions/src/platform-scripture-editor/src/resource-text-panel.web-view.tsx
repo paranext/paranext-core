@@ -1,4 +1,3 @@
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -19,7 +18,7 @@ import {
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ResourceReferenceList } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
@@ -27,6 +26,7 @@ import { useResourcePickerResources } from './use-resource-picker-resources.hook
 import type { PickerResource } from './downloaded-resources.utils';
 import {
   canPublishResourcePanelProjectIds,
+  canResolveResourceSelection,
   getResourcePanelReadiness,
   type ResourcePanelReadiness,
 } from './resource-panel-readiness.utils';
@@ -168,11 +168,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  // "The catalog is done, however it turned out" — one name for a disjunction the panel needs in
+  // three places (picker rows, selection settlement, and the readiness input below). Distinct from
+  // `isCatalogReady`, which means "done AND delivered"; the difference is what the display/persist
+  // split turns on (see `adr-panel-readiness-splits-display-from-persistence`).
+  const isCatalogSettled = isCatalogReady || hasCatalogError;
   const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
     projectId,
     RESOURCE_PICKER_OPTIONS,
     dblResources,
-    isCatalogReady || hasCatalogError,
+    isCatalogSettled,
   );
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
@@ -245,11 +250,26 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // the `usjPossiblyError` this passes DOWN to the panel, so a callback would close a cycle. That
   // constraint is what fixes the direction of the whole boundary, and it is why there is exactly
   // one answer to "which resource is on screen" rather than two derivations to keep in step.
-  const selection = resolveResourceSelection(
-    filteredResources,
+  const arePanelRowsReady = pickerResources !== undefined;
+  const selection = resolveResourceSelection({
+    rows: filteredResources,
     selectedResourceId,
     pendingResourceId,
-  );
+    areSourcesSettled: canResolveResourceSelection({
+      listState: effectiveResourcesState,
+      isCatalogReady,
+      hasCatalogError,
+      arePanelRowsReady,
+    }),
+    // Deliberately the stricter question. A failed catalog settles what the rows are well enough to
+    // display one, but its retry can still bring the selected row back, so a fallback derived from
+    // that absence must not be written over the stored pick.
+    mayPersistCorrection: canPublishResourcePanelProjectIds(
+      effectiveResourcesState,
+      isCatalogReady,
+      arePanelRowsReady,
+    ),
+  });
   const selectedRef = selection.selectedRow;
 
   useEffect(() => {
@@ -294,11 +314,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   usePublishNavigableProjectIds(
     useWebViewState,
     resourceProjectId ? [resourceProjectId] : [],
-    canPublishResourcePanelProjectIds(
-      effectiveResourcesState,
-      isCatalogReady,
-      pickerResources !== undefined,
-    ),
+    canPublishResourcePanelProjectIds(effectiveResourcesState, isCatalogReady, arePanelRowsReady),
     // These panels are re-pointed by reloading them, which reuses the web view id, so the
     // published list must be scoped to the project it was built for.
     projectId,
@@ -354,6 +370,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
   // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
+
+  // Re-drives a failed chapter read. `useData` keys its subscription on the selector by REFERENCE
+  // (see `create-use-data-hook.util.ts`, whose runaway-loop guard exists precisely because a new
+  // selector identity resubscribes), so handing it an equal-but-new selector object tears the
+  // subscription down and opens a fresh one — a real second attempt, not a repaint. Bumped only by
+  // the reader pressing retry, so the identity is otherwise as stable as the reference it is
+  // derived from and the guard is never approached.
+  const [chapterRetryNonce, setChapterRetryNonce] = useState(0);
+  const retryChapterRead = useCallback(() => setChapterRetryNonce((nonce) => nonce + 1), []);
+
   const [usjPossiblyError, , isUsjLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceProjectId,
@@ -365,9 +391,20 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
         verseNum: 1,
         versificationStr: scrRef.versificationStr,
       }),
-      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
+      // `chapterRetryNonce` is intentionally a dependency the returned value does not read: it is
+      // here to change this memo's IDENTITY, which is the retry mechanism described above. The rule
+      // cannot express "same value, new identity", and every way of satisfying it is worse —
+      // putting the nonce INTO the selector changes what is sent to the PDP over IPC, and reading
+      // it in the factory body trips `no-void` or `no-unused-expressions`.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr, chapterRetryNonce],
     ),
-    EMPTY_USJ,
+    // Seeded with nothing rather than a blank USJ so that "no chapter has arrived yet" is
+    // representable. A blank USJ is neither `undefined` nor falsy, so it cannot reach the two
+    // branches that answer this — `resolveResourceContentState`'s `'loading'` and the panel's
+    // `!usjFromPdp` spinner — and `Editorial` mounts holding nothing, painting Lexical's "Enter
+    // some Scripture…" prompt: an invitation to type in a text the reader cannot edit.
+    undefined,
   );
 
   // #endregion
@@ -408,8 +445,18 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     });
   }, [pickerResources]);
 
+  // Which pick is the current one. Two picks can overlap — each is an `await` chain over the
+  // settings write and an install, and nothing stops the user choosing again while one runs — and
+  // the `finally` below is unconditional, so without this the FIRST to settle clears `isSelecting`
+  // while the second is still working. That is not cosmetic: `isSelecting` is what suppresses
+  // `useDblResourceAutoInstall`, so clearing it early re-arms auto-install alongside the in-flight
+  // pick's own install of a different resource. Same guard as `use-dbl-resource-catalog.hook.ts`.
+  const selectGenerationRef = useRef(0);
+
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
+      selectGenerationRef.current += 1;
+      const generation = selectGenerationRef.current;
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
       retryInstall();
@@ -436,7 +483,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
           (writtenReference) => setPendingResourceId(getResourceReferenceRowId(writtenReference)),
         );
       } finally {
-        setIsSelecting(false);
+        // Only the newest pick owns the flag. A superseded one leaves it set so the panel keeps
+        // reporting "Selecting…" until the pick the user actually last made finishes.
+        if (generation === selectGenerationRef.current) setIsSelecting(false);
       }
     },
     [getUserResourceTexts, setUserResourceTexts, installResource, retryInstall, markInstallFailed],
@@ -481,6 +530,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       onSelectResource={setSelectedResourceId}
       usjPossiblyError={usjPossiblyError}
       isUsjLoading={isUsjLoading}
+      onRetryChapter={retryChapterRead}
       textDirection={textDirection}
       isSelecting={isSelecting}
       isInstalling={isInstalling}
