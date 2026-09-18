@@ -42,10 +42,13 @@
 import { FrameLocator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
-  LAUNCH_PHASE_TIMEOUT_MS,
-  sendPapiRequestOnce,
-  waitForPapiMethodRegistered,
-} from '../../../fixtures/helpers';
+  chapterLocation,
+  findCharSpanText,
+  getChapterUsj,
+  readEditorSelection,
+  sendToEditorController,
+  waitForEditorControllerMethod,
+} from '../../../fixtures/settled-positions-helpers';
 import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
@@ -53,9 +56,6 @@ import {
   SAMPLE_WEB_PROJECT_ID,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
-
-const WEBSOCKET_PORT = 8876;
-const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * John 2:4 is `\wj "Woman, what does that have to do with you and me? My hour has not yet
@@ -86,113 +86,6 @@ const ANNOTATION_ID = 'settled-offset-probe';
 
 /** The display separator the editor places between an opening marker glyph and its content. */
 const NBSP = '\u00a0';
-
-/** The PDP factory that layers the USJ `projectInterface`s over the C# Paratext projects. */
-const SCRIPTURE_EXTENDER_PDP_ID_METHOD =
-  'object:platformScripture.scriptureExtenderPdpf-pdpf.getProjectDataProviderId';
-
-/** A USJ node: a marker object whose `content` holds text and further marker objects. */
-interface UsjMarkerObject {
-  type: string;
-  marker?: string;
-  content?: (string | UsjMarkerObject)[];
-}
-
-/** The USJ document the PDP returns for one chapter. */
-interface UsjDocument {
-  content?: (string | UsjMarkerObject)[];
-}
-
-/** Where a char span's text sits in a USJ document, in the coordinates the editor is addressed in. */
-interface CharSpanTextLocation {
-  /** JSONPath to the text string itself, e.g. `$.content[6].content[1].content[0]`. */
-  jsonPath: string;
-  /** The text string at that path. */
-  text: string;
-}
-
-/** A document location as the editor reports it back through `getSelection`. */
-interface ReportedDocumentLocation {
-  jsonPath?: string;
-  offset?: number;
-}
-
-/** The selection shape `getSelection` resolves to (`ScriptureRangeUsjVerseRefChapterLocation`). */
-interface ReportedSelection {
-  start?: { documentLocation?: ReportedDocumentLocation };
-  end?: { documentLocation?: ReportedDocumentLocation };
-}
-
-/** Build the JSONPath for a chain of `content` indexes, the form USJ document locations use. */
-function contentJsonPath(indexes: readonly number[]): string {
-  return indexes.reduce((path, index) => `${path}.content[${index}]`, '$');
-}
-
-/**
- * Depth-first search for the first char span with `marker` whose content starts with plain text,
- * returning that text and its JSONPath. Recursive rather than index-arithmetic against a known
- * shape so the location stays correct if the chapter gains or loses content before the span.
- */
-function findCharSpanText(
-  content: readonly (string | UsjMarkerObject)[],
-  marker: string,
-  indexes: readonly number[],
-): CharSpanTextLocation | undefined {
-  return content.reduce<CharSpanTextLocation | undefined>((found, node, index) => {
-    if (found || typeof node === 'string') return found;
-    const nodeIndexes = [...indexes, index];
-    const children = node.content ?? [];
-    if (node.type === 'char' && node.marker === marker) {
-      const textIndex = children.findIndex((child) => typeof child === 'string');
-      const text = children[textIndex];
-      if (typeof text === 'string')
-        return { jsonPath: contentJsonPath([...nodeIndexes, textIndex]), text };
-    }
-    return findCharSpanText(children, marker, nodeIndexes);
-  }, undefined);
-}
-
-/**
- * Read one chapter's USJ straight from the project data provider — the editor's own source, and the
- * oracle the editor's answers are measured against here.
- */
-async function getChapterUsj(verseRef: typeof TARGET_VERSE_REF): Promise<UsjDocument> {
-  await waitForPapiMethodRegistered(
-    SCRIPTURE_EXTENDER_PDP_ID_METHOD,
-    WEBSOCKET_PORT,
-    LAUNCH_PHASE_TIMEOUT_MS,
-  );
-  const pdpId = await sendPapiRequestOnce<string>(
-    SCRIPTURE_EXTENDER_PDP_ID_METHOD,
-    [SAMPLE_WEB_PROJECT_ID],
-    WEBSOCKET_PORT,
-    REQUEST_TIMEOUT_MS,
-  );
-  // A PDP's network object carries a `-data` suffix on top of the id its factory reports (the
-  // platform's own `getDataProviderObjectId` rule). The C# factories report the suffixed name
-  // already; the TypeScript layering factory this one comes from reports the bare id.
-  const pdpObjectId = pdpId.endsWith('-data') ? pdpId : `${pdpId}-data`;
-  return sendPapiRequestOnce<UsjDocument>(
-    `object:${pdpObjectId}.getChapterUSJ`,
-    [verseRef],
-    WEBSOCKET_PORT,
-    REQUEST_TIMEOUT_MS,
-  );
-}
-
-/** JSON-RPC method name for one method on an editor's web view controller network object. */
-function webViewControllerMethod(editorId: string, method: string): string {
-  return `object:webViewController${editorId}.${method}`;
-}
-
-/** A chapter-relative USJ location for `jsonPath` at `offset`, the shape a `ScriptureRange` takes. */
-function chapterLocation(jsonPath: string, offset: number) {
-  return {
-    verseRef: TARGET_VERSE_REF,
-    granularity: 'chapter',
-    documentLocation: { jsonPath, offset },
-  };
-}
 
 test.use({
   interfaceMode: 'power',
@@ -228,7 +121,7 @@ test.describe('scripture editor settled positions', () => {
     ).toBeAttached({ timeout: 30_000 });
 
     const chapterUsj = await getChapterUsj(TARGET_VERSE_REF);
-    const charSpanText = findCharSpanText(chapterUsj.content ?? [], CHAR_MARKER, []);
+    const charSpanText = findCharSpanText(chapterUsj.content ?? [], CHAR_MARKER);
     if (!charSpanText)
       throw new Error(
         `No \\${CHAR_MARKER} char span with plain text content in ${TARGET_REFERENCE}'s USJ`,
@@ -236,28 +129,8 @@ test.describe('scripture editor settled positions', () => {
     expect(charSpanText.text).toBe(EXPECTED_CHAR_TEXT);
 
     const { jsonPath, text: charText } = charSpanText;
-    const controllerSetAnnotation = webViewControllerMethod(editorId, 'setAnnotation');
-    await waitForPapiMethodRegistered(
-      controllerSetAnnotation,
-      WEBSOCKET_PORT,
-      LAUNCH_PHASE_TIMEOUT_MS,
-    );
-
-    /** The editor's current selection, or undefined while the controller is still waiting for one. */
-    const readSelection = async (): Promise<ReportedSelection | undefined> => {
-      try {
-        return await sendPapiRequestOnce<ReportedSelection>(
-          webViewControllerMethod(editorId, 'getSelection'),
-          [],
-          WEBSOCKET_PORT,
-          REQUEST_TIMEOUT_MS,
-        );
-      } catch {
-        // The controller blocks its first caller until the editor reports a selection, so a slow
-        // first report is a retry, not a result.
-        return undefined;
-      }
-    };
+    await waitForEditorControllerMethod(editorId, 'setAnnotation');
+    const readSelection = () => readEditorSelection(editorId);
 
     await test.step("a caret clicked to the span's end reports the span text's own last offset", async () => {
       // Click just inside the left edge of the closing glyph — the insertion point immediately
@@ -288,17 +161,12 @@ test.describe('scripture editor settled positions', () => {
     });
 
     await test.step("selecting the span's last two characters highlights exactly those characters", async () => {
-      await sendPapiRequestOnce(
-        webViewControllerMethod(editorId, 'selectRange'),
-        [
-          {
-            start: chapterLocation(jsonPath, charText.length - 2),
-            end: chapterLocation(jsonPath, charText.length),
-          },
-        ],
-        WEBSOCKET_PORT,
-        REQUEST_TIMEOUT_MS,
-      );
+      await sendToEditorController(editorId, 'selectRange', [
+        {
+          start: chapterLocation(TARGET_VERSE_REF, jsonPath, charText.length - 2),
+          end: chapterLocation(TARGET_VERSE_REF, jsonPath, charText.length),
+        },
+      ]);
 
       // What the browser highlights is the oracle. Asking the editor to report the range back
       // would prove nothing: a shift applied on the way in and again on the way out cancels.
@@ -312,15 +180,10 @@ test.describe('scripture editor settled positions', () => {
     });
 
     await test.step('a collapsed selectRange at settled offset 0 lands inside the span text, not on the separator', async () => {
-      const location = chapterLocation(jsonPath, 0);
-      await sendPapiRequestOnce(
-        webViewControllerMethod(editorId, 'selectRange'),
-        // `start` and `end` at the same location is how a caller asks for a collapsed selection (a
-        // cursor position, not a range) — the shape `comment-list.web-view.tsx` sends.
-        [{ start: location, end: location }],
-        WEBSOCKET_PORT,
-        REQUEST_TIMEOUT_MS,
-      );
+      const location = chapterLocation(TARGET_VERSE_REF, jsonPath, 0);
+      // `start` and `end` at the same location is how a caller asks for a collapsed selection (a
+      // cursor position, not a range) — the shape `comment-list.web-view.tsx` sends.
+      await sendToEditorController(editorId, 'selectRange', [{ start: location, end: location }]);
 
       // The browser's own selection is the oracle for where the caret visually lands: the span's
       // content is one DOM text node holding `<NBSP>` followed by the span's text, so a caret at
@@ -360,19 +223,14 @@ test.describe('scripture editor settled positions', () => {
 
     await test.step("an annotation over the span's last two characters marks exactly those characters", async () => {
       const expectedAnnotatedText = charText.slice(-2);
-      await sendPapiRequestOnce(
-        controllerSetAnnotation,
-        [
-          {
-            start: chapterLocation(jsonPath, charText.length - 2),
-            end: chapterLocation(jsonPath, charText.length),
-          },
-          ANNOTATION_TYPE,
-          ANNOTATION_ID,
-        ],
-        WEBSOCKET_PORT,
-        REQUEST_TIMEOUT_MS,
-      );
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterLocation(TARGET_VERSE_REF, jsonPath, charText.length - 2),
+          end: chapterLocation(TARGET_VERSE_REF, jsonPath, charText.length),
+        },
+        ANNOTATION_TYPE,
+        ANNOTATION_ID,
+      ]);
 
       const annotatedMark = editorInput.locator(`mark.annotationId-${ANNOTATION_ID}`);
       await expect(annotatedMark).toHaveCount(1, { timeout: 30_000 });
