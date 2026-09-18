@@ -492,20 +492,34 @@ global.webViewComponent = function CommentListWebView({
   const isShowingAllCommentThreads =
     areCommentFiltersAtDefault(filters) && scopeFilter === 'all-books';
 
+  /**
+   * The thread ids pruning may safely trust, or `undefined` when the current state cannot support
+   * it: not the complete unfiltered list, still loading, or (checked against the RAW
+   * `commentThreads`, not the error-and-loading-both-flatten-to-`[]` `safeCommentThreads`) a failed
+   * query. Modeling "not ready to prune" as "no id list" rather than an extra boolean condition
+   * makes a failed query structurally unable to read as "zero threads": there is no path from
+   * `commentThreads` being a `PlatformError` to a non-`undefined` result here, so a transient query
+   * failure can never be mistaken for a genuinely empty project. A genuinely empty project (a
+   * healthy query that resolves to `[]`) still produces `[]` here, not `undefined` -- it correctly
+   * prunes every draft, because there really are no threads left to keep one for.
+   */
+  const prunableThreadIds = useMemo<readonly string[] | undefined>(() => {
+    if (!isShowingAllCommentThreads || isLoadingCommentThreads) return undefined;
+    if (!commentThreads || isPlatformError(commentThreads)) return undefined;
+    return commentThreads.map((thread) => thread.id);
+  }, [isShowingAllCommentThreads, isLoadingCommentThreads, commentThreads]);
+
   useEffect(() => {
-    // Also wait for the query to finish loading: an in-flight or placeholder empty list must never
-    // read as "this project has no threads," which would prune every draft the user has.
-    if (!isShowingAllCommentThreads || isLoadingCommentThreads) return;
+    if (!prunableThreadIds) return;
     setDrafts((prevDrafts) => {
-      const existingThreadIds = safeCommentThreads.map((thread) => thread.id);
-      const pruned = pruneDrafts(prevDrafts, existingThreadIds);
+      const pruned = pruneDrafts(prevDrafts, prunableThreadIds);
       // pruneDrafts only ever removes entries, so an unchanged count means nothing was pruned --
       // keep the same reference rather than mint an equal one, avoiding a no-op render (and, in
       // turn, a needless re-save).
       if (Object.keys(pruned).length === Object.keys(prevDrafts).length) return prevDrafts;
       return pruned;
     });
-  }, [isShowingAllCommentThreads, isLoadingCommentThreads, safeCommentThreads]);
+  }, [prunableThreadIds]);
 
   // #endregion
 
