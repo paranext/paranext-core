@@ -11,10 +11,10 @@ import {
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { ComponentProps, ReactNode } from 'react';
 import {
-  areCommentFiltersAtDefault,
   CommentFilters,
   isCommentPreset,
   isScopeFilter,
+  isShowingAllThreads,
   presetToLabelKey,
   ScopeFilter,
   scopeFilterToLabelKey,
@@ -180,7 +180,7 @@ export function CommentListPanel({
   drafts,
   onDraftChange,
 }: CommentListPanelProps) {
-  const noFiltersActive = areCommentFiltersAtDefault(filters) && scopeFilter === 'all-books';
+  const noFiltersActive = isShowingAllThreads({ filters, scopeFilter });
 
   // The list area swaps between skeletons (loading), an empty-state message, and the list — but the
   // toolbar below always renders, so isLoading only governs this region.

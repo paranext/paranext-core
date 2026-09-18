@@ -15,6 +15,8 @@ import {
   CommentPreset,
   DEFAULT_COMMENT_FILTERS,
   DEFAULT_SCOPE_FILTER,
+  LegacyCommentFilters,
+  LegacyScopeFilter,
   ScopeFilter,
 } from './comment-list-filters.model';
 
@@ -287,8 +289,8 @@ function readStoredSelection(projectId: string): unknown {
 }
 
 function dispatchSetFilters(message: {
-  filters?: Partial<CommentFilters>;
-  scopeFilter?: ScopeFilter;
+  filters?: Partial<CommentFilters> | LegacyCommentFilters;
+  scopeFilter?: ScopeFilter | LegacyScopeFilter;
 }) {
   window.dispatchEvent(new MessageEvent('message', { data: { method: 'setFilters', ...message } }));
 }
@@ -470,6 +472,122 @@ describe('setFilters messages replayed in a burst', () => {
     // The same object, not merely an equal one: an accepted repeat would mint a new-but-equal
     // filters object, churning the CommentThreads subscription the equal-values skip protects
     expect(latestPanelProps().filters).toBe(appliedFilters);
+  });
+});
+
+describe('setFilters message — legacy shapes and unrecognized values', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('maps a legacy four-axis setFilters message onto its matching preset', async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    act(() => {
+      dispatchSetFilters({ filters: { resolved: 'unresolved', assignment: 'assigned-to-me' } });
+    });
+
+    await waitFor(() =>
+      expect(latestPanelProps().filters).toEqual({ preset: 'unresolved-assigned-to-me' }),
+    );
+  });
+
+  it('falls back to the all preset for a legacy combination with no counterpart', async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    act(() => {
+      // 'team' assignment was dropped entirely by the new preset model -- no combination naming it
+      // has a counterpart.
+      dispatchSetFilters({ filters: { assignment: 'team' } });
+    });
+
+    await waitFor(() => expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS));
+  });
+
+  it("maps the legacy 'unfiltered' scope onto 'all-books' through the real message boundary", async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    act(() => {
+      dispatchSetFilters({ scopeFilter: 'unfiltered' });
+    });
+
+    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe('all-books'));
+  });
+
+  it('resolves an unrecognized preset to the default instead of reaching the exhaustiveness guard', async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    // Without applyFilterOverrides' isCommentPreset narrowing, this message would flow straight into
+    // buildCommentThreadSelector's `filters.preset` switch during render and throw
+    // `Unhandled comment preset: assigned-to-team` -- reproduced by temporarily removing that
+    // narrowing (see the PR description / task notes for the actual failure this pins).
+    act(() => {
+      dispatchSetFilters({
+        // Simulating a malformed value crossing the message bus, which real senders aren't
+        // restricted to the current union.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        filters: { preset: 'assigned-to-team' as CommentPreset },
+      });
+    });
+
+    await waitFor(() => expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS));
+  });
+
+  it('resolves an unrecognized scope to the default instead of reaching scopeFieldsUsed', async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    // Without resolveScopeFilter's isScopeFilter narrowing, this message would flow straight into
+    // `scopeFieldsUsed[scopeFilter].book` during render and throw a TypeError reading `.book` off
+    // `undefined`.
+    act(() => {
+      dispatchSetFilters({
+        // Simulating a malformed value crossing the message bus, which real senders aren't
+        // restricted to the current union.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        scopeFilter: 'not-a-real-scope' as ScopeFilter,
+      });
+    });
+
+    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe('all-books'));
+  });
+});
+
+describe('initialFilters/initialScopeFilter web view state seed — legacy shapes', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('maps a legacy four-axis initialFilters seed onto its matching preset on mount', async () => {
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-1', {
+      initialFilters: { read: 'unread', assignment: 'assigned-to-me' },
+    });
+
+    await waitFor(() =>
+      expect(latestPanelProps().filters).toEqual({ preset: 'unread-assigned-to-me' }),
+    );
+  });
+
+  it("maps a legacy 'unfiltered' initialScopeFilter seed onto 'all-books' on mount", async () => {
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-1', {
+      initialScopeFilter: 'unfiltered',
+    });
+
+    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe('all-books'));
   });
 });
 

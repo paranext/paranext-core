@@ -47,11 +47,11 @@ const DRAFT_SAVE_DEBOUNCE_MS = 500;
  *   every thread in the project, unfiltered — the only list pruning can safely trust; a narrowed
  *   preset or scope would otherwise make every thread it excludes look deleted, discarding drafts a
  *   filter change is merely hiding rather than destroying. Passed in rather than computed here: it
- *   is a general "no filtering is active" fact about the web view's `filters`/`scopeFilter` state
- *   (the same expression already backs the empty-state copy in comment-list.component.tsx's
- *   `noFiltersActive`), not something specific to pruning, and computing it needs the filters
- *   domain model (`CommentFilters`, `ScopeFilter`, `areCommentFiltersAtDefault`) that this hook
- *   otherwise has no reason to import.
+ *   is a general "no filtering is active" fact about the web view's `filters`/`scopeFilter` state,
+ *   computed via the shared `isShowingAllThreads` predicate (the same one that backs the
+ *   empty-state copy in comment-list.component.tsx's `noFiltersActive`), not something specific to
+ *   pruning, and computing it needs the filters domain model that this hook otherwise has no reason
+ *   to import.
  * @returns `drafts` (keyed by thread id) and `handleDraftChange`, the pair to hand straight to
  *   platform-bible-react's `CommentList` `drafts`/`onDraftChange` props.
  */

@@ -6,6 +6,7 @@ import {
   DEFAULT_SCOPE_FILTER,
   isCommentPreset,
   isScopeFilter,
+  isShowingAllThreads,
   presetToLabelKey,
   scopeFilterToLabelKey,
 } from './comment-list-filters.model';
@@ -104,5 +105,34 @@ describe('scope', () => {
     expect(Object.keys(scopeFilterToLabelKey).every(isScopeFilter)).toBe(true);
     expect(isScopeFilter('current-verse')).toBe(true);
     expect(isScopeFilter('unfiltered')).toBe(false);
+  });
+});
+
+describe('isShowingAllThreads', () => {
+  it('is true only when both the preset and the scope are at their defaults', () => {
+    expect(
+      isShowingAllThreads({ filters: DEFAULT_COMMENT_FILTERS, scopeFilter: DEFAULT_SCOPE_FILTER }),
+    ).toBe(true);
+  });
+
+  it('is false when the preset narrows the view, even at the default scope', () => {
+    expect(
+      isShowingAllThreads({
+        filters: { preset: 'unresolved' },
+        scopeFilter: DEFAULT_SCOPE_FILTER,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false when the scope narrows the view, even at the default preset', () => {
+    expect(
+      isShowingAllThreads({ filters: DEFAULT_COMMENT_FILTERS, scopeFilter: 'current-chapter' }),
+    ).toBe(false);
+  });
+
+  it('is false when both axes narrow the view', () => {
+    expect(
+      isShowingAllThreads({ filters: { preset: 'resolved' }, scopeFilter: 'current-verse' }),
+    ).toBe(false);
   });
 });

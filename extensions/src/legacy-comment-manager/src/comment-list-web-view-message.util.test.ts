@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type {
+  CommentPreset,
+  LegacyCommentFilters,
+  ScopeFilter,
+} from './comment-list-filters.model';
 import { DEFAULT_COMMENT_FILTERS, DEFAULT_SCOPE_FILTER } from './comment-list-filters.model';
 import { resolveSetFiltersMessage } from './comment-list-web-view-message.util';
 
@@ -92,6 +97,112 @@ describe('resolveSetFiltersMessage', () => {
 
     const resolved = resolveSetFiltersMessage({ filters: { preset: 'conflict' } }, current);
 
+    expect(resolved.scopeFilter).toBe('all-books');
+  });
+});
+
+describe('resolveSetFiltersMessage — legacy shapes', () => {
+  const current = { filters: DEFAULT_COMMENT_FILTERS, scopeFilter: DEFAULT_SCOPE_FILTER };
+
+  // Each row is the exact legacy-axes-to-preset mapping documented on LegacyCommentFilters (the
+  // type declaration) and presetFromLegacyAxes (the implementation). Driven through
+  // resolveSetFiltersMessage — the real `setFilters` web view message boundary — rather than by
+  // calling the mapper directly.
+  describe.each<[string, LegacyCommentFilters, CommentPreset]>([
+    ['all axes all (out-of-repo caller sends the old "no filter" shape)', {}, 'all'],
+    ['type: conflicts', { type: 'conflicts' }, 'conflict'],
+    ['resolved: unresolved', { resolved: 'unresolved' }, 'unresolved'],
+    ['read: unread', { read: 'unread' }, 'unread'],
+    [
+      'resolved: unresolved + read: unread',
+      { resolved: 'unresolved', read: 'unread' },
+      'unread-and-unresolved',
+    ],
+    ['resolved: resolved', { resolved: 'resolved' }, 'resolved'],
+    [
+      'resolved: unresolved + assignment: assigned-to-me',
+      { resolved: 'unresolved', assignment: 'assigned-to-me' },
+      'unresolved-assigned-to-me',
+    ],
+    [
+      'read: unread + assignment: assigned-to-me',
+      { read: 'unread', assignment: 'assigned-to-me' },
+      'unread-assigned-to-me',
+    ],
+  ])('%s', (_description, legacyFilters, expectedPreset) => {
+    it(`maps to the '${expectedPreset}' preset`, () => {
+      const resolved = resolveSetFiltersMessage({ filters: legacyFilters }, current);
+      expect(resolved.filters).toEqual({ preset: expectedPreset });
+    });
+  });
+
+  // Combinations the new preset set dropped entirely, or that mix axes into a shape no preset
+  // represents — each must fall back to 'all' rather than guess which axis to drop.
+  describe.each<[string, LegacyCommentFilters]>([
+    ["assignment: 'team' (dropped entirely by the new model)", { assignment: 'team' }],
+    ["assignment: 'unassigned' (dropped entirely by the new model)", { assignment: 'unassigned' }],
+    ["type: 'comments' (no preset excludes conflicts)", { type: 'comments' }],
+    ['read: read (no preset for "only read")', { read: 'read' }],
+    [
+      'resolved: resolved + assignment: assigned-to-me (no two-way preset for this pair)',
+      { resolved: 'resolved', assignment: 'assigned-to-me' },
+    ],
+    [
+      'a three-way combination (unresolved + unread + assigned-to-me)',
+      { resolved: 'unresolved', read: 'unread', assignment: 'assigned-to-me' },
+    ],
+  ])('%s', (_description, legacyFilters) => {
+    it("falls back to the 'all' preset", () => {
+      const resolved = resolveSetFiltersMessage({ filters: legacyFilters }, current);
+      expect(resolved.filters).toEqual({ preset: 'all' });
+    });
+  });
+
+  it("maps the legacy 'unfiltered' scope onto 'all-books', its exact replacement", () => {
+    const resolved = resolveSetFiltersMessage({ scopeFilter: 'unfiltered' }, current);
+    expect(resolved.scopeFilter).toBe('all-books');
+  });
+
+  it('still handles the new shape unchanged alongside a legacy filters payload', () => {
+    // A legacy scope arriving with a current-model preset (a mixed but plausible real caller) must
+    // resolve each independently rather than one axis contaminating the other.
+    const resolved = resolveSetFiltersMessage(
+      { filters: { preset: 'resolved' }, scopeFilter: 'unfiltered' },
+      current,
+    );
+    expect(resolved.filters).toEqual({ preset: 'resolved' });
+    expect(resolved.scopeFilter).toBe('all-books');
+  });
+});
+
+describe('resolveSetFiltersMessage — unrecognized values', () => {
+  const current = { filters: DEFAULT_COMMENT_FILTERS, scopeFilter: DEFAULT_SCOPE_FILTER };
+
+  it('resolves an unrecognized preset to the default instead of passing it through', () => {
+    // Guards buildCommentThreadSelector's exhaustiveness check downstream, which throws
+    // `Unhandled comment preset` on anything not in the CommentPreset union (see
+    // comment-list.web-view.burst.test.tsx for the reproduction of that actual throw).
+    const resolved = resolveSetFiltersMessage(
+      // Simulating a malformed value crossing the message bus, which real callers aren't
+      // restricted to the current union.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { filters: { preset: 'assigned-to-team' as CommentPreset } },
+      current,
+    );
+    expect(resolved.filters).toEqual({ preset: 'all' });
+  });
+
+  it('resolves an unrecognized scope to the default instead of passing it through', () => {
+    // Guards scopeFieldsUsed[scopeFilter] downstream, which throws a TypeError reading `.book` off
+    // `undefined` for any key outside the ScopeFilter union (see comment-list.web-view.burst.test.tsx
+    // for the reproduction of that actual throw).
+    const resolved = resolveSetFiltersMessage(
+      // Simulating a malformed value crossing the message bus, which real callers aren't
+      // restricted to the current union.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { scopeFilter: 'not-a-real-scope' as ScopeFilter },
+      current,
+    );
     expect(resolved.scopeFilter).toBe('all-books');
   });
 });

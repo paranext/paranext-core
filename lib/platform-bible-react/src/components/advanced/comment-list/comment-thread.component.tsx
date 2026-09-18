@@ -19,6 +19,7 @@ import { ArrowUp, AtSign, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-
 import { formatReplacementString } from 'platform-bible-utils';
 import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn-ui/tooltip';
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { CommentItem } from './comment-item.component';
 import {
@@ -115,6 +116,14 @@ export function CommentThread({
   const pendingCommentEditorState = effectiveDraft.editorState ?? initialValue;
   const pendingCommentAssignedUser = effectiveDraft.assignedUser;
 
+  // A consumer that supplies `onDraftChange` owns this draft exclusively, for the whole lifetime of
+  // the component — not just while `draft` happens to be defined. Gating on the current value
+  // instead would seed `internalDraft` from the first patch (while `draft` is still undefined) and
+  // then, once the consumer echoes that value back through `draft`, block every later patch —
+  // including one that empties the draft — leaving the stale seed to resurface the moment `draft`
+  // itself is cleared.
+  const isControlled = onDraftChange !== undefined;
+
   const updateDraft = useCallback(
     (patch: Partial<CommentDraft>) => {
       const next: CommentDraft = { ...effectiveDraft, ...patch };
@@ -123,10 +132,10 @@ export function CommentThread({
       // `draft` prop to `undefined` for a reason that did not go through `onDraftChange` (e.g.
       // pruning an entry against threads that no longer exist), `effectiveDraft` would fall back to
       // this shadow copy instead of the harmless empty default.
-      if (draft === undefined) setInternalDraft(next);
+      if (!isControlled) setInternalDraft(next);
       onDraftChange?.(threadId, isCommentDraftEmpty(next) ? undefined : next);
     },
-    [draft, effectiveDraft, onDraftChange, threadId],
+    [isControlled, effectiveDraft, onDraftChange, threadId],
   );
 
   // An in-progress edit to an existing comment is tracked separately from the reply draft above
@@ -319,6 +328,15 @@ export function CommentThread({
     clearEditorRef.current?.();
     updateDraft({ editorState: undefined });
   }, [updateDraft]);
+
+  // Shared by both the unselected-thread preview Editor and the compose Editor: empty content means
+  // no draft, so it clears the stored editor state rather than persisting an empty one.
+  const handleEditorSerializedChange = useCallback(
+    (value: SerializedEditorState) => {
+      updateDraft({ editorState: hasEditorContent(value) ? value : undefined });
+    },
+    [updateDraft],
+  );
 
   const toggleRead = useCallback(() => {
     const newIsRead = !isRead;
@@ -645,9 +663,7 @@ export function CommentThread({
           {!isSelected && hasEditorContent(pendingCommentEditorState) && (
             <Editor
               editorSerializedState={pendingCommentEditorState}
-              onSerializedChange={(value) =>
-                updateDraft({ editorState: hasEditorContent(value) ? value : undefined })
-              }
+              onSerializedChange={handleEditorSerializedChange}
               placeholder={localizedStrings['%comment_replyOrAssign%']}
             />
           )}
@@ -736,9 +752,7 @@ export function CommentThread({
                   >
                     <Editor
                       editorSerializedState={pendingCommentEditorState}
-                      onSerializedChange={(value) =>
-                        updateDraft({ editorState: hasEditorContent(value) ? value : undefined })
-                      }
+                      onSerializedChange={handleEditorSerializedChange}
                       placeholder={
                         threadStatus === 'Resolved'
                           ? localizedStrings['%comment_reopenResolved%']
@@ -769,24 +783,32 @@ export function CommentThread({
                             <div className="tw:flex-1" />
                           )}
                           <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
-                            <PopoverTrigger asChild>
-                              <Button
-                                size="icon-sm"
-                                variant="outline"
-                                className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                                disabled={
-                                  !canAssign ||
-                                  !assignableUsers ||
-                                  assignableUsers.length === 0 ||
-                                  !assignableUsers.includes(currentUser)
-                                }
-                                aria-label={
-                                  localizedStrings['%comment_aria_assign_user%'] ?? 'Assign user'
-                                }
-                              >
-                                <AtSign />
-                              </Button>
-                            </PopoverTrigger>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    size="icon-sm"
+                                    variant="outline"
+                                    className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                                    disabled={
+                                      !canAssign ||
+                                      !assignableUsers ||
+                                      assignableUsers.length === 0 ||
+                                      !assignableUsers.includes(currentUser)
+                                    }
+                                    aria-label={
+                                      localizedStrings['%comment_aria_assign_user%'] ??
+                                      'Assign user'
+                                    }
+                                  >
+                                    <AtSign />
+                                  </Button>
+                                </PopoverTrigger>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {localizedStrings['%comment_aria_assign_user%'] ?? 'Assign user'}
+                              </TooltipContent>
+                            </Tooltip>
                             <PopoverContent
                               className="tw:w-auto tw:p-0"
                               align="end"
@@ -826,21 +848,34 @@ export function CommentThread({
                               </Command>
                             </PopoverContent>
                           </Popover>
-                          <Button
-                            size="icon-sm"
-                            onClick={handleSubmitComment}
-                            className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                            disabled={
-                              !hasEditorContent(pendingCommentEditorState) &&
-                              (pendingCommentAssignedUser === undefined ||
-                                pendingCommentAssignedUser === lastSubmittedAssignedUser)
-                            }
-                            aria-label={
-                              localizedStrings['%comment_aria_submit_comment%'] ?? 'Submit comment'
-                            }
-                          >
-                            <ArrowUp />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              {/* span wrapper so the tooltip still receives pointer events when
+                                  the button is disabled (nothing to submit) */}
+                              <span className="tw:inline-flex">
+                                <Button
+                                  size="icon-sm"
+                                  onClick={handleSubmitComment}
+                                  className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                                  disabled={
+                                    !hasEditorContent(pendingCommentEditorState) &&
+                                    (pendingCommentAssignedUser === undefined ||
+                                      pendingCommentAssignedUser === lastSubmittedAssignedUser)
+                                  }
+                                  aria-label={
+                                    localizedStrings['%comment_aria_submit_comment%'] ??
+                                    'Submit comment'
+                                  }
+                                >
+                                  <ArrowUp />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {localizedStrings['%comment_aria_submit_comment%'] ??
+                                'Submit comment'}
+                            </TooltipContent>
+                          </Tooltip>
                         </>
                       }
                     />

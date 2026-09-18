@@ -429,7 +429,13 @@ step, no automation. Just a record.
 ## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
 
 - **Date:** 2026-09-15
-- **Status:** Accepted
+- **Status:** Superseded by adr-comment-filter-presets-over-axes. This design (the `Filters` trigger,
+  its popover, and `buildFilterChips`) shipped briefly, then was replaced two days later by two
+  always-visible `Select`s once the filter model itself collapsed from four orthogonal axes to a
+  closed preset set — exactly the "axis count small enough to fit inline" case this entry's own
+  Revisit clause named. `buildFilterChips` no longer exists anywhere in `comment-list.component.tsx`
+  or the rest of the branch. Read this entry as the reasoning of 2026-09-15, not as the current
+  toolbar design.
 - **Context:** The comments panel filtered on five orthogonal axes, each a `Select` with a 128px
   minimum width, in a wrapping toolbar row. In a 320px panel that already wrapped to three rows
   (~112px of chrome). Adding two more axes (date, author) would have made it four rows (~148px) —
@@ -455,6 +461,110 @@ step, no automation. Just a record.
   or they read as outside clicks; `PopoverPortalContainerProvider` is the existing mechanism, and
   `scope-selector.component.tsx` is the reference consumer. **Revisit** if an axis count small
   enough to fit inline returns, or if chips prove less discoverable than visible dropdowns in use.
+
+## adr-comment-drafts-follow-filters: An uncommitted comment draft is filtered like any other thread, unlike Paratext 9
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** In Paratext 9, a thread with an uncommitted draft is exempt from every filter — it
+  always shows, regardless of what the user has filtered to. PT10's comment list is filtered
+  server-side: `buildCommentThreadSelector` (`comment-list-filters.model.ts`) turns the preset and
+  scope selection into a `LegacyCommentThreadSelector` sent to the data provider's
+  `getCommentThreads` query, and the web view only ever narrows that already-queried result further
+  (see the `visibleCommentThreads` memo in `comment-list.web-view.tsx`). `LegacyCommentThreadSelector`
+  (`types/legacy-comment-manager.d.ts`) has no way to ask for "the filtered results, plus these
+  specific extra thread ids regardless of the filter" — its `threadId` field is a single optional
+  `string`, not a set. A thread the query excluded never reaches the web view's result set, so
+  nothing client-side can add it back in.
+- **Decision:** Let drafts be filtered like any other thread. Only the `unsaved` preset narrows the
+  query result down to threads that have a draft (`visibleCommentThreads` in
+  `comment-list.web-view.tsx`); every other preset or scope hides a drafted thread exactly as it
+  would hide any other thread that doesn't match. The `unsaved` preset keeps Paratext 9's "Unsaved
+  comments" label (`localizedStrings.json`) as a deliberate parity choice, even though this
+  implementation auto-saves drafts to `localStorage` on every change — so what's literally true of a
+  draft here is that it's unsent, not unsaved. Naming parity with Paratext 9 was judged to outweigh
+  literal accuracy; this is a knowing tradeoff, not an oversight to "fix" later.
+- **Alternatives:**
+  - Reproduce Paratext 9's always-show-drafted-threads behavior by merging drafted thread ids into
+    the query result on the client regardless of scope/preset. Rejected: it doesn't fit
+    `LegacyCommentThreadSelector`'s single-`threadId` shape, and even widening that field to a set
+    would still need the *provider's* own filtering to skip a listed thread's normal exclusion
+    criteria, which the query interface has no way to express. It would also surprise a user who
+    deliberately scoped the list to one book or chapter by showing a thread from outside that scope.
+- **Consequences:** A user with a draft on a thread the current scope or preset excludes will not see
+  that thread until they switch to `unsaved` (or to a scope/preset that includes it) — the draft
+  itself is not lost, just not visible. Revisit if this proves confusing enough in practice; the fix
+  would need either an "or match this specific thread" query clause or a client-side merge layered on
+  top of the query result, not just a wider `threadId` type.
+
+## adr-comment-filter-presets-over-axes: Four orthogonal comment-filter axes collapse into one closed preset set
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** The comment filters used to be four independent axes (`resolved`, `read`, `type`,
+  `assignment`), each a separate control, composing to many combinations. The axes were never
+  offered as separate controls to compose freely in the first place, and most combinations were
+  never reachable through the UI — so the composability was flexibility nobody could use, not
+  flexibility being removed. Separately, `adr-collapsed-multi-axis-filter-toolbar` had just collapsed
+  a five-axis toolbar behind a popover to fit a narrow panel; once the axis count itself shrank, that
+  popover's reason to exist went with it (see that entry's Status for detail).
+- **Decision:** Replace the four legacy axes with `CommentFilters = { preset: CommentPreset }`, a
+  closed set of nine named presets representing the combinations users actually work in (`all`,
+  `unresolved`, `unread`, `unread-and-unresolved`, `resolved`, `unresolved-assigned-to-me`,
+  `unread-assigned-to-me`, `unsaved`, `conflict` — see `presetToLabelKey` in
+  `comment-list-filters.model.ts`), plus a separate four-value `ScopeFilter` axis for the Scripture
+  range. Both render as always-visible inline `Select`s (`FilterDropdown` in
+  `comment-list.component.tsx`) rather than behind any popover or trigger. The deprecated four-axis
+  shape (`LegacyCommentFilters`) is still accepted at the filter boundaries (`openCommentList`,
+  `setFilters`) and mapped onto the closest preset via `LEGACY_AXES_TO_PRESET`/`presetFromLegacyAxes`
+  in `comment-list-filters.model.ts`.
+- **Alternatives:**
+  - Keep the four axes composable but render only the two visible controls, deriving a preset from
+    the underlying combination. Rejected for the same reason as keeping the axes at all: preserving
+    an internal cross-product representation buys nothing once the presented surface is a closed set.
+  - Keep `adr-collapsed-multi-axis-filter-toolbar`'s popover-and-chips toolbar and simply reduce the
+    axis count within it. Rejected once two axes fit inline on one row — the popover's own
+    justification (chrome cost of five-plus axes in a narrow panel) no longer applied.
+- **Consequences:** Two legacy axis values have no counterpart in the new preset set and are
+  unrepresentable: `assignment: 'team'` and `'unassigned'`, and `type: 'comments'` / `read: 'read'`
+  in combination with an otherwise-active axis. `presetFromLegacyAxes` falls back to `'all'` for any
+  legacy combination without an exact match rather than guessing which axis to drop — see
+  `LegacyCommentFilters`'s TSDoc in `types/legacy-comment-manager.d.ts` for the full mapping table and
+  the reasoning per row. A future need to compose two presets together (e.g. "unresolved AND assigned
+  to me AND unread") needs either a new named preset or a return to axis composition — revisit if the
+  preset list keeps growing to cover combinations rather than shrinking.
+
+## adr-comment-machine-local-storage: Per-machine comment state (drafts, filter selection) lives in `localStorage`, not per-user project settings
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** Comment drafts (an unsent reply, a pending assignee change, an unsaved edit) and the
+  user's filter/scope selection both need to survive a reload, but neither is data other project
+  members should see. Per-user project settings normally live under
+  `{projectDirectory}/Extensions/`, but that directory is not covered by PT9's ignore list —
+  `ParatextData/Repository/VersionedText.cs` excludes only `local/**`, `PA7/**`, and `InDesign/**` —
+  so anything written there travels to every other user on the next Send/Receive. A draft is a
+  half-written comment; transmitting it would leak a user's unsent thoughts to their team the moment
+  they sync. A filter selection is a personal view preference that should neither transmit to
+  teammates nor follow a user to a different machine.
+- **Decision:** Persist both comment drafts (`comment-draft-store.ts`) and the filter/scope selection
+  (`comment-filter-store.ts`) in `localStorage`, keyed `legacyCommentManager.<kind>.<projectId>`.
+- **Alternatives:** An earlier implementation on this same branch stored the filter selection through
+  a C# project-data type (`CommentFilterSelection`, exposed via
+  `ParatextProjectDataProvider.GetUserCommentFilters`/`SetUserCommentFilters`) backed by
+  `UserProjectSettings`, writing to `{projectDirectory}/Extensions/UserSettings-{userId}.xml`. It was
+  removed (`refactor(comments): drop the project-data path for filter selections`) once the
+  Send/Receive exposure above was identified: that store is scoped per user already, but per-user is
+  a broader guarantee than per-machine, and `Extensions/` is exactly the directory that travels in
+  sync. Comment drafts never went through an equivalent project-data path — they were `localStorage`
+  from their first commit on this branch — so this alternative applies specifically to the filter
+  selection, not to drafts.
+- **Consequences:** `localStorage` failures (storage unavailable, a sandboxed context) are swallowed
+  in both stores, so persistence degrades silently to "never persists" — a user sees no error, just a
+  selection or draft that doesn't survive a reload, rather than a visible failure. Neither drafts nor
+  the filter selection follow a user between machines or survive a profile reset; that is required
+  behavior for drafts (they must never travel) and an accepted tradeoff for the filter selection (a
+  view preference, not project data).
 
 ## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
 

@@ -15,9 +15,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { SerializedEditorState } from 'lexical';
-import { ArrowUp, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
+import { ArrowUp, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
 import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentItemProps } from './comment-list.types';
@@ -48,21 +49,29 @@ export function CommentItem({
   // Sometimes-controlled: a consumer that supplies `draftEditorState` owns the in-progress edit, so
   // unmounting (a filter change) and remounting comes back showing the same edit instead of losing
   // it. `internalEditorState` is the fallback for callers that don't manage this draft.
-  // `isEditing` is derived rather than tracked separately — the two were always set and cleared
-  // together, so a defined editor state is exactly what "editing" means.
+  // `isEditing` is derived rather than tracked separately: a defined editor state is exactly what
+  // "editing" means.
   const [internalEditorState, setInternalEditorState] = useState<SerializedEditorState>();
   const editorState = draftEditorState ?? internalEditorState;
   const isEditing = editorState !== undefined;
+
+  // A consumer that supplies `onDraftEditorStateChange` owns this state exclusively, for the whole
+  // lifetime of the component — not just while `draftEditorState` happens to be defined. Gating on
+  // the current value instead would seed `internalEditorState` from the first write (while
+  // `draftEditorState` is still undefined) and then, once the consumer echoes that value back,
+  // block every later write — including the clearing one — leaving the stale seed to resurface the
+  // moment `draftEditorState` itself is cleared.
+  const isControlled = onDraftEditorStateChange !== undefined;
 
   const setEditorState = useCallback(
     (value: SerializedEditorState | undefined) => {
       // Only write the fallback while it is actually the source of truth — see the matching guard
       // in CommentThread's `updateDraft` for why writing it while controlled would let stale
       // content resurface after the consumer drops `draftEditorState` for a reason of its own.
-      if (draftEditorState === undefined) setInternalEditorState(value);
+      if (!isControlled) setInternalEditorState(value);
       onDraftEditorStateChange?.(value);
     },
-    [draftEditorState, onDraftEditorStateChange],
+    [isControlled, onDraftEditorStateChange],
   );
 
   // Ref must default to null so React can attach it to the DOM element
@@ -269,24 +278,42 @@ export function CommentItem({
               actions={
                 <>
                   <div className="tw:flex-1" />
-                  <Button
-                    size="icon-sm"
-                    onClick={handleCancelEdit}
-                    variant="outline"
-                    className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                    aria-label={localizedStrings['%comment_aria_cancel_edit%'] ?? 'Cancel edit'}
-                  >
-                    <X />
-                  </Button>
-                  <Button
-                    size="icon-sm"
-                    onClick={handleSaveEdit}
-                    className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                    disabled={!hasEditorContent(editorState)}
-                    aria-label={localizedStrings['%comment_aria_save_edit%'] ?? 'Save edit'}
-                  >
-                    <ArrowUp />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon-sm"
+                        onClick={handleCancelEdit}
+                        variant="outline"
+                        className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                        aria-label={localizedStrings['%comment_aria_cancel_edit%'] ?? 'Cancel edit'}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {localizedStrings['%comment_aria_cancel_edit%'] ?? 'Cancel edit'}
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {/* span wrapper so the tooltip still receives pointer events when the
+                          button is disabled (an empty edit) */}
+                      <span className="tw:inline-flex">
+                        <Button
+                          size="icon-sm"
+                          onClick={handleSaveEdit}
+                          className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                          disabled={!hasEditorContent(editorState)}
+                          aria-label={localizedStrings['%comment_aria_save_edit%'] ?? 'Save edit'}
+                        >
+                          <ArrowUp />
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {localizedStrings['%comment_aria_save_edit%'] ?? 'Save edit'}
+                    </TooltipContent>
+                  </Tooltip>
                 </>
               }
             />

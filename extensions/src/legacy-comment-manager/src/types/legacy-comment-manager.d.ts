@@ -517,6 +517,64 @@ declare module 'legacy-comment-manager' {
 
   // #endregion
 
+  // #region Legacy comment filter types (deprecated, mapped onto the current model)
+
+  /**
+   * @deprecated One axis of the legacy four-axis filter model, replaced by {@link CommentPreset} via
+   *   `CommentFilters.preset`. Still accepted at the filter boundaries only for backward
+   *   compatibility — see {@link LegacyCommentFilters} for how a legacy combination maps onto a
+   *   preset.
+   */
+  export type ResolvedFilter = 'all' | 'unresolved' | 'resolved';
+
+  /** @deprecated See {@link ResolvedFilter}. */
+  export type ReadFilter = 'all' | 'unread' | 'read';
+
+  /** @deprecated See {@link ResolvedFilter}. */
+  export type TypeFilter = 'all' | 'conflicts' | 'comments';
+
+  /**
+   * @deprecated See {@link ResolvedFilter}. `'team'` and `'unassigned'` have no counterpart in the
+   *   current preset set — a legacy combination naming either always maps to `'all'`.
+   */
+  export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team' | 'unassigned';
+
+  /**
+   * @deprecated The legacy four-orthogonal-axis filter shape, replaced by {@link CommentFilters}'
+   *   single `preset`. Still accepted at {@link OpenCommentListWebViewOptions.filtersToSet}, the
+   *   `setFilters` web view message, and {@link CommentListWebViewController.setFilters} for
+   *   backward compatibility, and mapped onto the preset whose meaning matches:
+   *
+   *   - Every axis `'all'` (or the shape omitted entirely) → `'all'`
+   *   - `type: 'conflicts'` → `'conflict'`
+   *   - `resolved: 'unresolved'` → `'unresolved'`
+   *   - `read: 'unread'` → `'unread'`
+   *   - `resolved: 'unresolved'` + `read: 'unread'` → `'unread-and-unresolved'`
+   *   - `resolved: 'resolved'` → `'resolved'`
+   *   - `resolved: 'unresolved'` + `assignment: 'assigned-to-me'` → `'unresolved-assigned-to-me'`
+   *   - `read: 'unread'` + `assignment: 'assigned-to-me'` → `'unread-assigned-to-me'`
+   *   - Any other combination — including `type: 'comments'`, `assignment: 'team'` or `'unassigned'`,
+   *       `read: 'read'`, or a mix of active axes that matches none of the rows above — → `'all'`,
+   *       since the current preset set has nothing narrower to offer it and dropping one of the
+   *       requested axes to force a fit would silently show a different query than what was asked
+   *       for
+   */
+  export type LegacyCommentFilters = {
+    resolved?: ResolvedFilter;
+    read?: ReadFilter;
+    type?: TypeFilter;
+    assignment?: AssignmentFilter;
+  };
+
+  /**
+   * @deprecated Replaced by `'all-books'` on {@link ScopeFilter}, which `'unfiltered'` maps onto
+   *   exactly (both mean "no Scripture-range restriction"). Still accepted at the same boundaries
+   *   as {@link LegacyCommentFilters}.
+   */
+  export type LegacyScopeFilter = 'unfiltered';
+
+  // #endregion
+
   // #region Comment list WebView types
 
   /** Web view controller for the Comment List web view */
@@ -533,10 +591,19 @@ declare module 'legacy-comment-manager' {
      * NOT merged with the user's current selection — and an omitted `scopeFilter` resets scope to
      * 'all-books'. The result is the requested view with nothing carried over from prior state.
      *
+     * Also accepts the deprecated {@link LegacyCommentFilters} four-axis shape and the deprecated
+     * {@link LegacyScopeFilter} `'unfiltered'` value for backward compatibility; both are mapped
+     * onto their current equivalent (see those types' TSDoc for the mapping), and a value this
+     * build doesn't recognize at all resolves to the default rather than reaching the query
+     * unnarrowed.
+     *
      * @param filters Comment-filter preset to apply; an unspecified preset resets to 'all'.
      * @param scopeFilter Scope to apply; omitting it resets scope to 'all-books'.
      */
-    setFilters(filters?: Partial<CommentFilters>, scopeFilter?: ScopeFilter): Promise<void>;
+    setFilters(
+      filters?: Partial<CommentFilters> | LegacyCommentFilters,
+      scopeFilter?: ScopeFilter | LegacyScopeFilter,
+    ): Promise<void>;
   }>;
 
   export type OpenCommentListWebViewOptions = {
@@ -547,10 +614,17 @@ declare module 'legacy-comment-manager' {
      * the S/R results dialog). Takes precedence over the project derived from `webViewId`.
      */
     projectId?: string | undefined;
-    /** Comment-filter preset to pre-apply (an unspecified preset resets to 'all'). */
-    filtersToSet?: Partial<CommentFilters> | undefined;
-    /** Scope to pre-apply; an omitted value resets scope to `'all-books'`. */
-    scopeFilterToSet?: ScopeFilter | undefined;
+    /**
+     * Comment-filter preset to pre-apply (an unspecified preset resets to 'all'). Also accepts the
+     * deprecated {@link LegacyCommentFilters} four-axis shape for backward compatibility, which is
+     * mapped onto the closest matching preset — see {@link LegacyCommentFilters} for the mapping.
+     */
+    filtersToSet?: Partial<CommentFilters> | LegacyCommentFilters | undefined;
+    /**
+     * Scope to pre-apply; an omitted value resets scope to `'all-books'`. Also accepts the
+     * deprecated {@link LegacyScopeFilter} `'unfiltered'` value, which maps onto `'all-books'`.
+     */
+    scopeFilterToSet?: ScopeFilter | LegacyScopeFilter | undefined;
   };
 
   // #endregion Comment list WebView types

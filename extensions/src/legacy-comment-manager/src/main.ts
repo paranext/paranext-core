@@ -10,6 +10,8 @@ import type {
 import type {
   CommentFilters,
   CommentListWebViewController,
+  LegacyCommentFilters,
+  LegacyScopeFilter,
   OpenCommentListWebViewOptions,
   ScopeFilter,
 } from 'legacy-comment-manager';
@@ -43,9 +45,10 @@ interface CommentListWebViewOptions extends OpenWebViewOptions {
   // already-filtered instead of relying on a post-open setFilters message (which could race the
   // view's message listener). Passed by openCommentList on every open, but only takes effect when
   // creating a new view: a reuse hit returns before the provider (getWebViewDefinition) ever runs,
-  // so these are simply inert there.
-  initialFilters: Partial<CommentFilters> | undefined;
-  initialScopeFilter: ScopeFilter | undefined;
+  // so these are simply inert there. Also carries the deprecated legacy shapes straight through from
+  // OpenCommentListWebViewOptions — the web view maps them onto the current model on mount.
+  initialFilters: Partial<CommentFilters> | LegacyCommentFilters | undefined;
+  initialScopeFilter: ScopeFilter | LegacyScopeFilter | undefined;
 }
 
 /** WebView Factory for the Comment List web view with controller support */
@@ -432,9 +435,16 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
               filtersToSet: {
                 type: 'object',
                 description:
-                  'Comment-filter preset to pre-apply; an unspecified preset resets to all',
+                  'Comment-filter preset to pre-apply; an unspecified preset resets to all. Also ' +
+                  'accepts the deprecated four-axis shape ({ resolved, read, type, assignment }) ' +
+                  'for backward compatibility, mapped onto the closest matching preset (see ' +
+                  'LegacyCommentFilters in the type declarations for the full mapping); a ' +
+                  'combination with no counterpart resolves to all.',
                 // The enum is derived from presetToLabelKey's keys, so it always matches the
-                // CommentPreset union exactly.
+                // CommentPreset union exactly. The deprecated axis properties (resolved/read/type/
+                // assignment) are intentionally left undeclared here rather than hand-listed: this
+                // object schema has no `additionalProperties: false`, so they already validate, and
+                // documenting them in prose (above) avoids a second enum list to keep in sync.
                 properties: {
                   preset: {
                     type: 'string',
@@ -445,9 +455,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
               scopeFilterToSet: {
                 type: 'string',
                 // The enum is derived from scopeFilterToLabelKey's keys, so it always matches the
-                // ScopeFilter union exactly.
+                // ScopeFilter union exactly. The deprecated 'unfiltered' value is documented in the
+                // description below rather than appended here, so this stays the current, always-
+                // accurate set rather than a hand-maintained one.
                 enum: Object.keys(scopeFilterToLabelKey),
-                description: 'Scope to pre-apply; omitting it resets scope to all-books',
+                description:
+                  'Scope to pre-apply; omitting it resets scope to all-books. Also accepts the ' +
+                  "deprecated 'unfiltered' value, which maps to all-books.",
               },
             },
           },
