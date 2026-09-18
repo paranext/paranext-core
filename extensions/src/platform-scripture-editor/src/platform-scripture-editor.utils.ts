@@ -499,7 +499,11 @@ export function resolveNoteVerseRef(
       undefined,
       currentScrRef.book,
     );
-    return { ...currentScrRef, verseNum: verseRef.verseNum };
+    // `verse` is the text form of the verse being LEFT, set when it is a range or segment (`3-4`,
+    // `2a`); kept, it would contradict the note's own `verseNum` for every reader that prefers it.
+    const noteRef: SerializedVerseRef = { ...currentScrRef, verseNum: verseRef.verseNum };
+    delete noteRef.verse;
+    return noteRef;
   } catch {
     // Malformed USJ is a navigation that does not happen, never a thrown error out of a click
     // handler. Stays silent here — this is a pure helper with no logger of its own — and the

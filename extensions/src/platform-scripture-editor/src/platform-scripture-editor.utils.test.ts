@@ -4046,6 +4046,16 @@ describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
     });
   });
 
+  it('drops the verse range the caret was in, which names a different verse than the note', () => {
+    const resolved = resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, {
+      ...currentScrRef,
+      verseNum: 2,
+      verse: '2-3',
+    });
+    expect(resolved?.verseNum).toBe(4);
+    expect(resolved).not.toHaveProperty('verse');
+  });
+
   it('resolves a note that sits before the first verse to verse 0, not to nothing', () => {
     const noteInAHeading: Usj = {
       type: USJ_TYPE,
