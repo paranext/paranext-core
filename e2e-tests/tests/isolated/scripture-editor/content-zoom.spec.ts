@@ -577,6 +577,107 @@ test.describe('scripture editor content zoom', () => {
       expect((await scrollText(editorFrame, { to: 0 })).after).toBe(0);
     });
 
+    await test.step("the standard view's marker palette follows the text zoom", async () => {
+      // The standard view asks the platform for a command palette rather than rendering its own
+      // menu, so this pop-up is drawn by the renderer, outside the web view, and cannot read the
+      // pane's zoom variables.
+      const mainInput = editorFrame.locator('.editor-input').first();
+      // Standard view carries `marker-editable` (`_usj-nodes.scss`: "standard view
+      // (.marker-editable)"); `marker-hidden` and `marker-visible` belong to the formatted and
+      // markers views this step must run before.
+      await expect(mainInput).toHaveClass(/\bmarker-editable\b/, { timeout: 20_000 });
+      // Verse 1's own text, near the chapter's start rather than "that great city" (verse 2, used
+      // by the sibling in-iframe step below): that trigger sits near the pane's right edge.
+      const text = mainInput.getByText('Yahweh', { exact: false }).first();
+      // The anchored branch puts `data-overlay-command-palette` on both its `PopoverContent` (the
+      // sized, zoomed box) and, nested inside it, the `Command` that fills that box — so the bare
+      // attribute selector is ambiguous. `data-slot="popover-content"` narrows to the outer element.
+      const palette = mainPage.locator(
+        '[data-slot="popover-content"][data-overlay-command-palette]',
+      );
+
+      const openPalette = async () => {
+        await text.click();
+        const caret = await scrollTriggerNearPaneTop(editorFrame, await readCaretBox(editorFrame));
+        await mainPage.keyboard.press('\\');
+        await expect(palette).toBeVisible();
+        // Before returning: a pop-up mid-open animation reports a smaller box than its settled
+        // one, and the width read right after this call is what the growth ratio is measured on.
+        await waitForPopupAnimations(palette);
+        return caret;
+      };
+      const closePalette = async () => {
+        await mainPage.keyboard.press('Escape');
+        await expect(palette).toBeHidden();
+      };
+      /**
+       * Unlike the in-iframe pop-ups this file otherwise checks with
+       * {@link expectPopupBesideTriggerAndInsideFrame}, this palette is portalled to the MAIN
+       * document (`OverlayHost`, `createPortal(..., document.body)`), so Radix collision-avoids it
+       * against the app window's own viewport, not the narrower, shorter pane — it can paint a few
+       * pixels outside the pane while staying inside the window. With the trigger parked as near
+       * the pane's top as `scrollTriggerNearPaneTop` allows, the palette's own content height at
+       * 150% (≈560px) already exceeds the room left below the trigger inside the pane (≈553px)
+       * while still fitting inside the window (≈569px) — a fixed, zoom-independent gap (about the
+       * same 16px on every side of the pane), not something a different trigger position avoids. So
+       * this checks the weaker, but real, guarantee: beside its trigger and inside the WINDOW.
+       */
+      const expectBesideTriggerAndInsideWindow = async (trigger: PageBox) => {
+        await waitForPopupAnimations(palette);
+        const popupBox = await boxOf(palette);
+        const viewport = await mainPage.evaluate(() => ({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }));
+        const gapY = Math.max(
+          popupBox.y - (trigger.y + trigger.height),
+          trigger.y - (popupBox.y + popupBox.height),
+        );
+        const gapX = Math.max(
+          popupBox.x - (trigger.x + trigger.width),
+          trigger.x - (popupBox.x + popupBox.width),
+        );
+        const tolerance = 1;
+        expect(Math.min(Math.max(gapY, 0), Math.max(gapX, 0)), 'separated on one axis only').toBe(
+          0,
+        );
+        expect(Math.max(gapX, gapY), 'not covering the trigger').toBeGreaterThanOrEqual(-tolerance);
+        expect(Math.max(gapX, gapY), 'close to the trigger').toBeLessThanOrEqual(24);
+        expect(popupBox.x, 'inside the window').toBeGreaterThanOrEqual(-tolerance);
+        expect(popupBox.y, 'inside the window').toBeGreaterThanOrEqual(-tolerance);
+        expect(popupBox.x + popupBox.width, 'inside the window').toBeLessThanOrEqual(
+          viewport.width + tolerance,
+        );
+        expect(popupBox.y + popupBox.height, 'inside the window').toBeLessThanOrEqual(
+          viewport.height + tolerance,
+        );
+      };
+
+      const widths = new Map<number, number>();
+      // Sequential: each level's palette must be opened, measured and closed before the next.
+      /* eslint-disable no-await-in-loop */
+      const factors = [1, 1.5, 2];
+      for (let i = 0; i < factors.length; i += 1) {
+        const factor = factors[i];
+        await zoomAreaTo(mainPage, editorFrame, editorId, 'main', factor);
+        const caret = await openPalette();
+        widths.set(factor, (await boxOf(palette)).width);
+        // Drawn bigger, still placed against its trigger and still inside the window.
+        await expectBesideTriggerAndInsideWindow(caret);
+        await closePalette();
+      }
+      /* eslint-enable no-await-in-loop */
+
+      const atDefault = widths.get(1);
+      if (!atDefault) throw new Error('No 100 % palette width recorded');
+      [1.5, 2].forEach((factor) => {
+        expect((widths.get(factor) ?? 0) / atDefault).toBeCloseTo(factor, 1);
+      });
+
+      // Back to the default so the next step starts from its own baseline.
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
+    });
+
     await test.step('the inline marker menu and the comment editor follow the text zoom', async () => {
       // The inline marker menu is the non-standard views' `\` menu (the standard view opens the
       // platform's command palette instead), and the markers view is read-only, so cycle
