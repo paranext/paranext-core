@@ -162,6 +162,27 @@ describe('reconcileCachedResources', () => {
     expect(isChanged).toBe(true);
   });
 
+  // These maps are deserialized JSON and so carry `Object.prototype`. A uid spelling an inherited
+  // member resolves to a function rather than `undefined`, which an `=== undefined` guard reads as
+  // "the backend reported on this row" — marking it installed with a function for its project id,
+  // and persisting that. Uids are hex today, so this pins the contract by construction.
+  it('treats a uid that names an inherited object member as unreported', () => {
+    const row = { ...INSTALLED_WITH_UPDATE, dblEntryUid: 'toString', installed: true };
+
+    const { resources, isChanged } = reconcileCachedResources([row], {}, undefined);
+
+    expect(resources[0]).toBe(row);
+    expect(isChanged).toBe(false);
+  });
+
+  it('does not take an inherited member as an update-status answer', () => {
+    const row = { ...INSTALLED_WITH_UPDATE, dblEntryUid: 'constructor', updateAvailable: true };
+
+    const { resources } = reconcileCachedResources([row], { constructor: 'ABC123AAAA' }, {});
+
+    expect(resources[0].updateAvailable).toBe(true);
+  });
+
   // The contract the whole reconcile rests on. The backend reports an empty string for a resource
   // it knows is not installed, and omits a uid entirely when it has nothing to say — offline, or
   // when its project scan could not read every project. Treating those the same way would mark an

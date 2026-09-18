@@ -31,11 +31,18 @@ export function reconcileCachedResources(
     // from here cannot work: a resource project's id is unrelated to the DBL entry it was installed
     // from — ParatextData records the uid in the project's settings and matches on that — so an
     // exact-or-prefix comparison silently misses every resource whose ids diverge.
-    const reportedProjectId = installStatus[resource.dblEntryUid];
+    // `Object.hasOwn`, not an `undefined` check on the value: these maps are deserialized JSON, so
+    // they carry `Object.prototype`, and a uid spelling an inherited member — `toString`,
+    // `constructor`, `valueOf` — would resolve to a function rather than `undefined`. The row would
+    // then be read as installed with a function for its project id, and persisted. Uids are hex
+    // today, so this keeps the contract true by construction rather than by what uids happen to
+    // look like.
+    const hasReport = Object.hasOwn(installStatus, resource.dblEntryUid);
 
     // Absent means the backend said nothing about this row, which is not the same as "not
     // installed". Leave it exactly as it was.
-    if (reportedProjectId === undefined) return resource;
+    if (!hasReport) return resource;
+    const reportedProjectId = installStatus[resource.dblEntryUid] ?? '';
 
     const installed = reportedProjectId !== '';
     const installedChanged = installed !== resource.installed;
@@ -43,8 +50,12 @@ export function reconcileCachedResources(
     // Prefer the backend's answer. Falling back to `false` when the installed state just changed
     // keeps a stale "update available" from riding along with a resource that was installed or
     // removed outside this list.
+    const reportedUpdateAvailable =
+      updateStatus && Object.hasOwn(updateStatus, resource.dblEntryUid)
+        ? updateStatus[resource.dblEntryUid]
+        : undefined;
     const installedUpdateAvailable =
-      updateStatus?.[resource.dblEntryUid] ?? (installedChanged ? false : resource.updateAvailable);
+      reportedUpdateAvailable ?? (installedChanged ? false : resource.updateAvailable);
 
     // The flag only means anything for an installed resource — "the copy on disk is out of date" —
     // and that is the only state the list renders it in. The backend reports `true` for every
