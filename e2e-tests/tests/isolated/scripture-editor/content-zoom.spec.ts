@@ -88,15 +88,21 @@ function mainEditorContainer(frame: Frame): Locator {
 }
 
 /**
- * Scrolls the main text to `to`, or by `by`, and returns its scroll position before and after, plus
- * the scroll container's main-frame-relative box. The text scrolls in its nearest scrollable
- * ancestor (inside the footnotes layout), not in the pane's outer `overflow-auto` wrapper, which
- * never overflows. Called with neither, it only reads.
+ * Scrolls the main text to `to`, or by `by`, and returns its scroll position before and after, the
+ * scroll container's main-frame-relative box, and how far that container can scroll at all
+ * (`maxScroll`). The text scrolls in its nearest scrollable ancestor (inside the footnotes layout),
+ * not in the pane's outer `overflow-auto` wrapper, which never overflows. Called with neither, it
+ * only reads.
  */
 async function scrollText(
   frame: Frame,
   target: { to?: number; by?: number },
-): Promise<{ before: number; after: number; box: PageBox }> {
+): Promise<{
+  before: number;
+  after: number;
+  box: PageBox;
+  maxScroll: number;
+}> {
   const editorFrameBox = await frameBox(frame);
   const result = await mainEditorContainer(frame).evaluate((element, { to, by }) => {
     let node: Element | null = element;
@@ -115,6 +121,7 @@ async function scrollText(
       before,
       after: node.scrollTop,
       box: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+      maxScroll: node.scrollHeight - node.clientHeight,
     };
   }, target);
   return {
@@ -156,8 +163,8 @@ async function scrollTextKeepingVisible(
 const TRIGGER_TOP_MARGIN_PX = 40;
 
 /**
- * Scrolls the main text so `trigger`'s box sits no lower than {@link TRIGGER_TOP_MARGIN_PX} below
- * the top of the text's scroll container, and returns the box it has there. The room a pop-up
+ * Scrolls the main text as near as it goes to putting `trigger`'s box {@link TRIGGER_TOP_MARGIN_PX}
+ * below the top of the text's scroll container, and returns the box it has there. The room a pop-up
  * opened on that trigger then has is the pane's, rather than whatever the preceding steps left the
  * text scrolled to.
  *
@@ -165,19 +172,33 @@ const TRIGGER_TOP_MARGIN_PX = 40;
  * the pane has the whole pane below it. So the check is a range, not a target — scrolling up is
  * clamped at the top of the text, and demanding an exact offset would fail there instead of
  * accepting the room it asked for. Below the pane's top edge, on the other hand, the trigger is
- * scrolled out of sight, and above the margin the pop-up may find no room on either side.
+ * scrolled out of sight.
+ *
+ * Scrolling down clamps too, at the bottom of the text, and then the trigger stays lower than the
+ * margin — so the margin is allowed exactly the distance the scroll came up short by, and the
+ * scroll itself is held to moving every pixel that was available. A scroll that simply did not take
+ * effect fails on that, rather than buying itself room here. The shortfall only ever arises where
+ * it costs nothing: the text comes up short only when the chapter barely overflows the pane, which
+ * is the unzoomed case, where a pop-up is a fraction of the pane's height and has room below a
+ * trigger wherever it sits. At the zoom levels this step is about, the chapter is several
+ * pane-heights tall and the full margin is demanded.
  */
 async function scrollTriggerNearPaneTop(frame: Frame, trigger: PageBox): Promise<PageBox> {
-  const { box: scroller } = await scrollText(frame, {});
-  const { before, after } = await scrollText(frame, {
-    by: Math.round(trigger.y - scroller.y - TRIGGER_TOP_MARGIN_PX),
-  });
+  const { box: scroller, before: scrollTop, maxScroll } = await scrollText(frame, {});
+  const requested = Math.round(trigger.y - scroller.y - TRIGGER_TOP_MARGIN_PX);
+  const available = Math.min(Math.max(scrollTop + requested, 0), maxScroll) - scrollTop;
+  const { before, after } = await scrollText(frame, { by: requested });
+  // Sub-pixel: scrollTop is fractional while scrollHeight and clientHeight are whole pixels.
+  expect(Math.abs(after - before - available), 'the text scrolled as far as it can').toBeLessThan(
+    1,
+  );
   const scrolled = { ...trigger, y: trigger.y - (after - before) };
   const belowPaneTop = scrolled.y - scroller.y;
   expect(belowPaneTop, 'trigger inside the pane').toBeGreaterThanOrEqual(0);
-  expect(belowPaneTop, 'trigger near the top of the pane').toBeLessThanOrEqual(
-    TRIGGER_TOP_MARGIN_PX + 2,
-  );
+  expect(
+    belowPaneTop,
+    'trigger as near the top of the pane as the text scrolls',
+  ).toBeLessThanOrEqual(TRIGGER_TOP_MARGIN_PX + 2 + Math.max(requested - available, 0));
   return scrolled;
 }
 
@@ -218,9 +239,14 @@ async function boxOf(locator: Locator): Promise<PageBox> {
 }
 
 /**
- * Selects verse 2's text from "great" into "before" with a click and a Shift+click, which wraps
- * onto a second line at 200 % in the default window, and returns the selection's main-frame box.
- * Checks that the selection really spans more than one line.
+ * Selects verse 2's text from "great" onto the line below it with a click and a Shift+click, and
+ * returns the selection's main-frame box. Checks that the selection really spans more than one
+ * line.
+ *
+ * Where the line below starts is read from the laid-out text rather than named as a second word:
+ * which word verse 2 wraps after is a property of the Scripture font's metrics at the pane's width
+ * and zoom, so a fixed pair of words pins the selection to one line or two by luck of the current
+ * font.
  */
 async function selectWrappedText(page: Page, frame: Frame, input: Locator): Promise<PageBox> {
   const editorFrameBox = await frameBox(frame);
@@ -230,22 +256,43 @@ async function selectWrappedText(page: Page, frame: Frame, input: Locator): Prom
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const text = node.textContent ?? '';
       const from = text.indexOf('great city');
-      const to = text.indexOf('before me');
-      if (from >= 0 && to > from) {
+      if (from >= 0) {
         const textNode = node;
-        const charCenter = (offset: number) => {
+        const charRect = (offset: number) => {
           const range = root.ownerDocument.createRange();
           range.setStart(textNode, offset);
           range.setEnd(textNode, offset + 1);
-          const rect = range.getBoundingClientRect();
-          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+          return range.getBoundingClientRect();
         };
-        return { start: charCenter(from + 1), end: charCenter(to + 3) };
+        const center = (rect: DOMRect) => ({
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+        });
+        const start = from + 1;
+        const startTop = Math.round(charRect(start).top);
+        // The first character painted below the start's line, then a few more of its line, so the
+        // Shift+click lands well inside the second line rather than on its very first glyph.
+        let end = -1;
+        for (let offset = start + 1; offset < text.length; offset += 1) {
+          const rect = charRect(offset);
+          if (rect.width > 0 && Math.round(rect.top) > startTop) {
+            end = offset;
+            for (
+              let more = offset + 1;
+              more < text.length && more <= offset + 3 && Math.round(charRect(more).top) > startTop;
+              more += 1
+            )
+              end = more;
+            break;
+          }
+        }
+        if (end < 0) return undefined;
+        return { start: center(charRect(start)), end: center(charRect(end)) };
       }
     }
     return undefined;
   });
-  if (!points) throw new Error('Verse 2 text not found');
+  if (!points) throw new Error('Verse 2 does not wrap onto a second line');
   await page.mouse.click(editorFrameBox.x + points.start.x, editorFrameBox.y + points.start.y);
   await page.keyboard.down('Shift');
   await page.mouse.click(editorFrameBox.x + points.end.x, editorFrameBox.y + points.end.y);
