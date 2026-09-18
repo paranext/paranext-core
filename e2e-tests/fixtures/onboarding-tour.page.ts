@@ -88,9 +88,14 @@ export function getTourDoneButton(page: Page): Locator {
   return getTourButton(page, '%onboardingTour_button_done%');
 }
 
+/** Returns a Locator for the tour dialog's step-counter element (e.g. text `"1 of 5"`). */
+function getStepCounter(page: Page): Locator {
+  return getTourDialog(page).getByTestId('tour-step-counter');
+}
+
 /** Returns the step-counter display text (e.g. `"1 of 5"`). */
 export async function getTourStepCount(page: Page): Promise<string> {
-  const counter = getTourDialog(page).getByTestId('tour-step-counter');
+  const counter = getStepCounter(page);
   return counter.textContent().then((t) => t?.trim() ?? '');
 }
 
@@ -113,11 +118,67 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
 }
 
 /**
- * Clicks the primary action button (Next on intermediate steps, Done on the last step). Matches
- * either label so a caller need not know which step it is on.
+ * Waits for the tour's step-counter text to differ from `previousText` — or for the tour dialog to
+ * close, which is what a Done click does. Either outcome is proof that the triggering click's
+ * transition actually rendered, not just that the click resolved: the tour re-measures its target
+ * on every step change and has no Escape listener (and, once Done closes it, no dialog) for a frame
+ * while it does that.
+ *
+ * Polled by hand rather than `expect(stepCounter).not.toHaveText(...)`: that assertion keeps
+ * polling while the element is missing (only the `toBeHidden`/`not.toBeVisible` family passes on a
+ * missing element), so it would time out on the very Done click it is meant to cover. A counter
+ * that is momentarily absent while the dialog is still open is the mid-transition frame, and reads
+ * as "not changed yet".
+ *
+ * A dialog that is not visible is ambiguous: the tour unmounts it for good after Done, but it also
+ * renders nothing for a frame while it re-measures the next step's target — on a fast machine a
+ * single sample lands in that frame. So "closed" is only reported once the dialog has stayed away
+ * for several consecutive samples; a brief absence reads as "not changed yet" and the poll goes
+ * on.
+ *
+ * Compares trimmed text on both sides: `textContent()` can carry incidental leading/trailing
+ * whitespace from the surrounding markup that has nothing to do with the step actually changing, so
+ * comparing the raw strings can either report a change that is not real or paper over a stale
+ * read.
+ */
+async function waitForStepCounterChange(page: Page, previousText: string | null): Promise<void> {
+  const dialog = getTourDialog(page);
+  const stepCounter = getStepCounter(page);
+  const previousTrimmed = previousText?.trim() ?? previousText;
+  const samplesBeforeClosed = 4;
+  let dialogAbsentSamples = 0;
+  await expect
+    .poll(
+      async () => {
+        const [dialogVisible, counterCount] = await Promise.all([
+          dialog.isVisible(),
+          stepCounter.count(),
+        ]);
+        if (!dialogVisible) {
+          dialogAbsentSamples += 1;
+          return dialogAbsentSamples >= samplesBeforeClosed ? 'closed' : previousTrimmed;
+        }
+        dialogAbsentSamples = 0;
+        if (counterCount === 0) return previousTrimmed;
+        const text = await stepCounter.textContent();
+        return text?.trim() ?? text;
+      },
+      { timeout: 5_000 },
+    )
+    .not.toBe(previousTrimmed);
+}
+
+/**
+ * Clicks the primary action button (Next on intermediate steps, Done on the last step) and waits
+ * for the step counter to actually change — or the tour to close — before returning, so callers
+ * always see a settled state rather than a mid-transition frame. Matches either label so a caller
+ * need not know which step it is on.
  */
 export async function advanceTour(page: Page): Promise<void> {
+  const stepCounter = getStepCounter(page);
+  const stepBeforeClick = await stepCounter.textContent();
   await getTourNextButton(page).or(getTourDoneButton(page)).click();
+  await waitForStepCounterChange(page, stepBeforeClick);
 }
 
 /** Clicks the Back button to return to the previous step. */
@@ -133,13 +194,22 @@ export async function goBackTour(page: Page): Promise<void> {
  */
 export async function advanceToLastStep(page: Page): Promise<void> {
   const nextButton = getTourNextButton(page);
+  const stepCounter = getStepCounter(page);
   for (let i = 0; i < 10; i += 1) {
     // Steps are inherently sequential — must observe the current step before advancing.
     // eslint-disable-next-line no-await-in-loop
     if (!(await nextButton.isVisible())) return;
+    // Must be read before the click below fires, so there is nothing to parallelize.
+    // eslint-disable-next-line no-await-in-loop
+    const stepBeforeClick = await stepCounter.textContent();
     // Sequential: the click must complete (revealing the next step) before the next iteration.
     // eslint-disable-next-line no-await-in-loop
     await nextButton.click();
+    // Wait for the step-transition re-render to actually land before deciding whether to keep
+    // going: a bare isVisible() right after the click can still observe the outgoing step's Next
+    // button mid-transition and return early, silently skipping a step.
+    // eslint-disable-next-line no-await-in-loop
+    await waitForStepCounterChange(page, stepBeforeClick);
   }
 }
 
