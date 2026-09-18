@@ -705,10 +705,7 @@ export function OverlayCommandPalettePresentational({
           // writing a raw pixel offset onto its own wrapper — a value the browser re-scales if that
           // wrapper sits inside a zoomed element, doubling the effect. So the zoom and the sizing
           // live on the inner div below instead, leaving the arrow as PopoverContent's other, unzoomed
-          // child. The shared PopoverContent still carries a fixed `tw:w-72` width class; overriding
-          // it to `auto` here lets PopoverContent's own box size to that inner div rather than
-          // reasserting the fixed width over it — omitting this line stops the palette from growing
-          // with the pane's zoom at all.
+          // child. PopoverContent must not carry a fixed width; the inner wrapper below owns sizing.
           width: 'auto',
         }}
         onOpenAutoFocus={(e) => e.preventDefault()}
