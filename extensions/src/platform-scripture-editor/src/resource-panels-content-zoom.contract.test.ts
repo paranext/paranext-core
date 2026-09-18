@@ -36,3 +36,19 @@ describe('content zoom markers (Text Collection grid)', () => {
     expect(areaIndex).toBeGreaterThan(headerIndex);
   });
 });
+
+describe('content zoom markers (Bible Texts / Commentaries panel)', () => {
+  const panel = source('resource-text-panel.component.tsx');
+
+  it('picks its area id from the resource type it was opened for', () => {
+    // Both web-view types share this component and share a memory identity (their container
+    // project), so the area id is the only thing that keeps their remembered levels apart.
+    expect(panel).toMatch(/resourceType === 'ScriptureResource' \? 'bible-texts' : 'commentaries'/);
+  });
+
+  it('marks the content below the selector, keeping the selector itself fixed', () => {
+    expect(panel).toMatch(
+      /<ResourceSelectorDropdown[\s\S]*?\/> <ContentZoomRoot area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"> {renderContent\(\)} <\/ContentZoomRoot>/,
+    );
+  });
+});
