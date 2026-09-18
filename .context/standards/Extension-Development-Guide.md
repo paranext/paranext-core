@@ -336,7 +336,9 @@ when opened from inside one. `ContentZoomRoot` and `ContentZoomAreaProvider` are
 pop-up you build without these components can opt in by putting
 `data-platform-content-zoom-root="<area>"` and `data-platform-content-zoom-popup` on its portaled
 content. Those attributes only scale it: such a pop-up gets none of the library's size caps, so it
-must keep itself inside the pane.
+must keep itself inside the pane. The Scripture editor's own right-click menu is drawn by the
+editor library rather than by these components, at both the text pane and the footnote editor
+pop-up; it follows its area because the host hands the library the area's element to render into.
 
 **Pop-ups requested through `papi.overlays` follow the requesting pane too.** A command palette,
 popover or context menu shown with `papi.overlays.showCommandPalette`/`showPopover`/
