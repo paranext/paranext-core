@@ -107,7 +107,7 @@ cd c-sharp && dotnet csharpier --check .
 | `.../src/types/legacy-comment-manager.d.ts` | Remove the data type and its methods | 3 |
 | `c-sharp/Projects/CommentFilterSelection.cs` | **Delete** | 3 |
 | `c-sharp/Projects/ProjectDataType.cs` | Remove `USER_COMMENT_FILTERS` | 3 |
-| `c-sharp/Projects/ParatextProjectDataProvider.cs` | Remove the three methods, the deserializer, the dispatch entries, the schema block | 3 |
+| `c-sharp/Projects/ParatextProjectDataProvider.cs` | Remove the three methods, the deserializer, the dispatch entries | 3 |
 | `c-sharp-tests/Projects/UserCommentFiltersSettingTests.cs` | **Delete** | 3 |
 | `c-sharp-tests/Projects/CommentFilterSelectionTests.cs` | **Delete** | 3 |
 
@@ -323,8 +323,13 @@ different things; do not let the sweep conflate them.
 - [ ] **Step 2: Delete**
 
 Remove the two C# files, the `ProjectDataType` constant, the three provider methods, the
-deserializer, the dispatch entries, and the `OpenCommentListWebViewOptions` schema properties that
-described them. Remove the data type and its four methods from `legacy-comment-manager.d.ts`.
+deserializer and the dispatch entries. Remove the data type and its four methods from
+`legacy-comment-manager.d.ts`.
+
+**Leave `openCommentList`'s OpenRPC schema in `main.ts` alone.** Its `filtersToSet` and
+`scopeFilterToSet` properties describe the open command's own parameters, which still drive the
+mount-time override the web view honours. They were never part of the project-data path, and
+removing them breaks a live feature.
 
 **Leave `b362464be3e`'s comment fix in `UserTextConnectionSettingTests.cs` alone** — it is about a
 different setting's version validation and is still correct.
