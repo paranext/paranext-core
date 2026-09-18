@@ -12,8 +12,10 @@
  *   entries panel focused it does the opposite; with F7 on and focus in the footnotes list it
  *   raises `footnotes`, independently of the other two.
  * - The ribbons row and the top toolbar sit above every marked area and keep their height throughout.
- * - Closing and reopening the same resource restores the remembered `main` level; a different
- *   resource starts at the Settings default rather than inheriting it.
+ * - Closing and reopening the same resource restores the remembered `main` level (its own test, run
+ *   unconditionally). A different resource starts at the Settings default rather than inheriting
+ *   the first resource's level (a separate test, gated at the top on a second installed resource,
+ *   so a missing one skips only that case rather than the unconditional one above it).
  *
  * Not covered here (need real Marble/DBL fixtures and a running app; see below): Ctrl+wheel over
  * these areas (covered for the same mechanism by the Scripture editor and comment-list specs), the
@@ -56,6 +58,41 @@ const DEFAULT_RESOURCE_ID = 'ESV16UK+';
  * is opt-in; the one case that needs it is skipped without it.
  */
 const SECOND_RESOURCE_ID = process.env.E2E_TEST_ENHANCED_RESOURCE_ID_2 ?? '';
+
+/**
+ * The bootstrap's own idea of the pane's active area (its `window.__platformContentZoom.activeArea`
+ * getter — `web-view-content-zoom.bootstrap-script.ts`), set by its capture-phase `pointerdown`
+ * listener regardless of whether the click actually moved DOM focus. Used for the click-driven
+ * steps below (a plain click on a pane wrapper, or on a dictionary row, may or may not land on a
+ * focusable element), matching the same fallback `targetFor` uses to resolve a chord's area. Same
+ * shape as `readActiveArea` in `content-zoom.spec.ts`.
+ */
+async function readActiveArea(frame: Frame): Promise<string | undefined> {
+  return frame.evaluate(() => {
+    // The bootstrap script defines this global; untyped here since it is an internal
+    // platform/pane contract, not part of this test's own types.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as { __platformContentZoom?: { activeArea?: string } };
+    // Same internal platform/pane contract as above — the double underscore is the bootstrap's own name.
+    // eslint-disable-next-line no-underscore-dangle
+    return win.__platformContentZoom?.activeArea;
+  });
+}
+
+/**
+ * The zoom area the pane's focused element sits in — the same `closest()` lookup the in-iframe
+ * chord handler runs on `document.activeElement` (`targetFor` in
+ * `web-view-content-zoom.bootstrap-script.ts`). Used for the footnotes step below, where focus is
+ * moved by keyboard (`ArrowDown`) rather than by a click. Same shape as `readFocusedAreaId` in
+ * `content-zoom-chords.spec.ts`.
+ */
+async function readFocusedAreaId(frame: Frame): Promise<string | undefined> {
+  return frame.evaluate(() => {
+    const root = document.activeElement?.closest('[data-platform-content-zoom-root]');
+    if (!root) return undefined;
+    return root.getAttribute('data-platform-content-zoom-root') || 'main';
+  });
+}
 
 /**
  * Opens the Enhanced Resource web view directly for `resourceId`, bypassing the hardcoded-default
@@ -155,14 +192,23 @@ test.describe('Enhanced Resources content zoom', () => {
     await dismissMarbleGuideIfShown(mainPage);
     const frame = await getEditorFrame(mainPage, editorId);
 
+    // Wait for a genuinely rendered pane before reading anything off it: the panel's pre-content
+    // states (loading, error, no chapter data) carry the same testid but mark no zoom area at all,
+    // so reading a factor or a geometry box before real content arrives would fail for that reason
+    // rather than a real one.
+    await expect(frame.getByTestId('er-scripture-pane')).toBeVisible({ timeout: 15_000 });
+
     const topBeforeAnyZoom = await scripturePaneTop(frame);
 
     await test.step('Ctrl+= with the Bible text focused raises --platform-content-zoom-main and leaves --platform-content-zoom-entries where it was', async () => {
       const mainFactorBefore = await readFactor(frame, '');
       const entriesFactorBefore = await readFactor(frame, 'entries');
-      // A linked word inside the scripture pane, the same target the enhanced-resources-journey
-      // spec clicks to drive the pane — any click inside `er-scripture-pane` puts focus in `main`.
-      await frame.getByTestId('er-scripture-pane').getByRole('link').first().click();
+      // The pane itself, not a word inside it: Editorial renders words as
+      // `mark.editor-typed-mark-external-marble-word`, never `role="link"`. A primary-button
+      // pointerdown anywhere inside a marked area aims the next chord at that area
+      // (`onPointerDown`/`targetFor` in `web-view-content-zoom.bootstrap-script.ts`).
+      await frame.getByTestId('er-scripture-pane').click();
+      await expect.poll(() => readActiveArea(frame)).toBe('main');
       await mainPage.keyboard.press('Control+=');
       await expect.poll(() => readFactor(frame, '')).not.toBe(mainFactorBefore);
       expect(await readFactor(frame, 'entries')).toBe(entriesFactorBefore);
@@ -173,10 +219,17 @@ test.describe('Enhanced Resources content zoom', () => {
       const entriesFactorBefore = await readFactor(frame, 'entries');
       // The Dictionary tab is the default `activeTab` and shows entries for the current scope with
       // no filter needed; a row inside it sits inside the `entries` ContentZoomRoot, unlike the tab
-      // trigger itself which sits in the tab bar above it.
-      const entryRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
+      // trigger itself which sits in the tab bar above it. Excludes `dictionary-entry-detail-*`,
+      // which shares the `dictionary-entry-` prefix and would otherwise make `.first()` depend on
+      // whether a row has already expanded.
+      const entryRow = frame
+        .locator(
+          '[data-testid^="dictionary-entry-"]:not([data-testid^="dictionary-entry-detail-"])',
+        )
+        .first();
       await expect(entryRow).toBeVisible({ timeout: 15_000 });
       await entryRow.click();
+      await expect.poll(() => readActiveArea(frame)).toBe('entries');
       await mainPage.keyboard.press('Control+=');
       await expect.poll(() => readFactor(frame, 'entries')).not.toBe(entriesFactorBefore);
       expect(await readFactor(frame, '')).toBe(mainFactorBefore);
@@ -199,6 +252,7 @@ test.describe('Enhanced Resources content zoom', () => {
       // requirement of the focus check itself.
       await footnotesList.focus();
       await mainPage.keyboard.press('ArrowDown');
+      await expect.poll(() => readFocusedAreaId(frame)).toBe('footnotes');
       const footnotesFactorBefore = await readFactor(frame, 'footnotes');
       await mainPage.keyboard.press('Control+=');
       await expect.poll(() => readFactor(frame, 'footnotes')).not.toBe(footnotesFactorBefore);
@@ -212,7 +266,7 @@ test.describe('Enhanced Resources content zoom', () => {
     });
   });
 
-  test('closing and reopening the same resource restores the remembered level; a different resource starts at the Settings default', async ({
+  test('closing and reopening the same resource restores the remembered zoom level', async ({
     mainPage,
   }) => {
     test.skip(!!process.env.CI, 'Opens a real Marble resource — local runs only');
@@ -223,17 +277,23 @@ test.describe('Enhanced Resources content zoom', () => {
     const editorId = await openEnhancedResourceForId(mainPage, DEFAULT_RESOURCE_ID);
     await dismissMarbleGuideIfShown(mainPage);
     const frame = await getEditorFrame(mainPage, editorId);
+    await expect(frame.getByTestId('er-scripture-pane')).toBeVisible({ timeout: 15_000 });
 
     // Start from the known Settings default (Ctrl+0), rather than whatever level a prior run against
     // this same attached app may have left in memory, then zoom in twice — two steps away from a
     // KNOWN starting point is what makes `zoomedFactor` reliably distinct from `settingsDefault`
     // below, rather than merely "not equal to whatever it happened to start at".
-    await frame.getByTestId('er-scripture-pane').getByRole('link').first().click();
+    await frame.getByTestId('er-scripture-pane').click();
+    await expect.poll(() => readActiveArea(frame)).toBe('main');
     await mainPage.keyboard.press('Control+0');
     await expect.poll(() => readFactor(frame, '')).toBe(settingsDefault);
+    // Polled to the expected value between presses: `adjustContentZoom` awaits `getDefaultZoom()`
+    // before writing, and the memory write is debounced, so a poll gated only on "≠ default" could
+    // observe the first step and read `zoomedFactor` there while the second step is still landing.
     await mainPage.keyboard.press('Control+=');
+    await expect.poll(() => readFactor(frame, '')).toBeCloseTo(settingsDefault + 0.1, 5);
     await mainPage.keyboard.press('Control+=');
-    await expect.poll(() => readFactor(frame, '')).not.toBe(settingsDefault);
+    await expect.poll(() => readFactor(frame, '')).toBeCloseTo(settingsDefault + 0.2, 5);
     const zoomedFactor = await readFactor(frame, '');
 
     // The memory key is `resource:<state.resourceId>:main` — the definition carries no `projectId`,
@@ -245,27 +305,65 @@ test.describe('Enhanced Resources content zoom', () => {
       )
       .toBe(zoomedFactor);
 
-    await test.step('closing and reopening the same resource restores the remembered level', async () => {
-      await closeEnhancedResourceTab(mainPage, editorId);
-      const reopenedId = await openEnhancedResourceForId(mainPage, DEFAULT_RESOURCE_ID);
-      await dismissMarbleGuideIfShown(mainPage);
-      const reopenedFrame = await getEditorFrame(mainPage, reopenedId);
-      await expect.poll(() => readFactor(reopenedFrame, '')).toBe(zoomedFactor);
-      await closeEnhancedResourceTab(mainPage, reopenedId);
-    });
+    await closeEnhancedResourceTab(mainPage, editorId);
+    const reopenedId = await openEnhancedResourceForId(mainPage, DEFAULT_RESOURCE_ID);
+    await dismissMarbleGuideIfShown(mainPage);
+    const reopenedFrame = await getEditorFrame(mainPage, reopenedId);
+    await expect(reopenedFrame.getByTestId('er-scripture-pane')).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => readFactor(reopenedFrame, '')).toBe(zoomedFactor);
+    await closeEnhancedResourceTab(mainPage, reopenedId);
+  });
 
+  test('a different resource starts at the Settings default, not a previously zoomed resource’s level', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Opens a real Marble resource — local runs only');
+    // Gated at the top: this case needs a second installed Marble resource nothing in this
+    // repository guarantees, and running the whole test past its first assertion only to skip
+    // partway through would report the unconditional case above as skipped too (Playwright's
+    // `expectedStatus` is set for the whole test, not the assertions already run).
     test.skip(
       !SECOND_RESOURCE_ID,
       'Set E2E_TEST_ENHANCED_RESOURCE_ID_2 with a second installed Marble resource ID',
     );
+    await waitForAppReady(mainPage);
 
-    await test.step('a different resource starts at the Settings default, not the first resource’s level', async () => {
-      // `zoomedFactor` was already confirmed distinct from `settingsDefault` above, so a fresh pane
-      // landing on `settingsDefault` here is a real assertion, not a coincidence of equal values.
-      const secondId = await openEnhancedResourceForId(mainPage, SECOND_RESOURCE_ID);
-      await dismissMarbleGuideIfShown(mainPage);
-      const secondFrame = await getEditorFrame(mainPage, secondId);
-      await expect.poll(() => readFactor(secondFrame, '')).toBe(settingsDefault);
-    });
+    const settingsDefault = await readSettingsDefaultZoom(mainPage);
+
+    const editorId = await openEnhancedResourceForId(mainPage, DEFAULT_RESOURCE_ID);
+    await dismissMarbleGuideIfShown(mainPage);
+    const frame = await getEditorFrame(mainPage, editorId);
+    await expect(frame.getByTestId('er-scripture-pane')).toBeVisible({ timeout: 15_000 });
+
+    // Move the first resource two steps away from the known Settings default, so the "different
+    // resource starts fresh" assertion below compares against a level demonstrably distinct from
+    // the default rather than a coincidence of equal values.
+    await frame.getByTestId('er-scripture-pane').click();
+    await expect.poll(() => readActiveArea(frame)).toBe('main');
+    await mainPage.keyboard.press('Control+0');
+    await expect.poll(() => readFactor(frame, '')).toBe(settingsDefault);
+    await mainPage.keyboard.press('Control+=');
+    await expect.poll(() => readFactor(frame, '')).toBeCloseTo(settingsDefault + 0.1, 5);
+    await mainPage.keyboard.press('Control+=');
+    await expect.poll(() => readFactor(frame, '')).toBeCloseTo(settingsDefault + 0.2, 5);
+
+    const secondId = await openEnhancedResourceForId(mainPage, SECOND_RESOURCE_ID);
+    await dismissMarbleGuideIfShown(mainPage);
+    const secondFrame = await getEditorFrame(mainPage, secondId);
+    // The second resource is arbitrary (nothing in this repository guarantees it has data), so its
+    // pane may render the `showShellEmpty` shell instead of a real chapter — which mounts no
+    // `ContentZoomRoot` and reports no zoom area at all, rather than one at the Settings default.
+    // Detected here and skipped with that as the reason, rather than failing on a `readFactor` that
+    // would otherwise poll to 0 forever.
+    const hasContent = await secondFrame
+      .getByTestId('er-scripture-pane')
+      .waitFor({ state: 'visible', timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    test.skip(
+      !hasContent,
+      `${SECOND_RESOURCE_ID} reported no zoom areas — no chapter data available`,
+    );
+    await expect.poll(() => readFactor(secondFrame, '')).toBe(settingsDefault);
   });
 });
