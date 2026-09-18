@@ -51,6 +51,8 @@ export type OverlayPopoverPresentationalProps = {
   /**
    * The scale the requesting pane draws its content at. The pop-up is drawn at the same scale, so
    * it matches the text it belongs to. 1 leaves the rendered output exactly as it is.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   contentScale?: number;
   /**
@@ -58,6 +60,8 @@ export type OverlayPopoverPresentationalProps = {
    * pixels while its position has already been translated by this factor, so the size needs the
    * same multiplication to describe the trigger as it is painted. Only a pane scaled as a whole
    * frame has a factor here; one that marks zoom areas reports its trigger already translated.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   frameScale?: number;
   /** Called when the user clicks an action button (card content) */
@@ -177,8 +181,8 @@ export function OverlayPopoverPresentational({
   onAction,
   onDismiss,
 }: OverlayPopoverPresentationalProps) {
-  // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied,
-  // exactly as before content zoom existed.
+  // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied;
+  // the zoom cap below combines with this resolved value, not with the caller's raw one.
   const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
   const resolvedMaxHeight = maxHeight ?? DEFAULT_MAX_HEIGHT;
 
@@ -363,12 +367,20 @@ function localizePopoverContent(
 type OverlayPopoverProps = {
   overlay: Extract<OverlayEntry, { type: 'popover' }>;
   /**
-   * The requesting pane's content and frame scale, read and supplied by `OverlayHost` — see
-   * {@link OverlayPopoverPresentationalProps.contentScale} and
-   * {@link OverlayPopoverPresentationalProps.frameScale}. Undefined draws at interface scale,
+   * The requesting pane's content scale, read and supplied by `OverlayHost` — see
+   * {@link OverlayPopoverPresentationalProps.contentScale}. Undefined draws at interface scale,
    * matching the presentational component's own default.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   contentScale?: number;
+  /**
+   * The requesting pane's frame scale, read and supplied by `OverlayHost` — see
+   * {@link OverlayPopoverPresentationalProps.frameScale}. Undefined draws at interface scale,
+   * matching the presentational component's own default.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
   frameScale?: number;
 };
 

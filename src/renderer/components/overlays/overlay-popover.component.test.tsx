@@ -340,8 +340,8 @@ describe('OverlayPopoverPresentational', () => {
 });
 
 describe('OverlayPopover (store-connected)', () => {
-  // The connector no longer reads any service itself — it forwards `contentScale`/`frameScale`
-  // straight through to the presentational component, so this test needs no service mocks: it
+  // The connector forwards `contentScale`/`frameScale` straight through to the presentational
+  // component without reading any service of its own, so this test needs no service mocks: it
   // supplies both as explicit props and drives the real connector end to end.
   type PopoverEntry = Extract<OverlayEntry, { type: 'popover' }>;
 

@@ -180,9 +180,10 @@ describe('OverlayHost', () => {
   describe('content zoom wiring', () => {
     // Each overlay kind's stub echoes the `contentScale` prop it received into its own `style.zoom`
     // (see the mocks above), so these pin that OverlayHost itself reads the requesting pane's scale
-    // and passes it down — the one seam left once the overlay components stopped reading it
-    // themselves. Deleting the `contentScale={...}` prop from the corresponding branch in
-    // OverlayHost's JSX leaves every other test in this file green and only reds out its own case.
+    // and passes it down — the one seam that reads the content-zoom service; the overlay components
+    // below take the scale purely as a prop. Deleting the `contentScale={...}` prop from the
+    // corresponding branch in OverlayHost's JSX leaves every other test in this file green and only
+    // reds out its own case.
 
     it("passes the requesting pane's content scale to a context menu overlay", () => {
       mockGetContentZoomScaleForWebView.mockReturnValue(1.5);
