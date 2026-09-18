@@ -7,14 +7,14 @@
  * button while a drag is in progress, so only a real drag in a real window can show whether every
  * point of that space accepts the drop — unit tests with a mocked layout cannot.
  *
- * Three tests, each launching its own Electron instance:
+ * Four tests, each launching its own Electron instance:
  *
  * 1. The zone's remainder appends a tab dragged within its own panel.
- * 2. Every part of ANOTHER panel's empty bar space appends: the last tab's trailing half, which the
- *    zone also claims so the bar reads as one continuous target, the gap before "+", "+" itself,
- *    the bar's end padding, and the bar's lower band when the pointer arrives from the panel's
- *    content.
- * 3. Starting a drag on a crowded bar does not move the tabs; the squeezed zone refuses the drop, a
+ * 2. The zone claims the last tab's trailing half, so the bar reads as one continuous target instead
+ *    of two.
+ * 3. Every part of ANOTHER panel's empty bar space appends: the gap before "+", "+" itself, the bar's
+ *    end padding, and the bar's lower band when the pointer arrives from the panel's content.
+ * 4. Starting a drag on a crowded bar does not move the tabs; the squeezed zone refuses the drop, a
  *    neighboring tab's drop indicator stays inside the bar, and a release past the bar's last tab
  *    still appends even though the zone itself has no width left to claim.
  *
@@ -298,10 +298,65 @@ test.describe('tab-bar drop zone', () => {
     }).toPass({ timeout: 10_000 });
   });
 
+  test("the zone claims the last tab's trailing half", async ({ mainPage: page }) => {
+    // The zone's hit area extends backward over the current last tab's trailing half, so the bar
+    // reads as one continuous target instead of two. The tab landing last only shows SOMETHING
+    // accepted the drop — rc-dock's own after-tab target would produce the same outcome. Read the
+    // drop indicator before releasing and check its shape to prove the ZONE claimed this half:
+    // rc-dock's own after-tab indicator is a fixed 30px strip straddling the tab's trailing edge
+    // (`DockLayout.tsx`'s `after-tab` case: `left += width - 15; width = 30`), while the zone's own
+    // indicator (`.platform-tab-bar-drop-zone-indicator`, `inset-inline-end: 0` against the zone)
+    // starts at or before that edge and runs all the way to the zone's own right edge.
+    //
+    // Its own test, with a fresh two-panel layout holding only Home (dragged) and panel B's own
+    // original tab (claimed): sharing a layout with a sweep across the rest of the bar would crowd
+    // panel B enough, by the time this case runs, to leave the zone no width to claim with.
+    const { panelId: panelIdA, homeId } = await setUp(page);
+    const { panelId: panelIdB } = await openPanelToTheRight(page);
+    const panelB = panelSelector(panelIdB);
+
+    const lastTabId = (await tabIdsOf(page, panelIdB)).at(-1);
+    if (!lastTabId) throw new Error(`panel ${panelIdB} has no tabs`);
+
+    await startDrag(page, homeId);
+    try {
+      const box = await tabButton(page, lastTabId).boundingBox();
+      if (!box) throw new Error(`tab ${lastTabId} has no box`);
+      await page.mouse.move(box.x + 0.75 * box.width, box.y + box.height / 2, { steps: 10 });
+
+      const indicator = await readWhenSettled(page, () => readDropIndicator(page));
+      expect(indicator, 'drop indicator over the last tab trailing half').toBeDefined();
+      if (indicator) {
+        const tabRight = box.x + box.width;
+        const zone = await rectOf(page, `${panelB} .platform-tab-bar-drop-zone`);
+        const plus = await rectOf(page, `${panelB} .new-tab-button`);
+        expect
+          .soft(indicator.left, 'indicator starts at or before the tab trailing edge')
+          .toBeLessThanOrEqual(tabRight + 1);
+        expect
+          .soft(
+            Math.abs(indicator.right - zone.right),
+            "indicator right edge matches the zone's own right edge",
+          )
+          .toBeLessThan(2);
+        expect
+          .soft(
+            indicator.right,
+            'indicator reaches out toward "+", not a 15px after-tab strip past the tab edge',
+          )
+          .toBeGreaterThan(plus.left - TAB_BAR_EXTRA_GAP_PX - 1);
+      }
+    } finally {
+      await page.mouse.up();
+    }
+    await expect(page.locator(DRAGGING_LAYER)).toHaveCount(0, { timeout: 5_000 });
+    await expectAppendedTo(page, homeId, panelIdB, panelIdA, 'last tab trailing half');
+  });
+
   test("every part of another panel's empty bar space appends a dropped tab", async ({
     mainPage: page,
   }) => {
-    const { panelId: panelIdA, homeId } = await setUp(page);
+    const { panelId: panelIdA } = await setUp(page);
     const movers = [
       await addNewTab(page, panelIdA),
       await addNewTab(page, panelIdA),
@@ -316,58 +371,6 @@ test.describe('tab-bar drop zone', () => {
       const bar = await rectOf(page, `${panelB} .dock-bar`);
       return { x: (plus.left + plus.right) / 2, y: (bar.top + bar.bottom) / 2 };
     };
-
-    await test.step("last tab's trailing half", async () => {
-      // The zone's hit area extends backward over the current last tab's trailing half, so the bar
-      // reads as one continuous target instead of two. The tab landing last only shows SOMETHING
-      // accepted the drop — rc-dock's own after-tab target would produce the same outcome. Read the
-      // drop indicator before releasing and check its shape to prove the ZONE claimed this half:
-      // rc-dock's own after-tab indicator is a fixed 30px strip straddling the tab's trailing edge
-      // (`DockLayout.tsx`'s `after-tab` case: `left += width - 15; width = 30`), while the zone's
-      // own indicator (`.platform-tab-bar-drop-zone-indicator`, `inset-inline-end: 0` against the
-      // zone) starts at or before that edge and runs all the way to the zone's own right edge.
-      //
-      // Runs first, while panel B still has only its own original tab (the one `openPanelToTheRight`
-      // created) to claim the trailing half of. Drags the Home tab instead of adding a fifth tab to
-      // panel A: once panel B exists, panel A is only half the window wide, and a fifth tab there
-      // tips its own bar into overflow at the window sizes this suite launches with.
-      const lastTabId = (await tabIdsOf(page, panelIdB)).at(-1);
-      if (!lastTabId) throw new Error(`panel ${panelIdB} has no tabs`);
-
-      await startDrag(page, homeId);
-      try {
-        const box = await tabButton(page, lastTabId).boundingBox();
-        if (!box) throw new Error(`tab ${lastTabId} has no box`);
-        await page.mouse.move(box.x + 0.75 * box.width, box.y + box.height / 2, { steps: 10 });
-
-        const indicator = await readWhenSettled(page, () => readDropIndicator(page));
-        expect(indicator, 'drop indicator over the last tab trailing half').toBeDefined();
-        if (indicator) {
-          const tabRight = box.x + box.width;
-          const zone = await rectOf(page, `${panelB} .platform-tab-bar-drop-zone`);
-          const plus = await rectOf(page, `${panelB} .new-tab-button`);
-          expect
-            .soft(indicator.left, 'indicator starts at or before the tab trailing edge')
-            .toBeLessThanOrEqual(tabRight + 1);
-          expect
-            .soft(
-              Math.abs(indicator.right - zone.right),
-              "indicator right edge matches the zone's own right edge",
-            )
-            .toBeLessThan(2);
-          expect
-            .soft(
-              indicator.right,
-              'indicator reaches out toward "+", not a 15px after-tab strip past the tab edge',
-            )
-            .toBeGreaterThan(plus.left - TAB_BAR_EXTRA_GAP_PX - 1);
-        }
-      } finally {
-        await page.mouse.up();
-      }
-      await expect(page.locator(DRAGGING_LAYER)).toHaveCount(0, { timeout: 5_000 });
-      await expectAppendedTo(page, homeId, panelIdB, panelIdA, 'last tab trailing half');
-    });
 
     await test.step('gap between zone and "+"', async () => {
       await dragTabTo(page, movers[0], async () => {
@@ -427,25 +430,6 @@ test.describe('tab-bar drop zone', () => {
     const panel = panelSelector(panelId);
     const operations = page.locator(`${panel} .dock-nav-operations`);
 
-    await test.step('crowd the bar until tabs overflow', async () => {
-      // Comfortably more tabs than any window width the suite launches with needs before the row
-      // overflows into the "more" dropdown; if it somehow still didn't overflow, the `expect`
-      // right after the loop — not this cap — is what fails the test.
-      const MAX_TABS_TO_CROWD_BAR = 40;
-      for (let i = 0; i < MAX_TABS_TO_CROWD_BAR; i++) {
-        // Sequential on purpose: each tab must land before overflow is read again
-        // eslint-disable-next-line no-await-in-loop
-        const hidden = await operations.evaluate((operationsElement) =>
-          operationsElement.classList.contains('dock-nav-operations-hidden'),
-        );
-        if (!hidden) return;
-        // Sequential on purpose: tabs are added one at a time
-        // eslint-disable-next-line no-await-in-loop
-        await addNewTab(page, panelId);
-      }
-      await expect(operations).not.toHaveClass(/dock-nav-operations-hidden/);
-    });
-
     /** The tab row's geometry, which tabs are fully inside the visible wrap, and the last tab. */
     const measure = async () =>
       page.locator(`${panel} .dock-nav-wrap`).evaluate((wrap) => {
@@ -471,6 +455,35 @@ test.describe('tab-bar drop zone', () => {
         };
       });
 
+    await test.step('crowd the bar until tabs overflow with at least a few tabs still visible', async () => {
+      // Comfortably more tabs than any window width the suite launches with needs before the row
+      // overflows into the "more" dropdown with at least a few tabs still visible; if the cap is
+      // reached first, this throws naming which of the two conditions was not met, rather than
+      // leaving the assertion below to fail on a row that never got the chance to settle.
+      const MAX_TABS_TO_CROWD_BAR = 40;
+      const MIN_VISIBLE_TABS_TO_CROWD_BAR = 3;
+      let overflowed = false;
+      let visibleCount = 0;
+      for (let i = 0; i < MAX_TABS_TO_CROWD_BAR; i++) {
+        // Sequential on purpose: each tab must land before overflow and visibility are read again
+        // eslint-disable-next-line no-await-in-loop
+        overflowed = !(await operations.evaluate((operationsElement) =>
+          operationsElement.classList.contains('dock-nav-operations-hidden'),
+        ));
+        // Sequential on purpose: the settled row measurement after each tab lands
+        // eslint-disable-next-line no-await-in-loop
+        visibleCount = (await readWhenSettled(page, measure)).visible.length;
+        if (overflowed && visibleCount >= MIN_VISIBLE_TABS_TO_CROWD_BAR) return;
+        // Sequential on purpose: tabs are added one at a time
+        // eslint-disable-next-line no-await-in-loop
+        await addNewTab(page, panelId);
+      }
+      throw new Error(
+        `bar did not reach both overflow and ${MIN_VISIBLE_TABS_TO_CROWD_BAR}+ visible tabs within ` +
+          `${MAX_TABS_TO_CROWD_BAR} tabs (overflowed=${overflowed}, visible=${visibleCount})`,
+      );
+    });
+
     const before = await test.step('wait for the tab row to settle', async () => {
       // A new tab first shows its title's raw localization key, which is wider than the resolved
       // title. When it resolves, rc-tabs re-scrolls the row and animates the move over 0.3s, so a
@@ -480,6 +493,8 @@ test.describe('tab-bar drop zone', () => {
       ).toHaveCount(0, { timeout: 30_000 });
       return readWhenSettled(page, measure);
     });
+    // The crowding loop above already guarantees this; restated here as the precondition the rest
+    // of the test depends on, not as a race with the loop's own exit condition.
     expect(before.visible.length).toBeGreaterThan(2);
     // Pressing a tab focuses it, and rc-tabs scrolls a focused tab into view by its own measure,
     // which ignores `.dock-nav-wrap`'s inline padding: a tab at either edge can move a few px on
