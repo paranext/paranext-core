@@ -5,10 +5,10 @@
  * `resource:<container project>:bible-texts` key, and the Scripture editor's own `main` area is
  * untouched throughout.
  *
- * This is the one content-zoom e2e for the Resources views that runs on this machine:
- * `tests/enhanced-resources/` needs real Marble/DBL resources this box does not have. To get real
- * chapter content into the panel without one, the container project's PERSONAL (user-scope)
- * reference list is pointed at a second disposable project copy — `resolveReferenced` in
+ * This is the one content-zoom e2e for the Resources views that runs without real resources:
+ * `tests/enhanced-resources/` needs real Marble/DBL resources instead. To get real chapter content
+ * into the panel without one, the container project's PERSONAL (user-scope) reference list is
+ * pointed at a second disposable project copy — `resolveReferenced` in
  * `downloaded-resources.utils.ts` resolves an ordinary Paratext project reference without any DBL
  * catalog involved, and `useEffectiveResourceReferenceList` merges the user list in alongside the
  * (empty, for a fresh project) admin one.
@@ -41,6 +41,12 @@ import {
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
 
+// Power mode, matching the other content-zoom specs: Simple mode auto-opens the most recently used
+// project on launch, which races this spec's own project setup for the initial dock layout.
+//
+// The Bible Texts panel itself is Simple-mode-only (see `resource-text-panel.component.tsx`'s
+// `editor-container-simple` comment), so this spec exercises it in a mode it does not ship in — a
+// known limitation of this coverage, not something to fix by converting the spec to Simple mode.
 test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
@@ -54,7 +60,7 @@ const OPEN_RESOURCE_TEXT_COMMAND = 'platformScriptureEditor.openResourceText';
 
 /**
  * `contentZoomArea` for the Bible Texts tab (`resourceType === 'ScriptureResource'`) in
- * `resource-text-panel.component.tsx` — Task 5's area id.
+ * `resource-text-panel.component.tsx`.
  */
 const BIBLE_TEXTS_AREA_ID = 'bible-texts';
 
@@ -118,9 +124,9 @@ test.describe('Bible Texts panel content zoom', () => {
   let sourceProject: CommentTestProject;
 
   test.beforeAll(async () => {
-    // `containerProject` is both the project opened in the Scripture editor (case 5's `main` area)
-    // and the panel's own container identity (`openResourceText`'s second argument becomes the
-    // panel definition's `projectId`, which is what the memory key is built from — see
+    // `containerProject` is both the project opened in the Scripture editor (the editor's own
+    // `main` area) and the panel's own container identity (`openResourceText`'s second argument
+    // becomes the panel definition's `projectId`, which is what the memory key is built from — see
     // `memoryIdentityFor` in `web-view-content-zoom.service.ts`). `sourceProject` supplies the actual
     // chapter text; it is never opened anywhere directly.
     containerProject = await createCommentTestProject([], '_container');
@@ -148,8 +154,17 @@ test.describe('Bible Texts panel content zoom', () => {
     const editorFrame = await getEditorFrame(mainPage, editorId);
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
 
-    // Read BEFORE touching the Bible Texts panel at all, so case 5 below compares against the
-    // editor's own genuine starting point rather than assuming it is untouched by construction.
+    // Read BEFORE touching the Bible Texts panel at all, so the editor-untouched check below
+    // compares against the editor's own genuine starting point rather than assuming it is untouched
+    // by construction.
+    //
+    // Polled rather than read once: `readFactor` returns 0 (`Number('')`) before the bootstrap has
+    // written the variable onto this pane, so a bare read here can race that write and record a
+    // vacuous 0 — which would let the editor-untouched check below silently degrade to `0 === 0` if
+    // the editor ever stopped setting this variable at all. `toBeGreaterThan(0)` rules out both the
+    // race and the vacuous baseline, without assuming the Settings default is exactly 1 (the panel's
+    // own `before` factor below makes that same choice, for the same reason).
+    await expect.poll(() => readFactor(editorFrame, '')).toBeGreaterThan(0);
     const mainAreaBefore = await readFactor(editorFrame, '');
 
     await referenceProjectAsBibleText(mainPage, containerProject.projectId, sourceProject);
@@ -173,19 +188,46 @@ test.describe('Bible Texts panel content zoom', () => {
     const editorContainer = bibleTextsFrame.getByTestId(RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID);
     await editorContainer.waitFor({ timeout: 60_000 });
 
+    // The rendered verse text itself, not the container above or its own internal
+    // `.editor-container` wrapper: both of those are `tw:flex-1` flex items (the container is also
+    // `tw:overflow-auto`), so their own outer box is whatever the flex layout allots them and stays
+    // that size at any zoom level — a height ratio measured on either would read 1.0 even with the
+    // zoom rule broken. A verse span's height is intrinsic, set by its own rendered text at the
+    // pane's current zoom, so it is what actually moves when the zoom rule applies.
+    const verse1 = editorContainer
+      .locator('.editor-container span[data-marker="v"][data-number="1"]')
+      .first();
+    await verse1.waitFor({ timeout: 60_000 });
+
     // The resource-selector dropdown's trigger is the only button the panel renders outside the
-    // ContentZoomRoot (case 1's "unchanged header height" needs an element the area's zoom cannot
-    // reach).
+    // ContentZoomRoot — the header-height check below needs an element the area's zoom cannot reach.
     const headerButton = bibleTextsFrame.getByRole('button').first();
+    // Self-verifying: proves this matched the resource-selector trigger outside the ContentZoomRoot,
+    // not some other button the panel might grow inside the zoomed area.
+    const headerHasZoomRootAncestor = await headerButton.evaluate(
+      (element) => !!element.closest('[data-platform-content-zoom-root]'),
+    );
+    expect(headerHasZoomRootAncestor).toBe(false);
 
     // Read this pane's own starting factor rather than assuming the Settings default is 1.0 — a
     // prior local run can have left a different default behind.
     const before = await readFactor(bibleTextsFrame, BIBLE_TEXTS_AREA_ID);
 
     let afterCtrlPlus = before;
-    await test.step('Ctrl+= with the panel focused raises --platform-content-zoom-bible-texts, and the header height is unchanged', async () => {
+    // Populated inside the Ctrl+= step below, at the exact before/after of that single zoom step;
+    // asserted several steps later (see the dedicated step after the memory check) rather than right
+    // where it is measured. That placement is deliberate: a `test.step` failure aborts the rest of
+    // the test, so asserting it here would, on a failure, also swallow the evidence that the
+    // factor/indicator/wheel/memory checks below it are unaffected. Asserting it last, after those
+    // have already run and passed, means a failure of this check alone narrows the fault to the CSS
+    // rule that consumes the zoom variable — the other checks having already passed rules out a
+    // broken report path as the cause.
+    let contentRatioAfterCtrlPlus = 1;
+    await test.step('Ctrl+= with the panel focused raises --platform-content-zoom-bible-texts, and leaves the header height unchanged', async () => {
       const headerBoxBefore = await headerButton.boundingBox();
       if (!headerBoxBefore) throw new Error('Resource-selector header not found');
+      const verseBoxBefore = await verse1.boundingBox();
+      if (!verseBoxBefore) throw new Error('Verse 1 not found');
 
       await editorContainer.click();
       await mainPage.keyboard.press('Control+=');
@@ -193,22 +235,38 @@ test.describe('Bible Texts panel content zoom', () => {
       afterCtrlPlus = await readFactor(bibleTextsFrame, BIBLE_TEXTS_AREA_ID);
       expect(afterCtrlPlus).toBeCloseTo(before + 0.1, 5);
 
+      // Measured here, at the exact before/after of this one zoom step, but not yet asserted — see
+      // the comment on `contentRatioAfterCtrlPlus` above.
+      const verseBoxAfter = await verse1.boundingBox();
+      if (!verseBoxAfter) throw new Error('Verse 1 not found after zoom');
+      contentRatioAfterCtrlPlus = verseBoxAfter.height / verseBoxBefore.height;
+
       await expect
         .poll(() => bibleTextsFrame.locator(INDICATOR_SELECTOR).getAttribute('data-area'), {
           timeout: 2_000,
         })
         .toBe(BIBLE_TEXTS_AREA_ID);
+      // These two assertions check the badge's CONTENT, not that a user actually saw it: the hide
+      // timer only fades the badge to `opacity: 0` and never removes it, and `textContent()` does
+      // not require visibility.
       await expect
         .poll(() => readIndicatorText(bibleTextsFrame), { timeout: 2_000 })
         .toBe(`${Math.round(afterCtrlPlus * 100)}%`);
 
+      // The exact bound, not a slack range: nothing legitimate changes this control's height (a
+      // scrollbar appearing in the content area changes its width, not its height), so any
+      // difference at all is a regression.
       const headerBoxAfter = await headerButton.boundingBox();
       if (!headerBoxAfter) throw new Error('Resource-selector header not found after zoom');
-      expect(Math.abs(headerBoxAfter.height - headerBoxBefore.height)).toBeLessThanOrEqual(2);
+      expect(headerBoxAfter.height).toBe(headerBoxBefore.height);
     });
 
     let afterWheel = afterCtrlPlus;
     await test.step('Ctrl+wheel over the marked area changes the same variable', async () => {
+      // Aimed at the area's own centre rather than a content element (the precedent's approach):
+      // safe only because the factor is still near 1 here, so the area's box still fits inside the
+      // window. A taller area, or a much larger accumulated factor, can put its centre outside the
+      // viewport, where the wheel event would land nowhere.
       const box = await areaBox(bibleTextsFrame, BIBLE_TEXTS_AREA_ID);
       await ctrlWheel(mainPage, box, -120);
       await expect
@@ -233,9 +291,38 @@ test.describe('Bible Texts panel content zoom', () => {
         .toBe(afterWheel);
     });
 
-    await test.step('Ctrl+0 returns it to the Settings default', async () => {
+    await test.step('the Ctrl+= step actually scaled the rendered verse text, not just the variable', async () => {
+      // The factor variable moving does not by itself prove the rule that consumes it ever applied:
+      // `pushContentZoom` writes `--platform-content-zoom-bible-texts` for every reported area
+      // regardless of whether `zoom: var(--platform-content-zoom-bible-texts, …)` matches anything,
+      // so a broken rule would leave the factor, the memory entry, and the indicator all correct with
+      // nothing on screen actually bigger — exactly what the checks above this one, run and passed,
+      // cannot tell apart from a working rule. The verse's own rendered height is measured in the
+      // direction that would catch that: as a ratio against its own prior size, not re-derived from
+      // the factor above (which would just be checking the same variable twice). `toBeCloseTo(1.1,
+      // 1)` bounds the match within 0.05 of 1.1 (1.05–1.15), which a ratio of 1.0 — what a broken rule
+      // produces — cannot satisfy.
+      expect(contentRatioAfterCtrlPlus).toBeCloseTo(1.1, 1);
+    });
+
+    await test.step('Ctrl+0 returns the panel to its starting factor and drops the memory entry', async () => {
       await mainPage.keyboard.press('Control+0');
       await expect.poll(() => readFactor(bibleTextsFrame, BIBLE_TEXTS_AREA_ID)).toBe(before);
+
+      // `resetContentZoom` deletes the pane's memory entry outright rather than writing back the
+      // default, and that is the mechanism by which sibling panes of the same identity follow a
+      // reset — a regression that left the key behind would silently re-seed the old level into the
+      // next-opened pane. The write is on the same 250 ms debounce as every other memory write, so
+      // poll rather than reading once.
+      const normalizedId = containerProject.projectId.toUpperCase();
+      await expect
+        .poll(
+          async () =>
+            (await readContentZoomMemory(mainPage))[
+              `resource:${normalizedId}:${BIBLE_TEXTS_AREA_ID}`
+            ],
+        )
+        .toBeUndefined();
     });
 
     await test.step("the editor's own area is untouched", async () => {
