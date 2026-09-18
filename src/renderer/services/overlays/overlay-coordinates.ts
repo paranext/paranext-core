@@ -27,13 +27,14 @@ export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
  * The platform is the only writer of this property, so the inline value is authoritative (and,
  * unlike computed style, is defined for this non-standard property in every environment the
  * renderer runs in). Anything that is not a positive finite number — including the empty string
- * written to clear the zoom — means unscaled.
+ * written to clear the zoom, or a web view id with no matching iframe — means unscaled.
  *
- * @param iframe The WebView's host iframe element
+ * @param webViewId The webViewId of the iframe
  * @returns The scale factor the iframe's contents are rendered at
  */
-function getIframeZoom(iframe: HTMLIFrameElement): number {
-  const zoom = Number(iframe.style.zoom);
+export function getWebViewContentScale(webViewId: string): number {
+  const iframe = getWebViewIframe(webViewId);
+  const zoom = Number(iframe?.style.zoom);
   return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
 }
 
@@ -53,7 +54,7 @@ export function translateCoordinates(
   if (!iframe) return position;
 
   const rect = iframe.getBoundingClientRect();
-  const zoom = getIframeZoom(iframe);
+  const zoom = getWebViewContentScale(webViewId);
   return {
     x: rect.left + position.x * zoom,
     y: rect.top + position.y * zoom,
