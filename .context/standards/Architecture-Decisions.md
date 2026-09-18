@@ -4666,9 +4666,12 @@ step, no automation. Just a record.
   description assumed the opposite (that the definition carried the displayed resource's project);
   the design doc for this work corrects that assumption against the code before implementing from
   it. Separately, the Enhanced Resources viewer already carried its own zoom control —
-  `scripturePaneZoom`, a font-size multiplier driven by a Ctrl-chord handler that never fired on
-  Windows or Linux, with its menu items living in the toolbar outside every pane — that the new
-  platform mechanism had to either absorb or retire.
+  `scripturePaneZoom`, a font-size multiplier driven by its own `window` `keydown` handler for the
+  same Ctrl+`=`/`-`/`0` chords the platform mechanism claims, with its menu items living in the
+  toolbar outside every pane — that the new mechanism had to either absorb or retire. The two
+  handlers collided rather than one shadowing the other: both were registered bubble-phase on
+  `window` and neither stopped propagation, so a single keypress drove the private font-size
+  multiplier *and* the platform's content zoom.
 - **Decision:**
   - The four resource views each name their own `ContentZoomRoot` area — `text-collection`
     (`scripture-text-grid.web-view.tsx`), `bible-texts` and `commentaries` (both
@@ -4681,8 +4684,8 @@ step, no automation. Just a record.
     genuinely three independently resizable panes; a single area would remove the user's existing
     ability to enlarge just the Bible text relative to the other two. Its private `scripturePaneZoom`
     is deleted outright rather than migrated — state, prop chain, toolbar menu items, their localized
-    strings, and the keyboard-catalog entries for a handler that never worked cross-platform all go —
-    and the platform mechanism covers all three panes from a clean start.
+    strings, and the keyboard-catalog entries for the retired handler all go — and the platform
+    mechanism covers all three panes from a clean start.
 - **Alternatives:**
   - Adding per-view values to `ContentZoomKind` (one kind per resource panel) instead of naming
     areas — rejected: it reads tidier at each call site, but edits a core model file for no
