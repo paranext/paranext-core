@@ -398,11 +398,6 @@ global.webViewComponent = function CommentListWebView({
     return commentThreads;
   }, [commentThreads]);
 
-  // Mirror the loaded threads into the ref the stable message listener reads.
-  useEffect(() => {
-    commentThreadsRef.current = safeCommentThreads;
-  }, [safeCommentThreads]);
-
   // Whether the current query is the complete, unfiltered thread list -- the only list pruning can
   // safely trust. A narrowed preset or scope would otherwise make every thread it excludes look
   // deleted, discarding drafts a filter change is merely hiding rather than destroying. Computed
@@ -419,6 +414,24 @@ global.webViewComponent = function CommentListWebView({
     isLoadingCommentThreads,
     isShowingAllCommentThreads,
   });
+
+  // The 'unsaved' preset contributes no clause to the query (see buildCommentThreadSelector) --
+  // a draft is client-side state the provider has never heard of, so the query for this preset is
+  // scope-only and returns every thread the scope allows. Narrowing to drafted threads happens here
+  // instead: the hook above owns the drafts map, this web view owns the query result and the active
+  // filters, and only the web view has both at once. Because this filter only ever removes entries
+  // already present in `safeCommentThreads`, a thread the scope excluded (and which therefore never
+  // reached `safeCommentThreads`) can never be added back by having a draft -- unlike Paratext 9,
+  // where a drafted thread survives every filter.
+  const visibleCommentThreads = useMemo<LegacyCommentThread[]>(() => {
+    if (filters.preset !== 'unsaved') return safeCommentThreads;
+    return safeCommentThreads.filter((thread) => thread.id in drafts);
+  }, [filters.preset, safeCommentThreads, drafts]);
+
+  // Mirror the currently visible threads into the ref the stable message listener reads.
+  useEffect(() => {
+    commentThreadsRef.current = visibleCommentThreads;
+  }, [visibleCommentThreads]);
 
   /**
    * Writes the whole selection to this user's stored preference for this project, preserving
@@ -496,7 +509,7 @@ global.webViewComponent = function CommentListWebView({
     isLoadingCommentThreads,
     hasPendingThreadSelection: pendingThreadIdToSelect !== undefined,
     isViewVisible,
-    commentThreads: safeCommentThreads,
+    commentThreads: visibleCommentThreads,
     scrollToTarget,
   });
 
@@ -839,7 +852,7 @@ global.webViewComponent = function CommentListWebView({
         <CommentListPanel
           localizedStrings={localizedStrings}
           isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
-          threads={safeCommentThreads}
+          threads={visibleCommentThreads}
           currentUser={currentUserName}
           filters={filters}
           onFiltersChange={handleFiltersChange}

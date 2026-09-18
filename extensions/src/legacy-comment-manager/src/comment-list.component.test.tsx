@@ -132,12 +132,22 @@ describe('CommentListPanel filter toolbar', () => {
     expect(onFiltersChange).toHaveBeenCalledWith({ preset: 'resolved' });
   });
 
-  it('disables the unsaved preset until draft tracking exists', async () => {
-    renderPanel();
+  it('offers the unsaved preset as a selectable option', async () => {
+    // Draft tracking now exists (see use-comment-drafts.hook.ts / the web view's unsaved-preset
+    // filtering), so this preset is a normal, enabled option like any other -- unlike every other
+    // preset here, this one specifically regressed to disabled once already, so assert the option is
+    // enabled rather than merely present.
+    const onFiltersChange = vi.fn();
+    renderPanel({ onFiltersChange });
+
     await userEvent.click(screen.getByRole('combobox', { name: PRESET_ARIA }));
-    expect(
-      screen.getByRole('option', { name: EN_STRINGS['%comment_filter_preset_unsaved%'] }),
-    ).toHaveAttribute('aria-disabled', 'true');
+    const unsavedOption = screen.getByRole('option', {
+      name: EN_STRINGS['%comment_filter_preset_unsaved%'],
+    });
+    expect(unsavedOption).not.toHaveAttribute('aria-disabled', 'true');
+
+    await userEvent.click(unsavedOption);
+    expect(onFiltersChange).toHaveBeenCalledWith({ preset: 'unsaved' });
   });
 
   it('offers exactly the preset and scope dropdowns and no other filter control', () => {

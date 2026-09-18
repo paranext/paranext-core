@@ -13,7 +13,6 @@ import { ComponentProps, ReactNode } from 'react';
 import {
   areCommentFiltersAtDefault,
   CommentFilters,
-  CommentPreset,
   isCommentPreset,
   isScopeFilter,
   presetToLabelKey,
@@ -93,13 +92,6 @@ export type CommentListPanelProps = Pick<
 };
 
 /**
- * Presets the toolbar offers but cannot yet honour. `unsaved` needs draft tracking that does not
- * exist; it is shown disabled rather than omitted so the option list does not change shape when it
- * starts working.
- */
-const DISABLED_PRESETS = ['unsaved'] as const satisfies readonly CommentPreset[];
-
-/**
  * A single filter dropdown for one axis. Renders each option's localized label and reports the
  * chosen value through `onChange`, narrowed by `isValue` so no unsafe cast is needed. Generic over
  * the axis's value union.
@@ -111,7 +103,6 @@ function FilterDropdown<T extends string>({
   onChange,
   localizedStrings,
   ariaLabel,
-  disabledValues,
   testId,
 }: {
   value: T;
@@ -125,8 +116,6 @@ function FilterDropdown<T extends string>({
    * axis it filters.
    */
   ariaLabel: string;
-  /** Option values to disable (e.g. a preset that isn't implemented yet). */
-  disabledValues?: readonly T[];
   /** Optional stable test hook placed on the trigger (e.g. for the scope dropdown in E2E tests). */
   testId?: string;
 }) {
@@ -148,7 +137,7 @@ function FilterDropdown<T extends string>({
         {Object.keys(labelKeys)
           .filter(isValue)
           .map((option) => (
-            <SelectItem key={option} value={option} disabled={disabledValues?.includes(option)}>
+            <SelectItem key={option} value={option}>
               {localizedStrings[labelKeys[option]]}
             </SelectItem>
           ))}
@@ -274,7 +263,6 @@ export function CommentListPanel({
             onChange={(preset) => onFiltersChange({ preset })}
             localizedStrings={localizedStrings}
             ariaLabel={localizedStrings['%comment_filter_aria_preset%']}
-            disabledValues={DISABLED_PRESETS}
             testId="comment-preset-filter"
           />
           <FilterDropdown
