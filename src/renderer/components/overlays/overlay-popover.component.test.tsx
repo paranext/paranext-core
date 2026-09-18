@@ -208,13 +208,21 @@ describe('OverlayPopoverPresentational', () => {
       expect(inner).toBeInTheDocument();
       // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { style } = inner as HTMLElement;
+      const innerEl = inner as HTMLElement;
+      const { style } = innerEl;
       // jsdom leaves an inline style property that was never assigned as `undefined` rather than
       // the empty string a real browser reports for an unset CSS property, so a scale of 1 (which
       // never assigns `zoom` at all) is checked against both.
       expect(style.zoom || '').toBe('');
       // The popover's own default cap, unrelated to content zoom, unchanged.
       expect(style.maxHeight).toBe('400px');
+      // The inner div is what actually sizes the popover now that PopoverContent's own width is
+      // 'auto' — it must carry the width and flex layout classes the shared PopoverContent class
+      // used to provide.
+      expect(innerEl.className).toContain('tw:w-72');
+      expect(innerEl.className).toContain('tw:flex');
+      expect(innerEl.className).toContain('tw:flex-col');
+      expect(innerEl.className).toContain('tw:gap-2.5');
 
       const content = document.querySelector('[data-overlay-popover]');
       expect(content).toBeInTheDocument();
@@ -237,7 +245,8 @@ describe('OverlayPopoverPresentational', () => {
       expect(inner).toBeInTheDocument();
       // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { style } = inner as HTMLElement;
+      const innerEl = inner as HTMLElement;
+      const { style } = innerEl;
       expect(style.zoom).toBe('1.5');
       // The default (no caller maxWidth/maxHeight) still combines with the Radix cap — this is the
       // cap the component falls back to, not a bare, uncombined Radix value.
@@ -247,6 +256,12 @@ describe('OverlayPopoverPresentational', () => {
       expect(style.maxHeight).toBe(
         'min(400px, calc(var(--radix-popover-content-available-height) / 1.5))',
       );
+      // The width and layout classes must still be on the inner (zoomed) div at a zoom, not just at
+      // scale 1 — they are what sizes the popover at every scale.
+      expect(innerEl.className).toContain('tw:w-72');
+      expect(innerEl.className).toContain('tw:flex');
+      expect(innerEl.className).toContain('tw:flex-col');
+      expect(innerEl.className).toContain('tw:gap-2.5');
     });
 
     it("combines the caller's own maxWidth with the Radix cap so a zoomed popover still stays inside the window", () => {
