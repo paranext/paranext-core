@@ -531,8 +531,9 @@ step, no automation. Just a record.
     only a write aimed at a single chapter knows which marker is the right one. The mechanism is
     the call graph, not a flag: `SetBookUsfm` and `SetBookUsx` never call the corrector at all — the
     two chapter setters are its only call sites. Both ports separately return their input untouched
-    for a non-chapter number (`c-sharp/Projects/ChapterMarkerCorrection.cs:57`,
-    `extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts:138`), but that is a
+    for a non-chapter number (the opening guard of `FixChapterMarkers` in
+    `c-sharp/Projects/ChapterMarkerCorrection.cs`, and of `repairChapterMarkers` in
+    `extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts`), but that is a
     defensive guard inside the algorithm rather than what keeps book writes safe.
   - **Placement rule:** a restored marker for a chapter after the first goes at index 0
     *unconditionally*. Nothing may precede it — not even an `\id` book node typed into the chapter —
