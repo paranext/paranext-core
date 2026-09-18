@@ -1,7 +1,12 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import type { SerializedEditorState } from 'lexical';
+import type {
+  SerializedEditorState,
+  SerializedElementNode,
+  SerializedParagraphNode,
+  SerializedTextNode,
+} from 'lexical';
 import type { ComponentProps, ReactNode } from 'react';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
@@ -9,8 +14,13 @@ import { CommentThread } from './comment-thread.component';
 import { getCommentThreadElementId } from './comment-list.types';
 
 // A non-empty editor state a test can hand to `onSerializedChange` to simulate typing, since the
-// mock Editor below never generates one itself.
-const NON_EMPTY_EDITOR_STATE: SerializedEditorState = {
+// mock Editor below never generates one itself. Typed the same way `comment-thread.component.tsx`
+// types its own `initialValue` — the base `SerializedEditorState` widens each node to
+// `SerializedLexicalNode`, which has no `children`, so a paragraph/text literal needs the narrower
+// element-node type parameter to typecheck.
+const NON_EMPTY_EDITOR_STATE: SerializedEditorState<
+  SerializedParagraphNode & SerializedElementNode<SerializedTextNode>
+> = {
   root: {
     children: [
       {
