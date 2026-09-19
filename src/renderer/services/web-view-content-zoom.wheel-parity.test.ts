@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createContentZoomWheelReader } from 'platform-bible-utils';
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP } from '@shared/models/content-zoom.model';
 import { install } from './web-view-content-zoom.bootstrap-script.test-utils';
 
 /** A marked main area for the bootstrap to target, and a place to dispatch wheel events at. */
@@ -161,6 +162,10 @@ describe('content-zoom wheel reading: bootstrap and platform-bible-utils agree',
         (total: number, call: unknown[]) => total + Number(call[1]),
         0,
       );
+      // Makes the header's "every sequence's expected total is non-zero" claim checkable: dropping
+      // `ctrlKey` from `wheelEvent()` would make every sequence resolve to 0 on both sides, and the
+      // equality check below would still pass at 0 === 0.
+      expect(bootstrapSteps).not.toBe(0);
 
       const reader = createContentZoomWheelReader();
       try {
@@ -173,5 +178,15 @@ describe('content-zoom wheel reading: bootstrap and platform-bible-utils agree',
         reader.dispose();
       }
     });
+  });
+
+  it('pins the zoom range and step platform-bible-utils hardcodes to the platform constants they mirror', () => {
+    // `content-zoom-wheel.util.ts` cannot import `@shared` (this package has no dependency on the
+    // app), so its pinch calibration hardcodes the range width (3.0 - 0.5) and the default zoom step
+    // (0.1) by value rather than importing them. Restated here so a change to
+    // MIN_ZOOM_FACTOR/MAX_ZOOM_FACTOR/ZOOM_STEP alone fails this assertion instead of silently
+    // desynchronising the two.
+    expect(MAX_ZOOM_FACTOR - MIN_ZOOM_FACTOR).toBe(2.5);
+    expect(ZOOM_STEP).toBe(0.1);
   });
 });
