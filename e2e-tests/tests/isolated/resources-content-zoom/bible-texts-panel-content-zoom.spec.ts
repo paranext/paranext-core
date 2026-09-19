@@ -3,8 +3,11 @@
  * id `bible-texts`): Ctrl+`=` and Ctrl+wheel scale the panel's content while the resource-selector
  * header stays fixed, Ctrl+`0` returns it to the Settings default, the level reaches memory under a
  * `resource:<container project>:bible-texts` key (and leaves it again on reset), and the Scripture
- * editor's own `main` area is untouched throughout. Restore-on-reopen is not exercised here — it is
- * the Enhanced Resources spec's case, and the platform's own suites cover the read path.
+ * editor's own `main` area is untouched throughout. No e2e reopens this panel and asserts the
+ * `bible-texts` level comes back: the read path is area-agnostic and covered by
+ * `web-view-content-zoom.service.test.ts` ("seeds a new pane per area from state, else memory, else
+ * the default"), and the one e2e that does reopen a pane — `enhanced-resource-content-zoom.spec.ts`
+ * — covers it for the `main` area of a resource web view, under a different key.
  *
  * This is the one content-zoom e2e for the Resources views that runs without real resources:
  * `tests/enhanced-resources/` needs real Marble/DBL resources instead. To get real chapter content
