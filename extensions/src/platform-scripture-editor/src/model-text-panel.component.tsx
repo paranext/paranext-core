@@ -737,9 +737,10 @@ export function ModelTextPanel({
           resolved to a displayable resource, has not just failed an install, and is not mid-pick or
           mid-install. None of the earlier returns for those states (no project; readiness not
           configured; not found/unresolvable; install failed; selecting/installing) mark a zoom area,
-          so while any of them is on screen the platform scales the whole frame at the Settings
-          default and the pane offers no per-pane zoom control. Acceptable: each of those states is
-          transient and holds no content worth scaling to a remembered level yet. */}
+          so while any of them is on screen this pane reports no area and offers no per-pane zoom
+          control until content arrives; what the platform does with a pane that reports no areas is
+          core's to define and document. Acceptable: each of those states is transient and holds no
+          content worth scaling to a remembered level yet. */}
       <ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
         {renderContent()}
       </ContentZoomRoot>
