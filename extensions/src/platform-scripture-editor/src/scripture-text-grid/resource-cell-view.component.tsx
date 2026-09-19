@@ -140,13 +140,6 @@ function ZoomItemsShared({
 }
 
 /**
- * The resource short-name/abbreviation, in the standout resource color (`tw:text-primary`). Single
- * line; a tooltip reveals the full name only when the text is actually clipped (same manual-`open`
- * pattern as the `ProjectRowView` row in `project-selector.component.tsx`). `aria-hidden` because
- * the enclosing `role="listitem"` (`scripture-text-grid.component.tsx`) already exposes the name
- * via `aria-label`, so the visible copy is not announced twice.
- */
-/**
  * Compile-time exhaustiveness check for the cell-state chain below: every state that does NOT
  * render a placeholder must be `'ready'`. Adding a `ResourceCellState` member without giving it a
  * branch fails to compile here instead of silently rendering "Download failed".
@@ -158,6 +151,13 @@ function assertStateIsReady(state: 'ready'): 'ready' {
   return state;
 }
 
+/**
+ * The resource short-name/abbreviation, in the standout resource color (`tw:text-primary`). Single
+ * line; a tooltip reveals the full name only when the text is actually clipped (same manual-`open`
+ * pattern as the `ProjectRowView` row in `project-selector.component.tsx`). `aria-hidden` because
+ * the enclosing `role="listitem"` (`scripture-text-grid.component.tsx`) already exposes the name
+ * via `aria-label`, so the visible copy is not announced twice.
+ */
 function ResourceNameLabel({ label, className }: { label: string; className?: string }) {
   // Show the tooltip only when the label text is actually clipped (same manual-`open` pattern
   // shared with `ProjectRowView` in `project-selector.component.tsx`).
