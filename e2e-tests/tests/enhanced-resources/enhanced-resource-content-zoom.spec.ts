@@ -200,48 +200,72 @@ test.describe('Enhanced Resources content zoom', () => {
 
     const topBeforeAnyZoom = await scripturePaneTop(frame);
 
+    // The Dictionary tab is the default `activeTab` and shows entries for the current scope with
+    // no filter needed; a row inside it sits inside the `entries` ContentZoomRoot, unlike the tab
+    // trigger itself which sits in the tab bar above it. Excludes `dictionary-entry-detail-*`,
+    // which shares the `dictionary-entry-` prefix and would otherwise make `.first()` depend on
+    // whether a row has already expanded.
+    const entryRow = frame
+      .locator('[data-testid^="dictionary-entry-"]:not([data-testid^="dictionary-entry-detail-"])')
+      .first();
+    const footnotesList = frame.locator(
+      '[data-platform-content-zoom-root="footnotes"] [role="listbox"]',
+    );
+
+    // Every memory key exercised below is `resource:<DEFAULT_RESOURCE_ID>:<area>` — keyed by the
+    // hardcoded resource id rather than anything this run creates — so it persists across runs
+    // against the same attached app. Each area is reset to the known Settings default with Ctrl+0
+    // immediately before it is exercised, and every area is put back at that baseline once the test
+    // is done, so repeated runs assert a stable delta from a known starting point instead of
+    // ratcheting the memory entry toward the 3.0 clamp.
+    let mainBaseline = 0;
+    let entriesBaseline = 0;
+    let footnotesBaseline = 0;
+
     await test.step('Ctrl+= with the Bible text focused raises --platform-content-zoom-main and leaves --platform-content-zoom-entries where it was', async () => {
-      const mainFactorBefore = await readFactor(frame, '');
-      const entriesFactorBefore = await readFactor(frame, 'entries');
       // The pane itself, not a word inside it: Editorial renders words as
       // `mark.editor-typed-mark-external-marble-word`, never `role="link"`. A primary-button
       // pointerdown anywhere inside a marked area aims the next chord at that area
       // (`onPointerDown`/`targetFor` in `web-view-content-zoom.bootstrap-script.ts`).
       await frame.getByTestId('er-scripture-pane').click();
       await expect.poll(() => readActiveArea(frame)).toBe('main');
+      await mainPage.keyboard.press('Control+0');
+      // Guarded before recording either baseline: `readFactor` returns `Number('') === 0` if the
+      // platform ever stops writing that area's variable, which would otherwise let the "entries
+      // didn't move" assertion below pass vacuously against a baseline that was itself 0.
+      await expect.poll(() => readFactor(frame, '')).toBeGreaterThan(0);
+      mainBaseline = await readFactor(frame, '');
+      await expect.poll(() => readFactor(frame, 'entries')).toBeGreaterThan(0);
+      const entriesFactorBefore = await readFactor(frame, 'entries');
+
       await mainPage.keyboard.press('Control+=');
-      await expect.poll(() => readFactor(frame, '')).not.toBe(mainFactorBefore);
+      await expect.poll(() => readFactor(frame, '')).toBeCloseTo(mainBaseline + 0.1, 5);
       expect(await readFactor(frame, 'entries')).toBe(entriesFactorBefore);
     });
 
     await test.step('Ctrl+= with the entries panel focused does the opposite', async () => {
+      await expect.poll(() => readFactor(frame, '')).toBeGreaterThan(0);
       const mainFactorBefore = await readFactor(frame, '');
-      const entriesFactorBefore = await readFactor(frame, 'entries');
-      // The Dictionary tab is the default `activeTab` and shows entries for the current scope with
-      // no filter needed; a row inside it sits inside the `entries` ContentZoomRoot, unlike the tab
-      // trigger itself which sits in the tab bar above it. Excludes `dictionary-entry-detail-*`,
-      // which shares the `dictionary-entry-` prefix and would otherwise make `.first()` depend on
-      // whether a row has already expanded.
-      const entryRow = frame
-        .locator(
-          '[data-testid^="dictionary-entry-"]:not([data-testid^="dictionary-entry-detail-"])',
-        )
-        .first();
+
       await expect(entryRow).toBeVisible({ timeout: 15_000 });
       await entryRow.click();
       await expect.poll(() => readActiveArea(frame)).toBe('entries');
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(frame, 'entries')).toBeGreaterThan(0);
+      entriesBaseline = await readFactor(frame, 'entries');
+
       await mainPage.keyboard.press('Control+=');
-      await expect.poll(() => readFactor(frame, 'entries')).not.toBe(entriesFactorBefore);
+      await expect.poll(() => readFactor(frame, 'entries')).toBeCloseTo(entriesBaseline + 0.1, 5);
       expect(await readFactor(frame, '')).toBe(mainFactorBefore);
     });
 
     await test.step('with F7 on, the footnotes list zooms as --platform-content-zoom-footnotes, independently of both', async () => {
+      await expect.poll(() => readFactor(frame, '')).toBeGreaterThan(0);
       const mainFactorBefore = await readFactor(frame, '');
+      await expect.poll(() => readFactor(frame, 'entries')).toBeGreaterThan(0);
       const entriesFactorBefore = await readFactor(frame, 'entries');
+
       await mainPage.keyboard.press('F7');
-      const footnotesList = frame.locator(
-        '[data-platform-content-zoom-root="footnotes"] [role="listbox"]',
-      );
       await expect(footnotesList).toBeVisible({ timeout: 20_000 });
       // Keyboard, not a click: clicking a row selects that note and sends the caret back into the
       // Bible text, which would resolve the chord's area from `main` instead (same reasoning as
@@ -253,9 +277,14 @@ test.describe('Enhanced Resources content zoom', () => {
       await footnotesList.focus();
       await mainPage.keyboard.press('ArrowDown');
       await expect.poll(() => readFocusedAreaId(frame)).toBe('footnotes');
-      const footnotesFactorBefore = await readFactor(frame, 'footnotes');
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(frame, 'footnotes')).toBeGreaterThan(0);
+      footnotesBaseline = await readFactor(frame, 'footnotes');
+
       await mainPage.keyboard.press('Control+=');
-      await expect.poll(() => readFactor(frame, 'footnotes')).not.toBe(footnotesFactorBefore);
+      await expect
+        .poll(() => readFactor(frame, 'footnotes'))
+        .toBeCloseTo(footnotesBaseline + 0.1, 5);
       expect(await readFactor(frame, '')).toBe(mainFactorBefore);
       expect(await readFactor(frame, 'entries')).toBe(entriesFactorBefore);
     });
@@ -263,6 +292,24 @@ test.describe('Enhanced Resources content zoom', () => {
     await test.step('the ribbons row and the top toolbar keep their heights through all of it', async () => {
       const topAfterAllZoom = await scripturePaneTop(frame);
       expect(Math.abs(topAfterAllZoom - topBeforeAnyZoom)).toBeLessThanOrEqual(2);
+    });
+
+    await test.step('every area is left back at its Settings-default baseline', async () => {
+      await frame.getByTestId('er-scripture-pane').click();
+      await expect.poll(() => readActiveArea(frame)).toBe('main');
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(frame, '')).toBe(mainBaseline);
+
+      await entryRow.click();
+      await expect.poll(() => readActiveArea(frame)).toBe('entries');
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(frame, 'entries')).toBe(entriesBaseline);
+
+      await footnotesList.focus();
+      await mainPage.keyboard.press('ArrowDown');
+      await expect.poll(() => readFocusedAreaId(frame)).toBe('footnotes');
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(frame, 'footnotes')).toBe(footnotesBaseline);
     });
   });
 
