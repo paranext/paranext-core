@@ -6193,6 +6193,18 @@ step, no automation. Just a record.
   reaches a view from behind a cover.
   **Revisit** if a second platform-injected shortcut appears
   — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
+- **Amended 2026-09-19 (PT-4582/PT-4583):** three statements above no longer hold. Enhanced
+  Resources' own `keydown` handler for its scripture-pane zoom — named above as what answers the
+  chords — is gone; the view now answers through the three areas it marks (`main`, `entries`,
+  `footnotes`), the same mechanism as the Scripture editor and the comment list, not a handler of
+  its own. The list of views above also omitted two more that now answer the same way: the Text
+  Collection grid marks `text-collection`, and the Bible Texts, Commentaries and Model Text resource
+  panels mark `bible-texts`, `commentaries` and `model-text` respectively. The Text Collection is
+  therefore no longer an example of a pane "whose own pane zoom is wheel and menu only" — Ctrl+`0`
+  with the grid focused now changes its pane level too. A view that marks no area at all, such as
+  Home or an inventory, still ignores the chords, which remains an accurate example of the cost
+  described above. And the forward reference to "the Text Collection grid in PT-4582, Enhanced
+  Resources in PT-4583" is resolved: both landed together in this same work.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
   chord ownership), epic PT-4575.
 
