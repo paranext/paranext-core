@@ -195,8 +195,8 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     const stg = await openScriptureTextGrid(mainPage);
 
     // Wait for the grid row (two cells) to be present. `stg.cellDraggable`
-    // (`data-testid="scripture-text-grid-cell-draggable"`), not `[role="gridcell"]`: the role moved
-    // to the parent verse `listitem`, and `ResourceCellView` is now purely presentational.
+    // (`data-testid="scripture-text-grid-cell-draggable"`), not `[role="gridcell"]`: that role sits
+    // on the parent verse `listitem`, and `ResourceCellView` is purely presentational.
     await expect(stg.cellDraggable.first()).toBeVisible({ timeout: 15_000 });
     await expect(stg.cellDraggable).toHaveCount(2, { timeout: 15_000 });
 
