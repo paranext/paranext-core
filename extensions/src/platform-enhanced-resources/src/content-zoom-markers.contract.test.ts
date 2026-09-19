@@ -112,19 +112,27 @@ describe('Enhanced Resources has no private zoom of its own', () => {
     expect(webView).toContain("event.key === 'F7'");
   });
 
-  it('no longer carries a zoom factor of its own in the view', () => {
+  it('carries no zoom factor of its own in the view', () => {
     expect(webView).not.toContain('scripturePaneZoom');
   });
 
-  it('no longer carries a zoom factor of its own in the scripture pane', () => {
+  it('carries no zoom factor of its own in the scripture pane', () => {
     expect(scripturePane).not.toContain('scripturePaneZoom');
   });
 
-  it('no longer handles the zoom chords in the view', () => {
+  it('handles none of the zoom chords in the view', () => {
     // The platform owns these chords. An in-view handler does not merely duplicate it: both listen
     // bubble-phase on `window` and neither stops propagation, so one keypress would drive both.
     // Match the modifier-gate SHAPE (Ctrl or Cmd held) rather than the specific keys, so a
     // reintroduced chord branch is caught however its keys are spelled.
+    //
+    // This reads source text, so it only catches the literal idiom `event.ctrlKey ||
+    // event.metaKey` (either operand order, any whitespace). It does NOT catch a renamed or
+    // destructured event parameter (`e.ctrlKey || e.metaKey`, `const { ctrlKey, metaKey } =
+    // event`), a ternary or De Morgan spelling, a `getModifierState('Control')` gate, or a comment
+    // sitting between the two operands. A regex over source cannot be a structural test and
+    // chasing spellings is an infinite regress, so treat this as a guard against the idiom this
+    // codebase actually writes — not as proof that no modifier gate exists.
     expect(webView).not.toMatch(
       /event\.ctrlKey\s*\|\|\s*event\.metaKey|event\.metaKey\s*\|\|\s*event\.ctrlKey/,
     );
