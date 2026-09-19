@@ -1,9 +1,10 @@
 /**
  * E2E for the Bible Texts panel's per-pane content zoom (`platformScriptureEditor.bibleTexts`, area
  * id `bible-texts`): Ctrl+`=` and Ctrl+wheel scale the panel's content while the resource-selector
- * header stays fixed, Ctrl+`0` returns it to the Settings default, the level is remembered under a
- * `resource:<container project>:bible-texts` key, and the Scripture editor's own `main` area is
- * untouched throughout.
+ * header stays fixed, Ctrl+`0` returns it to the Settings default, the level reaches memory under a
+ * `resource:<container project>:bible-texts` key (and leaves it again on reset), and the Scripture
+ * editor's own `main` area is untouched throughout. Restore-on-reopen is not exercised here — it is
+ * the Enhanced Resources spec's case, and the platform's own suites cover the read path.
  *
  * This is the one content-zoom e2e for the Resources views that runs without real resources:
  * `tests/enhanced-resources/` needs real Marble/DBL resources instead. To get real chapter content
@@ -138,7 +139,7 @@ test.describe('Bible Texts panel content zoom', () => {
     cleanupCommentTestProject(sourceProject);
   });
 
-  test('Ctrl+= and Ctrl+wheel scale the panel, Ctrl+0 resets it, the level is remembered, and the editor is untouched', async ({
+  test('Ctrl+= and Ctrl+wheel scale the panel, Ctrl+0 resets it, the level reaches memory, and the editor is untouched', async ({
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance, two project copies, several zoom gestures each
