@@ -3795,6 +3795,51 @@ step, no automation. Just a record.
   their portaled content with the area and a pop-up flag and cap their size by the zoom factor.
   The platform bootstrap never counts flagged content as a pane or anchors the indicator on it.
   `ContentZoomAreaProvider` covers pop-ups rendered outside the area element.
+
+  A pop-up the platform itself draws outside the web view — the command palette, popover and
+  context menu requested through `papi.overlays`, portalled by `OverlayHost` into the renderer's
+  own document rather than into the requesting pane's iframe — takes the same rule by a different
+  route: it cannot see the pane's `--platform-content-zoom-<area>` custom property, since that
+  property lives on the requesting iframe's own document, so `OverlayHost` reads the requesting
+  pane's scale directly from the content-zoom service (`getContentZoomScaleForWebView`) and passes
+  it down to `OverlayCommandPalette`, `OverlayPopover` and `OverlayContextMenu` as a plain prop.
+  Each applies it as CSS `zoom`, capped by the space Radix reports available divided by the scale —
+  the same shape as the library's own cap. The popover and command palette combine that cap with the
+  size cap actually in force via `min()` once zoomed — the caller's `maxWidth`/`maxHeight` when one
+  was supplied, the component's own default otherwise, so a zoomed pop-up keeps its default bound
+  rather than losing it; the context menu takes no caller size cap at all.
+
+  **Where the `zoom` goes, and why it is not on the Radix content element.** For a pop-up that draws
+  an arrow, the zoom and all the sizing go on a wrapper div *inside* `Popover.Content`, with
+  `Popover.Arrow` left outside that wrapper as a direct child of the content. Radix requires the
+  arrow to be a content descendant and positions it by writing an inline pixel offset on it; inside
+  a zoomed element the browser reads that offset as a pre-zoom length and scales it a second time,
+  so the arrow lands at `offset × scale` instead of `offset` — and where the true offset is small,
+  the doubled value trips floating-ui's arrow clamp and collapses onto the content's own corner.
+  Radix's own placement of the pop-up is unaffected, because the popper wrapper it positions sits
+  outside the content element entirely. CSS `zoom` on a child still grows its parent's layout box,
+  so the pop-up still scales with the pane.
+
+  **The inner wrapper owns sizing, and it owns all of it.** The shared `PopoverContent` supplies a
+  fixed `tw:w-72` width, `tw:flex tw:flex-col tw:gap-2.5` layout and `tw:p-2.5` padding, and a
+  pop-up's content renderers return fragments — so their children were direct flex items of that
+  element. Moving the content inward moves it out of reach of every one of those, which is a
+  behaviour change at interface scale and not only when zoomed. So the wrapper must take over the
+  width, the flex layout and the padding together, with `width: 'auto'` and `tw:p-0` on
+  `Popover.Content` so the fixed class cannot reassert itself over the wrapper. Splitting them —
+  taking the padding inward and leaving the width and gap behind — silently resizes and respaces
+  the pop-up at every scale. Taking them inward also makes them scale with the content, which is
+  what following the pane's zoom means.
+
+  Anything Radix positions with an inline pixel offset inside a zoomed element has this defect. At
+  the time of writing the arrow is the only such element in the platform's own overlays: the context
+  menu draws no arrow, and its sub-menu content portals out of the zoomed subtree.
+
+  `OverlayHost` is deliberately the one place that depends on the content-zoom
+  service: `OverlayContextMenu` is part of the generated extension-facing declaration bundle, and an
+  import of the service from there would publish it — including its test-only seams — to extension
+  authors. A command palette shown centred, with no anchor position, is not anchored to any pane's
+  content and stays at interface scale, as does a modal dialog.
 - **Alternatives:**
   - per-call-site `ContentZoomRoot` wraps with a `zoomArea` prop threaded through the comment
     list (repeated at every site, easy to forget);
@@ -3806,8 +3851,17 @@ step, no automation. Just a record.
   - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
     (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
     when first opened from zoomed content;
-  - a pop-up portaled into a container inside another area inherits that container's zoom.
-- **Source:** PT-4634.
+  - a pop-up portaled into a container inside another area inherits that container's zoom;
+  - a command palette blocks the window's input while open, so the pane it was drawn for cannot
+    change underneath it; a popover and a context menu do not block input, so a zoom chord pressed
+    while one is open re-scales the pane behind it and the overlay keeps the level it was drawn at
+    until it closes — accepted, not a bug to be fixed later;
+  - PT-4713 (design approved 2026-09-18, planned as separate `scripture-editors` and
+    paranext-core PRs) is a third mechanism this decision does not reach: the Scripture editor's
+    right-click context menu is drawn by the editor library's own `ContextMenuPlugin`, portalled
+    outside `papi.overlays` entirely, so nothing here fixes it.
+- **Source:** PT-4634; the outside-the-web-view extension (`papi.overlays` command palette,
+  popover, context menu) by PT-4712.
 
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
@@ -6249,7 +6303,9 @@ step, no automation. Just a record.
   custom property per area (`--platform-content-zoom-<areaId>`, falling back to
   `--platform-content-zoom-default`). **Zoom areas are a platform capability**: a view marks one or
   more non-nested areas and the platform owns the targeting (focus, then pointer, then last active
-  area), the per-area state, the memory and the indicator. Views do not build their own zoom stacks.
+  area, except that the chords stay on the last active area rather than trust a caret the view
+  itself just moved), the per-area state, the memory and the indicator. Views do not build their
+  own zoom stacks.
 - **Alternatives:** (a) **A font-size cascade on the content root** — rejected: it does not reach the
   editor's rendered scripture, which sets its own sizes (PT-4167), so the one view the feature exists
   for would not scale. (b) **`transform: scale`** — rejected: it breaks hit-testing, so clicks and
@@ -6269,5 +6325,14 @@ step, no automation. Just a record.
   pane's own area around it and leaves it in place; moving it onto the platform mechanism is not
   scheduled. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view carries a
   private zoom any more.
+
+  The whole-iframe fallback applies as soon as a pane loads and is dropped the moment the view
+  reports an area, and which view types mark areas is remembered per type so the decision is right
+  before the content loads from the second open onwards. The first-ever open of a marking type on a
+  machine still shows one frame-scaled moment: only the view can say whether it marks an area, and
+  it can only say so after it has drawn. A type recorded as marking areas is not moved back by a
+  pane of that type reporting none, so a view that stops marking areas keeps its panes unscaled
+  until the record is cleared.
 - **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
-  recorded here by PT-4580.
+  recorded here by PT-4580; the chord-targeting exception added by PT-4711; the immediate fallback
+  and the per-type expectation added by PT-4714.

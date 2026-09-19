@@ -163,6 +163,16 @@ async function scrollTextKeepingVisible(
 const TRIGGER_TOP_MARGIN_PX = 40;
 
 /**
+ * How far the marker palette's box may sit from its trigger and still count as "beside" it, in
+ * {@link expectBesideTriggerAndInsideWindow}. Covers the anchored palette's own `sideOffset` (4px,
+ * `overlay-command-palette.component.tsx`) plus the slack Radix's collision avoidance can add to
+ * keep the palette inside the window rather than the narrower, shorter pane — a fixed,
+ * zoom-independent gap, not something a different trigger position avoids, so this is a constant
+ * rather than a value derived from the zoom factor.
+ */
+const MAX_PALETTE_TRIGGER_GAP_PX = 24;
+
+/**
  * Scrolls the main text as near as it goes to putting `trigger`'s box {@link TRIGGER_TOP_MARGIN_PX}
  * below the top of the text's scroll container, and returns the box it has there. The room a pop-up
  * opened on that trigger then has is the pane's, rather than whatever the preceding steps left the
@@ -575,6 +585,188 @@ test.describe('scripture editor content zoom', () => {
       // left scrolled out of view would be clicked where it is no longer painted.
       await setWindowWidth(electronApp, mainPage, DEFAULT_WINDOW_SIZE.width);
       expect((await scrollText(editorFrame, { to: 0 })).after).toBe(0);
+    });
+
+    await test.step("the standard view's marker palette follows the text zoom", async () => {
+      // The standard view asks the platform for a command palette rather than rendering its own
+      // menu, so this pop-up is drawn by the renderer, outside the web view, and cannot read the
+      // pane's zoom variables.
+      const mainInput = editorFrame.locator('.editor-input').first();
+      // Standard view carries `marker-editable` (`_usj-nodes.scss`: "standard view
+      // (.marker-editable)"); `marker-hidden` and `marker-visible` belong to the formatted and
+      // markers views this step must run before.
+      await expect(mainInput).toHaveClass(/\bmarker-editable\b/, { timeout: 20_000 });
+      // Verse 1's own text, near the chapter's start rather than "that great city" (verse 2, used
+      // by the sibling in-iframe step below): that trigger sits near the pane's right edge. This
+      // text can span more than one line, so the trigger's box deliberately moves between zoom
+      // levels as the text reflows — `openPalette` below re-reads the caret box on every open
+      // rather than reusing a position captured once.
+      const text = mainInput.getByText('Yahweh', { exact: false }).first();
+      // The anchored branch puts `data-overlay-command-palette` on both its `PopoverContent` (the
+      // sized, zoomed box) and, nested inside it, the `Command` that fills that box — so the bare
+      // attribute selector is ambiguous. `data-slot="popover-content"` narrows to the outer element.
+      const palette = mainPage.locator(
+        '[data-slot="popover-content"][data-overlay-command-palette]',
+      );
+
+      const openPalette = async () => {
+        await text.click();
+        const caret = await scrollTriggerNearPaneTop(editorFrame, await readCaretBox(editorFrame));
+        await mainPage.keyboard.press('\\');
+        await expect(palette).toBeVisible();
+        // Before returning: a pop-up mid-open animation reports a smaller box than its settled
+        // one, and the width read right after this call is what the growth ratio is measured on.
+        await waitForPopupAnimations(palette);
+        return caret;
+      };
+      const closePalette = async () => {
+        await mainPage.keyboard.press('Escape');
+        await expect(palette).toBeHidden();
+      };
+      /**
+       * Unlike the in-iframe pop-ups this file otherwise checks with
+       * {@link expectPopupBesideTriggerAndInsideFrame}, this palette is portalled to the MAIN
+       * document (`OverlayHost`, `createPortal(..., document.body)`), so Radix collision-avoids it
+       * against the app window's own viewport, not the narrower, shorter pane — it can paint a few
+       * pixels outside the pane while staying inside the window. So this checks the weaker, but
+       * real, guarantee: beside its trigger and inside the WINDOW.
+       */
+      const expectBesideTriggerAndInsideWindow = async (trigger: PageBox) => {
+        await waitForPopupAnimations(palette);
+        const popupBox = await boxOf(palette);
+        const viewport = await mainPage.evaluate(() => ({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }));
+        const gapY = Math.max(
+          popupBox.y - (trigger.y + trigger.height),
+          trigger.y - (popupBox.y + popupBox.height),
+        );
+        const gapX = Math.max(
+          popupBox.x - (trigger.x + trigger.width),
+          trigger.x - (popupBox.x + popupBox.width),
+        );
+        const tolerance = 1;
+        expect(Math.min(Math.max(gapY, 0), Math.max(gapX, 0)), 'separated on one axis only').toBe(
+          0,
+        );
+        expect(Math.max(gapX, gapY), 'not covering the trigger').toBeGreaterThanOrEqual(-tolerance);
+        expect(Math.max(gapX, gapY), 'close to the trigger').toBeLessThanOrEqual(
+          MAX_PALETTE_TRIGGER_GAP_PX,
+        );
+        expect(popupBox.x, 'inside the window').toBeGreaterThanOrEqual(-tolerance);
+        expect(popupBox.y, 'inside the window').toBeGreaterThanOrEqual(-tolerance);
+        expect(popupBox.x + popupBox.width, 'inside the window').toBeLessThanOrEqual(
+          viewport.width + tolerance,
+        );
+        expect(popupBox.y + popupBox.height, 'inside the window').toBeLessThanOrEqual(
+          viewport.height + tolerance,
+        );
+      };
+
+      const widths = new Map<number, number>();
+      // Sequential: each level's palette must be opened, measured and closed before the next.
+      /* eslint-disable no-await-in-loop */
+      const factors = [1, 1.5, 2];
+      for (let i = 0; i < factors.length; i += 1) {
+        const factor = factors[i];
+        await zoomAreaTo(mainPage, editorFrame, editorId, 'main', factor);
+        const caret = await openPalette();
+        widths.set(factor, (await boxOf(palette)).width);
+        // Drawn bigger, still placed against its trigger and still inside the window.
+        await expectBesideTriggerAndInsideWindow(caret);
+        await closePalette();
+      }
+      /* eslint-enable no-await-in-loop */
+
+      const atDefault = widths.get(1);
+      if (!atDefault) throw new Error('No 100 % palette width recorded');
+      [1.5, 2].forEach((factor) => {
+        expect((widths.get(factor) ?? 0) / atDefault).toBeCloseTo(factor, 1);
+      });
+
+      // Back to the default so the next step starts from its own baseline.
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
+    });
+
+    await test.step("the marker palette's arrow stays centred on its trigger at every zoom factor", async () => {
+      // Radix positions the palette's Arrow by writing a raw pixel offset onto its own wrapper,
+      // which is a descendant of PopoverContent. If that wrapper sits inside the zoomed subtree,
+      // the browser re-scales the offset on top of Radix's own (already zoom-aware) number, and the
+      // arrow drifts off its trigger — collapsing to the content's own left corner (see
+      // overlay-command-palette.component.tsx).
+      //
+      // "Yahweh" (verse 1, used above) sits close enough to the palette content's own left edge that
+      // a collapsed-to-zero offset reads the same as a correct one, so it cannot catch this defect.
+      // "that great city" (verse 2) sits far enough from that edge to discriminate a real offset
+      // from a collapsed one — the precondition assertion below enforces that distance per factor,
+      // so a trigger swapped in here that drifts back toward the edge fails loudly instead of
+      // silently disabling the check.
+      const mainInput = editorFrame.locator('.editor-input').first();
+      const text = mainInput.getByText('that great city', { exact: false }).first();
+      // Same ambiguity as the width-growth step above: the anchored branch puts
+      // `data-overlay-command-palette` on both its `PopoverContent` and the nested `Command`.
+      const palette = mainPage.locator(
+        '[data-slot="popover-content"][data-overlay-command-palette]',
+      );
+      // PopoverContent's only two children are the zoomed content div and the Arrow — see
+      // overlay-command-palette.component.tsx. Selecting "not a div" finds the Arrow's own wrapper
+      // (or the arrow element itself) without depending on Radix's exact internal tag name.
+      const arrow = palette.locator('> *:not(div)');
+
+      // Sub-pixel in practice: Radix's own offset puts the arrow's centre on the trigger exactly,
+      // so this absorbs rounding only. Keep it tight — the defect this guards displaced the arrow
+      // by tens of pixels, growing with the zoom, so a wide band would pass against it.
+      const arrowCentreTolerancePx = 2;
+      // How far the trigger must sit from the palette's own left edge for a correct arrow (centred
+      // on the trigger) and a collapsed one (pinned to that edge) to be distinguishable at all,
+      // well clear of the tolerance above.
+      const minTriggerOffsetFromPaletteEdgePx = arrowCentreTolerancePx + 20;
+      const factors = [1, 1.5, 2];
+      // Sequential: each level's palette must be opened, measured and closed before the next.
+      /* eslint-disable no-await-in-loop */
+      for (let i = 0; i < factors.length; i += 1) {
+        const factor = factors[i];
+        await zoomAreaTo(mainPage, editorFrame, editorId, 'main', factor);
+        await text.click();
+        const trigger = await scrollTriggerNearPaneTop(
+          editorFrame,
+          await readCaretBox(editorFrame),
+        );
+        await mainPage.keyboard.press('\\');
+        await expect(palette).toBeVisible();
+        await waitForPopupAnimations(palette);
+
+        // Precondition: the trigger must sit far enough from the palette's own left edge that a
+        // collapsed arrow cannot coincide with a correctly positioned one. Derived from the
+        // trigger's and the palette's own geometry only, never from the arrow itself, so it holds
+        // independent of whether the arrow below turns out correct or collapsed — a collapsed arrow
+        // fails the assertion after this one by construction rather than by luck.
+        const paletteBox = await boxOf(palette);
+        expect(
+          Math.abs(trigger.x - paletteBox.x),
+          `trigger sits meaningfully away from the palette's left edge at ${factor * 100}%, so a collapsed arrow cannot pass by coincidence`,
+        ).toBeGreaterThan(minTriggerOffsetFromPaletteEdgePx);
+
+        // Radix/floating-ui can still reposition the arrow after the open animation ends
+        // (`autoUpdate`, and the size/shift middleware settle asynchronously), so a single instant
+        // read risks a flake; retry until it settles or the timeout is reached.
+        await expect(async () => {
+          const arrowBox = await boxOf(arrow);
+          const arrowCentreX = arrowBox.x + arrowBox.width / 2;
+          expect(
+            Math.abs(arrowCentreX - trigger.x),
+            `arrow centred on its trigger at ${factor * 100}%`,
+          ).toBeLessThanOrEqual(arrowCentreTolerancePx);
+        }).toPass({ timeout: 5_000 });
+
+        await mainPage.keyboard.press('Escape');
+        await expect(palette).toBeHidden();
+      }
+      /* eslint-enable no-await-in-loop */
+
+      // Back to the default so the next step starts from its own baseline.
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
     });
 
     await test.step('the inline marker menu and the comment editor follow the text zoom', async () => {
