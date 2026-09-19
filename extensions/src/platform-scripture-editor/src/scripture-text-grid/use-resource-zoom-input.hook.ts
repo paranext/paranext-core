@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect } from 'react';
 import { createContentZoomWheelReader } from 'platform-bible-utils';
+import { ZOOM_STEP } from './resource-zoom.utils';
 
 export type ResourceZoomInputOptions = {
   /** The grid container the listeners attach to. */
@@ -46,7 +47,9 @@ export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomI
     const container = containerRef.current;
     if (!container) return undefined;
 
-    const reader = createContentZoomWheelReader();
+    // Explicit rather than relying on the util's own default: the grid's real step lives in
+    // `resource-zoom.utils.ts`, and the two only agree today because both happen to be 0.1.
+    const reader = createContentZoomWheelReader({ zoomStep: ZOOM_STEP });
 
     const onWheel = (event: WheelEvent) => {
       if (!hasZoomModifier(event)) return;
@@ -57,6 +60,11 @@ export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomI
       const resourceId = resolveResourceIdFromElement(
         event.target instanceof Element ? event.target : undefined,
       );
+      // A gesture that misses every cell — a gap between rows, the chapter-context chrome, list
+      // padding — reaches here with the page zoom already suppressed and propagation already
+      // stopped above, so it zooms neither this resource nor the pane the platform's bootstrap
+      // would otherwise scale. That swallow is what keeps this handler's zoom from double-firing
+      // with the pane-level one when a gesture DOES land on a cell.
       if (!resourceId) return;
       const steps = reader.read(event, resourceId);
       if (steps !== 0) adjustZoom?.(resourceId, steps);
