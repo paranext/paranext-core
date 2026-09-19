@@ -1502,12 +1502,17 @@ step, no automation. Just a record.
   - the capped menu's outer element gets `overflowY: auto` while the inner `<ul>` still carries
     `editor.css`'s own `max-height: 200px; overflow-y: scroll`; a short pane at zoom 200 % or more
     with a full menu can bind both constraints at once, producing two nested scroll regions with
-    only one visible scrollbar (`scrollbar-width: none` hides the inner one) — this is being
-    checked by hand at 200 % before deciding whether to change it;
-  - the fix reaches core through the `platform-yalc` pin, so core's own diff shows only the two
-    call sites and a reviewer cannot see the behaviour change in it;
-  - `model-text-panel` mounts the same editor and will need a container the moment PT-4582 gives
-    its view a zoom area.
+    only one visible scrollbar (`scrollbar-width: none` hides the inner one). Left as is:
+    collapsing the two caps would mean changing the library's own stylesheet for every host, and
+    the menu was usable in hand checks at 200 %. Revisit if a user reports a menu that will not
+    scroll to its last item;
+  - the fix reaches core through the `platform-yalc` pin, so the behaviour lives in
+    `scripture-editors` and core holds only the two call sites;
+  - the other hosts that mount the same editor — `model-text-panel`, `resource-text-panel`, and
+    `platform-enhanced-resources`' `scripture-pane` — each need a container of their own the
+    moment their view gets a zoom area (`model-text-panel`'s is PT-4582). `scripture-text-grid`'s
+    `resource-cell-view` is not one of them: it zooms its cells itself and intercepts
+    `onContextMenuCapture` with its own menu, so the editor's menu never opens there.
 - **Source:** PT-4713.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
@@ -3857,7 +3862,7 @@ step, no automation. Just a record.
     (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
     when first opened from zoomed content. The Scripture editor's right-click menu is not one of
     these — it is drawn by the editor library and follows its area by a different route; see
-    `adr-editor-context-menu-follows-its-area-via-a-container`.
+    `adr-editor-context-menu-follows-its-area-via-a-container`;
   - a pop-up portaled into a container inside another area inherits that container's zoom.
 - **Source:** PT-4634.
 
