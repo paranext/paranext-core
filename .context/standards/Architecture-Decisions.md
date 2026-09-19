@@ -4664,12 +4664,11 @@ step, no automation. Just a record.
   `resource-text-panel.component.tsx`) never reaches the definition — so all four resolve to the
   same kind and the same identity; with the unnamed `main` area they would all read and remember one
   shared zoom level, and zooming one would silently change the others. PT-4582's own ticket
-  description assumed the opposite (that the definition carried the displayed resource's project);
-  the design doc for this work corrects that assumption against the code before implementing from
-  it. Separately, the Enhanced Resources viewer already carried its own zoom control —
-  `scripturePaneZoom`, a font-size multiplier driven by its own `window` `keydown` handler for the
-  same Ctrl+`=`/`-`/`0` chords the platform mechanism claims, with its menu items living in the
-  toolbar outside every pane — that the new mechanism had to either absorb or retire. The two
+  description assumed the opposite — that the definition carried the displayed resource's project —
+  which the code does not do. Separately, the Enhanced Resources viewer already carried its own zoom
+  control — `scripturePaneZoom`, a font-size multiplier driven by its own `window` `keydown` handler
+  for the same Ctrl+`=`/`-`/`0` chords the platform mechanism claims, with its menu items living in
+  the toolbar outside every pane — that the new mechanism had to either absorb or retire. The two
   handlers collided rather than one shadowing the other: both were registered bubble-phase on
   `window` and neither stopped propagation, so a single keypress drove the private font-size
   multiplier *and* the platform's content zoom.
