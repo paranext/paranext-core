@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -17,6 +17,44 @@ const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
 function source(fileName: string): string {
   return readFileSync(path.join(SRC_DIR, fileName), 'utf-8').replace(/\s+/g, ' ');
 }
+
+/**
+ * Every `.ts`/`.tsx` file under `dir`, excluding test files. Used below to sweep the whole
+ * extension for `ContentZoomRoot` usages rather than trusting the five files that happen to carry
+ * markers today — a `ContentZoomRoot` added later inside `resource-cell-view.component.tsx`,
+ * `scripture-text-grid.component.tsx`, or a second one inside either panel's own `renderContent()`
+ * subtree would nest, be silently ignored by the platform, and leave every test above (each reading
+ * only its own named file) green. Test files are excluded by name pattern rather than one at a
+ * time: this extension carries two content-zoom contract tests (this file and
+ * `content-zoom-markers.contract.test.ts`), and both quote the literal `<ContentZoomRoot` inside
+ * their own regex patterns, which a naive sweep would misread as a real marker.
+ */
+function listSourceFiles(dir: string): string[] {
+  const files: string[] = [];
+  readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listSourceFiles(fullPath));
+    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+      files.push(fullPath);
+    }
+  });
+  return files;
+}
+
+/**
+ * How many `<ContentZoomRoot` markers each file is allowed to carry. `resource-text-panel.
+ * component.tsx` picks its area id from a variable (`area={contentZoomArea}`, covered by its own
+ * test above), so this map pins presence and count per file rather than the area id itself — the id
+ * for that one file cannot be read out of the source text.
+ */
+const ALLOWED_CONTENT_ZOOM_ROOT_COUNTS: Readonly<Record<string, number>> = {
+  'model-text-panel.component.tsx': 1,
+  'platform-scripture-editor-footnotes.component.tsx': 1,
+  'platform-scripture-editor.web-view.tsx': 1,
+  'resource-text-panel.component.tsx': 1,
+  'scripture-text-grid.web-view.tsx': 1,
+};
 
 describe('content zoom markers (Text Collection grid)', () => {
   const grid = source('scripture-text-grid.web-view.tsx');
@@ -70,5 +108,17 @@ describe('content zoom markers (Model Text panel)', () => {
     const areaIndex = panel.indexOf('<ContentZoomRoot');
     expect(labelIndex).toBeGreaterThan(-1);
     expect(areaIndex).toBeGreaterThan(labelIndex);
+  });
+});
+
+describe('content zoom markers (whole extension)', () => {
+  it('marks ContentZoomRoot in exactly the files that opt into content zoom, once each, with no others added anywhere in the extension', () => {
+    const actualCounts: Record<string, number> = {};
+    listSourceFiles(SRC_DIR).forEach((filePath) => {
+      const fileSource = readFileSync(filePath, 'utf-8');
+      const matches = fileSource.match(/<ContentZoomRoot\b/g);
+      if (matches) actualCounts[path.relative(SRC_DIR, filePath)] = matches.length;
+    });
+    expect(actualCounts).toEqual(ALLOWED_CONTENT_ZOOM_ROOT_COUNTS);
   });
 });
