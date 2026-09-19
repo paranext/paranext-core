@@ -115,8 +115,9 @@ describe('useResourceZoomInput', () => {
       (sum: number, call: unknown[]) => sum + Number(call[1]),
       0,
     );
-    expect(totalSteps).toBeGreaterThan(0);
-    expect(totalSteps).toBeLessThanOrEqual(3);
+    // 12 frames * 2 px = 24 px of travel against a ~9.53 px step (`ln(1.1) * 100`, the reader's
+    // pinch calibration at the grid's 0.1 zoom step) is exactly 2 steps, not a range.
+    expect(totalSteps).toBe(2);
   });
 
   it('removes every listener it installed when the component unmounts', () => {
