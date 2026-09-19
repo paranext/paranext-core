@@ -10,13 +10,12 @@ import {
 /*
  * `clampZoom`, `roundZoom` and `adjustZoomFactor` below are mirrored, with the same bounds and the
  * same step, in `extensions/src/platform-scripture-editor/src/scripture-text-grid/
- * resource-zoom.utils.ts`, which the Scripture text grid's own pane zoom uses, and again (unrounded,
- * inlined at each call site) in `extensions/src/platform-enhanced-resources/src/web-views/
- * enhanced-resource.web-view.tsx`'s scripture-pane zoom. Core cannot import extension source and an
- * extension cannot import `@shared`, so the copies can only be shared by promoting them into
- * `platform-bible-utils`; that move belongs to PT-4582 for the grid and PT-4583 for Enhanced
- * Resources, which bring their panes onto this mechanism. Until then, change all three copies
- * together.
+ * resource-zoom.utils.ts`, which the Scripture text grid's own per-resource zoom uses. Core cannot
+ * import extension source and an extension cannot import `@shared`, so the two copies can only be
+ * shared by promoting them into `platform-bible-utils`.
+ *
+ * TODO(PT-4725): promote these three helpers into `platform-bible-utils` and update both call
+ * sites onto the shared copy. Until then, change both copies together.
  */
 
 /** Clamps a zoom factor into `[MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR]`. */
