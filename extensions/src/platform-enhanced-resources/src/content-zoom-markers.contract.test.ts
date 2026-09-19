@@ -62,10 +62,10 @@ describe('content zoom markers (Enhanced Resources)', () => {
   });
 
   it('marks exactly three areas across the whole extension — main, entries, footnotes — with no others added anywhere', () => {
-    // Scoped to the two files known to carry markers today, a new ContentZoomRoot dropped into any
-    // other component (a tab, the scripture pane, the article viewer) would nest inside `main` or
-    // `entries` and go undetected — the platform ignores and logs a nested marker, it does not
-    // error. Sweeping every source file in the extension is what actually guards against that.
+    // Swept across every source file in the extension, not just the two that carry markers: a
+    // ContentZoomRoot added to any other component (a tab, the scripture pane, the article viewer)
+    // would nest inside `main` or `entries`, which the platform ignores and logs rather than
+    // erroring on.
     const areaAttrs = listSourceFiles(SRC_DIR, THIS_FILE).flatMap((filePath) => {
       const fileSource = readFileSync(filePath, 'utf-8').replace(/\s+/g, ' ');
       return [...fileSource.matchAll(/<ContentZoomRoot(?:\s+area="([a-z-]+)")?[ >]/g)].map(
@@ -80,14 +80,12 @@ describe('content zoom markers (Enhanced Resources)', () => {
     // and tab bar sit between the two ContentZoomRoot elements in the web view — never inside one —
     // so they stay at interface scale while the panes zoom. The footnotes pane's own resize handle,
     // between its two ResizablePanels, sits before its ContentZoomRoot for the same reason.
-    //
-    // Known limitation: if only the `entries` marker were removed, `betweenAreas` would run to
-    // end-of-file and this assertion alone would stay green on that case. Coverage is not lost —
-    // "marks the entries panel" and "marks exactly three areas" both catch it — and restructuring
-    // this assertion to close the gap would add more complexity than the overlap is worth.
     const firstOpenIndex = webView.indexOf('<ContentZoomRoot');
     const firstCloseIndex = webView.indexOf('</ContentZoomRoot>');
     const secondOpenIndex = webView.indexOf('<ContentZoomRoot', firstCloseIndex);
+    // Without this, a missing second marker makes `indexOf` return -1, `betweenAreas` slice to
+    // end-of-file, and the two `betweenAreas` assertions below pass on a view that marks one area.
+    expect(secondOpenIndex).toBeGreaterThan(firstCloseIndex);
     const beforeFirstArea = webView.slice(0, firstOpenIndex);
     const betweenAreas = webView.slice(firstCloseIndex, secondOpenIndex);
 

@@ -697,8 +697,9 @@ export function ResourceTextPanel({
   // those states (no project; selecting/installing; readiness not configured; install failed) mark a
   // zoom area, so while any of them is on screen this pane reports no area and offers no per-pane
   // zoom control until content arrives; what the platform does with a pane that reports no areas is
-  // core's to define and document. Acceptable: each of those states is transient and holds no
-  // content worth scaling to a remembered level yet.
+  // core's to define and document. Acceptable: each of those states shows only chrome — a prompt, a
+  // spinner or an error — with no scripture content to scale. Some of them (an unconfigured
+  // readiness, a failed install) can stay on screen indefinitely without that changing.
   return (
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       <ResourceSelectorDropdown

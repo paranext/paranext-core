@@ -120,16 +120,23 @@ describe('useResourceZoomInput', () => {
   });
 
   it('removes every listener it installed when the component unmounts', () => {
-    // The reader tracks physically-held modifier keys via window listeners, in addition to the
-    // container's own wheel listener; both must come off on unmount or they leak, and a mismatched
-    // capture flag on either removal leaks it just as silently as a missing call would.
+    // The container's own wheel listener, plus the six the reader installs to track
+    // physically-held modifier keys (window keydown/keyup/pointerdown/pointermove/blur, document
+    // visibilitychange). Every one of them is asserted, because an unremoved listener outlives the
+    // grid silently — and so does a removal whose capture flag does not match the registration's,
+    // which is why each expectation carries the flag the reader registered with.
     const { getByTestId, unmount } = render(<Harness handlers={handlers} />);
     const container = getByTestId('grid');
     const containerRemoveSpy = vi.spyOn(container, 'removeEventListener');
     const windowRemoveSpy = vi.spyOn(window, 'removeEventListener');
+    const documentRemoveSpy = vi.spyOn(document, 'removeEventListener');
     unmount();
     expect(containerRemoveSpy).toHaveBeenCalledWith('wheel', expect.any(Function), true);
     expect(windowRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     expect(windowRemoveSpy).toHaveBeenCalledWith('keyup', expect.any(Function), true);
+    expect(windowRemoveSpy).toHaveBeenCalledWith('pointerdown', expect.any(Function), true);
+    expect(windowRemoveSpy).toHaveBeenCalledWith('pointermove', expect.any(Function), true);
+    expect(windowRemoveSpy).toHaveBeenCalledWith('blur', expect.any(Function));
+    expect(documentRemoveSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
   });
 });
