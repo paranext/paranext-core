@@ -53,6 +53,7 @@
  * permanent, non-closable Column 3 tab.
  */
 
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ElectronApplication, Frame, FrameLocator, Locator, Page } from '@playwright/test';
 import {
   test,
@@ -64,6 +65,7 @@ import {
 } from '../../../fixtures/find.fixture';
 import {
   isPopoverTriggerExpanded,
+  sendPapiRequestOnce,
   waitForAppReady,
   waitForOpenWebViewIdByType,
   PROCESS_READY_TIMEOUT,
@@ -143,6 +145,41 @@ const RARE_SEARCH_TERM = 'Bartholomew';
 /** A word unlikely to exist in any scripture project, used to test the "no results" state. */
 const NO_MATCH_TERM = 'ZZZQQQXXX_NORESULT_12345';
 
+/**
+ * MAT 1:1 and 1:2 are separate paragraphs in the bundled WEB text, so the searched text runs
+ * "...the son of Abraham.Abraham became..." with no space between them. The editor renders a line
+ * break there, so copy-pasting this phrase out of the editor carries a space Find must tolerate at
+ * that boundary.
+ */
+const BOUNDARY_SPANNING_TERM = 'of Abraham. Abraham became';
+
+/**
+ * A negative control for the boundary-whitespace tolerance. "Bartholomew" occurs in the bundled WEB
+ * text (Matt 10:3); the two-word form "Bartholom ew" does not occur anywhere in the corpus. So this
+ * query's interior space, to match at all, would have to match zero characters mid-word — a
+ * position that is never a block boundary. With the gate engaged that zero-width gap is rejected,
+ * so this returns no results. This is a real control, unlike a query whose space is simply missing
+ * from the text everywhere (e.g. "of David,the son"): the tolerance only ever lets query whitespace
+ * shrink to zero, never grow, so a query already missing that space matches nothing regardless of
+ * whether the gate exists, and would still pass with the gate deleted.
+ */
+const NON_BOUNDARY_GAP_TERM = 'Bartholom ew';
+
+/**
+ * The book both boundary terms live in. Find's default scope is `'book'`, resolved from the scroll
+ * group's current reference, so a test that does not set the reference searches whatever book a
+ * previous test left behind — where the positive term is absent and the negative term returns zero
+ * for the wrong reason.
+ */
+const BOUNDARY_TERM_REF = { book: 'MAT', chapterNum: 1, verseNum: 1 };
+
+/**
+ * A term present in {@link BOUNDARY_TERM_REF}'s book with no whitespace subtlety to it. Used as a
+ * positive control so a "no results" assertion cannot pass merely because the wrong book is in
+ * scope.
+ */
+const BOUNDARY_TERM_BOOK_CONTROL = 'Bartholomew';
+
 /** History debounce delay (ms). Must match HISTORY_DEBOUNCE_DELAY_MS in find.web-view.tsx. */
 const HISTORY_DEBOUNCE_MS = 5_000;
 
@@ -171,6 +208,48 @@ const SEARCH_TIMEOUT_MS = 150_000;
  * change.
  */
 let openedProjectId: string | undefined;
+
+/**
+ * The scroll group's reference as the app came up, captured in `beforeAll` before any test
+ * navigates. `resetFindPanel` restores it so a test that navigates cannot change which book every
+ * later test searches — Find's default scope is `'book'`, resolved from this reference, and several
+ * tests assert exact match counts that only hold in the default book.
+ */
+let defaultScrRef: SerializedVerseRef | undefined;
+
+/** Point the scroll group at `scrRef`, so Find's book scope resolves to that book. */
+/**
+ * Sets scroll group 0's reference, labelling it with the project this suite opened.
+ *
+ * The capture in `beforeAll` reads the reference back without a source project, so restoring it
+ * through here re-labels the group as `openedProjectId`'s rather than reproducing whatever label it
+ * originally carried. That is not a pure restore, but this suite opens exactly one project, so the
+ * label it writes is the only one in play; a multi-project suite would need to capture and restore
+ * the source project too.
+ */
+async function setScrollGroupRef(scrRef: SerializedVerseRef): Promise<void> {
+  await sendPapiRequestOnce(
+    'object:ScrollGroupService.setScrRef',
+    [0, scrRef, openedProjectId],
+    undefined,
+    15_000,
+  );
+}
+
+/**
+ * Point the scroll group at {@link BOUNDARY_TERM_REF} so Find's book scope resolves to the book the
+ * boundary terms live in, independent of what any earlier test navigated to. Call this AFTER
+ * `openFindPanel`, which restores the default reference as part of resetting the panel.
+ */
+async function navigateToBoundaryTermBook(frame: FrameLocator): Promise<void> {
+  await setScrollGroupRef(BOUNDARY_TERM_REF);
+  // The scope button renders the reference's book, so waiting for it confirms the panel has
+  // observed the navigation before a search is typed against the old scope. It renders the book id
+  // (`MAT`) rather than the localized name, so match either.
+  await expect(frame.getByRole('button', { name: /showing/i })).toContainText(/mat(thew)?/i, {
+    timeout: 15_000,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -330,6 +409,29 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   if (await ignoreDiacritics.isChecked()) await ignoreDiacritics.click();
   await matchCase.press('Escape');
   await expect(matchCase).not.toBeVisible({ timeout: 5_000 });
+
+  // Put the scroll group back on the reference the app started with. Find's default scope is
+  // `'book'`, resolved from this reference, so a test that navigates elsewhere silently changes
+  // which book every later test searches — and several of them assert exact match counts that only
+  // hold in the default book. Resetting the toggles below without resetting this would leave the
+  // most consequential piece of leaked state in place.
+  //
+  // Failing here rather than skipping the restore: a falsy capture would put every test back on
+  // whatever book the previous one left behind, which is the exact bug this restore exists for, and
+  // it would do so invisibly.
+  if (!defaultScrRef)
+    throw new Error('resetFindPanel: the default scripture reference was never captured');
+  await setScrollGroupRef(defaultScrRef);
+  // Wait for the panel to observe the navigation before returning, the same way
+  // `navigateToBoundaryTermBook` does — otherwise the next test's first search can race the scope
+  // update and run against the outgoing book.
+  // Matched as a case-insensitive substring rather than a constructed `RegExp`: the book ID comes
+  // from the running app, so building a pattern out of it would let any regex metacharacter in it
+  // change what this assertion means.
+  await expect(frame.getByRole('button', { name: /showing/i })).toContainText(defaultScrRef.book, {
+    ignoreCase: true,
+    timeout: 15_000,
+  });
 
   // Reset the scope to the whole book. Same open/closed hazard as the filters popover above,
   // including the animate-out race and the aria-expanded-over-visibility fix — see the comment
@@ -675,11 +777,20 @@ async function setWindowContentWidth(
 }
 
 /**
- * Every term this suite types into the search box. A selection equal to one of these would let the
- * pre-fill assertion in "Editor selection to Find" pass without the selection ever reaching Find,
- * because the panel restores the project's last search term into an empty box on mount.
+ * Terms this suite types into the search box that the editor-selection helper could otherwise pick.
+ * A selection equal to one of these would let the pre-fill assertion in "Editor selection to Find"
+ * pass without the selection ever reaching Find, because the panel restores the project's last
+ * search term into an empty box on mount.
+ *
+ * This is not every term the suite types, and does not need to be. The selector only ever returns a
+ * whole run of six or more letters, and compares case-insensitively — so a shorter term
+ * ({@link COMMON_SEARCH_TERM}, `LORD`), any multi-word phrase, and anything with a digit or
+ * underscore in it can never be selected whole, and listing one here would exclude nothing.
+ * `Bartholomew` is in practice the only real exclusion; it covers both {@link RARE_SEARCH_TERM} and
+ * {@link BOUNDARY_TERM_BOOK_CONTROL}, which are the same word. {@link NO_MATCH_TERM} is listed to
+ * keep the list honest about intent even though its digits put it out of the selector's reach.
  */
-const SEARCHED_TERMS = [COMMON_SEARCH_TERM, RARE_SEARCH_TERM, NO_MATCH_TERM];
+const SEARCHED_TERMS = [RARE_SEARCH_TERM, NO_MATCH_TERM];
 
 /**
  * Select the first word in the editor's text that is long enough to be distinctive and is not one
@@ -795,6 +906,15 @@ test.beforeAll(async ({ electronApp }) => {
 
   openedProjectId = scriptureProject.id;
   await openScriptureEditor(scriptureProject.id);
+
+  // Captured before any test navigates, so `resetFindPanel` can put every test back on the book
+  // the count-based assertions below were written against.
+  defaultScrRef = await sendPapiRequestOnce<SerializedVerseRef>(
+    'object:ScrollGroupService.getScrRef',
+    [0],
+    undefined,
+    15_000,
+  );
 
   // Wait for the editor's Project hamburger button to confirm the editor is ready.
   // We cannot use nth(0) here because other webviews (home page, helloRock3) may appear before
@@ -1004,6 +1124,33 @@ test.describe('Search Results', () => {
     const frame = await openFindPanel(mainPage);
 
     await frame.locator('#search-term').fill(NO_MATCH_TERM);
+
+    await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('finds a phrase copied across a paragraph boundary', async ({ mainPage }) => {
+    const frame = await openFindPanel(mainPage);
+    await navigateToBoundaryTermBook(frame);
+
+    await fillSearchAndWaitForResults(frame, BOUNDARY_SPANNING_TERM);
+
+    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('does not tolerate a whitespace gap away from a paragraph boundary', async ({
+    mainPage,
+  }) => {
+    const frame = await openFindPanel(mainPage);
+    await navigateToBoundaryTermBook(frame);
+
+    // Positive control first: the negative assertion below is only meaningful if this book is
+    // actually being searched. Without it, "no results" would pass just as happily against a
+    // scope that contains neither term — which is what would happen if the reference were left
+    // wherever a previous test put it.
+    await fillSearchAndWaitForResults(frame, BOUNDARY_TERM_BOOK_CONTROL);
+    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
+
+    await frame.locator('#search-term').fill(NON_BOUNDARY_GAP_TERM);
 
     await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: 20_000 });
   });

@@ -1,11 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 import { FindResult, ScriptureRangeUsjChapterOrUsfmVerseLocation } from 'platform-scripture';
+import { UsjReaderWriter } from 'platform-bible-utils';
 import papi from '@papi/backend';
 import {
   ScriptureFinderProjectDataProviderEngine,
   ScriptureFinderOverlayPDPs,
 } from './platform-scripture-finder-pdpe.model';
-import { STRUCTURE_PROTECTED_ERROR } from '../find/structure-protection.util';
+import {
+  MARKER_DELETION_ERROR,
+  STRUCTURE_PROTECTED_ERROR,
+} from '../find/structure-protection.util';
 
 // Simple USFM test data for Matthew chapter 1
 const TEST_BOOK_USFM = String.raw`\id MAT
@@ -2056,6 +2060,38 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(getWrittenUsfm()).toContain('\\p new paragraph');
     });
 
+    it('rejects a marker-deleting replacement in power mode, where structure protection is off', async () => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      // Structure protection proper is simple-mode-only, and Replace is only offered in power
+      // mode, so it never runs for a real Replace. Deleting a marker is guarded separately and
+      // unconditionally: this range starts at offset 0, so the removed span includes `\v 1 `.
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 0 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+      await expect(engine.replace(ranges, 'plain text')).rejects.toThrow(MARKER_DELETION_ERROR);
+      expect(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM).not.toHaveBeenCalled();
+      expect(mockPdps['platformScripture.USFM_Book'].setBookUSFM).not.toHaveBeenCalled();
+    });
+
+    it('still allows a marker-adding replacement in power mode', async () => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      // The deletion guard is narrower than structure protection on purpose: adding and reordering
+      // stay a matter of editorial policy, and power mode opts out of that policy. Only losing a
+      // marker that was there is refused everywhere.
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+      await engine.replace(ranges, '\\p new paragraph');
+      await flushPromises();
+      expect(getWrittenUsfm()).toContain('\\p new paragraph');
+    });
+
     it('fails safe (rejects) when the project setting cannot be read in simple mode', async () => {
       vi.mocked(mockPdps['platform.base'].getSetting).mockImplementation((key: string) => {
         if (key === 'platformScripture.structureProtected')
@@ -2088,6 +2124,149 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       // structureProtected mock resolves undefined (not protected by admin), user setting unset →
       // simple-mode default is locked, so effective protection is true.
       await expect(engine.getIsStructureProtected()).resolves.toBe(true);
+    });
+
+    const TWO_PARAGRAPH_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1"/>The son of Abraham.<verse eid="MAT 1:1"/>
+  </para>
+  <para style="p">
+    <verse number="2" style="v" sid="MAT 1:2"/>Abraham was the father.<verse eid="MAT 1:2"/>
+  </para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+    it('refuses to replace a match that spans a real paragraph boundary in power mode', async () => {
+      // Verse 1 ends its paragraph with "Abraham." and verse 2 opens a new paragraph with "Abraham
+      // was" — the shape of a block-boundary match Find reports. The range below starts at the end
+      // of verse 1's text and ends at the end of the word "Abraham" in verse 2's text, so the
+      // removed span crosses the intervening \p and \v 2 markers without also removing any of the
+      // surrounding words.
+      const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
+      );
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          // offset 24 = 5 (start of verse 1's text) + 19 (length of "The son of Abraham.") — the end
+          // of verse 1's text, so none of verse 1's words are part of the removed span.
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 24 },
+          // offset 12 = 5 (start of verse 2's text) + 7 (length of "Abraham") — the end of the word
+          // "Abraham" in verse 2, so the full word is removed but "was the father." is not.
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
+        },
+      ];
+      // Power mode is where Replace is actually offered, so this is the branch a real user
+      // reaches. The removed span holds `\p` and `\v 2`, which a plain-text replacement drops.
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      await expect(boundaryEngine.replace(ranges, 'replaced')).rejects.toThrow(
+        MARKER_DELETION_ERROR,
+      );
+
+      // A replacement that puts the same markers back is accepted, which is what shows the guard
+      // is counting markers rather than refusing every boundary-spanning range outright.
+      await expect(
+        boundaryEngine.replace(ranges, 'replaced\r\n\\p\r\n\\v 2 Abraham'),
+      ).resolves.toBeUndefined();
+    });
+
+    it('reports the markers a boundary-spanning match would delete, on the result itself', async () => {
+      // The producer for the whole deletion guard. Every consumer — the card's Replace button, the
+      // toolbar's, and Replace All's skip filter — reads `removedMarkers` off the result and does
+      // nothing when it is empty, so a producer that silently stopped filling it would turn all
+      // three gates off with every one of their own tests still green.
+      const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
+      );
+
+      const results = await pollFindJob(boundaryEngine, {
+        searchString: 'Abraham. Abraham',
+        scope: [{ bookId: 'MAT' }],
+        caseInsensitive: false,
+        ignoreWhitespaceDifferences: true,
+      });
+
+      expect(results).toHaveLength(1);
+      // `\p` opens the second paragraph and `\v 2` opens the verse inside it; both sit in the gap
+      // the match runs across, so both would be deleted by a plain-text replacement.
+      expect(results[0].removedMarkers).toEqual(['p', 'v']);
+    });
+
+    it('leaves removedMarkers off a match that spans no marker at all', async () => {
+      // The other half of the producer: were it filled in unconditionally, every result would gate
+      // Replace and the feature would be unusable, which no assertion above would catch.
+      const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
+      );
+
+      const results = await pollFindJob(boundaryEngine, {
+        searchString: 'son of Abraham',
+        scope: [{ bookId: 'MAT' }],
+        caseInsensitive: false,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].removedMarkers).toBeUndefined();
+    });
+
+    const NOTE_IN_PARAGRAPH_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1"/>The son<note caller="+" style="f"><char style="ft">a note</char></note> of Abraham.<verse eid="MAT 1:1"/>
+  </para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+    it('refuses a note-swallowing replacement in simple mode, which structure protection allows', async () => {
+      // The case the deletion guard running unconditionally exists for. `usfmChangesStructure`
+      // deliberately ignores notes, so in simple mode the structure guard passes this range — if
+      // the two guards were an either/or, the note would be deleted silently. Every other
+      // simple-mode test here removes a `\p`/`\v` as well, which trips the structure guard first
+      // and so passes under `else if` too.
+      const noteEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(NOTE_IN_PARAGRAPH_USX),
+      );
+      vi.mocked(papi.settings.get).mockResolvedValue('simple');
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          // The whole of verse 1's text, which holds the note and no structural marker: `\v 1` and
+          // the paragraph's `\p` both sit before offset 5.
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 42 },
+        },
+      ];
+
+      await expect(noteEngine.replace(ranges, 'replaced')).rejects.toThrow(MARKER_DELETION_ERROR);
+
+      // Putting the note back is accepted, which shows the refusal is the deletion guard counting
+      // markers rather than structure protection refusing the range outright.
+      await expect(
+        noteEngine.replace(ranges, 'replaced\\f + \\ft a note\\f*'),
+      ).resolves.toBeUndefined();
+    });
+
+    it('refuses a boundary-spanning replacement in simple mode too, via structure protection', async () => {
+      // This range removes `\p` and `\v 2`, which is a structural change, so in simple mode it is
+      // the structure guard that refuses it and the deletion guard is never consulted. The range
+      // is therefore refused in both interface modes, by a different guard in each. The case only
+      // the deletion guard can catch is the note-swallowing one above.
+      const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
+      );
+      vi.mocked(papi.settings.get).mockResolvedValue('simple');
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 24 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
+        },
+      ];
+      await expect(boundaryEngine.replace(ranges, 'replaced')).rejects.toThrow(
+        STRUCTURE_PROTECTED_ERROR,
+      );
     });
   });
 });
@@ -2290,6 +2469,75 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
 
     expect(foundBooks.has('MAT')).toBe(true);
     expect(foundBooks.has('GEN')).toBe(false);
+  });
+
+  it('passes block-boundary whitespace tolerance for a plain search but not a regex search', async () => {
+    // Restored explicitly: this spy is on a shared prototype, and `restoreMocks` is not enabled
+    // anywhere in this repo, so leaving it in place would leak into every later test in the file.
+    const searchSpy = vi.spyOn(UsjReaderWriter.prototype, 'search');
+    onTestFinished(() => searchSpy.mockRestore());
+
+    await pollFindJob(engine, {
+      searchString: 'of Abraham. Abraham',
+      useRegex: false,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+    expect(searchSpy).toHaveBeenLastCalledWith(
+      expect.any(RegExp),
+      expect.objectContaining({ flexibleWhitespaceAtBlockBoundaries: true }),
+    );
+
+    await pollFindJob(engine, {
+      searchString: 'of Abraham\\.\\s?Abraham',
+      useRegex: true,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+    expect(searchSpy).toHaveBeenLastCalledWith(
+      expect.any(RegExp),
+      expect.objectContaining({ flexibleWhitespaceAtBlockBoundaries: false }),
+    );
+  });
+
+  it('runs the real buildSearchRegex/UsjReaderWriter.search pipeline across a paragraph boundary and rejects a false mid-word gap', async () => {
+    // Compact (no inter-element whitespace) USX: a pretty-printed USX inserts "\n  " text nodes
+    // between elements, which would fill the paragraph-boundary gap this test needs and defeat
+    // the assertion below regardless of whether the boundary-whitespace option works.
+    const COMPACT_TWO_PARAGRAPH_USX =
+      '<?xml version="1.0" encoding="utf-8"?><usx version="3.0">' +
+      '<book code="MAT" style="id">Matthew</book>' +
+      '<chapter number="1" style="c" sid="MAT 1"/>' +
+      '<para style="p"><verse number="1" style="v" sid="MAT 1:1"/>The son of Abraham.' +
+      '<verse eid="MAT 1:1"/></para>' +
+      '<para style="p"><verse number="2" style="v" sid="MAT 1:2"/>Abraham was the father.' +
+      '<verse eid="MAT 1:2"/></para>' +
+      '<chapter eid="MAT 1"/></usx>';
+    const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+      createSingleUsxMockPdps(COMPACT_TWO_PARAGRAPH_USX),
+    );
+
+    // Concatenated text is "The son of Abraham.Abraham was the father.". The query's interior
+    // space sits exactly at the paragraph boundary, so a plain (non-regex) search through the
+    // full PDPE pipeline must find it.
+    const bridged = await pollFindJobTexts(boundaryEngine, {
+      searchString: 'of Abraham. Abraham',
+      useRegex: false,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+    expect(bridged.length).toBe(1);
+
+    // "Abraham was" is one continuous text node with no boundary inside it, so a space inserted
+    // mid-word is not a break boundary and must not be tolerated even though it is nominally
+    // interior to the query.
+    const midWord = await pollFindJobTexts(boundaryEngine, {
+      searchString: 'Abraha m was',
+      useRegex: false,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+    expect(midWord.length).toBe(0);
   });
 });
 

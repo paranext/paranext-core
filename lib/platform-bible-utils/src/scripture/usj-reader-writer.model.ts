@@ -532,6 +532,14 @@ export type UsjNodeAndDocumentLocation<
   documentLocation: TDocumentLocation;
 };
 
+/**
+ * Prefix identifying the capture groups that
+ * {@link UsjSearchOptions.flexibleWhitespaceAtBlockBoundaries} applies to. A regex built for such a
+ * search names each whitespace run `${SEARCH_WHITESPACE_GROUP_PREFIX}${n}` — names must be unique,
+ * because a duplicate capture group name is a `SyntaxError`.
+ */
+export const SEARCH_WHITESPACE_GROUP_PREFIX = 'ws';
+
 /** Options controlling how {@link IUsjReaderWriter.search} performs its search */
 export type UsjSearchOptions = {
   /**
@@ -549,6 +557,31 @@ export type UsjSearchOptions = {
    * always slices of the original (non-NFD) string.
    */
   normalizationForm?: 'NFD';
+  /**
+   * When `true`, a capture group named `${SEARCH_WHITESPACE_GROUP_PREFIX}${n}` — the prefix
+   * followed by one or more digits, and nothing else — may match zero characters, but only at a
+   * block boundary: an offset in the concatenated text where the adjacent text nodes belong to
+   * different block-level markers, which is where the editor renders a block break. A match whose
+   * whitespace group matched zero characters anywhere else is discarded.
+   *
+   * The name is matched exactly, so a caller's own group keeps its ordinary meaning even when its
+   * name begins with the same letters (`(?<wsGap>…)` is left alone).
+   *
+   * This lets a phrase copied out of an editor match across a rendered block break: the clipboard
+   * supplies a space where the concatenated text has nothing between the two words. Most such
+   * breaks render as a line break; adjacent cells in one table row are the exception, rendering
+   * side by side.
+   *
+   * A chapter transition never counts as a boundary — the gap there is not something the editor
+   * renders as a break, and a match spanning one would put a `\c` marker inside a replacement's
+   * removed span.
+   *
+   * The filter needs capture-group offsets, so when the pattern carries such a group and lacks the
+   * `d` flag, `search` runs a **rebuilt copy** of it. Either way the caller's own `RegExp` object
+   * is left as they compiled it, `lastIndex` included — note that this means a search never
+   * advances a global regex's cursor for the caller.
+   */
+  flexibleWhitespaceAtBlockBoundaries?: boolean;
 };
 
 /** Result of a search for text within a USJ object */

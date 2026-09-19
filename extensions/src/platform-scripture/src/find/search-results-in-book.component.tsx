@@ -13,6 +13,7 @@ import SearchResult, {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
 import { PreviewOptions } from './replace-preview-types';
+import { markersDeletedBy } from './structure-protection.util';
 
 type SearchResultsInBookProps = {
   /**
@@ -56,6 +57,12 @@ type SearchResultsInBookProps = {
   isReplaceBlocked: boolean;
   /** Explanation shown in a tooltip while `isReplaceBlocked` is true. Forwarded to each result. */
   replaceBlockedTooltipText: string;
+  /**
+   * Explanation shown in a tooltip on a result whose span holds markers the replacement term does
+   * not put back. Unlike `isReplaceBlocked`, that condition is per result, so it is derived here
+   * rather than passed as a flag.
+   */
+  markerDeletionBlockedTooltipText: string;
   /** Configuration for the replacement preview (used in replace mode). Forwarded to each result. */
   replaceConfig?: ReplaceConfig;
   /** Options controlling how the replace preview is displayed. Forwarded to each result. */
@@ -88,6 +95,7 @@ export function SearchResultsInBook({
   isReplacing,
   isReplaceBlocked,
   replaceBlockedTooltipText,
+  markerDeletionBlockedTooltipText,
   replaceConfig,
   previewOptions,
   allowInvisibleCharacters,
@@ -140,33 +148,42 @@ export function SearchResultsInBook({
 
   return (
     <>
-      {results.map((result, index) => (
-        <SearchResult
-          key={`${result.start.verseRef.book + result.start.verseRef.chapterNum}:${result.start.verseRef.verseNum}${result.text}${result.start.offset}`}
-          searchResult={result}
-          globalResultsIndex={index}
-          isSelected={index === focusedResultIndex}
-          usjReaderWriter={usjReaderWriter}
-          cachedUsfm={cachedUsfm}
-          localizedBookData={localizedBookData}
-          onResultClick={onResultClick}
-          onResultFocus={onResultFocus}
-          onResultDoubleClick={onResultDoubleClick}
-          onResultReferenceClick={onResultReferenceClick}
-          onHideResult={onHideResult}
-          onReplace={onReplace}
-          onCancelReplace={index === firstReplacedIndex ? onCancelReplace : undefined}
-          localizedStrings={localizedStrings}
-          isReplaceMode={isReplaceMode}
-          isReplacing={isReplacing}
-          isReplaceBlocked={isReplaceBlocked}
-          replaceBlockedTooltipText={replaceBlockedTooltipText}
-          replaceConfig={replaceConfig}
-          previewOptions={previewOptions}
-          allowInvisibleCharacters={allowInvisibleCharacters}
-          logger={logger}
-        />
-      ))}
+      {results.map((result, index) => {
+        // A result whose USFM span holds markers can only be replaced by a replacement that puts
+        // them back, which plain text never does — `replace()` refuses it. Block the action here
+        // rather than letting the user click a button that can only raise a toast.
+        const deletesMarkers =
+          isReplaceMode && markersDeletedBy(result.removedMarkers ?? [], replaceConfig?.term ?? '');
+        return (
+          <SearchResult
+            key={`${result.start.verseRef.book + result.start.verseRef.chapterNum}:${result.start.verseRef.verseNum}${result.text}${result.start.offset}`}
+            searchResult={result}
+            globalResultsIndex={index}
+            isSelected={index === focusedResultIndex}
+            usjReaderWriter={usjReaderWriter}
+            cachedUsfm={cachedUsfm}
+            localizedBookData={localizedBookData}
+            onResultClick={onResultClick}
+            onResultFocus={onResultFocus}
+            onResultDoubleClick={onResultDoubleClick}
+            onResultReferenceClick={onResultReferenceClick}
+            onHideResult={onHideResult}
+            onReplace={onReplace}
+            onCancelReplace={index === firstReplacedIndex ? onCancelReplace : undefined}
+            localizedStrings={localizedStrings}
+            isReplaceMode={isReplaceMode}
+            isReplacing={isReplacing}
+            isReplaceBlocked={isReplaceBlocked || deletesMarkers}
+            replaceBlockedTooltipText={
+              isReplaceBlocked ? replaceBlockedTooltipText : markerDeletionBlockedTooltipText
+            }
+            replaceConfig={replaceConfig}
+            previewOptions={previewOptions}
+            allowInvisibleCharacters={allowInvisibleCharacters}
+            logger={logger}
+          />
+        );
+      })}
     </>
   );
 }
