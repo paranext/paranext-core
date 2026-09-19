@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { forwardRef, ReactNode, useImperativeHandle } from 'react';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, onTestFinished, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
 import { ContentZoomAreaProvider } from '@/components/advanced/content-zoom-root.component';
 import userEvent from '@testing-library/user-event';
@@ -121,6 +121,7 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
 // behavior — any earlier test that exercised the same path leaks its calls into later ones.
 beforeEach(() => {
   mockGetMarkerMenuItems.mockClear();
+  mockRegisterOptions.mockClear();
 });
 
 function buildLocalizedStrings(): FootnoteEditorLocalizedStrings {
@@ -295,6 +296,8 @@ describe('FootnoteEditor context-menu container', () => {
   it('passes its own root as the context-menu container, not the caller one', () => {
     const decoy = document.createElement('div');
     document.body.append(decoy);
+    // Testing Library's auto-cleanup only unmounts what it rendered, so this one is ours to remove.
+    onTestFinished(() => decoy.remove());
 
     const { container } = renderFootnoteEditor({
       view: editableView,
