@@ -143,8 +143,8 @@ function ZoomItemsShared({
  * The resource short-name/abbreviation, in the standout resource color (`tw:text-primary`). Single
  * line; a tooltip reveals the full name only when the text is actually clipped (same manual-`open`
  * pattern as the `ProjectRowView` row in `project-selector.component.tsx`). `aria-hidden` because
- * the enclosing gridcell already exposes the name via `aria-label`, so the visible copy is not
- * announced twice.
+ * the enclosing `role="listitem"` (`scripture-text-grid.component.tsx`) already exposes the name
+ * via `aria-label`, so the visible copy is not announced twice.
  */
 /**
  * Compile-time exhaustiveness check for the cell-state chain below: every state that does NOT
