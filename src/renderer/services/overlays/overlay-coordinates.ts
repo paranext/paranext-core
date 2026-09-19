@@ -71,7 +71,8 @@ export function translateCoordinates(
   if (!iframe) return position;
 
   const rect = iframe.getBoundingClientRect();
-  const zoom = getWebViewIframeZoom(webViewId);
+  // Parsed from the iframe already in hand rather than looked up again by id.
+  const zoom = parseIframeZoom(iframe);
   return {
     x: rect.left + position.x * zoom,
     y: rect.top + position.y * zoom,
