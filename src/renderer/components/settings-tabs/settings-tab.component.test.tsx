@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
 import userEvent from '@testing-library/user-event';
 import { projectLookupService } from '@shared/services/project-lookup.service';
+import type { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { SettingsTab } from './settings-tab.component';
 import {
   PROJECT_SELECTOR_NO_RESULTS_KEY,
@@ -94,9 +95,8 @@ vi.mock('@shared/services/settings.service', () => ({
 vi.mock('@shared/services/project-lookup.service', () => ({
   projectLookupService: {
     getMetadataForProject: vi.fn(async () => ({ projectInterfaces: [] })),
-    // Empty by default so the sidebar's project list stays empty. The return type is declared
-    // rather than inferred so a test can hand it a project without a type assertion.
-    getMetadataForAllProjects: vi.fn(async (): Promise<{ id: string }[]> => []),
+    // Empty by default so the sidebar's project list stays empty.
+    getMetadataForAllProjects: vi.fn(async (): Promise<ProjectMetadata[]> => []),
   },
 }));
 
@@ -181,7 +181,9 @@ describe('SettingsTab project picker localization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([{ id: 'projA' }]);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'projA', projectInterfaces: [], pdpFactoryInfo: {} },
+    ]);
   });
 
   it('shows the picker popover in the UI language, not English', async () => {
