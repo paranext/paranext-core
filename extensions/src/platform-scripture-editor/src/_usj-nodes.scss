@@ -2853,10 +2853,13 @@ span.read img {
    PT-4624.
    \tr needs no entry: a real row is a <tr>, not a .para, and tools/pt9-css-converter strips it for
    the same reason. The obsolete \tr1 and \tr2 still convert to plain paragraphs, so they do.
-   Out of scope: an "auto" text direction. The editor sets no dir attribute for it, so the
-   [dir]-qualified margins above never apply while this compensation still does, and the
-   [dir]-qualified gutter rules never match, so RTL content keeps the LTR gutter; see the KNOWN
-   GAP note in the editor's ArrowNavigationPlugin. */
+   Out of scope: an "auto" text direction. Core never passes it: a project always declares ltr
+   or rtl (direction cannot be guessed for a minority language), the platform.textDirection
+   setting is typed to exclude it, and the model text panel narrows to those two. Were it to
+   arrive, the editor would set no dir attribute, so the [dir]-qualified margins above would not
+   apply while this compensation still did, and the [dir]-qualified gutter rules would not match,
+   leaving RTL content with the LTR gutter; see the KNOWN GAP note in the editor's
+   ArrowNavigationPlugin. */
 .psc-gutter-markers.text-spacing .usfm_p2 {
   --para-indent: 2.5vw;
 }
