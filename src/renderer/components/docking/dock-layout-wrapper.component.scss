@@ -1,5 +1,6 @@
 @use '../../styles/vars';
 @use './dock-panel-button-base';
+@use './tab-bar-metrics';
 
 /*
 This file styles with SCSS because rc-dock doesn't give us good ways to render with Tailwind.  I also comes with a lot of opinionated styling that we need to undo, so you'll see a lot of rules that use `unset`. We use `unset` instead of the literal initial values to connote their intention: undoing rc-dock's styling.
@@ -211,8 +212,17 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
   background: unset;
-  padding-inline: vars.$space--xs;
+  padding-inline: tab-bar-metrics.$tab-bar-padding-inline;
   border: unset;
+}
+
+// rc-dock places its edge-split drop layer (`.dock-drop-edge`, z-index 100, Power mode's
+// `dropMode="edge"`) 30px below the panel's top, sized for its own tab bar. This app's tab bar is
+// taller, so without this the layer would cover the bar's bottom strip and a tab dropped there would
+// split the layout instead of joining the bar. rc-dock computes split directions from this layer's
+// own rect, so moving its top keeps the edge-split areas around the panel content intact.
+.dock-layout .dock-panel.dock-style-platform-bible .dock-drop-edge {
+  top: tab-bar-metrics.$tab-bar-height;
 }
 
 /*   Visually reorder children to have the New Tab (+) button immediately after the tabs.
@@ -229,9 +239,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     flex-grow: 0;
   }
 
-  // Contains New Tab (+) button
+  // Contains the New Tab (+) button and the invisible whole-bar tab-drop zone
+  // (`tab-bar-drop-zone.component.tsx`) that fills whatever space is left after it.
   > .dock-extra-content {
     order: 2;
+    // Claim the bar's leftover space so the drop zone inside has something to grow into; without
+    // this, the space between the "+" button and the tab bar's end belongs to no flex item and a
+    // dropped tab there is silently ignored. Growing this container (rather than growing
+    // `.platform-tab-bar-drop-zone` against `.dock-nav`) keeps every tab-bar flex rule here in one
+    // place instead of split across two stylesheets.
+    flex-grow: 1;
   }
 
   // Contains Overflow Dropdown and other operations
@@ -239,6 +256,19 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     order: 3;
     flex-grow: 1;
   }
+}
+
+// While a tab or tab group of this group is being dragged, move the "+" button to the far end of
+// the bar so the drop zone grows into ONE continuous area between the last tab and "+", the way
+// Chrome's tab strip behaves — otherwise the "+" sits between rc-dock's own after-last-tab strip
+// and the zone as a dead spot that quietly ignores a drop. rc-dock appends a `.dragging-layer`
+// carrying the dragged group's `dock-style-*` classes to `<body>` for tab and tab-group drags
+// only (a divider drag carries no group), so the button never moves while a panel is resized.
+body:has(> .dragging-layer.dock-style-platform-bible)
+  .dock-panel.dock-style-platform-bible
+  .dock-extra-content
+  > .new-tab-button {
+  order: 1;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap {
@@ -256,11 +286,11 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   height: var(--dock-tab-height);
 }
 
-.dock-panel.dock-style-platform-bible .dock-nav-operations,
+.dock-panel.dock-style-platform-bible .dock-nav-operations:not(.dock-nav-operations-hidden),
 .dock-panel.dock-style-platform-bible .dock-extra-content {
-  gap: vars.$space--sm;
+  gap: tab-bar-metrics.$tab-bar-extra-gap;
   padding-block: var(--tab-header-to-content-gap);
-  height: 30px;
+  height: tab-bar-metrics.$panel-button-size;
   display: flex;
   align-items: center;
 }
@@ -268,6 +298,17 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 .dock-nav-operations {
   height: 100%;
 
+  // The box has `flex-grow: 1` (see `.dock-nav` above) and rc-tabs keeps it in the DOM even when no
+  // tab overflows into the dropdown, so left in flow it would silently split the bar's leftover
+  // space with `.dock-extra-content` and halve the tab-drop zone; rc-tabs never measures this box
+  // (its overflow math only reads `.dock-nav-wrap`/`.dock-nav-list`), so hiding it is safe. The
+  // `:not()` above isn't enough on its own: rc-dock's own `.dock-nav-operations { display: flex }`
+  // still applies to a `.dock-nav-operations-hidden` element, so it needs this override too.
+  //
+  // Deliberately unscoped to `.dock-style-platform-bible`, so it also applies in Simple mode: the
+  // same "rc-tabs measures only `.dock-nav-wrap`/`.dock-nav-list`" invariant holds there too, and
+  // Simple mode's tab-collapse threshold (comparing the panel's width against the tabs plus a
+  // constant, never against the bar's free space) is identical with or without this rule.
   &.dock-nav-operations-hidden {
     display: none;
   }
@@ -297,7 +338,9 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   margin-right: unset;
   border: unset;
 
-  --dock-tab-height: 30px; // also from rc-dock
+  // Kept equal to the panel buttons' height ($panel-button-size), not a separate literal, so the
+  // tab and the "+"/"more" buttons render at the same height.
+  --dock-tab-height: #{tab-bar-metrics.$panel-button-size}; // also from rc-dock
   height: calc(var(--dock-tab-height) + var(--tab-header-to-content-gap));
 
   display: flex;
