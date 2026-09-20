@@ -3051,9 +3051,9 @@ span.read img {
 /* ── Active text focus box ────────────────────────────────────────────────────
    Applied via .psc-active-focus when viewOptions.hasActiveTextFocusBox is true.
    Outlines the entire paragraph under the cursor. When used alongside
-   .psc-gutter-markers, the --verse-text-start variable aligns the box with the
-   hanging-indent text start of poetry paragraphs. Without the gutter class that
-   variable defaults to 0px, so poetry alignment is approximate. */
+   .psc-gutter-markers the box also takes in the marker glyph (the rule below);
+   --verse-text-start is a fallback start that no marker in this file wins today.
+   Without the gutter class that variable defaults to 0px. */
 
 .psc-active-focus {
   --scripture-accent: #c4956a;
@@ -3082,8 +3082,9 @@ span.read img {
 
 /* In gutter-marker mode, the paragraph marker (\p, \q1, etc.) is absolutely positioned in the
    gutter to the inline-start side of the paragraph's content box. Extend the outline's
-   inline-start so the box surrounds the marker too — using min() picks whichever is further
-   into the gutter, the hanging-indent text start (for poetry) or the marker's own column. */
+   inline-start so the box surrounds the marker too — using min() against the hanging-indent
+   text start (--verse-text-start). For every marker in this file the marker's own column is
+   further into the gutter, so it is what wins today. */
 .psc-active-focus.psc-gutter-markers .psc-active-text::after {
   inset-inline-start: min(
     var(--verse-text-start, 0px),

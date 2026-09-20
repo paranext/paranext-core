@@ -2855,9 +2855,8 @@ span.read img {
    the same reason. The obsolete \tr1 and \tr2 still convert to plain paragraphs, so they do.
    Out of scope: an "auto" text direction. The editor sets no dir attribute for it, so the
    [dir]-qualified margins above never apply while this compensation still does, and the
-   [dir]-qualified gutter rules never match, so RTL content keeps the LTR gutter. Core never
-   passes "auto" (platform.textDirection is ltr, rtl or empty); see the KNOWN GAP note in the
-   editor's ArrowNavigationPlugin. */
+   [dir]-qualified gutter rules never match, so RTL content keeps the LTR gutter; see the KNOWN
+   GAP note in the editor's ArrowNavigationPlugin. */
 .psc-gutter-markers.text-spacing .usfm_p2 {
   --para-indent: 2.5vw;
 }
@@ -3013,9 +3012,9 @@ span.read img {
 /* ── Active text focus box ────────────────────────────────────────────────────
    Applied via .psc-active-focus when viewOptions.hasActiveTextFocusBox is true.
    Shows an outline box around the verse range under the cursor. When used
-   alongside .psc-gutter-markers, the --verse-text-start variable aligns the box
-   with the hanging-indent text start of poetry paragraphs. Without the gutter
-   class that variable defaults to 0px, so poetry alignment is approximate. */
+   alongside .psc-gutter-markers the box also takes in the marker glyph (the rule
+   below); --verse-text-start is a fallback start that no marker in this file
+   wins today. Without the gutter class that variable defaults to 0px. */
 
 .psc-active-focus {
   --scripture-accent: #c4956a;
@@ -3044,8 +3043,9 @@ span.read img {
 
 /* In gutter-marker mode, the paragraph marker (\p, \q1, etc.) is absolutely positioned in the
    gutter to the inline-start side of the paragraph's content box. Extend the outline's
-   inline-start so the box surrounds the marker too — using min() picks whichever is further
-   into the gutter, the hanging-indent text start (for poetry) or the marker's own column. */
+   inline-start so the box surrounds the marker too — using min() against the hanging-indent
+   text start (--verse-text-start). For every marker in this file the marker's own column is
+   further into the gutter, so it is what wins today. */
 .psc-active-focus.psc-gutter-markers .psc-active-text::after {
   inset-inline-start: min(
     var(--verse-text-start, 0px),
