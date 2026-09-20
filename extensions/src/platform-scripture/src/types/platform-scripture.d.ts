@@ -1465,6 +1465,9 @@ declare module 'platform-scripture' {
    * locally installed projects, as PT9 itself does, so a setup whose model text is not installed is
    * absent.
    *
+   * A string field the project left empty is absent here, so an optional string field is either
+   * present and non-empty or absent.
+   *
    * @experimental
    */
   export type Pt9InterlinearSetup = {
@@ -1512,6 +1515,10 @@ declare module 'platform-scripture' {
    * per-file loads quietly serve an empty file in a corrupt one's place, costing one book silently,
    * while here one bad file fails the whole request, so corruption is visible and no partial
    * payload ever poses as complete data.
+   *
+   * A malformed setup id in `InterlinearSetup.xml` is fatal to the whole PT9 interlinear read
+   * rather than degrading to a partial result, while legacy settings keep the more forgiving "serve
+   * as absent" behavior.
    *
    * @experimental
    */

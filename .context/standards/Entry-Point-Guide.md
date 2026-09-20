@@ -113,9 +113,10 @@ paranext-core has **no arbitrary predicate/expression gating** of menu visibilit
 `enabledWhen`/`visibleWhen` equivalent, and the contribution schema cannot evaluate conditions
 before a menu item renders. The one supported declarative axis is
 `MenuItemBase.hiddenInterfaceModes` (`lib/platform-bible-utils/src/extension-contributions/menus.model.ts`,
-enforced by `filterItemsForInterfaceMode` in `src/extension-host/services/menu-data.service-host.ts`, used in production by
-`platform-scripture-editor/contributions/menus.json`), which hides an item in named interface
-modes. Beyond that, don't try to add a "should this menu item show?" backend command or
+enforced by `filterItemsForInterfaceMode` in `src/extension-host/services/menu-data.service-host.ts`, used in production
+both by the core menu document `src/extension-host/data/menu.data.json` and by several extensions'
+`contributions/menus.json` — `grep -rn hiddenInterfaceModes` for the current sites), which hides an
+item in named interface modes. Beyond that, don't try to add a "should this menu item show?" backend command or
 conditionally suppress the contribution.
 
 Instead, leave menu items **always-available** and enforce permission/state at the point of action:
