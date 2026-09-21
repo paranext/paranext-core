@@ -288,8 +288,7 @@ function ToolbarProjectSelector({
     return index;
   }, [recentIds]);
 
-  // Absent metadata means editable — the registered default for `platform.isEditable` is true — so
-  // this tests for an explicit `false` rather than for falsiness.
+  // Explicit `false`, not falsiness — see {@link ProjectItem.isEditable}.
   const readOnlyIds = useMemo(
     () =>
       new Set(
@@ -355,9 +354,8 @@ function ToolbarProjectSelector({
   const renderProjectIndicator = useCallback(
     (project: ProjectSelectorProject) =>
       readOnlyIds.has(normalizeProjectId(project.id)) ? (
-        // No native title here, unlike the dialog's rows: a selector row is itself a shadcn tooltip
-        // trigger, so a `title` inside one would open the browser's default tooltip on top of the
-        // app's. The accessible name still reaches screen readers through the indicator's own role.
+        // No native title here, unlike the dialog's rows: a selector row is itself a tooltip
+        // trigger. See {@link LabelledGlyph} for why that rules the native one out.
         <ReadOnlyIndicator label={strings['%projectPicker_readOnly_label%']} />
       ) : undefined,
     [readOnlyIds, strings],

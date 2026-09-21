@@ -12,10 +12,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * throws nor ever matches. Without the bound the trigger would name a project that is not open,
  * indefinitely.
  *
- * The duration is a conservative round number, not a measured one: nothing here is derived from
- * project-open latency data, and the value only has to outlast any plausible open while still
- * clearing on its own rather than stranding the name. Widen it freely if a slow open is seen losing
- * its label; it is not tuned against a benchmark and should not be read as if it were.
+ * The duration is a round number, not a measured one — it only has to outlast any plausible open.
+ * Widen it freely if a slow open is seen losing its label.
  */
 export const PENDING_PROJECT_TIMEOUT_MS = 15_000;
 

@@ -63,7 +63,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   ]),
   useScrollGroupScrRef: vi.fn(() => [
     // `SerializedVerseRef`: a book ID string plus `chapterNum`/`verseNum`. The same mock in
-    // `platform-bible-toolbar.integration.test.tsx` has to agree with this one.
+    // `platform-bible-toolbar-integration.test.tsx` has to agree with this one.
     { book: 'GEN', chapterNum: 1, verseNum: 1 },
     vi.fn(),
     0,

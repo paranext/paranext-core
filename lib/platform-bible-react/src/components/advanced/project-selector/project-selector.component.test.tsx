@@ -955,7 +955,22 @@ describe('footerAction', () => {
     );
 
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
-    await user.click(await screen.findByTestId('project-selector-footer-action'));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // Activated by KEYBOARD, not by clicking the node. cmdk wires `onClick` on the element itself,
+    // so a direct click reaches the right handler no matter how values collide — that route cannot
+    // fail and proves nothing. The routes that CAN are the ones that resolve a value to a node by
+    // first DOM match: cmdk's own `getSelectedItem()` behind Enter, and `spaceSelectsHighlightedItem`.
+    // Arrow down past the single project row to the footer, then press Enter.
+    await user.keyboard('{ArrowDown}');
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByTestId('project-selector-footer-action')).toHaveAttribute(
+        'data-selected',
+        'true',
+      ),
+    );
+    await user.keyboard('{Enter}');
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onChangeSelection).not.toHaveBeenCalled();
