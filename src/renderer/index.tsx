@@ -11,6 +11,7 @@ import {
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
+import { initConnectionLostService } from '@renderer/services/connection-lost-service';
 import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
@@ -25,9 +26,19 @@ import {
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
 import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
+import { initializeContentZoomService } from '@renderer/services/web-view-content-zoom.service';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
-import { startWebViewServiceShard } from '@renderer/services/web-view.service-shard';
-import { initialize as initializeWindowService } from '@renderer/services/window.service-shard';
+import {
+  getAllOpenWebViewDefinitionsSync,
+  getSavedWebViewDefinitionSync,
+  onDidUpdateWebView,
+  startWebViewServiceShard,
+  updateWebViewDefinitionSync,
+} from '@renderer/services/web-view.service-shard';
+import {
+  getLastFocusedTabId,
+  initialize as initializeWindowService,
+} from '@renderer/services/window.service-shard';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { logger } from '@shared/services/logger.service';
@@ -93,6 +104,14 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   throw new Error(`${reasons}`);
 }
 
+// Subscribed here, at module evaluation, rather than inside the async startup below or from a React
+// effect: `onDidLoseConnection` is a module-level emitter on the network service, so it exists
+// before `initialize()` runs, and subscribing before any await means a loss cannot land in a window
+// where nothing is listening. `PlatformEvent` does not replay to a late subscriber, so a missed loss
+// is missed for good — and this store is the one thing that tells the user the app has stopped
+// working. Returns an unsubscriber we intentionally never call; it runs for the renderer's lifetime.
+initConnectionLostService();
+
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
 // - They internally await other services when they need others in order to start
@@ -112,6 +131,21 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // This needs to run before the web view service shard starts running and blocks us from creating
     // an iframe for the Usersnap feedback forms
     await initializeUsersnapApi();
+
+    // Composes the content-zoom service with the web-view and window shards' functions before the
+    // web-view service shard (below) can open a web view that needs them. Importing either shard
+    // directly from the zoom service would create a cycle, since both shards import from it; this
+    // is the one place that can wire them together without one. Not awaited: it reads two settings,
+    // and no web view should wait on those round trips to open.
+    initializeContentZoomService({
+      getDefinition: getSavedWebViewDefinitionSync,
+      updateDefinition: (webViewId, update) => updateWebViewDefinitionSync(webViewId, update),
+      getAllOpenDefinitions: getAllOpenWebViewDefinitionsSync,
+      onDidUpdateWebView,
+      getLastFocusedTabId,
+    }).catch((e) =>
+      logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
+    );
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),

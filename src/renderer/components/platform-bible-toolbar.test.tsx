@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -296,7 +296,8 @@ vi.mock('platform-bible-react/experimental', async (importOriginal) => {
     ...actual,
     ProjectSelector: (props: ProjectSelectorProps) => {
       capturedProjectSelectorProps.current = props;
-      const { buttonClassName, buttonPlaceholder, isDisabled } = props;
+      const { buttonClassName, isDisabled, localizedStrings } = props;
+      const buttonPlaceholder = localizedStrings?.buttonPlaceholder;
       const selected = getSelectedProject(props);
       const renderTriggerLabel = getRenderTriggerLabel(props);
       // Mirrors the real trigger: a caller-supplied `renderTriggerLabel` owns the whole label,
@@ -307,7 +308,7 @@ vi.mock('platform-bible-react/experimental', async (importOriginal) => {
         : (selected?.shortName ?? buttonPlaceholder);
       return (
         <div
-          data-testid="toolbar-project-selector"
+          data-testid="project-selector-stub"
           data-trigger-classname={buttonClassName}
           aria-disabled={isDisabled}
         >
@@ -753,7 +754,7 @@ describe('PlatformBibleToolbar — project selector visibility by interface mode
   it('renders the project selector when platform.interfaceMode is "simple"', async () => {
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
   });
 
@@ -761,7 +762,7 @@ describe('PlatformBibleToolbar — project selector visibility by interface mode
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.queryByTestId('toolbar-project-selector')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('project-selector-stub')).not.toBeInTheDocument();
     });
   });
 
@@ -772,13 +773,13 @@ describe('PlatformBibleToolbar — project selector visibility by interface mode
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), true]);
     const { rerender } = render(<PlatformBibleToolbar />);
     await screen.findByText('1.0.0');
-    expect(screen.queryByTestId('toolbar-project-selector')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('project-selector-stub')).not.toBeInTheDocument();
 
     // Positive control: the same render shows the picker as soon as the mode settles.
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     rerender(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
   });
 });
@@ -1012,7 +1013,7 @@ describe('PlatformBibleToolbar — top BCV and project selector styling by inter
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
     expect(
       document.querySelector('[data-trigger-classname]')?.getAttribute('data-trigger-classname'),
@@ -1499,7 +1500,7 @@ async function renderSimpleToolbarWith(data: Partial<ProjectPickerData>) {
   });
   const renderResult = render(<PlatformBibleToolbar />);
   await waitFor(() => {
-    expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+    expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
   });
   return renderResult;
 }
@@ -1524,36 +1525,64 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
       allProjects: NINE_PROJECTS.filter((p) => p.id !== 'p3' && p.id !== 'p1'),
     });
 
-    const { projects, customSections } = requireCapturedProjectSelectorProps();
-    const sections = customSections ?? [];
+    const { projects, availableGroupings } = requireCapturedProjectSelectorProps();
+    const grouping = (availableGroupings ?? [])[0];
 
-    expect(sections.map((s) => s.id)).toEqual(['recent', 'yours']);
-    // Every project must land in some section — a project matching none would vanish from the list.
-    expect(projects.every((p) => sections.some((s) => s.match(p)))).toBe(true);
+    // One grouping, which locks the selector into it and suppresses the group-by menu.
+    expect(availableGroupings).toHaveLength(1);
+    // Every project must land in a bucket — one keyed `undefined` would fall into the unknown
+    // bucket, which this grouping does not emit, and vanish from the list.
+    expect(projects.every((p) => grouping.getGroupKey?.(p) !== undefined)).toBe(true);
     expect(projects).toHaveLength(9);
 
-    // First-match-wins: exactly the recent ids match the 'recent' descriptor.
+    const bucketed = (key: string) => projects.filter((p) => grouping.getGroupKey?.(p) === key);
+
     expect(
-      projects
-        .filter((p) => sections[0].match(p))
+      bucketed('recent')
         .map((p) => p.id)
         .sort(),
     ).toEqual(['p1', 'p3']);
-    // ...and its compare orders them by recency, not alphabetically.
+    // Recent sits above local projects.
+    expect(grouping.priorityKey).toBe('recent');
+    // ...and `compareProjects` orders that bucket by recency, not alphabetically.
     expect(
-      projects
-        .filter((p) => sections[0].match(p))
-        .sort(sections[0].compare)
+      bucketed('recent')
+        .sort(grouping.compareProjects)
         .map((p) => p.id),
     ).toEqual(['p3', 'p1']);
+    // The two buckets are headed by the two localized section labels.
+    expect(grouping.getSectionHeading?.('recent', [])).not.toEqual(
+      grouping.getSectionHeading?.('yours', []),
+    );
   });
 
-  it('offers the footer action and stays enabled with zero local projects', async () => {
+  it('offers the footer action and disables nothing with zero local projects', async () => {
     await renderSimpleToolbarWith({ recentProjects: [], allProjects: [] });
 
-    const { footerAction, isDisabled } = requireCapturedProjectSelectorProps();
+    const { footerAction, isDisabled, isLoading } = requireCapturedProjectSelectorProps();
     expect(footerAction).toBeDefined();
-    expect(isDisabled).toBeFalsy();
+    // An empty list must not disable the trigger — the picker this replaced tied `disabled` to the
+    // list being non-empty, which took the escape hatch away exactly when it was the only way out.
+    // `ProjectSelector` disables on `isDisabled || isLoading`, so both levers are checked: asserting
+    // `isDisabled` alone would pass against a prop the toolbar never passes. That the rendered
+    // trigger really is enabled here is asserted in the integration test.
+    expect(isDisabled ?? false).toBe(false);
+    expect(isLoading).toBe(false);
+  });
+
+  it('disables the trigger only while loading, never for an empty list', async () => {
+    await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: true });
+
+    // Busy is a state the selector shows with a spinner and recovers from; the empty list above is
+    // not. Pinned so a future change cannot route the empty case back through the same disable.
+    const whileLoading = requireCapturedProjectSelectorProps();
+    expect(whileLoading.isLoading).toBe(true);
+    expect(whileLoading.footerAction).toBeDefined();
+
+    cleanup();
+    await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: false });
+
+    expect(requireCapturedProjectSelectorProps().isLoading).toBe(false);
   });
 
   it('marks a read-only project and leaves an editable one unmarked', async () => {
@@ -1586,6 +1615,58 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
     expect(
       renderProjectIndicator?.({ id: 'un', shortName: 'UN', fullName: 'Unstated' }),
     ).toBeUndefined();
+  });
+
+  it('marks a read-only project reached through the recent section', async () => {
+    // The two sections are separate hook outputs that the toolbar unions before deriving
+    // `readOnlyIds`. Asserting only against `allProjects` would leave a recent-only regression
+    // green, so the recent path is pinned on its own.
+    await renderSimpleToolbarWith({
+      recentProjects: [{ id: 'roRecent', shortName: 'RR', fullName: 'Readonly Recent' }],
+      allProjects: [],
+    });
+
+    const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
+    expect(
+      renderProjectIndicator?.({ id: 'roRecent', shortName: 'RR', fullName: 'Readonly Recent' }),
+    ).toBeUndefined();
+
+    cleanup();
+    await renderSimpleToolbarWith({
+      recentProjects: [
+        { id: 'roRecent', shortName: 'RR', fullName: 'Readonly Recent', isEditable: false },
+      ],
+      allProjects: [],
+    });
+
+    expect(
+      requireCapturedProjectSelectorProps().renderProjectIndicator?.({
+        id: 'roRecent',
+        shortName: 'RR',
+        fullName: 'Readonly Recent',
+      }),
+    ).not.toBeUndefined();
+  });
+
+  it('marks a read-only project with the read-only indicator, not merely with something', async () => {
+    // The assertions above only separate "a node" from `undefined`, which any placeholder would
+    // satisfy. Render what the toolbar actually returns and check it carries the localized
+    // read-only accessible name — the padlock's only carrier of meaning for a screen reader.
+    await renderSimpleToolbarWith({
+      allProjects: [{ id: 'ro', shortName: 'RO', fullName: 'Readonly', isEditable: false }],
+    });
+
+    const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
+    const indicator = renderProjectIndicator?.({
+      id: 'ro',
+      shortName: 'RO',
+      fullName: 'Readonly',
+    });
+
+    // Scoped to this container rather than `screen`: the toolbar rendered above is still mounted
+    // and carries icons of its own.
+    const { container } = render(<div>{indicator}</div>);
+    expect(within(container).getByRole('img', { name: 'Test read-only' })).toBeInTheDocument();
   });
 
   it('passes a localized search placeholder rather than falling back to English defaults', async () => {
@@ -1681,14 +1762,14 @@ describe('PlatformBibleToolbar — project selector accessible name', () => {
   it('names the current project, not just the action', async () => {
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
 
     // This selector supplies `renderTriggerLabel`, so `ProjectSelector` has no trigger text to
     // derive an accessible name from and leaves it to the consumer. Asserted on the prop rather
     // than the DOM because the selector is stubbed here; the composed name's effect on the real
     // button is covered in `project-selector.component.test.tsx`.
-    expect(requireCapturedProjectSelectorProps().ariaLabel).toBe(
+    expect(requireCapturedProjectSelectorProps().localizedStrings?.ariaLabel).toBe(
       'Test select a project: TP - Test Project',
     );
   });
@@ -1705,10 +1786,14 @@ describe('PlatformBibleToolbar — project selector accessible name', () => {
 
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
 
-    // Naming it "…: " with nothing after the colon would announce a selection that does not exist.
-    expect(requireCapturedProjectSelectorProps().ariaLabel).toBe('Test select a project');
+    // Naming it "…: " with nothing after the colon would announce a selection that does not
+    // exist, so the name falls back to the trigger's placeholder — which, with an empty project
+    // list, names that state rather than inviting a selection that cannot be made.
+    expect(requireCapturedProjectSelectorProps().localizedStrings?.ariaLabel).toBe(
+      'Test no projects',
+    );
   });
 });

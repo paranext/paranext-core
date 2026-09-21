@@ -76,7 +76,7 @@ Resolution order for any localize key lookup (see `findFirstLocalization` / `fin
 
 1. **User's preferred languages** — from the `platform.interfaceLanguage` setting (ordered array)
 2. **English** — `BACKUP_LANGUAGE = 'en'` is hardcoded and always appended to the fallback list
-3. **`fallbackKey` metadata** — if a key declares `fallbackKey` in the `metadata` section (e.g. `%inventoryName_Character%` → `%CheckType_3%`), that sibling key is tried across all languages
+3. **`fallbackKey` metadata** — if a key declares `fallbackKey` in the `metadata` section (e.g. `%inventoryName_Character%` → `%CheckType_3%`), that sibling key is tried across all languages. Exactly **one** hop is followed: the target is looked up in the language data only, so it must hold a value of its own. A `fallbackKey` pointing at a missing key, or at another key that is itself only a `fallbackKey` redirect, resolves to nothing and the user gets the bare key at step 4
 4. **Bare key** — if everything fails, the localize key (`%foo%`) itself is returned as a debug safety net
 
 **Practical implication**: if you add an English entry for a key, users in languages without that key automatically fall back to English. You do **not** need custom fallback logic in the consumer.
@@ -158,7 +158,7 @@ This is advisory, not a [blocking issue](#blocking-issues) — raise it, don't h
 
 The pattern above assumes a web view that can call `useLocalizedStrings` (a PAPI/`@papi/frontend` hook). **Components that live in `lib/platform-bible-react/` cannot do this.** That library is process-agnostic and must stay free of any PAPI dependency, so a library component must NOT resolve its own strings — the consuming extension resolves them and passes them in.
 
-The established contract for a localizable library component is three parts:
+The established contract for a localizable library component is four parts:
 
 1. **A frozen `STRING_KEYS` tuple** of the localize keys the component needs, exported so consumers have a typed handle to feed into `useLocalizedStrings`:
 
@@ -184,6 +184,30 @@ The established contract for a localizable library component is three parts:
    const selectChapter =
      localizedStrings?.['%webView_bookChapterControl_selectChapter%'] ?? 'Select Chapter';
    ```
+
+4. **A shipped English value for every key in the tuple.** The tuple only *declares* what the
+   component asks for; nothing about declaring a key produces a value. The **default** home for a
+   library string is the platform shell's own assets, `assets/localization/en.json` — the library is
+   shared by every consumer, and the number of consuming extensions is not a stable property, so
+   routing a library string through the one extension that happens to use it today means moving it
+   the first time a second extension adopts the component. Add the Spanish value in `es.json` at the
+   same time; the other shipped locales fall back to English.
+
+   An extension's `contributions/localizedStrings.json` is still a valid English shipping source,
+   and a majority of library keys are routed that way today (`INVENTORY_STRING_KEYS` and
+   `SCOPE_SELECTOR_STRING_KEYS` from `platform-scripture`, `COMMENT_LIST_STRING_KEYS` from
+   `legacy-comment-manager`, and others). Prefer the shell assets for a new key; don't migrate the
+   existing ones as a side errand.
+
+   What is *not* optional is shipping the value somewhere, and skipping that fails quietly rather
+   than loudly: the Storybook pseudo-localization fixture at
+   `lib/platform-bible-react/src/localizedStrings.json` is a *separate, hand-maintained file that
+   never ships*, so a key defined only there renders correctly in Storybook and renders as raw
+   `%key%` text in the real app. `src/node/data/shipped-locale-assets.test.ts` guards that floor —
+   it fails when a `*_STRING_KEYS` array exported from the `.` or `./experimental` package entry
+   names a key that no English shipping source defines, and when the Storybook fixture names a key
+   that does not ship. It reads the committed `dist/` bundle, so a newly exported array is covered
+   only once the library is rebuilt and that bundle committed.
 
 The consuming extension resolves the keys with `useLocalizedStrings(STRING_KEYS)` and passes the result down as the `localizedStrings` prop — the library never imports PAPI.
 
@@ -225,7 +249,12 @@ Add `...` to labels that open dialogs:
 
 ### Language Requirements
 
-**Always provide both `en` AND `es` translations.** Both are required for the build to pass.
+**Always provide both `en` AND `es` translations.** This is a review requirement, not a build one —
+nothing in the build, lint, or test run checks parity, so an `en`-only key ships silently and a
+Spanish user sees English text or a raw `%key%`. The only guard is a per-extension
+`localized-strings.test.ts` asserting the keys that extension's own code reads; see
+`platform-scripture-editor`, `legacy-comment-manager`, and `platform-scripture` for the shape. Add
+your keys to that test in the same change.
 
 ### Translation Style (All Languages)
 
@@ -239,6 +268,22 @@ Apply these regardless of target language:
 - Capitalization: sentence case only — capitalize just the first word of a sentence/instruction plus proper nouns. Do not mirror English title case, even for tab/window/section names (e.g. "Show Recent Searches" → "Mostrar búsquedas recientes"). Exceptions that stay capitalized: proper nouns (*Internet*, *Paratext*), single letters identifying scroll groups/additional books/etc., and acronyms (*ISO*, *JSON*).
 - Not every string maps neatly to an "interactive control" (button/menu/command) or an "alert/message" — tooltips, status bar text, placeholder text, and progress labels are common ambiguous cases. Classify by function first: an ongoing process (e.g. "Saving…", "Loading…") reads differently from a completed/current state (e.g. "Saved", "Connected") or a static description (a control's purpose, a tooltip). Apply your language's convention for each case; when it's still unclear, default to the same tone as static interactive-control labels.
 - Placeholder text depends on what it's a placeholder for — it is not one category. A field expecting a specific value (e.g. a name or email field) is typically a noun phrase naming the expected content, with no verb at all. A field that suggests an action (e.g. a search box) should match the register/tone used for other interactive-control action labels in your language.
+
+### Terminology: the two zoom settings
+
+The application has two distinct zoom concepts, and calling either one plain "Zoom" in any
+language is what keeps getting them confused (they were, for a while, each other's names in
+English and Spanish). Agreed with UX on PT-4579:
+
+| Concept | Setting key | English | Spanish |
+|---|---|---|---|
+| Whole application, menus and toolbars included | `platform.zoomFactor` | Interface scaling | Escalado de la interfaz |
+| Per-pane default for tab content | `platform.webViewContentZoom` | Tab content default zoom | Zoom predeterminado del contenido de la pestaña |
+
+Use these names wherever either concept is referred to — labels, descriptions, menu items,
+tooltips, documentation — and never the bare word "Zoom" for either. The UI vocabulary page
+(`lib/platform-bible-react/src/stories/guidelines/terms.mdx`, `Pane`) carries the same rule for
+anyone writing UI copy.
 
 ### Revising an Existing Localization Decision
 

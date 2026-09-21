@@ -38,26 +38,35 @@ import {
 } from 'platform-bible-react';
 import {
   getAvailableBookIds,
-  ScopeWithRange,
-  summarizeSelectedBooks,
   ProjectSelector,
+  ProjectSelectorLocalizedStrings,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
-  ProjectSelectorLocalizedStrings,
+  PROJECT_SELECTOR_STRING_KEYS,
+  ScopeWithRange,
+  buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
+  makeBuiltInGroupings,
+  summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';
 import {
   compareProjectsByName,
   formatReplacementString,
   LanguageStrings,
   LocalizedStringValue,
+  makeProjectSelectorCustomData,
   ScrollGroupId,
   Section,
 } from 'platform-bible-utils';
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useId, useMemo, useRef } from 'react';
 import { FindFilters } from './find-filters.component';
 import { LocalizedBookData, SearchTextType } from './find-types';
-import { isFindQueryValid } from './find.utils';
+import {
+  FIND_AVAILABLE_SCOPES,
+  isFindQueryValid,
+  isScopeBlockedByExtraMaterial,
+} from './find.utils';
 import {
   FindLogger,
   HidableFindResult,
@@ -95,6 +104,8 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_clearSearch%',
   '%webView_find_errorOccurred%',
   '%webView_find_extraMaterialNotSearched%',
+  '%webView_find_extraMaterialNotSearchedScope%',
+  '%webView_find_extraMaterialNotSearchedScopeResults%',
   '%webView_find_findTab%',
   '%webView_find_matchCase%',
   '%webView_find_matchContentIn%',
@@ -108,9 +119,6 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_projectFilter_noOpenProjectsOrResources%',
   '%webView_find_projectFilter_noProjectsFound%',
   '%webView_find_projectSelector_label%',
-  '%webView_find_projectSelector_openTabsSectionHeading%',
-  '%webView_find_projectSelector_otherProjectsSectionHeading%',
-  '%webView_find_projectSelector_searchPlaceholder%',
   '%webView_find_recent%',
   '%webView_find_replace%',
   '%webView_find_replaceAll%',
@@ -135,9 +143,13 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_showingResultsOfMore%',
   '%webView_find_showRecentSearches%',
   '%webView_find_toggleFilters%',
+  '%webView_find_filtersPanel%',
   '%webView_find_verseTextOnly%',
   // Preview-options keys live with their component; spread them so the two lists can't drift.
   ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
+  // Shared ProjectSelector keys — every ProjectSelector in the app resolves the same block, then
+  // the caller merges its own placeholder/ariaLabel on top.
+  ...PROJECT_SELECTOR_STRING_KEYS,
 ] as const;
 
 /**
@@ -149,6 +161,36 @@ export const FIND_LOCALIZED_STRING_KEYS = [
  */
 const EXTRA_MATERIAL_NOT_SEARCHED_KEY =
   '%webView_find_extraMaterialNotSearched%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * Key for the tooltip on the `book` and `chapter` scope options while the current reference sits in
+ * extra material, which those scopes cannot search. Distinct from
+ * {@link EXTRA_MATERIAL_NOT_SEARCHED_KEY}, whose wording is specific to the book picker's list.
+ *
+ * Bound to {@link FIND_LOCALIZED_STRING_KEYS} for the same reason as that key.
+ */
+const EXTRA_MATERIAL_SCOPE_KEY =
+  '%webView_find_extraMaterialNotSearchedScope%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * Key for the results-area placeholder shown in that same state. Separate from
+ * {@link EXTRA_MATERIAL_SCOPE_KEY} because a placeholder has to name a way out — the two ways out
+ * are the `Selected books` scope and moving the reference — while the tooltip sits on the control
+ * the user is already looking at and only has to say why it is unavailable.
+ *
+ * Bound to {@link FIND_LOCALIZED_STRING_KEYS} for the same reason as that key.
+ */
+const EXTRA_MATERIAL_SCOPE_RESULTS_KEY =
+  '%webView_find_extraMaterialNotSearchedScopeResults%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * `data-testid` of the results-area placeholder for the extra-material state.
+ *
+ * The DOM id the collapsed scope trigger points at with `aria-describedby` is derived per instance
+ * from `useId` instead — see {@link ResultsPlaceholder} — because a fixed id is not unique in a
+ * document holding more than one `Find`.
+ */
+const EXTRA_MATERIAL_PLACEHOLDER_TEST_ID = 'find-extra-material-placeholder';
 
 /**
  * A search result paired with its index in the complete (ungrouped) results array, as produced by
@@ -164,6 +206,15 @@ export type FindProject = {
   shortName: string;
   /** Full display name. */
   fullName: string;
+  /** Language name, used by the picker's Language grouping. Omitted when unknown. */
+  language?: string;
+  /**
+   * Presence flag the picker's Last-used grouping reads: any number puts the project in the
+   * "recently used" bucket. The magnitude is never compared, so it does not order anything. Build
+   * it with `recencyMapFromOrderedIds` over the recently-opened-projects list. Omitted when the
+   * project has not been opened.
+   */
+  lastUsedAt?: number;
 };
 
 /** Props for the {@link Find} presentational component. */
@@ -401,14 +452,88 @@ export type FindProps = {
 };
 
 /**
+ * The built-in grouping ids Find's project picker offers in the default (scroll-group) branch, in
+ * `makeBuiltInGroupings` order. The Simple-interface branch offers a different list — see
+ * {@link FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS}.
+ *
+ * Two of the four built-ins are left out because Find cannot populate them into more than one
+ * bucket, and a menu item that always yields a single bucket is a dead option:
+ *
+ * - `type`: Find has no project-type source. `FindProject` carries no type and nothing upstream
+ *   supplies one, so every row would land under "Unknown type".
+ * - `lastUsed`: Find lists ONLY projects open in a searchable tab, and opening a project is what
+ *   records it as recently used. The recents list is capped at 5, so the "Other" bucket is
+ *   non-empty only when more than five projects are open at once. The grouping also cannot order by
+ *   recency — the picker sorts every bucket alphabetically by short name.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toFindSelectorRows} actually packs, so adding an id here without adding its
+ * data is a build failure rather than a dead menu item.
+ */
+export const FIND_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['openTabs', 'language'];
+
+/**
+ * The built-in grouping ids Find's project picker offers in the Simple-interface branch, where the
+ * picker is handed an empty `openTabs` list to suppress scroll-group badges.
+ *
+ * It is {@link FIND_PROJECT_SELECTOR_GROUPING_IDS} minus `openTabs`: with no open tabs, the "open
+ * tabs" section has no eligible row, so that grouping collapses the list into one undifferentiated
+ * bucket — the same result as no grouping at all. Offering it would put a dead item at the top of
+ * the menu, and it is the item the picker's initial-grouping resolver picks first when present.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list too, so an id added here without the
+ * row data to back it is a build failure rather than a dead menu item.
+ */
+export const FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['language'];
+
+/**
+ * Maps caller-supplied Find projects onto ProjectSelector rows: sorted by full name, with the
+ * grouping inputs the picker's built-in groupings read packed into `customData`. Exported for
+ * coverage tests.
+ *
+ * `lastUsedAt` is packed even though Find's grouping menu does not currently offer `lastUsed` (see
+ * {@link FIND_PROJECT_SELECTOR_GROUPING_IDS} for why). It costs nothing, and a Find that ever lists
+ * projects beyond the open ones would want it without a second round of plumbing.
+ */
+export function toFindSelectorRows(projects: readonly FindProject[]): ProjectSelectorProject[] {
+  return [...projects].sort(compareProjectsByName).map((project) => ({
+    id: project.id,
+    shortName: project.shortName,
+    fullName: project.fullName,
+    customData: makeProjectSelectorCustomData({
+      language: project.language,
+      lastUsedAt: project.lastUsedAt,
+    }),
+  }));
+}
+
+/**
  * A centered, screen-reader-announced message shown in the results area in place of the results
  * list (idle prompt, invalid-query prompt). {@link EmptyState} supplies the muted/small text styling
  * and a `role="status"` region.
  */
-function ResultsPlaceholder({ id, message }: { id: string; message: string }) {
+function ResultsPlaceholder({
+  domId,
+  testId,
+  message,
+}: {
+  domId: string;
+  testId: string;
+  message: string;
+}) {
   return (
-    <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4">
-      <EmptyState id={id} className="tw:text-center tw:font-light" message={message} />
+    // `EmptyState`'s `id` is a `data-testid`, not a DOM id, so the wrapper carries the real one —
+    // without it there is nothing for a control elsewhere in the panel to reference with
+    // `aria-describedby`. The two are separate props because they have different uniqueness
+    // requirements: the test id is a fixed name, while the DOM id has to be unique across the
+    // whole document, and more than one `Find` can share a document — a Storybook autodocs page
+    // renders every story into one.
+    <div id={domId} className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4">
+      <EmptyState id={testId} className="tw:text-center tw:font-light" message={message} />
     </div>
   );
 }
@@ -636,7 +761,17 @@ export function Find({
   // the container previously passed its own copy as isSearchQueryValid, which drifted from the
   // Storybook harness's copy and let impossible prop combinations exist in tests. Find already
   // receives every input the rule needs.
-  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  const isSearchQueryValid = isFindQueryValid({
+    searchTerm,
+    scope,
+    selectedBookIds,
+    currentBookId: verseRef.book,
+  });
+
+  // Whether the invalid query is invalid *because* the current reference sits in extra material,
+  // which the `book` and `chapter` scopes cannot search. Read only to pick which placeholder the
+  // results area shows; `isSearchQueryValid` above is what actually blocks the search.
+  const isBlockedByExtraMaterial = isScopeBlockedByExtraMaterial(scope, verseRef.book);
 
   // Single source of truth for which (if any) results-area placeholder shows, so the four states
   // are mutually exclusive by construction instead of by four separately-maintained boolean
@@ -651,6 +786,7 @@ export function Find({
     | 'skeleton'
     | 'idlePrompt'
     | 'invalidQueryPrompt'
+    | 'extraMaterialPrompt'
     | 'none' = useMemo(() => {
     if (noOpenProjects) return 'noOpenProjectsPrompt';
     // Outranks the results still on screen. They belong to the last query that DID run, so leaving
@@ -659,13 +795,49 @@ export function Find({
     // makes an invalid query show the right thing by construction: no container effect has to land
     // first, so there is no window in which stale results are on screen under a query that cannot
     // produce them.
-    if (!isSearchQueryValid) return searchTerm.trim() === '' ? 'idlePrompt' : 'invalidQueryPrompt';
+    if (!isSearchQueryValid) {
+      // Ranked ahead of the empty-term idle prompt as well as the generic invalid-query prompt.
+      // Ahead of idle because "type to search" is false here — no term will run while the scope is
+      // blocked, and the state before typing is exactly where the reason is most useful. Ahead of
+      // the generic prompt because its "select books" wording sends the user to a picker that
+      // cannot fix this; only moving the reference or switching scope can.
+      if (isBlockedByExtraMaterial) return 'extraMaterialPrompt';
+      if (searchTerm.trim() === '') return 'idlePrompt';
+      return 'invalidQueryPrompt';
+    }
     if (results.length > 0) return 'none';
     if (searchStatus === 'running') return 'skeleton';
     if (searchStatus !== undefined) return 'none';
     if (searchTerm.trim() === '') return 'idlePrompt';
     return 'skeleton';
-  }, [noOpenProjects, results.length, searchStatus, searchTerm, isSearchQueryValid]);
+  }, [
+    noOpenProjects,
+    results.length,
+    searchStatus,
+    searchTerm,
+    isSearchQueryValid,
+    isBlockedByExtraMaterial,
+  ]);
+
+  /**
+   * Namespace for this `Find`'s results-area placeholder DOM ids.
+   *
+   * A fixed id would collide wherever two `Find` components share a document — a Storybook autodocs
+   * page renders every story into one — and a duplicate id makes `aria-describedby` resolve to
+   * whichever copy comes first.
+   */
+  const instanceId = useId();
+  const extraMaterialPlaceholderDomId = `${instanceId}-extra-material-placeholder`;
+
+  /**
+   * Whether the extra-material explanation is on screen in the results area.
+   *
+   * The one condition behind both halves of the scope trigger's unavailable presentation. Keying
+   * the de-emphasis off `isBlockedByExtraMaterial` instead would let the trigger render as
+   * unavailable in states that show a different placeholder — and `aria-describedby` has to key off
+   * this, since the id it names only exists while that placeholder is rendered.
+   */
+  const isExtraMaterialExplained = resultsAreaState === 'extraMaterialPrompt';
 
   const resultsMessage = useMemo(() => {
     if (results.length === 0) {
@@ -691,6 +863,25 @@ export function Find({
         : undefined,
     [hasExcludedExtraMaterial, localizedStrings],
   );
+
+  // Asks the same predicate the query gate asks, for each scope Find offers, rather than restating
+  // which scopes the rule covers. Extending the rule then reaches the picker and the gate together;
+  // a second copy here would let Find keep offering a scope the gate has started rejecting.
+  // Supplied only while something is blocked: an always-present explanation would disable scopes
+  // everywhere.
+  //
+  // Falls back to the key itself, as the library's own `localizeString` does. `localizedStrings` is
+  // an open index signature, so a key that went unrequested reads as `undefined` with no compile
+  // error — and an `undefined` explanation here would leave both scopes ENABLED while the query
+  // gate still rejects them, which is the one outcome worse than showing a raw key.
+  const disabledScopeExplanations = useMemo(() => {
+    const blockedScopes = FIND_AVAILABLE_SCOPES.filter((availableScope) =>
+      isScopeBlockedByExtraMaterial(availableScope, verseRef.book),
+    );
+    if (blockedScopes.length === 0) return undefined;
+    const explanation = localizedStrings[EXTRA_MATERIAL_SCOPE_KEY] ?? EXTRA_MATERIAL_SCOPE_KEY;
+    return Object.fromEntries(blockedScopes.map((blockedScope) => [blockedScope, explanation]));
+  }, [verseRef.book, localizedStrings]);
 
   /** Text shown in the scope popover trigger, e.g. "GEN 1", "GEN, EXO, JHN", or "All books" */
   const scopeDisplayText = useMemo(() => {
@@ -772,68 +963,63 @@ export function Find({
   };
 
   const sortedProjects = useMemo<ProjectSelectorProject[]>(
-    () =>
-      [...projects].sort(compareProjectsByName).map((project) => ({
-        id: project.id,
-        shortName: project.shortName,
-        fullName: project.fullName,
-      })),
+    () => toFindSelectorRows(projects),
     [projects],
   );
 
-  // `ProjectSelector`'s popover strings default to hardcoded English (`DEFAULT_STRINGS` in
-  // `project-selector.component.tsx`), so they must be supplied explicitly or the picker's insides
-  // stay untranslated. Mirrors the `manage-books.web-view.tsx` precedent.
-  //
-  // Deliberately only the strings REACHABLE from Find's configuration, since localized keys are
-  // immutable once shipped and one that can never render is permanent dead surface. Omitted, with
-  // the reason each cannot appear here:
-  // - `filterAriaLabel` / `groupSectionLabel` / `filterSectionLabel` / `filterGroupByOpenTabs` —
-  //   the funnel menu is not mounted at all (`hideFilterMenu` below).
-  // - `selectAll` / `clearAll` / `filterShowSelectedOnly` — multi-select only; both of Find's
-  //   configurations are single-select (`mode="projectScrollGroup"` / `mode="project"`).
-  // - `versificationUnknownSectionHeading` — requires versification grouping.
-  // - `boundButClosedTooltip` / `openButtonLabel` — render only on bound-but-closed rows, which Find
-  //   cannot produce (see `onOpenProjectInGroup`'s defensive no-op) and which `mode="project"` has no
-  //   code path for at all.
-  //
-  // `otherProjectsSectionHeading` is kept even though today's list is all open tabs (so that section
-  // is empty and its heading does not render): unlike the above, its reachability depends on what
-  // ends up in `projects` rather than on a setting here, so it is the one worth holding.
-  //
-  // `openTabsSectionHeading` is only reachable in the power-mode configuration: `defaultGroupByOpenTabs`
-  // defaults to `true`, and there every row carries a `scrollGroupId` so all of them land in the
-  // "open tabs" section. The simple-mode configuration passes `openTabs={[]}`, which leaves no row
-  // eligible for that section and collapses the list to a single unheaded group.
+  // Every ProjectSelector across the app resolves the shared `%projectSelector_*%` keys, then
+  // merges Find-specific overrides (placeholder, empty message, aria-label) on top.
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
-      searchPlaceholder: localizedStrings['%webView_find_projectSelector_searchPlaceholder%'],
-      openTabsSectionHeading:
-        localizedStrings['%webView_find_projectSelector_openTabsSectionHeading%'],
-      otherProjectsSectionHeading:
-        localizedStrings['%webView_find_projectSelector_otherProjectsSectionHeading%'],
+      ...buildProjectSelectorLocalizedStrings(localizedStrings),
+      buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
+      commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
+      ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
     }),
     [localizedStrings],
   );
 
-  // Presentation and localization shared by both project-picker configurations, so the
-  // `hideScrollGroups` branch below differs only in the parts that actually vary: the mode, the
-  // selection shape, and the change/open callbacks.
+  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys. Each branch
+  // is narrowed to the ids it can populate; see FIND_PROJECT_SELECTOR_GROUPING_IDS and
+  // FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
+  const builtInGroupings = useMemo(
+    () => makeBuiltInGroupings(buildBuiltInGroupingStrings(localizedStrings)),
+    [localizedStrings],
+  );
+  const projectSelectorGroupings = useMemo(
+    () =>
+      builtInGroupings.filter((grouping) =>
+        FIND_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [builtInGroupings],
+  );
+  const simpleProjectSelectorGroupings = useMemo(
+    () =>
+      builtInGroupings.filter((grouping) =>
+        FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [builtInGroupings],
+  );
+
+  // Presentation shared by both project-picker configurations, so the `hideScrollGroups` branch
+  // below differs only in the parts that actually vary: the mode, the selection shape, the offered
+  // groupings, and the change/open callbacks.
   const sharedProjectSelectorProps = {
     localizedStrings: projectSelectorLocalizedStrings,
     isLoading: isLoadingProjects,
-    hideFilterMenu: true,
-    buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
-    commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
-    ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
-    buttonVariant: 'outline' as const,
-    buttonClassName: 'tw:w-full tw:font-normal',
-    popoverContentClassName: 'tw:w-[300px]',
-    alignDropDown: 'start' as const,
   };
 
   return (
-    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
+    // Scrolling here keeps `max-h-screen` from ever handing overflow to the document. If the document
+    // scrolled, the search re-run that follows every filter change would move the results across the
+    // viewport boundary and toggle its scrollbar, and each toggle narrows the viewport by the
+    // scrollbar's width — shifting this right-aligned toolbar, and the filters popover anchored to it,
+    // sideways. The loading skeleton above the results list gives way entirely, and the list itself
+    // down to its floor, so at normal panel heights nothing reaches this container and it shows no
+    // scrollbar of its own. Once a panel is short enough that the header, that floor and the status
+    // bar no longer fit, this container does scroll — which is what keeps the status bar's Cancel
+    // button reachable, at the cost of the toolbar shifting while a search runs.
+    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
         {/* Project selector + Find/Replace toggle share one row. The responsiveness guideline caps a
@@ -849,14 +1035,16 @@ export function Find({
                  `openTabs={[]}` is what suppresses them — `mode="project"` derives each row's
                  group badges from `openTabs`, so passing Find's real tabs here would still badge
                  every open project with its group letter. It also leaves no row eligible for the
-                 "open tabs" section, collapsing the list into one unheaded group. Matches the
-                 `ProjectSelector` "Simple Flat List" story. */
+                 "open tabs" section, which is why this branch offers
+                 `FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS` instead. Matches the `ProjectSelector`
+                 "Simple Flat List" story. */
               <ProjectSelector
                 mode="project"
                 projects={sortedProjects}
                 openTabs={NO_OPEN_TABS}
                 selection={{ projectId: selectedProjectId }}
                 onChangeSelection={({ projectId: nextId }) => onSelectProject(nextId)}
+                availableGroupings={simpleProjectSelectorGroupings}
                 {...sharedProjectSelectorProps}
               />
             ) : (
@@ -869,6 +1057,7 @@ export function Find({
                   onSelectProjectScrollGroup(nextId, nextScrollGroupId)
                 }
                 onOpenProjectInGroup={onOpenProjectInGroup}
+                availableGroupings={projectSelectorGroupings}
                 {...sharedProjectSelectorProps}
               />
             )}
@@ -971,6 +1160,7 @@ export function Find({
             setIsRegexAllowed={setIsRegexAllowed}
             localizedStrings={{
               toggleFilters: localizedStrings['%webView_find_toggleFilters%'],
+              filtersPanel: localizedStrings['%webView_find_filtersPanel%'],
               matchContentIn: localizedStrings['%webView_find_matchContentIn%'],
               allText: localizedStrings['%webView_find_allText%'],
               allTextTooltip: localizedStrings['%webView_find_allText_tooltip%'],
@@ -1090,11 +1280,30 @@ export function Find({
                 variant="outline"
                 size="sm"
                 className="tw:h-auto tw:min-w-0 tw:shrink tw:gap-1 tw:overflow-hidden tw:px-2 tw:py-1 tw:font-normal"
+                // On the Button, not on the summary span inside it: a button is atomic to
+                // assistive technology, so a description on a role-less descendant is never
+                // announced — the span's text would only fold into the button's NAME.
+                aria-describedby={
+                  isExtraMaterialExplained ? extraMaterialPlaceholderDomId : undefined
+                }
               >
                 <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
                   {localizedStrings['%webView_find_showing%']}
                 </span>
-                <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:font-medium">
+                {/* While the scope is blocked the trigger would otherwise read as a normal,
+                    active scope — "XXB 1" with nothing to say it cannot run. The results area
+                    carries the full explanation, but it can be scrolled away, so the summary drops
+                    its emphasis here too. Both the de-emphasis and the description above key off
+                    the same condition, so the trigger never renders as unavailable while the
+                    reason is nowhere on screen — and the id can only be pointed at while the
+                    element carrying it is rendered. */}
+                <span
+                  className={
+                    isExtraMaterialExplained
+                      ? 'tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:text-muted-foreground tw:italic'
+                      : 'tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:font-medium'
+                  }
+                >
                   {scopeDisplayText}
                 </span>
                 <ChevronDown className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
@@ -1112,7 +1321,7 @@ export function Find({
             >
               <ScopeSelector
                 scope={scope}
-                availableScopes={['chapter', 'book', 'selectedBooks']}
+                availableScopes={FIND_AVAILABLE_SCOPES}
                 // ScopeSelector's onScopeChange takes the wider ScopeWithRange (the
                 // markers-checklist work added a 'range' scope). Find never enables
                 // 'range' (not in availableScopes), so this narrowing wrapper just
@@ -1130,10 +1339,18 @@ export function Find({
                 // quick-select button disabled on a project that has some. Say why, so it doesn't
                 // read as "this project has no extra material".
                 disabledSectionExplanations={extraMaterialNotSearchedExplanation}
+                // Find cannot search extra material, and both these scopes resolve to the current
+                // reference's book. Disabling them keeps the user from choosing a scope that would
+                // only produce the blocked-query placeholder.
+                disabledScopeExplanations={disabledScopeExplanations}
               />
             </PopoverContent>
           </Popover>
-          {visibleResults.length > 0 && (
+          {/* Gated on the query as well as on the results: the rows below are suppressed for an
+              invalid query, and a count with working arrows left behind reads as a live search —
+              "1 of 12" over an empty results area, with navigation that still drives the editor.
+              Navigating the scroll group into extra material makes that the common path. */}
+          {isSearchQueryValid && visibleResults.length > 0 && (
             <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1">
               <span className="tw:text-sm tw:text-muted-foreground tw:tabular-nums">
                 {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
@@ -1170,7 +1387,11 @@ export function Find({
           is about to auto-search (debounce pending, or waiting on the data provider) — otherwise a
           restored/carried-over term would flash the idle prompt below before the search starts. */}
       {resultsAreaState === 'skeleton' && (
-        <div className="tw:space-y-2">
+        // `overflow-hidden` lets these placeholder cards give way in a short panel instead of pushing
+        // the root past its height cap, where the root would grow its own scrollbar for the length of
+        // the search and narrow the toolbar, sliding the filters popover anchored to it sideways.
+        // `p-px` keeps that clip from cutting off each card's 1px ring outline.
+        <div className="tw:space-y-2 tw:overflow-hidden tw:p-px">
           {Array.from({ length: 5 }).map((_value, index) => (
             // As this is a placeholder, it is safe to use the index as a key
             // eslint-disable-next-line react/no-array-index-key
@@ -1194,7 +1415,16 @@ export function Find({
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={resultsContainerRef}
-        className="tw:min-h-48 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2"
+        // A floor of roughly one and a half result cards, rather than this list's natural minimum
+        // (zero, since a scroll container can always shrink): without one, a short panel squeezes the
+        // list away entirely and its results, and the idle prompt inside it, become unreachable. The
+        // floor is dropped while the loading skeleton is up, where this list is empty and the space
+        // would be blank — and where reserving it pushes the root into scrolling, which shifts the
+        // toolbar. Raising it eats the same budget: the root's height also covers its padding, the
+        // gaps between its children, the header and the status bar.
+        className={`tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2 ${
+          resultsAreaState === 'skeleton' ? '' : 'tw:min-h-24'
+        }`}
         // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
@@ -1205,7 +1435,8 @@ export function Find({
             so the results region would otherwise be blank. */}
         {resultsAreaState === 'idlePrompt' && (
           <ResultsPlaceholder
-            id="find-idle-placeholder"
+            domId={`${instanceId}-idle-placeholder`}
+            testId="find-idle-placeholder"
             message={localizedStrings['%webView_find_searchPrompt%']}
           />
         )}
@@ -1215,7 +1446,8 @@ export function Find({
             invites clicks that silently do nothing. */}
         {resultsAreaState === 'noOpenProjectsPrompt' && (
           <ResultsPlaceholder
-            id="find-no-open-projects-placeholder"
+            domId={`${instanceId}-no-open-projects-placeholder`}
+            testId="find-no-open-projects-placeholder"
             message={localizedStrings['%webView_find_noOpenProjectsOrResources_results%']}
           />
         )}
@@ -1224,8 +1456,21 @@ export function Find({
             selection). Distinct from the idle prompt so the user knows why nothing is happening. */}
         {resultsAreaState === 'invalidQueryPrompt' && (
           <ResultsPlaceholder
-            id="find-invalid-query-placeholder"
+            domId={`${instanceId}-invalid-query-placeholder`}
+            testId="find-invalid-query-placeholder"
             message={localizedStrings['%webView_find_selectBooksPrompt%']}
+          />
+        )}
+        {/* The current reference is in extra material, so the `book`/`chapter` scopes have nothing
+            searchable to resolve to. Separate from the invalid-query placeholder because the fix is
+            different: move the reference or switch scope, not pick books. */}
+        {resultsAreaState === 'extraMaterialPrompt' && (
+          <ResultsPlaceholder
+            domId={extraMaterialPlaceholderDomId}
+            testId={EXTRA_MATERIAL_PLACEHOLDER_TEST_ID}
+            message={
+              localizedStrings[EXTRA_MATERIAL_SCOPE_RESULTS_KEY] ?? EXTRA_MATERIAL_SCOPE_RESULTS_KEY
+            }
           />
         )}
         {(() => {

@@ -17,6 +17,7 @@ import {
   LAST_SCR_BOOK_NUM,
   Mutex,
   normalizeFullName,
+  normalizeProjectId,
 } from 'platform-bible-utils';
 import {
   CheckInputRange,
@@ -35,6 +36,7 @@ import {
   CHECKS_SIDE_PANEL_STRING_KEYS,
 } from './checks/checks-side-panel/checks-side-panel.component';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
@@ -44,12 +46,22 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.
  */
 async function getProjectNames(projectId: string): Promise<ProjectOption> {
   const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const projectShortName = await pdp.getSetting('platform.name');
-  const projectFullName = await pdp.getSetting('platform.fullName');
-  // This project shape requires a `string` full name, so an absent one becomes '' rather
-  // than `undefined` — `hasDistinctFullName` treats both as absent, and coalescing here
-  // keeps a `null` setting out of a slot the type promises is a string.
-  return { shortName: projectShortName, fullName: normalizeFullName(projectFullName) ?? '' };
+  // Fetched together so adding language costs no extra serial round trip per project.
+  // `platform.language` is optional: a project that does not define it degrades to an unknown
+  // language bucket rather than failing the whole lookup.
+  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
+    pdp.getSetting('platform.name'),
+    pdp.getSetting('platform.fullName'),
+    pdp.getSetting('platform.language').catch(() => undefined),
+  ]);
+  return {
+    shortName: projectShortName,
+    // This project shape requires a `string` full name, so an absent one becomes '' rather
+    // than `undefined` — `hasDistinctFullName` treats both as absent, and coalescing here
+    // keeps a `null` setting out of a slot the type promises is a string.
+    fullName: normalizeFullName(projectFullName) ?? '',
+    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
+  };
 }
 
 /**
@@ -113,6 +125,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useMemo(() => [defaultCheckRunnerCheckDetails], []),
   );
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('ChecksSidePanelWebView');
 
   // Project data loading
   const [projectIdsAndNames]: [{ [projectId: string]: ProjectOption }, boolean] = usePromise(
@@ -730,15 +744,15 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
 
   // Shape the loaded project metadata into the list the panel renders in the project filter.
-  const projects = useMemo<ChecksSidePanelProject[]>(
-    () =>
-      Object.entries(projectIdsAndNames).map(([id, project]) => ({
-        id,
-        fullName: project.fullName,
-        shortName: project.shortName,
-      })),
-    [projectIdsAndNames],
-  );
+  const projects = useMemo<ChecksSidePanelProject[]>(() => {
+    return Object.entries(projectIdsAndNames).map(([id, project]) => ({
+      id,
+      fullName: project.fullName,
+      shortName: project.shortName,
+      language: project.language,
+      lastUsedAt: recencyMap.get(normalizeProjectId(id)),
+    }));
+  }, [projectIdsAndNames, recencyMap]);
 
   // #endregion
 

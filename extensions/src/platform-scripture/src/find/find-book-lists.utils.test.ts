@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Canon } from '@sillsdev/scripture';
 import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
+import { isExtraMaterialBookId } from './extra-material.utils';
 import {
   deriveFindBookLists,
   excludeExtraMaterialBooks,
@@ -37,8 +38,13 @@ function presentBookIds(booksPresent: string): string[] {
  * Every book id the canon classifies as extra material, spelled out as literals.
  *
  * Pins the set the exclusion is expected to cover, so extending the canon's extra material shows up
- * as a failing test rather than as a silently wider exclusion. It is the same 15 ids as
- * `Canon.nonCanonicalIds`, which the code under test derives from — not an independent oracle.
+ * as a failing test rather than as a silently wider exclusion. Spelled out rather than derived
+ * because every other definition in play — `isExtraMaterialBookId`, the flag-clearing number set —
+ * comes from `Canon.isExtraMaterial`. These literals are the one oracle in this file independent of
+ * it.
+ *
+ * `isExtraMaterialBookId` is exercised here, rather than beside its own module, because what these
+ * tests are for is its agreement with the book-list exclusion below.
  */
 const ALL_EXTRA_MATERIAL_BOOK_IDS = [
   'XXA',
@@ -57,6 +63,36 @@ const ALL_EXTRA_MATERIAL_BOOK_IDS = [
   'TDX',
   'NDX',
 ];
+
+describe('isExtraMaterialBookId', () => {
+  it.each(ALL_EXTRA_MATERIAL_BOOK_IDS)('recognizes %s as extra material', (bookId) => {
+    expect(isExtraMaterialBookId(bookId)).toBe(true);
+  });
+
+  it.each(['GEN', 'PSA', 'MAT', 'REV', 'TOB'])('does not flag the scripture book %s', (bookId) => {
+    expect(isExtraMaterialBookId(bookId)).toBe(false);
+  });
+
+  // Asserting against the literal ids rather than against `Canon.allBookIds.filter(
+  // isExtraMaterialBookId)`: the flag-clearing set is now defined from that same predicate, so
+  // comparing the two would restate the implementation. The literals are the independent oracle.
+  it('covers exactly the books the flag exclusion clears', () => {
+    const clearedIds = Canon.allBookIds.filter(
+      (bookId) => !presentBookIds(excludeExtraMaterialBooks(booksPresentFor([bookId]))).length,
+    );
+    expect([...clearedIds].sort()).toEqual([...ALL_EXTRA_MATERIAL_BOOK_IDS].sort());
+  });
+
+  it('does not flag a book id the canon does not recognize', () => {
+    expect(isExtraMaterialBookId('ZZZ')).toBe(false);
+  });
+
+  // `Canon.isExtraMaterial` validates case-insensitively but matches its id list case-sensitively,
+  // so an un-normalized lowercase id would answer `false` and let the gate fail open.
+  it.each(['glo', 'Glo', 'xxb'])('recognizes %s regardless of case', (bookId) => {
+    expect(isExtraMaterialBookId(bookId)).toBe(true);
+  });
+});
 
 describe('excludeExtraMaterialBooks', () => {
   it('clears extra material while keeping OT, NT, and DC books', () => {

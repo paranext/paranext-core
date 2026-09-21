@@ -120,6 +120,44 @@ describe('usePendingProject', () => {
     }
   });
 
+  it('keeps naming a project whose editor opened in another window, until the bound expires', () => {
+    // The scenario the bound exists for, modelled end to end rather than left to prose. The open
+    // SUCCEEDS — it neither throws nor is corrected — but the editor lands in a different window,
+    // and `useProjectPickerData` reads only THIS window's web views on purpose, so `currentProject`
+    // keeps reporting the project that was already here. No match, no rejection: the timeout is the
+    // only exit, and until it fires the trigger must still name what the user picked.
+    vi.useFakeTimers();
+    try {
+      const otherWindowProject: ProjectItem = {
+        id: 'other-window',
+        shortName: 'OTHER',
+        fullName: 'Other Window Project',
+      };
+      const { result, rerender } = renderPendingProject(OLD_PROJECT);
+
+      act(() => {
+        result.current.beginOpenProject(otherWindowProject);
+      });
+
+      // This window's editor never changes, so re-rendering with the same current project is what
+      // really happens while the other window opens.
+      rerender({ current: OLD_PROJECT });
+      act(() => {
+        vi.advanceTimersByTime(PENDING_PROJECT_TIMEOUT_MS - 1);
+      });
+      expect(result.current.displayedProject?.id).toBe('other-window');
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+
+      expect(result.current.pendingProject).toBeUndefined();
+      expect(result.current.displayedProject?.id).toBe('old');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('re-arms the fallback for the newest selection rather than letting the earlier one expire', () => {
     vi.useFakeTimers();
     try {

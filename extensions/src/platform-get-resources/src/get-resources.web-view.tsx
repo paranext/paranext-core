@@ -3,7 +3,7 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { useRetryablePromise } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { shouldReportCatalogFailure } from './dbl-catalog.utils';
 import {
   GetResources,
@@ -125,8 +125,15 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       const actionFunction = action === 'install' ? installResource : uninstallResource;
 
       return actionFunction(dblEntryUid)
-        .then(() => {
-          // Trigger a refetch so the resource list reflects the new installed state.
+        .then(async () => {
+          // Wait for the derived flags to catch up before refetching. `getCachedResources` answers
+          // from the array it already has and syncs in the background, so refetching straight away
+          // returns the pre-action flags. An install or removal survives that, because the row's
+          // spinner clears on `installed` flipping and the following refetch corrects it; an
+          // update does not, because nothing about the row changes except `updateAvailable` and
+          // there is no event to announce the correction — the row would keep offering "Update"
+          // until the dialog was reopened.
+          await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
           refetchResources();
           return undefined;
         })
@@ -140,6 +147,29 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     },
     [installResource, uninstallResource, refetchResources],
   );
+
+  // Correct the update badges once the list is up. `getCachedResources` answers one refresh behind,
+  // and the background sync deliberately skips the backend round trip that `updateAvailable` needs
+  // — every other consumer of the catalog discards that flag. So a resource updated outside this
+  // dialog arrives here still offering "Update". This view is the only one that renders the flag,
+  // which makes it the one that pays for refreshing it. Once per mount: the post-action refresh
+  // covers anything the user does from here.
+  const hasRefreshedUpdateFlags = useRef(false);
+  useEffect(() => {
+    if (!hasSettled || hasRefreshedUpdateFlags.current) return;
+    hasRefreshedUpdateFlags.current = true;
+    papi.commands
+      .sendCommand('platformGetResources.refreshResourceFlags')
+      .then(() => {
+        refetchResources();
+        return undefined;
+      })
+      // The list is already rendered; a failed refresh leaves the cached flags in place rather
+      // than costing the user the dialog.
+      .catch((e) =>
+        logger.warn(`Could not refresh DBL resource update flags: ${getErrorMessage(e)}`),
+      );
+  }, [hasSettled, refetchResources]);
 
   /** Removes resources from array of resources that are currently being handled */
   useEffect(() => {

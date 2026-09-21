@@ -1,8 +1,8 @@
 import {
   ProjectSelector,
+  type ProjectSelectorLocalizedStrings,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
-import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import {
   Sidebar,
   SidebarContent,
@@ -72,6 +72,18 @@ export type SettingsSidebarProps = {
   /** Placeholder text for the button */
   buttonPlaceholderText: string;
 
+  /**
+   * Placeholder text for the project picker's search box. Falls back to the picker's English string
+   * when omitted.
+   */
+  searchPlaceholderText?: string;
+
+  /**
+   * Message the project picker shows when no project matches the search. Falls back to the picker's
+   * English string when omitted.
+   */
+  noResultsText?: string;
+
   /** Additional css classes to help with unique styling of the sidebar */
   className?: string;
 };
@@ -92,6 +104,8 @@ export function SettingsSidebar({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
+  searchPlaceholderText,
+  noResultsText,
   className,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
@@ -123,6 +137,20 @@ export function SettingsSidebar({
       })),
     [projectInfo],
   );
+
+  // `buttonPlaceholder` and `ariaLabel` are this sidebar's own copy; the popover's two strings are
+  // optional. Unsupplied entries are left off the bag rather than set to `undefined`, because
+  // ProjectSelector layers this bag over its own English defaults with a plain spread — an explicit
+  // `undefined` would blank the default it lands on instead of falling back to it.
+  const projectSelectorStrings = useMemo((): ProjectSelectorLocalizedStrings => {
+    const strings: ProjectSelectorLocalizedStrings = {
+      buttonPlaceholder: buttonPlaceholderText,
+      ariaLabel: projectsSidebarGroupLabel,
+    };
+    if (searchPlaceholderText) strings.searchPlaceholder = searchPlaceholderText;
+    if (noResultsText) strings.commandEmptyMessage = noResultsText;
+    return strings;
+  }, [buttonPlaceholderText, projectsSidebarGroupLabel, searchPlaceholderText, noResultsText]);
 
   const getIsActive: (label: string) => boolean = useCallback(
     (label: string) => !selectedSidebarItem.projectId && label === selectedSidebarItem.label,
@@ -166,11 +194,14 @@ export function SettingsSidebar({
               (no click handler), so keeping it adjacent to — rather than inside — the trigger
               preserves the visual affordance without bloating the canonical component.
 
-              Open Tabs grouping isn't wired here because the platform-bible-react library is
-              intentionally PAPI-free (see CLAUDE.md "Symlinked Directories" / lib boundaries).
-              `useOpenProjectTabs` lives in the extension layer; passing `openTabs={[]}` makes the
-              ProjectSelector fall back to a flat (non-grouped) list. If a future consumer needs
-              the grouping, they can pass `openTabs` in via a new prop on this component.
+              No groupings at all are offered here, and that is deliberate rather than an
+              oversight. platform-bible-react is intentionally PAPI-free (see CLAUDE.md
+              "Symlinked Directories" / lib boundaries), so this component cannot reach project
+              settings or the recently-opened-projects service, and its public `ProjectInfo` prop
+              carries only an id and a name — there is no language, type, or recency to group by.
+              `useOpenProjectTabs` likewise lives in the extension layer, so `openTabs={[]}` keeps
+              the ProjectSelector on a flat (non-grouped) list. A consumer that wants grouping
+              passes `openTabs` and richer rows in via new props on this component.
             */}
             <div
               className={cn(
@@ -186,7 +217,6 @@ export function SettingsSidebar({
                 mode="project"
                 projects={projectSelectorProjects}
                 openTabs={[]}
-                availableGroupings={['openTabs']}
                 selection={{ projectId: selectedSidebarItem?.projectId ?? '' }}
                 onChangeSelection={({ projectId: nextId }) => {
                   if (!nextId) return;
@@ -195,12 +225,8 @@ export function SettingsSidebar({
                 }}
                 buttonVariant="ghost"
                 buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
-                buttonPlaceholder={buttonPlaceholderText}
-                ariaLabel={projectsSidebarGroupLabel}
+                localizedStrings={projectSelectorStrings}
                 triggerLabelFormat="shortNameAndFullName"
-                // TODO: Check if this z-index override is necessary — the PopoverContent default
-                // (Z_INDEX_ABOVE_DOCK = 250) may be sufficient since this dropdown portals to body
-                popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}
               />
             </div>
           </SidebarGroupContent>

@@ -1,6 +1,7 @@
 import { type Frame, type Page } from '@playwright/test';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
+  requireIsolatedProjectRoot,
   SAMPLE_WEB_PROJECT_ID,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
@@ -83,26 +84,77 @@ export async function sendPapiCommandWhenRegistered(
  * click, so caret-driven behavior cannot be exercised without this. Flipping the setting through
  * the PDP (same write path as the Project Settings UI) keeps the change inside the isolated temp
  * project root.
+ *
+ * Writes project data, so it refuses to run unless the app was launched with `isolatedProjectRoot:
+ * true`: there is no restore, and the sample project's id is the one the backend installs into a
+ * developer's real project root too.
  */
 export async function makeSampleProjectEditable(): Promise<void> {
-  // Wait until the Paratext factory has registered AND the sample project is installed and
-  // advertised — see waitForSampleProjectMetadata for why a generic any-project wait is racy, and
-  // LAUNCH_PHASE_TIMEOUT_MS for why this factory in particular needs the cold-boot budget.
+  requireIsolatedProjectRoot();
+  const pdpId = await getSampleProjectDataProviderId();
+  await sendPapiRequestOnce<boolean>(
+    `object:${pdpId}.setSetting`,
+    ['platform.isEditable', true],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+}
+
+/**
+ * Resolves the sample WEB project's data provider id once the Paratext factory has registered AND
+ * the sample project is installed and advertised — see waitForSampleProjectMetadata for why a
+ * generic any-project wait is racy, and LAUNCH_PHASE_TIMEOUT_MS for why this factory in particular
+ * needs the cold-boot budget.
+ */
+async function getSampleProjectDataProviderId(): Promise<string> {
   await waitForPapiMethodRegistered(
     'object:platform.Paratext-pdpf.getProjectDataProviderId',
     WEBSOCKET_PORT,
     LAUNCH_PHASE_TIMEOUT_MS,
   );
   await waitForSampleProjectMetadata();
-  const pdpId = await sendPapiRequestOnce<string>(
+  return sendPapiRequestOnce<string>(
     'object:platform.Paratext-pdpf.getProjectDataProviderId',
     [SAMPLE_WEB_PROJECT_ID],
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
-  await sendPapiRequestOnce<boolean>(
-    `object:${pdpId}.setSetting`,
-    ['platform.isEditable', true],
+}
+
+/** The book/chapter selector the chapter USFM data type takes; `verseNum` is ignored for chapters. */
+export interface SampleChapterRef {
+  book: string;
+  chapterNum: number;
+  verseNum: number;
+}
+
+/**
+ * Rewrites one chapter of the sample WEB project through its data provider — read the chapter's
+ * USFM, pass it through `transform`, write the result back — so a spec can put markers the sample
+ * text does not contain in front of real verses. Writes project data, so it refuses to run unless
+ * the app was launched with `isolatedProjectRoot: true`: without that option it would rewrite the
+ * developer's own copy of the sample project, with no restore.
+ *
+ * Going through PAPI rather than editing the SFM file on disk means the write lands the same way an
+ * editor save does: the provider re-parses it and every open editor for the chapter is notified.
+ */
+export async function rewriteSampleProjectChapterUsfm(
+  chapter: SampleChapterRef,
+  transform: (usfm: string) => string,
+): Promise<void> {
+  requireIsolatedProjectRoot();
+  const pdpId = await getSampleProjectDataProviderId();
+  const usfm = await sendPapiRequestOnce<string | undefined>(
+    `object:${pdpId}.getChapterUSFM`,
+    [chapter],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+  if (!usfm)
+    throw new Error(`Sample project has no USFM for ${chapter.book} ${chapter.chapterNum}`);
+  await sendPapiRequestOnce(
+    `object:${pdpId}.setChapterUSFM`,
+    [chapter, transform(usfm)],
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
@@ -214,27 +266,81 @@ function escapeForRegExp(value: string): string {
 /**
  * Navigate the main toolbar's book-chapter-verse control (drives scroll group A).
  *
- * Commits with Enter only AFTER cmdk's highlighted (`data-selected`) item is the top match for the
- * typed reference: cmdk moves its highlight asynchronously after the input changes, so an immediate
- * Enter can race it and activate the previously-highlighted book instead (observed as "typed EXO
- * 2:3, still on Genesis 1:1"). The `\b` anchor keeps a wrong-chapter highlight from false-matching
- * (e.g. "Mark 4\b" accepts "Mark 4:1" but rejects "Mark 40:1").
+ * Commits with Enter only AFTER the top-match row displays the typed reference: the control parses
+ * the input asynchronously, so an immediate Enter can race the parse and commit the previous
+ * reference (observed as "typed EXO 2:3, still on Genesis 1:1"). The `(?!\d)` anchor keeps a
+ * wrong-chapter row from false-matching — "Mark 4" accepts "Mark 4:1" but rejects "Mark 40:1".
  *
- * Pass `reference` with the ENGLISH book name ("Exodus 2:3", not "EXO 2:3"): the top-match item
- * renders through `formatScrRef(..., 'English')`, so a book CODE never matches its own item.
+ * A `\b` anchor cannot do that job here. The row renders the reference and the book id as adjacent
+ * spans with no whitespace between them, so `hasText` sees one run of "Jonah 1:1JON" — a digit
+ * followed by a letter, which is not a word boundary, so `\b` never matches any verse-level
+ * reference. `(?!\d)` asserts what the anchor is actually for: the number must have ended.
+ *
+ * Deliberately NOT keyed on cmdk's `data-selected` highlight: that highlight sits on a cell of the
+ * chapter preview grid below this row, never on the row itself, and Enter submits the row's
+ * reference rather than whatever cmdk has highlighted.
+ *
+ * Pass `reference` with the ENGLISH book name ("Exodus 2:3", not "EXO 2:3"): the row renders the
+ * book name localized, and the app under test runs in English, so a book CODE never matches.
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
-  const highlightedTopMatch = mainPage.locator(
-    '[data-radix-popper-content-wrapper] [cmdk-item][data-selected="true"]',
-    { hasText: new RegExp(`${escapeForRegExp(reference)}\\b`, 'i') },
-  );
-  await highlightedTopMatch.waitFor({ timeout: 10_000 });
+  const topMatchRow = mainPage.locator('[data-radix-popper-content-wrapper] [cmdk-item]', {
+    hasText: new RegExp(`${escapeForRegExp(reference)}(?!\\d)`, 'i'),
+  });
+  await topMatchRow.first().waitFor({ timeout: 10_000 });
   await input.press('Enter');
   // The popover closing confirms the commit was accepted before callers assert on the outcome.
   await input.waitFor({ state: 'hidden', timeout: 10_000 });
+}
+
+/**
+ * `SIMPLE_COLUMN_MIN_WIDTH_PX` from `simple-layout.data.ts`, plus room for the rounding the dock's
+ * flex weights introduce. Assert it as an upper bound on the editor column's width after a drag to
+ * the floor, so a spec states that the drag really reached the floor rather than stopping somewhere
+ * comfortable.
+ */
+export const COLUMN_FLOOR_CEILING_PX = 310;
+
+/** Width of the Simple-mode editor column (the middle dock panel), rounded to whole pixels. */
+export async function getEditorColumnWidth(mainPage: Page): Promise<number> {
+  return mainPage
+    .locator('.dock-panel')
+    .nth(1)
+    .evaluate((el) => Math.round(el.getBoundingClientRect().width));
+}
+
+/**
+ * Drags the divider between the editor column and the resources column to the left by `distancePx`,
+ * in steps rc-dock will track. Pass `Number.POSITIVE_INFINITY` to drag as far as the window allows:
+ * the dock clamps the column at its floor, which is the state the column-floor specs are about.
+ */
+export async function dragEditorColumnDividerLeft(
+  mainPage: Page,
+  distancePx: number,
+): Promise<void> {
+  // The second divider is the one between the editor column and the resources column.
+  const divider = mainPage.locator('.dock-divider').nth(1);
+  const dividerBox = await divider.boundingBox();
+  if (!dividerBox) throw new Error('The editor/resources divider has no bounding box');
+  const startX = dividerBox.x + dividerBox.width / 2;
+  const y = dividerBox.y + dividerBox.height / 2;
+  const targetX = Math.max(1, startX - distancePx);
+  await mainPage.mouse.move(startX, y);
+  await mainPage.mouse.down();
+  // Stepped, and with a small first nudge: rc-dock's drag manager starts tracking on the first
+  // move that differs from where the press landed, so a single jump to the target does nothing.
+  const dragPath = [startX - 5];
+  for (let x = startX - 5; x > targetX; x -= 40) dragPath.push(Math.max(x - 40, targetX));
+  // Sequenced through a promise chain rather than an await-in-loop: the moves have to arrive in
+  // order.
+  await dragPath.reduce(
+    (previous, x) => previous.then(() => mainPage.mouse.move(x, y)),
+    Promise.resolve(),
+  );
+  await mainPage.mouse.up();
 }
 
 /**

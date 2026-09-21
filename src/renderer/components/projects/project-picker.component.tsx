@@ -10,9 +10,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
   useListbox,
-  Z_INDEX_MODAL,
 } from 'platform-bible-react';
-import { CheckIcon, LockIcon } from 'lucide-react';
+import { Z_INDEX_TOOLTIP } from 'platform-bible-react/experimental';
+import { CheckIcon } from 'lucide-react';
+import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { RefObject, useMemo, useState } from 'react';
 
 export type ProjectItem = {
@@ -132,15 +133,17 @@ function ProjectSection({
           {/* Column 1 — short name, right-aligned */}
           <div className="tw:flex tw:items-center tw:justify-end tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
             {p.id === currentProjectId && (
-              <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-label={currentProjectLabel} />
-            )}
-            {p.isEditable === false && (
-              // The padlock is the only carrier of "read-only" in the row, so `role="img"`
-              // hosts the accessible name and `title` gives sighted users a hover label.
-              <span role="img" aria-label={readOnlyLabel} title={readOnlyLabel}>
-                <LockIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
+              // Wrapped rather than labelled directly so it carries a hover label like the
+              // read-only padlock beside it — a Lucide icon takes no `title`, and without the
+              // wrapper one glyph in the row names itself on hover while its neighbour stays
+              // silent. `role="img"` hosts the accessible name, as it does there.
+              <span role="img" aria-label={currentProjectLabel} title={currentProjectLabel}>
+                <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
               </span>
             )}
+            {/* Rows here are plain listbox options rather than tooltip triggers, so the native
+                hover label is safe to show and matches the check mark beside it. */}
+            {p.isEditable === false && <ReadOnlyIndicator label={readOnlyLabel} showNativeTitle />}
             {p.shortName}
           </div>
           {/* Column 2 — full name */}
@@ -154,7 +157,7 @@ function ProjectSection({
                     <TooltipTrigger asChild>
                       <span className="tw:cursor-default">{p.language}</span>
                     </TooltipTrigger>
-                    <TooltipContent style={{ zIndex: Z_INDEX_MODAL + 50 }}>
+                    <TooltipContent style={{ zIndex: Z_INDEX_TOOLTIP }}>
                       {p.languageDisplayName}
                     </TooltipContent>
                   </Tooltip>

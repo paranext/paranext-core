@@ -25,7 +25,11 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from '@shared/services/scroll-group.service-model';
-  import type { AppWindowInputEvent, WindowSummary } from '@shared/services/window.service-model';
+  import type {
+    AppWindowInputEvent,
+    FocusedWindowIdEvent,
+    WindowSummary,
+  } from '@shared/services/window.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
@@ -37,7 +41,7 @@ declare module 'papi-shared-types' {
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
-  import { WebViewId } from '@shared/models/web-view.model';
+  import { ContentZoomAreaId, WebViewId } from '@shared/models/web-view.model';
 
   // #region Commands
 
@@ -81,7 +85,10 @@ declare module 'papi-shared-types' {
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
     /**
-     * Create a new application window
+     * Create a new application window.
+     *
+     * Rejects in simple interface mode, which is single-window and has no chrome that could reach a
+     * second window. The first window of a launch is never refused.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -97,13 +104,58 @@ declare module 'papi-shared-types' {
      * of window. Titles follow each window's own content, so two windows showing the same thing
      * carry the same label and nothing distinguishes them.
      *
+     * Only windows that can still take the work are listed: a window whose close has begun, and one
+     * whose renderer has been given up on, are both left out. Either can be the window holding the
+     * primary role, so the list can carry no `isMain` at all — absence is not evidence that some
+     * other window holds it.
+     *
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
-    /** Increase the zoom level of the entire UI */
+    /**
+     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
+     * and Linux, Ctrl+`=` / Ctrl+`+` invoke this until PT-4577 hands those chords to per-pane
+     * content zoom (`platform.webViewContentZoomIn`).
+     */
     'platform.zoomIn': () => Promise<void>;
-    /** Decrease the zoom level of the entire UI */
+    /**
+     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
+     * and Linux, Ctrl+`-` invokes this until PT-4577 hands that chord to per-pane content zoom
+     * (`platform.webViewContentZoomOut`).
+     */
     'platform.zoomOut': () => Promise<void>;
+    /**
+     * Zoom one area of a web view's content in by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area (the one
+     * last clicked or focused). Only web views that mark at least one zoom area respond.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomIn': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Zoom one area of a web view's content out by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomOut': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Return one area of a web view's content to the default zoom set in Settings. Without an id,
+     * the focused window's last focused tab is the target; without an area, the pane's active
+     * area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomReset': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -121,6 +173,21 @@ declare module 'papi-shared-types' {
      * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
+    /**
+     * Open the Terms of Service document that ships beside the application - the terms the
+     * distributed application is licensed to the user under, rather than this repository's AGPL
+     * source (see LICENSING.md).
+     *
+     * The document is a self-contained HTML file, shown in a window the application owns rather
+     * than handed to the operating system. One window at a time: a second request focuses the one
+     * already open. Every link in the document leaves through the browser, so the window only ever
+     * shows the document.
+     *
+     * @throws If the document could not be loaded. A caller that offers this as a link needs to be
+     *   able to tell the user the document did not open, so the failure is reported rather than
+     *   only logged.
+     */
+    'platform.openTermsOfService': () => Promise<void>;
 
     // These commands are provided in `web-view.service-shard.ts`
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
@@ -137,28 +204,40 @@ declare module 'papi-shared-types' {
      * `useWebViewState` state — in the target window. Consumers see a close event in the source and
      * an open event in the target, and the web view controller is disposed and re-created: a held
      * controller reference must be re-acquired after a move. The returned id is the authoritative
-     * id of the web view after the move, and it can differ from the id passed in: a web view
-     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
-     * scope along — so use the returned id for anything after the move. In Simple mode —
-     * single-window by design — there is no other window to move to, and this does nothing.
+     * id of the web view after the move — the same id as `webViewId`, since a web view keeps the id
+     * it was minted with for its whole life, across any number of moves — so use the returned id
+     * for anything after the move. In Simple mode — single-window by design — there is no other
+     * window to move to, and this does nothing.
      *
-     * A move that fails once it has taken the web view out of its window says where it left it, as
-     * a machine-readable marker at the front of the error message: `[webViewMoveFailure:<where>]`,
-     * where `<where>` is `reopened-in-source-window` (nothing about where it lives changed),
+     * A failed move says where it left the web view, as a machine-readable marker at the front of
+     * the error message: `[webViewMoveFailure:<where>]`, where `<where>` is
+     * `reopened-in-source-window` (nothing about where it lives changed),
      * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
-     * `not-reopened` (it is open in no window, and only the log holds what it was), or
-     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be
-     * told). The marker rides in the message because a rejection that crosses processes reaches its
-     * caller as a code and a message and nothing else. A failure decided before the move touches
-     * the web view carries no marker. Strip the marker before showing the message to a user — it is
-     * there to be classified on, not read.
+     * `not-reopened` (it is open in no window, and only the log holds what it was),
+     * `reached-new-window-unconfirmed` (the window created for the move is holding it, but the move
+     * could not get that confirmed), `possibly-closed` (taking it out of its window is what failed,
+     * so where it is cannot be told), or `already-moving` (this call was refused before it started,
+     * because another move of the same web view was already running — the web view is wherever that
+     * other move leaves it). The marker rides in the message because a rejection that crosses
+     * processes reaches its caller as a code and a message and nothing else. A failure decided
+     * before the move touches the web view for any other reason — an unknown target window, a
+     * target on its way out, an interface mode that could not be read — carries no marker. Strip
+     * the marker before showing the message to a user — it is there to be classified on, not read.
      *
      * @param webViewId Web view to move
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see above
-     * @experimental
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   above
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
-    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
     /**
      * Move a web view to an existing window, named by its window id (see
      * `papi.window.getWindowId()` for the id of the window the caller is in, or
@@ -172,13 +251,20 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId Web view to move
      * @param targetWindowId Window to move it to
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see `platform.moveWebViewToNewWindow`
-     * @experimental
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own. A target window the platform opened without activation and the user has not yet
+     *   been in stays backgrounded unless this is `true`: naming it is the user asking to go there,
+     *   which is what raises it. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   `platform.moveWebViewToNewWindow`
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
     'platform.moveWebViewToWindow': (
       webViewId: WebViewId,
       targetWindowId: string,
+      isUserRequested?: boolean,
     ) => Promise<WebViewId>;
 
     /** Open a dialog that displays essential information about the application */
@@ -348,8 +434,37 @@ declare module 'papi-shared-types' {
      */
     'platform.requestTimeout': number;
     /**
-     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
-     * 0.5 to 3.0.
+     * Default content zoom applied to every zoom area of a web view pane that has no level of its
+     * own (shown in Settings as "Tab content default zoom"). A factor: 1.0 = 100 %. Allowed range
+     * is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area its own level; Ctrl+`0` returns that area to
+     * this default. This factor multiplies with any font size a view sets for itself (for example a
+     * project's font size) and never replaces it; resetting a pane returns it to this default, not
+     * to that font size.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoom': number;
+    /**
+     * Per-project memory of content zoom levels, keyed `<kind>:<identity>:<area>` (kind is
+     * `editor`, `resource` or `notes`; identity is the project id, or the resource id for views
+     * without a project; area is the zoom area id, `main` for a view with one area). Written by the
+     * platform when an area's own level changes; read when a pane for that project opens. Local to
+     * this machine.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.ptxUtilsMementoData`: settings already give cross-window persistence and change
+     * notification for free. Writes are best-effort last-write-wins across windows, and a direct
+     * `papi.settings.set` on this key is tolerated rather than guarded against.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomMemory': { [key: string]: number };
+    /**
+     * The zoom factor that applies to the entire application, including menus and toolbars (shown
+     * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
+     * from Settings, by the `platform.zoomIn` / `platform.zoomOut` commands, and by the
+     * application's own zoom keyboard shortcuts; per-pane content zoom is
+     * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
@@ -1047,6 +1162,14 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidAppWindowInput': AppWindowInputEvent;
+    /**
+     * Emitted by the main process when the window it considers focused changes. Survives the whole
+     * application losing OS focus (alt-tabbing to another application) — the payload keeps naming
+     * the window the user was last working in.
+     *
+     * @experimental
+     */
+    'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
   }
 
   /** Union of all known network event names (keys of {@link NetworkEvents}). */

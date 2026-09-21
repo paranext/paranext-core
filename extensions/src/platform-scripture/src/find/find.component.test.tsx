@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
@@ -287,6 +287,11 @@ function openProjectSelector(user: ReturnType<typeof setupUser>) {
   );
 }
 
+/** Opens the Find filters panel, which is where every filter control lives */
+function openFilters(user: ReturnType<typeof setupUser>) {
+  return user.click(screen.getByRole('button', { name: 'Toggle filters' }));
+}
+
 describe('Find project selector — simple interface mode', () => {
   it('appends the scroll group letter to the trigger in power mode', () => {
     render(<Find {...buildProps()} />);
@@ -361,6 +366,86 @@ describe('Find project selector — simple interface mode', () => {
   });
 });
 
+/**
+ * The picker's grouping menu labels come from the shared `%projectSelector_grouping_*%` keys, which
+ * `buildProps` stubs key-as-value along with the rest of `FIND_LOCALIZED_STRING_KEYS`.
+ */
+const LANGUAGE_GROUPING_LABEL_KEY = '%projectSelector_grouping_language_label%';
+const TYPE_GROUPING_LABEL_KEY = '%projectSelector_grouping_type_label%';
+const LAST_USED_GROUPING_LABEL_KEY = '%projectSelector_grouping_lastUsed_label%';
+
+const PROJECTS_WITH_LANGUAGES: FindProject[] = [
+  { id: 'WEB', shortName: 'WEB', fullName: 'World English Bible', language: 'English' },
+  { id: 'OTH', shortName: 'OTH', fullName: 'Other Bible', language: 'Spanish' },
+];
+const OPEN_TABS_TWO_PROJECTS: ProjectSelectorOpenTab[] = [
+  ...OPEN_TABS,
+  { projectId: 'OTH', scrollGroupId: 0 },
+];
+
+/**
+ * The picker's group-by menu trigger, found by its menu-popup semantics rather than by its
+ * accessible name: the name comes from the shared `%projectSelector_*%` block, and matching on the
+ * role a dropdown trigger must expose keeps these tests independent of how that string is spelled.
+ * The length assertion keeps the query honest — it is the only menu-opening button in the picker.
+ */
+function getGroupByTrigger(): HTMLElement {
+  const menuTriggers = within(screen.getByRole('dialog'))
+    .getAllByRole('button')
+    .filter((button) => button.getAttribute('aria-haspopup') === 'menu');
+  expect(menuTriggers).toHaveLength(1);
+  return menuTriggers[0];
+}
+
+async function openGroupByMenu(user: ReturnType<typeof setupUser>) {
+  await openProjectSelector(user);
+  await user.click(getGroupByTrigger());
+}
+
+describe('Find project selector — groupings', () => {
+  it('buckets projects by language when the caller supplies it', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({ projects: PROJECTS_WITH_LANGUAGES, openTabs: OPEN_TABS_TWO_PROJECTS })}
+      />,
+    );
+
+    await openGroupByMenu(user);
+    await user.click(
+      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
+    );
+
+    // Section headings, not row text: no project's short or full name is exactly 'English' or
+    // 'Spanish', so these match the language buckets and nothing else.
+    expect(await screen.findByText('English')).toBeInTheDocument();
+    expect(screen.getByText('Spanish')).toBeInTheDocument();
+  });
+
+  it('offers neither Type nor Last used, which Find cannot split into real buckets', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({ projects: PROJECTS_WITH_LANGUAGES, openTabs: OPEN_TABS_TWO_PROJECTS })}
+      />,
+    );
+
+    await openGroupByMenu(user);
+
+    // Falsifies the negative assertions below: the menu did open, and it offers the groupings Find
+    // can actually populate.
+    expect(
+      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL_KEY }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: LAST_USED_GROUPING_LABEL_KEY }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 // #region PT-4343 lifecycle + permission suites
 
 /**
@@ -378,6 +463,7 @@ const STRINGS = {
   '%webView_find_showRecentSearches%': 'Show recent searches',
   '%webView_find_recent%': 'Recent',
   '%webView_find_toggleFilters%': 'Toggle filters',
+  '%webView_find_filtersPanel%': 'Search filters',
   '%webView_find_matchContentIn%': 'Match content in',
   '%webView_find_allText%': 'Any text',
   '%webView_find_allText_tooltip%': 'Including introductions, titles, headings, etc.',
@@ -420,7 +506,28 @@ const STRINGS = {
   '%webView_find_replace_readOnlyTooltip%':
     "This project is read-only, so replacements can't be made.",
   '%webView_find_previewOptions_toggle%': 'Preview style',
+  '%webView_find_extraMaterialNotSearchedScope%': "Find doesn't search extra material.",
+  '%webView_find_extraMaterialNotSearchedScopeResults%':
+    "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.",
 };
+
+/**
+ * Drains the `setTimeout` Radix returns focus from. The panel is already unmounted a full macrotask
+ * before focus settles, so asserting without this reads the caret mid-flight — still where it was
+ * put — and passes whether or not it is taken away next.
+ */
+async function settleFocus() {
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+}
+
+/** Gets the Find search box, which sits outside the filters panel */
+function getSearchInput() {
+  return screen.getByPlaceholderText(STRINGS['%webView_find_searchPlaceholder%']);
+}
 
 /** `buildProps` with the English string map swapped in, for the suites below. */
 function buildLifecycleProps(overrides: Partial<FindProps>): FindProps {
@@ -846,11 +953,6 @@ describe('Find — an unrunnable query with results still on screen', () => {
 // default to off. A regression that dropped the wiring — or shipped either one enabled — would
 // silently change every search, and nothing else in this suite would notice.
 describe('Find — whitespace and diacritic tolerance toggles', () => {
-  /** Opens the filters dropdown, which is where both toggles live */
-  async function openFilters(user: ReturnType<typeof setupUser>) {
-    await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
-  }
-
   it.each([
     ['Ignore whitespace differences', 'setIgnoreWhitespaceDifferences'] as const,
     ['Ignore diacritics', 'setIgnoreDiacritics'] as const,
@@ -885,4 +987,532 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
       expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveClass('tw:bg-muted');
     },
   );
+});
+
+// These exist because the filter controls are plain form controls (radio groups, checkboxes), not
+// menu items. Housing them in a Radix menu makes them unreachable by keyboard: menu content calls
+// preventDefault on Tab, and its arrow handling only walks items registered in its roving-focus
+// collection — which plain form controls never join. A regression back to a menu container would
+// leave the panel mouse-only, and nothing else in this suite would notice.
+describe('Find — filters panel keyboard accessibility', () => {
+  it('puts focus on the first filter control as soon as the panel opens', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('radio', { name: 'Any text' })).toHaveFocus();
+  });
+
+  // The explanation beside "Any text" describes the radio itself. A tab stop of its own would sit
+  // inside the radio group, where Tab never reaches it whenever the other radio is the selected one.
+  it('describes "Any text" with its explanation', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('radio', { name: 'Any text' })).toHaveAccessibleDescription(
+      'Including introductions, titles, headings, etc.',
+    );
+  });
+
+  it('describes "Ignore whitespace differences" with its explanation', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Ignore whitespace differences' }),
+    ).toHaveAccessibleDescription(
+      'Match any run of spaces in the text where the search has spaces.',
+    );
+  });
+
+  it.each([['Match content in'], ['Match boundaries']])(
+    'names the "%s" group after its legend',
+    async (name) => {
+      const user = setupUser();
+      render(<Find {...buildLifecycleProps({})} />);
+
+      await openFilters(user);
+
+      expect(screen.getByRole('group', { name })).toBeInTheDocument();
+    },
+  );
+
+  // Each radio group is a single tab stop (roving tabindex), so Tab crosses between groups rather
+  // than visiting every radio.
+  it('moves focus to the next group of controls when the user presses Tab', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+
+    expect(screen.getByRole('radio', { name: 'Anywhere' })).toHaveFocus();
+  });
+
+  // The key is held rather than tapped. Radix moves focus on a timer and selects the newly focused
+  // radio only while an arrow key is still down; a tap releases the key before that timer fires.
+  it('moves to and selects the next radio option when the down arrow is pressed', async () => {
+    const user = setupUser();
+    const setSearchTextType = vi.fn();
+    render(<Find {...buildLifecycleProps({ setSearchTextType })} />);
+
+    await openFilters(user);
+    await user.keyboard('{ArrowDown>}{/ArrowDown}');
+
+    await waitFor(() => expect(setSearchTextType).toHaveBeenCalledWith('verseOnly'));
+    expect(screen.getByRole('radio', { name: 'Verse text only' })).toHaveFocus();
+  });
+
+  // Leaving the panel with Shift+Tab dismisses it, so the question is where focus goes. The panel is
+  // portalled after the rest of the web view, so without help it lands at the bottom of the Find
+  // panel, nowhere near the control the user was on.
+  it('hands focus back to the filters button when Shift+Tab leaves the panel', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab({ shift: true });
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  it('hands focus back to the filters button when Escape closes the panel', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  // A popover is not named by its trigger the way a menu is, so the panel needs a name of its own —
+  // and a noun phrase rather than the trigger's "Toggle filters", which names the control the user
+  // just left rather than the surface a screen reader is announcing they arrived at.
+  it('gives the open panel a name of its own', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('dialog', { name: 'Search filters' })).toBeInTheDocument();
+  });
+
+  // The panel and each tooltip are portalled to the body separately, so they stack as siblings and
+  // the higher z-index paints on top. An explanation that stacks lower renders behind the panel it
+  // sits inside, where it cannot be read.
+  it('stacks a filter explanation above the panel rather than behind it', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.hover(screen.getByTestId('any-text-explanation'));
+    const tooltip = await screen.findByRole('tooltip');
+
+    const declaredZIndexOf = (element: Element) =>
+      element.closest<HTMLElement>('[data-radix-popper-content-wrapper]')?.style.zIndex;
+    const panelZIndex = declaredZIndexOf(screen.getByRole('dialog'));
+    const tooltipZIndex = declaredZIndexOf(tooltip);
+
+    // Check both are actually declared before comparing. `Number('')` is 0, so a bare greater-than
+    // keeps passing against an element that declares no stacking at all — which is precisely the
+    // regression that would put the explanation back behind the panel.
+    expect(panelZIndex).not.toBe('');
+    expect(tooltipZIndex).not.toBe('');
+    expect(Number(tooltipZIndex)).toBeGreaterThan(Number(panelZIndex));
+  });
+
+  // Tab moves between the groups inside the panel — Radix loops it, so forward Tab never leaves.
+  // The two tests below repeat the pair above after such a Tab, because arming the focus return on
+  // the keydown and clearing it only on open would leave it armed for the rest of the visit: the
+  // next dismissal of any kind would then take the caret, which is the bug those two tests exist to
+  // prevent. They are the same assertions from a state a user reaches by using the panel normally.
+  it('leaves focus in the search box when it is clicked after moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    const searchBox = getSearchInput();
+
+    await user.click(searchBox);
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+
+  it('leaves focus in the search box when it takes focus after moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    const searchBox = getSearchInput();
+
+    await act(async () => {
+      searchBox.focus();
+    });
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+
+  // The other side of the same coin: clearing the arming on an in-panel Tab must not clear it for a
+  // later Escape, which is a real exit and still owes the user the trigger.
+  it('hands focus back to the filters button when Escape follows moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    await user.keyboard('{Escape}');
+    await settleFocus();
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  // The pointer counterpart of the test below: clicking into the search box both dismisses the panel
+  // and puts the caret where the user aimed it, so nothing should move afterwards. Without this, the
+  // condition guarding the focus return has only one of its two branches covered and reads as
+  // deletable complexity.
+  it('leaves focus in the search box when the box outside the panel is clicked', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    const searchBox = getSearchInput();
+
+    await user.click(searchBox);
+    await settleFocus();
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(searchBox).toHaveFocus();
+  });
+
+  // The panel is a non-modal popover, so focus landing outside it dismisses it — including focus the
+  // app itself moves. Invoking Find while the panel is open does exactly that: `focusSearchInput`
+  // puts the caret in the search box, which dismisses the panel. The caret must survive that;
+  // returning focus to the trigger belongs to the keyboard exits below, not to every dismissal.
+  it('leaves focus in the search box when the box outside the panel takes focus', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    const searchBox = getSearchInput();
+    // `focus()` rather than a click, so this turns on focus alone rather than on the pointer
+    // interaction that would dismiss the panel regardless.
+    await act(async () => {
+      searchBox.focus();
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+});
+
+// The book and chapter scopes resolve to the CURRENT reference's book rather than to the (already
+// extra-material-free) book list, so nothing else keeps a search in a glossary from producing
+// matches labeled with the meaningless reference the exclusion exists to hide.
+describe('Find — current reference in extra material', () => {
+  const GLOSSARY_VERSE_REF: SerializedVerseRef = { book: 'GLO', chapterNum: 1, verseNum: 1 };
+  // The placeholder and the scope tooltip are separate strings: the placeholder has to name a way
+  // out, the tooltip only has to say why the option is unavailable.
+  const EXTRA_MATERIAL_MESSAGE =
+    "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.";
+  // The scope selector's own strings stay stubbed to their keys — `buildLifecycleProps` swaps in
+  // English only for Find's own strings.
+  const BOOK_SCOPE_LABEL_KEY = '%webView_scope_selector_book%';
+  const CHAPTER_SCOPE_LABEL_KEY = '%webView_scope_selector_chapter%';
+
+  /**
+   * The scope option a label names, found through the label's `for`.
+   *
+   * Not `getByRole('radio', { name })`: the scope selector renders each option as a Radix `<button
+   * role="radio">`, and the accessible-name computation does not pick up a `<label for>` pointing
+   * at a button, so every option comes back nameless.
+   */
+  function getScopeOption(labelKey: string): HTMLElement {
+    const optionId = screen.getByText(labelKey).getAttribute('for');
+    if (!optionId) throw new Error(`Scope label '${labelKey}' has no 'for'`);
+    const option = document.getElementById(optionId);
+    if (!option) throw new Error(`Scope label '${labelKey}' points at missing id '${optionId}'`);
+    return option;
+  }
+
+  it.each(['book', 'chapter'] as const)(
+    'explains why the %s scope cannot run instead of showing results for it',
+    (scope) => {
+      render(
+        <Find
+          {...buildLifecycleProps({
+            scope,
+            verseRef: GLOSSARY_VERSE_REF,
+            searchTerm: 'God',
+            results: [RESULT],
+            resultsByBook: RESULTS_BY_BOOK,
+            searchStatus: 'completed',
+            totalNumberOfResults: 1,
+          })}
+        />,
+      );
+
+      expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+      // The stale results are replaced, not merely covered — they carry the bogus reference.
+      expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
+    },
+  );
+
+  // The rows are suppressed for an invalid query; a count and working arrows left behind read as a
+  // live search over an empty results area, and the arrows still drive the editor.
+  it('drops the result count and navigation along with the results', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('1 of 1')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next result' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Previous result' })).not.toBeInTheDocument();
+  });
+
+  // Before typing is where the reason is most useful, and it is the state a user lands in by
+  // navigating into extra material. The idle "enter search text" prompt would be false here — no
+  // term will run while the scope is blocked.
+  it('explains the block before a search term is entered, rather than prompting for one', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({ scope: 'book', verseRef: GLOSSARY_VERSE_REF, searchTerm: '' })}
+      />,
+    );
+
+    expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText('Enter search text to find results')).not.toBeInTheDocument();
+    // The trigger's de-emphasis and its description are one condition, so it never reads as
+    // unavailable while the reason is nowhere on screen.
+    expect(screen.getByRole('button', { name: /Showing/ })).toHaveAttribute('aria-describedby');
+  });
+
+  // "Select at least one book" would send the user to a picker that cannot fix this: the picker
+  // never offers extra material, and the fix is to move the reference or change scope.
+  it('does not fall back to the select-books wording, which names the wrong remedy', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText('Select at least one book to search')).not.toBeInTheDocument();
+  });
+
+  // The selected books are the user's own choice and already exclude extra material, so where the
+  // reference happens to sit says nothing about them.
+  it('leaves the selectedBooks scope searchable while the reference sits in extra material', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(RESULT_MATCH_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText(EXTRA_MATERIAL_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('disables both current-reference scopes in the picker so neither can be chosen', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeDisabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeDisabled();
+  });
+
+  it('leaves both scopes selectable while the reference is in a scripture book', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({ scope: 'selectedBooks', selectedBookIds: ['GEN'] })} />);
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeEnabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeEnabled();
+  });
+
+  // `localizedStrings` is an open index signature, so an unrequested key reads as `undefined` with
+  // no compile error. Leaving the scopes enabled while the query gate still rejects them would be
+  // worse than showing a raw key, so the explanation falls back to the key rather than vanishing.
+  it('keeps the scopes disabled when the explanation string is missing', async () => {
+    const user = setupUser();
+    // Built by omission rather than by deleting from a copy: `STRINGS`'s inferred type has the key
+    // as required, so `delete` is a type error — one no check in this repo would report, since
+    // `platform-scripture`'s tsconfig excludes test files and the workspace has no typecheck
+    // script.
+    const stringsWithoutExplanation = Object.fromEntries(
+      Object.entries(STRINGS).filter(
+        ([key]) => key !== '%webView_find_extraMaterialNotSearchedScope%',
+      ),
+    );
+    render(
+      <Find
+        {...buildProps({
+          localizedStrings: stringsWithoutExplanation,
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeDisabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeDisabled();
+  });
+
+  // The results area carries the explanation, but it scrolls; the collapsed trigger must not read
+  // as an ordinary active scope on its own.
+  it('points the collapsed scope trigger at the placeholder that explains the block', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    // Asserted from the trigger outwards: the description has to be on the BUTTON, since a button
+    // is atomic to assistive technology and a description on a span inside it is never announced.
+    // Following the id through to the element proves the two sides name the same node — reading the
+    // id off the placeholder instead would pass for any element that merely carries the attribute.
+    const trigger = screen.getByRole('button', { name: /Showing/ });
+    const describedById = trigger.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+    expect(trigger).toHaveTextContent('GLO');
+    expect(document.getElementById(describedById ?? '')).toHaveTextContent(EXTRA_MATERIAL_MESSAGE);
+  });
+
+  // A fixed id would collide wherever two Find components share a document, e.g. a Storybook
+  // autodocs page, and aria-describedby would then resolve to whichever copy came first.
+  it('gives each Find its own placeholder id', () => {
+    const props = buildLifecycleProps({
+      scope: 'book',
+      verseRef: GLOSSARY_VERSE_REF,
+      searchTerm: 'God',
+    });
+    render(
+      <>
+        <Find {...props} />
+        <Find {...props} />
+      </>,
+    );
+
+    const describedByIds = screen
+      .getAllByRole('button', { name: /Showing/ })
+      .map((trigger) => trigger.getAttribute('aria-describedby'));
+
+    expect(describedByIds).toHaveLength(2);
+    expect(new Set(describedByIds).size).toBe(2);
+  });
+});
+
+// `buildProps` stubs every localized string as its own key, which is exactly what
+// `useLocalizedStrings` hands a consumer before the strings arrive. `RecentSearches` treats a raw
+// key as not-yet-localized and falls back to its English default, so this — not the key — is the
+// button's accessible name here. That fallback is what keeps a `%key%` off the screen when it is
+// rendered as visible tooltip text.
+const RECENT_SEARCHES_LABEL = 'Show recent searches';
+
+// `recentSearches: []` in `buildProps` means every other suite in this file renders
+// `RecentSearches` with an empty list, which makes it return `undefined` and never mount — so
+// nothing else here exercises the menu it opens. These are the only tests that do.
+describe('Find — recent searches menu', () => {
+  const RECENT_SEARCH_TERMS = ['first search', 'second search'];
+
+  it('opens the recent searches menu and lists recent search terms', async () => {
+    const user = setupUser();
+    render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS })} />);
+
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL }));
+
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByText('first search')).toBeInTheDocument();
+    expect(within(menu).getByText('second search')).toBeInTheDocument();
+  });
+
+  it('selecting a recent search item applies it and closes the menu', async () => {
+    const user = setupUser();
+    const onSearchTermChange = vi.fn();
+    render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS, onSearchTermChange })} />);
+
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL }));
+    await user.click(await screen.findByText('first search'));
+
+    expect(onSearchTermChange).toHaveBeenCalledWith('first search');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('uses the localized label once the strings arrive', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({
+          recentSearches: RECENT_SEARCH_TERMS,
+          localizedStrings: {
+            ...STRINGS,
+            '%webView_find_showRecentSearches%': 'Mostrar búsquedas recientes',
+            '%webView_find_recent%': 'Recientes',
+          },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Mostrar búsquedas recientes' }));
+
+    expect(await screen.findByRole('menu', { name: 'Recientes' })).toBeInTheDocument();
+  });
 });

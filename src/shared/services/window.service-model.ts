@@ -141,7 +141,37 @@ export type AppWindowInputEvent = {
  */
 export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
 
-/** Specific item that is intended to be focused at the top level of a window */
+/**
+ * Payload of the {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID} network event.
+ *
+ * @experimental
+ */
+export type FocusedWindowIdEvent = {
+  /**
+   * The window the main process considers focused, or `undefined` if no window of this application
+   * currently does. Survives the whole application losing OS focus (e.g. the user alt-tabbing to
+   * another application) — it names the window the user was last working in, not whether any window
+   * currently holds OS focus. See `getFocusedWindowId`.
+   */
+  focusedWindowId: string | undefined;
+};
+
+/**
+ * Name of the network event the main process emits when the window it considers focused changes.
+ *
+ * Fires when a window takes focus (including the first window at startup) and when the focused
+ * window closes, leaving none. Deliberately does NOT fire when the application loses OS focus
+ * without a new window taking it (e.g. alt-tabbing away) — the payload keeps naming the window the
+ * user was last in, matching `getFocusedWindowId`'s survive-blur semantic, so a renderer that shows
+ * per-window UI (e.g. an active-tab focus ring) based on this event keeps showing it on the window
+ * the user will land back in rather than clearing it everywhere the moment the app is
+ * backgrounded.
+ *
+ * @experimental
+ */
+export const EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID = 'platform.onDidChangeFocusedWindowId';
+
+/** Specific item that is intended to be focused in the top-level app window */
 export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
 
 /** Instructions that indicate how to change the focus within a window */
@@ -150,6 +180,8 @@ export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | 
 // Data Type to initialize data provider engine with
 export type WindowDataTypes = {
   Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  /** JSDOC DESTINATION getActiveEditorProjectId; read-only */
+  ActiveEditorProjectId: DataProviderDataType<undefined, string | undefined, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -234,6 +266,56 @@ export type IWindowService = {
     callback: (focusSubject: FocusSubject | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
+  /**
+   * JSDOC SOURCE getActiveEditorProjectId
+   *
+   * Get the `projectId` of the web view that BCV navigation (the top toolbar's book/chapter/verse
+   * controls and the `platform.goTo*` commands) currently drives in this window, or `undefined`
+   * when there is nothing to navigate.
+   *
+   * Which web view that is depends on the interface mode:
+   *
+   * - Simple mode: always the main Scripture editor, so this is the project the user is working in.
+   * - Power mode: the Scripture-navigable web view the user most recently focused — which may be a
+   *   resource or other reference panel rather than an editor, and whose `projectId` may be
+   *   `undefined` — falling back to the first open Scripture editor that has a project. So it
+   *   changes as focus moves between tabs, and is not necessarily an editor's project.
+   *
+   * Use this to learn which project is active, not to interpret a Scripture reference's
+   * versification frame (that is what a scroll group's own source project is for).
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @returns The project id, or `undefined`
+   * @experimental
+   */
+  getActiveEditorProjectId(selector: undefined): Promise<string | undefined>;
+  /** JSDOC DESTINATION getActiveEditorProjectId */
+  getActiveEditorProjectId(): Promise<string | undefined>;
+  /**
+   * This data cannot be changed. Trying to use this setter will always throw. The project follows
+   * whichever web view BCV navigation drives; see `getActiveEditorProjectId`.
+   *
+   * @throws Always
+   * @experimental
+   */
+  setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+  /**
+   * Subscribe to run a callback function when the project `getActiveEditorProjectId` reports
+   * changes.
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @param callback Function to run with the new active project id. If there is an error while
+   *   retrieving the updated data, the function will run with a {@link PlatformError} instead of the
+   *   data. You can call {@link isPlatformError} on this value to check if it is an error.
+   * @param options Various options to adjust how the subscriber emits updates
+   * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+   * @experimental
+   */
+  subscribeActiveEditorProjectId(
+    selector: undefined,
+    callback: (projectId: string | undefined | PlatformError) => void,
+    options?: DataProviderSubscriberOptions,
+  ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &
   typeof windowServiceObjectToProxy &
   IDataProvider<WindowDataTypes>;
@@ -262,6 +344,11 @@ export type WindowSummary = {
    * This is the live answer, not the persisted flag of the same name. Usually they agree, but when
    * no open window holds the marked entry the role falls to one of the windows that are open while
    * the flag stays where it is, and this reports the window that actually answers.
+   *
+   * At most one window carries it, and possibly none — the window holding the role may be absent
+   * from the list it appears in, because a window whose close has begun and one whose renderer has
+   * been given up on are both left out. So a caller must not read "no window is flagged" as "then
+   * it must be me".
    */
   isMain: boolean;
 };
