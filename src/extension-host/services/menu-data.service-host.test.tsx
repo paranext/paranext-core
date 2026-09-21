@@ -477,34 +477,48 @@ describe('Platform menu document interface-mode gating', () => {
     return realMenus;
   }
 
-  test('getMainMenu hides the Open new window item when platform.interfaceMode is simple', async () => {
+  /**
+   * Builds the engine from the shipped menu document with `platform.interfaceMode` set to `mode`,
+   * then reports whether the resulting main menu still offers `command`.
+   */
+  async function isCommandInMainMenu(mode: 'simple' | 'power', command: string): Promise<boolean> {
     const { settingsService } = await import('@shared/services/settings.service');
-    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    vi.mocked(settingsService.get).mockResolvedValue(mode);
     const engine =
       testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
     // Let the fire-and-forget settings read in the constructor resolve
     await Promise.resolve();
     await Promise.resolve();
 
-    const result = await engine.getMainMenu();
-    expect(
-      result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
-    ).toBe(false);
-  });
+    const { items } = await engine.getMainMenu();
+    return items.some((item) => 'command' in item && item.command === command);
+  }
 
-  test('getMainMenu shows the Open new window item when platform.interfaceMode is power', async () => {
-    const { settingsService } = await import('@shared/services/settings.service');
-    vi.mocked(settingsService.get).mockResolvedValue('power');
-    const engine =
-      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
-    await Promise.resolve();
-    await Promise.resolve();
+  /**
+   * Core menu items the shipped document gates to Power mode. Each is asserted in both directions:
+   * absent in Simple proves the gate takes effect, and present in Power proves the item was gated
+   * rather than deleted — which is what catches a flag broad enough to hide it in every mode.
+   */
+  const POWER_ONLY_COMMANDS = [
+    'platform.createWindow',
+    'platform.visitGettingStartedPage',
+    'platform.visitFeatureRoadmapPage',
+    'platform.openDeveloperDocumentationUrl',
+  ];
 
-    const result = await engine.getMainMenu();
-    expect(
-      result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
-    ).toBe(true);
-  });
+  test.each(POWER_ONLY_COMMANDS)(
+    'getMainMenu hides %s when platform.interfaceMode is simple',
+    async (command) => {
+      expect(await isCommandInMainMenu('simple', command)).toBe(false);
+    },
+  );
+
+  test.each(POWER_ONLY_COMMANDS)(
+    'getMainMenu shows %s when platform.interfaceMode is power',
+    async (command) => {
+      expect(await isCommandInMainMenu('power', command)).toBe(true);
+    },
+  );
 });
 
 describe('Tab menu', () => {
@@ -601,7 +615,8 @@ describe('Tab menu', () => {
   test('hides a tab item marked hidden in simple mode', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('simple');
-    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
     await Promise.resolve();
     await Promise.resolve();
 
@@ -615,7 +630,8 @@ describe('Tab menu', () => {
   test('shows that same item in power mode', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('power');
-    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
     await Promise.resolve();
     await Promise.resolve();
 
@@ -689,6 +705,115 @@ describe('Platform tab menu order reservation', () => {
     expect(itemOrders.length).toBeGreaterThan(0);
     expect(Math.min(...groupOrders, ...itemOrders)).toBeGreaterThan(
       ORDERS_AN_EXTENSION_WOULD_PICK_FIRST,
+    );
+  });
+});
+
+describe('shortcut hints', () => {
+  const findItem = {
+    label: '%find%',
+    localizeNotes: 'test',
+    group: 'test.group',
+    order: 1,
+    command: 'platformScripture.openFind',
+  } as const;
+  const unjoinedItem = {
+    ...findItem,
+    label: '%other%',
+    order: 2,
+    command: 'test.noShortcut',
+  } as const;
+
+  const HINT_MENU_DATA: PlatformMenus = {
+    mainMenu: {
+      columns: { 'test.column': { label: '%test_column%', order: 1 } },
+      groups: { 'test.group': { column: 'test.column', order: 1 } },
+      items: [findItem],
+    },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    defaultWebViewTabMenu: { groups: { 'test.group': { order: 1 } }, items: [findItem] },
+    webViewMenus: {
+      [EXTENSION_NAME]: {
+        includeDefaults: false,
+        topMenu: {
+          columns: { 'test.column': { label: '%test_column%', order: 1 } },
+          groups: { 'test.group': { column: 'test.column', order: 1 } },
+          items: [findItem, unjoinedItem],
+        },
+        contextMenu: { groups: { 'test.group': { order: 1 } }, items: [findItem] },
+        tabMenu: undefined,
+      },
+    },
+  };
+
+  const findCommandItem = (items: object[] | undefined, command: string): object | undefined =>
+    items?.find((item) => 'command' in item && item.command === command);
+
+  async function createEngine(platform: typeof process.platform) {
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      HINT_MENU_DATA,
+      platform,
+    );
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+    return engine;
+  }
+
+  test.each([
+    ['darwin', '⌃F'],
+    ['win32', 'Ctrl+F'],
+  ] as const)(
+    "on %s, a top-menu item shows its command's shortcut as %s",
+    async (platform, expected) => {
+      const { topMenu } = await (await createEngine(platform)).getWebViewMenu(EXTENSION_NAME);
+      expect(findCommandItem(topMenu?.items, 'platformScripture.openFind')).toHaveProperty(
+        'shortcut',
+        expected,
+      );
+    },
+  );
+
+  test('an item whose command has no catalogued shortcut has no hint', async () => {
+    const { topMenu } = await (await createEngine('win32')).getWebViewMenu(EXTENSION_NAME);
+    expect(findCommandItem(topMenu?.items, 'test.noShortcut')).toBeDefined();
+    expect(findCommandItem(topMenu?.items, 'test.noShortcut')).not.toHaveProperty('shortcut');
+  });
+
+  test('context menu and main menu items get hints', async () => {
+    const engine = await createEngine('win32');
+    const { contextMenu } = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(findCommandItem(contextMenu?.items, 'platformScripture.openFind')).toHaveProperty(
+      'shortcut',
+      'Ctrl+F',
+    );
+    const mainMenu = await engine.getMainMenu();
+    expect(findCommandItem(mainMenu.items, 'platformScripture.openFind')).toHaveProperty(
+      'shortcut',
+      'Ctrl+F',
+    );
+  });
+
+  test('the unlocalized main menu has no hints', async () => {
+    const engine = await createEngine('darwin');
+    const unlocalized = await engine.getUnlocalizedMainMenu();
+    expect(findCommandItem(unlocalized.items, 'platformScripture.openFind')).toBeDefined();
+    expect(findCommandItem(unlocalized.items, 'platformScripture.openFind')).not.toHaveProperty(
+      'shortcut',
+    );
+  });
+
+  test('tab menu items get hints for recognized and unrecognized web views', async () => {
+    const engine = await createEngine('win32');
+    const { tabMenu: unrecognizedTabMenu } = await engine.getWebViewMenu('nothing.recognized');
+    expect(
+      findCommandItem(unrecognizedTabMenu?.items, 'platformScripture.openFind'),
+    ).toHaveProperty('shortcut', 'Ctrl+F');
+    const { tabMenu: recognizedTabMenu } = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(findCommandItem(recognizedTabMenu?.items, 'platformScripture.openFind')).toHaveProperty(
+      'shortcut',
+      'Ctrl+F',
     );
   });
 });

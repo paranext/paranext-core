@@ -113,9 +113,10 @@ paranext-core has **no arbitrary predicate/expression gating** of menu visibilit
 `enabledWhen`/`visibleWhen` equivalent, and the contribution schema cannot evaluate conditions
 before a menu item renders. The one supported declarative axis is
 `MenuItemBase.hiddenInterfaceModes` (`lib/platform-bible-utils/src/extension-contributions/menus.model.ts`,
-enforced by `filterItemsForInterfaceMode` in `src/extension-host/services/menu-data.service-host.ts`, used in production by
-`platform-scripture-editor/contributions/menus.json`), which hides an item in named interface
-modes. Beyond that, don't try to add a "should this menu item show?" backend command or
+enforced by `filterItemsForInterfaceMode` in `src/extension-host/services/menu-data.service-host.ts`, used in production
+both by the core menu document `src/extension-host/data/menu.data.json` and by several extensions'
+`contributions/menus.json` — `grep -rn hiddenInterfaceModes` for the current sites), which hides an
+item in named interface modes. Beyond that, don't try to add a "should this menu item show?" backend command or
 conditionally suppress the contribution.
 
 Instead, leave menu items **always-available** and enforce permission/state at the point of action:
@@ -126,6 +127,16 @@ visibility/enable rules inline in the command/backend so the rationale isn't los
 
 See `adr-menus-always-available-gate-at-submission` in `Architecture-Decisions.md` for the
 rationale and history.
+
+### Section Headings and Shortcut Hints
+
+- **Headings come from columns.** In a tab's top menu each column is a section. When two or more
+  columns have items, each is headed by its `label`; a column with no items (including one whose
+  items are all hidden in the current interface mode) is not shown at all. So label columns as
+  section titles, and hide a section by hiding its items. See `adr-menu-section-headings-from-column-labels`.
+- **Do not add `shortcut` to `menus.json`** — the schema rejects it and the whole file fails to
+  load. Hints come from the keyboard shortcuts catalog's `command` join; see
+  `.claude/rules/keyboard-shortcuts-catalog.md` and `adr-menu-shortcut-hints-joined-from-catalog`.
 
 ---
 

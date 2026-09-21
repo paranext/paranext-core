@@ -85,7 +85,7 @@ frames). Enter and Escape are claimed there so they cannot reach the document: a
 Lexical performs the unmarked plain split the palette exists to prevent, and leaves the palette open
 with nothing committed.
 
-Every keyboard handler change here must also update `src/stories/keyboard-shortcuts.data.ts` — see
+Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.
 
 ---

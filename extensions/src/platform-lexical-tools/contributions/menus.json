@@ -5,7 +5,8 @@
     "items": [
       {
         "label": "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%",
-        "localizeNotes": "Scripture Editor top menu > Project > Dictionary: SDBH/SDBG",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Platform > Dictionary: SDBH/SDBG. Hidden in Simple mode: the Dictionary is a Power-mode tool and Simple offers no entry point for it",
         "group": "platform.projectResources",
         "order": 100,
         "command": "platformLexicalTools.openDictionary"

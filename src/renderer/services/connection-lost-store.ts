@@ -68,7 +68,13 @@ export function reportConnectionLost(): void {
 }
 
 /**
- * Resets the store to its initial state.
+ * Resets the store's state to its initial value.
+ *
+ * Subscriptions are deliberately left alone. Clearing them drops a mounted component's callback
+ * while `useSyncExternalStore` still believes it is subscribed — `subscribeToConnectionLost` is a
+ * stable module-level reference, so React never re-subscribes — and a later `reportConnectionLost`
+ * then notifies nobody. In the usual "assert the surface is gone" test that reads as a pass.
+ * Unsubscribing is the consumer's own teardown to do.
  *
  * WARNING: Test-only.
  *
@@ -77,5 +83,4 @@ export function reportConnectionLost(): void {
 export function resetConnectionLost(): void {
   isConnectionLost = false;
   isShuttingDown = false;
-  listeners.clear();
 }

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { floatTab, getOpenTabCountSync } from '@renderer/services/web-view.service-shard';
@@ -1095,5 +1095,52 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     const submenu = await screen.findByTestId('submenu-content');
     expect(submenu.textContent).toContain('MRK — wgPIDGIN');
     expect(submenu.textContent).not.toContain('Stale Window');
+  });
+});
+
+describe('PlatformTabTitle tab-menu item shortcuts', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows the shortcut beside an item that has one, and nothing beside one without', async () => {
+    vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue({
+      includeDefaults: true,
+      topMenu: undefined,
+      contextMenu: undefined,
+      tabMenu: {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            label: 'Find',
+            localizeNotes: '',
+            group: 'ext.group1',
+            order: 1,
+            command: 'ext.find',
+            shortcut: 'Ctrl+F',
+          },
+          {
+            label: 'Other',
+            localizeNotes: '',
+            group: 'ext.group1',
+            order: 2,
+            command: 'ext.other',
+          },
+        ],
+      },
+    });
+
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
+
+    const find = screen.getByText('Find').closest('button');
+    if (!find) throw new Error('The Find tab-menu item did not render');
+    expect(within(find).getByText('Ctrl+F')).toHaveAttribute('data-slot', 'context-menu-shortcut');
+    // jsdom computes no bidi, so the class that isolates the hint is the checkable part
+    expect(within(find).getByText('Ctrl+F')).toHaveClass('tw:[unicode-bidi:plaintext]');
+
+    const other = screen.getByText('Other').closest('button');
+    if (!other) throw new Error('The Other tab-menu item did not render');
+    expect(other.querySelector('[data-slot="context-menu-shortcut"]')).toBeNull();
   });
 });

@@ -1674,8 +1674,8 @@ export async function updateRelatedTextCollectionPanel(
     // provider declines to supply one. Worth an error rather than silence: a failed re-point is not
     // self-correcting. `projectId` is not in `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any
     // re-point has succeeded the panel's saved definition carries a project and `explicitProjectId`
-    // wins in `resolveTextCollectionProjectId` from then on — the scroll-group fallback that used to
-    // correct a stale panel on the next navigation no longer runs.
+    // wins in `resolveTextCollectionProjectId` from then on, and nothing but another re-point will
+    // move the panel.
     if (reloadedId === undefined)
       papi.logger.error(
         `Text Collection re-point to ${projectId} did not take: reloadWebView returned no id for panel ${existingPanel.id}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,

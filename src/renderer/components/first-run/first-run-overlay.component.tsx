@@ -25,10 +25,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { VisuallyHidden } from 'radix-ui';
-import {
-  getIsConnectionLost,
-  subscribeToConnectionLost,
-} from '@renderer/services/connection-lost-store';
+import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
 import { CANCEL_ENTER_ZOOM_STYLE } from '@renderer/components/overlays/full-screen-dialog.util';
 import { FirstRunStep } from '@renderer/services/first-run.model';
 import { REGISTRATION_RESOLVE_TIMEOUT_MS } from '@renderer/services/resolve-registration-validity';
@@ -46,7 +43,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_retry%',
   '%firstRun_button_continueWithoutFinishingSetup%',
   // Referenced via {%product_name%} in the title/description/error body; formatReplacementString
-  // expands it so the app name lives in one place (and swaps cleanly for P10 Studio).
+  // expands it so the app name lives in one place (and swaps cleanly for Paratext 10).
   '%product_name%',
 ];
 
@@ -258,7 +255,7 @@ export function FirstRunOverlay({
   // useSyncExternalStore re-reads on subscribe, so a status change emitted between the initial
   // render and the subscription cannot be missed (unlike a manual useState + useEffect).
   const status = useSyncExternalStore(subscribeToFirstRun, getFirstRunStatus);
-  const isConnectionLost = useSyncExternalStore(subscribeToConnectionLost, getIsConnectionLost);
+  const isConnectionLost = useIsConnectionLost();
 
   // Stand down once the connection is lost, even though `Z_INDEX_CONNECTION_LOST` (800) already
   // paints above this gate (700). Radix's `FocusScope` and `DismissableLayer` arbitrate between two

@@ -1,19 +1,17 @@
-import { KeyboardShortcutEntry } from './keyboard-shortcuts-catalog/keyboard-shortcuts-catalog.component';
+import type { KeyboardShortcutEntry } from '@shared/data/keyboard-shortcuts.model';
 
 /**
  * The complete catalog of keyboard shortcuts used across the entire Platform.Bible application:
  * shortcuts handled in the Electron main process, shortcuts defined by bundled extensions, and
  * shortcuts defined inside the shared `platform-bible-react` component library. This is the single
  * source of truth — when you add, change, or remove any keyboard handler anywhere in the app,
- * update the matching entry here.
+ * update the matching entry here. Set `command` on an entry to show its chord as a hint beside menu
+ * items that run that command.
  *
- * Note on macOS modifier order: the `Guidelines/Keyboard shortcuts` page documents the macOS
- * display order as Control, Option, Shift, Command. A few entries intentionally deviate and show
- * Command before Option (`⌘⌥…`) because their `keys` mirror the modifier order written in the code
- * that handles them (`next-tab-group`, `previous-tab-group`, `scripture-insert-comment`). These are
- * raw `keydown` handlers, not OS-rendered menu accelerators, so the chord is identical regardless
- * of display order; the entries are kept in code order so they read the same as the handler
- * source.
+ * Note on macOS modifier order: the `Guidelines/Keyboard shortcuts` page orders macOS modifiers
+ * Control, Option, Shift, Command. `next-tab-group` and `previous-tab-group` show Command before
+ * Option (`⌘⌥…`) to mirror their handler code. Entries with a `command` are shown in menus, so
+ * their macOS keys follow the guideline order.
  */
 export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
@@ -251,22 +249,85 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
   },
   {
+    id: 'content-zoom-in',
+    purpose: 'Zoom the content of the pane in by one step (10 %)',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    // The handler also accepts `=` (the unshifted key sharing the `+` cap), the numpad `+` key, and
+    // Ctrl+Shift+`=` — the `+` key itself on US/UK layouts — so the published `Ctrl++` is literally the working chord.
+    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
+    // branches that claim this chord are removed.
+    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
+    locations: [
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
+  },
+  {
+    id: 'content-zoom-out',
+    purpose: 'Zoom the content of the pane out by one step (10 %)',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    // The handler also accepts the numpad `-` key.
+    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
+    // branches that claim this chord are removed.
+    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
+    locations: [
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
+  },
+  {
+    id: 'content-zoom-reset',
+    purpose: 'Return the content of the pane to the default zoom from Settings',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    // The handler also accepts the numpad `0` key.
+    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
+    // branches that claim this chord are removed.
+    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
+    locations: [
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
+  },
+  {
+    id: 'content-zoom-wheel',
+    purpose: 'Zoom the content of the pane in or out one step per wheel notch',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area)',
+    // The handler accepts Ctrl or ⌘ as the modifier on every platform, and ignores the gesture when
+    // Shift or Alt is held as well.
+    keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+  },
+  {
     id: 'dismiss-overlays',
     purpose:
       'Dismiss the topmost open overlay — a context menu, command palette, or popover (works in every frame, including web views)',
     category: 'Menus',
-    context: 'Main process (global)',
+    context: 'Main process (global; not while the connection-lost state is shown)',
     // Announced without preventDefault, so the focused frame still receives Escape and may act on
     // it too — e.g. the scripture editor's marker palette closes its own session. Only the bare,
     // initial press announces: a modified Escape (Shift/Ctrl/Alt/Meta) or an auto-repeat tick of a
     // held Escape is not the dismissal gesture. A modal dialog on top is left to its own shell,
     // and a focused command palette also answers Escape through its own keydown handler.
+    // `OverlayHost` stands down once the connection-lost state latches, taking every overlay it
+    // hosts — context menu, command palette, popover, modal dialog — with it, so the renderer-side
+    // handler named above no longer exists in that state. Main's announcement goes out over the
+    // dead socket, so nothing in this renderer hears it; the key itself reaches the connection-lost
+    // dialog, which swallows it — see the `connection-lost-swallow-escape` entry.
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'src/main/main.ts',
       'src/main/app-window-input.util.ts',
       'src/renderer/services/overlays/overlay.service-host.ts',
       'src/renderer/components/overlays/overlay-command-palette.component.tsx',
+      'src/renderer/components/overlay-host.component.tsx',
     ],
   },
   {
@@ -388,21 +449,23 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture/src/main.ts',
       'extensions/src/platform-scripture/src/find/use-focus-search-on-invoke.hook.ts',
     ],
+    command: 'platformScripture.openFind',
   },
   {
     id: 'scripture-insert-comment',
     purpose: 'Insert a comment at the selection',
     category: 'Editing',
     context: 'Scripture editor web view',
-    // macOS combo mirrors code order (`event.metaKey && event.altKey`); see file note on modifier order
+    // Ctrl+Shift+N first (not code order) so the menu hint shows it
     keys: {
-      macOS: '⌘⌥M',
-      windows: 'Ctrl+Alt+M / Ctrl+Shift+N',
-      linux: 'Ctrl+Alt+M / Ctrl+Shift+N',
+      macOS: '⌥⌘M',
+      windows: 'Ctrl+Shift+N / Ctrl+Alt+M',
+      linux: 'Ctrl+Shift+N / Ctrl+Alt+M',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
+    command: 'platformScriptureEditor.insertCommentAtSelection',
   },
   {
     id: 'scripture-insert-footnote',
@@ -411,6 +474,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
+    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
@@ -423,6 +487,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
+    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
@@ -446,6 +511,31 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌃Space', windows: 'Ctrl+Space', linux: 'Ctrl+Space' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'scripture-toggle-structure-lock',
+    purpose: 'Lock or unlock the structure for yourself (your personal structure protection)',
+    category: 'Editing',
+    context: 'Scripture editor web view (Simple mode)',
+    // Does nothing while the button is disabled: the lock state failed to load, or a Project
+    // Administrator locked the structure and you cannot change project settings. The handler also
+    // accepts ⌃ for ⌘ on macOS, and Meta for Ctrl on Windows/Linux.
+    keys: { macOS: '⇧⌘L', windows: 'Ctrl+Shift+L', linux: 'Ctrl+Shift+L' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-toggle-project-structure-lock',
+    purpose: 'Lock or unlock the structure for everyone on the project',
+    category: 'Editing',
+    context: 'Scripture editor web view (Simple mode, users who can change project settings)',
+    // Does nothing while the lock state failed to load. The handler also accepts ⌃ for ⌘ on macOS,
+    // and Meta for Ctrl on Windows/Linux.
+    keys: { macOS: '⌥⇧⌘L', windows: 'Ctrl+Shift+Alt+L', linux: 'Ctrl+Alt+Shift+L' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
     ],
   },
   {
@@ -507,6 +597,20 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-zoom-wheel',
+    purpose:
+      'Zoom one resource column of the Text Collection grid in or out one step per wheel notch',
+    category: 'Zoom',
+    context:
+      'Inside the Text Collection grid — the resource column under the pointer. Registered capture-phase on the grid container and stops propagation, so it takes precedence over the pane-level content zoom (see content-zoom-wheel)',
+    // Accepts Ctrl or ⌘ and still acts when Shift or Alt is held as well, unlike the pane-level
+    // handler. Keyboard zoom for this grid is deferred pending PT-4143.
+    keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts',
     ],
   },
   {
@@ -790,16 +894,31 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'tour-dismiss',
     purpose: 'Dismiss the onboarding tour',
     category: 'View',
-    context: 'Onboarding tour overlay',
+    context: 'Onboarding tour overlay (not while the connection-lost state is shown)',
+    // The overlay unmounts entirely once the connection is lost, so this key is not merely muted —
+    // it is withdrawn, and Escape falls to the `connection-lost-swallow-escape` entry. Standing the
+    // tour down is what keeps it from spending the permanent done flag on the way to a reload.
+    // `onboarding-tour.component.tsx` is listed because that unmount is what makes the context
+    // above true — the handler lives in `tour.component.tsx`, but the guard decides whether it runs.
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
-    locations: ['src/renderer/components/onboarding-tour/tour.component.tsx'],
+    locations: [
+      'src/renderer/components/onboarding-tour/tour.component.tsx',
+      'src/renderer/components/onboarding-tour/onboarding-tour.component.tsx',
+    ],
   },
   {
     id: 'tour-focus-cycle',
     purpose: 'Cycle keyboard focus through the onboarding tour card buttons',
     category: 'Navigation',
-    context: 'Onboarding tour overlay',
+    context: 'Onboarding tour overlay (not while the connection-lost state is shown)',
+    // The overlay unmounts entirely once the connection is lost, so the card's focus trap goes with
+    // it and Tab falls to the `connection-lost-contain-focus` entry, which holds focus on Reload.
+    // `onboarding-tour.component.tsx` is listed because that unmount is what makes the context
+    // above true — the trap lives in `tour.component.tsx`, but the guard decides whether it runs.
     keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
-    locations: ['src/renderer/components/onboarding-tour/tour.component.tsx'],
+    locations: [
+      'src/renderer/components/onboarding-tour/tour.component.tsx',
+      'src/renderer/components/onboarding-tour/onboarding-tour.component.tsx',
+    ],
   },
 ];

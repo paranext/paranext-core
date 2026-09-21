@@ -346,7 +346,26 @@ declare module 'platform-scripture-editor' {
   };
 
   export type PlatformScriptureEditorWebViewController = NetworkableObject<{
-    /** Set the current selection on the editor */
+    /**
+     * Set the current selection on the editor, navigating to the range's book and chapter first if
+     * the editor is showing another, and scroll the range itself into view: a range already fully
+     * on screen stays put; otherwise its first line lands just below the top of the editor. If the
+     * editor's tab is hidden, the selection is made at once and the scroll happens when the tab is
+     * next shown.
+     *
+     * The reference the navigation publishes to the editor's scroll group is the range's full verse
+     * reference, not just its book and chapter, so other views on the same scroll group land on the
+     * same verse.
+     *
+     * The jump is ABANDONED — with no selection and no scroll — if the editor lands on a chapter
+     * other than the one requested before the range's content arrives (e.g. the user navigates away
+     * while the jump is still pending); the returned promise still resolves normally. It also falls
+     * back to scrolling to the verse, rather than the range, when the selection cannot be applied
+     * or its geometry cannot be measured.
+     *
+     * The returned promise resolves once the request has been sent to the editor, not once the
+     * scroll (or the navigation, selection, or fallback it may trigger) has finished.
+     */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
      * Cycle through the Scripture view types in the editor (currently just a toggle between

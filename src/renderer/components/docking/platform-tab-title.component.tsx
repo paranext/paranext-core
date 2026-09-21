@@ -39,6 +39,7 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuShortcut,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
@@ -180,6 +181,7 @@ function renderTabMenuItems(
     return (
       <ContextMenuItem key={key} onClick={() => onSelect(item.id)}>
         {item.label}
+        {item.shortcut && <ContextMenuShortcut>{item.shortcut}</ContextMenuShortcut>}
       </ContextMenuItem>
     );
   });
@@ -774,17 +776,18 @@ export function PlatformTabTitle({
   //    until rc-dock moved some of them into the dropdown instead.
   // 3. A ResizeObserver on `.dock-nav-wrap` (the element whose `overflow-x: clip` actually does the
   //    clipping) instead of `.dock-panel`, on the theory that its own rendered width IS the
-  //    available space. It has `flex-grow: 0` (rc-dock's own CSS: `.dock-nav-wrap { order: 1;
-  //    flex-grow: 0; }`, with a `flex-grow: 1` sibling `.dock-nav-operations` absorbing all leftover
-  //    space) — so it only shrinks to less than its own content's natural size while genuinely
-  //    being flex-squeezed (not enough total room for the whole `.dock-nav` row), and otherwise just
-  //    settles to "however big my current content is." Confirmed via CDP: once collapsed to
-  //    icon-only (or once comfortably fitting), `.dock-nav-wrap`'s clientWidth got stuck reporting
-  //    its own small content size and never grew even when the column was widened dramatically
-  //    (tested up to a 3000px window) — useless for detecting "is there now enough room to
-  //    re-expand." `.dock-panel` doesn't have this problem: it's the actual resizable column,
-  //    confirmed (both here and by the earlier hardcoded-threshold version) to track the true
-  //    available width correctly in both directions.
+  //    available space. It has `flex-grow: 0` (dock-layout-wrapper.component.scss: `.dock-nav >
+  //    .dock-nav-wrap { order: 1; flex-grow: 0; }`; leftover space never goes to it — in Power mode
+  //    `.dock-extra-content` grows into it, and `.dock-nav-operations` is `display: none` in both
+  //    modes while nothing overflows) — so it only shrinks to less than its own content's natural
+  //    size while genuinely being flex-squeezed (not enough total room for the whole `.dock-nav`
+  //    row), and otherwise just settles to "however big my current content is." Confirmed via CDP:
+  //    once collapsed to icon-only (or once comfortably fitting), `.dock-nav-wrap`'s clientWidth
+  //    got stuck reporting its own small content size and never grew even when the column was
+  //    widened dramatically (tested up to a 3000px window) — useless for detecting "is there now
+  //    enough room to re-expand." `.dock-panel` doesn't have this problem: it's the actual
+  //    resizable column, confirmed (both here and by the earlier hardcoded-threshold version) to
+  //    track the true available width correctly in both directions.
   const [isIconOnly, setIsIconOnly] = useState(false);
   useEffect(() => {
     // `isPowerMode` is a live subscription, so this effect re-runs on a runtime Simple->Power
@@ -857,6 +860,9 @@ export function PlatformTabTitle({
             // a screen reader announces every icon-only tab in this column identically.
             aria-label={isIconOnly ? title : tabLabel}
             data-web-view-id={webViewId}
+            // Resolves a middle click on this header to its tab; see
+            // `platform-dock-layout-middle-click-handlers.util.ts`
+            data-tab-header-id={id}
           >
             <span className={dragIgnoreClass.trim()}>{icon}</span>
             <span className={`platform-tab-title-text ${dragIgnoreClass.trim()}`.trim()}>
