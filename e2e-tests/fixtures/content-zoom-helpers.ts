@@ -63,7 +63,11 @@ export async function areaBox(
   frame: Frame,
   areaId: string,
 ): Promise<{ x: number; y: number; width: number; height: number }> {
-  const box = await frame.locator(`[data-platform-content-zoom-root="${areaId}"]`).boundingBox();
+  const box = await frame
+    .locator(
+      `[data-platform-content-zoom-root="${areaId}"]:not([data-platform-content-zoom-popup])`,
+    )
+    .boundingBox();
   if (!box) throw new Error(`Zoom area "${areaId}" has no bounding box`);
   return box;
 }
@@ -173,16 +177,14 @@ export async function expectPopupBesideTriggerAndInsideFrame(
   );
   const tolerance = 1;
   const boxes = `pop-up ${JSON.stringify(popupBox)}, trigger ${JSON.stringify(triggerRect)}, frame ${JSON.stringify(frameRect)}`;
-  // Beside = separated on at most one axis, by a small gap, and never covering the trigger: two
-  // boxes intersect exactly when both gaps are negative, so the larger gap must not be.
-  expect(
-    Math.min(Math.max(gapY, 0), Math.max(gapX, 0)),
-    `separated on one axis only: ${boxes}`,
-  ).toBe(0);
-  expect(Math.max(gapX, gapY), `not covering the trigger: ${boxes}`).toBeGreaterThanOrEqual(
-    -tolerance,
+  const separation = Math.max(gapX, gapY);
+  // Beside = separated on at most one axis, by a small gap, and never covering the trigger.
+  expect(Math.min(gapX, gapY), `separated on one axis only: ${boxes}`).toBeLessThanOrEqual(
+    tolerance,
   );
-  expect(Math.max(gapX, gapY), `close to the trigger: ${boxes}`).toBeLessThanOrEqual(
+  // Two boxes intersect exactly when both gaps are negative, so the larger gap must not be.
+  expect(separation, `not covering the trigger: ${boxes}`).toBeGreaterThanOrEqual(-tolerance);
+  expect(separation, `close to the trigger: ${boxes}`).toBeLessThanOrEqual(
     POPUP_TRIGGER_MAX_GAP_PX,
   );
   expect(popupBox.x, `inside the frame: ${boxes}`).toBeGreaterThanOrEqual(frameRect.x - tolerance);

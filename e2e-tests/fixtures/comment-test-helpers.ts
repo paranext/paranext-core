@@ -671,7 +671,7 @@ export async function clickCommentsTab(
  * Points the (worker-scoped, singleton) Comment List Panel — the Column 3 "Comments" tab in Simple
  * mode — at `projectId`, via the `legacyCommentManager.openCommentListPanel` command. Shared by
  * `comments-tab.spec.ts` (called inline for each of its test projects) and
- * `comments-panel-content-zoom.spec.ts` (its own Power-mode panel tab).
+ * `comments-panel-content-zoom.spec.ts` (its own Simple-mode Column 3 panel tab).
  */
 export async function openCommentListPanel(
   projectId: string,
