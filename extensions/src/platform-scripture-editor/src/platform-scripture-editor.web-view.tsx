@@ -266,6 +266,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   SYNC_EDIT_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+  '%webView_platformScriptureEditor_error_selectionNotResolved%',
   ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
@@ -1360,14 +1361,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           ? usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.end.jsonPath)
           : startNodeAndDocumentLocation;
       } catch (e) {
-        // A path that no longer resolves at all against the settled tree: same fail-safe response
-        // as an unresolvable selection below, not a crash. Log it — the settled contract says this
-        // cannot happen, so a hit here is a defect worth chasing, not a user mistake.
+        // A path that no longer resolves at all against the settled tree: a warning, not a crash.
+        // Log it — the settled contract says this cannot happen, so a hit here is a defect worth
+        // chasing, not a user mistake, and the notice must not tell the user their selection is at
+        // fault.
         logger.warn(
           `Comment insertion: selection jsonPath start=${selection.start.jsonPath} end=${selection.end?.jsonPath ?? selection.start.jsonPath} does not resolve against the settled USJ! ${getErrorMessage(e)}`,
         );
         papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+          message: '%webView_platformScriptureEditor_error_selectionNotResolved%',
           severity: 'warning',
         });
         return;
@@ -1411,7 +1413,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           `Comment insertion: selection offset ${startTextDocumentLocation.offset} at ${startTextDocumentLocation.jsonPath} is past the end of the settled node (length ${startNode.length})!`,
         );
         papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+          message: '%webView_platformScriptureEditor_error_selectionNotResolved%',
           severity: 'warning',
         });
         return;

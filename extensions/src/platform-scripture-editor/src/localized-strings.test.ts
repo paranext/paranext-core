@@ -301,3 +301,24 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
+
+// The notices comment insertion sends. They are inline in the web view, which exports no key list,
+// so they are listed here. The unresolved-selection notice exists so a failure the user did not
+// cause is never reported as a problem with what they selected.
+describe.each([
+  '%webView_platformScriptureEditor_error_noTextSelected%',
+  '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+  '%webView_platformScriptureEditor_error_selectionNotResolved%',
+])('comment insertion notice %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
