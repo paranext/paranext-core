@@ -63,9 +63,9 @@ export type CharacterMarkerState = Pick<
  * segment is collected at all, or the selection's json paths do not resolve against this USJ. That
  * last case should not happen — a selection addresses the settled document `getUsj()` returns, so
  * an unresolvable path is a bug or a race rather than expected drift — but degrading is still
- * better than reporting a marker state derived from nothing. Returning `undefined` makes the
- * hook degrade exactly as it does with no selection or no USJ — falling back to `contextMarker` —
- * rather than confidently reporting "nothing applied".
+ * better than reporting a marker state derived from nothing. Returning `undefined` makes the hook
+ * degrade exactly as it does with no selection or no USJ — falling back to `contextMarker` — rather
+ * than confidently reporting "nothing applied".
  */
 function computeCoverage(
   editorRef: MutableRefObject<EditorRef | null>,
