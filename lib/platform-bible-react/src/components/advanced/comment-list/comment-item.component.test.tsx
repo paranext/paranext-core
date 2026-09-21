@@ -432,6 +432,31 @@ function lucideIconName(svg: Element | null | undefined): string | undefined {
     .find((cls) => cls.startsWith('lucide-') && cls !== 'lucide-icon');
 }
 
+describe('CommentItem localization fallbacks', () => {
+  test('never renders a raw localization key in an edit-control aria-label', () => {
+    // `useLocalizedStrings` seeds every requested key to ITSELF and returns that on error, so a
+    // `localizedStrings[key] ?? 'fallback'` can never fire -- the value is a truthy string. An
+    // aria-label is the worst place for that to leak: a screen-reader user hears the raw key and
+    // it is invisible to everyone reviewing the UI by eye.
+    const unresolved = Object.fromEntries(Object.keys(localizedStrings).map((key) => [key, key]));
+    const { container } = render(
+      <CommentItem
+        comment={baseComment}
+        localizedStrings={unresolved}
+        isThreadExpanded
+        canEditOrDelete
+        draftEditorState={NON_EMPTY_EDITOR_STATE}
+      />,
+    );
+
+    const labels = [...container.querySelectorAll('[aria-label]')].map((element) =>
+      element.getAttribute('aria-label'),
+    );
+    expect(labels.length).toBeGreaterThan(0);
+    labels.forEach((label) => expect(label).not.toMatch(/^%.+%$/));
+  });
+});
+
 describe('CommentItem destructive-action icons', () => {
   test('cancelling an edit uses a different icon than deleting the comment', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });

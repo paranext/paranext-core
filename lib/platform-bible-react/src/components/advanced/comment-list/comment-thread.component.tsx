@@ -886,8 +886,11 @@ export const CommentThread = memo(function CommentThread({
                             pendingCommentAssignedUser !== lastSubmittedAssignedUser) ? (
                             <span className="tw:flex-1 tw:text-sm tw:text-muted-foreground">
                               {formatReplacementString(
-                                localizedStrings['%comment_assigning_to%'] ??
+                                localizeOrFallback(
+                                  '%comment_assigning_to%',
+                                  localizedStrings,
                                   'Assigning to: {assignedUser}',
+                                ),
                                 {
                                   assignedUser: getAssignedUserDisplayName(
                                     pendingCommentAssignedUser,
@@ -920,10 +923,11 @@ export const CommentThread = memo(function CommentThread({
                                       variant="outline"
                                       className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
                                       disabled={isAssignDisabled}
-                                      aria-label={
-                                        localizedStrings['%comment_aria_assign_user%'] ??
-                                        'Assign user'
-                                      }
+                                      aria-label={localizeOrFallback(
+                                        '%comment_aria_assign_user%',
+                                        localizedStrings,
+                                        'Assign user',
+                                      )}
                                     >
                                       <AtSign />
                                     </Button>
@@ -997,10 +1001,11 @@ export const CommentThread = memo(function CommentThread({
                                   onClick={handleSubmitComment}
                                   className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
                                   disabled={isSubmitDisabled}
-                                  aria-label={
-                                    localizedStrings['%comment_aria_submit_comment%'] ??
-                                    'Submit comment'
-                                  }
+                                  aria-label={localizeOrFallback(
+                                    '%comment_aria_submit_comment%',
+                                    localizedStrings,
+                                    'Submit comment',
+                                  )}
                                 >
                                   <ArrowUp />
                                 </Button>

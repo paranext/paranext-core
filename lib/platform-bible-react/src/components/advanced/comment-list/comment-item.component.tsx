@@ -318,7 +318,11 @@ export function CommentItem({
                         onClick={handleCancelEdit}
                         variant="outline"
                         className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                        aria-label={localizedStrings['%comment_aria_cancel_edit%'] ?? 'Cancel edit'}
+                        aria-label={localizeOrFallback(
+                          '%comment_aria_cancel_edit%',
+                          localizedStrings,
+                          'Cancel edit',
+                        )}
                       >
                         <Undo2 />
                       </Button>
@@ -351,7 +355,11 @@ export function CommentItem({
                           onClick={handleSaveEdit}
                           className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
                           disabled={isSaveDisabled}
-                          aria-label={localizedStrings['%comment_aria_save_edit%'] ?? 'Save edit'}
+                          aria-label={localizeOrFallback(
+                            '%comment_aria_save_edit%',
+                            localizedStrings,
+                            'Save edit',
+                          )}
                         >
                           <ArrowUp />
                         </Button>

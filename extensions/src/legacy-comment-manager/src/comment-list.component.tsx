@@ -215,10 +215,20 @@ export function CommentListPanel({
   if (currentUserNameUnavailable) {
     listContent = (
       <div className="tw:m-4 tw:flex tw:flex-col tw:items-center tw:gap-2">
-        <Label>{localizedStrings['%comment_filter_current_user_unavailable%']}</Label>
+        <Label>
+          {localizeOrFallback(
+            '%comment_filter_current_user_unavailable%',
+            localizedStrings,
+            "Couldn't load your user name, so comments assigned to you can't be shown right now.",
+          )}
+        </Label>
         {onRetryFetchCurrentUserName && (
           <Button variant="outline" size="sm" onClick={onRetryFetchCurrentUserName}>
-            {localizedStrings['%comment_filter_retry_current_user%']}
+            {localizeOrFallback(
+              '%comment_filter_retry_current_user%',
+              localizedStrings,
+              'Try again',
+            )}
           </Button>
         )}
       </div>
@@ -301,7 +311,11 @@ export function CommentListPanel({
             isValue={isCommentPreset}
             onChange={(preset) => onFiltersChange({ preset })}
             localizedStrings={localizedStrings}
-            ariaLabel={localizedStrings['%comment_filter_aria_preset%']}
+            ariaLabel={localizeOrFallback(
+              '%comment_filter_aria_preset%',
+              localizedStrings,
+              'Filter comments by',
+            )}
             testId="comment-preset-filter"
           />
           <FilterDropdown
@@ -311,7 +325,11 @@ export function CommentListPanel({
             isValue={isScopeFilter}
             onChange={onScopeFilterChange}
             localizedStrings={localizedStrings}
-            ariaLabel={localizedStrings['%comment_filter_aria_scope%']}
+            ariaLabel={localizeOrFallback(
+              '%comment_filter_aria_scope%',
+              localizedStrings,
+              'Filter by scope',
+            )}
             testId="comment-scope-filter"
           />
         </div>
