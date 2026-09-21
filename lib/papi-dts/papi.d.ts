@@ -11200,14 +11200,15 @@ declare module 'renderer/components/overlays/overlay-content-zoom.util' {
   /**
    * The style that draws a platform overlay at the scale of the pane that asked for it.
    *
-   * `zoom` goes on the Radix `Content` element, never the popper wrapper Radix positions: the wrapper
-   * stays in unzoomed viewport pixels, so Radix keeps measuring the drawn size and placing it
-   * correctly. The available-space variables Radix publishes are in those same unzoomed pixels, so
-   * dividing them by the scale is what keeps a zoomed pop-up inside the window rather than letting it
-   * grow past the edge.
+   * `zoom` goes inside the popper wrapper Radix positions — on the Radix `Content` element, or on an
+   * inner wrapper when an arrow must stay unzoomed — never on the wrapper itself: the wrapper stays
+   * in unzoomed viewport pixels, so Radix keeps measuring the drawn size and placing it correctly.
+   * The available-space variables Radix publishes are in those same unzoomed pixels, so dividing them
+   * by the scale is what keeps a zoomed pop-up inside the window rather than letting it grow past the
+   * edge.
    *
    * A scale of 1 - or anything that is not a usable positive number - contributes nothing at all, so
-   * an overlay from an unzoomed pane renders exactly as it did before.
+   * an overlay from an unzoomed pane is drawn at interface scale.
    *
    * @experimental This function is unstable and may change or disappear without notice
    */
@@ -11601,6 +11602,10 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * menu data, renders the menu, and auto-executes the selected command. Returns the command string
      * that was executed, or undefined if dismissed.
      *
+     * The menu is drawn at the content zoom of the requesting WebView's pane — of its active area,
+     * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
+     * in and nothing to compensate for.
+     *
      * @param webViewType The webViewType to look up in the menu data service
      * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
      *   from within a WebView iframe.
@@ -11624,6 +11629,10 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * return immediately with an overlay ID rather than waiting for dismissal. Use
      * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
      * {@link dismissPopover} to close it programmatically.
+     *
+     * The popover is drawn at the content zoom of the requesting WebView's pane — of its active area,
+     * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
+     * in and nothing to compensate for.
      *
      * @param request The popover anchor, content, and behavioral options
      * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
@@ -11670,6 +11679,11 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
      * the palette is shown, so all filtering — the palette's own search box and text forwarded via
      * {@link updateCommandPalette} — matches against the text the user actually sees.
+     *
+     * A palette shown at an anchor is drawn at the content zoom of the requesting WebView's pane — of
+     * its active area, for a pane with several zoom areas; there is nothing to opt in and nothing to
+     * compensate for. A palette shown without an anchor is centred in the window, belongs to no
+     * pane's content, and stays at interface scale.
      *
      * @param request The items, optional anchor position, and display options
      * @param webViewId The ID of the WebView requesting the command palette
