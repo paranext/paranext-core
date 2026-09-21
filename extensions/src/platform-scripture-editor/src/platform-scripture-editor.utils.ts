@@ -1216,6 +1216,9 @@ export async function finalizeProjectSwitch(
  * substitute: it is a project-wide switch on editing the Scripture text, so a translation project
  * can have it off.
  *
+ * Read from the project's `platform.base` PDP rather than `projectLookup.getMetadataForProject`,
+ * because the setting is the authoritative value while the metadata field is optional.
+ *
  * A failed read counts as "not published", the setting's own default: following a project is
  * recoverable on the next switch, while staying put would leave a panel silently on the outgoing
  * project.
@@ -1433,26 +1436,21 @@ export async function updateRelatedTextCollectionPanel(
 
 /**
  * Re-points the Find panel at `projectId`, the way {@link openOrUpdateRelatedPanels} re-points the
- * rest of Column 3. Kept separate, and called after the editor's own web view exists, because Find
- * needs `editorWebViewId`: it caches that id and uses it to select and highlight a clicked result
- * in the editor, and a project switch that replaces the editor tab mints a new one. Running this
- * alongside the other panels would hand Find the id of the editor being replaced.
+ * rest of Column 3. Called after the editor's own web view exists because Find caches
+ * `editorWebViewId` to select and highlight a clicked result, and a project switch that replaces
+ * the editor tab mints a new one.
  *
- * Find is re-pointed without being opened, the same way {@link updateRelatedTextCollectionPanel}
- * treats the Text Collection. In Simple mode it is part of the fixed layout from startup, so it is
- * always already there; anywhere else it is a panel the user opened deliberately, and a project
- * switch is not a request to open it.
+ * Re-points without opening, like {@link updateRelatedTextCollectionPanel}: a project switch is not
+ * a request to open a panel that isn't there.
  *
  * Deliberately has no editability or project-kind condition: Find follows the editor onto a
  * read-only project or a published resource because searching is a read (see
- * `adr-find-follows-editor-to-read-only`), and in Simple mode Find offers no Replace UI at all.
+ * `adr-find-follows-editor-to-read-only`).
  *
  * Hidden case: in Simple mode Find's tab is usually inactive when this runs, which is fine — the
  * re-point reloads the iframe and Find's render is data-driven, so it is correct whenever the tab
  * is next shown. The reload does abandon any search already running and restart it (a known gap,
  * tracked as PT-4418).
- *
- * Kept out of `main.ts` so this rule is covered by tests: nothing imports `main.ts`.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
