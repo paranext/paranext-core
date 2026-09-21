@@ -110,7 +110,15 @@ const configWebView: webpack.Configuration = merge(configBase, {
     minimizer: [
       new TerserPlugin({
         extractComments: false,
-        terserOptions: { format: { comments: 'some' }, compress: { passes: 2 } },
+        terserOptions: {
+          format: { comments: 'some' },
+          compress: { passes: 2 },
+          // React builds the component stack an error boundary logs out of function and class
+          // names, so mangling them costs every WebView crash report the name of the component
+          // that threw. Scoped to WebViews because they are the React trees a boundary reports on.
+          keep_classnames: true,
+          keep_fnames: true,
+        },
       }),
     ],
   },

@@ -25,6 +25,14 @@ const config = defineConfig({
       insertAt: 'after-all',
     }),
   ],
+  // React builds the component stack an error boundary logs out of function and class names, and
+  // this package is consumed through its committed `dist`, so a name esbuild mangles here is gone
+  // before the app's own minifier (which keeps names) ever sees it. Top-level, so it covers the
+  // dev/Storybook and Vitest transforms too; only the `dist` build ships. See
+  // `adr-keep-component-names-in-packaged-bundles` in `.context/standards/Architecture-Decisions.md`.
+  esbuild: {
+    keepNames: true,
+  },
   build: {
     sourcemap: true,
     lib: {
