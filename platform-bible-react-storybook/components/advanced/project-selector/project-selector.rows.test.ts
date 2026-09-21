@@ -69,6 +69,74 @@ describe('computeRows — case-insensitive open-tab join', () => {
     expect(abcRows).toHaveLength(2);
     expect(abcRows.every((r) => r.isMuted === false)).toBe(true);
   });
+
+  // The same casing mismatch reaches the SELECTION, not just the open-tab join: a selection can
+  // arrive lowercased from a persisted layout or a web view opened with a tab-derived id. Display
+  // and click have to agree on which project a selection names, or a row renders unchecked while
+  // clicking it clears the selection that was really there.
+  it('marks the selected row regardless of id casing (project mode)', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects: upperProjects,
+      openTabs: [],
+      selection: { projectId: 'abc123' },
+    });
+    const rowA = rows.find((r) => r.projectId === 'ABC123');
+    expect(rowA).toBeDefined();
+    expect(rowA!.isSelected).toBe(true);
+    expect(rows.find((r) => r.projectId === 'DEF456')!.isSelected).toBe(false);
+  });
+
+  it('marks no row selected when nothing is selected (project mode)', () => {
+    // Guards the normalization against turning "nothing selected" into "everything matches".
+    const rows = computeRows({
+      mode: 'project',
+      projects: upperProjects,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    expect(rows.every((r) => !r.isSelected)).toBe(true);
+  });
+
+  it('marks the selected pair regardless of id casing (project-multi mode)', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { pairs: [{ projectId: 'abc123', scrollGroupId: A }] },
+    });
+    const selected = rows.filter((r) => r.isSelected);
+    expect(selected.map((r) => [r.projectId, r.scrollGroupId])).toEqual([['ABC123', A]]);
+  });
+
+  it('does not duplicate a bound-but-closed row for a differently-cased pair', () => {
+    // The synthetic-row dedupe compares the pair against the rows already built. Comparing raw
+    // would miss the match and append a second row for a project that is already listed.
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { pairs: [{ projectId: 'abc123', scrollGroupId: A }] },
+    });
+    expect(rows.filter((r) => r.projectId === 'ABC123' && r.scrollGroupId === A)).toHaveLength(1);
+    expect(rows.some((r) => r.isBoundButClosed)).toBe(false);
+  });
+
+  it('builds a bound-but-closed row for a differently-cased pair in a closed group', () => {
+    // The pair's project must still be found in `projects` when only the casing differs, or the
+    // selected-but-closed row is silently dropped.
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { pairs: [{ projectId: 'abc123', scrollGroupId: C }] },
+    });
+    const closed = rows.find((r) => r.isBoundButClosed);
+    expect(closed).toBeDefined();
+    expect(closed!.projectId).toBe('ABC123');
+    expect(closed!.scrollGroupId).toBe(C);
+    expect(closed!.isSelected).toBe(true);
+  });
 });
 
 describe('computeRows — project mode', () => {
@@ -647,5 +715,83 @@ describe('partitionByGrouping — dispatch', () => {
     const sections = partitionByGrouping(rows, grouping);
     expect(sections).toHaveLength(1);
     expect(sections[0].kind).toBe('flat');
+  });
+});
+
+describe('partitionByGrouping — compareProjects', () => {
+  const recencyOf = (project: ProjectSelectorProject): number =>
+    typeof project.customData?.lastUsedAt === 'number' ? project.customData.lastUsedAt : 0;
+  /** Newest first — deliberately the REVERSE of the canonical alphabetical order. */
+  const byRecency = (a: ProjectSelectorProject, b: ProjectSelectorProject) =>
+    recencyOf(b) - recencyOf(a);
+
+  // Three orders that are pairwise different, so each assertion below can only hold for one of
+  // them: input order (BBB, CCC, AAA), canonical order (AAA, BBB, CCC) and recency order
+  // (CCC, BBB, AAA). A fixture already in alphabetical order would let a stable sort satisfy the
+  // canonical expectations without sorting at all.
+  const recencyProjects: ProjectSelectorProject[] = [
+    { id: 'bbb', shortName: 'BBB', fullName: 'Middle', customData: { bucket: 'x', lastUsedAt: 2 } },
+    { id: 'ccc', shortName: 'CCC', fullName: 'Newest', customData: { bucket: 'x', lastUsedAt: 3 } },
+    { id: 'aaa', shortName: 'AAA', fullName: 'Oldest', customData: { bucket: 'x', lastUsedAt: 1 } },
+    // Unbucketed, and listed newest-first so the canonical order is the reverse of the recency one.
+    { id: 'zzz', shortName: 'ZZZ', fullName: 'No bucket, newer', customData: { lastUsedAt: 9 } },
+    { id: 'yyy', shortName: 'YYY', fullName: 'No bucket, older', customData: { lastUsedAt: 1 } },
+  ];
+  const rows = computeRows({
+    mode: 'project',
+    projects: recencyProjects,
+    openTabs: [],
+    selection: { projectId: undefined },
+  });
+  const bucketed: ProjectSelectorGrouping = {
+    id: 'recent',
+    label: 'Recent',
+    getGroupKey: (project) =>
+      typeof project.customData?.bucket === 'string' ? project.customData.bucket : undefined,
+    unknownSectionHeading: 'Other',
+  };
+
+  it('orders rows within a bucket by the supplied comparator', () => {
+    const sections = partitionByGrouping(rows, { ...bucketed, compareProjects: byRecency });
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['ccc', 'bbb', 'aaa']);
+  });
+
+  it('falls back to canonical order when the comparator reports a tie', () => {
+    const sections = partitionByGrouping(rows, { ...bucketed, compareProjects: () => 0 });
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['aaa', 'bbb', 'ccc']);
+  });
+
+  it('uses canonical order within a bucket when no comparator is supplied', () => {
+    const sections = partitionByGrouping(rows, bucketed);
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['aaa', 'bbb', 'ccc']);
+  });
+
+  it('leaves the unknown bucket canonically ordered, not comparator-ordered', () => {
+    const sections = partitionByGrouping(rows, { ...bucketed, compareProjects: byRecency });
+    const unknown = sections.find((s) => s.label === 'Other');
+    // Recency order here would be ZZZ, YYY.
+    expect(unknown?.rows.map((r) => r.projectId)).toEqual(['yyy', 'zzz']);
+  });
+
+  it('keeps one project fanned across scroll groups in scroll-group order', () => {
+    // The comparator only sees ProjectSelectorProject, so it cannot tell these two rows apart and
+    // reports a tie for them. The canonical tie-break is what keeps A above B.
+    const multiRows = computeRows({
+      mode: 'project-multi',
+      projects: recencyProjects,
+      openTabs: [
+        { projectId: 'ccc', scrollGroupId: 1 },
+        { projectId: 'ccc', scrollGroupId: 0 },
+        { projectId: 'aaa', scrollGroupId: 0 },
+      ],
+      selection: { pairs: [] },
+    });
+    const sections = partitionByGrouping(multiRows, { ...bucketed, compareProjects: byRecency });
+    expect(sections[0].rows.map((r) => [r.projectId, r.scrollGroupId])).toEqual([
+      ['ccc', 0],
+      ['ccc', 1],
+      ['bbb', undefined],
+      ['aaa', 0],
+    ]);
   });
 });
