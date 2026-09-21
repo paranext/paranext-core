@@ -19,6 +19,10 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     // SHA-256 of the exact bytes "<Lexicon />", pinned so the manifest's hash contract (lowercase
     // hex over raw bytes) is asserted against a known answer rather than a mirror of the
     // implementation.
+    // The size guard is ceiling-relative, so these fixtures read against a small ceiling rather
+    // than writing a file the size of a real project's. Comfortably above every XML constant here.
+    private const long TestCeilingBytes = 8 * 1024;
+
     private const string EmptyLexiconSha256 =
         "2ad3a102d833fd2128e242272aa3f1c914e6c092e2bb10f834f9ca59b4a0c9c1";
 
@@ -388,6 +392,9 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         var manifest = _provider.GetPt9InterlinearManifest();
 
         Assert.That(manifest.Files["Lexicon.xml"].Hash, Is.EqualTo(EmptyLexiconSha256));
+        // Pinned exactly, for the same reason as the digest: every other size assertion in this
+        // fixture is relational, so a systematic error in the reported size would ship green.
+        Assert.That(manifest.Files["Lexicon.xml"].SizeBytes, Is.EqualTo(11));
     }
 
     [Test]
@@ -1268,11 +1275,10 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     public void GetPt9InterlinearData_FilesOverSizeLimit_ThrowsTooLargeInsteadOfResponding()
     {
         // Content is never parsed when the size guard trips, so padding bytes suffice.
-        var padding = new byte[81 * 1024 * 1024];
-        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", padding);
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", new byte[TestCeilingBytes + 1]);
 
         var exception = Assert.Throws<InvalidDataException>(
-            () => _provider.GetPt9InterlinearData()
+            () => Pt9InterlinearReader.GetData(_scrText, null, TestCeilingBytes)
         );
 
         Assert.That(
@@ -1280,6 +1286,53 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
             Does.StartWith(Pt9InterlinearReader.Pt9InterlinearDataTooLargeMessagePrefix)
         );
         // The machine-readable channel, preserved across the boundary's cause-chain strip.
+        Assert.That(
+            exception.Data[PlatformErrorCodes.PlatformErrorCodeDataKey],
+            Is.EqualTo(PlatformErrorCodes.ResourceExhausted)
+        );
+    }
+
+    [Test]
+    [Description(
+        "A read whose files sum to exactly the ceiling is served: the manifest publishes that "
+            + "ceiling so a caller can pack a selection up to it, and the comparison is strictly "
+            + "greater for exactly that reason."
+    )]
+    public void GetPt9InterlinearData_ReadSummingToExactlyTheCeiling_IsServed()
+    {
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+
+        var data = Pt9InterlinearReader.GetData(
+            _scrText,
+            null,
+            Encoding.UTF8.GetByteCount(InterlinearEnJasXml)
+        );
+
+        Assert.That(data.Books, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    [Description(
+        "One byte over the ceiling is refused, so the boundary the manifest publishes is exact on "
+            + "both sides rather than approximate."
+    )]
+    public void GetPt9InterlinearData_ReadOneByteOverTheCeiling_Throws()
+    {
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+
+        var exception = Assert.Throws<InvalidDataException>(
+            () =>
+                Pt9InterlinearReader.GetData(
+                    _scrText,
+                    null,
+                    Encoding.UTF8.GetByteCount(InterlinearEnJasXml) - 1
+                )
+        );
+
+        Assert.That(
+            exception!.Message,
+            Does.StartWith(Pt9InterlinearReader.Pt9InterlinearDataTooLargeMessagePrefix)
+        );
         Assert.That(
             exception.Data[PlatformErrorCodes.PlatformErrorCodeDataKey],
             Is.EqualTo(PlatformErrorCodes.ResourceExhausted)
@@ -1299,18 +1352,17 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         var header = Encoding.UTF8.GetBytes(
             """<InterlinearData GlossLanguage="en" BookId="PSA"><Verses>"""
         );
-        var padding = new byte[81 * 1024 * 1024];
+        var padding = new byte[TestCeilingBytes];
         Array.Fill(padding, (byte)' ');
         WriteProjectFile("Interlinear_en/Interlinear_en_PSA.xml", [.. header, .. padding]);
         WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
         WriteProjectFile("Lexicon.xml", "<Lexicon />");
 
-        var manifest = _provider.GetPt9InterlinearManifest();
+        var manifest = Pt9InterlinearReader.GetManifest(_scrText, TestCeilingBytes);
 
+        // Measured against the ceiling the manifest itself reports, which is what a caller has.
         var tooLarge = manifest
-            .Files.Where(entry =>
-                entry.Value.SizeBytes > Pt9InterlinearReader.MaxPt9InterlinearDataBytes
-            )
+            .Files.Where(entry => entry.Value.SizeBytes > manifest.MaxReadBytes)
             .ToDictionary(entry => entry.Key, entry => entry.Value);
         Assert.That(
             tooLarge.Keys,
@@ -1326,11 +1378,11 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         );
         Assert.That(
             manifest.Files["Interlinear_en/Interlinear_en_JAS.xml"].SizeBytes,
-            Is.LessThanOrEqualTo(Pt9InterlinearReader.MaxPt9InterlinearDataBytes)
+            Is.LessThanOrEqualTo(manifest.MaxReadBytes)
         );
         Assert.That(
             manifest.Files["Lexicon.xml"].SizeBytes,
-            Is.LessThanOrEqualTo(Pt9InterlinearReader.MaxPt9InterlinearDataBytes)
+            Is.LessThanOrEqualTo(manifest.MaxReadBytes)
         );
     }
 
@@ -1341,13 +1393,12 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     )]
     public void GetPt9InterlinearManifest_ProjectWideFiles_CarryNoBookIdentity()
     {
-        // Each carries a nested InterlinearData element. A probe that hunted for that name
-        // anywhere in the document, rather than classifying these as project-wide files, would
-        // report a book identity for them - and would read the whole file to find it.
-        WriteProjectFile(
-            "Lexicon.xml",
-            """<Lexicon><Entries><InterlinearData GlossLanguage="zz" BookId="XXX" /></Entries></Lexicon>"""
-        );
+        // The lexicon's root element is itself an InterlinearData, so classifying it as a
+        // project-wide file is the only thing that can answer "no identity"; reading its root the
+        // way a book file's is read would report one.
+        WriteProjectFile("Lexicon.xml", """<InterlinearData GlossLanguage="zz" BookId="XXX" />""");
+        // The stored analyses carry one nested instead, so a probe that hunted for that name at
+        // any depth would report a book identity for a project-wide file.
         WriteProjectFile(
             "WordAnalyses.xml",
             """<WordAnalyses><InterlinearData GlossLanguage="zz" BookId="XXX" /></WordAnalyses>"""
@@ -1383,6 +1434,33 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
 
     [Test]
     [Description(
+        "A book file whose root element carries an oversize attribute is listed with its hash and "
+            + "size but no identity, so no one file's content can size the manifest response."
+    )]
+    public void GetPt9InterlinearManifest_OversizeRootAttribute_IsListedWithoutIdentity()
+    {
+        // Well past the bound the identity read scans to, so it gives up before copying the value
+        // into the manifest entry.
+        var glossLanguage = new string('a', 128 * 1024);
+        WriteProjectFile(
+            "Interlinear_en/Interlinear_en_JAS.xml",
+            "<InterlinearData GlossLanguage=\""
+                + glossLanguage
+                + "\" BookId=\"JAS\"><Verses /></InterlinearData>"
+        );
+
+        var manifest = _provider.GetPt9InterlinearManifest();
+
+        var info = manifest.Files["Interlinear_en/Interlinear_en_JAS.xml"];
+        Assert.That(info.GlossLanguage, Is.Null);
+        Assert.That(info.BookId, Is.Null);
+        // Still fully described for selection: only the identity is withheld.
+        Assert.That(info.Hash, Is.Not.Empty);
+        Assert.That(info.SizeBytes, Is.GreaterThan(128 * 1024));
+    }
+
+    [Test]
+    [Description(
         "The manifest is not bounded by the data read's size cap: a project too large to serve in "
             + "one response still lists every file it holds, which is what a caller selects with."
     )]
@@ -1390,11 +1468,10 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     {
         // Content is never parsed by a manifest read, so padding bytes suffice. The total is over
         // the cap that bounds one data response.
-        var padding = new byte[81 * 1024 * 1024];
-        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", padding);
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", new byte[TestCeilingBytes + 1]);
         WriteProjectFile("Lexicon.xml", "<Lexicon />");
 
-        var manifest = _provider.GetPt9InterlinearManifest();
+        var manifest = Pt9InterlinearReader.GetManifest(_scrText, TestCeilingBytes);
 
         Assert.That(
             manifest.Files.Keys,
@@ -1413,20 +1490,20 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         // Well-formed padding, so the whole-project read is refused by the size guard rather than
         // by failing to parse a file of zero bytes.
         var padding = Encoding.UTF8.GetBytes(
-            $"<InterlinearData GlossLanguage=\"en\" BookId=\"JAS\"><!--{new string('x', 81 * 1024 * 1024)}--></InterlinearData>"
+            $"<InterlinearData GlossLanguage=\"en\" BookId=\"JAS\"><!--{new string('x', (int)TestCeilingBytes)}--></InterlinearData>"
         );
         WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", padding);
         WriteProjectFile("WordAnalyses.xml", WordAnalysesXml);
 
-        var refused = Assert.Throws<InvalidDataException>(() => _provider.GetPt9InterlinearData());
+        var refused = Assert.Throws<InvalidDataException>(
+            () => Pt9InterlinearReader.GetData(_scrText, null, TestCeilingBytes)
+        );
         Assert.That(
             refused!.Data[PlatformErrorCodes.PlatformErrorCodeDataKey],
             Is.EqualTo(PlatformErrorCodes.ResourceExhausted)
         );
 
-        var data = _provider.GetPt9InterlinearData(
-            new Pt9InterlinearDataSelector(["WordAnalyses.xml"])
-        );
+        var data = Pt9InterlinearReader.GetData(_scrText, ["WordAnalyses.xml"], TestCeilingBytes);
 
         // The selected file was served, not merely "not the big one": its one entry is present.
         Assert.That(data.WordAnalyses.Select(parse => parse.Word), Is.EqualTo(new[] { "walked" }));
@@ -1515,16 +1592,14 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     public void GetPt9InterlinearData_SetupsFile_IsNotChargedToTheSizeCap()
     {
         // A setups file that would on its own exhaust the ceiling, plus one small selectable file.
-        var setupsPadding = new string(' ', 81 * 1024 * 1024);
+        var setupsPadding = new string(' ', (int)TestCeilingBytes * 2);
         WriteProjectFile(
             "InterlinearSetup.xml",
             $"<InterlinearSetupList><!--{setupsPadding}--></InterlinearSetupList>"
         );
         WriteProjectFile("WordAnalyses.xml", WordAnalysesXml);
 
-        var data = _provider.GetPt9InterlinearData(
-            new Pt9InterlinearDataSelector(["WordAnalyses.xml"])
-        );
+        var data = Pt9InterlinearReader.GetData(_scrText, ["WordAnalyses.xml"], TestCeilingBytes);
 
         Assert.That(data.WordAnalyses.Select(parse => parse.Word), Is.EqualTo(new[] { "walked" }));
     }
@@ -1561,8 +1636,10 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     {
         WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
         WriteProjectFile("Interlinear_es/Interlinear_es_MAT.xml", InterlinearEsMatXml);
+        // A third book the selector does not name, so a selection that was ignored altogether
+        // would serve three books and fail the pinned list below.
+        WriteProjectFile("Interlinear_fr.xml", InterlinearEsMatXml);
 
-        var whole = _provider.GetPt9InterlinearData();
         // Named in the opposite order to the scan, with one repeated.
         var selected = _provider.GetPt9InterlinearData(
             new Pt9InterlinearDataSelector(
@@ -1576,16 +1653,112 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
 
         Assert.That(
             selected.Books.Select(book => book.FilePath),
-            Is.EqualTo(whole.Books.Select(book => book.FilePath))
+            Is.EqualTo(
+                new[]
+                {
+                    "Interlinear_en/Interlinear_en_JAS.xml",
+                    "Interlinear_es/Interlinear_es_MAT.xml",
+                }
+            )
         );
     }
 
     [Test]
     [Description(
-        "A selected read enforces path containment the same way an unselected one does, so a "
-            + "selector cannot reach a file the scan would have refused to serve."
+        "An unknown-path error truncates an over-long caller-supplied path, so ten named paths "
+            + "cannot make a message of unbounded length in notifications and logs."
     )]
-    public void GetPt9InterlinearData_Selector_StillRefusesAPathThatLeavesTheProject()
+    public void GetPt9InterlinearData_UnknownPathIsVeryLong_IsTruncatedInTheMessage()
+    {
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+        var longPath = new string('p', 5000);
+
+        var exception = Assert.Throws<InvalidDataException>(
+            () => _provider.GetPt9InterlinearData(new Pt9InterlinearDataSelector([longPath]))
+        );
+
+        Assert.That(exception!.Message, Does.Not.Contain(longPath));
+        Assert.That(exception.Message, Does.Contain("..."));
+        Assert.That(exception.Message.Length, Is.LessThan(500));
+    }
+
+    [Test]
+    [Description(
+        "An unknown-path error strips control characters from a caller-supplied path, so a caller "
+            + "cannot forge lines in a log the message reaches."
+    )]
+    public void GetPt9InterlinearData_UnknownPathHasControlCharacters_AreStrippedFromTheMessage()
+    {
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+
+        var exception = Assert.Throws<InvalidDataException>(
+            () =>
+                _provider.GetPt9InterlinearData(
+                    new Pt9InterlinearDataSelector(["forged\nERROR fake log line.xml"])
+                )
+        );
+
+        Assert.That(exception!.Message, Does.Not.Contain("\n"));
+        Assert.That(exception.Message, Does.Contain("forgedERROR fake log line.xml"));
+    }
+
+    [Test]
+    [Description(
+        "A selector entry naming no path is refused as invalid rather than reported as an unknown "
+            + "path, whose message would name nothing."
+    )]
+    public void GetPt9InterlinearData_SelectorEntryNamesNoPath_Throws()
+    {
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+
+        var exception = Assert.Throws<InvalidDataException>(
+            () => _provider.GetPt9InterlinearData(new Pt9InterlinearDataSelector([null!]))
+        );
+
+        Assert.That(
+            exception!.Message,
+            Is.EqualTo(Pt9InterlinearReader.Pt9InterlinearBlankPathMessage)
+        );
+        Assert.That(
+            exception.Data[PlatformErrorCodes.PlatformErrorCodeDataKey],
+            Is.EqualTo(PlatformErrorCodes.InvalidArgument)
+        );
+    }
+
+    [Test]
+    [Description(
+        "Selector paths match manifest keys exactly: a path differing only by case is unknown, so "
+            + "manifest keys stay the contract rather than a case-insensitive hint."
+    )]
+    public void GetPt9InterlinearData_SelectorNamesAPathDifferingOnlyByCase_Throws()
+    {
+        WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
+
+        var exception = Assert.Throws<InvalidDataException>(
+            () =>
+                _provider.GetPt9InterlinearData(
+                    new Pt9InterlinearDataSelector(
+                        ["interlinear_en/interlinear_en_jas.xml"]
+                    )
+                )
+        );
+
+        Assert.That(
+            exception!.Message,
+            Does.StartWith(Pt9InterlinearReader.Pt9InterlinearUnknownPathMessagePrefix)
+        );
+        Assert.That(
+            exception.Data[PlatformErrorCodes.PlatformErrorCodeDataKey],
+            Is.EqualTo(PlatformErrorCodes.InvalidArgument)
+        );
+    }
+
+    [Test]
+    [Description(
+        "A selector naming a traversal-shaped path is refused as an unknown path, since the scan "
+            + "enforces containment before selection and such a path is never a manifest key."
+    )]
+    public void GetPt9InterlinearData_SelectorNamesATraversalShapedPath_ThrowsAsUnknown()
     {
         // The scan is what enforces containment, so a selector can only ever name what it yielded.
         WriteProjectFile("Interlinear_en/Interlinear_en_JAS.xml", InterlinearEnJasXml);
@@ -1600,6 +1773,10 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         Assert.That(
             exception!.Message,
             Does.StartWith(Pt9InterlinearReader.Pt9InterlinearUnknownPathMessagePrefix)
+        );
+        Assert.That(
+            exception.Data[PlatformErrorCodes.PlatformErrorCodeDataKey],
+            Is.EqualTo(PlatformErrorCodes.InvalidArgument)
         );
     }
 

@@ -14,6 +14,15 @@ import { deserialize, getErrorMessage, retryUntil, serialize } from 'platform-bi
 export const WEBSOCKET_PORT = 8876;
 
 /**
+ * Largest message the WebSocket transport carries. A message over this is not a failed request: the
+ * receiver closes the connection with 1009, taking down every request in flight on it and, for the
+ * C# data provider, the process itself. Declared here rather than left to the `ws` default so a
+ * producer sizing a response against it - see `Pt9InterlinearReader.MaxPt9InterlinearDataBytes` -
+ * is measuring against a number this repository states.
+ */
+export const MAX_WEBSOCKET_PAYLOAD_BYTES = 100 * 1024 * 1024;
+
+/**
  * How many times to try sending a request before giving up if the request is not yet registered.
  * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
  * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of

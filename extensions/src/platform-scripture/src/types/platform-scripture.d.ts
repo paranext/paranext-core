@@ -1570,7 +1570,10 @@ declare module 'platform-scripture' {
    * @experimental
    */
   export type Pt9InterlinearProjectManifest = {
-    /** The most on-disk bytes one `getPt9InterlinearData` response may take on. */
+    /**
+     * The most on-disk bytes of selected files one `getPt9InterlinearData` response may take on;
+     * the setups file is served in addition and is not counted.
+     */
     maxReadBytes: number;
     /** Every interlinear file the project has, keyed by project-relative path. */
     files: { [filePath: string]: Pt9InterlinearFileInfo };
@@ -1583,6 +1586,10 @@ declare module 'platform-scripture' {
    *
    * A path the project does not have fails the whole read rather than being skipped, so a caller
    * reading file by file never mistakes a missing file for a book that holds no data.
+   *
+   * Build `paths` from a freshly polled manifest each time rather than replaying a stored list: a
+   * key names where a file currently lives, not the book itself, so a list kept between sessions
+   * can stop naming the project's files.
    *
    * @experimental
    */
@@ -1598,7 +1605,10 @@ declare module 'platform-scripture' {
    * @experimental
    */
   export type Pt9InterlinearProjectInterfaceDataTypes = {
-    /** Per-file SHA-256 hex, for change detection without transferring content. */
+    /**
+     * Per-file hash, size and book identity, plus the `maxReadBytes` ceiling a read is measured
+     * against - all without transferring content.
+     */
     Pt9InterlinearManifest: DataProviderDataType<undefined, Pt9InterlinearProjectManifest, never>;
     /**
      * The parsed interlinear data, for the whole project or for the files a
@@ -1648,10 +1658,12 @@ declare module 'platform-scripture' {
    *   projectId,
    * );
    * const manifest = await pdp.getPt9InterlinearManifest();
-   * if (!hashesMatch(manifest, storedHashes)) {
-   *   // Read the files in groups that fit; see getPt9InterlinearData for the ceiling.
-   *   const data = await pdp.getPt9InterlinearData({ paths: [somePath] });
-   *   // Convert and persist together with `manifest` for the next comparison.
+   * if (!hashesMatch(manifest.files, storedHashes)) {
+   *   // Groups whose summed `sizeBytes` each stay within the ceiling the manifest carries.
+   *   for (const paths of groupWithinCeiling(manifest.files, manifest.maxReadBytes)) {
+   *     const data = await pdp.getPt9InterlinearData({ paths });
+   *     // Convert and persist together with `manifest.files` for the next comparison.
+   *   }
    * }
    * ```
    *
@@ -1685,7 +1697,9 @@ declare module 'platform-scripture' {
        * unreadable project never poses as one with no data. A file whose root element cannot be
        * read still appears, without `glossLanguage` or `bookId`.
        *
-       * @returns Every interlinear file, keyed by project-relative path. Empty when the project has
+       * @returns `{ maxReadBytes, files }`. `maxReadBytes` is the ceiling
+       *   {@link getPt9InterlinearData} measures a read against; `files` describes every interlinear
+       *   file the project has, keyed by project-relative path, and is empty when the project has
        *   none.
        * @experimental
        */
@@ -1739,20 +1753,27 @@ declare module 'platform-scripture' {
        * files exceed the ceiling in total - a real project can, while no single file comes close. A
        * caller that cannot assume a small project reads {@link getPt9InterlinearManifest} first and
        * groups its reads by summed `sizeBytes`; the groups reassemble to exactly what one
-       * unselected read would have returned.
+       * unselected read would have returned, except `setups` and `hasAssociatedLexicalProject`,
+       * which repeat on every response - take them from any one.
        *
        * Throws if the project directory or a file cannot be read or parsed, so an unreadable
        * project never poses as one with no data and a caller never receives a partial payload. A
-       * read over the ceiling throws `RESOURCE_EXHAUSTED` (message prefix `PT9 interlinear data is
-       * too large`, for consumers that see only the message); a selector naming an unknown path, or
-       * no paths at all, throws `INVALID_ARGUMENT`.
+       * read over the ceiling throws with the message prefix `PT9 interlinear data is too large`; a
+       * selector naming an unknown path throws with the prefix `Unknown PT9 interlinear paths`, and
+       * one naming no paths at all throws with a message naming `Pt9InterlinearDataSelector.Paths`.
+       * Branch on the message rather than on a code: these carry `RESOURCE_EXHAUSTED` and
+       * `INVALID_ARGUMENT` on the provider side, but a C# platform error code does not reach a
+       * consumer across the RPC boundary today.
        *
        * @param selector Which interlinear files to read; omit to read all of them. See
        *   {@link Pt9InterlinearDataSelector}.
        * @returns Setups, per-book cluster data, the lexicon, and stored word analyses for the
        *   selected files; empty lists when the project has no interlinear data. `setups` and
        *   `hasAssociatedLexicalProject` come from project settings, so every response carries them
-       *   whatever the selection.
+       *   whatever the selection. A selection omitting `Lexicon.xml` returns `lexicon: null` and
+       *   one omitting `WordAnalyses.xml` returns `wordAnalyses: []` - the same values a project
+       *   holding neither file gives - so a caller merging file-by-file reads must track which
+       *   paths it asked for rather than replacing its prior state wholesale.
        * @experimental
        */
       getPt9InterlinearData(
@@ -1791,7 +1812,7 @@ declare module 'platform-scripture' {
        * @experimental
        */
       subscribePt9InterlinearData(
-        selector: undefined,
+        selector: Pt9InterlinearDataSelector,
         callback: (data: Pt9InterlinearProjectData | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;

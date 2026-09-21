@@ -316,8 +316,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         + "compare it to that method's documented ceiling to group reads and to "
                         + "find any file too large to read at all. glossLanguage and bookId come "
                         + "from a book file's root element and are absent for the lexicon, the "
-                        + "stored word analyses, and any file whose root cannot be read. Empty when "
-                        + "the project has no interlinear data. Never refused for size, however "
+                        + "stored word analyses, and any file whose root cannot be read. files "
+                        + "is empty when the project has no interlinear data. Never refused for size, however "
                         + "large the project's files are.",
                     [],
                     ExperimentalMethodDocumentation.ResultOf(
@@ -2771,7 +2771,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// Only interlinear file content is
     /// change-detected: the setups (from the setups file or rebuilt from project settings) and
     /// <c>HasAssociatedLexicalProject</c> derive partly from project settings and can change the
-    /// payload without any hash changing. Empty when the project has no interlinear data. Throws if the project directory or
+    /// payload without any hash changing. <c>Files</c> is empty when the project has no
+    /// interlinear data. Throws if the project directory or
     /// a file found by the scan cannot be read, so an unreadable project never poses as one with
     /// no data and a caller never receives a partial manifest. A book file whose root element
     /// cannot be read still appears, with no gloss language or book id, since a file a caller

@@ -4096,11 +4096,17 @@ step, no automation. Just a record.
   near 58 MiB, the ceiling holds even if the serialized form were as large as the source - a third
   more than anything measured - and a response at that worst case is still 20 MiB inside the
   transport's 100 MiB limit. (1) **Selection by request parameter:** `getPt9InterlinearData` takes
-  an optional selector of manifest paths, the idiom the platform's chapter and book getters already
-  use; a project of any size is read a group of files at a time, and the groups reassemble to
-  exactly what one unselected read would return. (2) **The manifest is not capped:** it carries one
-  fixed-length digest per file however large the file is, and it is what a caller selects with, so a
-  project too large to read at once must still be able to list what it holds. (3) **The manifest
+  an optional selector of manifest paths. Reading a scoped part of a project by request parameter,
+  rather than the whole of it, is what the platform's chapter and book getters already do, though
+  they take a `VerseRef` domain key; the in-repo precedent for an optional selector object is
+  `GetCommentThreads(CommentThreadSelector)`, which this one deliberately differs from - a sealed
+  record with `JsonUnmappedMemberHandling.Disallow` rather than a lenient mutable class whose
+  converter ignores unmapped members. A project of any size is read a group of files at a time, and
+  the groups reassemble to exactly what one unselected read would return, except `setups` and
+  `hasAssociatedLexicalProject`, which repeat on every response; take them from any one. (2) **The
+  manifest is not capped:** it carries one fixed-length digest per file however large the file is,
+  and it is what a caller selects with, so a project too large to read at once must still be able to
+  list what it holds. (3) **The manifest
   describes its files and carries the ceiling:** each entry carries `sizeBytes` and, for a book
   file, the `glossLanguage`/`bookId` its root element declares, so a caller can group its reads and
   name the books it must leave out before transferring anything, and the manifest carries the
@@ -4123,18 +4129,33 @@ step, no automation. Just a record.
   from a sibling getter, or on every manifest entry** - rejected: a second call to correlate, or a
   platform constant repeated per file, where one top-level field on the response that already
   carries the sizes costs neither.
-- **Consequences:** Project size stops deciding whether interlinear data can be imported. The
-  project that forced this now fits in a single read, so selection is what makes size irrelevant in
-  general rather than what rescues this one project. A consumer must now read the manifest before
-  the data, which was already the change-detection path. The uncapped manifest's cost scales with
-  the corpus rather than with any ceiling, so the request timeout is its effective bound. The setups
-  file is deliberately not charged to the cap - it is served whatever the selection and is never a
-  manifest key, so charging it would refuse a selection a caller had sized correctly.
+- **Consequences:** Project size stops deciding whether the book corpus can be imported. The project
+  that forced this now fits in a single read, so selection is what makes size irrelevant in general
+  rather than what rescues this one project. Selection is per file, though, so `Lexicon.xml` and
+  `WordAnalyses.xml` - single per-project files that grow with the corpus and cannot be split -
+  remain bounded by the ceiling; a project whose analyses file alone passes it has that data
+  unreadable through this interface until reads can be finer than a file. A consumer must now read
+  the manifest before the data, which was already the change-detection path. The uncapped manifest's
+  cost scales with the corpus rather than with any ceiling, so the request timeout is its effective
+  bound. The setups file is deliberately not charged to the cap - it is served whatever the
+  selection and is never a manifest key, so charging it would refuse a selection a caller had sized
+  correctly.
 
   Each selected read re-runs the file scan, so reading a project one file at a time repeats that
   scan once per file. Measured on a real project it is a low-single-digit share of import time -
   parsing and transferring the files dominate - so the scan is deliberately not cached: the gain
   would not pay for a cache whose invalidation had to track Send/Receive.
+
+  The ceiling is arithmetic over the transport's message limit, so that limit is declared as
+  `MAX_WEBSOCKET_PAYLOAD_BYTES` in `src/shared/data/rpc.model.ts` and passed to the WebSocket server
+  rather than left to the `ws` package's default. At 80 MiB a response may inflate 1.25x its on-disk
+  size before crossing it, where the 50 MiB cap allowed 2.0x, so the margin is thinner than it was
+  and neither number can be changed without re-checking the other.
+
+  The selector addresses files by manifest path, so it assumes a book and gloss language keep that
+  path between the manifest poll and the read that follows it. PT9's own writer always nests a book
+  file under `Interlinear_<lang>/`, so this holds in practice; the contract a consumer is given is
+  to rebuild `paths` from a fresh manifest rather than replay a stored list.
 - **Source:** PR #2838. The over-cap project described in Context, imported against the
   projectInterface `adr-pt9-legacy-data-as-parsed-models` introduced in PR #2707; every byte figure
   here is a measurement taken against that project's files.

@@ -27,6 +27,7 @@ public sealed record Pt9InterlinearProjectData(
     [property: JsonPropertyName("hasAssociatedLexicalProject")] bool HasAssociatedLexicalProject
 );
 
+/// <summary>
 /// The project's interlinear files, and the ceiling a read of them is measured against.
 ///
 /// <c>MaxReadBytes</c> is <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>, in the
@@ -63,6 +64,9 @@ public sealed record Pt9InterlinearFileInfo(
 /// project does not have fails the whole read, so a caller never mistakes a missing file for a book
 /// that holds no data. <c>Setups</c> and <c>HasAssociatedLexicalProject</c> come from project
 /// settings, so every read carries them whatever the selection.
+///
+/// <c>Paths</c> is built from a freshly polled manifest each time rather than replayed from a
+/// stored list: a key names where a file currently lives, not the book itself.
 ///
 /// A member this record does not declare fails deserialization rather than being skipped. Without
 /// that, a mis-cased or misspelled key binds <c>Paths</c> to null, which reads the whole project:

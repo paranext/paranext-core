@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml;
+using Paranext.DataProvider.ParatextUtils;
 using Paratext.Data;
 using Paratext.Data.Interlinear;
 using Paratext.Data.Linguistics;
@@ -29,10 +30,21 @@ internal static class Pt9InterlinearReader
     private const string Pt9InterlinearFilePrefixLower = "interlinear_";
 
     /// <summary>
+    /// Bound on how much of a file the identity read consumes before giving up on naming it. PT9
+    /// derives a book file's own path from its gloss language, so a root element PT9 wrote is a
+    /// few dozen characters whatever the file's size. A document that makes this read consume more
+    /// - an oversize attribute value, or a large comment before the root element - is listed
+    /// without an identity rather than read on, so a manifest entry stays a bounded size whatever
+    /// the file holds.
+    /// </summary>
+    private const long Pt9IdentityScanCharLimit = 64L * 1024L;
+
+    /// <summary>
     /// Ceiling on the total on-disk size of the interlinear files one <see cref="GetData"/>
     /// response may carry; <see cref="GetManifest"/> is not bounded by it. A project exceeding the
     /// ceiling is read a selection at a time (see <see cref="Pt9InterlinearDataSelector"/>) rather
-    /// than refused. A single WebSocket message over the transport's 100 MB limit
+    /// than refused. A single WebSocket message over the transport's limit
+    /// (<c>MAX_WEBSOCKET_PAYLOAD_BYTES</c> in <c>src/shared/data/rpc.model.ts</c>, 100 MB)
     /// tears down the whole PAPI connection to this process rather than failing the one request -
     /// an unaddressed platform-level issue - so this guard fails the request instead. The cap
     /// bounds source bytes because the serialized size cannot be confirmed here: the transport
@@ -44,7 +56,8 @@ internal static class Pt9InterlinearReader
     /// 20 MB under the transport's limit even if the serialized form were as large as the source.
     /// Content crafted of near-empty elements can exceed that - a bare cluster element is a few
     /// bytes of XML and a whole JSON object - which no source-byte ceiling can bound; it remains
-    /// an accepted residual risk.
+    /// an accepted residual risk. At this ceiling a response can inflate to at most 1.25x its
+    /// on-disk size before it crosses the transport's 100 MB limit.
     /// </summary>
     internal const long MaxPt9InterlinearDataBytes = 80L * 1024L * 1024L;
 
@@ -74,22 +87,30 @@ internal static class Pt9InterlinearReader
         "Pt9InterlinearDataSelector.Paths must not be empty; omit the selector to read the whole project";
 
     /// <summary>
-    /// Accumulates the source bytes a read has taken on and fails it at the file that crosses
-    /// <see cref="MaxPt9InterlinearDataBytes"/>, before that file is parsed. Only
-    /// <see cref="GetData"/> reads under it; a manifest read is not capped.
+    /// Message of the exception thrown when a selector entry names no path. Carries
+    /// <see cref="PlatformErrorCodes.InvalidArgument"/>. Distinct from the unknown-path error,
+    /// whose message names the paths it could not find and so would name nothing here.
     /// </summary>
-    private sealed class Pt9SizeCap
+    public const string Pt9InterlinearBlankPathMessage =
+        "Pt9InterlinearDataSelector.Paths must not contain an entry that names no path";
+
+    /// <summary>
+    /// Accumulates the source bytes a read has taken on and fails it at the file that crosses the
+    /// ceiling it was given, before that file is parsed. Only <see cref="GetData"/> reads under it;
+    /// a manifest read is not capped.
+    /// </summary>
+    private sealed class Pt9SizeCap(long maxReadBytes)
     {
         private long _totalBytes;
 
         public void Add(long fileLength)
         {
             _totalBytes += fileLength;
-            if (_totalBytes > MaxPt9InterlinearDataBytes)
+            if (_totalBytes > maxReadBytes)
             {
                 var tooLarge = new InvalidDataException(
                     $"{Pt9InterlinearDataTooLargeMessagePrefix}: the files this read takes on "
-                        + $"exceed the {MaxPt9InterlinearDataBytes} bytes one response can carry"
+                        + $"exceed the {maxReadBytes} bytes one response can carry"
                 );
                 tooLarge.Data[PlatformErrorCodes.PlatformErrorCodeDataKey] =
                     PlatformErrorCodes.ResourceExhausted;
@@ -110,18 +131,20 @@ internal static class Pt9InterlinearReader
     /// Only interlinear file content is change-detected: the payload's settings-derived parts
     /// (setups and the associated-lexical-project flag) can change without any hash changing.
     /// </summary>
-    public static Pt9InterlinearProjectManifest GetManifest(ScrText scrText) =>
-        ReadTyped(scrText, () => GetManifestCore(scrText));
+    public static Pt9InterlinearProjectManifest GetManifest(
+        ScrText scrText,
+        long maxReadBytes = MaxPt9InterlinearDataBytes
+    ) => ReadTyped(scrText, () => GetManifestCore(scrText, maxReadBytes));
 
     /// <summary>The manifest read itself; runs under <see cref="ReadTyped{T}"/>.</summary>
-    private static Pt9InterlinearProjectManifest GetManifestCore(ScrText scrText)
+    private static Pt9InterlinearProjectManifest GetManifestCore(ScrText scrText, long maxReadBytes)
     {
         EnsurePt9ProjectDirectoryReadable(scrText);
         var fileManager = scrText.FileManager;
         var files = new Dictionary<string, Pt9InterlinearFileInfo>();
         foreach (var relativePath in FindPt9InterlinearFiles(scrText))
             files[relativePath] = DescribePt9File(fileManager, relativePath);
-        return new Pt9InterlinearProjectManifest(MaxPt9InterlinearDataBytes, files);
+        return new Pt9InterlinearProjectManifest(maxReadBytes, files);
     }
 
     /// <summary>
@@ -158,9 +181,17 @@ internal static class Pt9InterlinearReader
             stream.Seek(0, SeekOrigin.Begin);
             var hash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
 
-            return new Pt9InterlinearFileInfo(hash, sizeBytes, identity.Item1, identity.Item2);
+            return new Pt9InterlinearFileInfo(
+                hash,
+                sizeBytes,
+                identity.GlossLanguage,
+                identity.BookId
+            );
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        // NotSupportedException covers a stream that cannot seek: the rewind above requires one,
+        // and a raw exception escaping here would leave the typed-error contract.
+        catch (Exception e)
+            when (e is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             throw Pt9FileUnreadable(relativePath, e);
         }
@@ -168,9 +199,12 @@ internal static class Pt9InterlinearReader
 
     /// <summary>
     /// Reads a book file's gloss language and book id from the root element of an already-open
-    /// file, stopping at that element rather than reading on, so the cost does not grow with the
-    /// file and a file too large to serve can still be named. Leaves the stream open and does not
-    /// rewind it; the caller owns both.
+    /// file, stopping at that element rather than reading on. For a well-formed file that is the
+    /// first few bytes, whatever the file's size; a file that leads with a large comment or
+    /// processing instruction is read up to its root element, since nothing bounds what precedes
+    /// it. The enclosing <see cref="DescribePt9File"/> then hashes the whole file regardless, so a
+    /// manifest read touches every byte either way. Leaves the stream open and does not rewind it;
+    /// the caller owns both.
     ///
     /// The attributes are the same ones the parsed payload's <c>GlossLanguage</c> and <c>BookId</c>
     /// come from, so a caller reading the probe and a caller reading the data name the same book
@@ -179,7 +213,7 @@ internal static class Pt9InterlinearReader
     /// and a file whose identity cannot be established is exactly one a caller most wants listed
     /// rather than one that should fail the whole probe.
     /// </summary>
-    private static (string?, string?) ReadPt9BookIdentity(Stream stream)
+    private static (string? GlossLanguage, string? BookId) ReadPt9BookIdentity(Stream stream)
     {
         try
         {
@@ -195,7 +229,12 @@ internal static class Pt9InterlinearReader
             );
             using var xmlReader = XmlReader.Create(
                 textReader,
-                new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, CloseInput = false }
+                new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    CloseInput = false,
+                    MaxCharactersInDocument = Pt9IdentityScanCharLimit,
+                }
             );
             // The root element only: the payload parse binds the root, so matching an
             // InterlinearData at any other depth would name a different book. MoveToContent stops
@@ -222,13 +261,15 @@ internal static class Pt9InterlinearReader
     /// </summary>
     public static Pt9InterlinearProjectData GetData(
         ScrText scrText,
-        IReadOnlyList<string>? requestedPaths = null
-    ) => ReadTyped(scrText, () => GetDataCore(scrText, requestedPaths));
+        IReadOnlyList<string>? requestedPaths = null,
+        long maxReadBytes = MaxPt9InterlinearDataBytes
+    ) => ReadTyped(scrText, () => GetDataCore(scrText, requestedPaths, maxReadBytes));
 
     /// <summary>The data read itself; runs under <see cref="ReadTyped{T}"/>.</summary>
     private static Pt9InterlinearProjectData GetDataCore(
         ScrText scrText,
-        IReadOnlyList<string>? requestedPaths
+        IReadOnlyList<string>? requestedPaths,
+        long maxReadBytes
     )
     {
         EnsurePt9ProjectDirectoryReadable(scrText);
@@ -237,11 +278,13 @@ internal static class Pt9InterlinearReader
         // Each file is opened exactly once and streams straight into the parser: its length
         // feeds the size cap and its content never buffers whole, so peak memory stays at the
         // parsed payload rather than payload plus corpus bytes. The cap trips before the file
-        // that crosses it is parsed, so no response over the cap can ever be produced.
+        // that crosses it is parsed, so no selected file past the cap is ever parsed. The setups
+        // file below is exempt and rides on top of that total, so a response is the capped
+        // selection plus that file.
         var filePaths = FindPt9InterlinearFiles(scrText);
         if (requestedPaths is not null)
             filePaths = SelectRequestedPt9Files(filePaths, requestedPaths);
-        var sizeCap = new Pt9SizeCap();
+        var sizeCap = new Pt9SizeCap(maxReadBytes);
 
         List<InterlinearSetup> fileSetups = [];
         if (fileManager.Exists(InterlinearSetups.fileName))
@@ -399,7 +442,7 @@ internal static class Pt9InterlinearReader
     /// selects with exactly the strings the manifest gave it.
     ///
     /// A requested path the project does not have fails the whole read, and so does a selection
-    /// naming no paths at all: either one would otherwise serve a payload a caller importing file
+    /// naming no paths at all, or one whose entry names no path: either one would otherwise serve a payload a caller importing file
     /// by file records as a book that holds nothing. An empty selection is reachable by accident,
     /// from filtering the manifest by size in a project whose every file is too large. The message
     /// names the missing paths, which are project-relative and carry no filesystem location.
@@ -417,6 +460,16 @@ internal static class Pt9InterlinearReader
             throw emptySelection;
         }
 
+        // Named separately from the unknown-path error, whose message lists what it could not find
+        // and so would name nothing for an entry that is itself nothing.
+        if (requestedPaths.Any(path => string.IsNullOrWhiteSpace(path)))
+        {
+            var blankPath = new InvalidDataException(Pt9InterlinearBlankPathMessage);
+            blankPath.Data[PlatformErrorCodes.PlatformErrorCodeDataKey] =
+                PlatformErrorCodes.InvalidArgument;
+            throw blankPath;
+        }
+
         var scanned = new HashSet<string>(scannedPaths, StringComparer.Ordinal);
         var missing = requestedPaths.Where(path => !scanned.Contains(path)).Distinct().ToList();
         if (missing.Count > 0)
@@ -425,7 +478,7 @@ internal static class Pt9InterlinearReader
             // after a Send/Receive that removed a directory can make it arbitrarily long, and the
             // message is a consumer-facing contract that reaches notifications and logs.
             const int maxNamed = 10;
-            var named = string.Join(", ", missing.Take(maxNamed));
+            var named = string.Join(", ", missing.Take(maxNamed).Select(DescribePathForMessage));
             var suffix = missing.Count > maxNamed ? $" (and {missing.Count - maxNamed} more)" : "";
             var unknownPaths = new InvalidDataException(
                 $"{Pt9InterlinearUnknownPathMessagePrefix}: {named}{suffix}"
@@ -437,6 +490,23 @@ internal static class Pt9InterlinearReader
 
         var requested = new HashSet<string>(requestedPaths, StringComparer.Ordinal);
         return scannedPaths.Where(requested.Contains).ToList();
+    }
+
+    /// <summary>
+    /// Renders one caller-supplied path for an error message that reaches notifications and logs:
+    /// control characters dropped so a caller cannot forge log lines, absolute paths redacted by
+    /// the same redactor the alert capture uses, and the result truncated so ten named paths cannot
+    /// make a message of unbounded length. The platform has no shared convention for this; the
+    /// pieces that exist are the path redactor and the truncate-with-ellipsis shape used elsewhere.
+    /// </summary>
+    private static string DescribePathForMessage(string path)
+    {
+        const int maxChars = 120;
+        var withoutControlCharacters = new string(
+            [.. path.Where(character => !char.IsControl(character))]
+        );
+        var redacted = AlertCapture.RedactPathsForLog(withoutControlCharacters);
+        return redacted.Length <= maxChars ? redacted : redacted[..maxChars] + "...";
     }
 
     /// <summary>
