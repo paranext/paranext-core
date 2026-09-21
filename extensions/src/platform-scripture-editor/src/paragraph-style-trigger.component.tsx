@@ -88,14 +88,14 @@ export function ParagraphStyleTrigger({
   // What the floor resolves to is the button's padding plus the WHOLE marker string, because the
   // primary field is nowrap and so contributes its full width to `min-content` — and `min-width`
   // beats `max-width`, so this is what decides whether the button's cap can hold at all.
-  // `blockMarker` is read verbatim off the USJ para node at the caret, NOT from the switcher menu:
-  // `blockMarkerToBlockNames` in platform-scripture-editor.utils.ts is explicitly incomplete and
-  // does not bound it. The ceiling is the longest `StyleType Paragraph` marker in
-  // `c-sharp/assets/usfm.sty` — SEVEN characters (`pubinfo`, `restore`; `periph` is six), not the
-  // four of `toc1` the column-floor widths were measured against. Those three are wider than the
-  // spare room that measurement found, so at the 297px Simple-mode column floor the trigger still
-  // overruns its zone by a few pixels. Peripheral and front-matter material only; see
-  // `adr-narrow-toolbar-yields-padding-then-decoration` for what is left open there and why.
+  // `blockMarker` is read verbatim off the USJ para node at the caret, NOT from the switcher menu,
+  // and isn't constrained to `selectableParagraphMarkers` (platform-bible-utils) or even to
+  // `usfm.sty` — a project-custom marker, or one entered by mistake, can be any string at all. The
+  // column-floor widths below were measured against `toc1` (4 characters), but some standard USFM
+  // markers are longer than that, so the trigger already overruns its zone by a few pixels for
+  // peripheral/front-matter material at the 297px Simple-mode column floor, before a nonstandard
+  // marker is even considered. See `adr-narrow-toolbar-yields-padding-then-decoration` for the
+  // specific markers and measurements, and what is left open there.
   const isFloored = shrinkStep >= SHRINK_STEP.MINIMUM;
   const widthFloor = isFloored ? 'tw:min-w-min' : 'tw:min-w-0';
 

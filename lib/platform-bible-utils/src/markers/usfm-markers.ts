@@ -3113,3 +3113,18 @@ export function isCharacterMarker(marker: string): boolean {
   if (markerDetails?.type !== MarkerType.Character) return false;
   return markerDetails.category !== MarkerCategoryType.DivisionMarks;
 }
+
+// Markers (e.g., `id`) which are applied programmatically and are never valid to select manually.
+const PROGRAMMATICALLY_APPLIED_MARKERS: ReadonlySet<string> = new Set(['id']);
+
+/**
+ * Every USFM paragraph-style marker known to {@link usfmMarkers} that a user can validly choose to
+ * apply. (Excludes programmatically applied markers.)
+ */
+export const selectableParagraphMarkers: readonly string[] = Object.entries(usfmMarkers)
+  .filter(
+    ([marker, details]) =>
+      details.type === MarkerType.Paragraph && !PROGRAMMATICALLY_APPLIED_MARKERS.has(marker),
+  )
+  .map(([marker]) => marker)
+  .sort();
