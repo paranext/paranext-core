@@ -57,10 +57,14 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%projectPicker_toolbar_more_projects%': 'Test more projects',
       '%projectPicker_toolbar_no_projects%': 'Test no projects',
       '%projectPicker_toolbar_select_project%': 'Test select a project',
+      '%projectPicker_toolbar_trigger_label%': 'Test select a project, {fullName} ({shortName})',
+      '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [
-    { book: 1, chapter: 1, verse: 1 },
+    // `SerializedVerseRef`: a book ID string plus `chapterNum`/`verseNum`. The same mock in
+    // `platform-bible-toolbar-integration.test.tsx` has to agree with this one.
+    { book: 'GEN', chapterNum: 1, verseNum: 1 },
     vi.fn(),
     0,
     vi.fn(),
@@ -1493,9 +1497,6 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
 
     // One grouping, which locks the selector into it and suppresses the group-by menu.
     expect(availableGroupings).toHaveLength(1);
-    // Every project must land in a bucket — one keyed `undefined` would fall into the unknown
-    // bucket, which this grouping does not emit, and vanish from the list.
-    expect(projects.every((p) => grouping.getGroupKey?.(p) !== undefined)).toBe(true);
     expect(projects).toHaveLength(9);
 
     const bucketed = (key: string) => projects.filter((p) => grouping.getGroupKey?.(p) === key);
@@ -1505,6 +1506,14 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
         .map((p) => p.id)
         .sort(),
     ).toEqual(['p1', 'p3']);
+    // The two buckets must PARTITION the list: every project lands in exactly one, so none can go
+    // missing. Asserting only that each key is defined proves nothing — this grouping's
+    // `getGroupKey` returns one of two constants and can never yield `undefined`.
+    expect(
+      bucketed('yours')
+        .map((p) => p.id)
+        .sort(),
+    ).toEqual(['p2', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9']);
     // Recent sits above local projects.
     expect(grouping.priorityKey).toBe('recent');
     // ...and `compareProjects` orders that bucket by recency, not alphabetically.
@@ -1524,28 +1533,41 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
 
     const { footerAction, isDisabled, isLoading } = requireCapturedProjectSelectorProps();
     expect(footerAction).toBeDefined();
-    // An empty list must not disable the trigger — the picker this replaced tied `disabled` to the
-    // list being non-empty, which took the escape hatch away exactly when it was the only way out.
-    // `ProjectSelector` disables on `isDisabled || isLoading`, so both levers are checked: asserting
-    // `isDisabled` alone would pass against a prop the toolbar never passes. That the rendered
-    // trigger really is enabled here is asserted in the integration test.
+    // An empty list must not disable the trigger: "More projects…" is the only way out of one, so
+    // disabling here would take the escape hatch away exactly when it is the only thing left.
+    // `ProjectSelector` disables on `isDisabled || isLoading`, so both levers are checked —
+    // asserting `isDisabled` alone would pass against a prop the toolbar never passes. That the
+    // rendered trigger really is enabled is asserted in the integration test.
     expect(isDisabled ?? false).toBe(false);
     expect(isLoading).toBe(false);
   });
 
-  it('disables the trigger only while loading, never for an empty list', async () => {
+  it("raises the selector's loading state only for a load with nothing to show yet", async () => {
+    // Nothing loaded yet: the spinner-and-disable state is warranted.
     await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: true });
+    expect(requireCapturedProjectSelectorProps().isLoading).toBe(true);
 
-    // Busy is a state the selector shows with a spinner and recovers from; the empty list above is
-    // not. Pinned so a future change cannot route the empty case back through the same disable.
-    const whileLoading = requireCapturedProjectSelectorProps();
-    expect(whileLoading.isLoading).toBe(true);
-    expect(whileLoading.footerAction).toBeDefined();
+    // A background refresh while a list is already on screen must NOT reach the selector, because
+    // `ProjectSelector` disables the trigger on `isDisabled || isLoading`. `useProjectPickerData`
+    // raises `isLoading` for every project-list change, retry and recents update, so passing it
+    // through greys the control out during ordinary use — and disables it exactly as Radix
+    // refocuses it after a keyboard pick, dropping the tab position to the document body.
+    cleanup();
+    await renderSimpleToolbarWith({
+      recentProjects: [],
+      allProjects: [NINE_PROJECTS[0]],
+      isLoading: true,
+    });
+    expect(requireCapturedProjectSelectorProps().isLoading).toBe(false);
 
+    // A settled, genuinely empty list is not a loading state: the trigger stays reachable so
+    // "More projects…" is still available.
     cleanup();
     await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: false });
-
-    expect(requireCapturedProjectSelectorProps().isLoading).toBe(false);
+    const settled = requireCapturedProjectSelectorProps();
+    expect(settled.isLoading).toBe(false);
+    expect(settled.isDisabled ?? false).toBe(false);
+    expect(settled.footerAction).toBeDefined();
   });
 
   it('marks a read-only project and leaves an editable one unmarked', async () => {
@@ -1670,7 +1692,7 @@ describe('PlatformBibleToolbar — pending project display', () => {
     });
   }
 
-  it('names a pending project chosen from the dialog, without adding a row for it', async () => {
+  it('opens a dialog-only project without naming it, and without adding a row for it', async () => {
     await renderSimpleToolbarWith({ allProjects: [] });
 
     const { footerAction } = requireCapturedProjectSelectorProps();
@@ -1678,16 +1700,21 @@ describe('PlatformBibleToolbar — pending project display', () => {
       footerAction?.onSelect();
     });
     // The dialog is the slower of the two paths, and it can return a project the short list never
-    // contained.
+    // contained — so there are no display fields to name it with.
     resolveProjectPickerDialogWith('far');
 
     const props = requireCapturedProjectSelectorProps();
-    expect(getSelection(props)?.projectId).toBe('far');
-    // Named by the trigger's own fallback, so no phantom row is injected into the visible list.
+    // No phantom row is injected into the visible list, and nothing is marked as selected — a
+    // selection naming a project with no row would leave the list with no visible check.
     expect(props.projects.some((project) => project.id === 'far')).toBe(false);
+    expect(getSelection(props)?.projectId).toBeUndefined();
+    // And the trigger does not fall back to the raw id. Standing `far (far)` in for a name would
+    // sit in the titlebar and in the trigger's accessible name for the whole pending bound, and
+    // reads as a bug rather than as a project. The placeholder is the graceful degradation here;
+    // the editor supplies the real name when it reports the project.
     const trigger = screen.getByTestId('project-picker-value');
-    expect(trigger).toHaveTextContent('far');
-    expect(trigger).not.toHaveTextContent('Test no projects');
+    expect(trigger).not.toHaveTextContent('far');
+    expect(trigger).toHaveTextContent('Test no projects');
   });
 
   it('names the newly picked project instead of a stale error for the project that failed to resolve', async () => {

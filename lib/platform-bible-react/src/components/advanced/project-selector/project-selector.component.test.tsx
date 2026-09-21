@@ -528,6 +528,28 @@ describe('renderProjectIndicator', () => {
     },
   ];
 
+  /**
+   * The row element for a project, by its short name. Rows have no test id in production markup, so
+   * these tests reach them through the visible label and assert on the row's own child order.
+   */
+  const rowFor = (shortName: string): HTMLElement => {
+    // The trigger renders the selected project's short name too, so match only inside a row.
+    const rows = screen
+      .getAllByText(shortName)
+      .map((label) => label.closest('[cmdk-item]'))
+      .filter((row): row is HTMLElement => Boolean(row));
+    expect(rows).toHaveLength(1);
+    return rows[0];
+  };
+
+  /**
+   * Index of the child holding the row's label, counting from the leading fixed-width check column.
+   * 1 means the label sits directly after the check column (no indicator column); 2 means an
+   * indicator column is laid out between them.
+   */
+  const labelChildIndex = (row: HTMLElement, shortName: string): number =>
+    [...row.children].findIndex((child) => child.textContent?.includes(shortName));
+
   it('renders projects and resources distinguishably from data alone', async () => {
     const user = setupUser();
     render(
@@ -548,7 +570,33 @@ describe('renderProjectIndicator', () => {
     expect(screen.getByTestId('indicator-ScriptureResource')).toBeInTheDocument();
   });
 
-  it('renders no indicator element when the prop is absent', async () => {
+  it('reserves the indicator column on every row, even where the renderer returns nothing', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        // The natural shape of a "mark only the resources" renderer. Keying the column on what it
+        // returned per row would indent R1's label one glyph further than P1's.
+        renderProjectIndicator={(project) =>
+          project.customData?.type === 'ScriptureResource' ? (
+            <span data-testid="indicator-resource" aria-label="Resource" />
+          ) : undefined
+        }
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+    expect(screen.getByTestId('indicator-resource')).toBeInTheDocument();
+    expect(labelChildIndex(rowFor('P1'), 'P1')).toBe(2);
+    expect(labelChildIndex(rowFor('R1'), 'R1')).toBe(2);
+  });
+
+  it('lays out no indicator column when the prop is absent', async () => {
     const user = setupUser();
     render(
       <ProjectSelector
@@ -561,7 +609,72 @@ describe('renderProjectIndicator', () => {
       />,
     );
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
-    expect(screen.queryByTestId(/^indicator-/)).not.toBeInTheDocument();
+
+    // An empty reserved column has no text and no test id, so its presence is only observable as
+    // the label being pushed one child to the right.
+    expect(labelChildIndex(rowFor('P1'), 'P1')).toBe(1);
+    expect(labelChildIndex(rowFor('R1'), 'R1')).toBe(1);
+  });
+});
+
+describe('case-insensitive selection', () => {
+  // Canonical project ids are uppercase, but a selection can arrive lowercased from a persisted
+  // layout or a web view opened with a tab-derived id. The trigger label has to resolve the same
+  // project the rows do, or it shows its placeholder while a row renders as selected.
+  const upperProjects: ProjectSelectorProject[] = [
+    { id: 'ABC123', shortName: 'ABC', fullName: 'Project ABC' },
+  ];
+
+  it('labels the trigger from a differently-cased single selection', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={upperProjects}
+        openTabs={[]}
+        selection={{ projectId: 'abc123' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project', buttonPlaceholder: 'Select a project' }}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ABC');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+
+  it('labels the trigger from a differently-cased pair selection', () => {
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={upperProjects}
+        openTabs={[]}
+        selection={{ pairs: [{ projectId: 'abc123', scrollGroupId: undefined }] }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project', buttonPlaceholder: 'Select a project' }}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ABC');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+
+  it('toggles a differently-cased pair off instead of appending a duplicate', async () => {
+    const user = setupUser();
+    const onChangeSelection = vi.fn();
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={upperProjects}
+        openTabs={[]}
+        selection={{ pairs: [{ projectId: 'abc123', scrollGroupId: undefined }] }}
+        onChangeSelection={onChangeSelection}
+        localizedStrings={{ ariaLabel: 'Project' }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    const row = await screen.findByRole('option', { name: /ABC/ });
+    await user.click(row);
+
+    expect(onChangeSelection).toHaveBeenCalledWith({ pairs: [] });
   });
 });
 
@@ -602,8 +715,7 @@ describe('renderTriggerLabel', () => {
     expect(screen.getByTestId('custom-trigger-label')).toHaveTextContent('custom:none');
   });
 
-  it('renders no tooltip of its own, so a caller label carrying one cannot double up', async () => {
-    const user = setupUser();
+  it('renders no tooltip of its own, so a caller label carrying one cannot double up', () => {
     render(
       <ProjectSelector
         mode="project"
@@ -612,17 +724,43 @@ describe('renderTriggerLabel', () => {
         selection={{ projectId: 'web' }}
         onChangeSelection={() => {}}
         localizedStrings={{ ariaLabel: 'Project' }}
+        // Load-bearing: it is what makes the suppressed tooltip's text the full name. Under the
+        // default `'shortName'` format the derived title is just `'WEB'`, so the assertion below
+        // would pass whether or not the tooltip were suppressed.
+        triggerLabelFormat="shortNameAndFullName"
         renderTriggerLabel={() => <span data-testid="custom-trigger-label">WEB</span>}
       />,
     );
 
-    await user.hover(screen.getByTestId('custom-trigger-label'));
+    // Asserted on the rendered structure rather than by hovering: Radix opens its tooltip from a
+    // pointer sequence jsdom does not produce, so a hover-then-expect-nothing test passes whether
+    // the tooltip is suppressed or not. The selector wraps its trigger in a `TooltipTrigger` only
+    // when it has a title to show, so the wrapper's absence IS the suppression.
+    expect(screen.getByRole('combobox', { name: 'Project' })).not.toHaveAttribute(
+      'data-slot',
+      'tooltip-trigger',
+    );
+  });
 
-    // The selector's own tooltip renders the selected project's full name. With a caller-supplied
-    // label it must stay absent — `ToolbarCompoundLabel` brings its own truncation tooltip.
-    await expect(
-      waitFor(() => screen.getByText('World English Bible'), { timeout: 700 }),
-    ).rejects.toThrow();
+  it('does wrap the trigger in its own tooltip when the caller supplies no label', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        triggerLabelFormat="shortNameAndFullName"
+      />,
+    );
+
+    // The control case for the assertion above: without `renderTriggerLabel` the wrapper is
+    // present, so its absence there is a real difference and not just how this trigger renders.
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveAttribute(
+      'data-slot',
+      'tooltip-trigger',
+    );
   });
 
   it('still uses the derived string when the prop is absent', () => {
@@ -754,6 +892,24 @@ describe('footerAction', () => {
     expect(screen.getByText('No projects found')).toBeInTheDocument();
   });
 
+  it('activates on Enter with no projects, without arrowing to it first', async () => {
+    const user = setupUser();
+    const onSelect = vi.fn();
+    renderWithFooter({ projects: [], onSelect });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // With an empty list the footer is the ONLY thing a user can act on, so Enter straight off the
+    // search box has to reach it. cmdk picks its Enter target from the highlighted item, and a
+    // `forceMount`ed row never enters the registered-item set that cmdk highlights from — so
+    // nothing highlights it unless the component seeds the highlight itself. Arrowing first (as
+    // the keyboard test above does) walks the DOM instead and hides this.
+    await user.keyboard('{Enter}');
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
   it('omits the separator when there are no projects, so no rule floats under the empty message', async () => {
     const user = setupUser();
     renderWithFooter({ projects: [] });
@@ -799,7 +955,22 @@ describe('footerAction', () => {
     );
 
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
-    await user.click(await screen.findByTestId('project-selector-footer-action'));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // Activated by KEYBOARD, not by clicking the node. cmdk wires `onClick` on the element itself,
+    // so a direct click reaches the right handler no matter how values collide — that route cannot
+    // fail and proves nothing. The routes that CAN are the ones that resolve a value to a node by
+    // first DOM match: cmdk's own `getSelectedItem()` behind Enter, and `spaceSelectsHighlightedItem`.
+    // Arrow down past the single project row to the footer, then press Enter.
+    await user.keyboard('{ArrowDown}');
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByTestId('project-selector-footer-action')).toHaveAttribute(
+        'data-selected',
+        'true',
+      ),
+    );
+    await user.keyboard('{Enter}');
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onChangeSelection).not.toHaveBeenCalled();

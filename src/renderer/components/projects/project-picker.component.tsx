@@ -12,6 +12,7 @@ import {
   useListbox,
 } from 'platform-bible-react';
 import { CheckIcon } from 'lucide-react';
+import LabelledGlyph from '@renderer/components/projects/labelled-glyph.component';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { RefObject, useMemo, useState } from 'react';
 
@@ -139,13 +140,9 @@ function ProjectSection({
                 reserves its indicator slot the same way. */}
             <span className="tw:flex tw:h-3 tw:w-3 tw:shrink-0 tw:items-center tw:justify-center">
               {p.id === currentProjectId && (
-                // Wrapped rather than labelled directly so it carries a hover label like the
-                // read-only padlock beside it — a Lucide icon takes no `title`, and without the
-                // wrapper one glyph in the row names itself on hover while its neighbour stays
-                // silent. `role="img"` hosts the accessible name, as it does there.
-                <span role="img" aria-label={currentProjectLabel} title={currentProjectLabel}>
-                  <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
-                </span>
+                <LabelledGlyph label={currentProjectLabel} showNativeTitle>
+                  <CheckIcon className="tw:h-3 tw:w-3" aria-hidden />
+                </LabelledGlyph>
               )}
             </span>
             <span className="tw:flex tw:h-3 tw:w-3 tw:shrink-0 tw:items-center tw:justify-center">

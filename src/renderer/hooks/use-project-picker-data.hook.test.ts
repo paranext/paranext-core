@@ -312,8 +312,9 @@ describe('useProjectPickerData', () => {
       metadataList([
         { id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1', isEditable: true },
         // Read-only, and deliberately still in the recent-ids list: a project the user can open but
-        // not edit is still a project they can reach, and this recent row must keep marking it
-        // rather than dropping it from the recents section.
+        // not edit is still a project they can reach, so the hook must keep it in the recents
+        // section and carry its `isEditable` through for the surface to mark. The hook itself
+        // marks nothing — that is the picker's job.
         { id: 'proj-r2', fullName: 'Full proj-r2', name: 'Short proj-r2', isEditable: false },
       ]) as never,
     );

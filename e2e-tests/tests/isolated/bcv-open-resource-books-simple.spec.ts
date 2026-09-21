@@ -50,6 +50,10 @@ import {
 
 /** The top toolbar's BookChapterControl trigger. In simple mode it is the only one on the page. */
 const BCV_TRIGGER = '[aria-label="book-chapter-trigger"]';
+// The titlebar project selector composes its accessible name as
+// "Select project, {fullName} ({shortName})" (`src/renderer/components/platform-bible-toolbar.tsx`).
+// The name prefix is what separates it from the book/chapter control, which is also a `combobox`.
+const PROJECT_SELECTOR_NAME = /^Select project,/;
 
 /**
  * Book rows carry an accessible name of `English Name (ID)`, with the dimmed explanation appended
@@ -217,7 +221,7 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // the book list below is asserted against. Naming the Revelation-less copy explicitly is what
     // keeps the rest of the test from passing against some OTHER project that happened to be
     // auto-opened into the editor column.
-    await expect(mainPage.locator('[data-slot="select-trigger"]').first()).toContainText(
+    await expect(mainPage.getByRole('combobox', { name: PROJECT_SELECTOR_NAME })).toContainText(
       targetProject.shortName,
       { timeout: 60_000 },
     );

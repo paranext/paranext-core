@@ -208,7 +208,17 @@ export type ProjectSelectorLocalizedStrings = {
 // bare Storybook render), not production copy: every real consumer merges its own values for
 // these two fields on top via `localizedStrings`. They exist so the trigger never renders with an
 // empty accessible name or empty text before localized strings resolve.
-const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
+/**
+ * English text for every {@link ProjectSelectorLocalizedStrings} key, used for any key a consumer
+ * leaves unset.
+ *
+ * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
+ * a consumer typically localizes only the handful of keys its configuration can reach, and which
+ * keys those are is a property of the configuration rather than of the component. Looping over this
+ * map keeps such a guard honest when a key is renamed or added; a hand-copied list of strings
+ * silently stops asserting anything.
+ */
+export const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   ariaLabel: 'Projects & resources',
   buttonPlaceholder: 'Select a project',
   commandEmptyMessage: 'No projects found',
@@ -230,7 +240,7 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): Required<ProjectSelectorLocalizedStrings> {
-  return { ...DEFAULT_STRINGS, ...partial };
+  return { ...PROJECT_SELECTOR_DEFAULT_STRINGS, ...partial };
 }
 
 /**
@@ -369,14 +379,25 @@ type CommonProps = {
    */
   defaultGrouping?: string | 'none';
   /**
-   * Render an indicator for a row — typically a small icon distinguishing a project from a
-   * resource, derived from the caller's own `customData.type` values.
+   * Render an indicator for a row — typically a small icon distinguishing one kind of row from
+   * another, derived from the caller's own `customData`.
    *
-   * The selector ships no taxonomy and no default mapping: `customData.type` is a free-form string
-   * whose meaning belongs to whoever produced the list (Paratext project types and DBL resource
-   * types are two different vocabularies, neither owned by this library), so the caller decides
-   * what a value looks like. Output is treated as decorative — give it an accessible name yourself,
-   * or mark it `aria-hidden`, since the selector cannot know what the glyph means.
+   * The selector ships no taxonomy and no default mapping: `customData` is a free-form bag whose
+   * meaning belongs to whoever produced the list (Paratext project types and DBL resource types are
+   * two different vocabularies, neither owned by this library), so the caller decides both what a
+   * value means and what it looks like. Note that the conventional `customData.type` key carries a
+   * project TYPE, not a project/resource discriminator — a caller who needs the latter has to pack
+   * its own flag.
+   *
+   * **The returned node must carry its own accessible name** (an `aria-label`, or visually hidden
+   * text) unless the row's own text already conveys the distinction. The selector renders it
+   * verbatim and adds no `aria-hidden` and no description of its own, so an unlabeled icon is
+   * information conveyed by sight alone (WCAG 1.1.1). Mark it `aria-hidden` only when the name
+   * would be redundant.
+   *
+   * Runs during the selector's own render, once per filtered row, on every render, so it must be
+   * pure, cheap, and free of hooks — the row count changes as the user filters, and a hook called
+   * here would change the selector's hook count between renders and throw.
    */
   renderProjectIndicator?: (
     project: ProjectSelectorProject,
@@ -407,7 +428,13 @@ export type ProjectSelectorProps =
       triggerLabelFormat?: 'shortName' | 'shortNameAndFullName';
       /**
        * Render the trigger's label yourself, in place of the derived `shortName` / `shortName -
-       * fullName` string. Receives the selected project, or `undefined` when nothing is selected.
+       * fullName` string.
+       *
+       * Receives the entry of `projects` that `selection.projectId` names, or `undefined` — which
+       * means either that nothing is selected OR that the selected id matches no entry of
+       * `projects`. The second case is reachable whenever the selection and the list come from
+       * different sources, so a caller that can name the selected project from its own state should
+       * fall back to that rather than treating `undefined` as "nothing is open".
        *
        * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
        * deliberate rather than an omission: a caller reaching for this prop is rendering a label
@@ -895,9 +922,20 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // value for React DOM refs.
   // eslint-disable-next-line no-null/no-null
   const selectedRowRef = useRef<HTMLDivElement>(null);
+  // cmdk highlights an item by its `value`, and only items it has REGISTERED are candidates. The
+  // footer action is `forceMount`ed and so never registers (that is what keeps `filtered.count` at
+  // 0 so `CommandEmpty` can render), which means that when no project row is registered either —
+  // an empty list, or a search that matches nothing — cmdk has nothing to highlight and its Enter
+  // handler, which acts on the highlighted item, does nothing at all. That is precisely the case
+  // the footer exists to serve, so the highlight is seeded here instead. Arrow keys are unaffected
+  // either way: they walk `getValidItems()` in the DOM rather than the registered set.
+  const [highlightedValue, setHighlightedValue] = useState<string | undefined>(undefined);
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
-    if (!nextOpen) setQuery('');
+    if (!nextOpen) {
+      setQuery('');
+      setHighlightedValue(undefined);
+    }
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -980,6 +1018,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   );
   const reserveIndicatorSlot = Boolean(renderProjectIndicator);
 
+  // The only state in which cmdk has no registered item to highlight, so the footer's Enter
+  // handling has to be seeded by hand.
+  const seedFooterHighlight = Boolean(props.footerAction) && filteredRows.length === 0;
+
   const sections = useMemo<RowSection[]>(() => {
     if (activeGrouping === NO_GROUPING) return partitionFlat(filteredRows);
     const grouping = availableGroupings.find((g) => g.id === activeGrouping);
@@ -1059,7 +1101,12 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     props.onChangeSelection({ pairs: [] });
   };
 
-  const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
+  // Computed on every render rather than memoized. `props` is the only workable dependency — the
+  // switch reads a different union arm's fields in each branch, so the set of props it touches is
+  // not statically knowable — and a new props object arrives on every render, so a memo keyed on it
+  // could never hit while still costing a comparison. Nothing consumes the result's identity; the
+  // body is a map lookup and a join.
+  const triggerContent: { node: ReactNode; title: string } = (() => {
     switch (props.mode) {
       case 'project': {
         const selected = lookUpProject(props.selection.projectId);
@@ -1130,7 +1177,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       default:
         return { node: '', title: '' };
     }
-  }, [props, strings.buttonPlaceholder, lookUpProject]);
+  })();
 
   // Auto-narrow: measure the trigger button's rendered width and hide the chevron below the
   // threshold at which the label would otherwise truncate to nothing. Consumers control the
@@ -1252,7 +1299,14 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         className="tw:w-80 tw:max-w-[calc(100vw-2rem)] tw:p-0"
       >
         <TooltipProvider delayDuration={400}>
-          <Command shouldFilter={false}>
+          <Command
+            shouldFilter={false}
+            // Controlled ONLY while no row is registered — see `highlightedValue`. With rows
+            // present this is `undefined`, which leaves cmdk uncontrolled and keeps its own
+            // "highlight the first item" behavior intact.
+            value={seedFooterHighlight ? (highlightedValue ?? FOOTER_ACTION_VALUE) : undefined}
+            onValueChange={setHighlightedValue}
+          >
             {/* No `border-b` here — CommandInput's own InputGroup carries a full 1px border, and
                 stacking the two draws an unexpected second horizontal line just below the pill. */}
             <div className="tw:flex tw:items-center tw:pe-2">
@@ -1310,11 +1364,22 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                       />
                     ))}
                   </CommandGroup>
-                  {index < sections.length - 1 && <CommandSeparator />}
+                  {/* `alwaysRender` for the same reason the footer's separator below carries it:
+                      a plain CommandSeparator returns null as soon as cmdk's `state.search` is
+                      non-empty, so one keystroke would drop the rule between two sections that
+                      are both still on screen. */}
+                  {index < sections.length - 1 && <CommandSeparator alwaysRender />}
                 </Fragment>
               ))}
               {props.footerAction && (
-                <>
+                // Stuck to the bottom of the scroll box rather than merely last in it. The footer
+                // is the list's escape hatch, and `CommandList` is `max-h-72 overflow-y-auto`, so
+                // as a plain last child it scrolls out of reach on any list long enough to need
+                // it — which is the state a user is most likely to be looking for it in. It stays
+                // INSIDE `CommandList` because that is the subtree cmdk's `getValidItems()` walks
+                // for arrow-key, Home/End and Enter navigation; moving it out would make it
+                // pointer-only. Opaque background so rows scroll behind it rather than through it.
+                <div className="tw:sticky tw:bottom-0 tw:z-10 tw:bg-popover">
                   {/* `alwaysRender`: a plain CommandSeparator returns null as soon as cmdk's
                       `state.search` is non-empty, so the footer would lose its rule mid-search.
                       Only rendered when a section above it actually has rows — with none, the
@@ -1335,6 +1400,11 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                     forceMount
                     value={FOOTER_ACTION_VALUE}
                     data-testid="project-selector-footer-action"
+                    // cmdk renders every CommandItem as `role="option"`, which promises a screen
+                    // reader that activating it selects a value from this list. This one closes
+                    // the popover and opens a modal dialog instead, so it says so.
+                    aria-haspopup="dialog"
+                    className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
                     onSelect={() => {
                       props.footerAction?.onSelect();
                       // Close through the handler rather than `setOpen`, so the search query is
@@ -1342,9 +1412,26 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                       handleOpenChange(false);
                     }}
                   >
-                    {props.footerAction.label}
+                    {/* Empty stand-ins for the check and indicator slots every project row leads
+                        with. Without them the footer's text starts ~40px to the left of every
+                        label above it — the same ragged edge `reserveIndicatorSlot` exists to
+                        prevent between rows. Mirrors `ProjectRowView`'s leading spans, so the two
+                        stay aligned if that layout changes. */}
+                    <span
+                      aria-hidden
+                      className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
+                    />
+                    {Boolean(props.renderProjectIndicator) && (
+                      <span
+                        aria-hidden
+                        className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
+                      />
+                    )}
+                    <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-start">
+                      {props.footerAction.label}
+                    </span>
                   </CommandItem>
-                </>
+                </div>
               )}
             </CommandList>
           </Command>

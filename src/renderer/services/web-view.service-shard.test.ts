@@ -1056,6 +1056,36 @@ describe('handleSwitchToSimpleMode', () => {
     expect(getLastOpenedProject()).toBeUndefined();
   });
 
+  it('slow path: a run of published resources ahead of an editable project still resolves inside the cold-start bound', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    // Eight resources ahead of the one usable project. Read-only projects reach the recents list
+    // now that the titlebar picker offers them, so a head like this is reachable in practice.
+    const resourceIds = Array.from({ length: 8 }, (_unused, index) => `proj-resource-${index}`);
+    const getRecentProjects = vi.fn(async () => [...resourceIds, 'proj-editable']);
+    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
+      dataProviderId === 'platformScripture.recentlyOpenedProjects'
+        ? { getRecentProjects }
+        : undefined,
+    );
+    // Each lookup is slow enough that checking the nine candidates one after another (~4.5s) would
+    // blow COLD_START_LOOKUP_TIMEOUT_MS, while checking them together costs about one lookup.
+    const LOOKUP_DELAY_MS = 500;
+    getMetadataForProjectMock.mockImplementation(async (projectId: string) => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, LOOKUP_DELAY_MS);
+      });
+      return projectId === 'proj-editable' ? {} : { isPublished: true };
+    });
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-editable');
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('Timed out'));
+  }, 10000);
+
   it('slow path: falls back to the bare layout and warns if resolving whether the project is published hangs past the cold-start bound', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();

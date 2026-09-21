@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { sendCommand } from '@shared/services/command.service';
+import { PROJECT_SELECTOR_DEFAULT_STRINGS } from 'platform-bible-react/experimental';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // The toolbar's unit tests replace `platform-bible-react/experimental` with a stub selector so they
@@ -13,12 +14,10 @@ import { PlatformBibleToolbar } from './platform-bible-toolbar';
 // section and footer behavior is covered in
 // `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.test.tsx`.
 //
-// Scope limit, because it is easy to over-trust these assertions: `platform-bible-react`'s
-// `exports` map sends `./experimental` to `dist/experimental.js`, so the component under test here
-// is the BUILT bundle, not `project-selector.component.tsx`. These tests therefore guard the
-// toolbar's side of the seam — the props it passes, and whether the real component accepts that
-// combination as shipped. A regression in the component's own source is caught by its source-level
-// test above, and only reaches this file once `dist/` is rebuilt.
+// `vitest.config.ts` aliases `platform-bible-react/experimental` to its source, so the component
+// under test is `project-selector.component.tsx` itself rather than the committed
+// `dist/experimental.js` the package's `exports` map would otherwise resolve to. That is what lets
+// a regression in the component's own source fail here instead of waiting for a `dist/` rebuild.
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -44,6 +43,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%projectPicker_toolbar_more_projects%': 'Test more projects',
       '%projectPicker_toolbar_no_projects%': 'Test no projects',
       '%projectPicker_toolbar_select_project%': 'Test select a project',
+      '%projectPicker_toolbar_trigger_label%': 'Test select a project, {fullName} ({shortName})',
+      '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [
@@ -210,6 +211,8 @@ async function renderSimpleToolbarWith(data: {
   currentSimpleProject?: (typeof PROJECTS)[number];
   recentProjects?: typeof PROJECTS;
   allProjects?: typeof PROJECTS;
+  currentSimpleProjectError?: string;
+  isLoading?: boolean;
 }) {
   const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
   vi.mocked(useProjectPickerData).mockReturnValue({
@@ -265,6 +268,59 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     expect(await screen.findByRole('combobox', { name: 'Test no projects' })).toBeInTheDocument();
   });
 
+  it('names the error in the accessible name when the current project cannot be resolved', async () => {
+    await renderSimpleToolbarWith({
+      currentSimpleProject: undefined,
+      currentSimpleProjectError: 'Test could not load project',
+      allProjects: [PROJECTS[0]],
+    });
+
+    expect(
+      await screen.findByRole('combobox', {
+        name: 'Test select a project, Test could not load project',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('names the just-picked project in the accessible name, not the stale error', async () => {
+    const user = await renderSimpleToolbarWith({
+      currentSimpleProject: undefined,
+      currentSimpleProjectError: 'Test could not load project',
+      recentProjects: [PROJECTS[0]],
+    });
+
+    await user.click(await screen.findByRole('combobox', { name: /Test select a project/ }));
+    await user.click(await screen.findByText('Project One'));
+
+    // The visible label switches to the pick immediately; the accessible name has to move with it
+    // or a screen reader keeps announcing the previous project's failure over the new selection.
+    expect(
+      await screen.findByRole('combobox', { name: 'Test select a project, Project One (P1)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the rendered trigger enabled through a background refresh', async () => {
+    await renderSimpleToolbarWith({
+      currentSimpleProject: PROJECTS[0],
+      recentProjects: [PROJECTS[0]],
+      allProjects: [PROJECTS[1]],
+      isLoading: true,
+    });
+
+    // The real component disables on `isDisabled || isLoading`, so this is the assertion the
+    // stub-based unit test cannot make. A refresh over a list already on screen must not grey the
+    // control out — among other things, Radix refocuses this trigger after a keyboard pick, and
+    // `.focus()` on a disabled button silently drops the tab position to the document body.
+    expect(await screen.findByRole('combobox', { name: /Test select a project/ })).toBeEnabled();
+  });
+
+  it('leaves the rendered trigger enabled on a settled but empty project list', async () => {
+    await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: false });
+
+    // An empty list must not disable the trigger: "More projects…" is the only way out of it.
+    expect(await screen.findByRole('combobox', { name: 'Test no projects' })).toBeEnabled();
+  });
+
   it('shows the toolbar-supplied sections and the more-projects footer when opened', async () => {
     const user = await renderSimpleToolbarWith({
       currentSimpleProject: PROJECTS[0],
@@ -290,6 +346,26 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     );
   });
 
+  it('marks a read-only project in the open popover, and leaves an editable one unmarked', async () => {
+    const user = await renderSimpleToolbarWith({
+      currentSimpleProject: PROJECTS[0],
+      recentProjects: [PROJECTS[0]],
+      allProjects: [PROJECTS[1]],
+    });
+
+    await user.click(await screen.findByRole('combobox', { name: /Test select a project/ }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // The only place `renderProjectIndicator` meets the real component: the unit tests call it as
+    // a captured function against the stub, which cannot show whether the row actually renders it.
+    // `PROJECTS[1]` is the `isEditable: false` one, so exactly one row is marked.
+    const readOnlyMarks = screen.getAllByLabelText('Test read-only');
+    expect(readOnlyMarks).toHaveLength(1);
+    // The mark belongs to the read-only project's row, not to some other row that happens to
+    // carry it.
+    expect(readOnlyMarks[0].closest('[cmdk-item=""]')).toHaveTextContent('Project Two');
+  });
+
   it('shows no untranslated selector default anywhere in the open popover', async () => {
     const user = await renderSimpleToolbarWith({
       currentSimpleProject: PROJECTS[0],
@@ -302,24 +378,22 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     );
     await screen.findByTestId('project-selector-footer-action');
 
-    // The toolbar localizes only `searchPlaceholder` of `ProjectSelectorLocalizedStrings`; the rest
-    // keep the component's English defaults and stay unreachable only because of how this call site
-    // is configured (`hideFilterMenu`, empty `openTabs`, and a catch-all last section that leaves
-    // the unmatched bucket empty). Change any of those and a default starts rendering untranslated,
-    // which no other assertion here would notice.
-    // Taken verbatim from the component's own DEFAULT_STRINGS, so a rename there surfaces here
-    // rather than leaving this asserting the absence of text that no longer exists.
-    const defaults = [
-      'Search projects & resources',
-      'Group by',
-      'View options',
-      'Opened project & resource tabs',
-      'Your projects & resources',
-      'Open',
-      'Other',
-    ];
+    // The toolbar localizes only a few of `ProjectSelectorLocalizedStrings`' keys; the rest keep
+    // the component's English defaults and stay unreachable only because of how this call site is
+    // configured (a single grouping, which suppresses the group-by menu; empty `openTabs`; and a
+    // grouping whose every key maps to one of the two labelled buckets). Change any of those and a
+    // default starts rendering untranslated, which no other assertion here would notice.
+    //
+    // Looped over the component's own exported map rather than a copied list of strings: a copy
+    // goes vacuous the moment a key is renamed or added, which is precisely the drift this is
+    // meant to catch. Three query kinds because these defaults land in text, in a `placeholder`
+    // and in an `aria-label`, and `queryByText` sees none of the latter two.
+    const defaults = Object.values(PROJECT_SELECTOR_DEFAULT_STRINGS);
+    expect(defaults.length).toBeGreaterThan(10);
     defaults.forEach((text) => {
       expect(screen.queryByText(text)).toBeNull();
+      expect(screen.queryByPlaceholderText(text)).toBeNull();
+      expect(screen.queryByLabelText(text)).toBeNull();
     });
   });
 
@@ -330,8 +404,8 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
       allProjects: [],
     });
 
-    // The trigger stays enabled with nothing to list — the escape hatch matters most here, and the
-    // picker this replaced disabled itself in exactly this state.
+    // The trigger stays enabled with nothing to list: "More projects…" is the only way out of an
+    // empty list, so this is the state the escape hatch matters most in.
     const trigger = await screen.findByRole('combobox', { name: 'Test no projects' });
     expect(trigger).toBeEnabled();
     await user.click(trigger);

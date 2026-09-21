@@ -186,9 +186,9 @@ export const CompoundTriggerLabelWithFooterAction: Story = {
           selection={{ projectId }}
           onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
           localizedStrings={{ ariaLabel: 'Project' }}
-          // A two-part label — short name leading, full name trailing in muted text — the shape a
-          // titlebar compound label takes when it owns the trigger's whole rendering, `undefined`
-          // included: see the prop's TSDoc for why the selector renders no tooltip of its own here.
+          // A two-part label: short name leading, full name trailing in muted text. The callback
+          // owns the WHOLE trigger, including the nothing-selected case, which is why it has to
+          // answer `undefined` itself rather than falling back to `buttonPlaceholder`.
           renderTriggerLabel={(selected) =>
             selected ? (
               <span className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-1">
