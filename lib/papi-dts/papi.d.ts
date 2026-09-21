@@ -665,8 +665,9 @@ declare module 'shared/models/web-view.model' {
    * A web view whose `getWebViewDefinition` rebuilds its own definition on re-point (a
    * `reloadWebView` pointed at another project through the same web view id) must carry its saved
    * `state` through wholesale, by spreading it rather than copying only the keys the view itself
-   * uses: the platform stores a companion identity stamp next to this key, and a view that dropped
-   * either one while rebuilding would lose the platform's re-point re-seed silently.
+   * uses: the platform stores a companion identity stamp next to this key, and a view that drops the
+   * stamp while keeping the levels has the platform silently re-attribute the previous project's
+   * level to the new one, rather than losing it.
    *
    * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
    * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
@@ -698,8 +699,9 @@ declare module 'shared/models/web-view.model' {
    * Attribute that marks an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} as pop-up content
    * opened from that zoom area (a popover, menu or tooltip portaled out of the area element) rather
    * than a pane. The platform scales such an element with its area but never reports it as an area of
-   * its own and never places the zoom indicator on it. `platform-bible-react`'s pop-up components set
-   * it automatically.
+   * its own and never places the zoom indicator on it. `platform-bible-react`'s `PopoverContent`,
+   * `DropdownMenuContent` and `TooltipContent` set it automatically; `SelectContent`,
+   * `ContextMenuContent`, `MenubarContent` and `DropdownMenuSubContent` do not yet.
    *
    * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
    * that marks its own pop-up content writes the literal `'data-platform-content-zoom-popup'` itself
