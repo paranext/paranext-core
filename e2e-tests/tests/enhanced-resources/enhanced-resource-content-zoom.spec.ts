@@ -23,10 +23,9 @@
  * Resources' `showFootnotes` has no auto-show of its own, unlike the Scripture editor's Power-mode
  * behavior — F7 is the only thing that opens or closes it here).
  *
- * Honest runnability: this is a CDP-attach suite (`tests/enhanced-resources/`) that needs a dev app
- * already running with a real Marble resource installed — this repository's dev container has
- * neither. Written and typechecked here; NOT run. `ESV16UK+` is the one resource the fixture
- * environment reliably has (see `HARDCODED_DEFAULT_RESOURCE_ID` in
+ * Runnability: this is a CDP-attach suite (`tests/enhanced-resources/`) that needs a dev app
+ * already running with a real Marble resource installed, so it does not run in CI. `ESV16UK+` is
+ * the one resource the fixture environment reliably has (see `HARDCODED_DEFAULT_RESOURCE_ID` in
  * `platform-enhanced-resources/src/main.ts`); the "different resource" case additionally needs a
  * SECOND installed Marble resource, which nothing in this repository guarantees, so it is opt-in
  * via `E2E_TEST_ENHANCED_RESOURCE_ID_2` and skips without one.
@@ -35,7 +34,7 @@
  * tests/enhanced-resources/enhanced-resource-content-zoom.spec.ts`
  */
 import type { Frame, Page } from '@playwright/test';
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import { readContentZoomMemory } from '../../fixtures/content-zoom-helpers';
 import { getEditorFrame, readFactor } from '../../fixtures/scripture-editor-helpers';

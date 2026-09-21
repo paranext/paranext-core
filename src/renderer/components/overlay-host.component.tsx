@@ -48,7 +48,8 @@ export function OverlayHost() {
         // bundle (papi.d.ts), and an import of the content-zoom service from there would drag the
         // whole service — including its test-only seams — onto that surface. OverlayHost is not
         // reachable from there, so this is the one place that may depend on it; the three overlay
-        // components below take the resulting scale as a plain prop instead.
+        // components below take the resulting scale as a plain prop instead. An open overlay keeps
+        // the scale it was drawn at; see `getContentZoomScaleForWebView`.
         if (overlay.type === 'contextMenu') {
           return (
             <OverlayContextMenu
