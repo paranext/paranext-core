@@ -2147,12 +2147,12 @@ export function decideStuckGateAction({
 export const TOP_LEVEL_ERROR_SELECTOR = '[role="alert"]:has(h1)';
 
 /**
- * Whether {@link dismissStuckFirstRunGate} settled the gate one way or another, or gave up within
- * its budget having recognised nothing — the case `waitForAppReady` needs to know about, since its
- * very next step ({@link waitForOverlayGone}) matches a selector the gate's own loading spinner also
- * matches.
+ * Whether {@link dismissStuckFirstRunGate} settled the gate one way or another, gave up within its
+ * budget having recognised nothing, or never managed a reliable read of the gate at all — every one
+ * of these cases `waitForAppReady` needs to know about, since its very next step
+ * ({@link waitForOverlayGone}) matches a selector the gate's own loading spinner also matches.
  */
-type FirstRunGateOutcome = 'settled' | 'inconclusive';
+type FirstRunGateOutcome = 'settled' | 'inconclusive' | SampleReadFailure;
 
 /**
  * One snapshot of everything {@link pollFirstRunGate} needs to decide what the first-run gate is
@@ -2164,6 +2164,16 @@ interface FirstRunGateSample {
   escapeHatchVisible: boolean;
   headingVisible: boolean;
   onErrorScreen: boolean;
+}
+
+/**
+ * {@link pollFirstRunGate} gave up because samples kept failing to read anything, not because the
+ * gate stayed stuck within its budget — distinct from `'inconclusive'` so a caller can tell "the
+ * gate may still be there, we just never got a clean look at it" apart from "we looked and it never
+ * settled", and report the actual triggering error instead of a bare string.
+ */
+interface SampleReadFailure {
+  sampleReadFailure: unknown;
 }
 
 /**
@@ -2224,16 +2234,18 @@ const MAX_CONSECUTIVE_SAMPLE_FAILURES = 3;
  * @returns `'cleared'` once the gate is gone; the sample itself once it shows a recognisable stuck
  *   state (an escape hatch or a heading) — the caller needs that exact snapshot, since it is
  *   already the single consistent observation {@link decideStuckGateAction} requires, not a cue to
- *   read again; `'inconclusive'` if neither happened within the budget, OR if 3 samples in a row
- *   fail to read anything (a non-retriable failure, e.g. a selector that will never match, should
- *   not burn the whole ~90s budget silently — the first such failure is logged once, with a stable
- *   `[e2e-first-run-gate]` prefix, and the streak resets on the next successful sample).
+ *   read again; `'inconclusive'` if neither happened within the budget; or a
+ *   {@link SampleReadFailure} carrying the triggering error if 3 samples in a row fail to read
+ *   anything at all (a non-retriable failure, e.g. a selector that will never match, should not
+ *   burn the whole ~90s budget silently, nor be reported the same way as a budget that simply ran
+ *   out with the gate still visible) — the streak resets on the next successful sample, and every
+ *   logged line carries a stable `[e2e-first-run-gate]` prefix.
  */
 export async function pollFirstRunGate(
   sample: () => Promise<FirstRunGateSample>,
   timeout: number,
   deps: PollFirstRunGateDeps = defaultPollFirstRunGateDeps,
-): Promise<'cleared' | 'inconclusive' | FirstRunGateSample> {
+): Promise<'cleared' | 'inconclusive' | FirstRunGateSample | SampleReadFailure> {
   const start = deps.now();
   let hasWarnedOnSampleFailure = false;
   let consecutiveSampleFailures = 0;
@@ -2254,7 +2266,16 @@ export async function pollFirstRunGate(
         hasWarnedOnSampleFailure = true;
       }
       consecutiveSampleFailures += 1;
-      if (consecutiveSampleFailures >= MAX_CONSECUTIVE_SAMPLE_FAILURES) return 'inconclusive';
+      if (consecutiveSampleFailures >= MAX_CONSECUTIVE_SAMPLE_FAILURES) {
+        // Logged unconditionally, independent of the notice above: that one only ever fires for the
+        // very first failure of the whole poll, so a later, unrelated streak that actually triggers
+        // this give-up would otherwise leave the console naming the wrong error.
+        console.warn(
+          `[e2e-first-run-gate] Giving up after ${MAX_CONSECUTIVE_SAMPLE_FAILURES} consecutive ` +
+            `sample-read failures: ${error}`,
+        );
+        return { sampleReadFailure: error };
+      }
     }
     if (current) {
       consecutiveSampleFailures = 0;
@@ -2379,6 +2400,7 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
 
   if (polled === 'cleared') return 'settled';
   if (polled === 'inconclusive') return 'inconclusive';
+  if ('sampleReadFailure' in polled) return polled;
 
   // `polled` is already the single consistent observation decideStuckGateAction needs — reading the
   // DOM again here could land after the gate moved on and describe an instant this call never saw.
@@ -2433,16 +2455,36 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
 
 /**
  * Build the error `waitForAppReady` should surface when the workspace overlay wait times out right
- * after `dismissStuckFirstRunGate` gave up inconclusive.
+ * after `dismissStuckFirstRunGate` gave up inconclusive, or never got a reliable read of the gate
+ * at all.
  *
  * `waitForOverlayGone`'s `.pr-twp [role="status"]` selector also matches the first-run gate's own
  * loading spinner (see its docblock and `first-run-wizard.spec.ts`), so a gate that is still
  * showing at this point times out here with a generic locator message that gives no hint the gate,
  * not the workspace overlay, is what never went away. Exported so the message this builds is
  * checkable without a live Page.
+ *
+ * @param sampleReadFailure When set, the gate check gave up because samples kept failing to read
+ *   anything (see {@link SampleReadFailure}), rather than because it saw the gate and it never
+ *   settled — the message says so accurately instead of claiming the gate was seen showing
+ *   something unrecognised.
  */
-export function describeInconclusiveOverlayTimeout(originalError: unknown): Error {
+export function describeInconclusiveOverlayTimeout(
+  originalError: unknown,
+  sampleReadFailure?: unknown,
+): Error {
   const reason = originalError instanceof Error ? originalError.message : String(originalError);
+  if (sampleReadFailure !== undefined) {
+    const sampleReason =
+      sampleReadFailure instanceof Error ? sampleReadFailure.message : String(sampleReadFailure);
+    return new Error(
+      'e2e precondition: the workspace overlay never cleared, and the first-run gate check just ' +
+        'before this wait never got a reliable read of the gate at all (repeated sample-read ' +
+        `failures: ${sampleReason}). waitForOverlayGone's ".pr-twp [role="status"]" selector also ` +
+        "matches the gate's own loading spinner, so this timeout may be the gate still showing, " +
+        `not the workspace overlay. Original error: ${reason}`,
+    );
+  }
   return new Error(
     'e2e precondition: the workspace overlay never cleared, and the first-run gate check just ' +
       'before this wait was inconclusive (still showing something unrecognised, or an error ' +
@@ -2506,10 +2548,13 @@ export async function waitForAppReady(
   try {
     await waitForOverlayGone(page, remainingForOverlay);
   } catch (error) {
-    // An inconclusive gate is the one prior state that can make this timeout name the wrong cause
-    // — see describeInconclusiveOverlayTimeout. Any other error is left exactly as
-    // waitForOverlayGone reported it.
-    throw gateOutcome === 'inconclusive' ? describeInconclusiveOverlayTimeout(error) : error;
+    // An inconclusive gate, or one whose samples never gave a reliable read, are the prior states
+    // that can make this timeout name the wrong cause — see describeInconclusiveOverlayTimeout. Any
+    // other error is left exactly as waitForOverlayGone reported it.
+    if (gateOutcome === 'inconclusive') throw describeInconclusiveOverlayTimeout(error);
+    if (typeof gateOutcome === 'object' && 'sampleReadFailure' in gateOutcome)
+      throw describeInconclusiveOverlayTimeout(error, gateOutcome.sampleReadFailure);
+    throw error;
   }
   if (!allowOnboardingTour) await suppressOnboardingTour(page);
 }

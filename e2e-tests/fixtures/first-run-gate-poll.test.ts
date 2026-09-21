@@ -137,24 +137,52 @@ describe('pollFirstRunGate', () => {
     );
   });
 
-  it('gives up as inconclusive after 3 consecutive sample failures, warning only once', async () => {
-    // A persisting failure — e.g. a selector that will never match — must not burn the whole
-    // poll budget silently: it should be logged once and give up well short of the timeout.
-    const sample = vi.fn().mockRejectedValue(new Error('selector never matches'));
+  it('gives up carrying the triggering error after 3 consecutive sample failures', async () => {
+    // A persisting failure — e.g. a selector that will never match — must not burn the whole poll
+    // budget silently: it should give up well short of the timeout, with the error that actually
+    // triggered the give-up attached to the result rather than collapsed into a bare 'inconclusive'.
+    const persistentError = new Error('selector never matches');
+    const sample = vi.fn().mockRejectedValue(persistentError);
     const sleep = vi.fn().mockResolvedValue(undefined);
     const now = vi.fn().mockReturnValue(0);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await pollFirstRunGate(sample, 90_000, { sleep, now });
 
-    expect(result).toBe('inconclusive');
+    expect(result).toEqual({ sampleReadFailure: persistentError });
     expect(sample).toHaveBeenCalledTimes(3);
     // Two sleeps between the three samples — the loop returns as soon as the 3rd failure lands,
     // never sleeping again after it already has its answer.
     expect(sleep).toHaveBeenCalledTimes(2);
-    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('[e2e-first-run-gate]'),
-    );
+    // Once for the first swallowed failure ("will keep polling"), once more at the give-up point
+    // naming the error that actually triggered it — both carry the same stable prefix.
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    warnSpy.mock.calls.forEach(([message]) => {
+      expect(message).toContain('[e2e-first-run-gate]');
+    });
+    expect(warnSpy).toHaveBeenLastCalledWith(expect.stringContaining('selector never matches'));
+  });
+
+  it('gives up naming the failure streak that triggered it, not an earlier one that already cleared', async () => {
+    // hasWarnedOnSampleFailure only ever fires for the very first failure of the whole poll, while
+    // the streak that actually triggers give-up can be a later, unrelated run of errors — the
+    // give-up log and the returned error must name THAT streak, not the first failure ever seen.
+    const transientError = new Error('transient A');
+    const persistentError = new Error('persistent B');
+    const sample = vi
+      .fn()
+      .mockRejectedValueOnce(transientError)
+      .mockResolvedValueOnce(SHOWING_NOTHING_RECOGNISABLE)
+      .mockRejectedValue(persistentError);
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const now = vi.fn().mockReturnValue(0);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await pollFirstRunGate(sample, 90_000, { sleep, now });
+
+    expect(result).toEqual({ sampleReadFailure: persistentError });
+    expect(warnSpy).toHaveBeenLastCalledWith(expect.stringContaining('persistent B'));
+    expect(warnSpy).not.toHaveBeenLastCalledWith(expect.stringContaining('transient A'));
   });
 });
 
