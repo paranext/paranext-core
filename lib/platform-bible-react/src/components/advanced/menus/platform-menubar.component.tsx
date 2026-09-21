@@ -4,6 +4,7 @@ import {
   MenubarItem,
   MenubarMenu,
   MenubarSeparator,
+  MenubarShortcut,
   MenubarSub,
   MenubarSubContent,
   MenubarSubTrigger,
@@ -25,7 +26,7 @@ import {
 import { RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
-import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
+import { getSortedMenuColumns, getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
 /**
@@ -83,6 +84,7 @@ const getMenubarContent = (
                   {item.iconPathAfter && (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
+                  {item.shortcut && <MenubarShortcut>{item.shortcut}</MenubarShortcut>}
                 </MenubarItem>
               ) : (
                 <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
@@ -130,7 +132,10 @@ type PlatformMenubarProps = {
   variant?: 'default' | 'muted';
 };
 
-/** Menubar component tailored to work with Platform.Bible menu data */
+/**
+ * Menubar component tailored to work with Platform.Bible menu data. Items show their `shortcut`, if
+ * any, at the end of the row.
+ */
 export function PlatformMenubar({
   menuData,
   onSelectMenuItem,
@@ -231,26 +236,18 @@ export function PlatformMenubar({
 
   return (
     <Menubar ref={menubarRef} className="pr-twp tw:border-0 tw:bg-transparent" variant={variant}>
-      {Object.entries(menuData.columns)
-        .filter(([, column]) => typeof column === 'object')
-        .sort(([, a], [, b]) => {
-          if (typeof a === 'boolean' || typeof b === 'boolean') return 0;
-          return a.order - b.order;
-        })
-        .map(([columnKey, column]) => (
-          <MenubarMenu key={columnKey}>
-            <MenubarTrigger ref={getRefForColumn(columnKey)}>
-              {typeof column === 'object' && 'label' in column && column.label}
-            </MenubarTrigger>
-            <MenubarContent
-              style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
-            >
-              <TooltipProvider>
-                {getMenubarContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
-              </TooltipProvider>
-            </MenubarContent>
-          </MenubarMenu>
-        ))}
+      {getSortedMenuColumns(menuData.columns).map(({ columnKey, column }) => (
+        <MenubarMenu key={columnKey}>
+          <MenubarTrigger ref={getRefForColumn(columnKey)}>{column.label}</MenubarTrigger>
+          <MenubarContent
+            style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
+          >
+            <TooltipProvider>
+              {getMenubarContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
+            </TooltipProvider>
+          </MenubarContent>
+        </MenubarMenu>
+      ))}
     </Menubar>
   );
 }
