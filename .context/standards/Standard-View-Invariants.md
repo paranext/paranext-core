@@ -103,6 +103,24 @@ consequences worth knowing here:
   `\id` line, where `\` offers the inline list and the Enter palette's paragraph pick splits the
   line instead of retagging it.
 
+**The editor's right-click menu outranks both palettes, and the hand-off rests on listener order
+across the two repos.** While `ContextMenuPlugin`'s menu is open it is the only keyboard mode on
+screen: the `\` trigger is claimed and does nothing, the Enter trigger stands down so the menu gets
+the press, and the insert shortcuts are swallowed. `isEditorContextMenuOpen` in
+`platform-scripture-editor.web-view.utils.ts` is the gate, and it depends on two facts owned by the
+editor package:
+
+- **The menu claims its keys from a capture-phase listener on the iframe's `document`, and this web
+  view claims its own from one on `window`.** Capture runs window → document, so the web view always
+  sees a key first, and handing Enter down means returning *without* `stopPropagation` — a
+  `stopPropagation` there ends the press before the menu's listener runs. Were the menu's listener
+  ever moved onto `window` too, the two would run in registration order, and neither side could
+  count on seeing a key first.
+- **The menu is found by its portal's classes, `.typeahead-popover.auto-embed-menu`.** Nothing in
+  this repo's unit tests reads those from the package; the context-menu e2e spec
+  (`endnote-insert-context-menu.spec.ts`) locates the menu by the same selector against the real
+  editor, so a rename fails there.
+
 Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.
 

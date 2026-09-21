@@ -1202,8 +1202,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             name: 'webViewId',
             required: false,
             summary:
-              'The ID of the web view tied to the project that we are inserting the footnote',
-            schema: { type: 'null' },
+              'The ID of the web view tied to the project that we are inserting the cross-reference',
+            schema: { type: 'string' },
           },
         ],
         result: {
