@@ -874,7 +874,7 @@ declare module 'papi-shared-types' {
     /**
      * Command to insert a cross-reference into a given editor web view.
      *
-     * @param editorWebViewId The ID of the web view to insert the footnote for
+     * @param editorWebViewId The ID of the web view to insert the cross-reference for
      */
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
       editorWebViewId?: string | undefined,
