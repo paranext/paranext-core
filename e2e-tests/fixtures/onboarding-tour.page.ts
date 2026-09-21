@@ -118,6 +118,59 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
 }
 
 /**
+ * Minimal Locator shape {@link sampleStepCounterPoll} needs to check dialog visibility — narrowed so
+ * its unit tests can pass a fake instead of a real Playwright Locator.
+ */
+type DialogVisibilitySource = Pick<Locator, 'isVisible'>;
+
+/**
+ * Minimal Locator shape {@link sampleStepCounterPoll} needs to read the step counter's current text
+ * — narrowed so its unit tests can pass a fake instead of a real Playwright Locator.
+ */
+type StepCounterTextSource = Pick<Locator, 'evaluateAll'>;
+
+/** Consecutive-absence count {@link sampleStepCounterPoll} carries across poll iterations. */
+export interface StepCounterPollTracker {
+  dialogAbsentSamples: number;
+}
+
+/**
+ * One sample of {@link waitForStepCounterChange}'s poll: reads the dialog's visibility and the step
+ * counter's current text together, in a single non-waiting round trip, and folds that into the
+ * "still on the same step" / "changed" / "closed" decision the poll watches for.
+ *
+ * The step counter's text is read with `evaluateAll`, not `textContent()`. `textContent()`
+ * auto-waits for its element to exist, and a Done click can unmount the whole tour dialog — step
+ * counter included — between this sample's dialog-visibility read and a separate later text read;
+ * that wait would then never resolve, bounded only by the outer `expect.poll`'s own timeout.
+ * `evaluateAll` runs against whichever elements (zero or one) are currently attached and returns
+ * immediately either way, so a step counter that has just been unmounted reads as `undefined`
+ * rather than stalling.
+ *
+ * Mutates `tracker.dialogAbsentSamples` in place so the consecutive-absence count survives across
+ * poll iterations, mirroring the closure variable this replaced.
+ */
+export async function sampleStepCounterPoll(
+  dialog: DialogVisibilitySource,
+  stepCounter: StepCounterTextSource,
+  previousTrimmed: string | null,
+  tracker: StepCounterPollTracker,
+  samplesBeforeClosed: number,
+): Promise<string | null> {
+  const [dialogVisible, counterText] = await Promise.all([
+    dialog.isVisible(),
+    stepCounter.evaluateAll((els) => els[0]?.textContent ?? undefined),
+  ]);
+  if (!dialogVisible) {
+    tracker.dialogAbsentSamples += 1;
+    return tracker.dialogAbsentSamples >= samplesBeforeClosed ? 'closed' : previousTrimmed;
+  }
+  tracker.dialogAbsentSamples = 0;
+  if (counterText === undefined) return previousTrimmed;
+  return counterText.trim();
+}
+
+/**
  * Waits for the tour's step-counter text to differ from `previousText` — or for the tour dialog to
  * close, which is what a Done click does. Either outcome is proof that the triggering click's
  * transition actually rendered, not just that the click resolved: the tour re-measures its target
@@ -128,7 +181,9 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
  * polling while the element is missing (only the `toBeHidden`/`not.toBeVisible` family passes on a
  * missing element), so it would time out on the very Done click it is meant to cover. A counter
  * that is momentarily absent while the dialog is still open is the mid-transition frame, and reads
- * as "not changed yet".
+ * as "not changed yet" — see {@link sampleStepCounterPoll} for how each sample reads dialog
+ * visibility and counter text together in one non-waiting round trip, so neither read can be left
+ * waiting on an element the other read just found unmounted.
  *
  * A dialog that is not visible is ambiguous: the tour unmounts it for good after Done, but it also
  * renders nothing for a frame while it re-measures the next step's target — on a fast machine a
@@ -136,7 +191,7 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
  * for several consecutive samples; a brief absence reads as "not changed yet" and the poll goes
  * on.
  *
- * Compares trimmed text on both sides: `textContent()` can carry incidental leading/trailing
+ * Compares trimmed text on both sides: element text can carry incidental leading/trailing
  * whitespace from the surrounding markup that has nothing to do with the step actually changing, so
  * comparing the raw strings can either report a change that is not real or paper over a stale
  * read.
@@ -146,23 +201,11 @@ async function waitForStepCounterChange(page: Page, previousText: string | null)
   const stepCounter = getStepCounter(page);
   const previousTrimmed = previousText?.trim() ?? previousText;
   const samplesBeforeClosed = 4;
-  let dialogAbsentSamples = 0;
+  const tracker: StepCounterPollTracker = { dialogAbsentSamples: 0 };
   await expect
     .poll(
-      async () => {
-        const [dialogVisible, counterCount] = await Promise.all([
-          dialog.isVisible(),
-          stepCounter.count(),
-        ]);
-        if (!dialogVisible) {
-          dialogAbsentSamples += 1;
-          return dialogAbsentSamples >= samplesBeforeClosed ? 'closed' : previousTrimmed;
-        }
-        dialogAbsentSamples = 0;
-        if (counterCount === 0) return previousTrimmed;
-        const text = await stepCounter.textContent();
-        return text?.trim() ?? text;
-      },
+      () =>
+        sampleStepCounterPoll(dialog, stepCounter, previousTrimmed, tracker, samplesBeforeClosed),
       { timeout: 5_000 },
     )
     .not.toBe(previousTrimmed);
