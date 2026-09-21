@@ -27,7 +27,7 @@ export default function LabelledGlyph({
 }) {
   return (
     // `shrink-0` belongs here rather than on the icon inside: this span is the flex item, so a
-    // shrinkable wrapper lets a crowded row squeeze the glyph however rigid the icon itself is.
+    // rule on the icon would leave the wrapper free to collapse and clip the glyph anyway.
     <span
       role="img"
       aria-label={label}

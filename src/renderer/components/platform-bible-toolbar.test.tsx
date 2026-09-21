@@ -24,7 +24,7 @@ import {
 import { SHRINK_STEP, ShrinkStepContext } from 'platform-bible-react';
 import type { ProjectSelectorProps } from 'platform-bible-react/experimental';
 import type { ProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
-import { PlatformBibleToolbar } from './platform-bible-toolbar';
+import { PlatformBibleToolbar, PROJECT_TRIGGER_MIN_WIDTH_CLASS } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -187,6 +187,7 @@ vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
     currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
     recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
     allProjects: [],
+    currentSimpleProjectError: undefined,
     isLoading: false,
   })),
 }));
@@ -1357,6 +1358,11 @@ describe('PlatformBibleToolbar project selector label', () => {
     expect(trigger).not.toHaveTextContent('Test Project');
   });
 
+  /** Matches one whole class token in a `class` attribute, rather than a substring of a longer one. */
+  function classMatcher(className: string) {
+    return new RegExp(`(?:^|\\s)${className.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}(?:\\s|$)`);
+  }
+
   it('lowers the trigger width floor at the narrowest step, so dropping the full name actually frees space', () => {
     // Without this the label just gets shorter inside a box still reserving 192px, and the room the
     // abbreviation was supposed to buy comes out of the reference control instead.
@@ -1371,9 +1377,13 @@ describe('PlatformBibleToolbar project selector label', () => {
       .querySelector('[data-trigger-classname]')
       ?.getAttribute('data-trigger-classname');
 
-    expect(wideTrigger).toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
-    expect(narrowTrigger).toMatch(/(?:^|\s)tw:min-w-24(?:\s|$)/);
-    expect(narrowTrigger).not.toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
+    // Compared against the exported constants rather than literal spellings, so renaming a floor
+    // moves both sides together instead of quietly leaving the test asserting a dead class.
+    const wide = classMatcher(PROJECT_TRIGGER_MIN_WIDTH_CLASS.WIDE);
+    const narrow = classMatcher(PROJECT_TRIGGER_MIN_WIDTH_CLASS.NARROW);
+    expect(wideTrigger).toMatch(wide);
+    expect(narrowTrigger).toMatch(narrow);
+    expect(narrowTrigger).not.toMatch(wide);
   });
 
   it('shows the placeholder when nothing is selected, rather than an empty trigger', async () => {
@@ -1681,9 +1691,12 @@ describe('PlatformBibleToolbar — pending project display', () => {
 
   /** Resolves the "More projects…" dialog with the id a real dialog response carries. */
   function resolveProjectPickerDialogWith(projectId: string | undefined) {
-    const resolveDialog = capturedDialogResolvers.at(-1);
+    // Asserted rather than optional-chained: a missing resolver means the dialog was never wired
+    // up, and a silent no-op here would leave every assertion below holding for the pre-act state.
+    expect(capturedDialogResolvers.length).toBeGreaterThan(0);
+    const resolveDialog = capturedDialogResolvers[capturedDialogResolvers.length - 1];
     act(() => {
-      resolveDialog?.(projectId);
+      resolveDialog(projectId);
     });
   }
 
@@ -1697,6 +1710,16 @@ describe('PlatformBibleToolbar — pending project display', () => {
     // The dialog is the slower of the two paths, and it can return a project the short list never
     // contained — so there are no display fields to name it with.
     resolveProjectPickerDialogWith('far');
+
+    // The positive consequence: the dialog's id really did reach the open path. Without this the
+    // rest of the assertions below all hold in the pre-act state (no projects, no selection,
+    // placeholder trigger) and the test would survive the dialog wiring being deleted outright.
+    await waitFor(() =>
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'platformScriptureEditor.openScriptureEditor',
+        'far',
+      ),
+    );
 
     const props = requireCapturedProjectSelectorProps();
     // No phantom row is injected into the visible list, and nothing is marked as selected — a

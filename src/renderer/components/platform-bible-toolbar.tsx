@@ -113,13 +113,27 @@ const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availabl
 
 const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
+/**
+ * Width floors for the project selector's trigger, one per shrink step band.
+ *
+ * Exported so tests can pin which floor applies at which step by comparing values rather than by
+ * matching a Tailwind class spelling, which jsdom cannot resolve to a measurement.
+ */
+export const PROJECT_TRIGGER_MIN_WIDTH_CLASS = {
+  NARROW: 'tw:min-w-24',
+  WIDE: 'tw:min-w-48',
+} as const;
+
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%mainMenu_openHome%',
   '%projectPicker_toolbar_select_project%',
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
   '%projectPicker_toolbar_trigger_label%',
+  '%projectPicker_toolbar_trigger_label_empty%',
   '%projectPicker_toolbar_trigger_label_error%',
+  '%projectPicker_toolbar_label_nameAndShortName%',
+  '%projectPicker_toolbar_label_shortNameOnly%',
   '%projectPicker_section_recent%',
   '%projectPicker_section_projects_localOnly%',
   '%projectPicker_search_placeholder%',
@@ -132,10 +146,11 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
  * localization service has not answered yet.
  *
  * `useLocalizedStrings` seeds its state with the KEY for each requested string, and returns that
- * seed both before the provider responds and permanently if it errors. `'%projectPicker_title%'` is
- * a non-empty string, so it survives every `??` and `||` fallback downstream — a picker showing
- * literal `%…%` text is what a user sees, rather than a blank one. Keep these in step with
- * `assets/localization/en.json`; they are a startup fallback, not a second source of truth.
+ * seed both before the provider responds and permanently if it errors.
+ * `'%projectPicker_no_results%'` is a non-empty string, so it survives every `??` and `||` fallback
+ * downstream — a picker showing literal `%…%` text is what a user sees, rather than a blank one.
+ * Keep these in step with `assets/localization/en.json`; they are a startup fallback, not a second
+ * source of truth.
  */
 const PICKER_STRING_FALLBACKS = {
   '%projectPicker_no_results%': 'No projects found',
@@ -143,10 +158,13 @@ const PICKER_STRING_FALLBACKS = {
   '%projectPicker_search_placeholder%': 'Search projects…',
   '%projectPicker_section_projects_localOnly%': 'Your projects on this computer',
   '%projectPicker_section_recent%': 'Recent',
+  '%projectPicker_toolbar_label_nameAndShortName%': '{fullName} ({shortName})',
+  '%projectPicker_toolbar_label_shortNameOnly%': '({shortName})',
   '%projectPicker_toolbar_more_projects%': 'More projects…',
   '%projectPicker_toolbar_no_projects%': 'No projects',
   '%projectPicker_toolbar_select_project%': 'Select project',
   '%projectPicker_toolbar_trigger_label%': 'Select project, {fullName} ({shortName})',
+  '%projectPicker_toolbar_trigger_label_empty%': 'Select project, no projects on this computer',
   '%projectPicker_toolbar_trigger_label_error%': 'Select project, {errorMessage}',
 } as const;
 
@@ -169,10 +187,19 @@ function resolvePickerStrings(localizedStrings: LanguageStrings): Record<PickerS
       '%projectPicker_section_projects_localOnly%',
     ),
     '%projectPicker_section_recent%': resolve('%projectPicker_section_recent%'),
+    '%projectPicker_toolbar_label_nameAndShortName%': resolve(
+      '%projectPicker_toolbar_label_nameAndShortName%',
+    ),
+    '%projectPicker_toolbar_label_shortNameOnly%': resolve(
+      '%projectPicker_toolbar_label_shortNameOnly%',
+    ),
     '%projectPicker_toolbar_more_projects%': resolve('%projectPicker_toolbar_more_projects%'),
     '%projectPicker_toolbar_no_projects%': resolve('%projectPicker_toolbar_no_projects%'),
     '%projectPicker_toolbar_select_project%': resolve('%projectPicker_toolbar_select_project%'),
     '%projectPicker_toolbar_trigger_label%': resolve('%projectPicker_toolbar_trigger_label%'),
+    '%projectPicker_toolbar_trigger_label_empty%': resolve(
+      '%projectPicker_toolbar_trigger_label_empty%',
+    ),
     '%projectPicker_toolbar_trigger_label_error%': resolve(
       '%projectPicker_toolbar_trigger_label_error%',
     ),
@@ -191,10 +218,12 @@ function ProjectSelectorLabel({
   fullName,
   shortName,
   errorMessage,
+  strings,
 }: {
   fullName: string;
   shortName: string;
   errorMessage?: string;
+  strings: Record<PickerStringKey, string>;
 }) {
   const shrinkStep = useShrinkStepValue();
   const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
@@ -215,12 +244,23 @@ function ProjectSelectorLabel({
   return (
     <ToolbarCompoundLabel
       // The short name is the identifying part, so it is the field that must survive — but it reads
-      // second, hence `secondaryFirst`.
-      primary={isAtMinimum ? shortName : `(${shortName})`}
+      // second, hence `secondaryFirst`. Both forms come from format strings rather than
+      // concatenation so a locale can reorder the pair and mirror the brackets, and so the visible
+      // text and the accessible name can never disagree about that order.
+      primary={
+        isAtMinimum
+          ? shortName
+          : formatReplacementString(strings['%projectPicker_toolbar_label_shortNameOnly%'], {
+              shortName,
+            })
+      }
       secondary={fullName}
       secondaryFirst
       showSecondary={!isAtMinimum}
-      fullText={`${fullName} (${shortName})`}
+      fullText={formatReplacementString(strings['%projectPicker_toolbar_label_nameAndShortName%'], {
+        fullName,
+        shortName,
+      })}
     />
   );
 }
@@ -384,15 +424,29 @@ function ToolbarProjectSelector({
           <ProjectSelectorLabel
             fullName={pendingProject.fullName}
             shortName={pendingProject.shortName}
+            strings={strings}
           />
         );
       if (currentProjectError)
-        return <ProjectSelectorLabel fullName="" shortName="" errorMessage={currentProjectError} />;
+        return (
+          <ProjectSelectorLabel
+            fullName=""
+            shortName=""
+            errorMessage={currentProjectError}
+            strings={strings}
+          />
+        );
       const named = selected ?? displayedProject;
       if (!named) return <ToolbarCompoundLabel primary={placeholder} fullText={placeholder} />;
-      return <ProjectSelectorLabel fullName={named.fullName} shortName={named.shortName} />;
+      return (
+        <ProjectSelectorLabel
+          fullName={named.fullName}
+          shortName={named.shortName}
+          strings={strings}
+        />
+      );
     },
-    [pendingProject, displayedProject, currentProjectError, placeholder],
+    [pendingProject, displayedProject, currentProjectError, placeholder, strings],
   );
 
   // `ariaLabel` becomes the trigger's `aria-label`, which REPLACES its content in the accessible
@@ -405,12 +459,25 @@ function ToolbarProjectSelector({
       return formatReplacementString(strings['%projectPicker_toolbar_trigger_label_error%'], {
         errorMessage: currentProjectError,
       });
-    if (!displayedProject) return placeholder;
+    // With nothing to name, the bare placeholder would be the whole accessible name — "No
+    // projects, combo box" says nothing about the control still opening a picker, which is
+    // precisely the state a user needs the escape hatch from.
+    if (!displayedProject)
+      return selectorProjects.length > 0
+        ? placeholder
+        : strings['%projectPicker_toolbar_trigger_label_empty%'];
     return formatReplacementString(strings['%projectPicker_toolbar_trigger_label%'], {
       fullName: displayedProject.fullName,
       shortName: displayedProject.shortName,
     });
-  }, [strings, pendingProject, displayedProject, currentProjectError, placeholder]);
+  }, [
+    strings,
+    pendingProject,
+    displayedProject,
+    currentProjectError,
+    placeholder,
+    selectorProjects.length,
+  ]);
 
   const selectorLocalizedStrings = useMemo(
     () => ({
@@ -475,7 +542,9 @@ function ToolbarProjectSelector({
         // padding and chevron), so the name stays readable while the trigger remains a comfortable
         // click target. Not `min-w-0`: with everything else in the row shrinkable too, the trigger
         // would collapse to just its chevron.
-        shrinkStep >= SHRINK_STEP.MINIMUM ? 'tw:min-w-24' : 'tw:min-w-48',
+        shrinkStep >= SHRINK_STEP.MINIMUM
+          ? PROJECT_TRIGGER_MIN_WIDTH_CLASS.NARROW
+          : PROJECT_TRIGGER_MIN_WIDTH_CLASS.WIDE,
       )}
     />
   );

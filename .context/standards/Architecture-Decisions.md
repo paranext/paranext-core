@@ -4106,7 +4106,7 @@ step, no automation. Just a record.
   screen readers — the titlebar composes the whole name at its own call site instead); and
   read-only is consumer-derived through `renderProjectIndicator`, which leaves the row tooltip
   unable to explain the padlock to sighted pointer users. Both are written up in
-  `PT-4549-followup-projectselector-accessible-name.md`.
+  [`.context/designs/PT-4549-followup-projectselector-accessible-name.md`](../designs/PT-4549-followup-projectselector-accessible-name.md).
 
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
