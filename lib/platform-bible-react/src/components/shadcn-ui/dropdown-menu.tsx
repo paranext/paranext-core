@@ -325,7 +325,10 @@ function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps
     <span
       data-slot="dropdown-menu-shortcut"
       className={cn(
-        'tw:ms-auto tw:text-xs tw:tracking-widest tw:text-muted-foreground tw:group-focus/dropdown-menu-item:text-accent-foreground',
+        // CUSTOM: Added tw:[unicode-bidi:plaintext] so the hint takes its direction from its first
+        // letter, keeping macOS symbols in order (⌃F, not F⌃) in RTL menus. Unlike dir="ltr", it
+        // keeps the span's direction, so tw:ms-auto still puts the hint at the inline end
+        'tw:[unicode-bidi:plaintext] tw:ms-auto tw:text-xs tw:tracking-widest tw:text-muted-foreground tw:group-focus/dropdown-menu-item:text-accent-foreground',
         className,
       )}
       {...props}

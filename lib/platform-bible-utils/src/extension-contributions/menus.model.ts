@@ -1,6 +1,8 @@
 //----------------------------------------------------------------------------------------------
 // NOTE: If you change any of the types, make sure the JSON schema at the end of this file gets
 // changed so they align.
+// Deliberate difference: `MenuItemContainingCommand.shortcut` is platform-filled; the schema
+// omits it.
 //----------------------------------------------------------------------------------------------
 
 import { ReplaceType } from '../util';
@@ -93,6 +95,21 @@ export type MenuItemContainingCommand = MenuItemBase & {
    * `papi-extension://helloWorld/assets/icon.png`
    */
   iconPathBefore?: string;
+  /**
+   * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
+   * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
+   * it as a key binding.
+   *
+   * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
+   * the unlocalized main menu never has it. Key names are not localized, and only the first
+   * catalogued alternative is shown.
+   *
+   * A `menus.json` contribution cannot set it: the menus schema rejects it, which rejects the
+   * extension's whole `menus.json`.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  shortcut?: string;
 };
 
 /**
@@ -407,6 +424,7 @@ export const menuDocumentSchema = {
           required: ['id'],
         },
         {
+          // No `shortcut`: the platform fills it in, so contributions must not set it
           properties: {
             command: {
               description: 'Name of the PAPI command to run when this menu item is selected.',
