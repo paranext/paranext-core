@@ -55,9 +55,9 @@ beforeAll(() => {
 /**
  * This panel's own keys whose values are merged onto the `ProjectSelector`'s `localizedStrings` bag
  * as `ariaLabel`, `buttonPlaceholder` and `commandEmptyMessage`. Like the shared
- * `%projectSelector_*%` block they must resolve to a real value — the picker treats any localize
- * key as its own value as "not localized yet" and falls back to English, whatever the key's
- * prefix.
+ * `%projectSelector_*%` block they must resolve to a real value; see the header comment in
+ * `../../project-selector.test-utils` for why a stub's choice here decides which path a test
+ * takes.
  */
 const PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS: readonly LocalizeKey[] = [
   '%webView_checksSidePanel_projectFilter_projectsAndResources%',
@@ -184,13 +184,23 @@ describe("Checks side panel project selector — the panel's own strings unresol
     expect(trigger).not.toHaveTextContent('Select a project');
   });
 
-  it('renders no raw localization key in the picker trigger', () => {
+  it("keeps the panel's own empty message inside the popover", async () => {
+    // The trigger assertion above cannot reach this: `commandEmptyMessage` only renders once the
+    // popover is open. Any `%…%` key, whatever its prefix — a sweep narrowed to
+    // `%webView_checksSidePanel_` would miss the shared `%projectSelector_*%` block the popover
+    // also renders.
+    const RAW_KEY = /%[^%\s]+%/;
+    const user = setupUser();
     render(
       <ChecksSidePanel {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />,
     );
 
-    const trigger = screen.getByRole('combobox', { name: 'Your projects & resources' });
-    expect(trigger.textContent ?? '').not.toMatch(/%[^%\s]+%/);
+    await user.click(screen.getByRole('combobox', { name: 'Your projects & resources' }));
+    const popover = await screen.findByRole('dialog');
+
+    expect(await within(popover).findByText('No projects found')).toBeInTheDocument();
+    expect(within(popover).queryAllByText(RAW_KEY)).toHaveLength(0);
+    expect(within(popover).queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
   });
 });
 

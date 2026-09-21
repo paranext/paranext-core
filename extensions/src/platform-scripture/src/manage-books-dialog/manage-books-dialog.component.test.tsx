@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  makeBuiltInGroupings,
+  type ProjectSelectorGrouping,
+} from 'platform-bible-react/experimental';
+import { MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS } from '../manage-books.web-view';
 import {
   ManageBooksDialog,
   type ManageBooksDialogBookInfo,
@@ -11,6 +16,10 @@ import {
   type ManageBooksDialogProps,
   type MutationResult,
 } from './manage-books-dialog.component';
+import {
+  MANAGE_BOOKS_DIALOG_STRING_KEYS,
+  type ManageBooksDialogLocalizedStrings,
+} from './manage-books-dialog.types';
 import { installManageBooksJsdomShims, scrolledElements } from './manage-books-dialog.test-utils';
 
 let uninstallShims: () => void;
@@ -144,5 +153,129 @@ describe('ManageBooksDialog launch parameters', () => {
 
     expect(isSectionActive('create')).toBe(true);
     expect(isBookSelected(container, 'EXO')).toBe(true);
+  });
+});
+
+describe('ManageBooksDialog project pickers', () => {
+  // Built the way the web view builds it, so the order these tests pin is the order users see.
+  // Hand-listing the descriptors would pin an order the wiring layer never produces.
+  const WIRING_GROUPINGS: ProjectSelectorGrouping[] = makeBuiltInGroupings().filter((grouping) =>
+    MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+  );
+
+  // `projectId` ('WEB') is the dialog's own project and is excluded from the "other projects" the
+  // Based-on picker lists, so two MORE projects are needed to produce two versification buckets.
+  const VERSIFIED_PROJECTS: ManageBooksDialogProject[] = [
+    { id: 'WEB', shortName: 'WEB', name: 'World English Bible', versificationId: '4' },
+    { id: 'VUL', shortName: 'VUL', name: 'Vulgate', versificationId: '3' },
+    { id: 'KJV', shortName: 'KJV', name: 'King James Version', versificationId: '4' },
+  ];
+
+  const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+
+  /** Grouping options the open group-by menu offers, in order, by visible label. */
+  const groupingChoices = () =>
+    screen.getAllByRole('menuitemradio').map((item) => item.textContent?.trim());
+
+  /**
+   * Opens a picker, then the group-by menu inside that picker's own popover.
+   *
+   * The dialog has a second "Group by" control — the book grid's toggle group — so the trigger is
+   * found within the popover rather than anywhere in the document.
+   */
+  async function openGroupingMenu(user: ReturnType<typeof setupUser>, trigger: HTMLElement) {
+    await user.click(trigger);
+    const popover = await screen.findByRole('dialog');
+    await user.click(await within(popover).findByRole('button', { name: 'Group by' }));
+  }
+
+  it('offers the sidebar picker every grouping the wiring layer supplies', async () => {
+    const user = setupUser();
+    render(dialog({ projectSelectorGroupings: WIRING_GROUPINGS }));
+
+    const rail = await screen.findByTestId('manage-books-sidebar-project-trigger');
+    // The rail trigger stays disabled until the project list loads, which would swallow a click.
+    await waitFor(() => expect(within(rail).getByRole('combobox')).toBeEnabled());
+    await openGroupingMenu(user, within(rail).getByRole('combobox'));
+
+    await waitFor(() =>
+      expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Last used', 'Type']),
+    );
+  });
+
+  it('narrows the copy source picker to the groupings its rows carry data for', async () => {
+    const user = setupUser();
+    render(dialog({ initialSection: 'copy', projectSelectorGroupings: WIRING_GROUPINGS }));
+
+    // The picker renders only after projects load, which is later than the section becoming
+    // active — waiting on the section flag alone would race the query below.
+    await openGroupingMenu(user, await screen.findByRole('combobox', { name: 'Select project' }));
+
+    // MANAGE_BOOKS_COPY_FROM_GROUPING_IDS is an allow-list narrower than the list the wiring layer
+    // hands the dialog: the Copy "From" rows drop `lastUsedAt`, so offering "Last used" would
+    // bucket every row under one heading. The absence of 'Last used' is the load-bearing half.
+    await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Type']));
+  });
+
+  it('locks the create reference picker to versification with no way to regroup it', async () => {
+    const user = setupUser();
+    render(
+      dialog({
+        initialSection: 'create',
+        loadProjects: () => VERSIFIED_PROJECTS,
+        projectSelectorGroupings: WIRING_GROUPINGS,
+      }),
+    );
+
+    await waitFor(() => expect(isSectionActive('create')).toBe(true));
+    const reference = await screen.findByTestId('manage-books-create-reference-trigger');
+    await user.click(within(reference).getByRole('combobox'));
+
+    // Versification is the only axis worth switching to here, so the picker passes it as the sole
+    // grouping — which locks the list to it and drops the group-by affordance rather than
+    // exposing an inert one-item toggle.
+    await waitFor(() => expect(screen.getByText('English versification')).toBeInTheDocument());
+    expect(screen.getByText('Vulgate versification')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Group by' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ManageBooksDialog project pickers — dialog strings unresolved', () => {
+  // What `useLocalizedStrings` actually hands a web view before strings load, and permanently if
+  // the localization provider errors: every key seeded as its own value. Those are defined
+  // strings, so the dialog's `t()` helper has to judge them rather than rely on `??`.
+  const UNRESOLVED_STRINGS: ManageBooksDialogLocalizedStrings = Object.fromEntries(
+    MANAGE_BOOKS_DIALOG_STRING_KEYS.map((key) => [key, key]),
+  );
+
+  const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+
+  it("keeps each picker's own English rather than the picker's generic default", async () => {
+    render(dialog({ initialSection: 'copy', localizedStrings: UNRESOLVED_STRINGS }));
+
+    // Distinct names matter as much as correct ones: without the dialog's own fallbacks both
+    // comboboxes resolve to ProjectSelector's identical 'Projects & resources'.
+    const rail = await screen.findByTestId('manage-books-sidebar-project-trigger');
+    await waitFor(() => expect(within(rail).getByRole('combobox')).toBeEnabled());
+    expect(within(rail).getByRole('combobox')).toHaveAccessibleName('Project');
+    // The rail shows its placeholder until the active project lands in the loaded list. That
+    // placeholder is a dialog-owned fallback too, so it must be English rather than a raw key.
+    expect(within(rail).getByRole('combobox')).toHaveTextContent('Select project');
+
+    expect(await screen.findByRole('combobox', { name: 'Select project' })).toBeInTheDocument();
+  });
+
+  it('renders no raw localization key in the copy source picker, trigger or popover', async () => {
+    const user = setupUser();
+    render(dialog({ initialSection: 'copy', localizedStrings: UNRESOLVED_STRINGS }));
+
+    // Any `%…%` key, whatever its prefix — a sweep narrowed to `%manageBooks_` would miss the
+    // shared `%projectSelector_*%` block the popover also renders.
+    const RAW_KEY = /%[^%\s]+%/;
+    await user.click(await screen.findByRole('combobox', { name: 'Select project' }));
+    const popover = await screen.findByRole('dialog');
+
+    expect(within(popover).queryAllByText(RAW_KEY)).toHaveLength(0);
+    expect(within(popover).queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
   });
 });

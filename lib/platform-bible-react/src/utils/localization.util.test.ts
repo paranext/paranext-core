@@ -1,9 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import {
-  firstResolvedLocalizedString,
-  isResolvedLocalizedValue,
-  resolveLocalizedString,
-} from './localization.util';
+import { isResolvedLocalizedValue, resolveLocalizedString } from './localization.util';
 
 describe('resolveLocalizedString', () => {
   test('keeps real localized text', () => {
@@ -53,20 +49,5 @@ describe('isResolvedLocalizedValue', () => {
     expect(isResolvedLocalizedValue(undefined)).toBe(false);
     expect(isResolvedLocalizedValue('%projectSelector_clearAll%')).toBe(false);
     expect(isResolvedLocalizedValue('  ')).toBe(false);
-  });
-});
-
-describe('firstResolvedLocalizedString', () => {
-  test('takes the first candidate carrying real text', () => {
-    expect(firstResolvedLocalizedString('Primero', 'Second')).toBe('Primero');
-  });
-
-  test('skips past unresolved candidates rather than stopping at them', () => {
-    // The whole point: `??` would stop at the raw key, because a key is a defined string.
-    expect(firstResolvedLocalizedString('%a_key%', undefined, '  ', 'English')).toBe('English');
-  });
-
-  test('returns undefined when no candidate can be shown', () => {
-    expect(firstResolvedLocalizedString('%a_key%', undefined, '')).toBeUndefined();
   });
 });

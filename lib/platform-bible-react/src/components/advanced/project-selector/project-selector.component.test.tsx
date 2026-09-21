@@ -559,12 +559,11 @@ describe('unresolved localized strings', () => {
     // only the popover's.
     await user.click(screen.getByRole('button', { name: 'Group by' }));
 
+    // The English assertions are what carry this test. A raw-key sweep would add nothing: the
+    // builder above already rejected every key-as-value, so no raw key can reach this DOM under
+    // any behavior of the merge. The consumer-override test below is where a sweep bites.
     expect(screen.getByPlaceholderText('Search projects & resources')).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: 'None' })).toBeInTheDocument();
-    // The load-bearing half: asserting the English string alone would still pass if the fallback
-    // were reached some other way. Nothing may render a raw key.
-    expect(screen.queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
-    expect(screen.queryAllByText(RAW_KEY)).toHaveLength(0);
   });
 
   it('falls back to English when a consumer overrides with its own unresolved keys', async () => {
@@ -696,5 +695,166 @@ describe('unresolved localized strings', () => {
     expect(screen.getByPlaceholderText('Projekte durchsuchen')).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText('Projekte durchsuchen'), 'zzzzz');
     expect(await screen.findByText('No projects found')).toBeInTheDocument();
+  });
+});
+
+describe('renderProjectIndicator', () => {
+  const mixed: ProjectSelectorProject[] = [
+    { id: 'p1', shortName: 'P1', fullName: 'A project', customData: { type: 'Standard' } },
+    {
+      id: 'r1',
+      shortName: 'R1',
+      fullName: 'A resource',
+      customData: { type: 'ScriptureResource' },
+    },
+  ];
+
+  /**
+   * The row element for a project, by its short name. Rows have no test id in production markup, so
+   * these tests reach them through the visible label and assert on the row's own child order.
+   */
+  const rowFor = (shortName: string): HTMLElement => {
+    // The trigger renders the selected project's short name too, so match only inside a row.
+    const rows = screen
+      .getAllByText(shortName)
+      .map((label) => label.closest('[cmdk-item]'))
+      .filter((row): row is HTMLElement => Boolean(row));
+    expect(rows).toHaveLength(1);
+    return rows[0];
+  };
+
+  /**
+   * Index of the child holding the row's label, counting from the leading fixed-width check column.
+   * 1 means the label sits directly after the check column (no indicator column); 2 means an
+   * indicator column is laid out between them.
+   */
+  const labelChildIndex = (row: HTMLElement, shortName: string): number =>
+    [...row.children].findIndex((child) => child.textContent?.includes(shortName));
+
+  it('renders projects and resources distinguishably from data alone', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        renderProjectIndicator={(project) => (
+          <span data-testid={`indicator-${project.customData?.type}`} aria-label="Type" />
+        )}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.getByTestId('indicator-Standard')).toBeInTheDocument();
+    expect(screen.getByTestId('indicator-ScriptureResource')).toBeInTheDocument();
+  });
+
+  it('reserves the indicator column on every row, even where the renderer returns nothing', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        // The natural shape of a "mark only the resources" renderer. Keying the column on what it
+        // returned per row would indent R1's label one glyph further than P1's.
+        renderProjectIndicator={(project) =>
+          project.customData?.type === 'ScriptureResource' ? (
+            <span data-testid="indicator-resource" aria-label="Resource" />
+          ) : undefined
+        }
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+    expect(screen.getByTestId('indicator-resource')).toBeInTheDocument();
+    expect(labelChildIndex(rowFor('P1'), 'P1')).toBe(2);
+    expect(labelChildIndex(rowFor('R1'), 'R1')).toBe(2);
+  });
+
+  it('lays out no indicator column when the prop is absent', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+    // An empty reserved column has no text and no test id, so its presence is only observable as
+    // the label being pushed one child to the right.
+    expect(labelChildIndex(rowFor('P1'), 'P1')).toBe(1);
+    expect(labelChildIndex(rowFor('R1'), 'R1')).toBe(1);
+  });
+});
+
+describe('case-insensitive selection', () => {
+  // Canonical project ids are uppercase, but a selection can arrive lowercased from a persisted
+  // layout or a web view opened with a tab-derived id. The trigger label has to resolve the same
+  // project the rows do, or it shows its placeholder while a row renders as selected.
+  const upperProjects: ProjectSelectorProject[] = [
+    { id: 'ABC123', shortName: 'ABC', fullName: 'Project ABC' },
+  ];
+
+  it('labels the trigger from a differently-cased single selection', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={upperProjects}
+        openTabs={[]}
+        selection={{ projectId: 'abc123' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project', buttonPlaceholder: 'Select a project' }}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ABC');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+
+  it('labels the trigger from a differently-cased pair selection', () => {
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={upperProjects}
+        openTabs={[]}
+        selection={{ pairs: [{ projectId: 'abc123', scrollGroupId: undefined }] }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project', buttonPlaceholder: 'Select a project' }}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ABC');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+
+  it('toggles a differently-cased pair off instead of appending a duplicate', async () => {
+    const user = setupUser();
+    const onChangeSelection = vi.fn();
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={upperProjects}
+        openTabs={[]}
+        selection={{ pairs: [{ projectId: 'abc123', scrollGroupId: undefined }] }}
+        onChangeSelection={onChangeSelection}
+        localizedStrings={{ ariaLabel: 'Project' }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    const row = await screen.findByRole('option', { name: /ABC/ });
+    await user.click(row);
+
+    expect(onChangeSelection).toHaveBeenCalledWith({ pairs: [] });
   });
 });

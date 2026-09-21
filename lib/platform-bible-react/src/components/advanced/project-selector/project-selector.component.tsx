@@ -390,6 +390,28 @@ type CommonProps = {
    * are available.
    */
   defaultGrouping?: string | 'none';
+  /**
+   * Render an indicator for a row — typically a small icon distinguishing one kind of row from
+   * another, derived from the caller's own `customData`.
+   *
+   * The selector ships no taxonomy and no default mapping: `customData` is a free-form bag whose
+   * meaning belongs to whoever produced the list (Paratext project types and DBL resource types are
+   * two different vocabularies, neither owned by this library), so the caller decides both what a
+   * value means and what it looks like. Note that the conventional `customData.type` key carries a
+   * project TYPE, not a project/resource discriminator — a caller who needs the latter has to pack
+   * its own flag.
+   *
+   * **The returned node must carry its own accessible name** (an `aria-label`, or visually hidden
+   * text) unless the row's own text already conveys the distinction. The selector renders it
+   * verbatim and adds no `aria-hidden` and no description of its own, so an unlabeled icon is
+   * information conveyed by sight alone (WCAG 1.1.1). Mark it `aria-hidden` only when the name
+   * would be redundant.
+   *
+   * Runs during the selector's own render, once per filtered row, on every render, so it must be
+   * pure, cheap, and free of hooks — the row count changes as the user filters, and a hook called
+   * here would change the selector's hook count between renders and throw.
+   */
+  renderProjectIndicator?: (project: ProjectSelectorProject) => ReactNode;
 };
 
 export type ProjectSelectorProps =
@@ -471,9 +493,26 @@ type RowRenderProps = {
   onOpen: ((row: ProjectRow) => void) | undefined;
   /** Forwarded by the parent so it can scroll the selected row into view when the popover opens. */
   selectedRowRef?: RefObject<HTMLDivElement | null>;
+  /** Resolved by the parent from `renderProjectIndicator`. */
+  indicator?: ReactNode;
+  /**
+   * Whether to lay out the indicator column at all, keyed on whether the caller supplied a renderer
+   * rather than on what it returned for THIS row — a renderer that indicates only some rows must
+   * not shift the other rows' labels.
+   */
+  reserveIndicatorSlot?: boolean;
 };
 
-function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }: RowRenderProps) {
+function ProjectRowView({
+  row,
+  mode,
+  strings,
+  onClick,
+  onOpen,
+  selectedRowRef,
+  indicator,
+  reserveIndicatorSlot,
+}: RowRenderProps) {
   // We control Radix Tooltip's `open` prop manually because Radix's built-in pointer/focus
   // auto-detection does not fire on cmdk's `<CommandItem>` trigger (data-state stays "closed"
   // even after pointerenter / pointermove / focus). Tracking hover ourselves bypasses that
@@ -579,6 +618,11 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
       </span>
+      {reserveIndicatorSlot && (
+        <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
+          {indicator}
+        </span>
+      )}
       {/* Row label uses a 2-line layout — shortName on top, fullName muted
           below. Each line truncates independently. Tooltip-on-clip still
           works because the wrapping span is what scrollWidth/clientWidth is
@@ -755,6 +799,22 @@ function resolveDefaultActiveGrouping(
 }
 
 /**
+ * Look a project up by id, case-insensitively. Canonical project ids are uppercase, but a selection
+ * can reach this component lowercased — from a persisted layout or a web view opened with a
+ * tab-derived id — and the rows already match those two spellings as one project (see
+ * `normalizeProjectId`), so the trigger label has to as well or it shows its placeholder while a
+ * row renders as selected.
+ */
+function findProjectById(
+  projects: readonly ProjectSelectorProject[],
+  projectId: string | undefined,
+): ProjectSelectorProject | undefined {
+  if (projectId === undefined) return undefined;
+  const normalizedId = normalizeProjectId(projectId);
+  return projects.find((p) => normalizeProjectId(p.id) === normalizedId);
+}
+
+/**
  * Combo-box project picker with three modes:
  *
  * - `project` — single-select, one row per project; chips list every open scroll group as metadata
@@ -771,6 +831,11 @@ function resolveDefaultActiveGrouping(
 export function ProjectSelector(props: ProjectSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  // Memoized on the prop's identity, which is all a component can key on. Note it does NOT hold on
+  // the unresolved path: `useLocalizedStrings` rebuilds its seed object in the render body and
+  // returns it on every platform-error render, so the prop is a fresh object each time and this
+  // recomputes. That is affordable — the work is a handful of anchored regex tests — but do not
+  // read this memo as a guarantee.
   const strings = useMemo(() => resolveStrings(props.localizedStrings), [props.localizedStrings]);
   // Effective grouping list:
   //
@@ -973,7 +1038,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
     switch (props.mode) {
       case 'project': {
-        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        const selected = findProjectById(props.projects, props.selection.projectId);
         let text = selected ? selected.shortName : strings.buttonPlaceholder;
         if (
           selected &&
@@ -993,7 +1058,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         type Tuple = { project: ProjectSelectorProject; scrollGroupId?: ScrollGroupId };
         const tuples: Tuple[] = [];
         pairs.forEach((pair) => {
-          const project = props.projects.find((p) => p.id === pair.projectId);
+          const project = findProjectById(props.projects, pair.projectId);
           if (project) tuples.push({ project, scrollGroupId: pair.scrollGroupId });
         });
         if (tuples.length === 0) {
@@ -1023,7 +1088,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         };
       }
       case 'projectScrollGroup': {
-        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        const selected = findProjectById(props.projects, props.selection.projectId);
         if (!selected) {
           const text = strings.buttonPlaceholder;
           return { node: text, title: text };
@@ -1213,6 +1278,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                         onClick={handleRowClick}
                         onOpen={openButtonHandler}
                         selectedRowRef={selectedRowRef}
+                        indicator={props.renderProjectIndicator?.(row.project)}
+                        reserveIndicatorSlot={Boolean(props.renderProjectIndicator)}
                       />
                     ))}
                   </CommandGroup>

@@ -46,7 +46,7 @@ import {
   ScopeWithRange,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
-  firstResolvedLocalizedString,
+  resolveLocalizedString,
   makeBuiltInGroupings,
   summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';
@@ -143,6 +143,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_showingResultsOfMore%',
   '%webView_find_showRecentSearches%',
   '%webView_find_toggleFilters%',
+  '%webView_find_filtersPanel%',
   '%webView_find_verseTextOnly%',
   // Preview-options keys live with their component; spread them so the two lists can't drift.
   ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
@@ -976,15 +977,15 @@ export function Find({
       // Each override falls back to Find's own English, not the picker's. The picker's generic
       // "Select a project" would be actively wrong here: this placeholder reports that there is
       // nothing to pick, so instructing the user to pick something contradicts it.
-      buttonPlaceholder: firstResolvedLocalizedString(
+      buttonPlaceholder: resolveLocalizedString(
         localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
         'No open projects or resources',
       ),
-      commandEmptyMessage: firstResolvedLocalizedString(
+      commandEmptyMessage: resolveLocalizedString(
         localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
         'No projects found',
       ),
-      ariaLabel: firstResolvedLocalizedString(
+      ariaLabel: resolveLocalizedString(
         localizedStrings['%webView_find_projectSelector_label%'],
         'Project',
       ),
@@ -1023,7 +1024,16 @@ export function Find({
   };
 
   return (
-    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
+    // Scrolling here keeps `max-h-screen` from ever handing overflow to the document. If the document
+    // scrolled, the search re-run that follows every filter change would move the results across the
+    // viewport boundary and toggle its scrollbar, and each toggle narrows the viewport by the
+    // scrollbar's width — shifting this right-aligned toolbar, and the filters popover anchored to it,
+    // sideways. The loading skeleton above the results list gives way entirely, and the list itself
+    // down to its floor, so at normal panel heights nothing reaches this container and it shows no
+    // scrollbar of its own. Once a panel is short enough that the header, that floor and the status
+    // bar no longer fit, this container does scroll — which is what keeps the status bar's Cancel
+    // button reachable, at the cost of the toolbar shifting while a search runs.
+    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
         {/* Project selector + Find/Replace toggle share one row. The responsiveness guideline caps a
@@ -1164,6 +1174,7 @@ export function Find({
             setIsRegexAllowed={setIsRegexAllowed}
             localizedStrings={{
               toggleFilters: localizedStrings['%webView_find_toggleFilters%'],
+              filtersPanel: localizedStrings['%webView_find_filtersPanel%'],
               matchContentIn: localizedStrings['%webView_find_matchContentIn%'],
               allText: localizedStrings['%webView_find_allText%'],
               allTextTooltip: localizedStrings['%webView_find_allText_tooltip%'],
@@ -1390,7 +1401,11 @@ export function Find({
           is about to auto-search (debounce pending, or waiting on the data provider) — otherwise a
           restored/carried-over term would flash the idle prompt below before the search starts. */}
       {resultsAreaState === 'skeleton' && (
-        <div className="tw:space-y-2">
+        // `overflow-hidden` lets these placeholder cards give way in a short panel instead of pushing
+        // the root past its height cap, where the root would grow its own scrollbar for the length of
+        // the search and narrow the toolbar, sliding the filters popover anchored to it sideways.
+        // `p-px` keeps that clip from cutting off each card's 1px ring outline.
+        <div className="tw:space-y-2 tw:overflow-hidden tw:p-px">
           {Array.from({ length: 5 }).map((_value, index) => (
             // As this is a placeholder, it is safe to use the index as a key
             // eslint-disable-next-line react/no-array-index-key
@@ -1414,7 +1429,16 @@ export function Find({
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={resultsContainerRef}
-        className="tw:min-h-48 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2"
+        // A floor of roughly one and a half result cards, rather than this list's natural minimum
+        // (zero, since a scroll container can always shrink): without one, a short panel squeezes the
+        // list away entirely and its results, and the idle prompt inside it, become unreachable. The
+        // floor is dropped while the loading skeleton is up, where this list is empty and the space
+        // would be blank — and where reserving it pushes the root into scrolling, which shifts the
+        // toolbar. Raising it eats the same budget: the root's height also covers its padding, the
+        // gaps between its children, the header and the status bar.
+        className={`tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2 ${
+          resultsAreaState === 'skeleton' ? '' : 'tw:min-h-24'
+        }`}
         // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}

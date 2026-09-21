@@ -19,6 +19,16 @@ const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
  *   one, and leaves the control with no accessible name. That reads as broken rather than as
  *   untranslated, so it belongs on the fallback path too.
  *
+ * TODO(PT-4673): ~83 sites repo-wide still read localized strings with the dead
+ * `localizedStrings[key] ?? fallback` idiom and should route through here instead. Two older copies
+ * of this rule also remain on a weaker test (`!value || value === key`, which misses a _different_
+ * `%…%` key and whitespace-only text): `localizedOrEnglish` in
+ * `src/renderer/components/overlays/overlay-connection-lost.component.tsx` and
+ * `createCrashedViewLocalizer` in `src/renderer/components/crashed-view.util.ts`. Both render the
+ * crash and connection-lost screens, which is exactly the state an unresolved string is most likely
+ * to be in, and both can reach this helper — the renderer already imports
+ * `platform-bible-react/experimental` widely.
+ *
  * @param value The value read out of a localized-strings map, if any.
  * @returns Whether `value` carries real localized text.
  */
@@ -35,21 +45,4 @@ export function isResolvedLocalizedValue(value: string | undefined): value is st
  */
 export function resolveLocalizedString(value: string | undefined, fallback: string): string {
   return isResolvedLocalizedValue(value) ? value : fallback;
-}
-
-/**
- * The first candidate that can actually be shown to a user, or `undefined` if none can.
- *
- * For call sites that have more than one source to try before reaching a literal they own — a
- * consumer's own localized override, then a value read from a setting, then English. Each candidate
- * is judged by {@link isResolvedLocalizedValue}, so an unresolved lookup is skipped rather than
- * rendered, which a nullish chain (`a ?? b ?? c`) cannot do.
- *
- * @param candidates Values to try, best first.
- * @returns The first candidate carrying real text, or `undefined` when none does.
- */
-export function firstResolvedLocalizedString(
-  ...candidates: (string | undefined)[]
-): string | undefined {
-  return candidates.find(isResolvedLocalizedValue);
 }

@@ -173,6 +173,29 @@ export type ProjectSelectorGrouping = {
 		key: string;
 		heading: string;
 	}) => number;
+	/**
+	 * Row order within each bucket, as a standard `Array.prototype.sort` comparator: return a
+	 * negative number to put `a` before `b`, positive to put `b` first, `0` for a tie.
+	 *
+	 * Omit it to use the selector's canonical order (alphabetical by `shortName`, tie-broken by
+	 * scroll group). Supply one when the bucket's meaning implies an order the selector cannot know —
+	 * a leaderboard-style bucket ordered by a caller-side score, for example, where alphabetical
+	 * order carries no meaning. The built-in `lastUsed` grouping deliberately supplies none: it reads
+	 * `lastUsedAt` as a presence flag for bucketing only, and its rows stay alphabetical.
+	 *
+	 * Ties fall back to the canonical order, so rows for one project fanned across several scroll
+	 * groups — which a comparator reading only `ProjectSelectorProject` cannot tell apart — keep a
+	 * stable sequence.
+	 *
+	 * Ignored in three places, because those lists are not bucketed by this descriptor: the
+	 * `'openTabs'` and `'selection'` groupings, which build their sections themselves; any grouping
+	 * with no `getGroupKey`, which falls through to a single flat section; and the unknown bucket,
+	 * which stays canonically ordered because it collects the rows the grouping could NOT classify —
+	 * an order derived from the grouping's own axis would be meaningless for exactly those rows. Note
+	 * the resulting list can mix two orders, e.g. a score-ordered bucket above an alphabetical
+	 * "Other".
+	 */
+	compareProjects?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
 };
 /**
  * The platform-level localization keys that back every shared ProjectSelector string. Consumers
@@ -414,6 +437,28 @@ type CommonProps = {
 	 * are available.
 	 */
 	defaultGrouping?: string | "none";
+	/**
+	 * Render an indicator for a row — typically a small icon distinguishing one kind of row from
+	 * another, derived from the caller's own `customData`.
+	 *
+	 * The selector ships no taxonomy and no default mapping: `customData` is a free-form bag whose
+	 * meaning belongs to whoever produced the list (Paratext project types and DBL resource types are
+	 * two different vocabularies, neither owned by this library), so the caller decides both what a
+	 * value means and what it looks like. Note that the conventional `customData.type` key carries a
+	 * project TYPE, not a project/resource discriminator — a caller who needs the latter has to pack
+	 * its own flag.
+	 *
+	 * **The returned node must carry its own accessible name** (an `aria-label`, or visually hidden
+	 * text) unless the row's own text already conveys the distinction. The selector renders it
+	 * verbatim and adds no `aria-hidden` and no description of its own, so an unlabeled icon is
+	 * information conveyed by sight alone (WCAG 1.1.1). Mark it `aria-hidden` only when the name
+	 * would be redundant.
+	 *
+	 * Runs during the selector's own render, once per filtered row, on every render, so it must be
+	 * pure, cheap, and free of hooks — the row count changes as the user filters, and a hook called
+	 * here would change the selector's hook count between renders and throw.
+	 */
+	renderProjectIndicator?: (project: ProjectSelectorProject) => React$1.ReactNode;
 };
 type ProjectSelectorProps = (CommonProps & {
 	mode: "project";
@@ -477,25 +522,6 @@ export declare const NO_GROUPING = "none";
  */
 export declare function ProjectSelector(props: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
- * Whether a value read out of a localized-strings map carries text that can actually be shown to a
- * user.
- *
- * Three states fail that test, and only one of them is nullish:
- *
- * - `undefined` — the lookup produced nothing, or a builder emitted a field it could not populate.
- * - A raw localization key — `useLocalizedStrings` seeds its result with `{ [key]: key }` and keeps
- *   that seed for the whole first render pass, and permanently if the localization provider errors.
- *   A key is a non-empty string, so the usual `localizedStrings[key] ?? 'Default'` idiom does NOT
- *   fall back: it hands back the literal `%some_key%` and renders it at the user.
- * - Blank or whitespace-only text — a label of spaces is indistinguishable on screen from an empty
- *   one, and leaves the control with no accessible name. That reads as broken rather than as
- *   untranslated, so it belongs on the fallback path too.
- *
- * @param value The value read out of a localized-strings map, if any.
- * @returns Whether `value` carries real localized text.
- */
-export declare function isResolvedLocalizedValue(value: string | undefined): value is string;
-/**
  * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
  *
  * @param value The value read out of a localized-strings map, if any.
@@ -503,18 +529,6 @@ export declare function isResolvedLocalizedValue(value: string | undefined): val
  * @returns `value` when {@link isResolvedLocalizedValue} accepts it, `fallback` otherwise.
  */
 export declare function resolveLocalizedString(value: string | undefined, fallback: string): string;
-/**
- * The first candidate that can actually be shown to a user, or `undefined` if none can.
- *
- * For call sites that have more than one source to try before reaching a literal they own — a
- * consumer's own localized override, then a value read from a setting, then English. Each candidate
- * is judged by {@link isResolvedLocalizedValue}, so an unresolved lookup is skipped rather than
- * rendered, which a nullish chain (`a ?? b ?? c`) cannot do.
- *
- * @param candidates Values to try, best first.
- * @returns The first candidate carrying real text, or `undefined` when none does.
- */
-export declare function firstResolvedLocalizedString(...candidates: (string | undefined)[]): string | undefined;
 /**
  * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
  * the result as the `localizedStrings` prop.

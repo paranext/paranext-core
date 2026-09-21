@@ -9,6 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import WebSocket from 'ws';
+import { suppressOnboardingTour } from './onboarding-tour.page';
 import { WINDOW_ID_SHAPE_SOURCE } from './window-id-shape';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
@@ -558,6 +559,29 @@ function unreachableDescription(lastReadError: unknown): string {
 }
 
 /**
+ * The project root the most recent {@link launchElectronApp} pointed the app at through
+ * `PLATFORM_BIBLE_PROJECT_ROOT_FOLDER`, or `undefined` when that launch did not ask for one. Set
+ * per launch, so a later launch without `isolatedProjectRoot` clears it.
+ */
+let isolatedProjectRootDir: string | undefined;
+
+/**
+ * Throws unless the most recent launch used `isolatedProjectRoot: true`, returning that root. Call
+ * it before any PAPI write that mutates project data (a setting, a chapter's USFM): the helpers
+ * address the sample project by its fixed id and the app on the fixed PAPI port, so without an
+ * isolated root the same call would rewrite the developer's own copy of the sample project, with no
+ * restore.
+ */
+export function requireIsolatedProjectRoot(): string {
+  if (!isolatedProjectRootDir || !isolatedProjectRootDir.startsWith(os.tmpdir()))
+    throw new Error(
+      'This helper writes project data and may only run against an app launched with ' +
+        '`isolatedProjectRoot: true` (electronLaunchOptions); the current launch was not.',
+    );
+  return isolatedProjectRootDir;
+}
+
+/**
  * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
  * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
  * user-data directory path, and a promise that resolves when the app closes.
@@ -591,6 +615,9 @@ export async function launchElectronApp(
   // isolatedProjectRoot. Only the isolatedProjectRoot branch (or an explicit envOverride) below sets it.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { ELECTRON_RUN_AS_NODE, PLATFORM_BIBLE_PROJECT_ROOT_FOLDER, ...restEnv } = process.env;
+  isolatedProjectRootDir = opts.isolatedProjectRoot
+    ? path.join(userDataDir, 'projects')
+    : undefined;
   const env = {
     ...restEnv,
     NODE_ENV: 'development',
@@ -2293,13 +2320,6 @@ export function describeInconclusiveOverlayTimeout(originalError: unknown): Erro
   );
 }
 
-/**
- * LocalStorage key persisting onboarding-tour completion. Mirrors ONBOARDING_TOUR_DONE_KEY in
- * src/renderer/components/onboarding-tour/onboarding-tour.store.ts — keep in sync (renderer source
- * cannot be imported into the Playwright Node context).
- */
-export const ONBOARDING_TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
-
 /** Options accepted by {@link waitForAppReady}. */
 export interface WaitForAppReadyOptions {
   /**
@@ -2326,12 +2346,8 @@ export interface WaitForAppReadyOptions {
  * full-screen initialization overlay to clear. The overlay lingers while async services (settings,
  * theme) finish initializing — it must be gone before tests interact with the UI.
  *
- * Unless `allowOnboardingTour` is set, also suppresses the onboarding tour: in Simple mode with a
- * fresh profile the tour opens automatically (and asynchronously — it waits for the dock layout and
- * localized strings), and its full-screen overlay blocks all pointer events. Writing the done flag
- * makes `OnboardingTour` (which re-reads it each render) refuse to open from that point on, closing
- * the race a visibility check alone would leave; an instance that already opened before the flag
- * landed is dismissed with Escape.
+ * Unless `allowOnboardingTour` is set, also suppresses the onboarding tour — see
+ * {@link suppressOnboardingTour} for why and how.
  */
 export async function waitForAppReady(
   page: Page,
@@ -2363,18 +2379,7 @@ export async function waitForAppReady(
     // waitForOverlayGone reported it.
     throw gateOutcome === 'inconclusive' ? describeInconclusiveOverlayTimeout(error) : error;
   }
-  if (!allowOnboardingTour) {
-    await page.evaluate((key) => {
-      localStorage.setItem(key, 'true');
-    }, ONBOARDING_TOUR_DONE_KEY);
-    // The tour-specific test id (not a generic modal-dialog selector) so an unrelated dialog —
-    // e.g. a real startup error — is never silently Escape-dismissed here.
-    const tourDialog = page.getByTestId('tour-dialog');
-    if (await tourDialog.isVisible()) {
-      await page.keyboard.press('Escape');
-      await expect(tourDialog).not.toBeVisible({ timeout: 5000 });
-    }
-  }
+  if (!allowOnboardingTour) await suppressOnboardingTour(page);
 }
 
 /**

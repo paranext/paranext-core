@@ -15,7 +15,7 @@ import {
   buildSelectionGroupingStrings,
   makeBuiltInGroupings,
   makeSelectionGrouping,
-  firstResolvedLocalizedString,
+  resolveLocalizedString,
   type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
@@ -774,11 +774,11 @@ global.webViewComponent = function ChecklistWebView({
   // owns, because the picker's own English default ("Select a project") is too generic to identify
   // which of the two toolbar pickers a screen reader has landed on. Mirrors
   // `%markersChecklist_toolbar_*%` in contributions/localizedStrings.json.
-  const comparativeProjectsLabel = firstResolvedLocalizedString(
+  const comparativeProjectsLabel = resolveLocalizedString(
     localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
     'Select comparative projects',
   );
-  const primaryProjectPickerLabel = firstResolvedLocalizedString(
+  const primaryProjectPickerLabel = resolveLocalizedString(
     localizedStrings['%markersChecklist_toolbar_primaryProject%'],
     'Select primary Scripture text',
   );

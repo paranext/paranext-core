@@ -1,9 +1,10 @@
 @use '../../styles/vars';
+@use './tab-bar-metrics';
 
 // Base class for panel buttons with shared styles
 %panel-button-base {
-  height: 30px;
-  width: 30px;
+  height: tab-bar-metrics.$panel-button-size;
+  width: tab-bar-metrics.$panel-button-size;
   color: var(--foreground);
   border-radius: vars.$space--sm;
 
@@ -16,8 +17,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding-inline: 16px;
-  padding-block: 8px;
+  // No inline padding: under `border-box`, padding plus border wider than `width` sets the used
+  // width instead, and the tab-bar drop zone's hit areas (tab-bar-drop-zone.component.scss) rely on
+  // these buttons being exactly `$panel-button-size` wide. The icon is centered either way.
+  padding-inline: 0;
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.25rem;

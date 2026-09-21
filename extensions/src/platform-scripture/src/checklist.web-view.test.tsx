@@ -103,8 +103,11 @@ vi.mock('@papi/frontend', () => {
 });
 
 vi.mock('@papi/frontend/react', async () => {
-  // Imported inside the factory: a hoisted `vi.mock` factory must not close over the file's
-  // top-level import bindings. Aliased because the same names are bound at the top level.
+  // Imported inside the factory: `vi.mock` factories are hoisted above the file's imports, so a
+  // top-level binding may still be in its temporal dead zone when the factory runs. One rule, no
+  // exceptions — whether the helper happens to be initialized first depends on module load order,
+  // which is not a property a test should rest on. Aliased because the same names are bound at the
+  // top level.
   const { isProjectSelectorSharedKey: isSharedKey, localizedValueFor: valueFor } = await import(
     './project-selector.test-utils'
   );
@@ -126,10 +129,8 @@ vi.mock('@papi/frontend/react', async () => {
 
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
-  // Imported inside the factory rather than at the top of the file: `react` is a dependency of the
-  // module this factory mocks, so a top-level import binding for it may still be in its temporal
-  // dead zone when the hoisted factory runs. Bindings from `./project-selector.test-utils` are safe
-  // by contrast — nothing in the mocked module graph imports it, so it is fully initialized first.
+  // Imported inside the factory, for the same reason as above. Aliased where the name is also
+  // bound at the top level.
   const { useEffect, useState: useStateInMock } = await import('react');
   return {
     ...original,
@@ -242,10 +243,9 @@ describe('ChecklistWebView recently-opened-projects wiring', () => {
   });
 });
 
-// The module-level `useLocalizedStrings` stub hands a `%markersChecklist_*%` key back as its own
-// value, which is what the real hook does before strings load and on a platform error. Such a value
-// is unresolved, so the picker would fall back to its own generic English — the web view has to
-// supply its specific wording itself for these to render.
+// The module-level stub leaves `%markersChecklist_*%` keys echoed as their own values, which is
+// the unresolved path (see `./project-selector.test-utils`). The picker would fall back to its own
+// generic English there, so the web view has to supply its specific wording itself.
 describe('ChecklistWebView picker labels when its own strings are unresolved', () => {
   const OTHER_PROJECTS: MockProject[] = [
     { id: 'project-9', shortName: 'P9', fullName: 'Project Nine' },

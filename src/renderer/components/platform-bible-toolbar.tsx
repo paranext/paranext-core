@@ -54,6 +54,7 @@ import {
   Toolbar,
   ToolbarCompoundLabel,
   Tooltip,
+  TOOLTIP_DELAY_MS,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
@@ -67,8 +68,6 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import { CSSProperties, ReactNode, useCallback, useMemo } from 'react';
-
-const TOOLTIP_DELAY = 300;
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
@@ -526,7 +525,7 @@ export function PlatformBibleToolbar() {
                 it contributes no gap-2 spacing while staying in the DOM at zero size — which is
                 how Tour skips the step.
                 In plain Platform.Bible the wrapper is always empty and the tour runs with four
-                stops rather than five: Send/Receive ships only in Paratext 10 Studio, so
+                stops rather than five: Send/Receive ships only in Paratext 10, so
                 `platformGetResources.isSendReceiveAvailable` settles to `false`, and no dotnet
                 sync can raise `hasBackendSynced` either (`GetSyncActivity` is hardcoded idle in
                 `ParatextProjectSendReceiveService`). A four-stop tour in this build is correct,
@@ -559,7 +558,7 @@ export function PlatformBibleToolbar() {
               )}
             </div>
             {marketingVersion !== '' && (
-              <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+              <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge
@@ -580,7 +579,7 @@ export function PlatformBibleToolbar() {
         }
       >
         {isPowerMode && (
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+          <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

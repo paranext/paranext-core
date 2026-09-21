@@ -7,7 +7,7 @@ import type { BundledComponent, Override, ProgramDelivery, SeparateProgram } fro
 
 /**
  * A third-party program a downstream product redistributes as a separate executable and invokes as
- * a subprocess - Mercurial in Paratext 10 Studio is the live case.
+ * a subprocess - Mercurial in Paratext 10 is the live case.
  *
  * Neither package graph can see it: on Windows it arrives as a NuGet package whose only content is
  * the program, on macOS as a tarball fetched at install time, on Linux as a Debian package staged

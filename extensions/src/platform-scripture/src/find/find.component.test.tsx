@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
@@ -60,8 +60,8 @@ beforeAll(() => {
 /**
  * Find's own keys whose values are merged onto the `ProjectSelector`'s `localizedStrings` bag as
  * `ariaLabel`, `buttonPlaceholder` and `commandEmptyMessage`. Like the shared `%projectSelector_*%`
- * block they must resolve to a real value — the picker treats any localize key as its own value as
- * "not localized yet" and falls back to English, whatever the key's prefix.
+ * block they must resolve to a real value; see the header comment in
+ * `../project-selector.test-utils` for why a stub's choice here decides which path a test takes.
  */
 const PICKER_BOUND_FIND_KEYS: readonly LocalizeKey[] = [
   '%webView_find_projectSelector_label%',
@@ -307,6 +307,11 @@ function openProjectSelector(user: ReturnType<typeof setupUser>) {
   return user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL }));
 }
 
+/** Opens the Find filters panel, which is where every filter control lives */
+function openFilters(user: ReturnType<typeof setupUser>) {
+  return user.click(screen.getByRole('button', { name: 'Toggle filters' }));
+}
+
 describe("Find project selector — Find's own strings unresolved", () => {
   // Every key comes back as itself, which is what `useLocalizedStrings` hands over before strings
   // load and permanently on a platform error. The picker treats those as unresolved, so without
@@ -325,11 +330,20 @@ describe("Find project selector — Find's own strings unresolved", () => {
     expect(trigger).not.toHaveTextContent('Select a project');
   });
 
-  it('renders no raw localization key in the picker trigger', () => {
+  it("keeps Find's own empty message inside the popover", async () => {
+    // The trigger assertion above cannot reach this: `commandEmptyMessage` only renders once the
+    // popover is open. Any `%…%` key, whatever its prefix — a sweep narrowed to `%webView_find_`
+    // would miss the shared `%projectSelector_*%` block the popover also renders.
+    const RAW_KEY = /%[^%\s]+%/;
+    const user = setupUser();
     render(<Find {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />);
 
-    const trigger = screen.getByRole('combobox', { name: 'Project' });
-    expect(trigger.textContent ?? '').not.toMatch(/%[^%\s]+%/);
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    const popover = await screen.findByRole('dialog');
+
+    expect(await within(popover).findByText('No projects found')).toBeInTheDocument();
+    expect(within(popover).queryAllByText(RAW_KEY)).toHaveLength(0);
+    expect(within(popover).queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
   });
 });
 
@@ -500,6 +514,7 @@ const STRINGS = {
   '%webView_find_showRecentSearches%': 'Show recent searches',
   '%webView_find_recent%': 'Recent',
   '%webView_find_toggleFilters%': 'Toggle filters',
+  '%webView_find_filtersPanel%': 'Search filters',
   '%webView_find_matchContentIn%': 'Match content in',
   '%webView_find_allText%': 'Any text',
   '%webView_find_allText_tooltip%': 'Including introductions, titles, headings, etc.',
@@ -546,6 +561,24 @@ const STRINGS = {
   '%webView_find_extraMaterialNotSearchedScopeResults%':
     "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.",
 };
+
+/**
+ * Drains the `setTimeout` Radix returns focus from. The panel is already unmounted a full macrotask
+ * before focus settles, so asserting without this reads the caret mid-flight — still where it was
+ * put — and passes whether or not it is taken away next.
+ */
+async function settleFocus() {
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+}
+
+/** Gets the Find search box, which sits outside the filters panel */
+function getSearchInput() {
+  return screen.getByPlaceholderText(STRINGS['%webView_find_searchPlaceholder%']);
+}
 
 /** `buildProps` with the English string map swapped in, for the suites below. */
 function buildLifecycleProps(overrides: Partial<FindProps>): FindProps {
@@ -971,11 +1004,6 @@ describe('Find — an unrunnable query with results still on screen', () => {
 // default to off. A regression that dropped the wiring — or shipped either one enabled — would
 // silently change every search, and nothing else in this suite would notice.
 describe('Find — whitespace and diacritic tolerance toggles', () => {
-  /** Opens the filters dropdown, which is where both toggles live */
-  async function openFilters(user: ReturnType<typeof setupUser>) {
-    await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
-  }
-
   it.each([
     ['Ignore whitespace differences', 'setIgnoreWhitespaceDifferences'] as const,
     ['Ignore diacritics', 'setIgnoreDiacritics'] as const,
@@ -1010,6 +1038,238 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
       expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveClass('tw:bg-muted');
     },
   );
+});
+
+// These exist because the filter controls are plain form controls (radio groups, checkboxes), not
+// menu items. Housing them in a Radix menu makes them unreachable by keyboard: menu content calls
+// preventDefault on Tab, and its arrow handling only walks items registered in its roving-focus
+// collection — which plain form controls never join. A regression back to a menu container would
+// leave the panel mouse-only, and nothing else in this suite would notice.
+describe('Find — filters panel keyboard accessibility', () => {
+  it('puts focus on the first filter control as soon as the panel opens', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('radio', { name: 'Any text' })).toHaveFocus();
+  });
+
+  // The explanation beside "Any text" describes the radio itself. A tab stop of its own would sit
+  // inside the radio group, where Tab never reaches it whenever the other radio is the selected one.
+  it('describes "Any text" with its explanation', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('radio', { name: 'Any text' })).toHaveAccessibleDescription(
+      'Including introductions, titles, headings, etc.',
+    );
+  });
+
+  it('describes "Ignore whitespace differences" with its explanation', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Ignore whitespace differences' }),
+    ).toHaveAccessibleDescription(
+      'Match any run of spaces in the text where the search has spaces.',
+    );
+  });
+
+  it.each([['Match content in'], ['Match boundaries']])(
+    'names the "%s" group after its legend',
+    async (name) => {
+      const user = setupUser();
+      render(<Find {...buildLifecycleProps({})} />);
+
+      await openFilters(user);
+
+      expect(screen.getByRole('group', { name })).toBeInTheDocument();
+    },
+  );
+
+  // Each radio group is a single tab stop (roving tabindex), so Tab crosses between groups rather
+  // than visiting every radio.
+  it('moves focus to the next group of controls when the user presses Tab', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+
+    expect(screen.getByRole('radio', { name: 'Anywhere' })).toHaveFocus();
+  });
+
+  // The key is held rather than tapped. Radix moves focus on a timer and selects the newly focused
+  // radio only while an arrow key is still down; a tap releases the key before that timer fires.
+  it('moves to and selects the next radio option when the down arrow is pressed', async () => {
+    const user = setupUser();
+    const setSearchTextType = vi.fn();
+    render(<Find {...buildLifecycleProps({ setSearchTextType })} />);
+
+    await openFilters(user);
+    await user.keyboard('{ArrowDown>}{/ArrowDown}');
+
+    await waitFor(() => expect(setSearchTextType).toHaveBeenCalledWith('verseOnly'));
+    expect(screen.getByRole('radio', { name: 'Verse text only' })).toHaveFocus();
+  });
+
+  // Leaving the panel with Shift+Tab dismisses it, so the question is where focus goes. The panel is
+  // portalled after the rest of the web view, so without help it lands at the bottom of the Find
+  // panel, nowhere near the control the user was on.
+  it('hands focus back to the filters button when Shift+Tab leaves the panel', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab({ shift: true });
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  it('hands focus back to the filters button when Escape closes the panel', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  // A popover is not named by its trigger the way a menu is, so the panel needs a name of its own —
+  // and a noun phrase rather than the trigger's "Toggle filters", which names the control the user
+  // just left rather than the surface a screen reader is announcing they arrived at.
+  it('gives the open panel a name of its own', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('dialog', { name: 'Search filters' })).toBeInTheDocument();
+  });
+
+  // The panel and each tooltip are portalled to the body separately, so they stack as siblings and
+  // the higher z-index paints on top. An explanation that stacks lower renders behind the panel it
+  // sits inside, where it cannot be read.
+  it('stacks a filter explanation above the panel rather than behind it', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.hover(screen.getByTestId('any-text-explanation'));
+    const tooltip = await screen.findByRole('tooltip');
+
+    const declaredZIndexOf = (element: Element) =>
+      element.closest<HTMLElement>('[data-radix-popper-content-wrapper]')?.style.zIndex;
+    const panelZIndex = declaredZIndexOf(screen.getByRole('dialog'));
+    const tooltipZIndex = declaredZIndexOf(tooltip);
+
+    // Check both are actually declared before comparing. `Number('')` is 0, so a bare greater-than
+    // keeps passing against an element that declares no stacking at all — which is precisely the
+    // regression that would put the explanation back behind the panel.
+    expect(panelZIndex).not.toBe('');
+    expect(tooltipZIndex).not.toBe('');
+    expect(Number(tooltipZIndex)).toBeGreaterThan(Number(panelZIndex));
+  });
+
+  // Tab moves between the groups inside the panel — Radix loops it, so forward Tab never leaves.
+  // The two tests below repeat the pair above after such a Tab, because arming the focus return on
+  // the keydown and clearing it only on open would leave it armed for the rest of the visit: the
+  // next dismissal of any kind would then take the caret, which is the bug those two tests exist to
+  // prevent. They are the same assertions from a state a user reaches by using the panel normally.
+  it('leaves focus in the search box when it is clicked after moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    const searchBox = getSearchInput();
+
+    await user.click(searchBox);
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+
+  it('leaves focus in the search box when it takes focus after moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    const searchBox = getSearchInput();
+
+    await act(async () => {
+      searchBox.focus();
+    });
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+
+  // The other side of the same coin: clearing the arming on an in-panel Tab must not clear it for a
+  // later Escape, which is a real exit and still owes the user the trigger.
+  it('hands focus back to the filters button when Escape follows moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    await user.keyboard('{Escape}');
+    await settleFocus();
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  // The pointer counterpart of the test below: clicking into the search box both dismisses the panel
+  // and puts the caret where the user aimed it, so nothing should move afterwards. Without this, the
+  // condition guarding the focus return has only one of its two branches covered and reads as
+  // deletable complexity.
+  it('leaves focus in the search box when the box outside the panel is clicked', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    const searchBox = getSearchInput();
+
+    await user.click(searchBox);
+    await settleFocus();
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(searchBox).toHaveFocus();
+  });
+
+  // The panel is a non-modal popover, so focus landing outside it dismisses it — including focus the
+  // app itself moves. Invoking Find while the panel is open does exactly that: `focusSearchInput`
+  // puts the caret in the search box, which dismisses the panel. The caret must survive that;
+  // returning focus to the trigger belongs to the keyboard exits below, not to every dismissal.
+  it('leaves focus in the search box when the box outside the panel takes focus', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    const searchBox = getSearchInput();
+    // `focus()` rather than a click, so this turns on focus alone rather than on the pointer
+    // interaction that would dismiss the panel regardless.
+    await act(async () => {
+      searchBox.focus();
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
 });
 
 // The book and chapter scopes resolve to the CURRENT reference's book rather than to the (already
@@ -1251,10 +1511,9 @@ describe('Find — current reference in extra material', () => {
   });
 });
 
-// `buildProps` stubs every localized string as its own key, which is exactly what
-// `useLocalizedStrings` hands a consumer before the strings arrive. `RecentSearches` treats a raw
-// key as not-yet-localized and falls back to its English default, so this — not the key — is the
-// button's accessible name here. That fallback is what keeps a `%key%` off the screen when it is
+// `buildProps` stubs every localized string as its own key (see `../project-selector.test-utils`),
+// so `RecentSearches` is on its English fallback path and this — not the key — is the button's
+// accessible name. That fallback is what keeps a `%key%` off the screen when the label is also
 // rendered as visible tooltip text.
 const RECENT_SEARCHES_LABEL = 'Show recent searches';
 
