@@ -56,6 +56,12 @@ type DialogRequest<DialogTabType extends DialogTabTypes> = {
       | PromiseLike<DialogTypes[DialogTabType]['responseType'] | undefined>,
   ) => void;
   reject: (reason?: unknown) => void;
+  /**
+   * Whether this request's tab has actually been placed in the dock. False from registration until
+   * `addTab` resolves for it, since a layout load can land in that window before the tab exists for
+   * it to drop.
+   */
+  isTabDocked: boolean;
 };
 
 /** Map of all live dialog requests */
@@ -309,6 +315,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
         id: dialogId,
         resolve,
         reject,
+        isTabDocked: false,
       };
       dialogRequests.set(dialogId, dialogRequest);
     },
@@ -327,6 +334,13 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
         position: 'center',
       },
     );
+
+    // addTab resolving means the tab reached the dock. Mark it via a fresh map lookup rather than
+    // the `dialogRequest` closure variable: the id may already have been removed by the time this
+    // runs (e.g. the window closed while addTab was in flight), and a fresh lookup naturally skips
+    // marking a request that is no longer there.
+    const dockedRequest = dialogRequests.get(dialogId);
+    if (dockedRequest) dockedRequest.isTabDocked = true;
 
     // TODO: preserve requests between refreshes - add keepalive messages to indicate to the
     // requestor if the dialog request is still alive
@@ -380,10 +394,14 @@ export async function startDialogServiceShard(): Promise<void> {
   // rc-dock's per-tab remove callback, so a docked dialog's tab can vanish with nothing telling this
   // shard its request is now unanswerable — the requestor would then await a promise that never
   // settles. Settle it as though the user canceled; `false` because the tab this would try to close
-  // is already gone.
+  // is already gone. Only a request whose tab actually reached the dock qualifies: a request can be
+  // registered here before `addTab` places its tab, and a load landing in that window has no tab of
+  // this request's to have dropped, so settling it would be indistinguishable from a user
+  // cancellation the user never made.
   webViewService.onLayoutLoadTabIds((survivingTabIds) => {
-    dialogRequests.forEach((_dialogRequest, id) => {
-      if (!survivingTabIds.has(id)) resolveDialogRequest(id, undefined, false);
+    dialogRequests.forEach((dialogRequest, id) => {
+      if (dialogRequest.isTabDocked && !survivingTabIds.has(id))
+        resolveDialogRequest(id, undefined, false);
     });
   });
 

@@ -323,4 +323,67 @@ describe('dialog.service-shard', () => {
       await dialogPromise;
     });
   });
+
+  describe('a layout load that arrives before the dialog tab is placed', () => {
+    it('leaves an unplaced dialog request alone', async () => {
+      const { hasDialogRequest, resolveDialogRequest } = await import('./dialog.service-shard');
+
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
+      // Never resolves during this test: standing in for a request registered synchronously at
+      // showDialog's start whose tab has not yet reached the dock when a layout load's sweep runs.
+      vi.mocked(addTab).mockReturnValue(new Promise(() => {}));
+
+      const dialogPromise = capturedShowDialog('platform.selectProject', {});
+      // A wrongly-settled promise would otherwise report as an unhandled rejection instead of
+      // failing the assertion below.
+      dialogPromise.catch(() => {});
+
+      await vi.waitFor(() => {
+        expect(hasDialogRequest('mock-guid')).toBe(true);
+      });
+
+      expect(mockOnLayoutLoadTabIds).toHaveBeenCalledTimes(1);
+      const [layoutLoadHandler] = mockOnLayoutLoadTabIds.mock.calls[0];
+      // The loaded layout does not report this id, but the request's tab was never placed in the
+      // dock for this load to have dropped, so the sweep must leave it alone.
+      layoutLoadHandler(new Set(['some-other-tab']));
+
+      expect(hasDialogRequest('mock-guid')).toBe(true);
+
+      // Clean up: resolve the request directly so it doesn't leak into subsequent tests (addTab
+      // never resolves in this test, so showDialog's own request/tab setup never completes).
+      resolveDialogRequest('mock-guid', undefined, false);
+    });
+  });
+
+  describe('a layout load that drops a docked dialog tab', () => {
+    it('settles the request once its tab has been placed in the dock', async () => {
+      const { hasDialogRequest } = await import('./dialog.service-shard');
+
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
+      let resolveAddTab: () => void = () => {};
+      const addTabPromise = new Promise<undefined>((resolve) => {
+        resolveAddTab = () => resolve(undefined);
+      });
+      vi.mocked(addTab).mockReturnValue(addTabPromise);
+
+      const dialogPromise = capturedShowDialog('platform.selectProject', {});
+
+      await vi.waitFor(() => {
+        expect(hasDialogRequest('mock-guid')).toBe(true);
+      });
+
+      // Let addTab resolve, then await the very promise showDialog itself is awaiting so the
+      // continuation that marks the request as docked has actually run before the sweep fires.
+      resolveAddTab();
+      await addTabPromise;
+
+      expect(mockOnLayoutLoadTabIds).toHaveBeenCalledTimes(1);
+      const [layoutLoadHandler] = mockOnLayoutLoadTabIds.mock.calls[0];
+      layoutLoadHandler(new Set(['some-other-tab']));
+
+      expect(hasDialogRequest('mock-guid')).toBe(false);
+      await expect(dialogPromise).resolves.toBeUndefined();
+    });
+  });
 });
