@@ -58,3 +58,20 @@ export function useLivePopoverAnchor(): LivePopoverAnchor {
 
   return useMemo(() => ({ virtualRef, setSource }), [setSource]);
 }
+
+/**
+ * The current viewport rect of a text range, or `undefined` when the range no longer lies in
+ * rendered text (its nodes were replaced, so it collapsed to an element boundary that has no box).
+ */
+export function measureRange(range: Range): DOMRect | undefined {
+  if (range.getClientRects().length === 0) return undefined;
+  return range.getBoundingClientRect();
+}
+
+/**
+ * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
+ * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
+ */
+export function leftEdgeRect(rect: DOMRect): DOMRect {
+  return new DOMRect(rect.left, rect.top, 0, rect.height);
+}

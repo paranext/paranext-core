@@ -71,8 +71,9 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
     expect(source).not.toMatch(/<PopoverContent[^>]*> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot>/);
   });
 
-  it('marks both areas as `main` (neither ContentZoomRoot carries an `area` prop)', () => {
+  it('marks both areas as `main` (neither ContentZoomRoot nor ContentZoomAreaProvider carries an `area` prop)', () => {
     expect(source).not.toContain('<ContentZoomRoot area=');
+    expect(source).not.toContain('<ContentZoomAreaProvider area=');
   });
 
   it('leaves the editor scroll container present and unmarked, not a ContentZoomRoot', () => {

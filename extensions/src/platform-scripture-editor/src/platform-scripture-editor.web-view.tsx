@@ -56,9 +56,11 @@ import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   type FootnoteEditorMarkerPalette,
+  leftEdgeRect,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
+  measureRange,
   Popover,
   PopoverAnchor,
   PopoverContent,
@@ -69,6 +71,7 @@ import {
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   isMacOs,
+  useLivePopoverAnchor,
   usePromise,
   useViewVisibility,
 } from 'platform-bible-react';
@@ -136,8 +139,6 @@ import {
 import {
   createPendingCommentAnchorSource,
   getVerseElement,
-  leftEdgeRect,
-  measureRange,
   runOnFirstLoad,
   scrollToAnnotation,
   scrollToVerse,
@@ -147,7 +148,6 @@ import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
-import { useLivePopoverAnchor } from './use-live-popover-anchor.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
@@ -1541,24 +1541,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // Position the popover near the annotation
     // Try to find the selected text element for positioning
     const editorContainer = document.querySelector<HTMLElement>('.usfm');
-    if (editorContainer) {
-      // Use the browser's selection to get the bounding rect of the selected text
-      const domSelection = window.getSelection();
-      if (domSelection && domSelection.rangeCount > 0) {
-        const range = domSelection.getRangeAt(0).cloneRange();
-        commentPopoverAnchor.setSource(
-          createPendingCommentAnchorSource(range, PENDING_COMMENT_ANNOTATION_ID, editorContainer),
-        );
-      } else {
-        // Fallback to center of editor viewport
-        commentPopoverAnchor.setSource({
-          measure: () => {
-            const rect = editorContainer.getBoundingClientRect();
-            return new DOMRect(rect.left + rect.width / 2, rect.top + rect.height / 2, 0, 0);
-          },
-          contextElement: editorContainer,
-        });
-      }
+    // No rendered editor content to anchor the popover to; opening it anyway would pin it at the
+    // pane's origin or a stale previous anchor.
+    if (!editorContainer) return;
+
+    // Use the browser's selection to get the bounding rect of the selected text
+    const domSelection = window.getSelection();
+    if (domSelection && domSelection.rangeCount > 0) {
+      const range = domSelection.getRangeAt(0).cloneRange();
+      commentPopoverAnchor.setSource(
+        createPendingCommentAnchorSource(range, PENDING_COMMENT_ANNOTATION_ID, editorContainer),
+      );
+    } else {
+      // Fallback to center of editor viewport
+      commentPopoverAnchor.setSource({
+        measure: () => {
+          const rect = editorContainer.getBoundingClientRect();
+          return new DOMRect(rect.left + rect.width / 2, rect.top + rect.height / 2, 0, 0);
+        },
+        contextElement: editorContainer,
+      });
     }
 
     setShowCommentEditor(true);
