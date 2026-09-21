@@ -54,7 +54,7 @@ const SYNC_ACTIVITY_WATCHDOG_INTERVAL_MS = 30_000;
  * running, and a `null` payload would throw inside the event emitter's dispatch loop, costing every
  * later subscriber the delivery.
  *
- * `projectIds` is accepted when ABSENT — the seam declares it required, but a Studio build
+ * `projectIds` is accepted when ABSENT — the seam declares it required, but a Paratext 10 build
  * predating that field answers without it, and "the projects are unknown" is a usable snapshot
  * while "malformed" is not.
  */

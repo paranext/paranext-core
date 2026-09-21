@@ -235,7 +235,7 @@ export function createEmptyOpenRpc(papiVersion: string): OpenRpc {
     },
     servers: [
       {
-        name: 'Platform.Bible and Paratext 10 Studio Wiki',
+        name: 'Platform.Bible and Paratext 10 Wiki',
         url: 'https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio',
       },
       {
