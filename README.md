@@ -402,9 +402,9 @@ The value must be exactly `true`; any other value (including other truthy-lookin
 
 - Check out the utility functions, types, and classes available to use.
 
-**[Platform.Bible and Paratext 10 Studio Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
+**[Platform.Bible and Paratext 10 Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
 
-- Explore links to other resources relevant to Platform.Bible and Paratext 10 Studio.
+- Explore links to other resources relevant to Platform.Bible and Paratext 10.
 
 ## Packaging for Production
 

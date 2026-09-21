@@ -111,7 +111,7 @@ describe('where the per-platform notices check may run', () => {
   // `clean.ts` is the first step of `package` and its glob removes every `node_modules/.cache/
   // webpack-*` directory, including each extension bundle's per-mode one, so the caches on that
   // path are cold by construction. The reason is that `package` is not run only from this
-  // repository. Paratext 10 Studio clones this repo, patches it, copies private extensions in,
+  // repository. Paratext 10 clones this repo, patches it, copies private extensions in,
   // yalc-links a local `scripture-editors`, and runs `npm run package` inside the patched clone -
   // a build whose npm graph genuinely differs from the committed one. `--verify-shipping-set` ends
   // in `diffShippingSet` and refuses ANY drift in either direction, so it would fail there on every
