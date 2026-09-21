@@ -66,9 +66,9 @@ import {
   expectNoFaultsWhileRunning,
   createStepLogger,
   expectWindowDockHasOnlyHomeTab,
+  getHomeTabWebViewId,
   getWindowIdOfPage,
   homeTabTitle,
-  homeTabWebViewId,
   pollUntil,
   quitAndExpectCleanExit,
   quitAppAndWaitForExit,
@@ -266,7 +266,7 @@ test.describe('window close rule', () => {
     // This test never quits, so its fault sweep runs at the end against a still-running app
     const output = captureAppOutput(electronApp);
     const logStep = createStepLogger('window-close-rule');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     const page2 = await createSecondWindow(electronApp);
@@ -329,7 +329,7 @@ test.describe('window close rule', () => {
       const { userDataDir } = ctx;
       const output = captureAppOutput(ctx.electronApp);
       const [mainPage] = await waitForAppPages(ctx.electronApp, 1, 90_000);
-      await waitForAppReady(mainPage, 180_000);
+      await waitForAppReady(mainPage, { timeout: 180_000 });
       const primaryId = getWindowIdOfPage(mainPage);
 
       const page2 = await createSecondWindow(ctx.electronApp);
@@ -384,7 +384,7 @@ test.describe('window close rule', () => {
             .map(getWindowIdOfPage)
             .join(', ')}`,
         );
-      await waitForAppReady(restoredMain, 180_000);
+      await waitForAppReady(restoredMain, { timeout: 180_000 });
       await waitForRendererRegistered(getWindowIdOfPage(restoredSecond), 120_000);
       logStep('phase 2: both windows restored');
     } finally {
@@ -405,7 +405,7 @@ test.describe('window close rule', () => {
     // So this asserts both halves: the primary stays and docks Home, and it is STILL the primary —
     // shown by its ✕ asking, which only the primary's does.
     const logStep = createStepLogger('window-close-rule');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     const page2 = await createSecondWindow(electronApp);
@@ -413,11 +413,11 @@ test.describe('window close rule', () => {
     await waitForRendererRegistered(secondId, 120_000);
     logStep(`windows ${primaryId} (primary) and ${secondId} up`);
 
-    // The primary's Home tab comes from the fixed fallback layout, so its id is known without
-    // reading the dock — but it has to have RENDERED before it can be moved, and app-ready does not
-    // wait for the dock. Waiting on the tab itself is what the sibling move spec does.
-    await expect(homeTabTitle(mainPage, primaryId)).toBeVisible({ timeout: 60_000 });
-    const webViewInPrimary = homeTabWebViewId(primaryId);
+    // The primary's Home tab has to have RENDERED before it can be moved, and app-ready does not
+    // wait for the dock. Waiting on the tab itself is what the sibling move spec does; its id is
+    // read off the DOM once it is there, since every materialization mints a fresh one.
+    await expect(homeTabTitle(mainPage)).toBeVisible({ timeout: 60_000 });
+    const webViewInPrimary = await getHomeTabWebViewId(mainPage);
 
     // Move the primary's only web view into window 2, emptying the primary
     const movedWebViewId = await sendPapiRequestOnce<string>(
@@ -429,7 +429,7 @@ test.describe('window close rule', () => {
     logStep(`moved ${movedWebViewId} out of the primary and into window ${secondId}`);
 
     // The primary stays, and docks Home rather than sitting empty. Docked on the fly, so it carries
-    // a freshly minted id rather than the fixed fallback-layout one `homeTabTitle` builds.
+    // a freshly minted id, distinct from the one the moved-out Home tab had.
     await expectWindowDockHasOnlyHomeTab(mainPage);
     expect(mainPage.isClosed()).toBe(false);
     expect(await liveWindowIds(electronApp)).toHaveLength(2);
@@ -468,7 +468,7 @@ test.describe('window close rule', () => {
       const { userDataDir } = ctx;
       const output = captureAppOutput(ctx.electronApp);
       const [mainPage] = await waitForAppPages(ctx.electronApp, 1, 90_000);
-      await waitForAppReady(mainPage, 180_000);
+      await waitForAppReady(mainPage, { timeout: 180_000 });
       const primaryId = getWindowIdOfPage(mainPage);
 
       const page2 = await createSecondWindow(ctx.electronApp);
@@ -508,7 +508,7 @@ test.describe('window close rule', () => {
       });
       const restored = await waitForAppPages(ctx.electronApp, 2, 240_000);
       expect(restored).toHaveLength(2);
-      await waitForAppReady(restored[0], 180_000);
+      await waitForAppReady(restored[0], { timeout: 180_000 });
       logStep('phase 2: both windows restored, primary included');
     } finally {
       if (ctx) await teardownElectronApp(ctx);
@@ -523,7 +523,7 @@ test.describe('window close rule', () => {
     // This test never quits, so its fault sweep runs at the end against a still-running app
     const output = captureAppOutput(electronApp);
     const logStep = createStepLogger('window-close-rule');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     const page2 = await createSecondWindow(electronApp);
@@ -570,7 +570,7 @@ test.describe('window close rule', () => {
     // WHILE the question is showing — every other test in this file creates its second window
     // before asking, never during.
     const logStep = createStepLogger('window-close-rule');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     const page2 = await createSecondWindow(electronApp);

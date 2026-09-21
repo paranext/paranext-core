@@ -648,6 +648,54 @@ import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from
 
 ---
 
+## Explaining Why a Control Is Disabled
+
+**A disabled control is out of the tab order, so hover- and focus-only affordances reach nobody.**
+The tooltip pattern above works for a disabled `Button` because the wrapping `<span>` is what the
+`Tooltip` listens on — but it costs a tab stop, and that is only acceptable where the wrapper is not
+inside a composite widget that owns focus.
+
+Do NOT add a focusable wrapper inside a `radiogroup`, a menu, a listbox, or any other roving-focus
+container. A wrapper takes a `role` the container does not own among its children, and adds tab
+stops to a group whose contract is exactly one. Radix goes further in menus: a `disabled`
+`DropdownMenuItem` is dropped from the menu's roving focus entirely, and a `Tooltip` inside
+`DropdownMenuContent` competes with the menu for the same pointer.
+
+**Inside a composite widget, render the explanation as inline text** beneath the option's label,
+and point the disabled control at it with `aria-describedby`:
+
+```tsx
+<div className="tw:flex tw:flex-col tw:gap-0.5">
+  <div className="tw:flex tw:items-center">
+    <RadioGroupItem
+      value={value}
+      id={optionId}
+      disabled={!!disabledExplanation}
+      aria-describedby={disabledExplanation ? `${optionId}-explanation` : undefined}
+    />
+    <Label htmlFor={optionId}>{label}</Label>
+  </div>
+  {disabledExplanation && (
+    <span id={`${optionId}-explanation`} className="tw:ms-6 tw:text-xs tw:text-muted-foreground">
+      {disabledExplanation}
+    </span>
+  )}
+</div>
+```
+
+Two things to watch when the text goes inside a menu item:
+
+- **Contrast.** `DropdownMenuItem` renders a disabled item at half opacity, and a parent `opacity`
+  is a compositing ceiling children cannot exceed. A `tw:text-muted-foreground` explanation under
+  that veil lands around 2:1. Use `tw:text-foreground` there.
+- **Width.** Give the column `tw:min-w-0` so a long explanation wraps instead of pushing the menu
+  past `--radix-dropdown-menu-trigger-width`.
+
+Reference implementation: `ScopeSelector`'s `disabledScopeExplanations`
+(`lib/platform-bible-react/src/components/advanced/scope-selector/`).
+
+---
+
 ## Test File Patterns
 
 ### Interaction Tests
@@ -729,3 +777,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.4.0   | 2026-05-11 | Move `EXPLANATION:` blocks into the function body rather than TSDoc. |
 | 1.4.1   | 2026-05-11 | Code-review fix: align `EXPLANATION:` placement wording with the Code-Style-Guide v1.2.1 relaxation — also accommodate class-level constants (e.g. regex pattern fields) when the constant *is* the algorithm. |
 | 1.5.0   | 2026-06-18 | Add "Presentational Components and Their Stories" section (keep demo/mock scaffolding out of the component, cover every wireframe state variant, `Default` story wires callbacks to `useState`). Add "Web View UI-State Persistence Caveat" (`useWebViewState` is per-`webViewId`; `existingId`/`createNewIfNotFound: false` dedupes currently-open instances only — for state that survives close/reopen use `papi.settings`). |
+| 1.6.0   | 2026-09-12 | Add "Explaining Why a Control Is Disabled" section — a disabled control is out of the tab order, so a focusable tooltip wrapper is wrong inside a `radiogroup`/menu/listbox; render the explanation inline with `aria-describedby`, and watch the half-opacity contrast and `tw:min-w-0` in a `DropdownMenuItem`. |

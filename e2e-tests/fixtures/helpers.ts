@@ -9,6 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import WebSocket from 'ws';
+import { suppressOnboardingTour } from './onboarding-tour.page';
 import { WINDOW_ID_SHAPE_SOURCE } from './window-id-shape';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
@@ -90,6 +91,51 @@ export interface ElectronAppContext {
    * reuse it. Carried over from {@link LaunchElectronAppOptions.preserveUserDataDir}.
    */
   preserveUserDataDir?: boolean;
+}
+
+/**
+ * Wait for the given port to stop accepting connections (i.e., be free). Used after teardown to
+ * ensure the previous Electron's extension-host WebSocket server has released port 8876 before the
+ * next test launches. On Windows, killing the Electron main process does not always kill the
+ * extension-host child process immediately; without this wait, the next `waitForWebSocketReady`
+ * connects to the dying extension host rather than the new one, causing "Settings service
+ * undefined" errors.
+ */
+async function waitForPortFree(port: number, timeout: number): Promise<void> {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeout) {
+    // Sequential polling: each probe must finish before starting the next.
+    // eslint-disable-next-line no-await-in-loop
+    const isFree = await new Promise<boolean>((resolve) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+      const timer = setTimeout(() => {
+        ws.close();
+        // Connect neither succeeded nor was refused within the probe window. A dying-but-still-
+        // listening extension host that is slow to complete the handshake looks exactly like
+        // this, and it is the case this helper exists to catch — so treat a timeout as "still in
+        // use" and keep polling. Only a refused connection is evidence the port is free.
+        resolve(false);
+      }, 500);
+      ws.on('open', () => {
+        clearTimeout(timer);
+        ws.close();
+        resolve(false); // Connection succeeded → port is still in use
+      });
+      ws.on('error', () => {
+        clearTimeout(timer);
+        resolve(true); // Connection refused → port is free
+      });
+    });
+    if (isFree) return;
+    // Sequential polling: each probe must complete before the next starts.
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 250);
+    });
+  }
+  // Do not throw — if the port is never freed within the window, log and proceed; the next
+  // launch will fail its own waitForWebSocketReady with a clearer error.
+  console.warn(`[teardown] Port ${port} still in use after ${timeout}ms — proceeding anyway`);
 }
 
 /** Wait for the WebSocket server to be ready on the specified port. */
@@ -241,6 +287,80 @@ export async function applyDeclaredWindowSize(
   await expect(async () => {
     await assertDeclaredWindowSize(page, size, howToFix);
   }).toPass({ timeout: 15_000 });
+}
+
+/** Sub-pixel layout rounding shows up as a 1px difference that is not a real width mismatch. */
+const WINDOW_WIDTH_SETTLE_TOLERANCE_PX = 1;
+
+/** Budget for the renderer to lay out at a width the OS has already granted. */
+const WINDOW_WIDTH_SETTLE_TIMEOUT_MS = 20_000;
+
+/**
+ * Closes the docked DevTools that a dev-mode launch opens.
+ *
+ * Not cosmetic for any spec that measures. Docked DevTools takes its width out of the renderer's
+ * layout viewport (measured: a constant 555px), so an 800px window lays its content out in 245px
+ * and every control genuinely overflows — the spec then reports "clipped" for a layout that is fine
+ * at the width a user would actually see.
+ */
+export async function closeDevTools(electronApp: ElectronApplication): Promise<void> {
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
+    });
+  });
+}
+
+/**
+ * Narrows the real OS window and waits until the renderer has actually laid out at the new width.
+ *
+ * Use this, never `page.setViewportSize()`. On a CDP-attached page `setViewportSize` applies an
+ * emulation override rather than resizing the window: it sets `innerWidth` to whatever was asked
+ * for, so it bypasses the `minWidth` Electron enforces in `main.ts` and a spec can silently assert
+ * against a width the app would never let a user reach. See {@link assertDeclaredWindowSize} for the
+ * measurements behind that.
+ *
+ * The counterpart to {@link applyDeclaredWindowSize}, which grows a freshly launched window to the
+ * size a spec declared; this one is for narrowing an already-running window mid-spec.
+ *
+ * Returns nothing useful to assert on by design — the point is the wait. Electron clamps the
+ * request to `minWidth`, so the settled width is read back from the window rather than assumed, and
+ * the poll compares against THAT. Polling for something already true before the resize waits for
+ * nothing, and the spec then samples boxes from two different layout passes and reports phantom
+ * clipping.
+ */
+export async function setWindowWidth(
+  electronApp: ElectronApplication,
+  page: Page,
+  width: number,
+): Promise<void> {
+  await closeDevTools(electronApp);
+
+  const settledWidth = await electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
+    // timeout and then fail with a width mismatch, hiding the actual cause.
+    if (!win) throw new Error('No Electron window to resize');
+    if (win.isMaximized()) win.unmaximize();
+
+    const [outerWidth, height] = win.getSize();
+    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
+    // reading the size back immediately after it returns the width the window still has, not the one
+    // it is moving to. The target is derived instead — the request clamped by the window's own
+    // `minWidth` (main.ts), converted from outer to content width by the frame delta, since the
+    // renderer's `innerWidth` measures the content box.
+    const frameDelta = outerWidth - win.getContentSize()[0];
+    const target = Math.max(requestedWidth, win.getMinimumSize()[0]) - frameDelta;
+
+    win.setSize(requestedWidth, height);
+    return target;
+  }, width);
+
+  await expect
+    .poll(async () => Math.abs((await page.evaluate(() => window.innerWidth)) - settledWidth), {
+      timeout: WINDOW_WIDTH_SETTLE_TIMEOUT_MS,
+    })
+    .toBeLessThanOrEqual(WINDOW_WIDTH_SETTLE_TOLERANCE_PX);
 }
 
 /**
@@ -439,6 +559,29 @@ function unreachableDescription(lastReadError: unknown): string {
 }
 
 /**
+ * The project root the most recent {@link launchElectronApp} pointed the app at through
+ * `PLATFORM_BIBLE_PROJECT_ROOT_FOLDER`, or `undefined` when that launch did not ask for one. Set
+ * per launch, so a later launch without `isolatedProjectRoot` clears it.
+ */
+let isolatedProjectRootDir: string | undefined;
+
+/**
+ * Throws unless the most recent launch used `isolatedProjectRoot: true`, returning that root. Call
+ * it before any PAPI write that mutates project data (a setting, a chapter's USFM): the helpers
+ * address the sample project by its fixed id and the app on the fixed PAPI port, so without an
+ * isolated root the same call would rewrite the developer's own copy of the sample project, with no
+ * restore.
+ */
+export function requireIsolatedProjectRoot(): string {
+  if (!isolatedProjectRootDir || !isolatedProjectRootDir.startsWith(os.tmpdir()))
+    throw new Error(
+      'This helper writes project data and may only run against an app launched with ' +
+        '`isolatedProjectRoot: true` (electronLaunchOptions); the current launch was not.',
+    );
+  return isolatedProjectRootDir;
+}
+
+/**
  * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
  * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
  * user-data directory path, and a promise that resolves when the app closes.
@@ -472,6 +615,9 @@ export async function launchElectronApp(
   // isolatedProjectRoot. Only the isolatedProjectRoot branch (or an explicit envOverride) below sets it.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { ELECTRON_RUN_AS_NODE, PLATFORM_BIBLE_PROJECT_ROOT_FOLDER, ...restEnv } = process.env;
+  isolatedProjectRootDir = opts.isolatedProjectRoot
+    ? path.join(userDataDir, 'projects')
+    : undefined;
   const env = {
     ...restEnv,
     NODE_ENV: 'development',
@@ -635,6 +781,15 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   } else if (!electronProcess) {
     console.log('[teardown] Playwright handle already disposed and the OS process has exited.');
   }
+
+  // Wait for the extension-host's WebSocket server (port 8876) to release the port before the next
+  // launch. On Windows, killing the Electron main process does not immediately kill child
+  // processes — the extension host can outlive the main process and keep port 8876 bound, causing
+  // the next test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
+  // preserve-and-return path too, since a relaunch reuses the same fixed port 8876.
+  console.log('[teardown] Waiting for port 8876 to be free...');
+  await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000);
+  console.log('[teardown] Port 8876 is free');
 
   // A preserved profile stays on disk so a later launch can relaunch into it (see
   // LaunchElectronAppOptions.preserveUserDataDir). The last teardown of a relaunch chain runs with
@@ -2165,6 +2320,24 @@ export function describeInconclusiveOverlayTimeout(originalError: unknown): Erro
   );
 }
 
+/** Options accepted by {@link waitForAppReady}. */
+export interface WaitForAppReadyOptions {
+  /**
+   * Budget for the whole readiness sequence, shared across its three waits.
+   *
+   * @default 90_000
+   */
+  timeout?: number;
+  /**
+   * Set true only in tests that are ABOUT the onboarding tour and need it to show. By default the
+   * helper suppresses the tour (see {@link waitForAppReady}) because its full-screen overlay blocks
+   * all pointer events for every other test.
+   *
+   * @default false
+   */
+  allowOnboardingTour?: boolean;
+}
+
 /**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
  * platform-dock layout to appear, then for a renderer to finish registering every window-scoped
@@ -2172,8 +2345,14 @@ export function describeInconclusiveOverlayTimeout(originalError: unknown): Erro
  * completes), then for the rare first-run-gate race to clear if it happened, and finally for the
  * full-screen initialization overlay to clear. The overlay lingers while async services (settings,
  * theme) finish initializing — it must be gone before tests interact with the UI.
+ *
+ * Unless `allowOnboardingTour` is set, also suppresses the onboarding tour — see
+ * {@link suppressOnboardingTour} for why and how.
  */
-export async function waitForAppReady(page: Page, timeout = 90_000): Promise<void> {
+export async function waitForAppReady(
+  page: Page,
+  { timeout = 90_000, allowOnboardingTour = false }: WaitForAppReadyOptions = {},
+): Promise<void> {
   const start = Date.now();
   await page.waitForSelector('div[class*="dock-layout"]', {
     state: 'attached',
@@ -2200,6 +2379,64 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
     // waitForOverlayGone reported it.
     throw gateOutcome === 'inconclusive' ? describeInconclusiveOverlayTimeout(error) : error;
   }
+  if (!allowOnboardingTour) await suppressOnboardingTour(page);
+}
+
+/**
+ * Poll until a web view of `webViewType` is open, and return its id.
+ *
+ * Every materialization of a baked layout mints a fresh id for its web views (see
+ * `mintFreshWebViewIds` in `src/renderer/components/docking/mint-web-view-ids.util.ts`), so a fixed
+ * layout slot's id can never be known ahead of time from a baked constant — it can only be read
+ * live from the app. Queries the renderer's `papi.webViews.getAllOpenWebViewDefinitions()` (the
+ * same mechanism `enhanced-resources` specs use to locate icon-only tabs) rather than the DOM,
+ * because the slot's id is not otherwise exposed by type — only by the `data-web-view-id` it
+ * renders once known.
+ */
+export async function waitForOpenWebViewIdByType(
+  page: Page,
+  webViewType: string,
+  timeoutMs = 120_000,
+): Promise<string> {
+  const start = Date.now();
+  let lastSeenTypes: string[] = [];
+  // Sequential polling: each attempt must finish (or time out) before the next; parallelizing would
+  // defeat the retry/backoff.
+  /* eslint-disable no-await-in-loop */
+  while (Date.now() - start < timeoutMs) {
+    const { id, types } = await page.evaluate(async (type) => {
+      // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+      const { papi } = window as unknown as {
+        papi: {
+          webViews: {
+            getAllOpenWebViewDefinitions: () => Promise<{ id: string; webViewType: string }[]>;
+          };
+        };
+      };
+      const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
+      return {
+        id: definitions.find((d) => d.webViewType === type)?.id,
+        types: definitions.map((d) => d.webViewType),
+      };
+    }, webViewType);
+    if (id) return id;
+    lastSeenTypes = types;
+    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    if (sleepMs <= 0) break;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, sleepMs);
+    });
+  }
+  /* eslint-enable no-await-in-loop */
+  // Lists what WAS open at the final poll: an empty list points at the layout never materializing,
+  // while a non-empty list missing only this type points at the slot being lost after materialization
+  // (e.g. a dock "Replacing tab failed" race during a concurrent auto-open) rather than a lookup bug.
+  throw new Error(
+    `No open web view of type "${webViewType}" within ${timeoutMs}ms (last seen open types: ${
+      lastSeenTypes.length > 0 ? lastSeenTypes.join(', ') : '<none>'
+    })`,
+  );
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */

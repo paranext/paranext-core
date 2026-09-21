@@ -3,6 +3,7 @@ import { newPlatformError } from 'platform-bible-utils';
 import { FindJobStatusReport } from 'platform-scripture';
 import {
   CharacterCategorizer,
+  FIND_AVAILABLE_SCOPES,
   MAX_CONSECUTIVE_POLL_MISSES,
   OpenScrollGroupTab,
   applyPreserveCase,
@@ -13,6 +14,7 @@ import {
   gateStartSearch,
   isDifferentProjectSelection,
   isFindQueryValid,
+  isScopeBlockedByExtraMaterial,
   isSimpleInterfaceMode,
   nextPollMissState,
   prunePresentBookIds,
@@ -508,30 +510,168 @@ describe('armBoundedWait', () => {
 
 describe('isFindQueryValid', () => {
   it('is false for an empty (or whitespace-only) search term regardless of scope', () => {
-    expect(isFindQueryValid({ searchTerm: '', scope: 'book', selectedBookIds: [] })).toBe(false);
-    expect(isFindQueryValid({ searchTerm: '   ', scope: 'chapter', selectedBookIds: [] })).toBe(
-      false,
-    );
+    expect(
+      isFindQueryValid({
+        searchTerm: '',
+        scope: 'book',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(false);
+    expect(
+      isFindQueryValid({
+        searchTerm: '   ',
+        scope: 'chapter',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(false);
   });
 
   it('is true for a non-empty term in the chapter/book scopes, which need no book selection', () => {
-    expect(isFindQueryValid({ searchTerm: 'God', scope: 'chapter', selectedBookIds: [] })).toBe(
-      true,
-    );
-    expect(isFindQueryValid({ searchTerm: 'God', scope: 'book', selectedBookIds: [] })).toBe(true);
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'chapter',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(true);
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'book',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(true);
   });
 
   it('is false for the selectedBooks scope with no books selected, even with a non-empty term', () => {
     expect(
-      isFindQueryValid({ searchTerm: 'God', scope: 'selectedBooks', selectedBookIds: [] }),
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
     ).toBe(false);
   });
 
   it('is true for the selectedBooks scope once at least one book is selected', () => {
     expect(
-      isFindQueryValid({ searchTerm: 'God', scope: 'selectedBooks', selectedBookIds: ['GEN'] }),
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: ['GEN'],
+        currentBookId: 'GEN',
+      }),
     ).toBe(true);
   });
+
+  // Find cannot search extra material, and these two scopes resolve to the current reference's
+  // book rather than to the (already-filtered) book list, so this is the only thing stopping them.
+  it.each(['book', 'chapter'] as const)(
+    'is false for the %s scope while the current reference is in extra material',
+    (scope) => {
+      expect(
+        isFindQueryValid({ searchTerm: 'God', scope, selectedBookIds: [], currentBookId: 'XXB' }),
+      ).toBe(false);
+      expect(
+        isFindQueryValid({ searchTerm: 'God', scope, selectedBookIds: [], currentBookId: 'GLO' }),
+      ).toBe(false);
+    },
+  );
+
+  // The book picker never offers extra material, so the current reference sitting in it says
+  // nothing about the books the user actually chose to search.
+  it('is unaffected by a current reference in extra material under the selectedBooks scope', () => {
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: ['GEN'],
+        currentBookId: 'GLO',
+      }),
+    ).toBe(true);
+  });
+
+  // `find.web-view.tsx`'s `findScope` throws on any scope outside FIND_AVAILABLE_SCOPES, so a
+  // scope that passed the gate without being offered would fail during render instead of being
+  // refused as a query — a worse failure than the one it would be reporting.
+  it.each(['verse', 'selectedText'] as const)(
+    'is false for the %s scope, which Find does not offer',
+    (scope) => {
+      expect(
+        isFindQueryValid({ searchTerm: 'God', scope, selectedBookIds: [], currentBookId: 'GEN' }),
+      ).toBe(false);
+    },
+  );
+
+  it('rejects exactly the scopes Find does not offer', () => {
+    const acceptedScopes = (['verse', 'chapter', 'book', 'selectedBooks', 'selectedText'] as const)
+      .filter((scope) =>
+        isFindQueryValid({
+          searchTerm: 'God',
+          scope,
+          selectedBookIds: ['GEN'],
+          currentBookId: 'GEN',
+        }),
+      )
+      .sort();
+    expect(acceptedScopes).toEqual([...FIND_AVAILABLE_SCOPES].sort());
+  });
+
+  // A selection restored from a persisted tab is pruned against the project's book list only once
+  // that list resolves. Until then it can still hold extra material, and the auto-search on the
+  // restore path would otherwise run against it — the reopened bug, by another route.
+  it('is false for the selectedBooks scope when every selected book is extra material', () => {
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: ['GLO', 'FRT'],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(false);
+  });
+
+  it('is true for the selectedBooks scope when a searchable book survives alongside extra material', () => {
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: ['GLO', 'GEN'],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('isScopeBlockedByExtraMaterial', () => {
+  it.each(['book', 'chapter'] as const)(
+    'blocks the %s scope, which resolves to the current reference book, in extra material',
+    (scope) => {
+      expect(isScopeBlockedByExtraMaterial(scope, 'XXB')).toBe(true);
+      expect(isScopeBlockedByExtraMaterial(scope, 'GLO')).toBe(true);
+    },
+  );
+
+  it.each(['book', 'chapter'] as const)(
+    'leaves the %s scope unblocked in a scripture book',
+    (scope) => {
+      expect(isScopeBlockedByExtraMaterial(scope, 'GEN')).toBe(false);
+      expect(isScopeBlockedByExtraMaterial(scope, 'REV')).toBe(false);
+    },
+  );
+
+  it.each(['selectedBooks', 'verse', 'selectedText'] as const)(
+    'never blocks the %s scope, which does not resolve to the current reference book list',
+    (scope) => {
+      expect(isScopeBlockedByExtraMaterial(scope, 'XXB')).toBe(false);
+      expect(isScopeBlockedByExtraMaterial(scope, 'GEN')).toBe(false);
+    },
+  );
 });
 
 describe('gateStartSearch', () => {

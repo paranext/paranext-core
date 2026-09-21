@@ -33,7 +33,11 @@ function waitForPort(port: number, timeout: number): Promise<void> {
         reject(new Error(`Port ${port} did not become available within ${timeout}ms`));
         return;
       }
-      const socket = net.createConnection(port, '127.0.0.1');
+      // Dial by name, not the `127.0.0.1` literal. The renderer dev server binds `localhost`, which
+      // on Windows resolves to `::1` first — a literal-IPv4 dial against that bind gets
+      // `ECONNREFUSED` forever and burns this wait's whole timeout. Node dials a name across both
+      // address families, so it matches whichever one the server ended up on.
+      const socket = net.createConnection(port, 'localhost');
       socket.on('connect', () => {
         socket.destroy();
         resolve();
@@ -137,13 +141,13 @@ function isDevBundleStale(rootDir: string, bundlePath: string): boolean {
  * that emits it.
  *
  * The preload needs an entry of its own because `prestart` does NOT produce the preload the app
- * loads: the main webpack config's `preload` entry emits `preload.bundle.dev.js`, which nothing
- * reads, while the unpackaged app points `BrowserWindow`'s `preload` at `.erb/dll/preload.js` (see
- * `createWindow` in src/main/main.ts) — the output of the separate preload config. The renderer dev
- * server does spawn a watcher for it, but only when this setup has to start the server, and setup
- * waits for the server's port rather than for that build, so Electron could launch against whatever
- * preload bundle was lying around from an earlier checkout. Build it here instead, where the same
- * staleness check that covers the main bundle covers it.
+ * loads: the dev main config builds only `main.bundle.dev.js`, while the unpackaged app points
+ * `BrowserWindow`'s `preload` at `.erb/dll/preload.js` (see `createWindow` in src/main/main.ts) —
+ * the output of the separate preload config. The renderer dev server does spawn a watcher for it,
+ * but only when this setup has to start the server, and setup waits for the server's port rather
+ * than for that build, so Electron could launch against whatever preload bundle was lying around
+ * from an earlier checkout. Build it here instead, where the same staleness check that covers the
+ * main bundle covers it.
  */
 const DEV_BUNDLES = [
   { label: 'main bundle', relativePath: '.erb/dll/main.bundle.dev.js', buildScript: 'prestart' },

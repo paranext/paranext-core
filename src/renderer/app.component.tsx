@@ -9,8 +9,10 @@ import './styles/tailwind.css';
 import { NotificationDisplay } from './components/notification-display';
 import { OverlayHost } from './components/overlay-host.component';
 import { WorkspaceUpdatingOverlay } from './components/overlays/overlay-workspace-updating.component';
+import { ConnectionLostOverlay } from './components/overlays/overlay-connection-lost.component';
 import { PlatformBibleToolbar } from './components/platform-bible-toolbar';
 import { FirstRunOverlay } from './components/first-run/first-run-overlay.component';
+import { OnboardingTour } from './components/onboarding-tour/onboarding-tour.component';
 import { initWorkspaceUpdatingService } from './services/workspace-updating-service';
 import { resolveFirstRunState } from './services/first-run-store';
 
@@ -37,7 +39,9 @@ function Main() {
       <NotificationDisplay />
       <OverlayHost />
       <WorkspaceUpdatingOverlay />
+      <ConnectionLostOverlay />
       <FirstRunOverlay />
+      <OnboardingTour />
     </TestContext.Provider>
   );
 }

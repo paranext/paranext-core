@@ -477,34 +477,48 @@ describe('Platform menu document interface-mode gating', () => {
     return realMenus;
   }
 
-  test('getMainMenu hides the Open new window item when platform.interfaceMode is simple', async () => {
+  /**
+   * Builds the engine from the shipped menu document with `platform.interfaceMode` set to `mode`,
+   * then reports whether the resulting main menu still offers `command`.
+   */
+  async function isCommandInMainMenu(mode: 'simple' | 'power', command: string): Promise<boolean> {
     const { settingsService } = await import('@shared/services/settings.service');
-    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    vi.mocked(settingsService.get).mockResolvedValue(mode);
     const engine =
       testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
     // Let the fire-and-forget settings read in the constructor resolve
     await Promise.resolve();
     await Promise.resolve();
 
-    const result = await engine.getMainMenu();
-    expect(
-      result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
-    ).toBe(false);
-  });
+    const { items } = await engine.getMainMenu();
+    return items.some((item) => 'command' in item && item.command === command);
+  }
 
-  test('getMainMenu shows the Open new window item when platform.interfaceMode is power', async () => {
-    const { settingsService } = await import('@shared/services/settings.service');
-    vi.mocked(settingsService.get).mockResolvedValue('power');
-    const engine =
-      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
-    await Promise.resolve();
-    await Promise.resolve();
+  /**
+   * Core menu items the shipped document gates to Power mode. Each is asserted in both directions:
+   * absent in Simple proves the gate takes effect, and present in Power proves the item was gated
+   * rather than deleted — which is what catches a flag broad enough to hide it in every mode.
+   */
+  const POWER_ONLY_COMMANDS = [
+    'platform.createWindow',
+    'platform.visitGettingStartedPage',
+    'platform.visitFeatureRoadmapPage',
+    'platform.openDeveloperDocumentationUrl',
+  ];
 
-    const result = await engine.getMainMenu();
-    expect(
-      result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
-    ).toBe(true);
-  });
+  test.each(POWER_ONLY_COMMANDS)(
+    'getMainMenu hides %s when platform.interfaceMode is simple',
+    async (command) => {
+      expect(await isCommandInMainMenu('simple', command)).toBe(false);
+    },
+  );
+
+  test.each(POWER_ONLY_COMMANDS)(
+    'getMainMenu shows %s when platform.interfaceMode is power',
+    async (command) => {
+      expect(await isCommandInMainMenu('power', command)).toBe(true);
+    },
+  );
 });
 
 describe('Tab menu', () => {
@@ -601,7 +615,8 @@ describe('Tab menu', () => {
   test('hides a tab item marked hidden in simple mode', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('simple');
-    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
     await Promise.resolve();
     await Promise.resolve();
 
@@ -615,7 +630,8 @@ describe('Tab menu', () => {
   test('shows that same item in power mode', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('power');
-    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
     await Promise.resolve();
     await Promise.resolve();
 

@@ -81,6 +81,7 @@ export type {
   ProjectMetadataWithoutFactoryInfo,
 } from '@shared/models/project-metadata.model';
 export type {
+  ContentZoomAreaId,
   GetWebViewOptions,
   OpenWebViewOptions,
   SavedWebViewDefinition,
@@ -134,6 +135,7 @@ export type {
 export type {
   AppWindowInputEvent,
   AppWindowInputKind,
+  FocusedWindowIdEvent,
   FocusSubject,
   SetFocusSubject,
   SetFocusSpecifier,

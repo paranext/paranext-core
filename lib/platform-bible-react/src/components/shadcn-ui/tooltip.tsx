@@ -6,9 +6,10 @@ import { Tooltip as TooltipPrimitive } from 'radix-ui';
 import { cn } from '@/utils/shadcn-ui/utils';
 // CUSTOM: Import ButtonProps and buttonVariants to allow TooltipTrigger to accept button variants
 import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
-// CUSTOM: Use Z_INDEX_TOOLTIP (above Z_INDEX_MODAL=500) so tooltips triggered from
-// inside a modal dialog (e.g. help icons in form fields) render above the modal instead
-// of behind it. The prior Z_INDEX_ABOVE_DOCK=250 was below the modal layer.
+// CUSTOM: Use the shared Z_INDEX_TOOLTIP constant rather than a stock z-class. A tooltip must
+// clear every layer that can hold its trigger — modal dialogs and the overlay layer (popovers,
+// selects, dropdown and context menus, the menubar) — or it renders behind the surface it
+// describes. The ordering is pinned by z-index.test.tsx.
 import { Z_INDEX_TOOLTIP } from '@/components/z-index';
 
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
@@ -87,9 +88,10 @@ function TooltipContent({
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
-        // CUSTOM: Use Z_INDEX_TOOLTIP (above Z_INDEX_MODAL=500) so tooltips triggered from
-        // inside a modal dialog (e.g. help icons in form fields) render above the modal instead
-        // of behind it. The prior Z_INDEX_ABOVE_DOCK=250 was below the modal layer.
+        // CUSTOM: Use the shared Z_INDEX_TOOLTIP constant rather than a stock z-class. A tooltip
+        // must clear every layer that can hold its trigger — modal dialogs and the overlay layer
+        // (popovers, selects, dropdown and context menus, the menubar) — or it renders behind the
+        // surface it describes. The ordering is pinned by z-index.test.tsx.
         style={{ zIndex: Z_INDEX_TOOLTIP, ...style }}
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation

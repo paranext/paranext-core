@@ -50,7 +50,6 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
-  DisabledActionTooltip,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
@@ -61,18 +60,15 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
   ScrollGroupSelector,
   SelectMenuItemHandler,
-  SHRINK_STEP,
   Spinner,
   TabToolbar,
-  ToolbarCompoundLabel,
-  useShrinkStepValue,
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   isMacOs,
   usePromise,
+  useViewVisibility,
 } from 'platform-bible-react';
 import {
   clearPaletteSessionIfCurrent,
@@ -110,13 +106,16 @@ import {
 } from 'platform-scripture-editor';
 import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
-import { ChevronDown } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
 } from './structure-protection-button.component';
+import {
+  ParagraphStyleTrigger,
+  PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
+} from './paragraph-style-trigger.component';
 import { useMarkerSettleDelay } from './use-marker-settle-delay.hook';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
@@ -135,7 +134,12 @@ import {
   mergeDecorations,
   removeDecorations,
 } from './decorations.util';
-import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import {
+  getVerseElement,
+  runOnFirstLoad,
+  scrollToAnnotation,
+  scrollToVerse,
+} from './editor-dom.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
@@ -143,6 +147,7 @@ import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
+import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -208,78 +213,6 @@ function PortalContents({ children }: PropsWithChildren) {
 }
 
 /**
- * Characters the paragraph-style trigger reserves for the USFM marker. UX set six, which fits the
- * long markers in ordinary use (`periph`). Must match the `tw:w-[6ch]` literal on the marker slot —
- * Tailwind cannot read this constant, so the two are kept in step by hand.
- */
-const MARKER_SLOT_CHARACTERS = 6;
-
-/**
- * Separator between the marker and its style name. Shared by the rendered label and the tooltip's
- * full text so the two can never disagree about how the label reads.
- */
-const MARKER_STYLE_SEPARATOR = ' - ';
-
-/**
- * Label for the paragraph-style trigger: the marker code, then the style name.
- *
- * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which
- * `TabToolbarContainer` publishes. `PlatformScriptureEditor` _renders_ the `TabToolbar`, so a hook
- * call there would sit above the provider and read the widest step forever. This renders as the
- * toolbar's descendant, so it sees the real value.
- */
-function ParagraphStyleLabel({
-  blockMarker,
-  styleName,
-}: {
-  blockMarker: string;
-  /** Undefined until the localized strings resolve, and for any marker without a description. */
-  styleName: string | undefined;
-}) {
-  const shrinkStep = useShrinkStepValue();
-  // With no style name there is nothing to put beside the marker, so the label is already at its
-  // shortest form — and `fullText` must not advertise a name it cannot show.
-  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM || !styleName;
-  // A marker longer than the slot is cut without an ellipsis, and a clipped `restor` still reads as
-  // a plausible marker — so declare the label partial and let the tooltip carry the real one.
-  // `ToolbarCompoundLabel`'s own clip detection cannot see this: it watches the style name.
-  const isMarkerClipped = blockMarker.length > MARKER_SLOT_CHARACTERS;
-
-  return (
-    <ToolbarCompoundLabel
-      // A USFM marker is a code, so it reads as one — monospace, inheriting the row's foreground
-      // rather than taking a marker colour.
-      //
-      // The slot is a fixed 6 characters at every step, not sized to the marker: monospace makes
-      // `6ch` exactly six glyphs, which is the width UX asked for, and a content-sized slot would
-      // resize the trigger as the cursor moved between a `p` and a `toc1`, shifting every button
-      // after it. `overflow-hidden` keeps a longer marker inside the slot instead of pushing the
-      // chevron out. Written as a literal because Tailwind extracts class names statically — an
-      // interpolated `tw:w-[${n}ch]` would silently emit no rule at all.
-      primary={
-        // `inline-flex` + `items-center`, not `inline-block`. The slot is taller than its siblings
-        // — a monospace line box against the row's proportional one — and an `inline-block` puts
-        // its text at the top of that taller box, so centring the box on the row still leaves the
-        // marker sitting visibly high next to the style name. A flex container centres its own
-        // content instead, which removes the offset at the source rather than compensating for it.
-        // The marker menu's rows have no fixed slot at all, which is why they never showed this.
-        <span className="tw:inline-flex tw:w-[6ch] tw:items-center tw:overflow-hidden tw:font-mono">
-          {blockMarker}
-        </span>
-      }
-      secondary={styleName}
-      separator={MARKER_STYLE_SEPARATOR}
-      showSecondary={!isAtMinimum}
-      isPartial={isMarkerClipped || (!!styleName && isAtMinimum)}
-      fullText={styleName ? `${blockMarker}${MARKER_STYLE_SEPARATOR}${styleName}` : blockMarker}
-      // A ceiling, not a width: long style names stop the trigger growing without bound, but the
-      // label still shrinks below this.
-      className="tw:max-w-[30ch]"
-    />
-  );
-}
-
-/**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
  * to listen for the editor to finish loading
  *
@@ -340,7 +273,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   SYNC_EDIT_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-  '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%',
+  ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
   '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%',
@@ -1314,6 +1247,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [viewType, isPowerMode]);
 
   /**
+   * {@link toBookChapterKey} of the chapter the engine was last handed content for. A jump into
+   * another chapter waits on this rather than on a delay, because selecting before the engine has
+   * the new chapter resolves the range against the old one. State rather than a ref so the waiting
+   * jump re-runs when it changes.
+   */
+  const [editorChapterKey, setEditorChapterKey] = useState<string | undefined>(undefined);
+  /**
+   * The chapter this render's content subscription is for. `useEditorPdpSync` applies content in
+   * the commit of the render that delivered it, so this is the chapter of the content being
+   * applied.
+   *
+   * Correctness rests on `useEditorPdpSync` calling `setEditorUsj` only for a genuinely NEW
+   * `(usjFromPdp, documentSelector)` pair (its `lastProcessedUsjFromPdp` guard). During navigation
+   * there is a window where `scrRef` — and so this ref, updated every render below — has already
+   * moved to the new chapter while `usjFromPdp` still holds the PREVIOUS chapter's content
+   * (`useProjectData` keeps serving the old value until the new subscription's first delivery
+   * lands). That window is harmless here: for as long as it lasts, `usjFromPdp` is unchanged from
+   * what `useEditorPdpSync` already processed, so its guard skips the effect entirely and
+   * `setEditorUsj` — the only thing that reads this ref — is not called against it. By the time a
+   * delivery DOES pass that guard, the platform's data-hook contract guarantees it belongs to the
+   * selector current at that point, which is the same chapter this ref was just updated to.
+   */
+  const renderedChapterKeyRef = useRef(toBookChapterKey(scrRef));
+  renderedChapterKeyRef.current = toBookChapterKey(scrRef);
+  /**
    * Function to run to set the editor's USJ content. Also clears annotation info because setting
    * the editor's USJ silently removes all annotations
    *
@@ -1322,6 +1280,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const setEditorUsj = useRef((usj: Usj) => {
     editorRef.current?.setUsj(usj);
     clearAnnotationInfo.current();
+    setEditorChapterKey(renderedChapterKeyRef.current);
+  });
+
+  const isViewVisible = useViewVisibility();
+  // Jumps to a range — Find, Checks, Comments — select and scroll the range itself into view; see
+  // `computeRangeScrollTop` in editor-dom.util.ts for exactly where it lands.
+  //
+  // Hidden case: those panels drive this editor from elsewhere, and in Power mode they can share its
+  // tab stack. The selection is applied at once; the scroll waits for this tab to be shown, then
+  // runs once, instantly, for the latest request. See `useScrollToRange`.
+  const { requestScrollToRange, consumeRangeScrollClaimFor } = useScrollToRange({
+    editorRef,
+    editorChapterKey,
+    isViewVisible,
   });
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
@@ -1386,8 +1358,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       ),
     [localizedStrings, isStructureProtected, notifyStructureProtected, restoreEditorSelection],
   );
-
-  const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
 
   const insertCommentAtCurrentSelection = useCallback(() => {
     const selection = currentSelectionRef.current;
@@ -1659,16 +1629,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           const { scrRef: targetScrRef, range } = editorMessage;
           logger.debug(`selectRange targetScrRef ${serialize(targetScrRef)} ${serialize(range)}`);
 
-          if (compareScrRefs(scrRef, targetScrRef) !== 0) {
-            // Need to update scr ref, let the editor load the Scripture text at the new scrRef,
-            // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
-            // which will set the range after a short wait time in a `useEffect` below
-            setScrRefWithScroll(targetScrRef);
-            nextSelectionRange.current = range;
-          }
-          // We're on the right scr ref. Go ahead and set the selection
-          else editorRef.current?.setSelection(range);
-
+          // Requested before navigating, so the jump records the chapter it started from.
+          requestScrollToRange(range, targetScrRef);
+          // Keeps the scroll group on the range's verse. The verse scroll this sets off stands down
+          // for a reference a range scroll owns (see the scroll effect below).
+          if (compareScrRefs(scrRef, targetScrRef) !== 0) setScrRefWithScroll(targetScrRef);
           break;
         }
         case 'updateDecorations': {
@@ -1897,6 +1862,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     insertCrossReferenceAtCurrentSelection,
     scrRef,
     setScrRefWithScroll,
+    requestScrollToRange,
     decorations,
     setDecorations,
     setFootnotesPaneVisible,
@@ -1918,7 +1884,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         notifyStructureProtected,
         restoreEditorSelection,
         contextMarker,
-        styleInfo,
       ),
     [
       contextMarker,
@@ -1926,7 +1891,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       isStructureProtected,
       notifyStructureProtected,
       restoreEditorSelection,
-      styleInfo,
     ],
   );
 
@@ -2694,8 +2658,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // `CLEAR_HISTORY_COMMAND` unconditionally, so anything that re-runs it moments after an edit
     // wipes the undo stack. `@eten-tech-foundation/platform-editor` 0.8.15 is the first published
     // version that holds that effect's inputs stable BY VALUE rather than by reference; 0.8.14 does
-    // not. The pin is `~0.8.15`, so a patch release could regress it without a bump review, and no
-    // test here or upstream covers undo for this path — re-check it by hand when the pin moves.
+    // not. The editor is staged from the revision `dev-packages.json` pins, so it can change with
+    // no version diff here at all, and no test here or upstream covers undo for this path —
+    // re-check it by hand whenever that revision moves.
     editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
   }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
 
@@ -2715,6 +2680,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // The round trip the in-flight guard above was waiting for has completed, regardless of what
     // caused this transition.
     if (pendingScaffoldInsertRef.current) {
+      // Not gated on `consumeRangeScrollClaimFor`, unlike the two verse scrolls above: this one
+      // fires only for an insert the user's own click in THIS editor triggered, which no cross-view
+      // range jump can be concurrent with. Gate it if that ever stops being true — the `focus()`
+      // below would also re-collapse a just-applied selection.
       scrollToVerse(scrRef);
       editorRef.current?.focus();
     }
@@ -3308,7 +3277,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // TODO: hook into the editor and detect when it has loaded somehow
       const cancelRunOnLoad = runOnFirstLoad(() => {
         hasFirstRetrievedScripture.current = true;
-        scrollToVerse(scrRef);
+        // A range scroll (a find match, a check result) owns where this reference lands, exactly as
+        // the reference-scroll effect below defers to it — this poll runs every 100ms, so a jump
+        // landing in that window must not be overwritten by a plain verse-start scroll.
+        if (!consumeRangeScrollClaimFor(scrRef)) scrollToVerse(scrRef);
         editorRef.current?.focus();
         // On Load, the editor sets the selection to `scrRef`. Since this is an internal change, we
         // don't want to scroll again when we get this scrRef back from the PDP, so we set
@@ -3321,9 +3293,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     // Do nothing in destructor since we didn't do anything. TypeScript requires a returned function
     return () => {};
-  }, [usjFromPdp, scrRef]);
+  }, [usjFromPdp, scrRef, consumeRangeScrollClaimFor]);
 
-  // Scroll the selected verse and selection range into view
+  // Scroll the selected verse into view
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
     if (
@@ -3339,25 +3311,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     let highlightedVerseElement: HTMLElement | undefined;
 
-    // Queue up the next selection range to be set and clear it so we don't accidentally set the
-    // range to the wrong thing
-    const nextRange = nextSelectionRange.current;
-    nextSelectionRange.current = undefined;
-
     // Wait before scrolling to make sure there is time for the editor to load
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
-      // Scroll to and add a highlight to the current verse element
-      highlightedVerseElement = scrollToVerse(scrRef);
+      // A range scroll (a find match, a check result) owns where this reference lands. Scrolling to
+      // the verse as well would drag a match low in a long verse back off screen, so only highlight.
+      highlightedVerseElement = consumeRangeScrollClaimFor(scrRef)
+        ? getVerseElement(scrRef.verseNum)
+        : scrollToVerse(scrRef);
       highlightedVerseElement?.classList.add('highlighted');
 
       // Clear the internal verse ref since we've handled it and also clear the volatile
       // allow-scroll flag so this special-casing only happens once.
       internalVerseLocationRef.current = undefined;
       allowScrollForInternalRef.current = false;
-
-      // Set the selection if the selection was set to something as part of this scr ref change
-      if (nextRange) editorRef.current?.setSelection(nextRange);
     }, EDITOR_LOAD_DELAY_TIME);
 
     return () => {
@@ -3368,7 +3335,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Remove highlight from the current verse element
       highlightedVerseElement?.classList.remove('highlighted');
     };
-  }, [scrRef]);
+  }, [scrRef, consumeRangeScrollClaimFor]);
 
   const onCommentEditorCancel = useCallback(() => {
     // Remove the pending annotation if one was created
@@ -3738,6 +3705,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               canAddChapterNumber(lastVerse)
             }
             onAddChapterNumber={handleAddChapterNumber}
+            announcementKey={`${projectId}:${scrRef.book} ${scrRef.chapterNum}`}
           />
         )}
         {/* The empty-chapter view HIDES this subtree rather than replacing it, for the same reason
@@ -3792,7 +3760,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               )
             }
           >
-            <ParagraphMarkerTooltipOverlay>{editorTree}</ParagraphMarkerTooltipOverlay>
+            <ParagraphMarkerTooltipOverlay enabled={!isPowerMode}>
+              {editorTree}
+            </ParagraphMarkerTooltipOverlay>
           </CharacterMarkerBarOverlay>
         </div>
       </>
@@ -3840,7 +3810,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
-        className={`scripture-editor-tab-nav tw:block tw:z-10${isPowerMode ? '' : ' scripture-editor-tab-nav-simple'}`}
+        className={`scripture-editor-tab-nav tw:z-10${isPowerMode ? '' : ' scripture-editor-tab-nav-simple'}`}
         startAreaChildren={
           <>
             {bcvControls}
@@ -3855,69 +3825,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   localizedStrings={localizedStrings}
                 />
 
-                {/* Truthy, not just defined: an empty marker has nothing to put in the fixed
-                    marker slot, so the trigger would render a blank six-character box followed by
-                    a dangling " - " and the generic fallback description. No marker and no block
-                    are the same state to a user, so they read the same way. */}
-                {!!blockMarker && (
-                  <DisabledActionTooltip
-                    disabled={isStructureProtected}
-                    tooltipText={
-                      localizedStrings[
-                        '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
-                      ]
-                    }
-                    // This wrapper div — not the Button inside it — is the toolbar zone's flex
-                    // item, so this is where the shrink floor has to be lifted. Without it the div
-                    // stays pinned at min-content and the Button's own `tw:min-w-0` can never come
-                    // into play, because the box around it never narrows.
-                    className="tw:min-w-0"
-                  >
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          // `tw:min-w-0` lets the button shrink inside the wrapper so its label can
-                          // truncate rather than push the end-zone buttons out of the clipped
-                          // toolbar. It only bites because the wrapper above carries the same
-                          // floor-lift; on its own it would be inert. The width ceiling lives on
-                          // the label itself (30 characters) so it is expressed in the same units
-                          // UX specified it in — see ParagraphStyleLabel.
-                          className="tw:h-8 tw:min-w-0"
-                          aria-label="Paragraph Selection"
-                          // No native `title` here. The label inside now raises its own tooltip
-                          // whenever it is abbreviated or clipped, and a native tooltip would open
-                          // on top of it a beat later — two overlapping bubbles for one control.
-                          // `aria-label` still names the button for assistive technology.
-                          disabled={isStructureProtected}
-                          variant="outline"
-                        >
-                          <ParagraphStyleLabel
-                            blockMarker={blockMarker}
-                            styleName={blockMarkerName}
-                          />
-                          {/* An icon has no shorter form, so it must never be the thing squeezed. */}
-                          <ChevronDown className="tw:shrink-0" />
-                        </Button>
-                      </PopoverTrigger>
-                      {/* 384px is the width this menu wants, not a width it can insist on. Simple
-                          mode gives the editor ~302px at the 900px window minimum, and a fixed
-                          384px popover lays out at full width and is then clipped by the web view
-                          edge — taking roughly 80px of every row with it, including the ellipsis
-                          each row had correctly truncated to. The rows were degrading properly into
-                          space nobody could see. Radix measures the room actually available and
-                          publishes it, so cap against that and let the menu narrow instead. */}
-                      <PopoverContent className="tw:w-96 tw:max-w-(--radix-popover-content-available-width) tw:p-0">
-                        <MarkerMenu
-                          localizedStrings={localizedStrings}
-                          markerMenuItems={paragraphSwitcherMenuItems}
-                          searchPlaceholder={
-                            localizedStrings['%markerMenu_searchPlaceholder_paragraph%']
-                          }
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </DisabledActionTooltip>
-                )}
+                <ParagraphStyleTrigger
+                  blockMarker={blockMarker}
+                  styleName={blockMarkerName}
+                  isStructureProtected={isStructureProtected}
+                  markerMenuItems={paragraphSwitcherMenuItems}
+                  localizedStrings={localizedStrings}
+                />
               </>
             )}
           </>

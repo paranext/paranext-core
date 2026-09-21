@@ -3,7 +3,7 @@ import {
   PlatformMenubar,
 } from '@/components/advanced/menus/platform-menubar.component';
 import { cn } from '@/utils/shadcn-ui/utils';
-import { ShrinkStepContext } from '@/context/shrink-step.context';
+import { ShrinkStepContext, useShrinkStepOverride } from '@/context/shrink-step.context';
 import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { PropsWithChildren, ReactNode, useCallback, useState } from 'react';
@@ -47,15 +47,6 @@ export type ToolbarProps = PropsWithChildren<{
 
   /** Variant of the menubar */
   menubarVariant?: 'default' | 'muted';
-
-  /**
-   * Overrides the shrink step this toolbar would otherwise measure from its own width, and
-   * publishes it to descendants through `ShrinkStepContext`. Higher means narrower.
-   *
-   * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
-   * the app, leave this unset and let the toolbar measure itself.
-   */
-  shrinkStep?: number;
 }>;
 
 /**
@@ -124,7 +115,6 @@ export function Toolbar({
   configAreaChildren,
   shouldUseAsAppDragArea,
   menubarVariant = 'default',
-  shrinkStep: shrinkStepOverride,
 }: ToolbarProps) {
   // The content row lives in state, not a ref: mutating `ref.current` does not re-run the effect
   // inside `useShrinkStep`, so a ref would leave the observer permanently unattached.
@@ -134,7 +124,9 @@ export function Toolbar({
     [],
   );
   const measuredShrinkStep = useShrinkStep(contentRowNode, APP_TOOLBAR_SHRINK_THRESHOLDS_PX);
-  const shrinkStep = shrinkStepOverride ?? measuredShrinkStep;
+  // A `ShrinkStepOverride` above this wins, so stories and tests can pin a step where there is no
+  // layout engine to measure with.
+  const shrinkStep = useShrinkStepOverride() ?? measuredShrinkStep;
 
   return (
     <ShrinkStepContext.Provider value={shrinkStep}>

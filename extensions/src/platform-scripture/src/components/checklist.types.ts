@@ -17,7 +17,7 @@ import type { ScriptureRange } from 'platform-scripture';
 export const CHECKLIST_STRING_KEYS = Object.freeze([
   // Toolbar — selector trigger labels (aria-label on the outline-button stand-ins)
   '%markersChecklist_toolbar_primaryProject%',
-  '%markersChecklist_toolbar_comparativeTexts%',
+  '%markersChecklist_toolbar_comparativeProjects%',
   '%markersChecklist_toolbar_verseRange%',
   // Toolbar — action buttons + view dropdown
   '%markersChecklist_toolbar_copy%',

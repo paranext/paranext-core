@@ -1,4 +1,4 @@
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import {
   closeAllNonHomeDockTabs,
