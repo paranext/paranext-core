@@ -1,18 +1,28 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { beforeAll, vi } from 'vitest';
+import { afterAll, beforeAll, vi } from 'vitest';
 import { Dialog } from 'platform-bible-react';
 import ProjectPicker, {
   type ProjectItem,
   type ProjectPickerLocalizedStrings,
 } from './project-picker.component';
 
-// jsdom implements no ResizeObserver; the row tooltip's popper wires one.
+// jsdom implements no ResizeObserver (the row tooltip's popper wires one) and no
+// `scrollIntoView` (the listbox's keyboard navigation calls it whenever a row takes focus).
+const originalScrollIntoView = Element.prototype.scrollIntoView;
 beforeAll(() => {
   vi.stubGlobal(
     'ResizeObserver',
     vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
   );
+  Element.prototype.scrollIntoView = vi.fn();
+});
+afterAll(() => {
+  vi.unstubAllGlobals();
+  // `vi.unstubAllGlobals` does not reach a prototype assignment, so put the original back by hand
+  // rather than leaving a stub on `Element` for every file sharing this worker. jsdom ships no
+  // `scrollIntoView`, so the captured value is `undefined` and restoring it restores the absence.
+  Element.prototype.scrollIntoView = originalScrollIntoView;
 });
 
 const STRINGS: ProjectPickerLocalizedStrings = {
