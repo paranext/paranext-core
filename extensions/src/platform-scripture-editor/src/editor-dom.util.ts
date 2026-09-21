@@ -1,7 +1,7 @@
 import { logger } from '@papi/frontend';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Unsubscriber } from 'platform-bible-utils';
-import { LivePopoverAnchorSource } from './use-live-popover-anchor.hook';
+import { leftEdgeRect, LivePopoverAnchorSource, measureRange } from 'platform-bible-react';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -574,29 +574,23 @@ export function measureAnnotation(id: string): DOMRect | undefined {
   const rects = Array.from(document.querySelectorAll(annotationSelector(id))).flatMap((element) =>
     Array.from(element.getClientRects()),
   );
-  if (rects.length === 0) return undefined;
-  const left = Math.min(...rects.map((rect) => rect.left));
-  const top = Math.min(...rects.map((rect) => rect.top));
-  const right = Math.max(...rects.map((rect) => rect.right));
-  const bottom = Math.max(...rects.map((rect) => rect.bottom));
-  return new DOMRect(left, top, right - left, bottom - top);
-}
-
-/**
- * The current viewport rect of a text range, or `undefined` when the range no longer lies in
- * rendered text (its nodes were replaced, so it collapsed to an element boundary that has no box).
- */
-export function measureRange(range: Range): DOMRect | undefined {
-  if (range.getClientRects().length === 0) return undefined;
-  return range.getBoundingClientRect();
-}
-
-/**
- * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
- * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
- */
-export function leftEdgeRect(rect: DOMRect): DOMRect {
-  return new DOMRect(rect.left, rect.top, 0, rect.height);
+  const [first, ...rest] = rects;
+  if (!first) return undefined;
+  const bounds = rest.reduce(
+    (accumulator, rect) => ({
+      left: Math.min(accumulator.left, rect.left),
+      top: Math.min(accumulator.top, rect.top),
+      right: Math.max(accumulator.right, rect.right),
+      bottom: Math.max(accumulator.bottom, rect.bottom),
+    }),
+    { left: first.left, top: first.top, right: first.right, bottom: first.bottom },
+  );
+  return new DOMRect(
+    bounds.left,
+    bounds.top,
+    bounds.right - bounds.left,
+    bounds.bottom - bounds.top,
+  );
 }
 
 /**

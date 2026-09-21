@@ -340,6 +340,13 @@ export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export { useViewVisibility } from './hooks/use-view-visibility.hook';
 export { useRunWhenVisible } from './hooks/use-run-when-visible.hook';
 export {
+  useLivePopoverAnchor,
+  measureRange,
+  leftEdgeRect,
+  type LivePopoverAnchor,
+  type LivePopoverAnchorSource,
+} from './hooks/use-live-popover-anchor.hook';
+export {
   pickTabIconUrl,
   useTabIconSelection,
   type TabIconUrls,

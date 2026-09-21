@@ -26,10 +26,8 @@ import {
   isEchoOfPublishedScrRef,
   isSameScrollGeometry,
   isSameVerseRef,
-  leftEdgeRect,
   measureAnnotation,
   measureBaselineOffset,
-  measureRange,
   measureRangeScrollGeometry,
   paraAtPoint,
   RANGE_SCROLL_TOP_OFFSET,
@@ -1268,55 +1266,6 @@ describe('measureAnnotation', () => {
     addAnnotationFragment(elsewhere, 'abc', [new DOMRect(10, 10, 10, 10)]);
 
     expect(measureAnnotation('abc')).toBeUndefined();
-  });
-});
-
-describe('measureRange', () => {
-  afterEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  function addParagraphRange() {
-    const paragraph = document.createElement('p');
-    paragraph.textContent = 'In the beginning';
-    document.body.appendChild(paragraph);
-    const range = document.createRange();
-    range.selectNodeContents(paragraph);
-    return range;
-  }
-
-  it('has no rect once the range no longer lies in rendered text', () => {
-    // The editor replaces text nodes as it re-renders; the range then collapses to an element
-    // boundary, which paints nothing.
-    const range = addParagraphRange();
-    stubClientRects(range, []);
-
-    expect(measureRange(range)).toBeUndefined();
-  });
-
-  it('is the range box while the text is rendered', () => {
-    const range = addParagraphRange();
-    stubClientRects(range, [new DOMRect(30, 60, 120, 18)]);
-
-    expect(rectNumbers(measureRange(range))).toEqual({
-      x: 30,
-      y: 60,
-      width: 120,
-      height: 18,
-    });
-  });
-});
-
-describe('leftEdgeRect', () => {
-  it('collapses to the left edge and keeps the full height', () => {
-    // A pop-up anchored on this sits below all of the original rect and centered on its left edge,
-    // instead of centered under a wide caller.
-    expect(rectNumbers(leftEdgeRect(new DOMRect(40, 100, 260, 40)))).toEqual({
-      x: 40,
-      y: 100,
-      width: 0,
-      height: 40,
-    });
   });
 });
 

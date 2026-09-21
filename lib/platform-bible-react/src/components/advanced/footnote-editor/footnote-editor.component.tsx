@@ -51,6 +51,11 @@ import { UndoRedoButtons } from '@/components/basics/undo-redo-buttons.component
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
 import { EditorKeyboardShortcuts } from '@/components/basics/editor-keyboard-shortcuts.component';
+import {
+  leftEdgeRect,
+  measureRange,
+  useLivePopoverAnchor,
+} from '@/hooks/use-live-popover-anchor.hook';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
@@ -296,14 +301,8 @@ export default function FootnoteEditor({
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
 
   /**
-   * The selection the inline markers menu opened at, kept as a detached copy so moving focus into
-   * the menu's search box does not move it.
-   */
-  const markersMenuRangeRef = useRef<Range | undefined>(undefined);
-  const markersMenuLastRectRef = useRef<DOMRect | undefined>(undefined);
-  /**
-   * The inline markers menu's anchor: a virtual element that reads the zero-width left edge of
-   * {@link markersMenuRangeRef} every time the menu is positioned. It is not an element placed
+   * The inline markers menu's anchor: a virtual element that reads the zero-width left edge of the
+   * selection the menu opened at, every time the menu is positioned. It is not an element placed
    * inside this component from client-rect offsets because this component can sit inside a
    * CSS-`zoom`ed pop-up. There, client rects are painted pixels, and an offset written back as
    * `top`/`left` is scaled by the zoom a second time. The range's own viewport rect is correct at
@@ -311,19 +310,7 @@ export default function FootnoteEditor({
    * reflows. If the range can no longer be measured (its text was re-rendered away), the last rect
    * is kept.
    */
-  const markersMenuAnchorRef = useRef({
-    getBoundingClientRect: (): DOMRect => {
-      const range = markersMenuRangeRef.current;
-      if (range && range.getClientRects().length > 0) {
-        const rect = range.getBoundingClientRect();
-        markersMenuLastRectRef.current = new DOMRect(rect.left, rect.top, 0, rect.height);
-      }
-      return markersMenuLastRectRef.current ?? new DOMRect();
-    },
-    get contextElement(): Element | undefined {
-      return editorParentRef.current ?? undefined;
-    },
-  });
+  const markersMenuAnchor = useLivePopoverAnchor();
 
   const [contextMarker, setContextMarker] = useState<string | undefined>();
 
@@ -696,14 +683,21 @@ export default function FootnoteEditor({
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
-    if (inlineMarkerMenuItems.length && currentSelection && currentSelection.rangeCount > 0) {
-      markersMenuRangeRef.current = currentSelection.getRangeAt(0).cloneRange();
-      markersMenuLastRectRef.current = undefined;
-      // Take the rect now, while the range is sure to be measurable.
-      markersMenuAnchorRef.current.getBoundingClientRect();
-      setShowMarkersMenu(true);
-    }
-  }, [inlineMarkerMenuItems]);
+    if (!inlineMarkerMenuItems.length || !currentSelection || currentSelection.rangeCount === 0)
+      return;
+    // A selection with nothing to anchor to has nowhere to place the menu.
+    const contextElement = editorParentRef.current;
+    if (!contextElement) return;
+    const range = currentSelection.getRangeAt(0).cloneRange();
+    markersMenuAnchor.setSource({
+      measure: () => {
+        const rect = measureRange(range);
+        return rect && leftEdgeRect(rect);
+      },
+      contextElement,
+    });
+    setShowMarkersMenu(true);
+  }, [inlineMarkerMenuItems, markersMenuAnchor]);
 
   /**
    * Always-current {@link runPaletteSessionKey} (assigned below, once it exists). The palette
@@ -1167,7 +1161,7 @@ export default function FootnoteEditor({
       </div>
       {/** Inline markers menu components */}
       <Popover open={showMarkersMenu}>
-        <PopoverAnchor virtualRef={markersMenuAnchorRef} />
+        <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
         <PopoverContent
           className="tw:w-[500px] tw:p-0"
           onClick={(event) => {
