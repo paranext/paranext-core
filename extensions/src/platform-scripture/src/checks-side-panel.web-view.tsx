@@ -591,12 +591,19 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 },
               }
             : location;
-        editorWebViewController.selectRange({
-          // Transform deprecated check result locations to the new format. The old check result
-          // types don't have book/chapter info in the location, so we need to add them.
-          start: normalizeLocation(selectedResult.start),
-          end: normalizeLocation(selectedResult.end),
-        });
+        editorWebViewController
+          .selectRange({
+            // Transform deprecated check result locations to the new format. The old check result
+            // types don't have book/chapter info in the location, so we need to add them.
+            start: normalizeLocation(selectedResult.start),
+            end: normalizeLocation(selectedResult.end),
+          })
+          .catch((e) => {
+            // The editor could not select the range, so fall back to the verse the way the branch
+            // below does when there is no editor to ask.
+            logger.warn(`Checks: failed to select result in editor: ${getErrorMessage(e)}`);
+            setScrRef(selectedResult.verseRef);
+          });
       } else {
         // Could not get controller to set specific range, so at least set the verse ref
         setScrRef(selectedResult.verseRef);
