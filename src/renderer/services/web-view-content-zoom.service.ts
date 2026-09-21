@@ -655,11 +655,17 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
   const pendingWriteMatchesStamp = pendingWrite !== undefined && pendingWrite.identity === stamp;
   if (storedStamp === undefined) {
     if (hasOwnLevels) {
+      // An unread `cachedMemory` is `{}` by construction, not evidence that nothing is remembered
+      // (same reasoning as the `!memoryLoaded` guard below): merging it in here would stamp the
+      // pane as reconciled with this identity before memory ever had a chance to contribute
+      // anything, and no later report would revisit it once "The stamp matches the pane's
+      // identity" starts short-circuiting this function on every future call.
+      if (!memoryLoaded) return;
       // Committed-levels half of "no stamp, and the pane already has something of its own" above:
       // fill only the areas its own state lacks, exactly as state → memory → default precedence
       // works everywhere else (getInitialContentZoomForWebView).
       const merged: Levels = { ...getOwnLevels(definition) };
-      Object.entries(collectMemoryLevelsFor(cachedMemory, id)).forEach(([areaId, level]) => {
+      Object.entries(settledMemoryLevelsFor(id)).forEach(([areaId, level]) => {
         if (merged[areaId] === undefined) merged[areaId] = level;
       });
       deps.updateDefinition(webViewId, {
@@ -688,7 +694,7 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
     ownLevelWriteTimers.delete(webViewId);
   }
   const state: Record<string, unknown> = { ...(definition.state ?? {}) };
-  const levels = collectMemoryLevelsFor(cachedMemory, id);
+  const levels = settledMemoryLevelsFor(id);
   if (Object.keys(levels).length === 0) {
     // Nothing to give this pane and nothing it may keep: a re-pointed pane's old levels and stamp
     // go, and a pane that had neither is left exactly as it was rather than written to.
@@ -943,6 +949,29 @@ function collectMemoryLevelsFor(memory: MemoryRecord, id: MemoryIdentity): Level
   return levels;
 }
 
+/**
+ * {@link collectMemoryLevelsFor}, minus any area this window has an unresolved memory write of its
+ * own for: one still pending in {@link pendingMemoryWrites} whose value disagrees with what
+ * {@link cachedMemory} holds — a debounced local edit {@link cachedMemory} has not caught up with yet
+ * — or one this window gave up on ({@link givenUpMemoryWrites}) whose superseded value is still what
+ * {@link cachedMemory} holds. {@link syncSiblingsFromMemory} applies the identical per-key check
+ * while patching a sibling; {@link seedFromMemory} needs the same guard on the areas it reads before
+ * writing a pane's state wholesale, so a re-seed reached while this window's own delete is still in
+ * flight cannot read `cachedMemory`'s stale, not-yet-overwritten value back as "still remembered".
+ */
+function settledMemoryLevelsFor(id: MemoryIdentity): Levels {
+  const levels: Levels = {};
+  Object.entries(cachedMemory).forEach(([key, remembered]) => {
+    const parsed = parseContentZoomMemoryKey(key);
+    if (!parsed || parsed.kind !== id.kind || parsed.identity !== id.identity) return;
+    if (pendingMemoryWrites.has(key) && pendingMemoryWrites.get(key) !== remembered) return;
+    const givenUp = givenUpMemoryWrites.get(key);
+    if (givenUp && remembered === givenUp.superseded) return;
+    levels[parsed.areaId] = remembered;
+  });
+  return levels;
+}
+
 function memoryKeyFor(
   definition: Pick<SavedWebViewDefinition, 'webViewType' | 'projectId' | 'state'>,
   areaId: ContentZoomAreaId,
@@ -1145,14 +1174,17 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
     const state: Record<string, unknown> = { ...(definition.state ?? {}) };
     // The identity stamp lives exactly as long as the levels it belongs to: a pane that has levels
     // always says which project they were chosen for, and a pane that gives them up keeps no stamp
-    // that a later re-point would judge the next project's levels against.
+    // that a later re-point would judge the next project's levels against — a stamp with no levels
+    // behind it would tell `seedFromMemory` this pane is already reconciled with its identity and
+    // stop it from ever restoring a level a sibling remembers for that same, still-current identity.
     if (Object.keys(levels).length === 0) {
       delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+      delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
     } else {
       state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+      if (currentStamp !== undefined) state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = currentStamp;
+      else delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
     }
-    if (currentStamp !== undefined) state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = currentStamp;
-    else delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
     if (!deps.updateDefinition(webViewId, { state })) return false;
   } catch (e) {
     logger.warn(
@@ -1352,6 +1384,11 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
         // re-seed is owed first (missed because memory hadn't loaded, or because this ran before
         // onDidUpdateWebView registered), not a patch of another project's level onto it.
         reseedIfIdentityChanged(definition.id);
+        // The re-seed's outcome is not visible from here — it may be a deliberate no-op, e.g. a
+        // pending own-level write already chosen for this identity outranking memory — so this
+        // pane's catch-up is unconfirmed. Leave the delta owed rather than letting the walk's
+        // record advance past whatever it still owes this pane.
+        everyPaneTookItsUpdate = false;
         return;
       }
       const levels: Levels = { ...effectiveOwnLevels(current) };
