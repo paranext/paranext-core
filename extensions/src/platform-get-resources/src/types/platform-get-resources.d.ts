@@ -17,6 +17,18 @@ declare module 'platform-get-resources' {
    */
   export type DblResourceUpdateStatus = { [dblEntryUid: string]: boolean | undefined };
 
+  /**
+   * The local project id each catalogued DBL resource is installed as, keyed by DBL Entry UID. An
+   * empty string means the resource is not installed; a resource absent from the map is one the
+   * backend did not report on, and keeps whatever the caller already has.
+   *
+   * Only the backend can produce this: a resource project's id is unrelated to the DBL entry it was
+   * installed from — the entry uid is recorded in the project's settings, which is what
+   * ParatextData matches on — so nothing in the local project list identifies the catalog row it
+   * belongs to.
+   */
+  export type DblResourceInstallStatus = { [dblEntryUid: string]: string | undefined };
+
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
     /**
      * Recomputes whether a newer version of each known resource is available from the DBL,
@@ -36,6 +48,25 @@ declare module 'platform-get-resources' {
      * @returns Whether an update is available, keyed by DBL Entry UID.
      */
     recomputeDblResourcesUpdateStatus: () => Promise<DblResourceUpdateStatus>;
+    /**
+     * Recomputes which of the resources in the DBL catalog are installed locally, and under which
+     * project id.
+     *
+     * Callers cannot work this out for themselves: a resource project's id is unrelated to the DBL
+     * entry it was installed from, so matching a catalog row to a local project by id — exactly or
+     * by prefix — is guesswork that fails for any resource whose ids diverge.
+     *
+     * Never contacts the DBL, and gives up rather than blocking when the provider is busy. Unlike
+     * {@link recomputeDblResourcesUpdateStatus} it still answers before the catalog has been fetched
+     * — install status is a property of the machine, not of the catalog — but names only the
+     * resources that are installed until the catalog arrives, and cannot report a removal in that
+     * state. Read an empty map as "no answer" and keep the values you have; reading it as "nothing
+     * is installed" would clear every installed flag.
+     *
+     * @returns The local project id of each catalogued resource, keyed by DBL Entry UID; an empty
+     *   string for one that is not installed.
+     */
+    recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
     /**
      * Installs or updates a DBL resource to the local filesystem
      *

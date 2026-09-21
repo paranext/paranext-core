@@ -628,3 +628,17 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
   });
 });
+
+describe('PlatformTabTitle header id attribute', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('marks its root with data-tab-header-id, leaving data-tab-id to the tab’s panel', () => {
+    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" />);
+
+    const header = container.querySelector('.platform-tab-title');
+    expect(header).toHaveAttribute('data-tab-header-id', 'tab-1');
+    expect(header).not.toHaveAttribute('data-tab-id');
+  });
+});
