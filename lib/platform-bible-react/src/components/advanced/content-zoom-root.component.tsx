@@ -56,10 +56,12 @@ export type ContentZoomRootProps = HTMLAttributes<HTMLDivElement> & {
  * found inside another marked element is ignored. Keep toolbars, dividers and headers outside the
  * marked element so they are not scaled along with the content.
  *
- * Popovers, dropdown menus and tooltips from this library that open from inside the element follow
- * its zoom and stay inside the pane. A pop-up rendered outside the element (beside the content,
- * anchored to a position in it) belongs to the area only when wrapped in
- * {@link ContentZoomAreaProvider}.
+ * Popovers and dropdown menus from this library that open from inside the element follow its zoom
+ * and cap their own width and height to the pane, scrolling their content if it doesn't fit;
+ * tooltips follow the zoom too but cap only their width, so a tooltip taller than the available
+ * space is clipped at the pane's edge. Dropdown sub-menu content does not follow an area yet. A
+ * pop-up rendered outside the element (beside the content, anchored to a position in it) belongs to
+ * the area only when wrapped in {@link ContentZoomAreaProvider}.
  *
  * This component renders a plain `div` in normal flow and applies no classes of its own — the
  * caller supplies whatever layout classes its parent expects.
