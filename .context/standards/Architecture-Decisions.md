@@ -814,6 +814,16 @@ step, no automation. Just a record.
   implementation auto-saves drafts to `localStorage` on every change — so what's literally true of a
   draft here is that it's unsent, not unsaved. Naming parity with Paratext 9 was judged to outweigh
   literal accuracy; this is a knowing tradeoff, not an oversight to "fix" later.
+  **Amended 2026-09-21:** the nine preset labels (`presetToLabelKey`, `comment-list-filters.model.ts`)
+  were also made grammatically parallel — each a noun phrase naming a set of comments (`unresolved`:
+  "Unresolved comments", `resolved`: "Resolved comments", `conflict`: "Conflicts", etc.) instead of
+  the prior mix of noun phrases and bare adjectives (`"Unresolved"`, `"Resolved"`, `"Conflict"`).
+  Paratext 9's own labels (`ThreadFilterSelectionAdapter.cs`) are themselves non-parallel — "All
+  notes", "Unread and unresolved", "Unsaved notes" — so this is the same kind of wording decision as
+  the "comments" (not PT9's "notes") and "Unsaved comments" choices already recorded above:
+  consistency of the label set as presented in one dropdown was judged to outweigh literal wording
+  parity with PT9. Both `en` and `es` were updated together, keeping Spanish masculine agreement with
+  *comentarios* (e.g. `conflict`: "Conflictos", `resolved`: "Comentarios resueltos").
 - **Alternatives:**
   - Reproduce Paratext 9's always-show-drafted-threads behavior by merging drafted thread ids into
     the query result on the client regardless of scope/preset. Rejected: it doesn't fit
@@ -1248,6 +1258,38 @@ step, no automation. Just a record.
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
+## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** `openCommentList` (`extensions/src/legacy-comment-manager/src/main.ts`) can be targeted at
+  a project other than the triggering web view's (e.g. the S/R results dialog opening a different
+  project's comment list). Such a cross-project open leaves `editorScrollGroupId` undefined, because
+  the triggering web view's scroll group belongs to the wrong project. An earlier version of this
+  code coerced a `current-chapter` scope filter to all-books (`UNFILTERED`) in that case, with a
+  `logger.warn`, on the reasoning that a cross-project open has no editor to derive "current chapter"
+  from. That coercion and its `current-chapter`-only reach were removed in ffc6e4dfad2 without a
+  decision record, and the scope set has since widened to include `current-verse` too, so the
+  question is now broader than the deleted code answered.
+- **Decision:** No coercion. A cross-project comment list's `current-*` scopes resolve against
+  `useWebViewScrollGroupScrRef`'s fallback — scroll group 0, the window's active-project position —
+  rather than being withheld or redirected to all-books. This keeps all four scopes always offered
+  (`adr-comment-filter-presets-over-axes`) instead of a project-dependent subset, and it is workable
+  because a scroll-group reference is a book/chapter/verse (BCV) triple, which is project-agnostic:
+  GEN 1 names the same location in either project.
+- **Alternatives:** Keep coercing `current-chapter` (and, by extension, `current-verse`) to
+  all-books for a cross-project target — rejected: it special-cased one scope, would need
+  duplicating for the newer `current-verse` scope, and traded a merely BCV-unmapped scope for one
+  that silently drops the user's chosen scope. Suppress the `current-*` scopes from the panel
+  entirely for a cross-project list — rejected: nothing distinguishes a cross-project list from any
+  other at the point the panel renders the scope picker, and the user can already reach the same
+  state by hand (opening a same-project list, then switching the toolbar's project picker), so
+  withholding the scopes only on the command's own open path would be inconsistent.
+- **Consequences:** A BCV is project-agnostic in reference, not in content — `useBcvSyncScroll` still
+  carries `TODO (PT-4031): Handle versification`, so a cross-project `current-*` scope can show a
+  mismatched result where the two projects' versifications diverge at that reference. That gap is
+  accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
+- **Source:** external code review, finding 16.
 ## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
 
 - **Date:** 2026-09-01

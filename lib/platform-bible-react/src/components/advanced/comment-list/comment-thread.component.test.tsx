@@ -781,6 +781,90 @@ describe('CommentThread draft write-guard on a real round trip', () => {
   });
 });
 
+describe('CommentThread phantom assignee-only draft after unmount', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /**
+   * Mirrors `ControlledDraftThread`, but the draft lives in a component that keeps rendering even
+   * when the thread itself stops being mounted — the same as a real durable-draft consumer, whose
+   * storage lives above the thread and outlives it. `show` toggling to false unmounts
+   * `CommentThread` while `isSelected` stays true throughout, which is what a filter change does
+   * (as opposed to a deselect, which flips `isSelected` to false while the component stays
+   * mounted).
+   */
+  function FilterableDraftThread({
+    show,
+    onDraftChange,
+    ...props
+  }: Partial<ComponentProps<typeof CommentThread>> & { show: boolean }) {
+    const [draftState, setDraftState] = useState<CommentDraft | undefined>(undefined);
+    if (!show) return undefined;
+    return (
+      <CommentThread
+        {...baseThreadProps}
+        {...props}
+        draft={draftState}
+        onDraftChange={(threadId, next) => {
+          setDraftState(next);
+          onDraftChange?.(threadId, next);
+        }}
+      />
+    );
+  }
+
+  it('does not survive a successful assigned reply once the thread unmounts while still selected', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onDraftChange = vi.fn();
+    const { rerender } = render(
+      <FilterableDraftThread
+        show
+        isSelected
+        onDraftChange={onDraftChange}
+        canUserAssignThreadCallback={async () => true}
+      />,
+    );
+
+    // Assign a user.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Assign user' })).not.toBeDisabled();
+    });
+    await user.click(screen.getByRole('button', { name: 'Assign user' }));
+    await user.click(await screen.findByText('Alice'));
+
+    // Type a reply.
+    await user.click(screen.getByText('Type reply'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Submit comment' })).not.toBeDisabled();
+    });
+
+    // Submit successfully — handleAddCommentToThread resolves, the editor clears, but per
+    // handleSubmitComment's own comment, pendingCommentAssignedUser is deliberately NOT cleared.
+    await user.click(screen.getByRole('button', { name: 'Submit comment' }));
+    await waitFor(() => {
+      const [, lastDraft] = onDraftChange.mock.calls.at(-1) ?? [];
+      expect(lastDraft?.editorState).toBeUndefined();
+    });
+
+    // Unmount while still selected — a filter change, not a deselect. The deselect branch of the
+    // assignee effect never runs, so it cannot be what clears the leftover assignee.
+    rerender(
+      <FilterableDraftThread
+        show={false}
+        isSelected
+        onDraftChange={onDraftChange}
+        canUserAssignThreadCallback={async () => true}
+      />,
+    );
+
+    // Nothing the user typed is still pending — the submitted assignee must not persist as a
+    // phantom draft that shows this thread under "Unsaved comments" forever.
+    const [, finalDraft] = onDraftChange.mock.calls.at(-1) ?? [];
+    expect(finalDraft).toBeUndefined();
+  });
+});
+
 describe('CommentThread DOM id', () => {
   it('sets its root element id via getCommentThreadElementId(threadId)', () => {
     render(<CommentThread {...defaultProps} />);

@@ -78,9 +78,10 @@ describe('comment draft store', () => {
   it('drops drafts whose thread no longer exists', () => {
     // Otherwise a deleted thread leaves an entry that makes "Unsaved comments" claim a draft the
     // user can never reach.
-    const pruned = pruneDrafts({ t1: { assignedUser: 'Ana' }, gone: {} }, [
-      { id: 't1', commentIds: [] },
-    ]);
+    const pruned = pruneDrafts<{
+      assignedUser?: string;
+      commentEdits?: Readonly<Record<string, unknown>>;
+    }>({ t1: { assignedUser: 'Ana' }, gone: {} }, [{ id: 't1', commentIds: [] }]);
     expect(pruned).toEqual({ t1: { assignedUser: 'Ana' } });
   });
 
@@ -156,6 +157,47 @@ describe('comment draft store', () => {
     });
     saveDraftChanges(PROJECT, new Map([['t1', { assignedUser: 'Ana' }]]));
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('round-trips a draft through its stored version envelope', () => {
+    // Pins the on-disk shape itself (not just the round trip loadDrafts/saveDrafts already cover
+    // above): each entry is wrapped as `{ version, draft }`, not stored as the bare draft value, so
+    // a version mismatch can be detected per entry on load.
+    saveDrafts(PROJECT, { t1: { assignedUser: 'Ana' } });
+    const rawStored = JSON.parse(
+      localStorage.getItem(`legacyCommentManager.drafts.${PROJECT}`) ?? 'null',
+    );
+    expect(rawStored).toEqual({ t1: { version: 1, draft: { assignedUser: 'Ana' } } });
+    expect(loadDrafts(PROJECT)).toEqual({ t1: { assignedUser: 'Ana' } });
+  });
+
+  it('drops an entry with no version tag at all, keeping the rest of the map', () => {
+    // Every draft persisted before this tag existed (or written by some other, non-versioning
+    // source) has no `version` field. It must not be handed back as if it were readable -- its
+    // `editorState` may be a shape this build's Lexical can't parse, which fails silently rather
+    // than throwing (see DRAFT_SCHEMA_VERSION's doc) -- while an untagged neighbor must not take
+    // down an otherwise-valid entry alongside it.
+    localStorage.setItem(
+      `legacyCommentManager.drafts.${PROJECT}`,
+      JSON.stringify({
+        untagged: { assignedUser: 'Old' },
+        t1: { version: 1, draft: { assignedUser: 'Ana' } },
+      }),
+    );
+    expect(loadDrafts(PROJECT)).toEqual({ t1: { assignedUser: 'Ana' } });
+  });
+
+  it('drops an entry tagged with a version this build does not recognize, keeping the rest of the map', () => {
+    // A future build's schema (or a stale one this build no longer reads) must be dropped the same
+    // way as a missing tag, without disturbing an entry tagged with the current version.
+    localStorage.setItem(
+      `legacyCommentManager.drafts.${PROJECT}`,
+      JSON.stringify({
+        future: { version: 2, draft: { assignedUser: 'FromTheFuture' } },
+        t1: { version: 1, draft: { assignedUser: 'Ana' } },
+      }),
+    );
+    expect(loadDrafts(PROJECT)).toEqual({ t1: { assignedUser: 'Ana' } });
   });
 
   it('leaves commentEdits untouched for a thread with no known comment-id list', () => {

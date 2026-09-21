@@ -247,6 +247,12 @@ async function openCommentList(
   // If the caller targeted a different project than the triggering web view, that web view's editor
   // context (scroll group + id) belongs to another project, so it must not wire this comment list to
   // the wrong editor. The trigger's tab id is still used purely for docking placement.
+  //
+  // A cross-project list is intentionally left to fall back to the window's scroll group (see
+  // useWebViewScrollGroupScrRef) rather than being coerced onto an all-books scope: all four scopes
+  // are always offered, and a scroll-group reference is a BCV, which is project-agnostic. See
+  // Architecture-Decisions.md ("Cross-project comment list follows the window's scroll group") for
+  // the known consequence (unmapped versification differences) before re-adding a guard here.
   const editorContextApplies = !options.projectId || options.projectId === triggerProjectId;
   const editorWebViewId = editorContextApplies ? webViewId : undefined;
   if (!editorContextApplies) editorScrollGroupId = undefined;

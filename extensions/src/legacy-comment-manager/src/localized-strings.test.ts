@@ -114,14 +114,17 @@ describe('legacyCommentManager retired four-axis filter keys', () => {
   // redirect wherever a successor genuinely carries the same meaning.
   //
   // Only these four have a genuine successor:
-  // - `_resolved_unresolved%`/`_resolved_resolved%`/`_read_unread%` carry an EXACT-VALUE successor
-  //   (same displayed text in both shipped languages) among the new preset keys.
-  // - `_type_conflicts%` -> `_preset_conflict%` is a MEANING match, not a byte-exact one: the old
-  //   value is the plural option label "Conflicts" ("Conflictos"/"Conflictos" in es), the new
-  //   preset's singular name is "Conflict" ("Conflicto"). Both select the identical underlying
-  //   query (`selector.type = 'Conflict'` in comment-list-filters.model.ts's
-  //   `buildCommentThreadSelector`), so the fallback still redirects to a control that means the
-  //   same thing, just phrased as a preset name rather than a list option.
+  // - `_type_conflicts%` -> `_preset_conflict%` is a byte-exact match in both shipped languages:
+  //   the old value is the plural option label "Conflicts" ("Conflictos" in es), and the new
+  //   preset's label is the same word, phrased as a preset name rather than a list option. Both
+  //   select the identical underlying query (`selector.type = 'Conflict'` in
+  //   comment-list-filters.model.ts's `buildCommentThreadSelector`).
+  // - `_resolved_unresolved%`/`_resolved_resolved%`/`_read_unread%` are MEANING matches, not
+  //   byte-exact ones: the preset labels are full noun phrases ("Unresolved comments", "Resolved
+  //   comments", "Unread comments") naming the set they filter to, rather than the old keys' bare
+  //   adjectives ("Unresolved", "Resolved", "Unread"). Each fallback still redirects to a control
+  //   selecting the identical query, just phrased to read consistently alongside the rest of the
+  //   preset dropdown.
   //
   // Every other retired key either names an aria label for a per-axis control that no longer
   // exists (the four axes collapsed into ONE preset dropdown, so there is no single-axis

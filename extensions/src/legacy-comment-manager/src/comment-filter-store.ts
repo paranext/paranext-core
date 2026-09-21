@@ -31,6 +31,14 @@ import {
  * used" preference with no cross-process locking; that residual case is accepted rather than
  * engineered around, since both writes there really are real user choices, unlike the programmatic
  * case.
+ *
+ * Also unlike `comment-draft-store.ts`, this store carries no schema-version tag. A draft's
+ * `editorState` is an opaque blob this codebase cannot validate beyond "is it an object", so an
+ * incompatible one needs a version tag to be caught before it reaches Lexical. A filter selection
+ * has no such blind spot: both fields are closed string unions (`isCommentPreset`,
+ * `isScopeFilter`), so `loadFilterSelection` already resolves any value this build doesn't
+ * recognize — an old build's retired value, a newer build's addition, a hand-edited string — to
+ * that field's default, per field, with no version needed to detect the mismatch.
  */
 
 const STORAGE_KEY_PREFIX = 'legacyCommentManager.filters.';

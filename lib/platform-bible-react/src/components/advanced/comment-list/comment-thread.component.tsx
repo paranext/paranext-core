@@ -300,6 +300,52 @@ export const CommentThread = memo(function CommentThread({
     }
   }, [isSelected, initialAssignedUser, canAssign, assignedUser, updateDraft]);
 
+  // Mirrors of the values the unmount-only cleanup below needs, since a `useEffect` cleanup that
+  // must fire exactly once — at teardown, not on every dependency change (see that effect for why)
+  // — has to read them through a ref instead of its own dependency array.
+  const lastSubmittedAssignedUserRef = useRef(lastSubmittedAssignedUser);
+  lastSubmittedAssignedUserRef.current = lastSubmittedAssignedUser;
+  const onDraftChangeRef = useRef(onDraftChange);
+  onDraftChangeRef.current = onDraftChange;
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
+
+  // Both `handleSubmitComment` and `handleAddCommentToThreadWithContents` deliberately leave a
+  // just-submitted assignee sitting in the draft (see their own comments) so the "Assigning to:"
+  // indicator doesn't flicker, and so the assignment stays sticky for a subsequent reply typed
+  // into the same still-open thread. Once submission succeeds, though, that value is no longer
+  // unsent content the moment nothing else is pending — it's exactly what `lastSubmittedAssignedUser`
+  // already is. The deselect branch of the assignee-selection effect above is the only place that
+  // clears it, and it only runs when `isSelected` transitions to false while this component stays
+  // mounted — never when the thread unmounts while still selected, which is what a filter change
+  // does. Left uncleared, a submitted-then-orphaned assignee becomes a phantom draft: non-empty per
+  // `isCommentDraftEmpty`, reported upward, and persisted with nothing in the UI able to clear it.
+  //
+  // Scoped tightly to that one case, so it does not undercut the durable-draft feature this exists
+  // alongside: real unsent editor text, an in-progress comment edit, or an assignee that was chosen
+  // but never submitted (including one reselected after a submit — see the popover's
+  // `setLastSubmittedAssignedUser(undefined)`) all leave the condition below false, so they still
+  // survive the unmount the way a draft is supposed to.
+  useEffect(() => {
+    return () => {
+      const { current } = effectiveDraftRef;
+      if (
+        current.assignedUser !== undefined &&
+        current.assignedUser === lastSubmittedAssignedUserRef.current &&
+        current.editorState === undefined &&
+        !hasCommentEdits(current.commentEdits)
+      ) {
+        onDraftChangeRef.current?.(threadIdRef.current, undefined);
+      }
+    };
+    // Intentionally unmount-only (empty dependency array): the deselect branch above already
+    // handles the "still mounted" transition, so re-running this on every dependency change would
+    // just duplicate that path — and would fire mid-session on ordinary state changes (e.g. a new
+    // submission) rather than only when the thread actually goes away. The refs above keep the
+    // cleanup seeing each render's latest values regardless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Prefer the caller's pre-computed active comments (ConflictThread already derives them) over
   // re-filtering, so a conflict thread doesn't run the same non-deleted filter twice per render.
   const activeComments = useMemo(

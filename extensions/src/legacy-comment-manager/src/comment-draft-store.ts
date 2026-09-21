@@ -18,6 +18,9 @@ import { getErrorMessage } from 'platform-bible-utils';
  * through {@link saveDraftChanges}, which merges per-thread via read-modify-write so a write from
  * one view cannot silently erase an unrelated thread's draft the other view wrote in the meantime.
  * {@link saveDraftChanges}'s own doc covers the deletion rule and its residual limitation.
+ *
+ * Every stored draft carries a schema-version tag (see `DRAFT_SCHEMA_VERSION`) so a draft this
+ * build cannot safely read is dropped by {@link loadDrafts} instead of being handed to a caller.
  */
 
 const STORAGE_KEY_PREFIX = 'legacyCommentManager.drafts.';
@@ -27,33 +30,106 @@ function getStorageKey(projectId: string): string {
 }
 
 /**
- * Whether a parsed value can stand in for a map of drafts.
+ * Schema version this build writes and reads for one stored draft. Bump it whenever a change on
+ * this build's side -- a Lexical upgrade, or a change to the draft's own shape -- could make a
+ * draft written by a different build unreadable.
  *
- * Only the container is checked, not the drafts themselves: this store round-trips whatever it was
- * handed, and a draft written by another build is still that build's business. `typeof null` is
- * `'object'`, so the truthiness check carries the null case; an array would otherwise pass and hand
- * every caller numeric keys.
+ * A draft's `editorState` is an opaque `SerializedEditorState` this store never inspects -- it only
+ * ever validates the container, not a draft's content. Lexical's own `parseEditorState` does not
+ * throw on a shape it can't read: it routes to `editor._onError`, which this codebase implements as
+ * `console.error`, so an incompatible `editorState` reaching the editor produces a silently empty
+ * editor plus console noise -- the user's draft text reads as lost, with nothing visible explaining
+ * why. Tagging each draft with the version it was written under lets a mismatched entry be dropped
+ * here, before it ever reaches Lexical, rather than discovered later as a blank editor.
+ *
+ * Tagged per draft, not once per project: `saveDraftChanges` merges individual thread entries via
+ * read-modify-write, so one project's stored map can hold entries written by different builds over
+ * time (e.g. across an app upgrade, only the threads a user actually touches after the upgrade get
+ * rewritten under the new version -- untouched entries from before it keep their old tag until they
+ * are). A single map-wide tag would force treating the whole project's drafts as one all-or-nothing
+ * unit, discarding entries that are still perfectly readable alongside the one that isn't.
+ */
+const DRAFT_SCHEMA_VERSION = 1;
+
+/** One draft exactly as stored: the version it was written under, plus the opaque draft value. */
+type StoredDraft<T> = { version: number; draft: T };
+
+/**
+ * Whether a parsed value is a plain, indexable object -- `typeof null` is `'object'`, so the
+ * truthiness check carries the null case; an array would otherwise pass and hand a caller numeric
+ * keys. Shared by {@link isDraftMap} and {@link isCurrentStoredDraft}, and typed as an indexable
+ * `Record` (rather than each caller narrowing `unknown` itself) specifically so a property read off
+ * a narrowed value never needs an `as` cast.
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Whether a parsed value can stand in for a map of stored draft entries.
+ *
+ * Only the container is checked here, not each entry's `draft` payload: this store round-trips
+ * whatever `draft` value it was handed without inspecting it, and a version-mismatched entry is
+ * filtered out separately by {@link isCurrentStoredDraft}, not by this shape check.
  */
 function isDraftMap<T>(value: unknown): value is Readonly<Record<string, T>> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
+  return isRecord(value);
+}
+
+/**
+ * Whether a parsed map entry is a {@link StoredDraft} written under the version this build reads. An
+ * entry with no `version` field at all (every draft persisted before this tag existed) or a
+ * `version` this build doesn't recognize (an older or newer build's format) fails this check and is
+ * dropped by {@link loadDrafts} rather than handed to a caller as if it were readable.
+ */
+function isCurrentStoredDraft<T>(value: unknown): value is StoredDraft<T> {
+  return isRecord(value) && value.version === DRAFT_SCHEMA_VERSION && 'draft' in value;
+}
+
+/**
+ * Wraps a project's whole draft map for storage, tagging each entry with the current schema
+ * version, and writes it -- or removes the key entirely for an empty map, matching this store's
+ * existing "no stale `{}` left behind" behavior. Shared by {@link saveDrafts} and
+ * {@link saveDraftChanges} so both write the identical on-disk shape.
+ */
+function writeDraftMap<T>(key: string, drafts: Readonly<Record<string, T>>): void {
+  const entries = Object.entries(drafts);
+  if (entries.length === 0) {
+    localStorage.removeItem(key);
+    return;
+  }
+  const stored: Record<string, StoredDraft<T>> = {};
+  entries.forEach(([threadId, draft]) => {
+    stored[threadId] = { version: DRAFT_SCHEMA_VERSION, draft };
+  });
+  localStorage.setItem(key, JSON.stringify(stored));
 }
 
 /**
  * Loads the persisted drafts for a project.
  *
  * @param projectId Id of the project whose drafts to load.
- * @returns The project's drafts, keyed by thread id. Returns an empty object when nothing has been
- *   saved, when storage is unavailable (`localStorage` throws outright in sandboxed contexts), or
- *   when the stored value cannot be a map of drafts — a caller must be able to render with no
- *   drafts rather than crash. That covers text which is not JSON at all and JSON which parses to
- *   something other than an object, such as `null`, which every caller would otherwise iterate.
+ * @returns The project's drafts, keyed by thread id, unwrapped from their storage envelope. Returns
+ *   an empty object when nothing has been saved, when storage is unavailable (`localStorage` throws
+ *   outright in sandboxed contexts), or when the stored value cannot be a map of drafts — a caller
+ *   must be able to render with no drafts rather than crash. That covers text which is not JSON at
+ *   all and JSON which parses to something other than an object, such as `null`, which every caller
+ *   would otherwise iterate. An individual entry whose `version` is missing or doesn't match
+ *   {@link DRAFT_SCHEMA_VERSION} is dropped rather than returned — see that constant's doc — while
+ *   every entry that does match is still returned, so one stale or foreign entry never costs the
+ *   rest of the project's drafts.
  */
 export function loadDrafts<T>(projectId: string): Readonly<Record<string, T>> {
   try {
     const stored = localStorage.getItem(getStorageKey(projectId));
     if (!stored) return {};
     const parsed: unknown = JSON.parse(stored);
-    return isDraftMap<T>(parsed) ? parsed : {};
+    if (!isDraftMap<unknown>(parsed)) return {};
+    const result: Record<string, T> = {};
+    Object.entries(parsed).forEach(([threadId, entry]) => {
+      if (isCurrentStoredDraft<T>(entry)) result[threadId] = entry.draft;
+    });
+    return result;
   } catch {
     // Storage may be unavailable, or a previous build may have written something this build
     // can't parse. Either way, drafts are best-effort: losing them must never block rendering.
@@ -70,12 +146,7 @@ export function loadDrafts<T>(projectId: string): Readonly<Record<string, T>> {
  */
 export function saveDrafts<T>(projectId: string, drafts: Readonly<Record<string, T>>): void {
   try {
-    const key = getStorageKey(projectId);
-    if (Object.keys(drafts).length === 0) {
-      localStorage.removeItem(key);
-      return;
-    }
-    localStorage.setItem(key, JSON.stringify(drafts));
+    writeDraftMap(getStorageKey(projectId), drafts);
   } catch (error) {
     // Best-effort persistence: a failed write leaves the draft live only in the caller's
     // in-memory state for this session, which is the same outcome as never having saved it. Still
@@ -120,17 +191,12 @@ export function saveDraftChanges<T>(
 ): void {
   if (changes.size === 0) return;
   try {
-    const key = getStorageKey(projectId);
     const merged: Record<string, T> = { ...loadDrafts<T>(projectId) };
     changes.forEach((draft, threadId) => {
       if (draft === undefined) delete merged[threadId];
       else merged[threadId] = draft;
     });
-    if (Object.keys(merged).length === 0) {
-      localStorage.removeItem(key);
-      return;
-    }
-    localStorage.setItem(key, JSON.stringify(merged));
+    writeDraftMap(getStorageKey(projectId), merged);
   } catch (error) {
     // Best-effort persistence, matching saveDrafts: a failed write leaves the change live only in
     // the caller's in-memory state for this session. Still logged for the same QuotaExceededError

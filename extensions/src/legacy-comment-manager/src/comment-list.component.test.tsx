@@ -181,7 +181,9 @@ describe('CommentListPanel filter toolbar', () => {
 
   it('shows the current selection as each dropdown’s value', () => {
     renderPanel({ filters: { preset: 'unread' }, scopeFilter: 'current-verse' });
-    expect(screen.getByRole('combobox', { name: PRESET_ARIA })).toHaveTextContent('Unread');
+    expect(screen.getByRole('combobox', { name: PRESET_ARIA })).toHaveTextContent(
+      'Unread comments',
+    );
     expect(screen.getByRole('combobox', { name: SCOPE_ARIA })).toHaveTextContent('Current verse');
   });
 
@@ -190,7 +192,7 @@ describe('CommentListPanel filter toolbar', () => {
     renderPanel({ onFiltersChange });
 
     await userEvent.click(screen.getByRole('combobox', { name: PRESET_ARIA }));
-    await userEvent.click(screen.getByRole('option', { name: 'Resolved' }));
+    await userEvent.click(screen.getByRole('option', { name: 'Resolved comments' }));
 
     expect(onFiltersChange).toHaveBeenCalledWith({ preset: 'resolved' });
   });

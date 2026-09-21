@@ -354,7 +354,7 @@ const threadC = makeCommentThread('thread-c', 'Todo');
 /** Maps a preset's user-facing toolbar label to its underlying value — the three this file drives. */
 const PRESET_LABEL_TO_VALUE: Partial<Record<string, CommentPreset>> = {
   'All comments': 'all',
-  Resolved: 'resolved',
+  'Resolved comments': 'resolved',
   'Unsaved comments': 'unsaved',
 };
 
@@ -957,7 +957,7 @@ describe('comment draft persistence', () => {
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
 
     typeDraftInto(threadA.id, 'half a thought');
-    selectPreset('Resolved'); // threadA (Todo) no longer matches; its input unmounts
+    selectPreset('Resolved comments'); // threadA (Todo) no longer matches; its input unmounts
     await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'resolved' }));
     selectPreset('All comments'); // and threadA comes back
     await waitFor(() => expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS));
@@ -1254,7 +1254,12 @@ describe('current-user registration-data fetch failure recovery', () => {
 
   it('recovers once a retry succeeds', async () => {
     vi.mocked(papi.commands.sendCommand).mockRejectedValueOnce(new Error('network down'));
-    vi.mocked(papi.commands.sendCommand).mockResolvedValueOnce({ name: 'Tester' });
+    vi.mocked(papi.commands.sendCommand).mockResolvedValueOnce({
+      name: 'Tester',
+      code: 'code',
+      email: 'tester@example.com',
+      supporterName: '',
+    });
 
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
