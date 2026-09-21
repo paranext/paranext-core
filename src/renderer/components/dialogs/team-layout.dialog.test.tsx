@@ -34,14 +34,26 @@ const EMPTY_RESOURCE_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items
  * factories stay strongly typed while tests still vary behavior between cases.
  */
 type MockState = {
-  referencedProjectsAndResources: ResourceReferenceList;
+  /**
+   * Admits `PlatformError` because an unreadable read is the case that matters here: it maps to
+   * `undefined`, `seedResourceList` then falls back to the admin's PERSONAL list, and the per-field
+   * seed comparison does NOT catch it — both sides are the personal list. Only the explicit
+   * `isProjectResourcesUnknown` / `isProjectModelTextsUnknown` guards do.
+   */
+  referencedProjectsAndResources: ResourceReferenceList | PlatformError;
   setReferencedProjectsAndResources: ReturnType<typeof vi.fn>;
-  modelTexts: ResourceReferenceList;
+  modelTexts: ResourceReferenceList | PlatformError;
   setModelTexts: ReturnType<typeof vi.fn>;
   sharedLayoutDefaultTab: string;
   setSharedLayoutDefaultTab: ReturnType<typeof vi.fn>;
   structureProtected: boolean | PlatformError;
   setStructureProtected: ReturnType<typeof vi.fn>;
+  /**
+   * Makes `useProjectSetting` return NO setter for the team lock, which is what it really does for
+   * as long as its data provider is unresolved — a window the mount gate is deliberately latched
+   * across, so the body can be live and interactive while the setter is missing.
+   */
+  isStructureProtectedSetterUnavailable: boolean;
   /**
    * The two settings the heading is composed from. Through `mockState` like the rest, so a test can
    * vary them — the composition rule (skip the full name when it is absent or equal to the short
@@ -73,6 +85,7 @@ const mockState: MockState = {
   setSharedLayoutDefaultTab: vi.fn(),
   structureProtected: false,
   setStructureProtected: vi.fn(),
+  isStructureProtectedSetterUnavailable: false,
   projectShortName: 'HNF',
   projectFullName: 'Hanif Bible',
   canWritePromise: undefined,
@@ -114,7 +127,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     if (key === 'platformScripture.structureProtected')
       return [
         mockState.structureProtected,
-        mockState.setStructureProtected,
+        mockState.isStructureProtectedSetterUnavailable
+          ? undefined
+          : mockState.setStructureProtected,
         vi.fn(),
         isProjectSettingLoading,
       ];
@@ -186,6 +201,7 @@ beforeEach(() => {
   mockState.setSharedLayoutDefaultTab = vi.fn();
   mockState.structureProtected = false;
   mockState.setStructureProtected = vi.fn();
+  mockState.isStructureProtectedSetterUnavailable = false;
   mockState.projectShortName = 'HNF';
   mockState.projectFullName = 'Hanif Bible';
   mockState.canWritePromise = undefined;
@@ -222,7 +238,14 @@ async function confirmDialog() {
   const confirmButton = screen.getByText('%shareLayoutDialog_saveForTeam_label%');
   await act(async () => {
     confirmButton.click();
-    await Promise.resolve();
+  });
+  // The confirm path is async on both sides of the boundary — the body awaits `onConfirm`, which
+  // awaits `Promise.allSettled` over the writes — so a single microtask tick lands mid-chain and
+  // the dialog has neither submitted nor reported a failure yet. A macrotask turn drains both.
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
   });
 }
 
@@ -542,10 +565,6 @@ describe('TEAM_LAYOUT_DIALOG registration', () => {
     expect(DIALOGS[SHARE_LAYOUT_DIALOG_TYPE]).toBe(TEAM_LAYOUT_DIALOG);
   });
 
-  it('defines a Component to render', () => {
-    expect(typeof TEAM_LAYOUT_DIALOG.Component).toBe('function');
-  });
-
   // The tab title and the DialogTitle inside the dialog body are separate strings that must name
   // the dialog identically; nothing but this ties them together.
   it('titles its tab with the team layout name', () => {
@@ -568,9 +587,8 @@ describe('TeamLayoutDialogWrapper admin gate', () => {
     expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
     expect(mockState.setModelTexts).not.toHaveBeenCalled();
     expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
-    // The team lock especially: it is the write this dialog adds, it reaches every translator, and
-    // the hook tests that used to cover "a non-admin can never write it" were deleted with the
-    // toolbar button.
+    // The team lock especially: this dialog is its only control, and the write reaches every
+    // translator on the project.
     expect(mockState.setStructureProtected).not.toHaveBeenCalled();
     expect(cancelDialog).not.toHaveBeenCalled();
 
@@ -584,9 +602,8 @@ describe('TeamLayoutDialogWrapper admin gate', () => {
     expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
     expect(mockState.setModelTexts).not.toHaveBeenCalled();
     expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
-    // The team lock especially: it is the write this dialog adds, it reaches every translator, and
-    // the hook tests that used to cover "a non-admin can never write it" were deleted with the
-    // toolbar button.
+    // The team lock especially: this dialog is its only control, and the write reaches every
+    // translator on the project.
     expect(mockState.setStructureProtected).not.toHaveBeenCalled();
   });
 
@@ -700,13 +717,10 @@ describe('TeamLayoutDialogWrapper team structure lock', () => {
     renderWrapper();
 
     await screen.findByText('%shareLayoutDialog_modelText_label%');
-    const saveButton = screen.getByText('%shareLayoutDialog_saveForTeam_label%');
     act(() => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
-    act(() => {
-      saveButton.click();
-    });
+    await confirmDialog();
 
     expect(mockState.setStructureProtected).toHaveBeenCalledWith(true);
   });
@@ -751,6 +765,114 @@ describe('TeamLayoutDialogWrapper team structure lock', () => {
 });
 
 describe('TeamLayoutDialogWrapper confirm-write logic', () => {
+  // On a project that has never shared a layout, `seedResourceList` seeds the team lists from the
+  // admin's PERSONAL list — so a Save that writes an untouched resource field publishes one
+  // person's selections to the whole team. The per-field seed comparison is what prevents that,
+  // and it only works if it compares against the seed the BODY was mounted with. A catalog retry
+  // driven from inside the open dialog gives the wrapper's live memos a fresh identity, which
+  // would fail the comparison for a field nobody touched.
+  it('does not write the resource lists after a catalog retry when only the lock was changed', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = EMPTY_RESOURCE_LIST;
+    const personalResource: ResourceReference = {
+      type: 'dblResource',
+      name: 'Personal ESV',
+      id: 'personal-esv-uid',
+    };
+    mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockImplementation(
+      async () => ({ dataVersion: '2.0.0', items: [personalResource] }),
+    );
+    // The catalog is unavailable at mount — the state that puts the Retry button on screen — and
+    // the retry then succeeds.
+    vi.mocked(sendCommand)
+      .mockResolvedValueOnce({ status: 'unavailable', reason: 'notReady' })
+      .mockResolvedValue({
+        status: 'available',
+        resources: [
+          makeDblResource({ dblEntryUid: 'personal-esv-uid', displayName: 'Personal ESV' }),
+        ],
+      });
+
+    renderWrapper();
+    const retry = await screen.findByText('%shareLayoutDialog_retry%');
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+
+    // A retry from inside the open dialog: a fresh catalog object, so `allResources` — and every
+    // memo that takes it as a dep — takes a new identity.
+    await act(async () => {
+      retry.click();
+      await Promise.resolve();
+    });
+
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+    await confirmDialog();
+
+    expect(mockState.setStructureProtected).toHaveBeenCalledWith(true);
+    expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
+    expect(mockState.setModelTexts).not.toHaveBeenCalled();
+  });
+
+  // An unreadable read maps to `undefined`, so `seedResourceList` falls back to the admin's
+  // personal list — and the seed comparison cannot catch it, because both sides ARE the personal
+  // list. Only the explicit unknown-guards stop the personal list being published to the team.
+  it('never writes the resource lists back when their current value could not be read', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = newPlatformError('could not read the resources');
+    mockState.modelTexts = newPlatformError('could not read the model texts');
+    const personalResource: ResourceReference = {
+      type: 'dblResource',
+      name: 'Personal ESV',
+      id: 'personal-esv-uid',
+    };
+    mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockImplementation(
+      async () => ({ dataVersion: '2.0.0', items: [personalResource] }),
+    );
+    vi.mocked(sendCommand).mockResolvedValue({
+      status: 'available',
+      resources: [
+        makeDblResource({ dblEntryUid: 'personal-esv-uid', displayName: 'Personal ESV' }),
+      ],
+    });
+
+    renderWrapper();
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+
+    // Edit the list, so an unguarded Confirm would definitely write it.
+    editResourceList();
+    await confirmDialog();
+
+    expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
+    expect(mockState.setModelTexts).not.toHaveBeenCalled();
+  });
+
+  // `useProjectSetting` returns NO setter while its data provider is unresolved, and the mount gate
+  // is deliberately latched open across exactly that window — so the body can be live with a
+  // missing setter. Skipping it silently would close the dialog reporting a save that never
+  // reached the project.
+  it('reports failure rather than success when a setter it intends to call is unavailable', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.structureProtected = false;
+
+    const { submitDialog, rerender } = renderWrapper();
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+    // The provider churns and the setter goes away while the body stays mounted. The gate is
+    // latched, so the body keeps its staged edit and its live Save button across this.
+    mockState.isStructureProtectedSetterUnavailable = true;
+    await act(async () => {
+      rerender();
+    });
+    await confirmDialog();
+
+    expect(submitDialog).not.toHaveBeenCalled();
+    expect(await screen.findByText('%shareLayoutDialog_saveFailed%')).toBeInTheDocument();
+  });
+
   it('writes referencedProjectsAndResources, modelTexts, and sharedLayoutDefaultTab, preserving otherResources the dialog does not model', async () => {
     mockState.canWritePromise = Promise.resolve(true);
 

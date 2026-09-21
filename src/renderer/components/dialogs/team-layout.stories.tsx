@@ -39,8 +39,9 @@ const TEAM_LAYOUT_STRINGS: TeamLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_closePicker_label%': 'Close',
   '%shareLayoutDialog_cancel_label%': 'Cancel',
   '%shareLayoutDialog_saveFailed%':
-    "Couldn't save the team layout. Nothing was changed \u2014 try again.",
+    "Couldn't save the team layout. Some settings may have been saved and others not. The values shown here are what you intended \u2014 try again to reapply them all.",
   '%shareLayoutDialog_saveForTeam_label%': 'Save layout for team',
+  '%shareLayoutDialog_saving_label%': 'Saving\u2026',
   '%shareLayoutDialog_hiddenResources_loadError%':
     "{count} shared resources can't be shown because the list of available resources couldn't be loaded. They will be kept unchanged when you save.",
   '%shareLayoutDialog_hiddenResources_unavailable%':

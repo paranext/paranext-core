@@ -40,9 +40,29 @@ import { ChevronDown, X } from 'lucide-react';
 // `!` important modifier) do not take effect in the running app — the class shows up in the DOM but
 // no matching CSS rule is generated, even though the same syntax works in Storybook's build. An
 // inline style sidesteps the class-generation/tailwind-merge dependency entirely and is guaranteed
-// to apply. Sized to match ResourcePickerDialog's own Storybook decorator (560x600) so the resource
-// list has room to show many entries and scroll within a bounded area instead of growing unbounded.
-const RESOURCE_PICKER_POPOVER_STYLE = { width: 560, maxHeight: 400 };
+// to apply.
+//
+// The 560 width matches ResourcePickerDialog's own Storybook decorator (`tw:w-[560px]`), so the
+// resource list has room to show many entries. The height does NOT: the decorator is 600, but this
+// popover opens inside a dialog rather than filling a story canvas, and 400 is what keeps it within
+// the dialog while still giving the list a bounded area to scroll in instead of growing unbounded.
+// Don't "restore" 600 from the decorator — only the width is derived from it.
+//
+// `maxWidth` keeps the popover inside the app window: 560 is unconditional otherwise, so on a
+// narrow window the popover would be wider than the dialog hosting it.
+const RESOURCE_PICKER_POPOVER_STYLE = {
+  width: 560,
+  maxWidth: 'calc(100vw - 2rem)',
+  maxHeight: 400,
+};
+
+/**
+ * The `SelectItem` value standing for "no default tab".
+ *
+ * Radix forbids `value=""` on a `SelectItem`, and the persisted representation of this state IS the
+ * empty string, so the two cannot be the same token. Mapped back to `undefined` on the way out.
+ */
+const NO_ACTIVE_TAB_VALUE = 'none';
 
 /**
  * Floor for the three-column card, shared by the loaded dialog and the skeleton it replaces.
@@ -101,6 +121,7 @@ export const TEAM_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_closePicker_label%',
   '%shareLayoutDialog_saveFailed%',
   '%shareLayoutDialog_saveForTeam_label%',
+  '%shareLayoutDialog_saving_label%',
   '%shareLayoutDialog_hiddenResources_loadError%',
   '%shareLayoutDialog_hiddenResources_unavailable%',
   '%shareLayoutDialog_retry%',
@@ -160,7 +181,7 @@ export type TeamLayoutDialogContentProps = {
   hiddenInTextCollectionCount: number;
   resourcePickerLocalizedStrings: ResourcePickerDialogLocalizedStrings;
   localizedStrings: TeamLayoutDialogLocalizedStrings;
-  onConfirm: (result: TeamLayoutResult) => void;
+  onConfirm: (result: TeamLayoutResult) => Promise<void> | void;
   onCancel: () => void;
 };
 
@@ -171,9 +192,9 @@ function localizeString(
   return strings[key] ?? key;
 }
 
-function referenceKey(ref: ResourceReference): string {
-  if ('id' in ref && typeof ref.id === 'string') return `${ref.type}:${ref.id}`;
-  return `${ref.type}:${referenceName(ref)}`;
+function referenceKey(reference: ResourceReference): string {
+  if (hasStringId(reference)) return `${reference.type}:${reference.id}`;
+  return `${reference.type}:${referenceName(reference)}`;
 }
 
 /**
@@ -182,14 +203,16 @@ function referenceKey(ref: ResourceReference): string {
  * signature (`[key: string]: unknown`), so `ref.name` on the union widens to `unknown` — narrow it
  * back to `string` here, falling back to the type discriminant for the unknown-variant case.
  */
-function referenceName(ref: ResourceReference): string {
-  const { name } = ref;
-  return typeof name === 'string' ? name : ref.type;
+function referenceName(reference: ResourceReference): string {
+  const { name } = reference;
+  return typeof name === 'string' ? name : reference.type;
 }
 
 /** Narrows a `ResourceReference` to the variants that carry a string `id`, without a type assertion. */
-function hasStringId(ref: ResourceReference): ref is Extract<ResourceReference, { id: string }> {
-  return 'id' in ref && typeof ref.id === 'string';
+function hasStringId(
+  reference: ResourceReference,
+): reference is Extract<ResourceReference, { id: string }> {
+  return 'id' in reference && typeof reference.id === 'string';
 }
 
 /**
@@ -204,12 +227,12 @@ function hasStringId(ref: ResourceReference): ref is Extract<ResourceReference, 
  * keystroke.
  */
 function formatResourceDisplayName(
-  ref: ResourceReference,
+  reference: ResourceReference,
   resourcesByUid: Map<string, DblResourceData>,
 ): string {
-  const shortName = referenceName(ref);
-  if (!hasStringId(ref)) return shortName;
-  const match = resourcesByUid.get(ref.id);
+  const shortName = referenceName(reference);
+  if (!hasStringId(reference)) return shortName;
+  const match = resourcesByUid.get(reference.id);
   if (!match) return shortName;
   return `${match.fullName} (${match.displayName})`;
 }
@@ -286,12 +309,20 @@ function ResourceRow({
 function TeamLayoutDialogFooter({
   localizedStrings: strings,
   areStringsLoading = false,
+  isSaving = false,
   onCancel,
   onConfirm,
 }: {
   localizedStrings: TeamLayoutDialogLocalizedStrings;
   /** See {@link TeamLayoutDialogSkeleton}'s prop of the same name. */
   areStringsLoading?: boolean;
+  /**
+   * While `true` both buttons are inert and Save says so. The writes are neither atomic nor instant
+   * — they can block behind a Send/Receive — so without this the dialog looks identical to before
+   * the click: a second click would fire a second concurrent batch that races the first on the save
+   * outcome, and a Cancel mid-flight would leave the writes with no dialog to report to.
+   */
+  isSaving?: boolean;
   onCancel?: () => void;
   onConfirm?: () => void;
 }) {
@@ -299,11 +330,13 @@ function TeamLayoutDialogFooter({
     areStringsLoading ? '' : localizeString(strings, key);
   return (
     <div className="tw:flex tw:justify-end tw:gap-2 tw:p-4">
-      <Button variant="outline" onClick={onCancel} disabled={!onCancel}>
+      <Button variant="outline" onClick={onCancel} disabled={!onCancel || isSaving}>
         {text('%shareLayoutDialog_cancel_label%')}
       </Button>
-      <Button onClick={onConfirm} disabled={!onConfirm}>
-        {text('%shareLayoutDialog_saveForTeam_label%')}
+      <Button onClick={onConfirm} disabled={!onConfirm || isSaving}>
+        {text(
+          isSaving ? '%shareLayoutDialog_saving_label%' : '%shareLayoutDialog_saveForTeam_label%',
+        )}
       </Button>
     </div>
   );
@@ -458,8 +491,15 @@ export function TeamLayoutDialogContent({
     ? formatResourceDisplayName(modelText, resourcesByUid)
     : localizeString(strings, '%shareLayoutDialog_modelText_none%');
 
+  // Toggles, like the tab pickers do. "No model text" is a first-class persisted state — the
+  // wrapper writes an empty list for it and the trigger names it — so the picker has to be able to
+  // reach it. With `allowDeselect`, clicking the already-selected row calls back here with that
+  // same resource, which is the deselect.
   const handleSelectModelText = useCallback((resource: DblResourceData) => {
-    setModelText(toResourceReference(resource));
+    const newRef = toResourceReference(resource);
+    setModelText((existing) =>
+      existing && referenceKey(existing) === referenceKey(newRef) ? undefined : newRef,
+    );
     setIsModelTextPickerOpen(false);
   }, []);
 
@@ -480,12 +520,12 @@ export function TeamLayoutDialogContent({
 
   // Both scripture resources and commentaries are selectable to be in the text collection.
   const handleToggleShownByDefault = useCallback(
-    (tab: TabKey, ref: ResourceReference, checked: boolean) => {
+    (tab: TabKey, reference: ResourceReference, checked: boolean) => {
       const setResources =
         tab === 'ScriptureResource' ? setScriptureResources : setCommentaryResources;
       setResources((existing) =>
         existing.map((item) =>
-          referenceKey(item) === referenceKey(ref)
+          referenceKey(item) === referenceKey(reference)
             ? { ...item, isInTextCollection: checked }
             : item,
         ),
@@ -494,14 +534,22 @@ export function TeamLayoutDialogContent({
     [],
   );
 
-  const handleConfirm = useCallback(() => {
-    onConfirm({
-      modelText,
-      activeTab,
-      scriptureResources,
-      commentaryResources,
-      isStructureProtectedForTeam,
-    });
+  // Mirrors the write in flight. `onConfirm` resolves whether the writes succeeded or failed — the
+  // wrapper reports failure through `hasSaveError` — so this is cleared in a `finally`.
+  const [isSaving, setIsSaving] = useState(false);
+  const handleConfirm = useCallback(async () => {
+    setIsSaving(true);
+    try {
+      await onConfirm({
+        modelText,
+        activeTab,
+        scriptureResources,
+        commentaryResources,
+        isStructureProtectedForTeam,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   }, [
     modelText,
     activeTab,
@@ -519,8 +567,9 @@ export function TeamLayoutDialogContent({
   // though this dialog cannot show them. Counting only the two editable lists would report "(0)"
   // over a collection that is about to be saved non-empty.
   const textCollectionCount =
-    [...scriptureResources, ...commentaryResources].filter((ref) => ref.isInTextCollection).length +
-    hiddenInTextCollectionCount;
+    [...scriptureResources, ...commentaryResources].filter(
+      (reference) => reference.isInTextCollection,
+    ).length + hiddenInTextCollectionCount;
 
   const manageLabelKey: Record<TabKey, keyof TeamLayoutDialogLocalizedStrings> = {
     ScriptureResource: '%shareLayoutDialog_manageScriptureResources_label%',
@@ -613,19 +662,19 @@ export function TeamLayoutDialogContent({
           is stated once, under the tabs, where it reads as one rule covering both of them. */}
       {resources.length > 0 ? (
         <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-2">
-          {resources.map((ref) => {
-            const displayName = formatResourceDisplayName(ref, resourcesByUid);
+          {resources.map((reference) => {
+            const displayName = formatResourceDisplayName(reference, resourcesByUid);
             return (
               <ResourceRow
-                key={referenceKey(ref)}
+                key={referenceKey(reference)}
                 displayName={displayName}
                 checkboxLabel={formatReplacementString(
                   localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
                   { resourceName: displayName },
                 )}
-                isInTextCollection={!!ref.isInTextCollection}
+                isInTextCollection={!!reference.isInTextCollection}
                 onToggleInTextCollection={(checked: boolean) =>
-                  handleToggleShownByDefault(tab, ref, checked)
+                  handleToggleShownByDefault(tab, reference, checked)
                 }
               />
             );
@@ -748,6 +797,7 @@ export function TeamLayoutDialogContent({
                       selectedResourceIds={
                         modelText && hasStringId(modelText) ? [modelText.id] : []
                       }
+                      allowDeselect
                       localizedStrings={resourcePickerLocalizedStrings}
                       onSelect={handleSelectModelText}
                     />
@@ -856,10 +906,16 @@ export function TeamLayoutDialogContent({
                       {localizeString(strings, '%shareLayoutDialog_activeTab_sublabel%')}
                     </span>
                   </div>
+                  {/* `NO_ACTIVE_TAB_VALUE` is a sentinel, not a persisted value: Radix forbids
+                      `value=""` on a `SelectItem`, but "no default tab" is a real persisted state
+                      (the wrapper writes `''` for it) and this dialog is about reviewing before
+                      publishing — so picking a tab by accident has to be undoable without
+                      cancelling and losing every other staged edit. */}
                   <Select
-                    value={activeTab}
+                    value={activeTab ?? NO_ACTIVE_TAB_VALUE}
                     onValueChange={(value) => {
-                      if (isTeamLayoutActiveTab(value)) setActiveTab(value);
+                      if (value === NO_ACTIVE_TAB_VALUE) setActiveTab(undefined);
+                      else if (isTeamLayoutActiveTab(value)) setActiveTab(value);
                     }}
                   >
                     {/* `SelectTrigger` spreads consumer props last, so a bare `aria-labelledby`
@@ -881,6 +937,9 @@ export function TeamLayoutDialogContent({
                           %webView_resourcePanel_bibleTexts_title% /
                           %webView_resourcePanel_commentaries_title%. The Comments and
                           TextCollection options below have no resource-panel counterpart. */}
+                      <SelectItem value={NO_ACTIVE_TAB_VALUE}>
+                        {localizeString(strings, '%shareLayoutDialog_activeTab_none%')}
+                      </SelectItem>
                       <SelectItem value="ScriptureResource">
                         {localizeString(strings, '%shareLayoutDialog_activeTab_scriptureResource%')}
                       </SelectItem>
@@ -945,6 +1004,7 @@ export function TeamLayoutDialogContent({
 
       <TeamLayoutDialogFooter
         localizedStrings={strings}
+        isSaving={isSaving}
         onCancel={onCancel}
         onConfirm={handleConfirm}
       />

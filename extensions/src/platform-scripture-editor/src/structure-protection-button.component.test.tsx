@@ -74,23 +74,21 @@ afterEach(() => {
 });
 
 describe('StructureProtectionButton — personal button', () => {
-  it('renders Lock (not LockOpen) and ghost variant when protected', () => {
+  it('renders Lock (not LockOpen) and stays enabled when protected', () => {
     setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PERSONAL });
     expect(button.querySelector('.lucide-lock')).toBeInTheDocument();
     expect(button.querySelector('.lucide-lock-open')).not.toBeInTheDocument();
-    expect(button.className).not.toContain('tw:text-destructive');
     expect(button).toBeEnabled();
   });
 
-  it('renders LockOpen and destructive variant when unlocked', () => {
+  it('renders LockOpen (not Lock) when unlocked', () => {
     setState({ isStructureProtected: false, canAdminToggle: false, isProtectedByAdmin: false });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: PERSONAL });
     expect(button.querySelector('.lucide-lock-open')).toBeInTheDocument();
     expect(button.querySelector('.lucide-lock')).not.toBeInTheDocument();
-    expect(button.className).toContain('tw:text-destructive');
   });
 
   it('uses the localized personal aria-label', () => {
@@ -337,12 +335,35 @@ describe('StructureProtectionButton — personal button', () => {
     expect(screen.getByRole('button', { name: PERSONAL })).toBeDisabled();
   });
 
-  it('does not auto-open the tooltip on a re-render with no state change', () => {
-    setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
+  // Targets the `prevDisplayState` guard, not React's dependency array. A bare re-render never
+  // re-runs the auto-open effect at all (its deps are unchanged), so it cannot tell the guard from
+  // its absence. The path the deps DO fire on is a reload: `isLoading` goes true and back to false
+  // — a provider reconnect or an extension reload — while the value itself is unchanged. Without
+  // the guard that pops a tooltip at a user who did nothing.
+  it('does not auto-open the tooltip when the state reloads to the same value', async () => {
+    setState({
+      isStructureProtected: true,
+      canAdminToggle: false,
+      isProtectedByAdmin: false,
+      isLoading: false,
+    });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
+
+    setState({ isLoading: true });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    // Same value as before, redelivered.
+    setState({ isLoading: false, isStructureProtected: true });
+    rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+
+    // Asserted at a fixed point, NOT through `waitFor`: an auto-opened tooltip dismisses itself
+    // after AUTO_OPEN_TOOLTIP_DURATION_MS, so a `waitFor` for its absence passes on the timer
+    // rather than on the guard, and stays green with the guard deleted. One flush is the same
+    // opportunity the positive auto-open cases above need to render.
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(screen.queryByText('USFM structure protected')).not.toBeInTheDocument();
   });
 

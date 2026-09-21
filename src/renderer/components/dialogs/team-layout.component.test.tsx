@@ -444,6 +444,36 @@ describe('TeamLayoutDialogContent', () => {
     );
   });
 
+  // "No model text" is a first-class persisted state — the wrapper writes an empty list for it and
+  // the trigger names it — so the picker has to be able to reach it. Without `allowDeselect` the
+  // already-selected row is inert and the choice is a one-way door.
+  it('clears the model text when the already-selected resource is picked again', () => {
+    const { onConfirm } = renderContent({ initialModelText: ESV });
+
+    // Open the picker from the trigger, which now names the current selection.
+    const trigger = screen.getByText('%shareLayoutDialog_modelText_label%').closest('div');
+    fireEvent.click(within(trigger ?? document.body).getByRole('button'));
+    // The already-selected row: clicking it is the deselect.
+    fireEvent.click(screen.getByRole('button', { name: 'ESV' }));
+
+    fireEvent.click(screen.getByText(SAVE_LABEL));
+    const [result] = onConfirm.mock.calls[0];
+    expect(result.modelText).toBeUndefined();
+  });
+
+  // Same one-way door on the other control: the empty value is persisted and `seedScalar` treats
+  // `''` as unset, but without a sentinel item "none" is reachable only as the initial state.
+  it('can return the default tab to none after a tab has been picked', () => {
+    const { onConfirm } = renderContent({ initialActiveTab: 'Comments' });
+
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByRole('option', { name: '%shareLayoutDialog_activeTab_none%' }));
+
+    fireEvent.click(screen.getByText(SAVE_LABEL));
+    const [result] = onConfirm.mock.calls[0];
+    expect(result.activeTab).toBeUndefined();
+  });
+
   // The picker overlaps the dialog it was opened from, so the dialog behind it is dimmed and
   // blurred while it is open — otherwise the two read as equally live surfaces.
   it('dims the dialog while a picker is open and clears it again on close', () => {

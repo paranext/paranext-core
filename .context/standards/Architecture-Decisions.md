@@ -4953,7 +4953,7 @@ step, no automation. Just a record.
   startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
-## adr-share-layout-renders-without-a-catalog: Share Layout always renders, and states what it cannot show
+## adr-share-layout-renders-without-a-catalog: The Team layout dialog always renders, and states what it cannot show
 
 - **Date:** 2026-09-03
 - **Status:** Accepted
@@ -5682,15 +5682,23 @@ step, no automation. Just a record.
   localization keys for the retired project-wide toolbar toggle were deprecated with no successor.
   An admin opening the dialog only to flip the lock must not publish anything else: `handleConfirm`
   writes each setting only when its own field changed, because on a project that has never shared a
-  layout the resource lists are seeded from the admin's *personal* selections. And because the lock
+  layout the resource lists are seeded from the admin's *personal* selections — compared against
+  the seed the body was MOUNTED with, not the wrapper's live memos, which a catalog retry from
+  inside the open dialog re-identities. Two further consequences of that write path: a field whose
+  setter is momentarily `undefined` (its data provider unresolved, a window the mount gate is
+  deliberately latched across) counts as a FAILED save rather than a skipped one; and the four
+  writes are independent and non-atomic, so they are gathered with `allSettled` and the failure
+  message states that the save may be partial and that the dialog's values are the intended end
+  state, rather than promising a rollback that does not happen. And because the lock
   is now saved as part of the team layout, it joins `readLayoutSignature`
   (`shared-layout-receiver.model.ts`): every setting that dialog writes must be fingerprinted there,
   or an admin who changes only that setting produces an identical signature and the team is never
   notified — worst of all for the lock, the one change that REMOVES a capability from them. One question is still
   open: the modal shell renders a ✕ that resolves the dialog with `undefined`, discarding the staged
   edits silently, which a staged-commit dialog should not offer beside Cancel — whether to remove it
-  or make it behave as Cancel is with the product owner (TODO(PT-4557)).
-- **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25).
+  or make it behave as Cancel is with the product owner. Tracked separately from PT-4557, which
+  this entry closes, in `~/Desktop/PT-4557-followup-close-button-discards-staged-edits.md`.
+- **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25; round 3 A1, A2, A3).
 
 ## adr-theme-hosted-in-main: The theme service is hosted in main, and each window caches the current theme
 

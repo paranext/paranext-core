@@ -25,7 +25,14 @@ export type StructureProtectionState = {
    * rather than trusting the protection values.
    */
   adminSettingError: PlatformError | undefined;
-  /** Whether the current user has write permission on project settings */
+  /**
+   * Whether the current user has write permission on project settings, and so may change the
+   * project-level lock — in the Team layout dialog, which is now its only control.
+   *
+   * Named to match {@link computeEffectiveStructureProtection}'s input of the same name in
+   * `platform-bible-utils`, which this value feeds and which the Scripture Finder PDP also passes:
+   * the three have to agree, so the name is that shared contract's rather than this hook's.
+   */
   canAdminToggle: boolean;
   /**
    * Whether every input to the state above has been delivered at least once.

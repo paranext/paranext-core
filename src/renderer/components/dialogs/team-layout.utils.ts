@@ -80,14 +80,17 @@ export function seedResourceList(
 }
 
 /**
- * Per-field seeding fallback for scalar settings (model text's single reference, or the active tab
- * identifier): use the project-level value if it is set (non-empty string / defined reference);
- * otherwise fall back to the personal value.
+ * Per-field seeding fallback for the dialog's one scalar setting, the active tab identifier: use
+ * the project-level value if it is set (a non-empty string); otherwise fall back to the personal
+ * value.
+ *
+ * The model text is a reference rather than a scalar and seeds through
+ * {@link seedResourceList}(...)[0], so this does not need to be generic over `ResourceReference`.
  */
-export function seedScalar<T extends string | ResourceReference | undefined>(
-  projectValue: T,
-  personalValue: T,
-): T {
+export function seedScalar(
+  projectValue: string | undefined,
+  personalValue: string | undefined,
+): string | undefined {
   const isProjectValueUnset = projectValue === undefined || projectValue === '';
   return isProjectValueUnset ? personalValue : projectValue;
 }

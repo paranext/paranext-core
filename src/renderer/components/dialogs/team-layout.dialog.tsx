@@ -230,9 +230,8 @@ function TeamLayoutDialogWrapper({
   );
   const seededModelText: ResourceReference | undefined = seededModelTextItems[0];
 
-  // `seedScalar` is generic over `string | ResourceReference | undefined`, so it returns the plain
-  // `string | undefined` type of the persisted setting. Narrow it using the type guard to ensure
-  // only known tab values are trusted.
+  // `seedScalar` returns the plain `string | undefined` of the persisted setting, so narrow it with
+  // the type guard to ensure only known tab values are trusted.
   const seededActiveTabRaw = seedScalar(projectActiveTab, undefined);
   const seededActiveTab =
     seededActiveTabRaw && isTeamLayoutActiveTab(seededActiveTabRaw)
@@ -280,19 +279,61 @@ function TeamLayoutDialogWrapper({
     if (areAllGateInputsReady) setHaveGateInputsEverBeenReady(true);
   }, [areAllGateInputsReady]);
 
-  // Captured at the same commit the gate first opens, for the same reason the body's own snapshots
-  // are: `otherResources` is a partition of `seededItems`, and Confirm concatenates it with the two
-  // lists the body snapshotted, so all three must come from ONE `seededItems`. Without this, a
-  // catalog retry from inside the open dialog re-partitions `otherResources` underneath the mounted
-  // body and a Save writes a list the admin never saw.
-  const mountedOtherResourcesRef = useRef<ResourceReference[] | undefined>(undefined);
+  // The seed the mounted body was handed, captured at the same commit the gate first opens.
+  //
+  // All four are partitions or elements of ONE `seededItems`, and Confirm both concatenates them
+  // and reference-compares the body's result against them, so they must come from the same
+  // `seededItems` the body was mounted with. They cannot be read live at Confirm time: their memos
+  // take `allResources` as a dep, and a catalog retry driven from inside the open dialog
+  // (`onRetryResources`, reachable from the retry button and from both embedded pickers) hands
+  // every one of them a fresh identity. Live, that would re-partition `otherResources` underneath
+  // the mounted body AND make every untouched field fail its `!==` test, writing lists the admin
+  // never saw — including, on a project that has never shared a layout, the admin's own personal
+  // selections.
+  //
+  // Captured together in one effect, for the same reason the gate latches its inputs together: a
+  // per-value latch could mix values from different `seededItems`.
+  const mountedSeedRef = useRef<
+    | {
+        scriptureResources: ResourceReference[];
+        commentaryResources: ResourceReference[];
+        otherResources: ResourceReference[];
+        modelText: ResourceReference | undefined;
+      }
+    | undefined
+  >(undefined);
   useEffect(() => {
-    if (areAllGateInputsReady && mountedOtherResourcesRef.current === undefined)
-      mountedOtherResourcesRef.current = otherResources;
-  }, [areAllGateInputsReady, otherResources]);
+    if (areAllGateInputsReady && mountedSeedRef.current === undefined)
+      mountedSeedRef.current = {
+        scriptureResources,
+        commentaryResources,
+        otherResources,
+        modelText: seededModelText,
+      };
+  }, [
+    areAllGateInputsReady,
+    scriptureResources,
+    commentaryResources,
+    otherResources,
+    seededModelText,
+  ]);
 
   const handleConfirm = useCallback(
     async (result: TeamLayoutResult) => {
+      // The seed the body was mounted with. Absent only if Confirm somehow ran before the gate
+      // opened, which cannot happen — the body is not rendered until then — but treat it as a
+      // failure rather than silently comparing against nothing.
+      // Cleared at the start of every attempt, so the destructive alert always describes the
+      // attempt the admin is looking at rather than staying pinned over a screen they have since
+      // edited.
+      setHasSaveError(false);
+
+      const seed = mountedSeedRef.current;
+      if (!seed) {
+        setHasSaveError(true);
+        return;
+      }
+
       // Each setter runs only if its own field actually changed. The lock is now the only control
       // in this dialog for a setting that has no other UI, so an admin opening it purely to flip the
       // lock is an ordinary path — and on a project that has never shared a layout, `seedResourceList`
@@ -300,28 +341,47 @@ function TeamLayoutDialogWrapper({
       // would publish one person's resource list to the whole team as a side effect of an action
       // that has nothing to do with resources.
       //
-      // Reference equality is the right test: the wrapper passes its own memoized values as the
-      // `initial*` props and the mounted body never mutates them, so an untouched field comes back
-      // as the identical array.
-      const writes: (Promise<unknown> | undefined)[] = [];
+      // Reference equality is the right test, and it is compared against `mountedSeedRef` rather
+      // than the live memos: the body snapshots its `initial*` props at mount and never mutates
+      // them, so an untouched field comes back as the identical array the seed holds — while the
+      // live memos take a fresh identity on any catalog retry, which would fail the test for a
+      // field nobody touched.
+      const writes: Promise<unknown>[] = [];
+      // A field this Confirm intends to write whose setter is `undefined`. `useProjectSetting`
+      // returns no setter for as long as its data provider is unresolved, and the gate is
+      // deliberately latched open across exactly that window (see the latch comment above), so the
+      // body can be live and interactive while a setter is missing. Skipping it silently would
+      // close the dialog reporting a save that never reached the project.
+      let hasUnavailableSetter = false;
+      const queueWrite = (setter: unknown, run: () => Promise<unknown> | undefined) => {
+        // Only the setter's ABSENCE counts as unavailable. A setter that returns something other
+        // than a promise is still a setter that ran; there is just nothing to await.
+        if (!setter) {
+          hasUnavailableSetter = true;
+          return;
+        }
+        const promise = run();
+        if (promise) writes.push(promise);
+      };
+
       if (
         !isProjectResourcesUnknown &&
-        (result.scriptureResources !== scriptureResources ||
-          result.commentaryResources !== commentaryResources)
+        (result.scriptureResources !== seed.scriptureResources ||
+          result.commentaryResources !== seed.commentaryResources)
       ) {
-        writes.push(
+        queueWrite(setProjectResources, () =>
           setProjectResources?.({
             dataVersion: projectResources?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
             items: [
               ...result.scriptureResources,
               ...result.commentaryResources,
-              ...(mountedOtherResourcesRef.current ?? otherResources),
+              ...seed.otherResources,
             ],
           }),
         );
       }
-      if (!isProjectModelTextsUnknown && result.modelText !== seededModelText) {
-        writes.push(
+      if (!isProjectModelTextsUnknown && result.modelText !== seed.modelText) {
+        queueWrite(setProjectModelTexts, () =>
           setProjectModelTexts?.({
             dataVersion: projectModelTexts?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
             items: result.modelText ? [result.modelText] : [],
@@ -329,7 +389,7 @@ function TeamLayoutDialogWrapper({
         );
       }
       if (result.activeTab !== seededActiveTab)
-        writes.push(setProjectActiveTab?.(result.activeTab ?? ''));
+        queueWrite(setProjectActiveTab, () => setProjectActiveTab?.(result.activeTab ?? ''));
       // Written unconditionally when its value is known, rather than compared against the seed like
       // the settings above: this dialog is the lock's only control, so "Save writes the state you
       // see" is what an admin expects of it. Skipped entirely when the current value could NOT be
@@ -340,28 +400,30 @@ function TeamLayoutDialogWrapper({
       // is itself Simple-mode-gated, so there is no mode in which this write is reachable but
       // inert.
       if (!isTeamLockUnknown)
-        writes.push(setProjectStructureProtected?.(result.isStructureProtectedForTeam));
+        queueWrite(setProjectStructureProtected, () =>
+          setProjectStructureProtected?.(result.isStructureProtectedForTeam),
+        );
 
       // A project-setting write can be REFUSED — the Send/Receive write gate rejects during an
       // automatic sync — so the dialog must not report success until every write has landed.
       // Closing optimistically would tell the admin the team lock was saved when nothing was, and
       // this dialog is the lock's only UI, so there is no second place to notice.
-      try {
-        await Promise.all(writes);
-      } catch {
+      //
+      // `allSettled`, not `all`: the four writes are independent and non-atomic, so `all` would
+      // report the first rejection while its siblings were still in flight and free to commit.
+      // Settling them all means the failure message describes a finished state. It is still a
+      // PARTIAL state — the message says so, and says the dialog's values are the intended end
+      // state, because a retry from here is idempotent.
+      const outcomes = await Promise.allSettled(writes);
+      if (hasUnavailableSetter || outcomes.some((outcome) => outcome.status === 'rejected')) {
         setHasSaveError(true);
         return;
       }
-      setHasSaveError(false);
       submitDialog(true);
     },
     [
       projectResources,
       projectModelTexts,
-      otherResources,
-      scriptureResources,
-      commentaryResources,
-      seededModelText,
       seededActiveTab,
       isTeamLockUnknown,
       isProjectResourcesUnknown,
