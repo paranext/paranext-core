@@ -336,6 +336,20 @@ global.webViewComponent = function CommentListWebView({
 
   const isViewVisible = useViewVisibility();
 
+  /**
+   * Mirrors {@link isViewVisible}, read by `trySelectThread` instead of the closed-over value.
+   * `trySelectThread` is captured by the `window` message-listener effect below, which only
+   * re-subscribes when `trySelectThread`'s own identity changes — if `isViewVisible` were a
+   * dependency of `trySelectThread` instead, every visibility flip would both (a) leave a window,
+   * between this component's render and that effect's re-subscription, where the still-attached old
+   * listener's closed-over value can disagree with this ref, and (b) tear down and rebuild the
+   * message listener and restart the pending-selection retry timer on every flip even when nothing
+   * else changed. Updated unconditionally on every render, the same way `useRunWhenVisible`'s own
+   * internal visibility ref is, so the two can never disagree about the current visibility.
+   */
+  const isViewVisibleRef = useRef(isViewVisible);
+  isViewVisibleRef.current = isViewVisible;
+
   // Performs the DOM scroll for a computed sync-scroll target. The hook computes WHERE to scroll;
   // this web view owns the DOM knowledge (both element ids come from platform-bible-react's
   // CommentList).
@@ -399,15 +413,29 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  const scrollSelectedThreadIntoView = useCallback(() => {
+  const scrollSelectedThreadIntoView = useCallback((isRetry = false) => {
     const pending = pendingThreadScrollRef.current;
-    pendingThreadScrollRef.current = undefined;
     if (!pending) return;
     const threadElement = document.getElementById(getCommentThreadElementId(pending.threadId));
     if (!threadElement) {
-      logger.debug(`Deferred thread scroll: thread element not found: ${pending.threadId}`);
+      // The catch-up can race a re-render that is still inserting the thread (e.g. a filter change
+      // resolving right as the tab becomes visible) — the element that was found when the thread
+      // was selected can be momentarily gone by the time this runs. Keep the target and retry once
+      // shortly after instead of dropping it for good; only give up once the retry itself misses.
+      if (isRetry) {
+        logger.debug(
+          `Deferred thread scroll: thread element still not found after retry: ${pending.threadId}`,
+        );
+        pendingThreadScrollRef.current = undefined;
+        return;
+      }
+      logger.debug(
+        `Deferred thread scroll: thread element not found: ${pending.threadId}; retrying once`,
+      );
+      setTimeout(() => scrollSelectedThreadIntoView(true), 50);
       return;
     }
+    pendingThreadScrollRef.current = undefined;
     applyStickyHeaderScrollPadding();
     threadElement.scrollIntoView({ behavior: pending.behavior, block: 'center' });
   }, []);
@@ -435,10 +463,11 @@ global.webViewComponent = function CommentListWebView({
         setSelectedThreadId(threadId);
         // See requestThreadScroll's own comment for the hidden-view rationale: 'smooth' while the
         // view is already visible, 'instant' recorded up front for the hidden case so the eventual
-        // catch-up doesn't animate.
+        // catch-up doesn't animate. Reads isViewVisibleRef rather than closing over isViewVisible —
+        // see the ref's own doc comment.
         pendingThreadScrollRef.current = {
           threadId,
-          behavior: isViewVisible ? 'smooth' : 'instant',
+          behavior: isViewVisibleRef.current ? 'smooth' : 'instant',
         };
         requestThreadScroll();
         setPendingThreadIdToSelect(undefined);
@@ -465,7 +494,7 @@ global.webViewComponent = function CommentListWebView({
       logger.warn(`Could not find thread element with id: ${threadId}`);
       return false;
     },
-    [isViewVisible, recordSelfInitiatedNavigation, requestThreadScroll],
+    [recordSelfInitiatedNavigation, requestThreadScroll],
   );
 
   // Listen for messages from the web view controller

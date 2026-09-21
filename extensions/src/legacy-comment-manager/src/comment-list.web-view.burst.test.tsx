@@ -440,4 +440,106 @@ describe('trySelectThread and hidden views', () => {
       remove();
     }
   });
+
+  it('retries once if the thread element is briefly missing when the deferred scroll first runs', async () => {
+    vi.mocked(useViewVisibility).mockReturnValue(false);
+    const CommentListWebView = globalThis.webViewComponent;
+    const useWebViewState = makeUseWebViewState({ editorWebViewId: 'editor-1' });
+    const { rerender } = render(
+      <CommentListWebView
+        webViewType="legacyCommentManager.commentList"
+        id="comment-list-1"
+        projectId="project-1"
+        useWebViewState={useWebViewState}
+        useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+        updateWebViewDefinition={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    const first = mountThreadElement('thread-1');
+    act(() => {
+      dispatchSelectThread('thread-1');
+    });
+    expect(first.scrollIntoView).not.toHaveBeenCalled();
+
+    // The thread's DOM node disappears right as the tab becomes visible (e.g. a filter re-inserting
+    // it mid-transition), so the first catch-up attempt misses it.
+    first.remove();
+
+    vi.mocked(useViewVisibility).mockReturnValue(true);
+    act(() => {
+      rerender(
+        <CommentListWebView
+          webViewType="legacyCommentManager.commentList"
+          id="comment-list-1"
+          projectId="project-1"
+          useWebViewState={useWebViewState}
+          useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+          updateWebViewDefinition={vi.fn()}
+        />,
+      );
+    });
+
+    // The thread reappears shortly after (the interrupted re-render finishing) — the missed
+    // catch-up must retry rather than being dropped for good.
+    const second = mountThreadElement('thread-1');
+    try {
+      await waitFor(() => expect(second.scrollIntoView).toHaveBeenCalledTimes(1));
+      expect(second.scrollIntoView).toHaveBeenCalledWith({ behavior: 'instant', block: 'center' });
+    } finally {
+      second.remove();
+    }
+  });
+});
+
+describe('trySelectThread identity across visibility flips', () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(useViewVisibility).mockReturnValue(true);
+  });
+
+  it('keeps the window message listener subscribed across a visibility flip alone', async () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+    vi.mocked(useViewVisibility).mockReturnValue(true);
+    const CommentListWebView = globalThis.webViewComponent;
+    const useWebViewState = makeUseWebViewState({ editorWebViewId: 'editor-1' });
+    const { rerender } = render(
+      <CommentListWebView
+        webViewType="legacyCommentManager.commentList"
+        id="comment-list-1"
+        projectId="project-1"
+        useWebViewState={useWebViewState}
+        useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+        updateWebViewDefinition={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    const messageSubscriptionsBefore = addEventListenerSpy.mock.calls.filter(
+      ([eventName]) => eventName === 'message',
+    ).length;
+
+    vi.mocked(useViewVisibility).mockReturnValue(false);
+    act(() => {
+      rerender(
+        <CommentListWebView
+          webViewType="legacyCommentManager.commentList"
+          id="comment-list-1"
+          projectId="project-1"
+          useWebViewState={useWebViewState}
+          useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+          updateWebViewDefinition={vi.fn()}
+        />,
+      );
+    });
+
+    const messageSubscriptionsAfter = addEventListenerSpy.mock.calls.filter(
+      ([eventName]) => eventName === 'message',
+    ).length;
+
+    // A visibility flip alone must not tear down and re-subscribe the message listener — doing so
+    // would also restart the pending-selection retry timer (see the effect below it) on every flip.
+    expect(messageSubscriptionsAfter).toBe(messageSubscriptionsBefore);
+  });
 });

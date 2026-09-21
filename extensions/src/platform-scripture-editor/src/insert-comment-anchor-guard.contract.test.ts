@@ -27,8 +27,10 @@ function collapseWhitespace(text: string): string {
 describe('insertCommentAtCurrentSelection anchor guard (platform-scripture-editor.web-view.tsx)', () => {
   const source = collapseWhitespace(readFileSync(WEB_VIEW_FILE, 'utf-8'));
 
+  // The dependency array is matched generically (not re-baked verbatim) so an unrelated dependency
+  // change doesn't turn every assertion below into a "callback not found" failure.
   const callbackMatch = source.match(
-    /const insertCommentAtCurrentSelection = useCallback\(\(\) => \{(.*?)\}, \[scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked, commentPopoverAnchor\]\);/,
+    /const insertCommentAtCurrentSelection = useCallback\(\(\) => \{(.*?)\}, \[[^[\]]*\]\);/,
   );
   if (!callbackMatch) throw new Error('insertCommentAtCurrentSelection callback not found');
   const [, callbackBody] = callbackMatch;
@@ -52,5 +54,23 @@ describe('insertCommentAtCurrentSelection anchor guard (platform-scripture-edito
 
     expect(queryIndex).toBeGreaterThan(-1);
     expect(guardIndex).toBeGreaterThan(queryIndex);
+  });
+
+  it('returns before recording the pending comment range or setting the highlight annotation, not just before opening the popover', () => {
+    const guardIndex = callbackBody.indexOf('if (!editorContainer) return;');
+    const pendingRangeAssignIndex = callbackBody.indexOf(
+      'pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };',
+    );
+    const setAnnotationIndex = callbackBody.indexOf('editorRef.current?.setAnnotation(');
+
+    expect(guardIndex).toBeGreaterThan(-1);
+    expect(pendingRangeAssignIndex).toBeGreaterThan(-1);
+    expect(setAnnotationIndex).toBeGreaterThan(-1);
+    // A missing `.usfm` element must bail out before either side effect: recording the pending
+    // range and setting the highlight annotation. Otherwise both survive with no popover ever
+    // opened to reach the only code that clears them (the cancel/save handlers), so the highlight
+    // is stranded in the text and the stale range is what the next successful save would use.
+    expect(guardIndex).toBeLessThan(pendingRangeAssignIndex);
+    expect(guardIndex).toBeLessThan(setAnnotationIndex);
   });
 });
