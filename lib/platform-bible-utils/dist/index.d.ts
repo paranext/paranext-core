@@ -4701,8 +4701,14 @@ export declare function hasDistinctFullName(names: ProjectNames): boolean;
  * with its own separator node, say — has to draw the same character the joined string uses, or the
  * visible label and its own tooltip disagree the moment this changes.
  *
- * Not localized: it joins two proper nouns rather than translatable prose, and the surrounding
- * element's direction handles right-to-left layout.
+ * Not localized: it joins two proper nouns rather than translatable prose.
+ *
+ * Bidi caveat: the hyphen is direction-neutral. A caller that renders the two names in separate
+ * elements gets the surrounding element's direction for free, but {@link formatProjectName} returns
+ * one text node, so a right-to-left name inside a left-to-right container (or the reverse) can put
+ * the separator on the visually wrong side. Callers that place that joined string where mixed
+ * directions are likely — a tooltip, a subtitle, an `aria-label` — should set `dir="auto"` on the
+ * element that carries it.
  */
 export declare const PROJECT_NAME_SEPARATOR = " - ";
 /**
@@ -4717,6 +4723,17 @@ export declare const PROJECT_NAME_SEPARATOR = " - ";
  * @returns The display string.
  */
 export declare function formatProjectName(names: ProjectNames): string;
+/**
+ * Compares two project short names for display order: alphabetical, case- and accent-insensitive.
+ *
+ * The string-level form of {@link compareProjectsByName}, for a caller whose list rows are not
+ * {@link ProjectNames} objects and would otherwise allocate a throwaway one per comparison.
+ *
+ * @param a First short name.
+ * @param b Second short name.
+ * @returns Negative, zero or positive, as `Array.prototype.sort` expects.
+ */
+export declare function compareProjectShortNames(a: string, b: string): number;
 /**
  * Compares two projects for display order: alphabetical by short name, case- and
  * accent-insensitive.

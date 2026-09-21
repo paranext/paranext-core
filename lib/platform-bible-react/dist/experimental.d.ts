@@ -50,9 +50,8 @@ export type ProjectSelectorProject = {
 	id: string;
 	shortName: string;
 	/**
-	 * Full name shown as the row's muted second line and as the tooltip title. Optional — omit it (or
-	 * pass the short name) when the project has no separate longer name, and the selector renders a
-	 * single line rather than repeating it.
+	 * Full name, shown as the row's muted second line. Omit it when the project has none — don't copy
+	 * the short name in; the selector already renders a single line when the names match.
 	 */
 	fullName?: string;
 	/**
@@ -334,7 +333,12 @@ export type ProjectSelectorFooterAction = {
  * groupings can supply their own localized label without a separate string channel.
  */
 export type ProjectSelectorLocalizedStrings = {
-	/** Trigger `aria-label`. */
+	/**
+	 * Names what the trigger selects (e.g. "Project"), NOT the whole accessible name. With something
+	 * selected the trigger announces `"{ariaLabel}: {selection}"`, so a consumer passing `"Select
+	 * project"` gets "Select project: WEB". Supply the group label alone and let the selection be
+	 * appended.
+	 */
 	ariaLabel?: string;
 	/** Trigger fallback text when nothing is selected. */
 	buttonPlaceholder?: string;

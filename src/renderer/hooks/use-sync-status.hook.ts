@@ -12,7 +12,7 @@ import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { projectLookupService } from '@shared/services/project-lookup.service';
-import { compareProjectsByName, getErrorMessage } from 'platform-bible-utils';
+import { compareProjectShortNames, getErrorMessage } from 'platform-bible-utils';
 import { useEvent, usePromise } from 'platform-bible-react';
 import type {
   ResultStatus,
@@ -710,8 +710,7 @@ export function useSyncStatus(): SyncStatusInfo {
           // id) would otherwise be left in exactly the meaningless order the sort exists to remove.
           .sort(
             (a, b) =>
-              compareProjectsByName({ shortName: a.name }, { shortName: b.name }) ||
-              a.projectId.localeCompare(b.projectId),
+              compareProjectShortNames(a.name, b.name) || a.projectId.localeCompare(b.projectId),
           )
       );
     }, [effectiveProjectIds]),

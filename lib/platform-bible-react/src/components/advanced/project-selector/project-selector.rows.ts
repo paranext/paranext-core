@@ -20,9 +20,8 @@ export type ProjectSelectorProject = {
   id: string;
   shortName: string;
   /**
-   * Full name shown as the row's muted second line and as the tooltip title. Optional — omit it (or
-   * pass the short name) when the project has no separate longer name, and the selector renders a
-   * single line rather than repeating it.
+   * Full name, shown as the row's muted second line. Omit it when the project has none — don't copy
+   * the short name in; the selector already renders a single line when the names match.
    */
   fullName?: string;
   /**

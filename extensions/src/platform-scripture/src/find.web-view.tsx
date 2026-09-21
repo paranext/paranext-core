@@ -1,4 +1,4 @@
-import { WebViewProps } from '@papi/core';
+import { ProjectMetadata, WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
 import {
   useData,
@@ -123,30 +123,23 @@ type ProjectNamesById = {
 };
 
 /**
- * Gets the short name, full name, and language of a project from its ID. Kept in the webview (not
- * the shared, `@papi`-free utils) so the utils stay importable by the presentational component and
- * its story.
+ * Reads the short name, full name, and language the picker needs off a project's metadata.
  *
- * `platform.language` feeds the picker's Language grouping; it degrades to `undefined` (an "unknown
- * language" bucket) rather than failing the whole lookup, since a project without it is still
- * perfectly searchable.
+ * Metadata, not `pdp.getSetting`: `platform.fullName` has a contribution default — a localized
+ * `*Name Missing*` placeholder — so an unset full name reads back as that placeholder and would
+ * render as a real second name. Metadata omits the field, and costs no data provider per project.
+ *
+ * `language` feeds the picker's Language grouping; a project without one degrades to the "unknown
+ * language" bucket, since it is still perfectly searchable.
  */
-async function getProjectNames(
-  projectId: string,
-): Promise<Pick<FindProject, 'shortName' | 'fullName' | 'language'>> {
-  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
-    pdp.getSetting('platform.name'),
-    pdp.getSetting('platform.fullName'),
-    pdp.getSetting('platform.language').catch(() => undefined),
-  ]);
+function projectNamesFromMetadata(
+  metadata: ProjectMetadata,
+): Pick<FindProject, 'shortName' | 'fullName' | 'language'> {
   return {
-    shortName: projectShortName,
-    // This project shape requires a `string` full name, so an absent one becomes '' rather
-    // than `undefined` — `hasDistinctFullName` treats both as absent, and coalescing here
-    // keeps a `null` setting out of a slot the type promises is a string.
-    fullName: normalizeFullName(projectFullName) ?? '',
-    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
+    // `name` is optional on the metadata contract; the id is the documented fallback.
+    shortName: metadata.name ?? metadata.id,
+    fullName: normalizeFullName(metadata.fullName),
+    language: metadata.language,
   };
 }
 
@@ -407,29 +400,10 @@ global.webViewComponent = function FindWebView({
         includeProjectInterfaces: ['Scripture', 'Paratext'],
       });
 
-      // `allSettled`, NOT `all`. These are independent per-project reads, and `usePromise` has no
-      // `.catch` around its factory — so with `all`, one project whose PDP or `platform.name` read
-      // rejects would reject the whole batch, the rejection would escape this callback, and neither
-      // `setValue` nor `setIsLoading(false)` would ever run: `projectIdsAndNames` would stay `{}`
-      // and `isLoadingProjects` stuck `true`, permanently. That state is UNRECOVERABLE here,
-      // because the refetch effect and the reassignment effect's canonical-id gate both wait on
-      // `isLoadingProjects` — the one path that could retry is gated off by the failure itself. And
-      // the batch spans every Scripture/Paratext project, not just open ones, so a single bad
-      // project would take out the whole picker. Skip the failures, keep the rest.
-      const projectNameResults = await Promise.allSettled(
-        allMetadata.map(async (metadata) => ({
-          id: metadata.id,
-          names: await getProjectNames(metadata.id),
-        })),
-      );
-      projectNameResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          projectDict[result.value.id] = result.value.names;
-          return;
-        }
-        logger.warn(
-          `Find: could not read names for project ${allMetadata[index].id}; omitting it from the project picker: ${getErrorMessage(result.reason)}`,
-        );
+      // Every name the picker shows comes off the metadata already fetched above, so there is no
+      // per-project read left that could fail and take the whole picker with it.
+      allMetadata.forEach((metadata) => {
+        projectDict[metadata.id] = projectNamesFromMetadata(metadata);
       });
 
       return projectDict;

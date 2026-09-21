@@ -21,12 +21,17 @@ const SELF_REFERENTIAL_FILES = new Set([
 ]);
 
 /**
- * The shared helpers. A line that calls one is adopting the rule rather than re-inlining it, so it
- * is skipped structurally — that is the behaviour this sweep exists to encourage, and listing every
- * adoption site as an exemption would make the list grow with the good outcome.
+ * The shared helpers that decide a name's SHAPE. A line that calls one is adopting the rule rather
+ * than re-inlining it, so it is skipped structurally — that is the behavior this sweep exists to
+ * encourage, and listing every adoption site as an exemption would make the list grow with the good
+ * outcome.
+ *
+ * `normalizeFullName` is deliberately NOT here. It narrows a raw setting value and decides nothing
+ * about order or de-dup, so `normalizeFullName(p.fullName) ?? p.shortName` — the long-name-first
+ * fallback this sweep exists to catch — would otherwise buy a free pass just by mentioning it.
  */
 const HELPERS =
-  /\b(formatProjectName|hasDistinctFullName|normalizeFullName|compareProjectsByName|PROJECT_NAME_SEPARATOR)\b/;
+  /\b(formatProjectName|hasDistinctFullName|compareProjectsByName|PROJECT_NAME_SEPARATOR)\b/;
 
 /**
  * A field whose name ends in `fullName`, in any casing or prefix — `fullName`, `projectFullName`,
@@ -43,7 +48,7 @@ const FULL_NAME_FIELD = /\b\w*[Ff]ullName\b/;
  * over-matching costs one triage entry in `EXEMPT`, whereas a shape the pattern cannot express is
  * silent.
  */
-const COMPOSING_OPERATOR = /(===?|!==?|\?\?|\|\||\$\{|\.join\(| \+ )/;
+const COMPOSING_OPERATOR = /(===?|!==?|\?\?|\|\||\$\{|\.join\(| \+ | \? )/;
 
 /**
  * Sites that match the pattern without being a re-inlined project-name label. Per-site, not
@@ -103,7 +108,8 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
   {
     file: 'src/renderer/hooks/use-project-picker-data.hook.ts',
     contains: 'fullName: m.fullName ?? m.name ?? m.id',
-    reason: 'metadata adapter — fills the full-name slot; the label itself is composed downstream',
+    reason:
+      'metadata adapter — fills the full-name slot, composing no label. The toolbar selector that consumes it de-dups through `formatProjectName`; the "More projects" dialog renders the slot raw in its own column (`project-picker.component.tsx`), so a project with no metadata full name shows its short name twice there. Pre-existing and out of this rule\'s scope — the duplicate is a rendering decision in that dialog, not a name composed here',
   },
   {
     file: 'src/shared/models/project-lookup.service-model.ts',
@@ -138,17 +144,13 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
   // name like every other label: the two sites that composed one — `getRefLabel` (the Model Text
   // tab and the third-column resource tabs) and Share Layout's `formatResourceDisplayName` — call
   // `formatProjectName` with `displayName` in the `shortName` slot, so they are adopted rather than
-  // exempt. The two entries left below fill a long-name slot the UI renders after the short name,
-  // so they compose no label and have no order to get wrong.
-  {
-    file: 'extensions/src/platform-scripture-editor/src/scripture-text-grid-contents.utils.ts',
-    contains: 'downloadedResource.fullName !== downloadedResource.name',
-    reason: 'DBL resource long-name slot — resource metadata, not project names',
-  },
+  // exempt. The entry left below fills a long-name slot the UI renders after the short name, so it
+  // composes no label and has no order to get wrong.
   {
     file: 'extensions/src/platform-scripture-editor/src/scripture-text-grid/view-options-long-name.utils.ts',
     contains: 'fullName === reference.name',
-    reason: 'DBL resource long-name slot — resource metadata, not project names',
+    reason:
+      "fills View Options' long-name slot, composing no label. The row itself is joined downstream in `resource-collection-options.component.tsx`, short name first, with an em dash rather than `PROJECT_NAME_SEPARATOR` — a deliberate difference for that panel, and the order this rule is about is already correct there",
   },
 
   // ---- Fixtures and prototypes: not shipped UI ----

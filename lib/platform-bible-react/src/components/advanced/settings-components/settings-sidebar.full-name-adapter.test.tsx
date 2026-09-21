@@ -51,6 +51,23 @@ describe('SettingsSidebar — project full name adapter', () => {
     expect(projects).toEqual([{ id: 'p1', shortName: 'NOFULL', fullName: undefined }]);
   });
 
+  it('asks the selector for a short-name-first trigger label', () => {
+    // The sidebar's trigger reads `{short} - {full}` rather than the short name alone. That is a
+    // user-visible choice this component makes, and the only thing that carries it is one prop —
+    // deleting it silently reverts the label with every other assertion here still green.
+    renderSidebar([
+      { projectId: 'p1', projectName: 'ESV', projectFullName: 'English Standard Version' },
+    ]);
+
+    // `toMatchObject` rather than destructuring: `triggerLabelFormat` is declared only on the
+    // `project`-mode arm of the props union, so reading it off the union needs a narrowing the
+    // assertion itself already performs.
+    expect(vi.mocked(ProjectSelector).mock.calls[0][0]).toMatchObject({
+      mode: 'project',
+      triggerLabelFormat: 'shortNameAndFullName',
+    });
+  });
+
   it('passes a distinct full name through unchanged', () => {
     renderSidebar([
       { projectId: 'p1', projectName: 'ESV', projectFullName: 'English Standard Version' },

@@ -3910,12 +3910,17 @@ step, no automation. Just a record.
   rendered `arb - True Meaning Arabic` — and each carried its own copy of the
   `fullName && fullName !== shortName` de-dup rule. Five sites sorted project lists by three
   different keys, so the same projects ordered differently depending on which surface listed them.
-- **Decision:** The short name leads everywhere, joined to the full name by a non-localized `" - "`.
-  `formatProjectName`, `hasDistinctFullName` and `compareProjectsByName` live in
-  `platform-bible-utils` — the one package every consumer already depends on — and every formatting
-  and sorting site calls them. Lists sort by `shortName` at `sensitivity: 'base'`; a site with its
-  own tie-break layers it on top. A sweep test fails the build if either rule is re-inlined outside
-  the helper.
+- **Decision:** Wherever a surface shows both names, the short name leads, joined to the full name
+  by a non-localized `" - "`. Five helpers live in `platform-bible-utils` — the one package every
+  consumer already depends on: `formatProjectName`, `hasDistinctFullName`, `PROJECT_NAME_SEPARATOR`,
+  `compareProjectsByName` (plus its string-level `compareProjectShortNames`), and `normalizeFullName`
+  for reading the raw setting. Every formatting and sorting site calls them. Lists sort by
+  `shortName` at `sensitivity: 'base'`; a site with its own tie-break layers it on top. Two surfaces
+  deliberately show the short name ALONE rather than the pair — tab titles (see Consequences) and
+  `home.component.tsx`'s resource cards — so "short name first" is a rule about order, not a
+  requirement that every surface show both. A sweep test (`project-name-adoption.test.ts`) fails the
+  build when the FORMATTING/de-dup rule is re-inlined; it is line- and identifier-based and does not
+  see a re-inlined sort at all, so the sort half rests on review and the helper's own tests.
 - **Alternatives:** **Keep long-name-first and change `ProjectSelector` instead** — rejected: the
   short name is what a Paratext user identifies a project by and the field that must survive
   truncation, so leading with it means the identifying half is never the half that is clipped.
@@ -3923,28 +3928,30 @@ step, no automation. Just a record.
   the label, a `fullName` sort orders on a field the user cannot see, so the list reads as unsorted.
   **Per-consumer tests alone, without the sweep** — rejected: they pin today's consumers and say
   nothing about the next surface added, which is the failure this exists to prevent.
-- **Consequences:** Supersedes the toolbar's documented long-name-first rationale. Five sort sites —
-  Find, the checks side panel, the renderer picker, `ProjectSelector`'s own rows, and the
-  sync-status popover's `use-sync-status.hook.ts` — now share one comparator, so Find, the checks
-  side panel, the renderer picker and the sync-status popover all reorder visibly; the last of
-  these also gains case-insensitive ordering it previously lacked. `secondaryFirst` on
-  `ToolbarCompoundLabel` loses its only in-repo consumer
-  but is retained, because the component is in the stable barrel and removing a documented prop is
-  a breaking change. `ProjectSelectorProject.fullName` became optional so a project with no full
-  name stops mirroring its short name into that field. Tab titles deliberately do NOT call
+- **Consequences:** Supersedes the toolbar's documented long-name-first rationale. Three sort sites
+  now share one comparator: `ProjectSelector`'s own `compareRows`, the renderer picker's
+  "More projects" list, and the sync-status popover. Only two of those change what a user sees — the
+  renderer picker, which sorted by `fullName` before, and the sync-status popover, which gains the
+  case-insensitivity it lacked. Find and the checks side panel look like a third and fourth: they
+  hand `ProjectSelector` a list, and it re-sorts every section it renders, so their own order was
+  never observable and they pass their rows through unsorted. `secondaryFirst` on
+  `ToolbarCompoundLabel` loses its only in-repo consumer but is retained, because the component is in
+  the stable barrel and removing a documented prop is a breaking change.
+  `ProjectSelectorProject.fullName` — and the extension-side `FindProject`/`ProjectOption` rows that
+  feed it — became optional so a project with no full name stops mirroring its short name into that
+  field. Surfaces that name a project read `fullName` from project metadata rather than
+  `pdp.getSetting('platform.fullName')`: that setting's contribution default is a localized
+  `*Name Missing*` placeholder, so a data-provider read cannot tell "no full name" from "never set
+  one" and would render the placeholder as a real name. Tab titles deliberately do NOT call
   `formatProjectName`: a tab strip is the most space-constrained surface in the app, so appending
   the full name would push the short name toward the truncation leading with it is meant to avoid.
-  They show the short name alone — short-name-first in its strongest form — which
-  `getTabTitleProjectName` now pins to the `platform.name` setting, because `formatEditorTitle`'s
-  tests inject the name and so stay green whichever setting feeds them. DBL resource labels follow
-  the same rule even though a resource carries a `displayName`/`fullName` pair rather than the
-  `platform.name`/`platform.fullName` project settings: the two sites that compose one —
-  `getRefLabel` (the Model Text tab and Simple mode's third-column resource tabs) and Share Layout's
-  `formatResourceDisplayName` — pass `displayName` in the helper's `shortName` slot, which also
-  de-dups the locally-installed non-DBL resources whose `fullName` falls back to their
-  `displayName`. Sites that merely fill a long-name slot the UI renders after the short name
-  (`scripture-text-grid-contents.utils.ts`, `view-options-long-name.utils.ts`) compose no label and
-  stay as they are.
+  They show the short name alone, which `getTabTitleProjectName` now pins to the `platform.name`
+  setting. DBL resource labels follow the same rule even though a resource carries a
+  `displayName`/`fullName` pair rather than the `platform.name`/`platform.fullName` project
+  settings: `getRefLabel` and Share Layout's `formatResourceDisplayName` pass `displayName` in the
+  helper's `shortName` slot. Sites that merely fill a long-name slot the UI renders after the short
+  name compose no label and keep their own separator — View Options joins with an em dash.
+
 ## adr-project-selector-consumer-driven-groupings: ProjectSelector groupings are consumer-supplied descriptors over an untyped `customData` bag
 
 - **Date:** 2026-09-14

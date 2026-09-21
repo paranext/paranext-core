@@ -358,18 +358,17 @@ function ToolbarProjectSelector({
     [pendingProject, displayedProject, currentProjectError, placeholder],
   );
 
-  // `ariaLabel` becomes the trigger's `aria-label`, which REPLACES its content in the accessible
-  // name rather than adding to it. This selector also supplies `renderTriggerLabel`, so the
-  // selector cannot derive the selection from its own trigger text and leaves the name to the
-  // consumer. Without the project name here a screen-reader user hears only "Select project", at
-  // every shrink step — and at the narrowest step the full name is dropped from the visible label
-  // too, so this is the only place it remains reachable.
+  // The whole accessible name, not just the group label: supplying `renderTriggerLabel` makes the
+  // trigger's content arbitrary, so `ProjectSelector` leaves naming to the consumer (see its
+  // `ariaLabel` TSDoc). At the narrowest shrink step the visible label drops the full name, so this
+  // is the only place it stays reachable.
   const triggerAriaLabel = useMemo(() => {
     const selectProject = localizedStrings['%projectPicker_toolbar_select_project%'];
     if (!pendingProject && currentProjectError) return `${selectProject}, ${currentProjectError}`;
-    const named = displayedProject ?? pendingProject;
-    if (!named) return placeholder;
-    return `${selectProject}: ${formatProjectName(named)}`;
+    // `displayedProject` already resolves to the pending pick when there is one, so it is the only
+    // source to consult here.
+    if (!displayedProject) return placeholder;
+    return `${selectProject}: ${formatProjectName(displayedProject)}`;
   }, [localizedStrings, pendingProject, displayedProject, currentProjectError, placeholder]);
 
   const selectorLocalizedStrings = useMemo(

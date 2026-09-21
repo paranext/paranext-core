@@ -17,7 +17,12 @@ import { LinkedScrRefButton } from 'platform-bible-react/experimental';
 import { AlertTriangle, Book, BookOpen, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import { formatScrRef, normalizeFullName } from 'platform-bible-utils';
+import {
+  formatProjectName,
+  formatReplacementString,
+  formatScrRef,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import type {
   ChecklistCell,
   ChecklistLocalizedStringKey,
@@ -235,8 +240,13 @@ function ColumnHeaderWithTooltip({
   fullName,
   ariaLabelTemplate,
 }: ColumnHeaderWithTooltipProps) {
-  const displayFullName = normalizeFullName(fullName) ?? shortName;
-  const ariaLabel = ariaLabelTemplate.replace('{name}', displayFullName);
+  // The column shows only the short name, so the accessible name has to lead with it too — a
+  // screen-reader user who hears the full name alone cannot match the column to the tab titles or
+  // the toolbar, which name the same project by its short name.
+  const displayName = formatProjectName({ shortName, fullName: normalizeFullName(fullName) });
+  // `formatReplacementString`, not `String.replace`: a string replacement interprets `$&`, `` $` ``
+  // and `$'`, so a project whose name contains one would render mangled.
+  const ariaLabel = formatReplacementString(ariaLabelTemplate, { name: displayName });
   return (
     // delayDuration={0} → tooltip appears immediately on hover (per Sebastian's PR #2219
     // #3138170120: "do not use cursor help. show the tooltip immediately"). Mirrors the
@@ -252,7 +262,7 @@ function ColumnHeaderWithTooltip({
             {shortName}
           </span>
         </TooltipTrigger>
-        <TooltipContent>{displayFullName}</TooltipContent>
+        <TooltipContent>{displayName}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

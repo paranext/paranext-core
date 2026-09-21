@@ -135,7 +135,12 @@ const NARROW_TRIGGER_THRESHOLD_PX = 100;
  * groupings can supply their own localized label without a separate string channel.
  */
 export type ProjectSelectorLocalizedStrings = {
-  /** Trigger `aria-label`. */
+  /**
+   * Names what the trigger selects (e.g. "Project"), NOT the whole accessible name. With something
+   * selected the trigger announces `"{ariaLabel}: {selection}"`, so a consumer passing `"Select
+   * project"` gets "Select project: WEB". Supply the group label alone and let the selection be
+   * appended.
+   */
   ariaLabel?: string;
   /** Trigger fallback text when nothing is selected. */
   buttonPlaceholder?: string;
@@ -985,7 +990,16 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     props.onChangeSelection({ pairs: [] });
   };
 
-  const triggerContent = useMemo<{ node: ReactNode; title: string; hasSelection: boolean }>(() => {
+  const triggerContent = useMemo<{
+    node: ReactNode;
+    title: string;
+    /**
+     * The spoken form of {@link title}, when the two differ. `title` is written for the eye and can
+     * carry punctuation a screen reader reads out as a word; this drops it.
+     */
+    accessibleTitle?: string;
+    hasSelection: boolean;
+  }>(() => {
     switch (props.mode) {
       case 'project': {
         const selected = props.projects.find((p) => p.id === props.selection.projectId);
@@ -1050,8 +1064,15 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         if (group === undefined) {
           return { node: selected.shortName, title: selected.shortName, hasSelection: true };
         }
-        const text = `${selected.shortName} · ${scrollGroupLetterFromMap(group)}`;
-        return { node: text, title: text, hasSelection: true };
+        const groupLetter = scrollGroupLetterFromMap(group);
+        // The middle dot is a visual separator; a screen reader reads it aloud ("WEB middle dot
+        // A"). A comma is the spoken equivalent — it renders as a pause, not a word.
+        return {
+          node: `${selected.shortName} · ${groupLetter}`,
+          title: `${selected.shortName} · ${groupLetter}`,
+          accessibleTitle: `${selected.shortName}, ${groupLetter}`,
+          hasSelection: true,
+        };
       }
       default:
         return { node: '', title: '', hasSelection: false };
@@ -1124,7 +1145,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // node is arbitrary then, so the consumer owns naming it, as the Simple-mode toolbar does.
   const triggerAriaLabel =
     strings.ariaLabel && triggerContent.hasSelection && triggerContent.title
-      ? `${strings.ariaLabel}: ${triggerContent.title}`
+      ? `${strings.ariaLabel}: ${triggerContent.accessibleTitle ?? triggerContent.title}`
       : strings.ariaLabel || undefined;
 
   // The trigger's untruncated label is exposed through the shadcn Tooltip wrapped around the

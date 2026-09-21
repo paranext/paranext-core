@@ -21,7 +21,6 @@ import {
   makeBuiltInGroupings,
 } from 'platform-bible-react/experimental';
 import {
-  compareProjectsByName,
   formatReplacementString,
   LanguageStrings,
   makeProjectSelectorCustomData,
@@ -80,14 +79,17 @@ export const CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] 
 ];
 
 /**
- * Maps caller-supplied checks-side-panel projects onto ProjectSelector rows, sorted by full name
- * and carrying the grouping inputs (language, recency) in the picker's `customData` envelope.
- * Exported for coverage tests.
+ * Maps caller-supplied checks-side-panel projects onto ProjectSelector rows, carrying the grouping
+ * inputs (language, recency) in the picker's `customData` envelope. Exported for coverage tests.
+ *
+ * Deliberately unsorted. `ProjectSelector` sorts every section it renders itself — every partition
+ * path in `project-selector.rows.ts` runs `compareRows`, which leads with `compareProjectsByName` —
+ * so a sort here would order rows nothing ever reads in that order.
  */
 export function toChecksSelectorRows(
   projects: readonly ChecksSidePanelProject[],
 ): ProjectSelectorProject[] {
-  return [...projects].sort(compareProjectsByName).map((project) => ({
+  return projects.map((project) => ({
     id: project.id,
     shortName: project.shortName,
     fullName: project.fullName,

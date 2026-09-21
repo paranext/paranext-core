@@ -1,4 +1,4 @@
-import { WebViewProps } from '@papi/core';
+import { ProjectMetadata, WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
 import {
   useData,
@@ -41,26 +41,20 @@ import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-block
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 /**
- * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
- * `@papi`-free utils) so the utils stay importable by the presentational component and its story.
+ * Reads the names and language the picker needs off a project's metadata.
+ *
+ * Metadata, not `pdp.getSetting`: `platform.fullName` has a contribution default — a localized
+ * `*Name Missing*` placeholder — so an unset full name reads back as that placeholder and would
+ * render as a real second name. Metadata omits the field, and costs no data provider per project.
+ *
+ * `language` is optional: a project that does not define it degrades to an unknown language bucket.
  */
-async function getProjectNames(projectId: string): Promise<ProjectOption> {
-  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  // Fetched together so adding language costs no extra serial round trip per project.
-  // `platform.language` is optional: a project that does not define it degrades to an unknown
-  // language bucket rather than failing the whole lookup.
-  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
-    pdp.getSetting('platform.name'),
-    pdp.getSetting('platform.fullName'),
-    pdp.getSetting('platform.language').catch(() => undefined),
-  ]);
+function projectNamesFromMetadata(metadata: ProjectMetadata): ProjectOption {
   return {
-    shortName: projectShortName,
-    // This project shape requires a `string` full name, so an absent one becomes '' rather
-    // than `undefined` — `hasDistinctFullName` treats both as absent, and coalescing here
-    // keeps a `null` setting out of a slot the type promises is a string.
-    fullName: normalizeFullName(projectFullName) ?? '',
-    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
+    // `name` is optional on the metadata contract; the id is the documented fallback.
+    shortName: metadata.name ?? metadata.id,
+    fullName: normalizeFullName(metadata.fullName),
+    language: metadata.language,
   };
 }
 
@@ -138,14 +132,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
         includeProjectInterfaces: ['Scripture', 'Paratext'],
       });
 
-      // Map through all metadata to get ids and names
-      await Promise.all(
-        allMetadata.map(async (metadata) => {
-          const names = await getProjectNames(metadata.id);
-          if (!names) return;
-          projectDict[metadata.id] = names;
-        }),
-      );
+      // Every name this panel shows comes off the metadata already fetched above, so there is no
+      // per-project read left to await.
+      allMetadata.forEach((metadata) => {
+        projectDict[metadata.id] = projectNamesFromMetadata(metadata);
+      });
 
       return projectDict;
     }, []),

@@ -98,13 +98,13 @@ type Story = StoryObj<typeof ProjectSelector>;
 
 export const ShortNameTriggerLabel: Story = {
   render: () => {
-    // Legacy-project fixtures: `fullName` mirrors `shortName` (as consumers do when
-    // upstream data has no `platform.fullName`). The row renderer's de-dup
-    // (`fullName && fullName !== shortName`) then collapses each row to a single
-    // line, matching what the trigger label shows.
+    // Fixtures for projects that have no full name: `fullName` is omitted, not mirrored from
+    // `shortName`. `hasDistinctFullName` collapses each row to a single line either way, but
+    // omitting is what a consumer should build — mirroring claims a full name the project does
+    // not have, and every surface then has to un-claim it.
     const shortOnlyProjects: ProjectSelectorProject[] = sampleProjects.map((p) => ({
-      ...p,
-      fullName: p.shortName,
+      id: p.id,
+      shortName: p.shortName,
     }));
     const [projectId, setProjectId] = useState<string | undefined>('esvus16');
     return (
@@ -126,7 +126,7 @@ export const ShortNameTriggerLabel: Story = {
     docs: {
       description: {
         story:
-          '`triggerLabelFormat="shortName"` (the default) renders only the selected project\'s short name in the trigger. This story pairs the format with legacy-project fixtures (`fullName` mirrors `shortName`) so the popover rows also collapse to a single line — the trigger and rows both read the short name only. Compare with `WideTriggerLabel` at the same width to see the `{shortName} - {fullName}` variant with distinct names.',
+          '`triggerLabelFormat="shortName"` (the default) renders only the selected project\'s short name in the trigger. This story pairs the format with fixtures that omit `fullName` so the popover rows also collapse to a single line — the trigger and rows both read the short name only. Compare with `WideTriggerLabel` at the same width to see the `{shortName} - {fullName}` variant with distinct names.',
       },
     },
   },
@@ -134,12 +134,12 @@ export const ShortNameTriggerLabel: Story = {
 
 export const ShortNameTriggerLabelNoScrollGroups: Story = {
   render: () => {
-    // Same legacy-project fixtures as `ShortNameTriggerLabel`, but with `openTabs={[]}`.
+    // Same no-full-name fixtures as `ShortNameTriggerLabel`, but with `openTabs={[]}`.
     // No project is open in any scroll group, so the right-side scroll-group chips are
     // suppressed and every row renders in muted text (the "not open anywhere" state).
     const shortOnlyProjects: ProjectSelectorProject[] = sampleProjects.map((p) => ({
-      ...p,
-      fullName: p.shortName,
+      id: p.id,
+      shortName: p.shortName,
     }));
     const [projectId, setProjectId] = useState<string | undefined>('esvus16');
     return (
@@ -161,7 +161,7 @@ export const ShortNameTriggerLabelNoScrollGroups: Story = {
     docs: {
       description: {
         story:
-          'Same short-name-only setup as `ShortNameTriggerLabel`, but with no open tabs. The scroll-group chips on the right disappear and every row renders muted (the "not open anywhere" state), yielding the plainest single-line row layout the selector can render.',
+          'Same no-full-name setup as `ShortNameTriggerLabel`, but with no open tabs. The scroll-group chips on the right disappear and every row renders muted (the "not open anywhere" state), yielding the plainest single-line row layout the selector can render.',
       },
     },
   },

@@ -457,12 +457,14 @@ describe('useProjectPickerData', () => {
 
   it('orders all projects by short name, not full name', async () => {
     const { projectLookupService } = await importMocks();
-    // `fullName` order is the exact reverse of `shortName` order here, so a comparator reading the
-    // wrong field returns the reversed list rather than a coincidentally-equal one.
+    // Two traps at once. The fixture arrives in reverse `shortName` order, so deleting the sort
+    // altogether fails rather than yielding the expectation by coincidence; and `fullName` order is
+    // the exact reverse of `shortName` order, so a comparator reading the wrong field returns the
+    // reversed list.
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
       metadataList([
-        { id: 'proj-z', name: 'AAA', fullName: 'Zulu Last' },
         { id: 'proj-a', name: 'ZZZ', fullName: 'Alpha First' },
+        { id: 'proj-z', name: 'AAA', fullName: 'Zulu Last' },
       ]) as never,
     );
 

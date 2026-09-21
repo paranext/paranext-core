@@ -187,6 +187,34 @@ Avoid:
 
 Reference: `manage-books-sidebar.component.tsx` (`mode='project'`), `manage-books-dialog.component.tsx` Copy "From" / Create "Based on" (`mode='project'`), `checklist.web-view.tsx` primary picker (`mode='project'`) and comparative-texts multi-select (`mode='project-multi'`).
 
+### Project names: short name first, through the shared helpers
+
+Never write `` `${fullName} (${shortName})` `` or `fullName && fullName !== shortName` by hand. The
+rule lives in `platform-bible-utils` (`lib/platform-bible-utils/src/project-util.ts`):
+
+| Need | Call |
+| --- | --- |
+| A project's display label | `formatProjectName({ shortName, fullName })` → `"arb - True Meaning Arabic"`, or `"arb"` when there is no distinct full name |
+| "Is the full name worth its own slot?" (two names in separate elements) | `hasDistinctFullName({ shortName, fullName })` |
+| The separator, when you render the two names as separate nodes | `PROJECT_NAME_SEPARATOR` |
+| Ordering a project list | `compareProjectsByName` (objects) / `compareProjectShortNames` (bare strings) |
+| Reading a raw `platform.fullName` value | `normalizeFullName(raw)` — `undefined` for absent/empty |
+
+Two further rules the helpers cannot enforce:
+
+- **Never mirror the short name into `fullName`.** A project with no full name omits the field. A
+  mirrored value renders the same (the de-dup catches it) but claims a full name the project does
+  not have, and every consumer downstream has to un-claim it.
+- **Source `fullName` from project metadata, not `pdp.getSetting('platform.fullName')`.** That
+  setting has a contribution default — a localized `*Name Missing*` placeholder — so a data-provider
+  read cannot distinguish "no full name" from "never set one", and the placeholder renders as a real
+  name. `ProjectMetadata.fullName` is absent-when-unset by design.
+
+`src/renderer/components/projects/project-name-adoption.test.ts` sweeps the repo and fails the build
+on a re-inlined format or de-dup. A site that matches the pattern without being a project-name label
+goes in that file's `EXEMPT` list with a reason. Rationale and history:
+`adr-project-name-short-name-first` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
+
 ### Read-only (non-editable) projects in a picker
 
 **Decision: surface `ProjectSummary.IsEditable` (the `platform.isEditable` wire field) all the way up to the picker**, then either:

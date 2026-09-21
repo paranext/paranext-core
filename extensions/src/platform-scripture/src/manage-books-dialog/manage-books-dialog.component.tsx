@@ -821,10 +821,11 @@ export function ManageBooksDialog({
   // The Copy "From" and Create "Based on" pickers are <ProjectSelector mode="project">, which
   // takes a `ProjectSelectorProject` shape (`{ id, shortName, fullName }`). Map the dialog's
   // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
-  // upstream) becomes the secondary label, and is passed through as-is: the selector suppresses a
-  // full name that is absent or equal to the short name, so mirroring one into the other here would
-  // make every project look like it has a distinct full name. The target project itself is filtered
-  // out (already done in `otherProjects`).
+  // upstream) becomes the secondary label, and is passed through as-is. Do not mirror the short
+  // name into it when it is absent: `hasDistinctFullName` would collapse the row either way, but a
+  // mirrored value claims a full name the project does not have, and every consumer downstream
+  // then has to un-claim it. The target project itself is filtered out (already done in
+  // `otherProjects`).
   // Commentaries should be excluded from both the Copy "From" and Create "Based on" pickers.
   // DEFERRED — there is no reliable commentary signal in
   // the current data model: DBL classifies resources only by medium (text/audio/print), ParatextData

@@ -1366,7 +1366,11 @@ describe('PlatformBibleToolbar project selector label', () => {
       isLoading: false,
     });
 
-    renderAtStep(SHRINK_STEP.WIDE);
+    // MINIMUM, not WIDE. The only tooltip opener reachable in jsdom is the dropped-field
+    // (`isShowingPartialLabel`) one — `useTruncationTooltip` needs a real `scrollWidth`, which is
+    // always 0 here — and that opener is live only at the step where the secondary field is
+    // dropped. At WIDE it cannot fire at all, so the assertion would hold with the de-dup deleted.
+    renderAtStep(SHRINK_STEP.MINIMUM);
 
     await userEvent.hover(screen.getByText('TP'));
 

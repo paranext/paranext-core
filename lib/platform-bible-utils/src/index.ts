@@ -140,6 +140,7 @@ export {
   formatProjectName,
   PROJECT_NAME_SEPARATOR,
   compareProjectsByName,
+  compareProjectShortNames,
   type ProjectNames,
 } from './project-util';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';

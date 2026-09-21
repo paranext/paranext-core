@@ -12,7 +12,6 @@ import {
 import { settingsService } from '@shared/services/settings.service';
 import './settings-tab.component.scss';
 import { projectLookupService } from '@shared/services/project-lookup.service';
-import { projectDataProviders } from '@renderer/services/papi-frontend.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
 import {
@@ -44,24 +43,26 @@ type SettingsTabProps = {
   projectIdToLimitSettings?: string;
 };
 
-async function getAllProjectIdsFromMetadata() {
+/**
+ * The sidebar's project rows, sourced from project metadata.
+ *
+ * Metadata rather than a `platform.fullName` read per project, for three reasons. It is the only
+ * source that distinguishes "this project has no full name" from "this project has not set one":
+ * `pdp.getSetting('platform.fullName')` falls through to the setting's contribution default, a
+ * localized `*Name Missing*` placeholder, which would render as the second half of a `{short} -
+ * {full}` label. It is already in hand, so the sidebar opens no data provider per project. And it
+ * stays consistent with the toolbar and manage-books, which name projects from the same metadata.
+ */
+async function getAllProjectOptions(): Promise<
+  { projectId: string; projectName: string; projectFullName?: string }[]
+> {
   const allMetadata = await projectLookupService.getMetadataForAllProjects();
-  return allMetadata.flatMap((metadata) => metadata.id);
-}
-
-async function getProjectNames(
-  projectIdToGetName: string,
-): Promise<{ projectName: string; projectFullName?: string }> {
-  const pdp = await projectDataProviders.get('platform.base', projectIdToGetName);
-  // Fetch both names in parallel so the sidebar can render short + full name (matching
-  // manage-books / checks-side-panel behavior). `normalizeFullName` owns what counts as an absent
-  // full name, so the sidebar's row renderer falls back to a single-line layout for a project that
-  // has none.
-  const [projectName, projectFullNameRaw] = await Promise.all([
-    pdp.getSetting('platform.name'),
-    pdp.getSetting('platform.fullName'),
-  ]);
-  return { projectName, projectFullName: normalizeFullName(projectFullNameRaw) };
+  return allMetadata.map((metadata) => ({
+    projectId: metadata.id,
+    // `name` is optional on the metadata contract; the id is the documented fallback.
+    projectName: metadata.name ?? metadata.id,
+    projectFullName: normalizeFullName(metadata.fullName),
+  }));
 }
 
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
@@ -197,21 +198,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   );
 
   const [allProjectOptions, isLoadingAllProjectOptions] = usePromise(
-    useCallback(async () => {
-      const allProjectIdsFromMetadata = await getAllProjectIdsFromMetadata();
-
-      if (allProjectIdsFromMetadata.length === 0) {
-        return [];
-      }
-
-      const projectOptions = await Promise.all(
-        allProjectIdsFromMetadata.map(async (id) => {
-          const { projectName, projectFullName } = await getProjectNames(id);
-          return { projectId: id, projectName, projectFullName };
-        }),
-      );
-      return projectOptions;
-    }, []),
+    useCallback(() => getAllProjectOptions(), []),
     [],
   );
 
