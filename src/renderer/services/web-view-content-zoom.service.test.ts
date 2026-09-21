@@ -170,7 +170,7 @@ describe('web-view-content-zoom.service', () => {
     expect(resolveContentZoomTarget(undefined)).toBeUndefined();
   });
 
-  it('lets a modal overlay stop only the no-id path; an explicitly targeted pane still resolves', () => {
+  it('lets a blocked window stop only the no-id path; an explicitly targeted pane still resolves', () => {
     lastFocused = 'editor-1';
     windowInputBlocked = true;
     expect(resolveContentZoomTarget('editor-1')).toBe('editor-1');
@@ -236,7 +236,7 @@ describe('web-view-content-zoom.service', () => {
     await __flushContentZoomWritesForTesting(); // persist 1.6 so the reset below deletes a real entry
     await resetContentZoom('editor-1', 'main');
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(definitions.get('editor-1')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' });
     expect(settings[MEMORY]).toEqual({});
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.5');
     expect(showIndicator).toHaveBeenLastCalledWith('main', 'Default · 150 %');
@@ -522,9 +522,9 @@ describe('web-view-content-zoom.service', () => {
       },
     );
     memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('editor-1')?.state).toEqual({}); // before the failing pane: still lands
+    expect(definitions.get('editor-1')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' }); // before the failing pane: still lands
     expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } }); // its own write failed
-    expect(definitions.get('editor-3')?.state).toEqual({}); // after the failing pane: still reached
+    expect(definitions.get('editor-3')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' }); // after the failing pane: still reached
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-2'));
   });
 
@@ -544,13 +544,13 @@ describe('web-view-content-zoom.service', () => {
       },
     );
     memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('editor-1')?.state).toEqual({}); // the healthy pane takes the deletion
+    expect(definitions.get('editor-1')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' }); // the healthy pane takes the deletion
     expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } });
     updateDefinition.mockImplementation(applyDefinitionUpdate);
     // The same delta reaches the pane that missed it, on the next change memory delivers.
     memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('editor-2')?.state).toEqual({});
-    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(definitions.get('editor-2')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' });
+    expect(definitions.get('editor-1')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' });
   });
 
   it("keeps walking the siblings when reading one pane's definition throws", async () => {
@@ -582,14 +582,14 @@ describe('web-view-content-zoom.service', () => {
     throwingPane = 'editor-2';
     vi.mocked(logger.warn).mockClear();
     memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('editor-1')?.state).toEqual({}); // before the throwing pane: still lands
-    expect(definitions.get('editor-3')?.state).toEqual({}); // after it: still reached
+    expect(definitions.get('editor-1')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' }); // before the throwing pane: still lands
+    expect(definitions.get('editor-3')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' }); // after it: still reached
     expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } });
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-2'));
     // The record did not advance, so the same delta reaches the pane that missed it.
     throwingPane = undefined;
     memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('editor-2')?.state).toEqual({});
+    expect(definitions.get('editor-2')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' });
   });
 
   it('retries a sibling update that was queued into a zoom burst whose write then failed', async () => {
@@ -640,6 +640,31 @@ describe('web-view-content-zoom.service', () => {
     );
     expect(updateDefinition).toHaveBeenCalledTimes(1);
     expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.2, footnotes: 1.3 }));
+  });
+
+  it('shows the shared level in a sibling whose definition write failed', async () => {
+    settings[MEMORY] = {};
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main']);
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    setContentZoomAreas('editor-2', ['main']);
+    updateDefinition.mockImplementation(
+      (id: string, update: { state?: Record<string, unknown> }) =>
+        id === 'editor-2' ? false : applyDefinitionUpdate(id, update),
+    );
+
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.4 }));
+    expect(cssVar(iframeFor('editor-2'), '--platform-content-zoom-main')).toBe('1.4');
+    // Controls: the write really did fail, so the level above is the push happening anyway; and the
+    // pane that could be written took the same level, so the walk was not skipped.
+    expect(definitions.get('editor-2')?.state).toEqual({});
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.4 }));
   });
 
   it('holds the memory write behind the debounce delay, then flushes it in one call', async () => {
@@ -780,7 +805,7 @@ describe('web-view-content-zoom.service', () => {
     expect(settingsSet).not.toHaveBeenCalled();
   });
 
-  it('does not overwrite a pane that already holds levels', async () => {
+  it("keeps a pane's own level and seeds the remembered areas its state lacks", async () => {
     settings[MEMORY] = {
       'editor:PROJ-A:main': 1.3,
       'editor:PROJ-A:footnotes': 0.9,
@@ -794,9 +819,10 @@ describe('web-view-content-zoom.service', () => {
       state: { [LEVELS]: { main: 2 } },
     });
     setContentZoomAreas('editor-4', ['main', 'footnotes']);
-    // Its own level is kept; the platform only adds the stamp naming the identity it belongs to.
-    expect(definitions.get('editor-4')?.state).toEqual(zoomState({ main: 2 }));
+    expect(definitions.get('editor-4')?.state).toEqual(zoomState({ main: 2, footnotes: 0.9 }));
+    // Control: what the pane's own state holds still outranks what memory remembers for it.
     expect(cssVar(iframeFor('editor-4'), '--platform-content-zoom-main')).toBe('2');
+    expect(cssVar(iframeFor('editor-4'), '--platform-content-zoom-footnotes')).toBe('0.9');
   });
 
   it('seeds on the first non-empty report even when an earlier report for the same pane was empty', async () => {
@@ -932,11 +958,42 @@ describe('web-view-content-zoom.service', () => {
     // The guard's coverage must not rest on `cachedMemory` still holding the level alone: a
     // real re-seed would call updateDefinition, so this proves the update was skipped outright.
     expect(updateDefinition).not.toHaveBeenCalled();
-    expect(definitions.get('notes-4')?.state).toEqual({});
+    expect(definitions.get('notes-4')?.state).toEqual({ [IDENTITY]: 'notes:AAA' });
     expect(cssVar(iframeFor('notes-4'), '--platform-content-zoom-main')).toBe('1');
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('notes-4')?.state).toEqual({});
+    expect(definitions.get('notes-4')?.state).toEqual({ [IDENTITY]: 'notes:AAA' });
     expect(settings[MEMORY]).toEqual({});
+  });
+
+  it('does not let a reload replay inside the memory debounce window bring a reset level back', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.2 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-y', {
+      id: 'notes-y',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-y', ['main']);
+    expect(definitions.get('notes-y')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+
+    await resetContentZoom('notes-y', 'main');
+    // The memory delete this reset enqueued is still in its debounce window, so `cachedMemory`
+    // still remembers the level the pane just gave up.
+    expect(definitions.get('notes-y')?.state?.[LEVELS]).toBeUndefined();
+
+    // A reload replays inside that window: the reset's own definition-update echo, then the
+    // bootstrap's first (empty) area scan, then its second (non-empty) scan — an empty first scan
+    // is the norm, since the marker is rendered by React and absent from the static shell the
+    // reload's DOMContentLoaded fires against.
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-y') });
+    setContentZoomAreas('notes-y', []);
+    setContentZoomAreas('notes-y', ['main']);
+    expect(definitions.get('notes-y')?.state?.[LEVELS]).toBeUndefined();
+
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-y')?.state?.[LEVELS]).toBeUndefined();
   });
 
   it('drops a burst edit still in flight for the old identity when a re-point interrupts it, rather than writing it to the new one', async () => {
@@ -1005,6 +1062,46 @@ describe('web-view-content-zoom.service', () => {
     onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-x') });
     expect(definitions.get('notes-x')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
     expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
+  it("re-seeds, rather than merges, a re-pointed pane's missed update once a memory change for its NEW identity reaches it first", async () => {
+    // The memory read fails, so `memoryLoaded` stays false through the re-point below — but the
+    // subscription itself is registered (unlike the test above), so its callback is in hand for the
+    // delta this test delivers directly, bypassing onDidUpdateWebView the way a missed registration
+    // window would.
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          if (key === MEMORY) throw new Error('network blip');
+          return settings[key];
+        },
+        set: settingsSet,
+        subscribe: async (key: string, callback: (value: unknown) => void) => {
+          if (key === MEMORY) memoryCallbacks.push(callback);
+          else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
+          return async () => {};
+        },
+      },
+    });
+    await initializeContentZoomService();
+    definitions.set('notes-z', {
+      id: 'notes-z',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: zoomState({ main: 1.2 }, 'notes:AAA'),
+    });
+    updateDefinition.mockClear();
+    definitions.set('notes-z', { ...requireDefinition('notes-z'), projectId: 'bbb' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-z') });
+    // The re-seed was skipped while memory had never loaded, so the pane still carries project A's
+    // level and stamp — the precondition the test above pins.
+    expect(definitions.get('notes-z')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+
+    // A memory change for the NEW identity now reaches the pane through the sibling sync — the
+    // stamp mismatch this delta finds must trigger the missed re-seed instead of merging project A's
+    // stale level onto project B's real delta and labeling the result project B's own.
+    memoryCallbacks.forEach((cb) => cb({ 'notes:BBB:footnotes': 0.6 }));
+    expect(definitions.get('notes-z')?.state).toEqual(zoomState({ footnotes: 0.6 }, 'notes:BBB'));
   });
 
   it('warns and still pushes the pane variables when a re-point write throws', async () => {
@@ -1407,7 +1504,38 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).not.toHaveBeenCalled();
   });
 
-  it('still acts on an explicitly targeted pane while a modal overlay is open, and on none without an id', async () => {
+  it('does not let a failing definition read escape the iframe load hook', async () => {
+    __setContentZoomDepsForTesting({
+      getDefinition: () => {
+        throw new Error('dock layout is not registered');
+      },
+    });
+    await initializeContentZoomService();
+    expect(() => applyContentZoomForWebView('editor-1')).not.toThrow();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+  });
+
+  it('does not let a failing definition read stop the other subscribers of a web-view update', async () => {
+    let getDefinitionThrows = false;
+    __setContentZoomDepsForTesting({
+      getDefinition: (id: string) => {
+        if (getDefinitionThrows) throw new Error('dock layout is not registered');
+        return definitions.get(id);
+      },
+    });
+    await initializeContentZoomService();
+    if (!onDidUpdateWebViewCallback) throw new Error('test setup: no web-view update subscriber');
+    // Positive control: the subscriber runs normally while the definition is readable.
+    onDidUpdateWebViewCallback({ webView: requireDefinition('editor-1') });
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+    getDefinitionThrows = true;
+    expect(() =>
+      onDidUpdateWebViewCallback?.({ webView: requireDefinition('editor-1') }),
+    ).not.toThrow();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+  });
+
+  it("still acts on an explicitly targeted pane while the window's input is blocked, and on none without an id", async () => {
     windowInputBlocked = true;
     await adjustContentZoom('editor-1', 1);
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
@@ -1479,7 +1607,7 @@ describe('web-view-content-zoom.service', () => {
     memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.4 }));
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.4 } });
     memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(definitions.get('editor-1')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
   });
 
@@ -1664,12 +1792,229 @@ describe('web-view-content-zoom.service', () => {
     expect(settingsSet).not.toHaveBeenCalled();
   });
 
+  /**
+   * Drives a pane's memory edit all the way to give-up: three consecutive failed reads, with the
+   * warning asserted as the positive control that the give-up branch really ran.
+   */
+  async function giveUpTheMemoryWrite(reads: {
+    failNextReads: (count: number) => void;
+  }): Promise<void> {
+    reads.failNextReads(3);
+    await __flushContentZoomWritesForTesting();
+    await __flushContentZoomWritesForTesting();
+    await __flushContentZoomWritesForTesting();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('giving up'));
+  }
+
+  it("keeps a pane's level after the memory write was given up, when an unrelated key changes", async () => {
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.3 };
+    const reads = useControllableMemoryReads();
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main'); // 1.4, which never reaches the setting
+    await giveUpTheMemoryWrite(reads);
+
+    // Another window stores an unrelated area's level. The emission carries this identity's whole
+    // record, including the `main` entry this window failed to overwrite.
+    memoryCallbacks.forEach((cb) =>
+      cb({ 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 }),
+    );
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.4');
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.4, footnotes: 0.9 }));
+    // Control: the unrelated area did take its update, so the level above is the given-up key being
+    // honored rather than the whole walk having been skipped.
+    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('0.9');
+  });
+
+  it("follows another window's later level for a key it gave up on", async () => {
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.3 };
+    const reads = useControllableMemoryReads();
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main'); // 1.4, which never reaches the setting
+    await giveUpTheMemoryWrite(reads);
+
+    // Anything other than the level this window failed to replace is real news from elsewhere.
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.6 }));
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.6');
+    // The entry is spent, so the value it used to suppress now reaches the pane like any other.
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.3 }));
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+  });
+
+  /**
+   * Initialization starts both subscriptions before the two reads and a subscription delivers its
+   * current value immediately, so a callback commonly lands while a read is still in flight. These
+   * park the reads and deliver in that window.
+   */
+  function useSubscriptionsThatDeliverWhileTheReadsAreOut(readOutcome: 'stale' | 'failure'): {
+    releaseReads: () => void;
+  } {
+    let release = () => {};
+    const parked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          await parked;
+          if (readOutcome === 'failure') throw new Error(`the settings read for ${key} failed`);
+          return settings[key];
+        },
+        set: settingsSet,
+        // Registered here and delivered by the test, rather than delivered on subscribe, so the
+        // delivery lands after the reads have started and before they resolve.
+        subscribe: async (key: string, callback: (value: unknown) => void) => {
+          if (key === MEMORY) memoryCallbacks.push(callback);
+          else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
+          return async () => {};
+        },
+      },
+    });
+    memoryCallbacks.length = 0;
+    defaultCallbacks.length = 0;
+    return { releaseReads: release };
+  }
+
+  it('keeps a default a subscription delivered while the startup read was out, rather than the fallback that failed read leaves', async () => {
+    const { releaseReads } = useSubscriptionsThatDeliverWhileTheReadsAreOut('failure');
+    const initializing = initializeContentZoomService();
+    // Let the subscriptions register and both reads park.
+    await Promise.resolve();
+    await Promise.resolve();
+    defaultCallbacks.forEach((cb) => cb(1.3));
+    releaseReads();
+    await initializing;
+
+    setContentZoomAreas('editor-1', ['main']);
+    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    // Control: the read really did fail, so the level above is the subscription's value surviving it.
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('could not read the default'));
+  });
+
+  it('keeps what the subscriptions delivered while the startup reads were out, rather than the values those reads carry', async () => {
+    const { releaseReads } = useSubscriptionsThatDeliverWhileTheReadsAreOut('stale');
+    const initializing = initializeContentZoomService();
+    await Promise.resolve();
+    await Promise.resolve();
+    // The stored values the parked reads will carry are the suite's defaults (1 and no memory); a
+    // change made in Settings meanwhile reaches this window through the subscriptions first. The
+    // remembered level names a project no pane is open for, so nothing but the cache can carry it
+    // to the pane opened below.
+    defaultCallbacks.forEach((cb) => cb(1.3));
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-B:main': 1.6 }));
+    releaseReads();
+    await initializing;
+
+    setContentZoomAreas('editor-1', ['main']);
+    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-B',
+      state: {},
+    });
+    setContentZoomAreas('editor-2', ['main']);
+    expect(definitions.get('editor-2')?.state).toEqual(zoomState({ main: 1.6 }, 'editor:PROJ-B'));
+    expect(cssVar(iframeFor('editor-2'), '--platform-content-zoom-main')).toBe('1.6');
+  });
+
+  it('subscribes and registers the unload flush before the startup reads come back', async () => {
+    let releaseReads = () => {};
+    const parked = new Promise<void>((resolve) => {
+      releaseReads = resolve;
+    });
+    /** What initialization did, in the order it happened, so the control can pin the order. */
+    const order: string[] = [];
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          await parked;
+          order.push(`read ${key}`);
+          return settings[key];
+        },
+        set: settingsSet,
+        // The immediate delivery a real subscription makes is withheld here, so the only thing that
+        // can fill the caches is the parked read below — which is what makes the control able to
+        // fail if the reads stop being awaited.
+        subscribe: async (key: string, callback: (value: unknown) => void) => {
+          if (key === MEMORY) memoryCallbacks.push(callback);
+          else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
+          return async () => {};
+        },
+      },
+    });
+    settings['platform.webViewContentZoom'] = 1.3;
+    // The suite's own setup already initialized once; these are what this initialization registers.
+    memoryCallbacks.length = 0;
+    defaultCallbacks.length = 0;
+    onDidUpdateWebViewCallback = undefined;
+
+    const addListener = vi.spyOn(window, 'addEventListener');
+    try {
+      const initializing = initializeContentZoomService().then(() => order.push('initialized'));
+      // Let the synchronous registrations and the not-yet-awaited subscriptions run.
+      await Promise.resolve();
+      await Promise.resolve();
+      // Everything that makes this window hear about zoom is in place while the reads are still out.
+      expect(defaultCallbacks).toHaveLength(1);
+      expect(memoryCallbacks).toHaveLength(1);
+      expect(onDidUpdateWebViewCallback).toBeDefined();
+      expect(addListener.mock.calls.some(([type]) => type === 'beforeunload')).toBe(true);
+
+      // Control: every pending microtask and a full turn of the event loop later, initialization is
+      // still out, because both reads are awaited and neither has come back.
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      expect(order).toEqual([]);
+
+      releaseReads();
+      await initializing;
+      // ...and once they do come back, the default one of them carries is in hand.
+      expect(order).toHaveLength(3);
+      expect(order[2]).toBe('initialized');
+      setContentZoomAreas('editor-1', ['main']);
+      expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
+    } finally {
+      addListener.mockRestore();
+    }
+  });
+
   it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
     setContentZoomAreas('editor-1', []);
     await adjustContentZoom('editor-1', 1);
     await resetContentZoom('editor-1');
     expect(updateDefinition).not.toHaveBeenCalled();
     expect(settingsSet).not.toHaveBeenCalled();
+  });
+
+  it('does not throw out of the fallback grace timer when the pane is being torn down', async () => {
+    // A pane detached while the grace is running: reading `contentDocument` on its iframe throws,
+    // and the timer's push is the one call site with no caller to catch it.
+    const detached = document.createElement('iframe');
+    Object.defineProperty(detached, 'contentDocument', {
+      get() {
+        throw new Error('the iframe is detached');
+      },
+    });
+    let paneIsDetached = false;
+    __setContentZoomDepsForTesting({
+      getIframe: (id: string) => (paneIsDetached ? detached : iframeFor(id)),
+    });
+    await initializeContentZoomService();
+    vi.useFakeTimers();
+    try {
+      setContentZoomAreas('editor-1', []); // arms the grace
+      paneIsDetached = true;
+      expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('fallback'));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('scales a pane without areas whole at the default once its grace period passes, and switches to per-area variables once areas are reported', async () => {
@@ -1729,6 +2074,28 @@ describe('web-view-content-zoom.service', () => {
       vi.advanceTimersByTime(2000);
       expect(iframe.style.zoom).toBe('');
       expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still arms the fallback grace when the definition read fails at the iframe load hook', async () => {
+    // The pane this matters for — an HTML view opened with `allowScripts: false` — never runs the
+    // bootstrap, so this hook is the only thing that ever arms a grace for it: a read that threw
+    // before the arming would leave it unscaled for as long as it lives.
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({
+      getDefinition: () => {
+        throw new Error('dock layout is not registered');
+      },
+    });
+    await initializeContentZoomService();
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('editor-1');
+      expect(iframe.style.zoom).toBe('');
+      vi.advanceTimersByTime(1000);
+      expect(iframe.style.zoom).toBe('1.3');
     } finally {
       vi.useRealTimers();
     }
@@ -1965,7 +2332,7 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
     requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4 } };
     await resetContentZoom('editor-1', 'main');
-    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(definitions.get('editor-1')?.state).toEqual({ [IDENTITY]: 'editor:PROJ-A' });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
     expect(showIndicator).toHaveBeenLastCalledWith('main', `Default · ${formatZoomPercent(1)}`);
   });
