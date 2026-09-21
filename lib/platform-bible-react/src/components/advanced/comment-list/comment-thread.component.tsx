@@ -440,7 +440,11 @@ export const CommentThread = memo(function CommentThread({
   }, [isSelected]);
 
   useEffect((): void | (() => void) => {
-    if (isSelected && !isRead && !manuallyUnread) {
+    // Suppressed while the thread holds unsent content (an in-progress reply or comment edit):
+    // marking a thread read while the user is still actively composing in it is surprising on its
+    // own, and under a read-status-scoped filter it would also remove the very card they're
+    // typing into.
+    if (isSelected && !isRead && !manuallyUnread && isCommentDraftEmpty(effectiveDraft)) {
       const timer = setTimeout(() => {
         setIsRead(true);
         handleReadStatusChange?.(threadId, true);
@@ -452,7 +456,15 @@ export const CommentThread = memo(function CommentThread({
       clearTimeout(autoReadTimerRef.current);
       autoReadTimerRef.current = undefined;
     }
-  }, [isSelected, isRead, manuallyUnread, autoReadDelay, threadId, handleReadStatusChange]);
+  }, [
+    isSelected,
+    isRead,
+    manuallyUnread,
+    autoReadDelay,
+    threadId,
+    handleReadStatusChange,
+    effectiveDraft,
+  ]);
 
   const localizedReplies = useMemo(
     () => ({

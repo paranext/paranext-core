@@ -35,10 +35,15 @@ const DRAFT_SAVE_DEBOUNCE_MS = 500;
  * @param projectId Project the drafts belong to. `undefined` only for a brand-new Comment List
  *   Panel that has no project yet (see `openCommentListPanel`'s doc) — there is no project to scope
  *   a draft to, and no comments PDP either, so there is nothing to load or persist until a project
- *   is assigned. Invariant for this hook's whole lifetime: every caller that reassigns this web
- *   view's project calls `reloadWebView`, which remounts the React root entirely rather than
- *   changing the prop on a live instance (see `openCommentListPanel`) — so it is safe to close over
- *   directly rather than track through a ref.
+ *   is assigned. A genuine project-TO-project REASSIGNMENT always goes through `reloadWebView`,
+ *   which remounts the React root entirely rather than changing the prop on a live instance (see
+ *   `openCommentListPanel`) — but a panel that mounts before its project resolves gets `undefined`
+ *   on this very instance's first render and the real id on a LATER render of that SAME instance,
+ *   with no remount in between (`comment-list.web-view.tsx` runs the identical transition on its
+ *   own filter-selection state via its "projectId resolves" correction effect). This hook does not
+ *   close over `projectId` directly anywhere it would matter across that transition — see
+ *   `projectIdRef` below — and reloads `drafts` from storage once `projectId` resolves, since the
+ *   mount-time `useState` initializer only ever ran against `undefined`.
  * @param commentThreads The RAW `CommentThreads` query result (not normalized to `[]` on error) —
  *   this hook needs to tell "the query failed" apart from "this project has no threads", which a
  *   pre-normalized array can no longer express.
@@ -73,6 +78,14 @@ export function useCommentDrafts({
     projectId ? loadDrafts<CommentDraft>(projectId) : {},
   );
 
+  // Mirrors the latest `projectId` prop so the debounced save closure (created exactly once, see
+  // `debouncedSaveDraftsRef` below) always reads the CURRENT project rather than whatever was in
+  // scope the one time that closure was built. Assigned unconditionally on every render (not in an
+  // effect) so it is current before any same-render event can fire -- the same pattern
+  // `comment-thread.component.tsx`'s `effectiveDraftRef` uses for the identical reason.
+  const projectIdRef = useRef(projectId);
+  projectIdRef.current = projectId;
+
   // Whether `drafts` has been changed by an action this hook recognizes as a real edit
   // (`handleDraftChange` or an actual prune) since mount, as opposed to merely holding the value
   // `loadDrafts` produced on the initial render. `loadDrafts` returns `{}` for four distinct
@@ -106,9 +119,11 @@ export function useCommentDrafts({
   // A ref, not `useMemo`: this object owns a live timer, and React documents a memo value as a
   // discardable hint (see useAutoSearchDebounce for the same reasoning). A ref guarantees exactly
   // one instance, so the flush-on-unmount effect below is always flushing the one timer that could
-  // actually be pending. Created exactly once (guarded below), so it closes directly over
-  // `projectId` — invariant for this hook's whole lifetime, per the parameter doc above — rather
-  // than reading it through a second ref that could only ever report the same value.
+  // actually be pending. Created exactly once (guarded below), so it must read `projectId` through
+  // `projectIdRef` (above) rather than closing over the parameter directly -- a project that
+  // resolves from `undefined` to a real id on this SAME instance (see the `projectId` doc) would
+  // otherwise leave this closure scoped to the `undefined` it captured the one time it was built,
+  // silently dropping every write for the rest of this instance's lifetime.
   //
   // Takes no arguments: unlike a whole-map save (which would need the latest `drafts` snapshot
   // passed in), this reads `pendingChangesRef.current` at the moment it actually runs -- whether
@@ -118,15 +133,34 @@ export function useCommentDrafts({
   const debouncedSaveDraftsRef = useRef<DebouncedFunction<() => void> | undefined>(undefined);
   if (!debouncedSaveDraftsRef.current) {
     debouncedSaveDraftsRef.current = debounce(() => {
+      const currentProjectId = projectIdRef.current;
       // No project to scope this write to (see the `drafts` initializer above) -- nothing to save.
-      if (!projectId) return;
+      if (!currentProjectId) return;
       const changes = pendingChangesRef.current;
       if (changes.size === 0) return;
-      saveDraftChanges(projectId, changes);
+      saveDraftChanges(currentProjectId, changes);
       pendingChangesRef.current = new Map();
     }, DRAFT_SAVE_DEBOUNCE_MS);
   }
   const debouncedSaveDrafts = debouncedSaveDraftsRef.current;
+
+  // Ref tracking the previous render's `projectId`, purely to detect the one live transition this
+  // hook's own state can undergo (see the `projectId` doc): `undefined` on mount, a real id on a
+  // LATER render of this same instance. A genuine project-to-project reassignment always remounts,
+  // so that transition never reaches this effect.
+  const previousProjectIdRef = useRef(projectId);
+  useEffect(() => {
+    const previousProjectId = previousProjectIdRef.current;
+    previousProjectIdRef.current = projectId;
+    // Nothing to do unless a project was just assigned where none existed before -- the mount-time
+    // `useState` initializer above only ever ran against `undefined` in that case, so `drafts` is
+    // still `{}` regardless of what is actually stored for the now-resolved project.
+    if (previousProjectId !== undefined || projectId === undefined) return;
+    // Not a real edit -- a load, exactly like the mount-time initializer -- so this must not mark
+    // `hasRealDraftChangeRef`: the value just read from storage must never be the reason a write
+    // happens (see that flag's own doc).
+    setDrafts(loadDrafts<CommentDraft>(projectId));
+  }, [projectId]);
 
   useEffect(() => {
     // Skip the mount-time value and any render that merely echoes it back unchanged: only a real
@@ -222,7 +256,15 @@ export function useCommentDrafts({
     if (!commentThreads || isPlatformError(commentThreads)) return undefined;
     return commentThreads.map((thread) => ({
       id: thread.id,
-      commentIds: thread.comments.map((comment) => comment.id),
+      // Excludes soft-deleted comments (`deleted: true`), matching the same rule
+      // CommentThread itself renders by (`comments.filter((comment) => !comment.deleted)` in
+      // platform-bible-react's comment-thread.component.tsx): the record survives a Send/Receive
+      // deletion, it just stops rendering. A `commentEdits` entry for one is exactly as stranded as
+      // one for a comment id that isn't in this thread at all, so it must be excluded here too, or
+      // it would survive every prune forever.
+      commentIds: thread.comments
+        .filter((comment) => !comment.deleted)
+        .map((comment) => comment.id),
     }));
   }, [
     isShowingAllCommentThreads,

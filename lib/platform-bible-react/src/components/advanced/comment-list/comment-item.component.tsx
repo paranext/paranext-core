@@ -19,7 +19,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { SerializedEditorState } from 'lexical';
-import { ArrowUp, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { ArrowUp, MoreHorizontal, Pencil, Trash2, Undo2 } from 'lucide-react';
 import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
 import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentItemProps } from './comment-list.types';
@@ -307,6 +307,12 @@ export function CommentItem({
                   <div className="tw:flex-1" />
                   <Tooltip>
                     <TooltipTrigger asChild>
+                      {/* Reverts the in-progress edit rather than deleting the comment -- `Trash2`
+                          is already this card's Delete Comment icon (in the "..." menu, reachable
+                          at the same time as this button), so reusing it here would put two
+                          differently-scoped destructive actions behind one glyph. `Undo2` still
+                          signals that unsaved content is discarded (unlike `X`, reserved for
+                          "nothing will be lost"), without colliding with Delete. */}
                       <Button
                         size="icon-sm"
                         onClick={handleCancelEdit}
@@ -314,7 +320,7 @@ export function CommentItem({
                         className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
                         aria-label={localizedStrings['%comment_aria_cancel_edit%'] ?? 'Cancel edit'}
                       >
-                        <Trash2 />
+                        <Undo2 />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>

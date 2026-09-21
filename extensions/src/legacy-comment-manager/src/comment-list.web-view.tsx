@@ -48,6 +48,7 @@ import {
   DEFAULT_COMMENT_FILTERS,
   DEFAULT_SCOPE_FILTER,
   isShowingAllThreads,
+  presetNeedsFrozenReadMembership,
   presetRequiresCurrentUser,
   resolveScopeFilter,
   ScopeFilter,
@@ -60,7 +61,7 @@ import {
 import type { CommentListScrollTarget } from './comment-list-scroll.utils';
 import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { useCommentDrafts } from './use-comment-drafts.hook';
-import { useUnsavedPresetThreadIds } from './use-unsaved-preset-threads.hook';
+import { useFrozenPresetThreadIds } from './use-frozen-preset-thread-ids.hook';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
@@ -474,7 +475,15 @@ global.webViewComponent = function CommentListWebView({
     isShowingAllCommentThreads,
   });
 
-  // Ids of the threads that currently have a draft, memoized so `useUnsavedPresetThreadIds` below
+  // The raw query result, normalized to never be a `PlatformError` or `undefined`. Both frozen
+  // membership sets below narrow FROM this list, so it is computed once and shared rather than
+  // repeated at each narrowing site.
+  const queriedThreads = useMemo<LegacyCommentThread[]>(
+    () => (!commentThreads || isPlatformError(commentThreads) ? [] : commentThreads),
+    [commentThreads],
+  );
+
+  // Ids of the threads that currently have a draft, memoized so `useFrozenPresetThreadIds` below
   // only re-runs its entry/grow effect when the SET of drafted threads actually changes, not on
   // every render `drafts` happens to be handed on.
   const draftThreadIds = useMemo(() => Object.keys(drafts), [drafts]);
@@ -484,25 +493,51 @@ global.webViewComponent = function CommentListWebView({
   // a draft": filtering by the live `drafts` map would unmount a thread's CommentThread (and the
   // Lexical editor holding the caret) the instant its draft empties, e.g. select-all + delete, or
   // a successful submit that clears the editor.
-  const unsavedPresetThreadIds = useUnsavedPresetThreadIds(filters.preset, draftThreadIds);
+  const unsavedPresetThreadIds = useFrozenPresetThreadIds(
+    filters.preset,
+    filters.preset === 'unsaved',
+    draftThreadIds,
+  );
 
-  // The single UI-facing thread list: the raw query result, normalized (never a `PlatformError` or
-  // `undefined`) and, under the 'unsaved' preset, narrowed to the frozen `unsavedPresetThreadIds`
-  // set. Both steps happen here together rather than as a separate normalized-but-unfiltered
-  // intermediate, so there is no half-ready list left lying around for a future change to reach for
-  // by mistake. The 'unsaved' preset contributes no clause to the query (see
-  // buildCommentThreadSelector) -- a draft is client-side state the provider has never heard of, so
-  // the query for this preset is scope-only and returns every thread the scope allows; narrowing to
-  // (frozen) drafted threads happens here instead, since the hooks above own the drafts map and this
-  // web view owns the query result and the active filters. Because this filter only ever removes
-  // entries already present in the normalized query result, a thread the scope excluded (and which
-  // therefore never reached that result) can never be added back by having a draft -- unlike
+  // Ids of the threads that are CURRENTLY unread, per the (unnarrowed-by-isRead) query result --
+  // see buildCommentThreadSelector's 'unread' cases and presetNeedsFrozenReadMembership's doc for
+  // why isRead is never sent to the provider. Memoized for the same reason draftThreadIds is.
+  const unreadThreadIds = useMemo(
+    () => queriedThreads.filter((thread) => !thread.isRead).map((thread) => thread.id),
+    [queriedThreads],
+  );
+
+  // An unread-family preset's membership, frozen at entry and grow-only while it stays active --
+  // the same treatment as 'unsaved' above, for the same reason: a thread is marked read ~5 seconds
+  // after selection, and filtering by the LIVE read state would unmount the very card the user just
+  // opened to read, taking their scroll position with it. A thread read during this visit therefore
+  // stays listed until the user leaves the preset.
+  const unreadPresetThreadIds = useFrozenPresetThreadIds(
+    filters.preset,
+    presetNeedsFrozenReadMembership[filters.preset],
+    unreadThreadIds,
+  );
+
+  // The single UI-facing thread list: the normalized query result, narrowed client-side to whichever
+  // frozen membership set the active preset needs (at most one ever applies -- the two families are
+  // mutually exclusive). Both preset families contribute no isRead/draft clause to the query itself
+  // (see buildCommentThreadSelector) -- a draft is client-side state the provider has never heard
+  // of, and isRead is deliberately withheld -- so their queries are otherwise scope-only (plus, for
+  // 'unread-assigned-to-me', an assignedTo clause) and return every thread scope/assignment allow;
+  // narrowing to the frozen set happens here instead, since the hooks above own the membership sets
+  // and this web view owns the query result and the active filters. Because this filter only ever
+  // removes entries already present in the normalized query result, a thread the scope excluded (and
+  // which therefore never reached that result) can never be added back by newly qualifying -- unlike
   // Paratext 9, where a drafted thread survives every filter.
   const visibleCommentThreads = useMemo<LegacyCommentThread[]>(() => {
-    const queriedThreads = !commentThreads || isPlatformError(commentThreads) ? [] : commentThreads;
-    if (filters.preset !== 'unsaved') return queriedThreads;
-    return queriedThreads.filter((thread) => unsavedPresetThreadIds.has(thread.id));
-  }, [commentThreads, filters.preset, unsavedPresetThreadIds]);
+    if (filters.preset === 'unsaved') {
+      return queriedThreads.filter((thread) => unsavedPresetThreadIds.has(thread.id));
+    }
+    if (presetNeedsFrozenReadMembership[filters.preset]) {
+      return queriedThreads.filter((thread) => unreadPresetThreadIds.has(thread.id));
+    }
+    return queriedThreads;
+  }, [queriedThreads, filters.preset, unsavedPresetThreadIds, unreadPresetThreadIds]);
 
   // Mirror the currently visible threads into the ref the stable message listener reads.
   useEffect(() => {

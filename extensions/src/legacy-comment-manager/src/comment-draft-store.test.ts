@@ -104,17 +104,48 @@ describe('comment draft store', () => {
     });
   });
 
-  it('drops commentEdits entirely once every edited comment in it is gone', () => {
+  it('drops the whole thread entry once commentEdits was its only content and that empties out', () => {
+    // A draft whose only content was `commentEdits` must not survive as a residual `{}`-shaped
+    // entry once that empties -- that leaves a thread permanently listed under "Unsaved comments"
+    // with nothing in the UI able to clear it. Checking `Object.keys` (not `toEqual` against `{}`,
+    // which treats an object with only `undefined`-valued own properties as equal to `{}` and so
+    // would pass even if the key survived) is what actually proves the entry itself is gone.
     const pruned = pruneDrafts({ t1: { commentEdits: { 'c1-deleted': { edited: true } } } }, [
       { id: 't1', commentIds: [] },
     ]);
-    expect(pruned).toEqual({ t1: {} });
+    expect(Object.keys(pruned)).toEqual([]);
+  });
+
+  it('keeps a thread entry whose commentEdits emptied out but which still has other draft content', () => {
+    // Negative control for the test above: a thread whose commentEdits empties but which still
+    // carries other draft content (here, `assignedUser`) must NOT be dropped -- only a draft that
+    // has become empty by every measure should disappear.
+    const pruned = pruneDrafts(
+      { t1: { assignedUser: 'Ana', commentEdits: { 'c1-deleted': { edited: true } } } },
+      [{ id: 't1', commentIds: [] }],
+    );
+    expect(pruned).toEqual({ t1: { assignedUser: 'Ana' } });
+  });
+
+  it('drops a thread entry whose commentEdits record arrived already empty', () => {
+    // `{}` carries no edit, so this entry is empty by the rule the rest of the codebase uses --
+    // but it is NOT empty by the all-fields-`undefined` rule, so without normalization it would
+    // survive every prune and strand the thread under "Unsaved comments" forever. Nothing this
+    // extension writes produces the shape; storage is shared with every other web view in the
+    // window and can be hand-edited, so pruning has to tolerate it arriving anyway.
+    expect(
+      Object.keys(pruneDrafts({ t1: { commentEdits: {} } }, [{ id: 't1', commentIds: [] }])),
+    ).toEqual([]);
+    // The comment-id list being unknown must not resurrect it: that path deliberately prunes
+    // nothing at the comment level, but there is no edit here to protect.
+    expect(Object.keys(pruneDrafts({ t1: { commentEdits: {} } }, [{ id: 't1' }]))).toEqual([]);
   });
 
   it("merges a change onto what's currently stored instead of replacing the whole map", () => {
-    // Simulates the two-views-on-one-project race Finding 10 describes: the panel already wrote a
-    // draft for thread B (via its OWN saveDraftChanges call, modeled here directly against storage
-    // since this test only needs the end state) that this writer's `changes` never mentions at all.
+    // Simulates two views open on the same project racing to persist drafts: the panel already
+    // wrote a draft for thread B (via its OWN saveDraftChanges call, modeled here directly against
+    // storage since this test only needs the end state) that this writer's `changes` never mentions
+    // at all.
     saveDrafts(PROJECT, { t2: { assignedUser: 'Bea' } });
     saveDraftChanges(PROJECT, new Map([['t1', { assignedUser: 'Ana' }]]));
     expect(loadDrafts(PROJECT)).toEqual({

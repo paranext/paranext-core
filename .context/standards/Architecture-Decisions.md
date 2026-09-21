@@ -904,7 +904,16 @@ step, no automation. Just a record.
   selection or draft that doesn't survive a reload, rather than a visible failure. Neither drafts nor
   the filter selection follow a user between machines or survive a profile reset; that is required
   behavior for drafts (they must never travel) and an accepted tradeoff for the filter selection (a
-  view preference, not project data).
+  view preference, not project data). This decision closes the Send/Receive leak, but `localStorage`
+  is private only from OTHER MACHINES and other project members, not from other code running on this
+  one: it is scoped per browser origin, not per web view, and every web view iframe in this renderer
+  shares the SAME origin and gets `allow-same-origin` by default (`src/renderer/services/web-view.
+  service-shard.ts`; see also `src/renderer/services/local-storage.service.ts`'s own doc, which states
+  this sharing directly). So any other extension's web view open in the same window can read (and
+  write) `legacyCommentManager.drafts.*`/`legacyCommentManager.filters.*` directly — this store adds
+  no isolation between extensions, only between machines and between project members. Accepted
+  because the threat this ADR is answering is Send/Receive leakage to teammates, not cross-extension
+  isolation within one user's own running app.
 
 ## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
 

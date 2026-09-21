@@ -230,3 +230,27 @@ describe('CommentListPanel filter toolbar', () => {
     expect(within(toolbar).queryByRole('button')).not.toBeInTheDocument();
   });
 });
+
+describe('CommentListPanel filter dropdown localization fallback', () => {
+  // Mirrors useLocalizedStrings seeding every requested key to itself before the subscription
+  // delivers (or permanently, on a PlatformError) -- the exact shape a user sees during panel
+  // load, not just an empty object.
+  const UNRESOLVED_STRINGS: LanguageStrings = Object.fromEntries(
+    Object.keys(EN_STRINGS).map((key) => [key, key]),
+  );
+
+  it('does not render a raw localize key as the preset dropdown’s displayed value', () => {
+    renderPanel({ localizedStrings: UNRESOLVED_STRINGS });
+
+    expect(screen.getByTestId('comment-preset-filter')).not.toHaveTextContent(/%.+%/);
+  });
+
+  it('does not render a raw localize key in any preset dropdown option', async () => {
+    renderPanel({ localizedStrings: UNRESOLVED_STRINGS });
+
+    await userEvent.click(screen.getByTestId('comment-preset-filter'));
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
+    options.forEach((option) => expect(option).not.toHaveTextContent(/%.+%/));
+  });
+});

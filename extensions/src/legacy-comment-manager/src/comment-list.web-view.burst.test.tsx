@@ -42,11 +42,12 @@ const mocks = vi.hoisted(() => {
   /**
    * A settable stand-in for the comments PDP's server-side filtering: `useProjectData(...)
    * .CommentThreads` (mocked below) filters `current` by the handful of selector fields these tests
-   * actually drive (`isResolved`), rather than always returning an empty list, so a test can
-   * exercise a filter change actually changing which threads render. The loading/error paths of
+   * actually drive (`isResolved`, `isRead`), rather than always returning an empty list, so a test
+   * can exercise a filter change actually changing which threads render. The loading/error paths of
    * that same query are exercised at the `useCommentDrafts` hook level instead (see
    * use-comment-drafts.hook.test.ts) -- this fixture only needs to drive real filtering, which is
-   * what the remaining draft-persistence test here (an end-to-end wiring check) actually needs.
+   * what the draft-persistence and unread-preset-membership tests here (end-to-end wiring checks)
+   * actually need.
    */
   const commentThreadsFixture: {
     current: LegacyCommentThread[];
@@ -87,11 +88,16 @@ vi.mock('@papi/frontend/react', () => ({
   useProjectData: vi.fn(() => ({
     CommentThreads: (selector: LegacyCommentThreadSelector) => {
       mocks.commentThreadSelectorLog.push(selector);
-      // A minimal stand-in for the comments PDP's server-side filtering: only `isResolved` is
-      // simulated, since that is the only axis the draft-persistence test below drives.
+      // A minimal stand-in for the comments PDP's server-side filtering: only `isResolved` and
+      // `isRead` are simulated, since those are the only axes the tests below drive.
       const filtered = mocks.commentThreadsFixture.current.filter((thread) => {
-        if (selector.isResolved === undefined) return true;
-        return (thread.status === 'Resolved') === selector.isResolved;
+        if (
+          selector.isResolved !== undefined &&
+          (thread.status === 'Resolved') !== selector.isResolved
+        )
+          return false;
+        if (selector.isRead !== undefined && thread.isRead !== selector.isRead) return false;
+        return true;
       });
       return [filtered, vi.fn(), false];
     },
@@ -356,6 +362,7 @@ const PRESET_LABEL_TO_VALUE: Partial<Record<string, CommentPreset>> = {
   'All comments': 'all',
   'Resolved comments': 'resolved',
   'Unsaved comments': 'unsaved',
+  'Unread comments': 'unread',
 };
 
 /**
@@ -864,12 +871,11 @@ describe('stored comment filter selection', () => {
       latestPanelProps().onFiltersChange({ preset: 'resolved' });
     });
 
-    // Finding 17: BEFORE this fix, this assertion read `scopeFilter: 'current-verse'` -- the
-    // override's scope, carried forward from `currentViewRef` and persisted even though the user
-    // never touched scope at all. That was the bug (a programmatic override leaking into the user's
-    // standing preference), not a real invariant: the correct persisted scope is the user's actual
-    // last choice, 'current-book' (from UNREAD_CURRENT_BOOK_SELECTION above), which
-    // `lastUserChosenViewRef` now recovers even while the override is still on screen.
+    // The persisted scope must be the user's actual last choice, 'current-book' (from
+    // UNREAD_CURRENT_BOOK_SELECTION above) -- NOT the mount-time override's scope, carried forward
+    // from `currentViewRef` and persisted even though the user never touched scope at all. This is
+    // what `lastUserChosenViewRef` recovers even while the override is still on screen: a
+    // programmatic override must never leak into the user's standing preference.
     await waitFor(() => {
       expect(readStoredSelection('project-1')).toEqual({
         preset: 'resolved',
@@ -879,8 +885,8 @@ describe('stored comment filter selection', () => {
   });
 
   it("does not let a setFilters message override's scope leak into the next user-driven persist", async () => {
-    // Finding 17's literal scenario: the S/R conflict link's setFilters message resets the ENTIRE
-    // view (per its documented contract), including an axis the user never touched.
+    // The S/R conflict link's setFilters message resets the ENTIRE view (per its documented
+    // contract), including an axis the user never touched.
     seedStoredSelection('project-1', UNREAD_CURRENT_BOOK_SELECTION);
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unread' }));
@@ -995,9 +1001,22 @@ describe('unsaved preset filtering', () => {
     // round-trips `editorState`), since the edit path runs through a different component and lands
     // in `commentEdits` — testing only the compose box would leave that path free to regress
     // unnoticed.
+    mocks.commentThreadsFixture.current = [threadA, threadB, threadC];
     saveDrafts('project-1', {
+      // threadB's only comment id is `${threadB.id}/tester/2024-01-01` (see makeCommentThread) --
+      // this seeds an edit to that REAL comment.
       [threadB.id]: {
-        commentEdits: { [`${threadB.id}-comment`]: makeEditorState('edited comment') },
+        commentEdits: { [`${threadB.id}/tester/2024-01-01`]: makeEditorState('edited comment') },
+      },
+      // Negative control: threadC gets a `commentEdits` entry keyed by a comment id that does not
+      // exist in ANY thread. If the per-comment prune merely left a residual entry behind instead
+      // of actually matching against real comment ids, threadC would wrongly show up under
+      // "Unsaved comments" too -- this is what makes the assertion below fail for the reason this
+      // test claims to check, not merely because a stray key happened to compare non-empty.
+      [threadC.id]: {
+        commentEdits: {
+          [`${threadC.id}-comment`]: makeEditorState('edit to a comment that never existed'),
+        },
       },
     });
 
@@ -1074,6 +1093,44 @@ describe('unsaved preset filtering', () => {
 
     await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unsaved' }));
     expect(latestPanelProps().threads.map((thread) => thread.id)).toEqual([threadA.id]);
+  });
+});
+
+describe('unread preset live membership', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+    mocks.commentThreadsFixture.current = [threadA, threadB];
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('keeps a thread mounted after it is marked read while the unread preset stays active', async () => {
+    // Regression coverage: a thread is marked read ~5 seconds after selection. If the query still
+    // asks the provider for isRead: false, the thread leaves the query result the instant it is
+    // marked read, unmounting its card and losing the user's place -- even though the user did
+    // nothing but read it. The thread must stay visible for the rest of this preset session.
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    selectPreset('Unread comments');
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unread' }));
+    expect(latestPanelProps().threads.map((thread) => thread.id)).toContain(threadA.id);
+
+    // The thread is marked read (e.g. by the auto-read timer) while the preset stays active --
+    // mirrors the PDP subscription delivering the updated thread after the write succeeds.
+    mocks.commentThreadsFixture.current = mocks.commentThreadsFixture.current.map((thread) =>
+      thread.id === threadA.id ? { ...thread, isRead: true } : thread,
+    );
+    // Force the web view to re-render against the mutated fixture, the same as a live PDP push
+    // would -- draft state lives in the same component tree, so typing (then clearing) a draft into
+    // another thread is an innocuous way to trigger it without touching the behavior under test.
+    typeDraftInto(threadB.id, 'x');
+    typeDraftInto(threadB.id, '');
+
+    expect(latestPanelProps().threads.map((thread) => thread.id)).toContain(threadA.id);
   });
 });
 

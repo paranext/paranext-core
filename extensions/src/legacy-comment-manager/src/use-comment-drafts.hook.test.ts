@@ -280,8 +280,51 @@ describe('useCommentDrafts', () => {
     });
   });
 
+  it('prunes a commentEdits entry for a comment that was soft-deleted, not just one gone entirely', () => {
+    // Unlike the test above (a comment id absent from the thread altogether), a Send/Receive
+    // deletion leaves the comment record in place with `deleted: true` -- the component renders
+    // threads by filtering those out, so a `commentEdits` entry for one is exactly as stranded as
+    // one for a comment that no longer exists at all. `assignedUser` is also seeded so this
+    // assertion isolates the comment-id list this hook builds: if that list wrongly still included
+    // the deleted comment's id, only `commentEdits` would fail to prune, while `assignedUser`
+    // survives regardless -- proving the failure is specifically about which comments count as
+    // "existing", not about pruning dropping the whole entry.
+    const deletedCommentId = `${threadA.id}/other/2024-01-02`;
+    const threadWithDeletedReply: LegacyCommentThread = {
+      ...threadA,
+      comments: [
+        ...threadA.comments,
+        {
+          contents: '<p>a reply someone else deleted</p>',
+          date: '2024-01-02T00:00:00.0000000-00:00',
+          deleted: true,
+          hideInTextWindow: false,
+          id: deletedCommentId,
+          isRead: false,
+          language: 'en',
+          startPosition: 0,
+          thread: threadA.id,
+          user: 'Tester',
+          verseRef: 'MRK 1:1',
+        },
+      ],
+    };
+    saveDrafts('project-1', {
+      [threadA.id]: {
+        assignedUser: 'Tester',
+        commentEdits: {
+          [deletedCommentId]: makeEditorState('edit to a reply someone else deleted'),
+        },
+      },
+    });
+
+    const { result } = renderCommentDrafts({ commentThreads: [threadWithDeletedReply, threadB] });
+
+    expect(result.current.drafts[threadA.id]).toEqual({ assignedUser: 'Tester' });
+  });
+
   it('keeps a draft written by a second view on the same project after this one persists its own', () => {
-    // The Finding 10 scenario end-to-end: the Column 3 panel and the editor-anchored list can both
+    // The two-views-on-one-project race end-to-end: the Column 3 panel and the editor-anchored list can both
     // be open on the same project, each running its OWN useCommentDrafts instance with its own
     // in-memory `drafts` map. View A mounts first (empty storage), then view B writes and flushes a
     // draft for a DIFFERENT thread. View A -- which never loaded view B's write into its own stale
@@ -320,5 +363,38 @@ describe('useCommentDrafts', () => {
     const { result } = renderCommentDrafts({ commentThreads: [] });
 
     expect(result.current.drafts).toEqual({});
+  });
+
+  it('loads and persists drafts once projectId resolves on the same mounted instance', () => {
+    // A brand-new Comment List Panel can render with `projectId: undefined` and receive its real
+    // project only on a LATER render of the SAME instance (see this hook's `projectId` doc) --
+    // unlike a genuine project-to-project reassignment, which always remounts via `reloadWebView`
+    // and so never hits this hook's live state at all. Seed storage as if a draft already existed
+    // for the project that is about to resolve, so a load that only ever ran once (at the
+    // `projectId: undefined` mount) would miss it.
+    const seededDraft: Record<string, CommentDraft> = {
+      [threadA.id]: { editorState: makeEditorState('already saved before this view opened') },
+    };
+    saveDrafts('late-project', seededDraft);
+
+    const { result, rerenderWith } = renderCommentDrafts({ projectId: undefined });
+    expect(result.current.drafts).toEqual({});
+
+    rerenderWith({ projectId: 'late-project' });
+    expect(result.current.drafts).toEqual(seededDraft);
+
+    // A write made AFTER the project resolves must actually reach storage, not be silently dropped
+    // by a debounced-save closure still scoped to the `undefined` it captured on the first render.
+    const newEntry = makeEditorState('typed after the project resolved');
+    act(() => {
+      result.current.handleDraftChange(threadB.id, { editorState: newEntry });
+    });
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    expect(loadDrafts('late-project')).toEqual({
+      ...seededDraft,
+      [threadB.id]: { editorState: newEntry },
+    });
   });
 });

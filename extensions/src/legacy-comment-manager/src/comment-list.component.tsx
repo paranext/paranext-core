@@ -2,6 +2,7 @@ import {
   Button,
   CommentList,
   Label,
+  localizeOrFallback,
   Select,
   SelectContent,
   SelectItem,
@@ -16,8 +17,10 @@ import {
   isCommentPreset,
   isScopeFilter,
   isShowingAllThreads,
+  presetToFallbackLabel,
   presetToLabelKey,
   ScopeFilter,
+  scopeFilterToFallbackLabel,
   scopeFilterToLabelKey,
 } from './comment-list-filters.model';
 
@@ -109,6 +112,7 @@ export type CommentListPanelProps = Pick<
 function FilterDropdown<T extends string>({
   value,
   labelKeys,
+  fallbackLabels,
   isValue,
   onChange,
   localizedStrings,
@@ -117,6 +121,13 @@ function FilterDropdown<T extends string>({
 }: {
   value: T;
   labelKeys: Readonly<Record<T, LocalizeKey>>;
+  /**
+   * English text shown in place of a `labelKeys` lookup that has not resolved to translated text
+   * yet -- `useLocalizedStrings` seeds every requested key to itself both before the subscription
+   * delivers and permanently on a `PlatformError`, so a bare `localizedStrings[key]` lookup would
+   * otherwise render that raw key.
+   */
+  fallbackLabels: Readonly<Record<T, string>>;
   isValue: (value: string) => value is T;
   onChange: (value: T) => void;
   localizedStrings: LanguageStrings;
@@ -139,7 +150,7 @@ function FilterDropdown<T extends string>({
       <SelectTrigger className="tw:w-auto tw:min-w-32" aria-label={ariaLabel} data-testid={testId}>
         <SelectValue>
           <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
-            {localizedStrings[labelKeys[value]]}
+            {localizeOrFallback(labelKeys[value], localizedStrings, fallbackLabels[value])}
           </div>
         </SelectValue>
       </SelectTrigger>
@@ -148,7 +159,7 @@ function FilterDropdown<T extends string>({
           .filter(isValue)
           .map((option) => (
             <SelectItem key={option} value={option}>
-              {localizedStrings[labelKeys[option]]}
+              {localizeOrFallback(labelKeys[option], localizedStrings, fallbackLabels[option])}
             </SelectItem>
           ))}
       </SelectContent>
@@ -286,6 +297,7 @@ export function CommentListPanel({
           <FilterDropdown
             value={filters.preset}
             labelKeys={presetToLabelKey}
+            fallbackLabels={presetToFallbackLabel}
             isValue={isCommentPreset}
             onChange={(preset) => onFiltersChange({ preset })}
             localizedStrings={localizedStrings}
@@ -295,6 +307,7 @@ export function CommentListPanel({
           <FilterDropdown
             value={scopeFilter}
             labelKeys={scopeFilterToLabelKey}
+            fallbackLabels={scopeFilterToFallbackLabel}
             isValue={isScopeFilter}
             onChange={onScopeFilterChange}
             localizedStrings={localizedStrings}

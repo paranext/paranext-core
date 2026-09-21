@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type {
@@ -985,6 +985,10 @@ describe('CommentThread selection styling', () => {
     // The bar's width is reserved while unselected so selecting does not shift content sideways.
     expect(unselected.className).toMatch(/\bborder-s-4\b/);
     expect(unselected.className).toMatch(/\bborder-transparent\b/);
+    // Captured before the rerender: `unselected` and `selected` below both resolve to the same
+    // live DOM node (React reuses it across a rerender), so reading its classes AFTER the
+    // rerender on both sides of the comparison would compare the post-rerender state to itself.
+    const unselectedBgClasses = bgClasses(unselected);
 
     rerender(threadElement({ isSelected: true }));
 
@@ -995,7 +999,7 @@ describe('CommentThread selection styling', () => {
     // The structural invariant: selection must not change ANY background-channel class, not just
     // the one token being removed from it. Catches a regression to e.g. `bg-background` or
     // `bg-secondary`, which the narrower token-specific check above would miss.
-    expect(bgClasses(selected)).toEqual(bgClasses(unselected));
+    expect(bgClasses(selected)).toEqual(unselectedBgClasses);
   });
 
   // Status must be expressible independently of selection, so each status needs its own selected and
@@ -1006,6 +1010,8 @@ describe('CommentThread selection styling', () => {
     const { rerender } = renderThread({ isRead: false, isSelected: false });
     const unselected = screen.getByRole('option');
     expect(unselected.className).toMatch(/\bbg-accent\b/);
+    // Captured before the rerender -- see the comment on the equivalent capture above.
+    const unselectedBgClasses = bgClasses(unselected);
 
     rerender(threadElement({ isRead: false, isSelected: true }));
     const selected = screen.getByRole('option');
@@ -1013,19 +1019,62 @@ describe('CommentThread selection styling', () => {
     expect(selected.className).toMatch(/\bborder-foreground\b/);
     // Unread must survive selection rather than being displaced by it.
     expect(selected.className).toMatch(/\bbg-accent\b/);
-    expect(bgClasses(selected)).toEqual(bgClasses(unselected));
+    expect(bgClasses(selected)).toEqual(unselectedBgClasses);
   });
 
   it('keeps the resolved background and adds the bar when a resolved thread is selected', () => {
     const { rerender } = renderThread({ threadStatus: 'Resolved', isSelected: false });
     const unselected = screen.getByRole('option');
     expect(unselected.className).toMatch(/\bbg-muted\b/);
+    // Captured before the rerender -- see the comment on the equivalent capture above.
+    const unselectedBgClasses = bgClasses(unselected);
 
     rerender(threadElement({ threadStatus: 'Resolved', isSelected: true }));
     const selected = screen.getByRole('option');
 
     expect(selected.className).toMatch(/\bborder-foreground\b/);
     expect(selected.className).toMatch(/\bbg-muted\b/);
-    expect(bgClasses(selected)).toEqual(bgClasses(unselected));
+    expect(bgClasses(selected)).toEqual(unselectedBgClasses);
+  });
+});
+
+describe('CommentThread auto-read timer', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does not mark an unread thread read while it holds an unsent reply draft', () => {
+    vi.useFakeTimers();
+    const handleReadStatusChange = vi.fn();
+    renderThread({
+      isRead: false,
+      isSelected: true,
+      autoReadDelay: 5,
+      handleReadStatusChange,
+      draft: { editorState: NON_EMPTY_EDITOR_STATE },
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(handleReadStatusChange).not.toHaveBeenCalled();
+  });
+
+  it('marks an unread thread read after the delay once it holds no draft', () => {
+    vi.useFakeTimers();
+    const handleReadStatusChange = vi.fn();
+    renderThread({
+      isRead: false,
+      isSelected: true,
+      autoReadDelay: 5,
+      handleReadStatusChange,
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(handleReadStatusChange).toHaveBeenCalledWith('thread-1', true);
   });
 });

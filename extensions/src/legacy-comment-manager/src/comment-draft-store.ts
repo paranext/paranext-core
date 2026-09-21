@@ -224,8 +224,27 @@ export type PrunableThread = {
 };
 
 /**
- * Removes drafts whose thread no longer exists, and -- within a surviving thread's draft -- any
- * `commentEdits` entry whose comment no longer exists in that thread.
+ * Whether every one of an object's own properties is `undefined`. `CommentDraft` (the type this is
+ * actually used with) documents each of its fields individually as "present means non-empty,
+ * `undefined` means absent", which is the same rule platform-bible-react's exported
+ * `isCommentDraftEmpty` applies.
+ *
+ * This checks the convention structurally rather than calling that function, because `pruneDrafts`
+ * is generic over any draft-shaped `T` and never narrows to `CommentDraft` -- it prunes by thread
+ * and comment id without caring what a draft contains. Structural checking also means a field added
+ * to `CommentDraft` later is covered here with no edit, where a by-name check would silently start
+ * reporting a non-empty draft as empty. The one place the two rules diverge is a `commentEdits`
+ * record that is present but empty, which `isCommentDraftEmpty` calls empty and this does not;
+ * `pruneDrafts` normalizes that shape away before this runs.
+ */
+function isEveryFieldUndefined(value: object): boolean {
+  return Object.values(value).every((fieldValue) => fieldValue === undefined);
+}
+
+/**
+ * Removes drafts whose thread no longer exists, drafts that have become empty by every measure, and
+ * -- within a surviving, non-empty thread's draft -- any `commentEdits` entry whose comment no
+ * longer exists in that thread.
  *
  * @param drafts The drafts to prune, keyed by thread id. A draft's optional `commentEdits` sub-map,
  *   if present, is keyed by COMMENT id (not thread id): an edit to one specific comment in the
@@ -238,9 +257,12 @@ export type PrunableThread = {
  *   comments" indicator point at a thread the user can no longer open. Within a surviving thread's
  *   draft, `commentEdits` is pruned the same way when that thread's `commentIds` is known (not
  *   `undefined`) -- otherwise a `commentEdits` entry keyed by a deleted comment id would survive
- *   every prune forever, since pruning by thread id alone can never reach it. `commentEdits` is
- *   dropped entirely (set to `undefined`) once it would otherwise become `{}`, matching the shape
- *   `handleDraftChange` itself already produces when the last edit in a thread is cleared.
+ *   every prune forever, since pruning by thread id alone can never reach it. Once that pruning
+ *   leaves a draft with no content left at all (every field `undefined`, per
+ *   {@link isEveryFieldUndefined}), the entry itself is dropped from the result -- not kept as a
+ *   residual `{}`-shaped entry -- matching what `handleDraftChange` itself does when the last edit
+ *   in a thread is cleared: it reports `undefined` for that thread, and its caller deletes the key
+ *   entirely rather than storing an empty object under it.
  */
 export function pruneDrafts<T extends { commentEdits?: Readonly<Record<string, unknown>> }>(
   drafts: Readonly<Record<string, T>>,
@@ -253,8 +275,17 @@ export function pruneDrafts<T extends { commentEdits?: Readonly<Record<string, u
   return Object.fromEntries(
     Object.entries(drafts)
       .filter(([threadId]) => commentIdsByThreadId.has(threadId))
-      .map(([threadId, draft]) => {
+      .map(([threadId, draft]): [string, T] => {
         const existingCommentIds = commentIdsByThreadId.get(threadId);
+        // An already-empty `commentEdits` record carries no edit, so normalize it to `undefined`
+        // before anything else looks at it. Nothing this extension writes produces that shape --
+        // a draft with nothing left in it is reported as `undefined` and its key deleted -- but
+        // storage is shared with every other web view in the window (see
+        // `adr-comment-machine-local-storage`) and can be hand-edited, so a `{}` arriving here is
+        // possible. Left alone it would survive every prune: it is empty by the rule the rest of
+        // the codebase uses, but not by the all-fields-`undefined` rule the filter below applies.
+        if (draft.commentEdits && Object.keys(draft.commentEdits).length === 0)
+          return [threadId, { ...draft, commentEdits: undefined }];
         // No commentEdits to prune, or this thread's comment-id list isn't known -- leave the
         // draft as-is (unconditional pruning against an unknown list would risk discarding a
         // live edit; see the `commentIds` doc above).
@@ -275,6 +306,7 @@ export function pruneDrafts<T extends { commentEdits?: Readonly<Record<string, u
               Object.keys(prunedCommentEdits).length > 0 ? prunedCommentEdits : undefined,
           },
         ];
-      }),
+      })
+      .filter(([, draft]) => !isEveryFieldUndefined(draft)),
   );
 }

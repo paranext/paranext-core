@@ -9,6 +9,7 @@ import {
   isCommentPreset,
   isScopeFilter,
   isShowingAllThreads,
+  presetNeedsFrozenReadMembership,
   presetRequiresCurrentUser,
   presetToLabelKey,
   scopeFilterToLabelKey,
@@ -38,11 +39,10 @@ describe('presets', () => {
   describe.each<[CommentPreset, ReturnType<typeof build>]>([
     ['unresolved', { isResolved: false }],
     ['resolved', { isResolved: true }],
-    ['unread', { isRead: false }],
-    ['unread-and-unresolved', { isRead: false, isResolved: false }],
+    ['unread-and-unresolved', { isResolved: false }],
     ['conflict', { type: 'Conflict' }],
     ['unresolved-assigned-to-me', { isResolved: false, assignedTo: 'Donna' }],
-    ['unread-assigned-to-me', { isRead: false, assignedTo: 'Donna' }],
+    ['unread-assigned-to-me', { assignedTo: 'Donna' }],
   ])('%s', (preset, expected) => {
     it(`maps to ${JSON.stringify(expected)}`, () => {
       expect(build(preset)).toEqual(expected);
@@ -55,14 +55,25 @@ describe('presets', () => {
     expect(build('unsaved')).toEqual({});
   });
 
-  it('maps every preset in the label map, with only all and unsaved unnarrowed', () => {
+  it('never sends isRead to the provider, for any preset', () => {
+    // A thread marked read (the auto-read timer, ~5 seconds after selection) must not leave the
+    // query result mid-visit -- every unread-family preset narrows by read state client-side
+    // instead (see presetNeedsFrozenReadMembership), so isRead must never reach the selector.
+    Object.keys(presetToLabelKey)
+      .filter(isCommentPreset)
+      .forEach((preset) => {
+        expect(build(preset)).not.toHaveProperty('isRead');
+      });
+  });
+
+  it('maps every preset in the label map, with only all, unread and unsaved unnarrowed', () => {
     // Iterates the union rather than a hand-listed set, so a preset added later is exercised here
     // without anyone remembering to add a case.
     const unnarrowed = Object.keys(presetToLabelKey)
       .filter(isCommentPreset)
       .filter((preset) => Object.keys(build(preset)).length === 0);
 
-    expect(unnarrowed.sort()).toEqual(['all', 'unsaved']);
+    expect(unnarrowed.sort()).toEqual(['all', 'unread', 'unsaved']);
   });
 
   it('omits assignedTo until the current user name has loaded', () => {
@@ -128,6 +139,16 @@ describe('presetRequiresCurrentUser', () => {
       .map(([preset]) => preset)
       .sort();
     expect(flagged).toEqual(['unread-assigned-to-me', 'unresolved-assigned-to-me']);
+  });
+});
+
+describe('presetNeedsFrozenReadMembership', () => {
+  it('has an entry for every preset, and flags exactly the three unread presets', () => {
+    const flagged = Object.entries(presetNeedsFrozenReadMembership)
+      .filter(([, needsFrozenMembership]) => needsFrozenMembership)
+      .map(([preset]) => preset)
+      .sort();
+    expect(flagged).toEqual(['unread', 'unread-and-unresolved', 'unread-assigned-to-me']);
   });
 });
 

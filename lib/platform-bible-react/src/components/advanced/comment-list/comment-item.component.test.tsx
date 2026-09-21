@@ -14,16 +14,66 @@ import { TooltipProvider } from '@/components/shadcn-ui/tooltip';
 import { focusContentEditable } from '@/components/advanced/editor/editor-utils';
 import { CommentItem } from './comment-item.component';
 
+// A distinct non-empty editor state from NON_EMPTY_EDITOR_STATE below, so a test can tell "the
+// value the mock editor reports on a simulated edit" apart from "the value a test seeded as the
+// existing draft" when both are in play.
+const TYPED_EDITOR_STATE: SerializedEditorState<
+  SerializedParagraphNode & SerializedElementNode<SerializedTextNode>
+> = {
+  root: {
+    children: [
+      {
+        children: [
+          {
+            detail: 0,
+            format: 0,
+            mode: 'normal',
+            style: '',
+            text: 'typed',
+            type: 'text',
+            version: 1,
+          },
+        ],
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        type: 'paragraph',
+        version: 1,
+        textFormat: 0,
+        textStyle: '',
+      },
+    ],
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    type: 'root',
+    version: 1,
+  },
+};
+
 // CommentItem imports the Lexical Editor at module scope (only rendered while editing). Stub it so
 // these non-editing render tests don't pull in the full editor setup, matching the thread tests.
 // The stub still renders `actions` (wrapped in a TooltipProvider, matching the real Editor — see
-// editor.tsx) so the Save/Cancel tooltip buttons render for the editing-mode tests below.
+// editor.tsx) so the Save/Cancel tooltip buttons render for the editing-mode tests below. It also
+// exposes a button that drives `onSerializedChange`, matching comment-thread's mock, so a test can
+// simulate typing into the edit-mode editor.
 vi.mock('@/components/advanced/editor/editor', () => ({
-  Editor: vi.fn(({ actions }: { actions?: ReactNode }) => (
-    <div data-testid="mock-editor">
-      <TooltipProvider>{actions}</TooltipProvider>
-    </div>
-  )),
+  Editor: vi.fn(
+    ({
+      actions,
+      onSerializedChange,
+    }: {
+      actions?: ReactNode;
+      onSerializedChange?: (value: SerializedEditorState) => void;
+    }) => (
+      <div data-testid="mock-editor">
+        <button type="button" onClick={() => onSerializedChange?.(TYPED_EDITOR_STATE)}>
+          Type comment edit
+        </button>
+        <TooltipProvider>{actions}</TooltipProvider>
+      </div>
+    ),
+  ),
 }));
 
 // Spy on the real focusContentEditable so tests can assert whether CommentItem's 300ms
@@ -327,5 +377,90 @@ describe('CommentItem icon-button tooltips', () => {
     const tooltip = await screen.findByRole('tooltip');
     expect(tooltip).not.toHaveTextContent('%comment_aria_save_edit%');
     expect(tooltip).toHaveTextContent('Save edit');
+  });
+});
+
+describe('CommentItem controlled draft write guard', () => {
+  test('does not let a stale internal edit resurface once the consumer clears draftEditorState for a reason of its own', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onDraftEditorStateChange = vi.fn();
+    const { rerender } = render(
+      <CommentItem
+        comment={baseComment}
+        localizedStrings={localizedStrings}
+        isThreadExpanded
+        canEditOrDelete
+        draftEditorState={NON_EMPTY_EDITOR_STATE}
+        onDraftEditorStateChange={onDraftEditorStateChange}
+      />,
+    );
+
+    // Simulate typing while a consumer owns this draft — the write must be reported upward, not
+    // also seeded into the internal fallback.
+    await user.click(screen.getByRole('button', { name: 'Type comment edit' }));
+    expect(onDraftEditorStateChange).toHaveBeenCalledWith(TYPED_EDITOR_STATE);
+
+    // The consumer drops draftEditorState to undefined for a reason of its own — not via
+    // onDraftEditorStateChange (e.g. CommentThread pruning an entry for a comment no longer
+    // active). If the write above had also seeded the internal fallback, that stale value would
+    // resurface here instead of the card correctly falling back to plain (non-editing) text.
+    rerender(
+      <CommentItem
+        comment={baseComment}
+        localizedStrings={localizedStrings}
+        isThreadExpanded
+        canEditOrDelete
+        draftEditorState={undefined}
+        onDraftEditorStateChange={onDraftEditorStateChange}
+      />,
+    );
+
+    expect(screen.queryByTestId('mock-editor')).not.toBeInTheDocument();
+    expect(screen.getByText('ORDINARY BODY')).toBeInTheDocument();
+  });
+});
+
+// Every lucide-react icon renders its base `lucide-<kebab-name>` class regardless of any extra
+// className the caller passes (e.g. sizing utilities), so this identifies WHICH icon rendered
+// rather than being thrown off by unrelated styling differences between the two call sites.
+// `className` on an SVG element is an `SVGAnimatedString`, not a plain string -- read the
+// attribute directly instead.
+function lucideIconName(svg: Element | null | undefined): string | undefined {
+  return svg
+    ?.getAttribute('class')
+    ?.split(/\s+/)
+    .find((cls) => cls.startsWith('lucide-') && cls !== 'lucide-icon');
+}
+
+describe('CommentItem destructive-action icons', () => {
+  test('cancelling an edit uses a different icon than deleting the comment', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    // While editing, the "..." menu (with its own Delete Comment item) is still reachable on the
+    // same card as the editor's own Cancel action — both are destructive-looking, so they must be
+    // visually distinguishable from one another.
+    const { container } = render(
+      <CommentItem
+        comment={baseComment}
+        localizedStrings={localizedStrings}
+        isThreadExpanded
+        canEditOrDelete
+        draftEditorState={NON_EMPTY_EDITOR_STATE}
+      />,
+    );
+
+    const cancelTrigger = container.querySelectorAll('[data-slot="tooltip-trigger"]')[0];
+    const cancelIcon = lucideIconName(cancelTrigger?.querySelector('svg'));
+    expect(cancelIcon).toBeTruthy();
+
+    const menuTrigger = container.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]');
+    if (!menuTrigger) throw new Error('dropdown trigger not rendered');
+    await user.click(menuTrigger);
+    const deleteMenuItem = await screen.findByText('Delete Comment');
+    const deleteIcon = lucideIconName(
+      deleteMenuItem.closest('[role="menuitem"]')?.querySelector('svg'),
+    );
+    expect(deleteIcon).toBeTruthy();
+
+    expect(cancelIcon).not.toBe(deleteIcon);
   });
 });

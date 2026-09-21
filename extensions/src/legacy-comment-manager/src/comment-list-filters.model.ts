@@ -39,6 +39,25 @@ export function isCommentPreset(value: string): value is CommentPreset {
   return Object.hasOwn(presetToLabelKey, value);
 }
 
+/**
+ * English fallback text for each preset, shown via `localizeOrFallback` in place of a
+ * `presetToLabelKey` lookup that has not resolved to translated text yet (either still loading, or
+ * permanently on a `PlatformError`). `satisfies Record<CommentPreset, string>` keeps this in
+ * lockstep with `presetToLabelKey` — a preset added to the union without a row here is a compile
+ * error.
+ */
+export const presetToFallbackLabel = {
+  all: 'All comments',
+  'unresolved-assigned-to-me': 'Unresolved comments assigned to me',
+  unresolved: 'Unresolved comments',
+  'unread-assigned-to-me': 'Unread comments assigned to me',
+  unread: 'Unread comments',
+  'unread-and-unresolved': 'Unread and unresolved comments',
+  resolved: 'Resolved comments',
+  unsaved: 'Unsaved comments',
+  conflict: 'Conflicts',
+} as const satisfies Record<CommentPreset, string>;
+
 export const DEFAULT_COMMENT_FILTERS: CommentFilters = { preset: 'all' };
 
 /**
@@ -65,6 +84,29 @@ export const presetRequiresCurrentUser = {
   conflict: false,
 } as const satisfies Record<CommentPreset, boolean>;
 
+/**
+ * Whether a preset's membership must be frozen at entry and only ever grown while it stays active,
+ * the same treatment `'unsaved'` already gets (see `useFrozenPresetThreadIds`'s doc). True for
+ * every preset whose displayed set depends on live read state: `buildCommentThreadSelector`
+ * deliberately does not send `isRead` to the provider for these, because a thread marked read (the
+ * auto-read timer fires ~5 seconds after selection) would otherwise leave the query result and
+ * unmount its card mid-visit. Carried alongside every other preset via `satisfies
+ * Record<CommentPreset, boolean>` so a future preset that also narrows by `isRead` can't be added
+ * without deciding this, the same way `presetRequiresCurrentUser` above guards against a silent
+ * `assignedTo` gap.
+ */
+export const presetNeedsFrozenReadMembership = {
+  all: false,
+  'unresolved-assigned-to-me': false,
+  unresolved: false,
+  'unread-assigned-to-me': true,
+  unread: true,
+  'unread-and-unresolved': true,
+  resolved: false,
+  unsaved: false,
+  conflict: false,
+} as const satisfies Record<CommentPreset, boolean>;
+
 // --- Scope axis (how much Scripture the list covers) ---
 
 export const DEFAULT_SCOPE_FILTER: ScopeFilter = 'all-books';
@@ -79,6 +121,19 @@ export const scopeFilterToLabelKey = {
 export function isScopeFilter(value: string): value is ScopeFilter {
   return Object.hasOwn(scopeFilterToLabelKey, value);
 }
+
+/**
+ * English fallback text for each scope, shown via `localizeOrFallback` in place of a
+ * `scopeFilterToLabelKey` lookup that has not resolved to translated text yet. `satisfies
+ * Record<ScopeFilter, string>` keeps this in lockstep with `scopeFilterToLabelKey` — a scope added
+ * to the union without a row here is a compile error.
+ */
+export const scopeFilterToFallbackLabel = {
+  'all-books': 'All books',
+  'current-book': 'Current book',
+  'current-chapter': 'Current chapter',
+  'current-verse': 'Current verse',
+} as const satisfies Record<ScopeFilter, string>;
 
 /**
  * Resolves a scope value arriving at any filter boundary (the `openCommentList` command's
@@ -295,10 +350,11 @@ export function buildCommentThreadSelector({
       selector.isResolved = true;
       break;
     case 'unread':
-      selector.isRead = false;
+      // isRead is deliberately NOT sent to the provider -- see presetNeedsFrozenReadMembership's
+      // doc: an unread preset's membership is instead frozen and narrowed client-side, so a thread
+      // marked read while the user is looking at it doesn't leave the query result and unmount.
       break;
     case 'unread-and-unresolved':
-      selector.isRead = false;
       selector.isResolved = false;
       break;
     case 'conflict':
@@ -311,7 +367,7 @@ export function buildCommentThreadSelector({
       if (currentUserName) selector.assignedTo = currentUserName;
       break;
     case 'unread-assigned-to-me':
-      selector.isRead = false;
+      // See the 'unread' case above: isRead is deliberately not sent.
       if (currentUserName) selector.assignedTo = currentUserName;
       break;
     case 'all':

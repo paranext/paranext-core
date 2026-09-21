@@ -2,6 +2,12 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
+import {
+  presetToFallbackLabel,
+  presetToLabelKey,
+  scopeFilterToFallbackLabel,
+  scopeFilterToLabelKey,
+} from './comment-list-filters.model';
 
 const PANEL_TITLE_KEY = '%webView_legacyCommentManager_commentListPanel_title%';
 const COMMENTARIES_TAB_TITLE_KEY = '%webView_resourcePanel_commentaries_title%';
@@ -182,6 +188,48 @@ describe('legacyCommentManager retired four-axis filter keys', () => {
   RETIRED_WITHOUT_A_FALLBACK.forEach((oldKey) => {
     it(`does not invent a fallback for ${oldKey}`, () => {
       expect(commentManagerStringsFile.metadata?.[oldKey]).toBeUndefined();
+    });
+  });
+});
+
+describe('comment filter dropdown fallback labels', () => {
+  // The dropdown renders through `localizeOrFallback`, because `useLocalizedStrings` seeds every
+  // requested key to ITSELF and returns that on error -- so a plain `?? 'fallback'` can never fire
+  // and the user sees a raw `%comment_filter_preset_all%` while strings load. The fallback a user
+  // briefly sees must therefore be the same English the shipped strings resolve to; the `satisfies
+  // Record<...>` on each map catches a MISSING entry at compile time but says nothing about a
+  // STALE one, which is what this pins.
+  // Both maps are keyed by a closed union, but `Object.entries` widens those keys to `string`, so
+  // the parameters here are widened to match rather than asserted back down -- the pairing this
+  // checks is between two maps that already share a key type, so nothing is lost by looking both
+  // up as plain strings.
+  const fallbackCases = (
+    kind: string,
+    fallbacks: Readonly<Record<string, string>>,
+    labelKeys: Readonly<Record<string, string>>,
+  ): [label: string, key: string, fallback: string][] =>
+    Object.entries(fallbacks).map(([value, fallback]) => [
+      `${kind} ${value}`,
+      labelKeys[value],
+      fallback,
+    ]);
+
+  const cases: [label: string, key: string, fallback: string][] = [
+    ...fallbackCases('preset', presetToFallbackLabel, presetToLabelKey),
+    ...fallbackCases('scope', scopeFilterToFallbackLabel, scopeFilterToLabelKey),
+  ];
+
+  it('covers every preset and scope the dropdown can show', () => {
+    expect(cases).toHaveLength(
+      Object.keys(presetToLabelKey).length + Object.keys(scopeFilterToLabelKey).length,
+    );
+  });
+
+  cases.forEach(([label, key, fallback]) => {
+    it(`${label}'s fallback matches the shipped English string`, () => {
+      // Fail loudly rather than comparing against `undefined` if the key is ever renamed.
+      expect(localizedStrings.en[key]).toBeDefined();
+      expect(fallback).toBe(localizedStrings.en[key]);
     });
   });
 });

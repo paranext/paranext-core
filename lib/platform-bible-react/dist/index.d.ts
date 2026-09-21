@@ -8,7 +8,7 @@ import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { SerializedEditorState } from 'lexical';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
@@ -664,6 +664,27 @@ export interface CommentListProps {
  * @param CommentListProps Props for the CommentList component
  */
 export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, conflictResolution, drafts, onDraftChange, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * A draft is empty only when none of its three parts carry anything: no unsent reply, no pending
+ * assignee, and no in-progress edit to an existing comment. Centralized so every writer reports
+ * emptiness the same way — get it wrong in one direction and a real draft is lost, in the other an
+ * empty entry reads as a draft forever.
+ */
+export declare function isCommentDraftEmpty(draft: CommentDraft): boolean;
+/**
+ * Resolves a localize key against `localizedStrings`, falling back when the key has not actually
+ * resolved to translated text. `useLocalizedStrings` seeds every requested key to itself and
+ * returns that seed both before the subscription delivers and permanently on a `PlatformError`, so
+ * `localizedStrings[key] ?? fallback` can never catch that case — the value is a truthy string
+ * equal to the key, not `undefined`. Centralized so every visible (non-aria-label) localized string
+ * in this component tree resolves the same way.
+ *
+ * @param key The localize key to look up.
+ * @param localizedStrings The localized strings to resolve `key` against.
+ * @param fallback English text to show while `key` has not resolved to anything else.
+ * @returns The resolved string, or `fallback` when `key` is missing or still unresolved.
+ */
+export declare function localizeOrFallback(key: LocalizeKey, localizedStrings: LanguageStrings, fallback: string): string;
 /**
  * Presentational card body for a verseText merge conflict. Presents the resolution as a set of
  * clickable option cards — "Keep the current text" (accept, preselected), "Use the other change"

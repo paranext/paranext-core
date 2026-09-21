@@ -251,7 +251,15 @@ export interface CommentThreadProps {
   handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */
   handleDeleteComment: (commentId: string) => Promise<boolean>;
-  /** Handler for updating read status */
+  /**
+   * Handler for updating read status. Called both from the manual mark-read/unread toggle and from
+   * the auto-read timer (see `autoReadDelay`) — the two are not distinguished in the call. A
+   * consumer whose thread list is filtered by read status (server-side or client-side) should not
+   * simply re-run that filter on every call: the auto-read timer fires while the thread is open and
+   * selected, so an unread-scoped filter would remove the very thread the user is looking at the
+   * instant it fires. Consider freezing that filter's membership for the session the way an
+   * unsaved-drafts filter would (grow-only, re-snapshotted only on re-entering the filter).
+   */
   handleReadStatusChange?: (threadId: string, markRead: boolean) => void;
   /**
    * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
