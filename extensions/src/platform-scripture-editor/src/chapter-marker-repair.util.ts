@@ -403,12 +403,18 @@ export function prepareUsjForChapterSave(
  * document to write.
  *
  * The push-back into the editor is not bookkeeping — without it the bad marker stays on screen, so
- * every later save repairs it again and reports it again, forever. It is skipped only when the
- * chapter being saved is no longer the chapter being shown: a save can fire after the user has
- * navigated away (a trailing save, a chapter-switch flush) through the closure captured for the
- * chapter the content was typed in, and pushing that chapter's document into the editor would
- * overwrite the chapter the user is now looking at. The user is still told, because the correction
- * was still made to what gets written.
+ * every later save repairs it again and reports it again, forever. It is skipped in two cases, and
+ * the user is told either way, because the correction was still made to what gets written:
+ *
+ * - The chapter being saved is no longer the chapter being shown. A save can fire after the user has
+ *   navigated away (a trailing save, a chapter-switch flush) through the closure captured for the
+ *   chapter the content was typed in, and pushing that chapter's document into the editor would
+ *   overwrite the chapter the user is now looking at.
+ * - The user is still typing. A save can run mid-typing (the PDP sync saves as soon as a delivery
+ *   arrives), and replacing the document leaves the editor with no caret until it has loaded, so
+ *   the keys that follow land wherever the browser leaves them — at the end of the chapter,
+ *   deleting or adding text there. The save that follows once typing pauses makes the same repair
+ *   and pushes it back then.
  *
  * `applyRepairToEditor` is responsible for its own failures: the PDP write has to run even when the
  * editor refuses the repaired document, because it is that write which un-poisons the chapter.
@@ -416,6 +422,8 @@ export function prepareUsjForChapterSave(
  * @param preparation What {@link prepareUsjForChapterSave} returned for this save.
  * @param savedChapterKey The chapter this save was scheduled for.
  * @param currentChapterKey The chapter the editor is showing now.
+ * @param isUserTyping Whether the user has edited the document too recently for it to be replaced
+ *   under them.
  * @param applyRepairToEditor Puts the repaired document back into the editor and the caret back
  *   where the correction was made. Must not throw.
  * @param notifyRepair Tells the user the chapter marker was corrected.
@@ -425,18 +433,21 @@ export function applyChapterSavePreparation({
   preparation,
   savedChapterKey,
   currentChapterKey,
+  isUserTyping,
   applyRepairToEditor,
   notifyRepair,
 }: {
   preparation: ChapterSavePreparation;
   savedChapterKey: string;
   currentChapterKey: string;
+  isUserTyping: boolean;
   applyRepairToEditor: (usj: Usj, caretTarget: ChapterMarkerCaretTarget | undefined) => void;
   notifyRepair: () => void;
 }): Usj | undefined {
   const { repairedUsj, usjToSave, caretTarget } = preparation;
   if (repairedUsj) {
-    if (savedChapterKey === currentChapterKey) applyRepairToEditor(repairedUsj, caretTarget);
+    if (savedChapterKey === currentChapterKey && !isUserTyping)
+      applyRepairToEditor(repairedUsj, caretTarget);
     notifyRepair();
   }
   return usjToSave;

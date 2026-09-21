@@ -334,6 +334,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
+      isUserTyping: false,
       applyRepairToEditor,
       notifyRepair,
     });
@@ -353,6 +354,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 4',
+      isUserTyping: false,
       applyRepairToEditor,
       notifyRepair,
     });
@@ -363,12 +365,35 @@ describe('applyChapterSavePreparation', () => {
     expect(usjToSave).toBe(TO_SAVE);
   });
 
+  // A save can run mid-typing, and replacing the document then drops the caret so the next keys
+  // land at the end of the chapter. The repair is still written and reported; the save after the
+  // pause puts it on screen.
+  it('does not correct the editor under a user who is still typing', () => {
+    const { state, applyRepairToEditor } = editorStandIn();
+    const notifyRepair = vi.fn();
+
+    const usjToSave = applyChapterSavePreparation({
+      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
+      savedChapterKey: 'GEN 3',
+      currentChapterKey: 'GEN 3',
+      isUserTyping: true,
+      applyRepairToEditor,
+      notifyRepair,
+    });
+
+    expect(applyRepairToEditor).not.toHaveBeenCalled();
+    expect(state.editorUsj).toBeUndefined();
+    expect(notifyRepair).toHaveBeenCalledTimes(1);
+    expect(usjToSave).toBe(TO_SAVE);
+  });
+
   it('tells the user about the repair whether or not the editor was corrected', () => {
     const sameChapterNotify = vi.fn();
     applyChapterSavePreparation({
       preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
+      isUserTyping: false,
       applyRepairToEditor: vi.fn(),
       notifyRepair: sameChapterNotify,
     });
@@ -379,6 +404,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 4',
+      isUserTyping: false,
       applyRepairToEditor: vi.fn(),
       notifyRepair: crossChapterNotify,
     });
@@ -393,6 +419,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: undefined, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
+      isUserTyping: false,
       applyRepairToEditor,
       notifyRepair,
     });
@@ -410,6 +437,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: undefined, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
+      isUserTyping: false,
       applyRepairToEditor,
       notifyRepair,
     });
@@ -547,6 +575,7 @@ describe('the caret target on the way to the editor', () => {
       },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
+      isUserTyping: false,
       applyRepairToEditor,
       notifyRepair: vi.fn(),
     });

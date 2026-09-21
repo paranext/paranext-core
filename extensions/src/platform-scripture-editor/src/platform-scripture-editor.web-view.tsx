@@ -2772,6 +2772,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const chapterKeyRef = useRef(chapterKey);
   chapterKeyRef.current = chapterKey;
 
+  /**
+   * `Date.now()` of the last LOCAL editor edit (`undefined` until the first one). Stamped in
+   * {@link handleEditorialUsjChange} for `'local'`-source changes only — the same signal that
+   * schedules the debounced PDP save — and read by `useEditorPdpSync`, whose
+   * `EDITOR_OWNERSHIP_WINDOW_MS` contract lets the focused editor defer incoming PDP updates only
+   * while a local edit is recent. External applies never refresh it (see the stamp site).
+   */
+  const lastLocalEditTimestamp = useRef<number | undefined>(undefined);
+
   // The chapter document the editor is actually holding, which trails the selected chapter after
   // navigation until the new chapter's content arrives. Recorded by `useEditorPdpSync`.
   const editorDocumentSelector = useRef<EditorDocumentSelector | undefined>(undefined);
@@ -2841,6 +2850,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // Read live rather than captured, so a save that fires after a chapter switch compares the
         // chapter it was scheduled for against the chapter actually on screen now.
         currentChapterKey: chapterKeyRef.current,
+        // The debounced save fires only once typing has paused this long, so a save seeing a newer
+        // edit is one that ran mid-typing.
+        isUserTyping:
+          lastLocalEditTimestamp.current !== undefined &&
+          Date.now() - lastLocalEditTimestamp.current < PDP_SAVE_DEBOUNCE_MS,
         applyRepairToEditor: putRepairedUsjInEditor,
         notifyRepair: () =>
           notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum),
@@ -3269,15 +3283,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (!saveUsjToPdpDebounced.isPending()) return undefined;
     return saveUsjToPdpDebounced.flush();
   }, [saveUsjToPdpDebounced]);
-
-  /**
-   * `Date.now()` of the last LOCAL editor edit (`undefined` until the first one). Stamped in
-   * {@link handleEditorialUsjChange} for `'local'`-source changes only — the same signal that
-   * schedules the debounced PDP save — and read by `useEditorPdpSync`, whose
-   * `EDITOR_OWNERSHIP_WINDOW_MS` contract lets the focused editor defer incoming PDP updates only
-   * while a local edit is recent. External applies never refresh it (see the stamp site).
-   */
-  const lastLocalEditTimestamp = useRef<number | undefined>(undefined);
 
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], source?: DeltaSource, insertedNodeKey?: string) => {
