@@ -3,6 +3,10 @@ import type { CSSProperties } from 'react';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, test } from 'vitest';
 import { ContentZoomRoot } from '@/components/advanced/content-zoom-root.component';
+import {
+  CONTENT_ZOOM_POPUP_ATTRIBUTE as POPUP,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE as ROOT,
+} from '@/context/content-zoom-area.context';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
   DropdownMenu,
@@ -17,8 +21,6 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 
-const ROOT = 'data-platform-content-zoom-root';
-const POPUP = 'data-platform-content-zoom-popup';
 const FACTOR = '--platform-content-zoom-popup-factor';
 
 function content(slot: string): HTMLElement {
@@ -84,17 +86,17 @@ describe('pop-ups opened from zoomed content', () => {
     [
       'popover-content',
       popover(),
-      'tw:max-w-[calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
+      'tw:max-w-[calc(var(--radix-popover-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1))]',
     ],
     [
       'dropdown-menu-content',
       menu,
-      'tw:max-h-[calc(var(--radix-dropdown-menu-content-available-height)/var(--platform-content-zoom-popup-factor,1))]',
+      'tw:max-h-[calc(var(--radix-dropdown-menu-content-available-height,100vh)/var(--platform-content-zoom-popup-factor,1))]',
     ],
     [
       'tooltip-content',
       tooltip,
-      'tw:max-w-[min(20rem,calc(var(--radix-tooltip-content-available-width)/var(--platform-content-zoom-popup-factor,1)))]',
+      'tw:max-w-[min(20rem,calc(var(--radix-tooltip-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1)))]',
     ],
   ])('%s outside every area renders as before', (slot, ui, zoomedClass) => {
     render(ui);
@@ -103,6 +105,9 @@ describe('pop-ups opened from zoomed content', () => {
     expect(element.hasAttribute(POPUP)).toBe(false);
     expect(element.style.getPropertyValue(FACTOR)).toBe('');
     expect(element.className).not.toContain(zoomedClass);
+    // Only dropdown-menu-content ever carries an inline minWidth (see the dedicated test below);
+    // for every slot it must stay unset outside every area.
+    expect(element.style.minWidth).toBe('');
   });
 
   test('popover-content outside every area has no zoomed height cap and no scroll box', () => {
@@ -117,8 +122,8 @@ describe('pop-ups opened from zoomed content', () => {
       'popover-content',
       popover(),
       [
-        'tw:max-w-[calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
-        'tw:max-h-[calc(var(--radix-popover-content-available-height)/var(--platform-content-zoom-popup-factor,1))]',
+        'tw:max-w-[calc(var(--radix-popover-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1))]',
+        'tw:max-h-[calc(var(--radix-popover-content-available-height,100vh)/var(--platform-content-zoom-popup-factor,1))]',
         // Content that cannot shrink to the capped height scrolls inside the box
         'tw:overflow-y-auto',
       ],
@@ -127,15 +132,15 @@ describe('pop-ups opened from zoomed content', () => {
       'dropdown-menu-content',
       menu,
       [
-        'tw:max-h-[calc(var(--radix-dropdown-menu-content-available-height)/var(--platform-content-zoom-popup-factor,1))]',
-        'tw:max-w-[calc(var(--radix-dropdown-menu-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
+        'tw:max-h-[calc(var(--radix-dropdown-menu-content-available-height,100vh)/var(--platform-content-zoom-popup-factor,1))]',
+        'tw:max-w-[calc(var(--radix-dropdown-menu-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1))]',
       ],
     ],
     [
       'tooltip-content',
       tooltip,
       [
-        'tw:max-w-[min(20rem,calc(var(--radix-tooltip-content-available-width)/var(--platform-content-zoom-popup-factor,1)))]',
+        'tw:max-w-[min(20rem,calc(var(--radix-tooltip-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1)))]',
       ],
     ],
   ])('%s inside the main area follows that area', (slot, ui, zoomedClasses) => {
@@ -149,6 +154,17 @@ describe('pop-ups opened from zoomed content', () => {
     zoomedClasses.forEach((zoomedClass) => expect(element.className).toContain(zoomedClass));
     // Portaled out of the area element, so the platform sees a separate marker, not a nested one.
     expect(element.closest(`[${ROOT}]:not([${POPUP}])`)).toBeNull();
+  });
+
+  test('dropdown-menu-content inside the main area gets a zoom-aware min-width, not just the fixed tw:min-w-32 class', () => {
+    render(<ContentZoomRoot>{menu}</ContentZoomRoot>);
+    const element = content('dropdown-menu-content');
+    // tw:min-w-32 stays in the class string — it still governs the unzoomed case — but the inline
+    // style below must win the CSS min-width/max-width conflict inside a zoom area.
+    expect(element.className).toContain('tw:min-w-32');
+    expect(element.style.minWidth).toBe(
+      'min(8rem, calc(var(--radix-dropdown-menu-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))',
+    );
   });
 
   test('a named area reaches the pop-up', () => {

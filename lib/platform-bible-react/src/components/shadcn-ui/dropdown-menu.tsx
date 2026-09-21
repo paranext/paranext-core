@@ -107,6 +107,14 @@ function DropdownMenuTrigger({
   return <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />;
 }
 
+// CUSTOM: A zoomed pop-up's own min-width must yield to a narrow pane the same way its max-width
+// cap does. tw:min-w-32 alone always wins a CSS min/max-width conflict (min-width clamps after
+// max-width, not the other way around), so at high zoom in a pane narrower than 8rem painted, the
+// fixed class alone would force the menu past the pane's edge. Mirrors FOOTNOTE_POPOVER_MIN_WIDTH
+// (platform-scripture-editor.web-view.tsx).
+const ZOOMED_MIN_WIDTH =
+  'min(8rem, calc(var(--radix-dropdown-menu-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))';
+
 /** @inheritdoc DropdownMenuProps */
 // CUSTOM: Lifted the prop shape out of the function signature into the named
 // DropdownMenuContentProps type above so it can be exported.
@@ -143,8 +151,11 @@ function DropdownMenuContent({
           // CUSTOM: Inside a content-zoom area, cap height and width at the space Radix reports as
           // available, divided by the area's zoom factor: Radix measures in unzoomed pixels while
           // this element's own lengths are zoomed. Replaces the base unzoomed max-height above.
+          // CUSTOM: Falls back to 100vh/100vw until Radix's size middleware publishes the real
+          // available space, so the measuring pass gets a real cap instead of an invalid var()
+          // computing to none.
           zoomArea !== undefined &&
-            'tw:max-h-[calc(var(--radix-dropdown-menu-content-available-height)/var(--platform-content-zoom-popup-factor,1))] tw:max-w-[calc(var(--radix-dropdown-menu-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
+            'tw:max-h-[calc(var(--radix-dropdown-menu-content-available-height,100vh)/var(--platform-content-zoom-popup-factor,1))] tw:max-w-[calc(var(--radix-dropdown-menu-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1))]',
           className,
         )}
         // CUSTOM: Set the shared overlay z-index instead of a stock z-class, matching the other
@@ -161,9 +172,12 @@ function DropdownMenuContent({
         // `...style` merges after, so a caller can still override. Ordering is pinned by
         // z-index.test.tsx.
         // CUSTOM: Inside a content-zoom area, also carry the area's zoom factor for the size caps above
+        // CUSTOM: Inside a content-zoom area, override tw:min-w-32 with ZOOMED_MIN_WIDTH so the
+        // menu's minimum width also yields to a narrow pane at high zoom, not just its maximum.
         style={{
           zIndex: Z_INDEX_ABOVE_DOCK,
           ...(zoomArea === undefined ? undefined : getContentZoomPopupStyle(zoomArea)),
+          ...(zoomArea === undefined ? undefined : { minWidth: ZOOMED_MIN_WIDTH }),
           ...style,
         }}
         // CUSTOM: Inside a content-zoom area, mark the content with that area so the platform's
