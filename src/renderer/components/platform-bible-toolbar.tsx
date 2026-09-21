@@ -554,8 +554,17 @@ export function PlatformBibleToolbar() {
     // This command comes from an extension and is not typed in CommandHandlers.
     // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
     await (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId);
-    const svc = await dataProviders.get('platformScripture.recentlyOpenedProjects');
-    await svc?.recordProjectOpened(projectId);
+    // Recency bookkeeping runs after the editor is already open, and its own failure says nothing
+    // about whether the open succeeded. Letting it reject would retire the pending pick and snap
+    // the trigger back to the previous project's name over a stale Recent list.
+    try {
+      const svc = await dataProviders.get('platformScripture.recentlyOpenedProjects');
+      await svc?.recordProjectOpened(projectId);
+    } catch (e) {
+      logger.warn(
+        `Could not record project ${projectId} as recently opened: ${getErrorMessage(e)}`,
+      );
+    }
   }, []);
 
   const { pendingProject, beginOpenProject } = usePendingProject(currentSimpleProject, openProject);

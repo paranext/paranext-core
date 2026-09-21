@@ -867,6 +867,24 @@ describe('footerAction', () => {
     expect(screen.getByText('No projects found')).toBeInTheDocument();
   });
 
+  it('activates on Enter with no projects, without arrowing to it first', async () => {
+    const user = setupUser();
+    const onSelect = vi.fn();
+    renderWithFooter({ projects: [], onSelect });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // With an empty list the footer is the ONLY thing a user can act on, so Enter straight off the
+    // search box has to reach it. cmdk picks its Enter target from the highlighted item, and a
+    // `forceMount`ed row never enters the registered-item set that cmdk highlights from — so
+    // nothing highlights it unless the component seeds the highlight itself. Arrowing first (as
+    // the keyboard test above does) walks the DOM instead and hides this.
+    await user.keyboard('{Enter}');
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
   it('omits the separator when there are no projects, so no rule floats under the empty message', async () => {
     const user = setupUser();
     renderWithFooter({ projects: [] });

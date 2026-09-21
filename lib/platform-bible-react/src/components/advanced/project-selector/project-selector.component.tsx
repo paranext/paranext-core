@@ -870,9 +870,20 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // value for React DOM refs.
   // eslint-disable-next-line no-null/no-null
   const selectedRowRef = useRef<HTMLDivElement>(null);
+  // cmdk highlights an item by its `value`, and only items it has REGISTERED are candidates. The
+  // footer action is `forceMount`ed and so never registers (that is what keeps `filtered.count` at
+  // 0 so `CommandEmpty` can render), which means that when no project row is registered either —
+  // an empty list, or a search that matches nothing — cmdk has nothing to highlight and its Enter
+  // handler, which acts on the highlighted item, does nothing at all. That is precisely the case
+  // the footer exists to serve, so the highlight is seeded here instead. Arrow keys are unaffected
+  // either way: they walk `getValidItems()` in the DOM rather than the registered set.
+  const [highlightedValue, setHighlightedValue] = useState<string | undefined>(undefined);
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
-    if (!nextOpen) setQuery('');
+    if (!nextOpen) {
+      setQuery('');
+      setHighlightedValue(undefined);
+    }
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -919,6 +930,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         r.shortName.toLowerCase().includes(needle) || r.fullName.toLowerCase().includes(needle),
     );
   }, [rows, query]);
+
+  // The only state in which cmdk has no registered item to highlight, so the footer's Enter
+  // handling has to be seeded by hand.
+  const seedFooterHighlight = Boolean(props.footerAction) && filteredRows.length === 0;
 
   const sections = useMemo<RowSection[]>(() => {
     if (activeGrouping === NO_GROUPING) return partitionFlat(filteredRows);
@@ -1192,7 +1207,14 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         className="tw:w-80 tw:max-w-[calc(100vw-2rem)] tw:p-0"
       >
         <TooltipProvider delayDuration={400}>
-          <Command shouldFilter={false}>
+          <Command
+            shouldFilter={false}
+            // Controlled ONLY while no row is registered — see `highlightedValue`. With rows
+            // present this is `undefined`, which leaves cmdk uncontrolled and keeps its own
+            // "highlight the first item" behavior intact.
+            value={seedFooterHighlight ? (highlightedValue ?? FOOTER_ACTION_VALUE) : undefined}
+            onValueChange={setHighlightedValue}
+          >
             {/* No `border-b` here — CommandInput's own InputGroup carries a full 1px border, and
                 stacking the two draws an unexpected second horizontal line just below the pill. */}
             <div className="tw:flex tw:items-center tw:pe-2">

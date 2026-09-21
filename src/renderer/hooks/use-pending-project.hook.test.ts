@@ -25,6 +25,11 @@ function doNothing() {}
 /**
  * Mounts the hook over a caller-supplied `openProject`, and records the project it names on every
  * render so a name that only appears for a frame is still visible to assertions.
+ *
+ * `displayedProject` is derived here rather than returned by the hook, using the same
+ * `pendingProject ?? currentProject` rule the consuming component applies (`ToolbarProjectSelector`
+ * in `platform-bible-toolbar.tsx`). Asserting on it therefore pins what a user actually sees, while
+ * leaving the hook's own surface to the two values production reads.
  */
 function renderPendingProject(
   currentProject: ProjectItem | undefined,
@@ -34,8 +39,9 @@ function renderPendingProject(
   const rendered = renderHook(
     ({ current }: { current: ProjectItem | undefined }) => {
       const state = usePendingProject(current, openProject);
-      displayedIds.push(state.displayedProject?.id);
-      return state;
+      const displayedProject = state.pendingProject ?? current;
+      displayedIds.push(displayedProject?.id);
+      return { ...state, displayedProject };
     },
     { initialProps: { current: currentProject } },
   );
@@ -96,6 +102,67 @@ describe('usePendingProject', () => {
     });
 
     expect(result.current.displayedProject?.id).toBe('b');
+  });
+
+  it('does not clear a newer pick of the SAME project when an earlier open of it fails', async () => {
+    let rejectFirstOpen: (error: Error) => void = doNothing;
+    let openCount = 0;
+    const projectA: ProjectItem = { id: 'a', shortName: 'A', fullName: 'A Project' };
+    const { result } = renderPendingProject(undefined, async () => {
+      openCount += 1;
+      // Only the first attempt hangs and then fails; the second is still outstanding.
+      if (openCount === 1)
+        await new Promise<void>((_resolve, reject) => {
+          rejectFirstOpen = reject;
+        });
+      else await new Promise<void>(doNothing);
+    });
+
+    act(() => {
+      result.current.beginOpenProject(projectA);
+    });
+    act(() => {
+      result.current.beginOpenProject(projectA);
+    });
+    await act(async () => {
+      rejectFirstOpen(new Error('boom'));
+    });
+
+    // Latest-wins has to key on the attempt, not the project: both picks name `a`, so comparing
+    // ids would let the first attempt's rejection retire the second attempt's pick.
+    expect(result.current.pendingProject).toEqual(projectA);
+  });
+
+  it('stops naming a pick once the editor settles on a different project instead', () => {
+    const projectA: ProjectItem = { id: 'a', shortName: 'A', fullName: 'A Project' };
+    const projectB: ProjectItem = { id: 'b', shortName: 'B', fullName: 'B Project' };
+    const { result, rerender } = renderPendingProject(OLD_PROJECT);
+
+    act(() => {
+      result.current.beginOpenProject(projectA);
+    });
+    act(() => {
+      result.current.beginOpenProject(projectB);
+    });
+    // A resolves last: the editor lands on A while B is the outstanding pick. Holding B until the
+    // bound expires would have the trigger contradict the editor for up to 15 seconds.
+    rerender({ current: projectA });
+
+    expect(result.current.pendingProject).toBeUndefined();
+    expect(result.current.displayedProject?.id).toBe('a');
+  });
+
+  it('keeps naming a pick while the editor still reports what it did when the pick was made', () => {
+    const { result, rerender } = renderPendingProject(OLD_PROJECT);
+
+    act(() => {
+      result.current.beginOpenProject(NEW_PROJECT);
+    });
+    // The same project the editor already reported — it has not moved, so the bridge stands. This
+    // is the case a bare "current is not the pick" exit would retire instantly.
+    rerender({ current: { ...OLD_PROJECT } });
+
+    expect(result.current.pendingProject).toEqual(NEW_PROJECT);
   });
 
   it('falls back to the current project when the editor never reports the selection', () => {
