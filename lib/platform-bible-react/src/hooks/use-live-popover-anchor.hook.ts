@@ -1,16 +1,24 @@
 import { RefObject, useCallback, useMemo, useRef } from 'react';
 
-/** What a popover is placed against, re-measured every time the popover is positioned. */
+/**
+ * What a popover is placed against, re-measured every time the popover is positioned.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
 export type LivePopoverAnchorSource = {
   /**
    * Reads the anchor's current viewport rect. Returns `undefined` when the source can no longer be
    * measured; the anchor then keeps its last rect.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
    */
   measure: () => DOMRect | undefined;
   /**
    * An element of the content the anchor belongs to that stays in the document while the popover is
    * open (the editor's root, not a text span the editor may re-render). The popover's positioning
    * watches this element's scroll ancestors, its size and its movement while the popover is open.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
    */
   contextElement: Element;
 };
@@ -21,10 +29,23 @@ type VirtualAnchorElement = {
   readonly contextElement: Element | undefined;
 };
 
+/**
+ * The anchor {@link useLivePopoverAnchor} returns.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
 export type LivePopoverAnchor = {
-  /** Pass as `PopoverAnchor`'s `virtualRef`. */
+  /**
+   * Pass as `PopoverAnchor`'s `virtualRef`.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
   virtualRef: RefObject<VirtualAnchorElement>;
-  /** Points the anchor at a new source. Call it before opening the popover. */
+  /**
+   * Points the anchor at a new source. Call it before opening the popover.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
   setSource: (source: LivePopoverAnchorSource) => void;
 };
 
@@ -36,6 +57,8 @@ export type LivePopoverAnchor = {
  *
  * Hidden-tab case: needs no catch-up. A popover is only open while its pane is visible, and every
  * listener belongs to the open popover.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
  */
 export function useLivePopoverAnchor(): LivePopoverAnchor {
   const sourceRef = useRef<LivePopoverAnchorSource | undefined>(undefined);
@@ -62,6 +85,8 @@ export function useLivePopoverAnchor(): LivePopoverAnchor {
 /**
  * The current viewport rect of a text range, or `undefined` when the range no longer lies in
  * rendered text (its nodes were replaced, so it collapsed to an element boundary that has no box).
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
  */
 export function measureRange(range: Range): DOMRect | undefined {
   if (range.getClientRects().length === 0) return undefined;
@@ -71,6 +96,8 @@ export function measureRange(range: Range): DOMRect | undefined {
 /**
  * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
  * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
  */
 export function leftEdgeRect(rect: DOMRect): DOMRect {
   return new DOMRect(rect.left, rect.top, 0, rect.height);

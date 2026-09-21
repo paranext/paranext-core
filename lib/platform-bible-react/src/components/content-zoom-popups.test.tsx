@@ -163,7 +163,20 @@ describe('pop-ups opened from zoomed content', () => {
     // style below must win the CSS min-width/max-width conflict inside a zoom area.
     expect(element.className).toContain('tw:min-w-32');
     expect(element.style.minWidth).toBe(
-      'min(8rem, calc(var(--radix-dropdown-menu-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))',
+      'min(8rem, calc(max(var(--radix-dropdown-menu-content-available-width, 100vw), 8rem) / var(--platform-content-zoom-popup-factor, 1)))',
+    );
+  });
+
+  test('the zoom-aware min-width keeps its full 8rem floor at zoom factor 1, not just when space is plentiful', () => {
+    render(<ContentZoomRoot>{menu}</ContentZoomRoot>);
+    const element = content('dropdown-menu-content');
+    // The inner max(available-width, 8rem) can never resolve under 8rem; dividing an already-≥8rem
+    // value by a factor of 1 stays ≥8rem, so the outer min(8rem, …) always lands on exactly 8rem —
+    // a menu aligned near a narrow pane's edge keeps the same floor an unzoomed dropdown menu has
+    // anywhere else. Without this inner max(), the floor shrank whenever available space was merely
+    // narrow, even unzoomed.
+    expect(element.style.minWidth).toContain(
+      'max(var(--radix-dropdown-menu-content-available-width, 100vw), 8rem)',
     );
   });
 
