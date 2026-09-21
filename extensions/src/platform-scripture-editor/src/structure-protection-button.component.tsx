@@ -60,6 +60,12 @@ export type LockToggleButtonViewProps = {
   isLocked: boolean;
   /** When `true` the button is disabled and the toggle (click + shortcut) is a no-op. */
   isDisabled: boolean;
+  /**
+   * Whether the state above is still the pre-load default rather than the project's real state.
+   * Transitions are not auto-announced while this is `true`, so opening the editor does not pop a
+   * tooltip reporting a "change" that is only the settings arriving.
+   */
+  isStateLoading: boolean;
   /** Invoked on click or matching shortcut when not disabled. */
   onToggle: () => void;
   /** Tooltip shown while unlocked — reports that state, rather than naming a click's action. */
@@ -89,6 +95,7 @@ export type LockToggleButtonViewProps = {
 export function LockToggleButtonView({
   isLocked,
   isDisabled,
+  isStateLoading,
   onToggle,
   unlockedTooltipKey,
   lockedTooltipKey,
@@ -111,18 +118,35 @@ export function LockToggleButtonView({
   // the effect below, and the auto-dismiss timer covers the case where none of those ever fire.
   const [tooltipOpen, setTooltipOpen] = useState(false);
   // Distinguishes the two ways this controlled tooltip opens. Radix routes hover and focus opens
-  // through `onOpenChange`; a programmatic `setTooltipOpen(true)` does not, so setting the ref in
-  // the state-change effect and clearing it in `onOpenChange` tells the timer below which kind of
-  // open it is looking at.
+  // through `onOpenChange`; a programmatic `setTooltipOpen(true)` does not, so setting this in the
+  // state-change effect and clearing it in `onOpenChange` tells the timer below which kind of open
+  // it is looking at.
   const wasAutoOpenedRef = useRef(false);
+  // Bumped on every auto-open, including one that happens while the tooltip is ALREADY open. The
+  // timer effect keys on this rather than on `tooltipOpen`, because `setTooltipOpen(true)` on an
+  // already-`true` state is a no-op React bails out of — so two state changes a couple of seconds
+  // apart would leave the second one sharing the first one's remaining time.
+  const [autoOpenCount, setAutoOpenCount] = useState(0);
   const prevDisplayState = useRef(displayState);
+  // Whether a settled value has been observed yet. `displayState` is seeded on the first render from
+  // mode-aware DEFAULTS, and the load finishing and the real value arriving land in the SAME commit
+  // — so comparing against the seed would report the settings merely arriving as a change the user
+  // made, and every editor open would pop a tooltip at someone who did nothing. Adopt the first
+  // settled value silently instead, and compare only from there on.
+  const hasSettledOnceRef = useRef(false);
   useEffect(() => {
-    if (prevDisplayState.current !== displayState) {
+    if (isStateLoading) return;
+    if (!hasSettledOnceRef.current) {
+      hasSettledOnceRef.current = true;
       prevDisplayState.current = displayState;
-      wasAutoOpenedRef.current = true;
-      setTooltipOpen(true);
+      return;
     }
-  }, [displayState]);
+    if (prevDisplayState.current === displayState) return;
+    prevDisplayState.current = displayState;
+    wasAutoOpenedRef.current = true;
+    setAutoOpenCount((count) => count + 1);
+    setTooltipOpen(true);
+  }, [displayState, isStateLoading]);
 
   // The effect above opens the tooltip without a hover, so there may be no pointer on the button
   // and no focus in it — and then NONE of Radix's dismissal paths can fire: no pointerleave, no
@@ -138,7 +162,7 @@ export function LockToggleButtonView({
     if (!tooltipOpen || !wasAutoOpenedRef.current) return undefined;
     const timeoutId = setTimeout(() => setTooltipOpen(false), AUTO_OPEN_TOOLTIP_DURATION_MS);
     return () => clearTimeout(timeoutId);
-  }, [tooltipOpen]);
+  }, [tooltipOpen, autoOpenCount]);
 
   // Close the tooltip on scroll. Radix closes the controlled tooltip on click-away and Escape, but
   // not on scroll, and this button sits in the toolbar while content scrolls in a separate
@@ -235,6 +259,7 @@ export function StructureProtectionButton({
     adminSettingError,
     canAdminToggle,
     isProtectionActive,
+    isLoading: isStateLoading,
     setUserProtection,
   } = useStructureProtectionState(projectId);
 
@@ -274,6 +299,7 @@ export function StructureProtectionButton({
     <LockToggleButtonView
       isLocked={isStructureProtected}
       isDisabled={personalDisabled}
+      isStateLoading={isStateLoading}
       onToggle={handlePersonalToggle}
       unlockedTooltipKey={STATE_EDITABLE_KEY}
       lockedTooltipKey={STATE_PROTECTED_KEY}

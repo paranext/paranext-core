@@ -568,6 +568,10 @@ describe('TeamLayoutDialogWrapper admin gate', () => {
     expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
     expect(mockState.setModelTexts).not.toHaveBeenCalled();
     expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
+    // The team lock especially: it is the write this dialog adds, it reaches every translator, and
+    // the hook tests that used to cover "a non-admin can never write it" were deleted with the
+    // toolbar button.
+    expect(mockState.setStructureProtected).not.toHaveBeenCalled();
     expect(cancelDialog).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -580,9 +584,13 @@ describe('TeamLayoutDialogWrapper admin gate', () => {
     expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
     expect(mockState.setModelTexts).not.toHaveBeenCalled();
     expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
+    // The team lock especially: it is the write this dialog adds, it reaches every translator, and
+    // the hook tests that used to cover "a non-admin can never write it" were deleted with the
+    // toolbar button.
+    expect(mockState.setStructureProtected).not.toHaveBeenCalled();
   });
 
-  it('calls cancelDialog only after canWrite resolves to false, not during the loading window (regression: took 3 review rounds to get right)', async () => {
+  it('calls cancelDialog only after canWrite resolves to false, not during the loading window', async () => {
     let resolveCanWrite: (value: boolean) => void = () => {};
     mockState.canWritePromise = new Promise<boolean>((resolve) => {
       resolveCanWrite = resolve;
@@ -649,8 +657,18 @@ describe('TeamLayoutDialogWrapper loading state', () => {
     await act(async () => {
       await Promise.resolve();
     });
+    // Asserted as "the actions are disabled", not just "clicking wrote nothing": the skeleton's
+    // buttons carry no handler at all, so a bare click assertion passes however the code changes —
+    // including if someone wired the real `onConfirm` into the skeleton and left it enabled.
+    const saveButton = screen.getByRole('button', {
+      name: '%shareLayoutDialog_saveForTeam_label%',
+    });
+    const cancelButton = screen.getByRole('button', { name: '%shareLayoutDialog_cancel_label%' });
+    expect(saveButton).toBeDisabled();
+    expect(cancelButton).toBeDisabled();
+
     act(() => {
-      screen.getByText('%shareLayoutDialog_saveForTeam_label%').click();
+      saveButton.click();
     });
 
     expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
@@ -737,7 +755,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     mockState.canWritePromise = Promise.resolve(true);
 
     const scriptureItem: ResourceReference = { type: 'dblResource', name: 'ESV', id: 'esv-uid' };
-    // A reference type the dialog doesn't display or let the admin edit (Finding 1's
+    // A reference type the dialog doesn't display or let the admin edit (the
     // `otherResources` bucket). Confirming without touching anything must still preserve it in
     // the write-back instead of silently dropping it.
     const otherItem: ResourceReference = { type: 'xmlResource', name: 'Some XML' };

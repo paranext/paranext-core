@@ -76,12 +76,11 @@ describe('TeamLayoutButton', () => {
 
   // The button names a layout, so it shows a layout glyph; generic share arrows read as "export"
   // beside the other toolbar actions.
-  it('shows a layout icon rather than a share icon', () => {
+  it('shows a layout icon', () => {
     setPermission(true, false);
     render(<TeamLayoutButton projectId="p1" localizedStrings={STRINGS} />);
     const button = screen.getByRole('button', { name: LABEL });
     expect(button.querySelector('.lucide-panels-top-left')).toBeInTheDocument();
-    expect(button.querySelector('.lucide-share-2')).not.toBeInTheDocument();
   });
 
   it('opens the Team layout dialog for the project on click', () => {

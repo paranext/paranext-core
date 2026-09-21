@@ -73,6 +73,7 @@ function renderContent(overrides: Partial<Parameters<typeof TeamLayoutDialogCont
         initialIsStructureProtectedForTeam={false}
         isTeamLockUnknown={false}
         hasSaveError={false}
+        hiddenInTextCollectionCount={0}
         projectName="HNF - Hanif Bible"
         allResources={ALL_RESOURCES}
         isResourcesLoading={false}
@@ -246,7 +247,7 @@ describe('TeamLayoutDialogContent', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
-  it('titles the dialog as the team layout rather than as the act of sharing it', () => {
+  it('titles the dialog with the team layout name', () => {
     renderContent();
 
     expect(screen.getByText('%shareLayoutDialog_teamLayout_title%')).toBeInTheDocument();
@@ -425,6 +426,24 @@ describe('TeamLayoutDialogContent', () => {
     expect(result.isStructureProtectedForTeam).toBe(false);
   });
 
+  // The model-text picker deliberately closes on select, where the Manage picker deliberately stays
+  // open (pinned separately above) — so a refactor that unified the two would break exactly one of
+  // them silently. Both halves are asserted here: the pick reaches `onConfirm`, and the popover goes.
+  it('records the picked model text and closes its picker', () => {
+    const { onConfirm } = renderContent({ initialModelText: undefined });
+
+    fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
+    fireEvent.click(screen.getByText('English Standard Version'));
+
+    expect(screen.queryByTestId('resource-picker-scrim')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(SAVE_LABEL));
+    const [result] = onConfirm.mock.calls[0];
+    expect(result.modelText).toEqual(
+      expect.objectContaining({ type: 'dblResource', id: 'esv-uid' }),
+    );
+  });
+
   // The picker overlaps the dialog it was opened from, so the dialog behind it is dimmed and
   // blurred while it is open — otherwise the two read as equally live surfaces.
   it('dims the dialog while a picker is open and clears it again on close', () => {
@@ -489,9 +508,8 @@ describe('TeamLayoutDialogContent', () => {
     ).toEqual(['%shareLayoutDialog_cancel_label%', SAVE_LABEL]);
   });
 
-  // Choosing a preferred text for commentaries or Bible texts is deliberately not part of this
-  // dialog — it was struck from the requirements as too costly. This is the guard against it
-  // reappearing.
+  // The dialog sets a model text and nothing else per-resource: a preferred text per commentary or
+  // Bible text is deliberately out of scope. Guards against one appearing.
   it('offers no preferred-text control for commentaries or Bible texts', () => {
     renderContent({ initialCommentaryResources: [IVP] });
 

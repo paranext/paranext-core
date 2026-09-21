@@ -29,6 +29,7 @@ const mockState: StructureProtectionState = {
   adminSettingError: undefined,
   canAdminToggle: false,
   isProtectionActive: true,
+  isLoading: false,
   setUserProtection: vi.fn(),
 };
 
@@ -48,7 +49,6 @@ const STRINGS = {
 };
 
 const PERSONAL = 'Toggle structure protection';
-const PROJECT = 'Toggle structure lock for project';
 
 // A minimal PlatformError stand-in; the component only checks `adminSettingError !== undefined`.
 // Cast through unknown because the object literal does not structurally satisfy PlatformError.
@@ -69,6 +69,7 @@ afterEach(() => {
     canAdminToggle: false,
     adminSettingError: undefined,
     isProtectionActive: true,
+    isLoading: false,
   });
 });
 
@@ -183,6 +184,66 @@ describe('StructureProtectionButton — personal button', () => {
       await waitFor(() =>
         expect(screen.queryByText('USFM structure editable')).not.toBeInTheDocument(),
       );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // `displayState` is seeded on the first render from mode-aware defaults, before the admin setting
+  // and the permission check have landed — so without suppressing transitions during the load, the
+  // settings merely ARRIVING reads as a state change and every editor open pops a tooltip at a user
+  // who did nothing.
+  it('does not announce the state settling as though the user had changed it', async () => {
+    setState({ isLoading: true, isStructureProtected: true, canAdminToggle: false });
+    const { rerender } = render(
+      <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
+    );
+
+    // The real state lands: not locked after all.
+    setState({ isLoading: false, isStructureProtected: false });
+    rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('USFM structure editable')).not.toBeInTheDocument();
+
+    // A genuine change after the load still announces itself.
+    setState({ isStructureProtected: true });
+    rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+    expect((await screen.findAllByText('USFM structure protected')).length).toBeGreaterThan(0);
+  });
+
+  // `setTooltipOpen(true)` on an already-open tooltip is a no-op React bails out of, so a timer
+  // keyed only on `tooltipOpen` would never restart and the second of two nearby changes would
+  // inherit whatever time the first had left.
+  it('gives a second state change its own full display time', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
+      const { rerender } = render(
+        <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
+      );
+
+      setState({ isStructureProtected: false });
+      rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+      expect((await screen.findAllByText('USFM structure editable')).length).toBeGreaterThan(0);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2900);
+      });
+
+      // Second change with only 100ms left on the first timer.
+      setState({ isStructureProtected: true });
+      rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+      expect((await screen.findAllByText('USFM structure protected')).length).toBeGreaterThan(0);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      // Still up: its own 3s timer restarted rather than inheriting the first one's remainder.
+      expect(screen.getAllByText('USFM structure protected').length).toBeGreaterThan(0);
     } finally {
       vi.useRealTimers();
     }
@@ -307,12 +368,16 @@ describe('StructureProtectionButton — no team lock', () => {
     setState({ canAdminToggle, isProtectedByAdmin: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
 
-    expect(screen.queryByRole('button', { name: PROJECT })).not.toBeInTheDocument();
+    // Asserted by count and by icon, not by the removed button's accessible name: that name was a
+    // localization key deleted in the same change, so a name query on it could never match and would
+    // pass against a restored admin button.
     expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.getByRole('button', { name: PERSONAL })).toBeInTheDocument();
+    expect(document.querySelector('.lucide-shield')).not.toBeInTheDocument();
+    expect(document.querySelector('.lucide-shield-off')).not.toBeInTheDocument();
   });
 
-  // The admin lock still governs what a non-admin may do; only the control for setting it moved.
+  // The admin lock governs what a non-admin may do, wherever it is set from.
   it('still disables the personal toggle for a non-admin while the team lock is on', () => {
     setState({ canAdminToggle: false, isProtectedByAdmin: true, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
@@ -320,13 +385,22 @@ describe('StructureProtectionButton — no team lock', () => {
     expect(screen.getByRole('button', { name: PERSONAL })).toBeDisabled();
   });
 
-  it('does not bind the admin shortcut to anything', () => {
+  // The retired admin combo was Ctrl/Cmd+Alt+Shift+L. An admin is the only user who ever had it, so
+  // `canAdminToggle: true` is the case that would regress if the binding came back — and the
+  // assertion is that the ONLY shortcut in this component is the personal one, which the Alt variant
+  // must not reach.
+  it('binds no admin shortcut, and the personal one ignores the retired admin combo', () => {
     setState({ canAdminToggle: true, isProtectedByAdmin: false, isStructureProtected: true });
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
 
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true, altKey: true });
-
+    fireEvent.keyDown(window, { key: 'l', metaKey: true, shiftKey: true, altKey: true });
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
+
+    // Control: the personal combo (no Alt) does fire, so the assertions above mean the Alt variant
+    // was rejected rather than that no shortcut is wired at all.
+    fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
+    expect(mockState.setUserProtection).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -343,6 +417,6 @@ describe('StructureProtectionButton — power mode', () => {
     );
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByRole('button', { name: PERSONAL })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: PROJECT })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });

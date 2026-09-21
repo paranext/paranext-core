@@ -68,8 +68,8 @@ export function splitResourcesByTab(
 }
 
 /**
- * Per-field seeding fallback for the Share Layout dialog (spec Section 2): use the project-level
- * (previously shared) list if it has items; otherwise fall back to the admin's personal list.
+ * Per-field seeding fallback for the Team layout dialog: use the project-level (previously shared)
+ * list if it has items; otherwise fall back to the admin's personal list.
  */
 export function seedResourceList(
   projectList: ResourceReferenceList | undefined,

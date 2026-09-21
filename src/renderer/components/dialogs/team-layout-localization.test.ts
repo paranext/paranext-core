@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { TEAM_LAYOUT_DIALOG_STRING_KEYS } from './dialogs/team-layout.component';
+import { TEAM_LAYOUT_DIALOG_STRING_KEYS } from './team-layout.component';
 
 // Resolved from this file's location rather than `process.cwd()` so the test is not sensitive to
 // the directory `vitest` happens to be invoked from.
-const LOCALIZATION_DIR = resolve(__dirname, '../../../assets/localization');
+const LOCALIZATION_DIR = resolve(__dirname, '../../../../assets/localization');
 
 function localizationPath(fileName: string) {
   return resolve(LOCALIZATION_DIR, fileName);
@@ -92,6 +92,10 @@ describe('Team layout dialog localization keys', () => {
     expect(findUnusableKeys(spanish, tabKeys)).toHaveLength(0);
     tabKeys.forEach((key) => expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).toContain(key));
     selectKeys.forEach((key) => expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).toContain(key));
+    // The assertion the test is named for. Membership alone is a tautology over an `as const`
+    // array, and passes just as happily if `tabLabelKey` is reverted to reuse the select's keys —
+    // which is the exact regression described above.
+    expect(new Set([...tabKeys, ...selectKeys]).size).toBe(4);
   });
 });
 
@@ -105,7 +109,7 @@ const EXTENSION_STRINGS: { localizedStrings: { [locale: string]: { [key: string]
     readFileSync(
       resolve(
         __dirname,
-        '../../../extensions/src/platform-scripture-editor/contributions/localizedStrings.json',
+        '../../../../extensions/src/platform-scripture-editor/contributions/localizedStrings.json',
       ),
       'utf8',
     ),

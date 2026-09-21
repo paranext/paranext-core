@@ -3842,7 +3842,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               localizedStrings={localizedStrings}
               className="tw:h-8"
             />
-            {/* Share Layout is only available in 10 Simple right now. Later it will be made available in 10 Power too. */}
+            {/* Team layout is only available in 10 Simple right now. Later it will be made available in
+                10 Power too — note the team USFM structure lock it edits is itself unenforced in Power
+                mode (`useStructureProtectionState`), so opening it there needs a decision about what
+                that lock means. */}
             {!isPowerMode && (
               <TeamLayoutButton
                 projectId={projectId}

@@ -204,7 +204,7 @@ function downloadedToRow(
  *
  * The per-reference-kind typing this applies is mirrored by `splitResourcesByTab` in
  * `src/renderer/components/dialogs/team-layout.utils.ts`, which sorts the same setting into the
- * Share Layout dialog's tabs. It cannot import from an extension, so the two are kept in step by
+ * Team layout dialog's tabs. It cannot import from an extension, so the two are kept in step by
  * hand: change a typing rule here and change it there.
  *
  * They currently disagree in two ways, documented in full on that function. One is deliberate — a

@@ -188,7 +188,10 @@ type Story = StoryObj<typeof TeamLayoutDialogContent>;
 export const Default: Story = {};
 export const NoModelTextSelected: Story = { args: { initialModelText: undefined } };
 export const NoActiveTabSelected: Story = { args: { initialActiveTab: undefined } };
-/** Both resource panels are empty, so each explains what to add rather than heading a blank list. */
+/**
+ * Both resource panels are empty, so the open tab explains what to add rather than heading a blank
+ * list.
+ */
 export const NoResourcesYet: Story = {
   args: { initialScriptureResources: [], initialCommentaryResources: [] },
 };
@@ -242,5 +245,7 @@ export const SaveRefused: Story = { args: { hasSaveError: true } };
  * opens at the size it will keep, rather than animating open as a sliver and then jumping.
  */
 export const Loading: Story = {
-  render: () => <TeamLayoutDialogSkeleton localizedStrings={TEAM_LAYOUT_STRINGS} />,
+  render: () => (
+    <TeamLayoutDialogSkeleton localizedStrings={TEAM_LAYOUT_STRINGS} areStringsLoading={false} />
+  ),
 };

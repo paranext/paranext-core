@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
@@ -152,6 +152,12 @@ export type TeamLayoutDialogContentProps = {
    * unexplained short list into a stated one.
    */
   hiddenResourceCount: number;
+  /**
+   * How many of those undisplayable references are flagged into the text collection. They are
+   * round-tripped by Confirm rather than dropped, so they count toward what the team will actually
+   * see and must be included in the hint's total.
+   */
+  hiddenInTextCollectionCount: number;
   resourcePickerLocalizedStrings: ResourcePickerDialogLocalizedStrings;
   localizedStrings: TeamLayoutDialogLocalizedStrings;
   onConfirm: (result: TeamLayoutResult) => void;
@@ -191,14 +197,19 @@ function hasStringId(ref: ResourceReference): ref is Extract<ResourceReference, 
  * cached DBL catalog by id. Falls back to just the short name when the reference has no id, or the
  * id isn't found in the currently-loaded catalog (e.g. an uncached resource, or a non-dbl reference
  * type).
+ *
+ * Takes a `Map` rather than the catalog array because the catalog runs to a couple of thousand rows
+ * and this is called twice per resource row (the label and the checkbox's accessible name), for
+ * BOTH tabs on every render — a linear scan there is tens of thousands of comparisons per
+ * keystroke.
  */
 function formatResourceDisplayName(
   ref: ResourceReference,
-  allResources: DblResourceData[],
+  resourcesByUid: Map<string, DblResourceData>,
 ): string {
   const shortName = referenceName(ref);
   if (!hasStringId(ref)) return shortName;
-  const match = allResources.find((r) => r.dblEntryUid === ref.id);
+  const match = resourcesByUid.get(ref.id);
   if (!match) return shortName;
   return `${match.fullName} (${match.displayName})`;
 }
@@ -274,20 +285,25 @@ function ResourceRow({
  */
 function TeamLayoutDialogFooter({
   localizedStrings: strings,
+  areStringsLoading = false,
   onCancel,
   onConfirm,
 }: {
   localizedStrings: TeamLayoutDialogLocalizedStrings;
+  /** See {@link TeamLayoutDialogSkeleton}'s prop of the same name. */
+  areStringsLoading?: boolean;
   onCancel?: () => void;
   onConfirm?: () => void;
 }) {
+  const text = (key: keyof TeamLayoutDialogLocalizedStrings) =>
+    areStringsLoading ? '' : localizeString(strings, key);
   return (
     <div className="tw:flex tw:justify-end tw:gap-2 tw:p-4">
       <Button variant="outline" onClick={onCancel} disabled={!onCancel}>
-        {localizeString(strings, '%shareLayoutDialog_cancel_label%')}
+        {text('%shareLayoutDialog_cancel_label%')}
       </Button>
       <Button onClick={onConfirm} disabled={!onConfirm}>
-        {localizeString(strings, '%shareLayoutDialog_saveForTeam_label%')}
+        {text('%shareLayoutDialog_saveForTeam_label%')}
       </Button>
     </div>
   );
@@ -303,25 +319,38 @@ function TeamLayoutDialogFooter({
  */
 export function TeamLayoutDialogSkeleton({
   localizedStrings: strings,
+  areStringsLoading,
 }: {
   localizedStrings: TeamLayoutDialogLocalizedStrings;
+  /**
+   * Whether the localization subscription has yet to deliver. `useLocalizedStrings` seeds its state
+   * key-to-key, so every `localizeString` call returns the raw `%key%` until then — which this
+   * skeleton would otherwise paint as the dialog's title, description and button labels during
+   * exactly the window it exists to cover.
+   */
+  areStringsLoading: boolean;
 }) {
   // A `role="status"` region is announced from its text content changing, not from its `aria-label`
   // — and a region mounted together with its text is not reliably announced at all. So the region
-  // mounts empty and an effect fills it in on the next tick, following the same shape as
-  // `sync-status-button.component.tsx`.
+  // mounts empty and an effect fills it in once there is a real string to announce, following the
+  // same shape as `sync-status-button.component.tsx`. Gated on the strings having landed, or it
+  // would announce the raw key.
   const [announcement, setAnnouncement] = useState('');
   useEffect(() => {
+    if (areStringsLoading) return;
     setAnnouncement(localizeString(strings, '%shareLayoutDialog_loading_label%'));
-  }, [strings]);
+  }, [strings, areStringsLoading]);
+
+  // Blank rather than a raw key. The header and footer keep their boxes so the dialog does not
+  // resize when the text arrives; only the glyphs wait.
+  const text = (key: keyof TeamLayoutDialogLocalizedStrings) =>
+    areStringsLoading ? '' : localizeString(strings, key);
 
   return (
     <>
       <DialogHeader className="tw:p-4 tw:pb-0">
-        <DialogTitle>{localizeString(strings, '%shareLayoutDialog_teamLayout_title%')}</DialogTitle>
-        <DialogDescription>
-          {localizeString(strings, '%shareLayoutDialog_reviewAndSyncNotice%')}
-        </DialogDescription>
+        <DialogTitle>{text('%shareLayoutDialog_teamLayout_title%')}</DialogTitle>
+        <DialogDescription>{text('%shareLayoutDialog_reviewAndSyncNotice%')}</DialogDescription>
       </DialogHeader>
 
       <div className="tw:flex tw:min-h-0 tw:flex-col tw:gap-4 tw:overflow-hidden tw:p-4">
@@ -355,7 +384,7 @@ export function TeamLayoutDialogSkeleton({
         </div>
       </div>
 
-      <TeamLayoutDialogFooter localizedStrings={strings} />
+      <TeamLayoutDialogFooter localizedStrings={strings} areStringsLoading={areStringsLoading} />
     </>
   );
 }
@@ -375,6 +404,7 @@ export function TeamLayoutDialogContent({
   onRetryResources,
   areDownloadsUnavailable,
   hiddenResourceCount,
+  hiddenInTextCollectionCount,
   resourcePickerLocalizedStrings,
   localizedStrings: strings,
   onConfirm,
@@ -395,6 +425,7 @@ export function TeamLayoutDialogContent({
   // The default-tab Select has no <label>, so name and describe it from the two spans beside it.
   const activeTabLabelId = useId();
   const activeTabSublabelId = useId();
+  const activeTabTriggerId = useId();
   // Ties the team-lock switch to its label and to the explanation under it.
   const teamLockLabelId = useId();
   const teamLockDescriptionId = useId();
@@ -418,8 +449,13 @@ export function TeamLayoutDialogContent({
   // focus rather than as a panel floating over equally-live content.
   const isAnyPickerOpen = isModelTextPickerOpen || openAddPickerTab !== undefined;
 
+  const resourcesByUid = useMemo(
+    () => new Map(allResources.map((resource) => [resource.dblEntryUid, resource])),
+    [allResources],
+  );
+
   const modelTextLabel = modelText
-    ? formatResourceDisplayName(modelText, allResources)
+    ? formatResourceDisplayName(modelText, resourcesByUid)
     : localizeString(strings, '%shareLayoutDialog_modelText_none%');
 
   const handleSelectModelText = useCallback((resource: DblResourceData) => {
@@ -475,11 +511,16 @@ export function TeamLayoutDialogContent({
     onConfirm,
   ]);
 
-  // What the hint under the tabs reports. Counted across BOTH tabs, since the text collection is
-  // one list drawn from two — which is exactly the fact a per-tab count would hide.
-  const textCollectionCount = [...scriptureResources, ...commentaryResources].filter(
-    (ref) => ref.isInTextCollection,
-  ).length;
+  // What the hint under the tabs reports. Counted across BOTH tabs, since the text collection is one
+  // list drawn from two — which is exactly the fact a per-tab count would hide.
+  //
+  // `hiddenInTextCollectionCount` is added because `otherResources` is round-tripped unchanged by
+  // Confirm, `isInTextCollection` flags and all: those resources ARE in the team's collection even
+  // though this dialog cannot show them. Counting only the two editable lists would report "(0)"
+  // over a collection that is about to be saved non-empty.
+  const textCollectionCount =
+    [...scriptureResources, ...commentaryResources].filter((ref) => ref.isInTextCollection).length +
+    hiddenInTextCollectionCount;
 
   const manageLabelKey: Record<TabKey, keyof TeamLayoutDialogLocalizedStrings> = {
     ScriptureResource: '%shareLayoutDialog_manageScriptureResources_label%',
@@ -573,7 +614,7 @@ export function TeamLayoutDialogContent({
       {resources.length > 0 ? (
         <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-2">
           {resources.map((ref) => {
-            const displayName = formatResourceDisplayName(ref, allResources);
+            const displayName = formatResourceDisplayName(ref, resourcesByUid);
             return (
               <ResourceRow
                 key={referenceKey(ref)}
@@ -591,8 +632,8 @@ export function TeamLayoutDialogContent({
           })}
         </div>
       ) : (
-        /* An empty tab with nothing in it reads as a failed load rather than as an empty set
-           waiting on a choice the admin has not made yet. */
+        /* Says the tab is empty and what would fill it, so an empty set waiting on a choice the
+           admin has not made does not read as a failed load. */
         <EmptyState
           className="tw:text-xs"
           message={localizeString(strings, '%shareLayoutDialog_resources_empty%')}
@@ -821,9 +862,14 @@ export function TeamLayoutDialogContent({
                       if (isTeamLayoutActiveTab(value)) setActiveTab(value);
                     }}
                   >
+                    {/* `SelectTrigger` spreads consumer props last, so a bare `aria-labelledby`
+                        REPLACES the name Radix derives from the trigger's own content — and the
+                        selected value stops being announced at all. Naming the trigger itself as
+                        the second id puts the value back. */}
                     <SelectTrigger
+                      id={activeTabTriggerId}
                       className="tw:h-8 tw:w-full tw:bg-background"
-                      aria-labelledby={activeTabLabelId}
+                      aria-labelledby={`${activeTabLabelId} ${activeTabTriggerId}`}
                       aria-describedby={activeTabSublabelId}
                     >
                       <SelectValue

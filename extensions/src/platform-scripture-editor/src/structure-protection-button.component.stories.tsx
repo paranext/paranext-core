@@ -45,6 +45,7 @@ function PersonalLockHarness({ initialLocked }: { initialLocked: boolean }) {
   return (
     <LockToggleButtonView
       isLocked={isLocked}
+      isStateLoading={false}
       isDisabled={false}
       onToggle={() => setIsLocked((previous) => !previous)}
       unlockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateEditable%"
@@ -78,6 +79,7 @@ export const LockedByAdmin: Story = {
   render: () => (
     <LockToggleButtonView
       isLocked
+      isStateLoading={false}
       isDisabled
       onToggle={() => {}}
       unlockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateEditable%"

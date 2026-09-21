@@ -5521,9 +5521,13 @@ step, no automation. Just a record.
   NTH-2 admin popover was built first and then abandoned: it reproduced the ambiguity it was meant to
   remove — a control that *looks* like the personal toggle beside it but changes a setting for
   everyone — and it applied on click, so a team-wide change had no review step. Two rules follow.
-  (1) **Authoring is any-mode; enforcement is Simple-mode only.** The lock is a project setting an
-  admin is explicitly here to set, so the dialog writes it whatever mode the admin is in; the editor
-  only *enforces* it in Simple mode, where structure protection is active at all. (2) **Staged, not
+  (1) **Structure protection is a Simple-mode feature end to end.** `isProtectionActive` is
+  `interfaceMode === 'simple'`, so in Power mode the lock is unenforced and the toolbar renders no
+  toggle — and the dialog's only opener is itself Simple-mode-gated, so the lock is authored and
+  enforced in the same mode. The toolbar's admin button was likewise Simple-only before this PR, so
+  removing it takes nothing away from Power mode. Opening the dialog in Power mode is noted as future
+  work at its call site; whoever does that must decide what the lock means there, since the setting
+  has no effect in Power mode today. (2) **Staged, not
   immediate.** The lock joins the dialog's other settings behind Save, so an admin sees what they are
   about to change for the team before it happens — and Cancel must discard it.
 - **Alternatives:** **(a) The NTH-2 admin popover on the toolbar** — built, then rejected: see above.
@@ -5542,7 +5546,11 @@ step, no automation. Just a record.
   localization keys for the retired project-wide toolbar toggle were deprecated with no successor.
   An admin opening the dialog only to flip the lock must not publish anything else: `handleConfirm`
   writes each setting only when its own field changed, because on a project that has never shared a
-  layout the resource lists are seeded from the admin's *personal* selections. One question is still
+  layout the resource lists are seeded from the admin's *personal* selections. And because the lock
+  is now saved as part of the team layout, it joins `readLayoutSignature`
+  (`shared-layout-receiver.model.ts`): every setting that dialog writes must be fingerprinted there,
+  or an admin who changes only that setting produces an identical signature and the team is never
+  notified — worst of all for the lock, the one change that REMOVES a capability from them. One question is still
   open: the modal shell renders a ✕ that resolves the dialog with `undefined`, discarding the staged
   edits silently, which a staged-commit dialog should not offer beside Cancel — whether to remove it
   or make it behave as Cancel is with the product owner (TODO(PT-4557)).
