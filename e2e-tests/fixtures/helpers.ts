@@ -305,6 +305,17 @@ const WINDOW_WIDTH_SETTLE_TOLERANCE_PX = 1;
 const WINDOW_WIDTH_SETTLE_TIMEOUT_MS = 20_000;
 
 /**
+ * Budget for the double-rAF wait after the width itself has settled — not the pixel tolerance
+ * above, and much shorter than {@link WINDOW_WIDTH_SETTLE_TIMEOUT_MS}, since a healthy window paints
+ * within a frame or two. Chromium's `backgroundThrottling`, on by default and never overridden for
+ * this app's windows, stops `requestAnimationFrame` entirely for a hidden or occluded window, and
+ * `page.evaluate` carries no timeout of its own, so this wait needs its own bound rather than
+ * relying on the test's overall timeout to end it. Mirrors how `waitForNextPaint`
+ * (`src/renderer/services/web-view.service-shard.ts`) bounds the same double-rAF idiom.
+ */
+const WINDOW_WIDTH_RAF_SETTLE_TIMEOUT_MS = 2_000;
+
+/**
  * Closes the docked DevTools that a dev-mode launch opens.
  *
  * Not cosmetic for any spec that measures. Docked DevTools takes its width out of the renderer's
@@ -376,12 +387,23 @@ export async function setWindowWidth(
   // above can still catch a pre-shrink `scrollWidth` against a post-shrink `clientWidth`. Two rAFs
   // guarantee that callback (which runs before the next frame's paint) has landed before this
   // returns.
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      }),
-  );
+  //
+  // Raced against a bounded sleep rather than awaited outright: a hidden/occluded window suspends
+  // requestAnimationFrame indefinitely (see WINDOW_WIDTH_RAF_SETTLE_TIMEOUT_MS), so this must fail
+  // fast instead of hanging. `Promise.race` never cancels its loser, so the `.catch(() => {})` keeps
+  // the abandoned `evaluate` call from surfacing as an unhandled rejection once the window becomes
+  // visible again after the race has already settled via the sleep.
+  await Promise.race([
+    page
+      .evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }),
+      )
+      .catch(() => {}),
+    sleep(WINDOW_WIDTH_RAF_SETTLE_TIMEOUT_MS),
+  ]);
 }
 
 /**
