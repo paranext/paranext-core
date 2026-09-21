@@ -127,15 +127,30 @@ interface ElementBox {
 }
 
 /**
- * The on-screen box of `locator`, failing with `description` instead of handing back a null box.
+ * The on-screen box of `locator`, failing with `description` instead of handing back a null box —
+ * or a box whose CENTRE falls outside the browser window.
  *
  * `boundingBox()` reports MAIN-FRAME coordinates even for an element inside an iframe — the very
  * space `mainPage.mouse` works in — so a drag between two elements of the editor's web view needs
- * no iframe-offset arithmetic of its own.
+ * no iframe-offset arithmetic of its own. It also reports real coordinates for an element that is
+ * merely scrolled off-screen, so a caller relying on the null check alone would silently aim a drag
+ * at a point nothing can receive and only learn about it from a 15s clipboard-poll timeout that
+ * names the clipboard rather than the cause. The check is on the box's centre, not its full extent,
+ * so a box only partly clipped by the viewport edge — still a valid drag target — passes.
  */
 async function requireElementBox(locator: Locator, description: string): Promise<ElementBox> {
   const box = await locator.boundingBox();
   if (!box) throw new Error(`${description} has no box on screen, so a drag cannot aim at it`);
+  // `locator.page()` resolves to the top-level Page even when `locator` is inside a frame, so this
+  // reads the main window's viewport — the same coordinate space `boundingBox()` reports in.
+  const viewport = await locator
+    .page()
+    .evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  const centreX = box.x + box.width / 2;
+  const centreY = box.y + box.height / 2;
+  if (centreX < 0 || centreX > viewport.width || centreY < 0 || centreY > viewport.height) {
+    throw new Error(`${description} is off-screen, so a drag cannot aim at it`);
+  }
   return box;
 }
 
@@ -266,6 +281,14 @@ test.describe('scripture editor clipboard USFM round trip', () => {
 
     await test.step('undoing the paste is a single step', async () => {
       await editorInput.press(UNDO_KEY);
+      // Positive control, checked BEFORE the negative assertions below: Playwright's negative
+      // matchers (`not.toContainText`, `toHaveCount(0)`) return success on the first poll that
+      // holds, and an editor that is momentarily empty or mid-replacement — the PDP's debounced save
+      // echoes back by replacing editor content wholesale, see type-through-save-echo.spec.ts —
+      // satisfies all three vacuously. Anchoring on text the undo must have restored, rather than
+      // removed, before the negatives run is what makes this step measure the undo rather than a
+      // transient empty window.
+      await expect(editorInput).toContainText('Amittai', { timeout: 20_000 });
       await expect(editorInput).not.toContainText(PASTE_TOKEN, { timeout: 20_000 });
       // Both halves of the span, not just the opener: a half-reverted span would otherwise pass.
       await expect(editorFrame.locator('span.opening[data-marker="nd"]')).toHaveCount(0, {
@@ -274,12 +297,6 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       await expect(editorFrame.locator('span.closing[data-marker="nd"]')).toHaveCount(0, {
         timeout: 20_000,
       });
-      // Positive control. The three assertions above are all negative, and an editor that is empty
-      // or mid-replacement satisfies every one of them — the PDP's debounced save echoes back by
-      // replacing editor content wholesale (see type-through-save-echo.spec.ts), and Playwright's
-      // negative matchers pass on the first poll that holds. Anchoring on text the undo must have
-      // restored, rather than removed, is what makes this step measure the undo.
-      await expect(editorInput).toContainText('Amittai', { timeout: 20_000 });
     });
 
     await test.step('pasting a `\\c` chapter marker cannot corrupt the open chapter', async () => {
@@ -397,7 +414,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // the glyph's first byte if the engine grew the selection out over the whole read-only glyph
       // rather than starting mid-glyph — the poll above proves the run is complete, this proves
       // where it starts.
-      expect(clipboardText.startsWith('\\fig ')).toBe(true);
+      expect(clipboardText.slice(0, '\\fig '.length)).toBe('\\fig ');
     });
 
     await test.step('a selection ending inside a figure’s attribute run copies the whole run', async () => {
@@ -418,10 +435,28 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // dragging afresh.
       await figureTailGlyph.click();
       const openerBox = await requireElementBox(figureOpenerGlyph, 'the figure’s `\\fig` opener');
-      const attributeBox = await requireElementBox(
-        figureAttributeRun,
-        'the figure’s `|src="…"` attribute run',
+
+      // The release point comes from the run's OWN client rects, not `boundingBox()`:
+      // `boundingBox()` resolves through the box model's UNION of an inline element's per-line
+      // rects, so a run that wraps onto a second line (the 30-byte attribute list can, depending on
+      // where the figure falls on its line) reports a box whose vertical centre sits on the seam
+      // between the two lines — on neither line's glyphs. Reading the rects directly and releasing on the LAST one keeps the
+      // point on real text. `getClientRects()` returns IFRAME-relative coordinates, unlike
+      // `boundingBox()`, so the editor iframe's own box supplies the offset into `mainPage.mouse`'s
+      // main-frame coordinate space.
+      const attributeRunRects = await figureAttributeRun.evaluate((element) =>
+        Array.from(element.getClientRects()).map((rect) => ({
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+        })),
       );
+      const lastAttributeRunRect = attributeRunRects.at(-1);
+      if (!lastAttributeRunRect) {
+        throw new Error('the figure’s `|src="…"` attribute run has no client rects to drag onto');
+      }
+      const editorFrameBox = await requireElementBox(editorFrame.owner(), 'the editor’s iframe');
 
       // Start a few pixels past the opener glyph's RIGHT edge — the caption's first character, which
       // is ordinary editable text, so nothing about the start of this selection needs expanding.
@@ -434,8 +469,8 @@ test.describe('scripture editor clipboard USFM round trip', () => {
         mainPage,
         openerBox.x + openerBox.width + 3,
         openerBox.y + openerBox.height / 2,
-        attributeBox.x + attributeBox.width / 2,
-        attributeBox.y + attributeBox.height / 2,
+        editorFrameBox.x + lastAttributeRunRect.x + lastAttributeRunRect.width / 2,
+        editorFrameBox.y + lastAttributeRunRect.y + lastAttributeRunRect.height / 2,
       );
       await editorInput.press(COPY_KEY);
 
@@ -456,12 +491,14 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       expect(clipboardText.slice(-FIGURE_ATTRIBUTE_BYTES.length)).toBe(FIGURE_ATTRIBUTE_BYTES);
       // Nor did it over-expand past the run to the `\fig*` closer, which sits immediately after it.
       expect(clipboardText).not.toContain('\\fig*');
-      // The caption side is a real, non-empty tail of the caption: the attribute run is pinned to the
-      // end above, so these are exactly the bytes between where the drag started and where the run
-      // begins, and `toContain` then holds only for a genuine substring of the caption.
+      // The caption side must be a genuine SUFFIX of the caption, longer than one character: the
+      // attribute run is pinned intact at its end above and the caption is ordinary editable text at
+      // its start, so any imprecision in the drag's start point can only truncate the caption from
+      // the FRONT, never the back. A one-character copy would still satisfy a bare non-empty check,
+      // so the length floor is what actually rules out an under-selected drag.
       const copiedCaption = clipboardText.slice(0, -FIGURE_ATTRIBUTE_BYTES.length);
-      expect(copiedCaption).not.toBe('');
-      expect(FIGURE_CAPTION_TOKEN).toContain(copiedCaption);
+      expect(copiedCaption).toBe(FIGURE_CAPTION_TOKEN.slice(-copiedCaption.length));
+      expect(copiedCaption.length).toBeGreaterThan(1);
     });
 
     await test.step('copying a footnote carries its USFM bytes in the `text/html` flavour too', async () => {
@@ -513,7 +550,11 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // separates the two — and it is the one attribute that cannot survive a bytes-only flavour.
       expect(clipboardHtml).not.toContain('data-caller');
       // Both flavours say the same thing, so a consumer's flavour preference cannot change the
-      // document it receives.
+      // document it receives. Read raw, unlike the html poll above: the editor's copy handler builds
+      // `text/plain` via an unconditional display-NBSP-to-space replace (`$selectionToUsfmText`,
+      // scripture-editors' `whitespaceDisplay.plugin.utils.ts`), so this flavour can never carry an
+      // NBSP in the first place — normalizing it here would hide a regression if that replace ever
+      // stopped running.
       const clipboardText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
       expect(clipboardText).toContain(NOTE_USFM);
     });

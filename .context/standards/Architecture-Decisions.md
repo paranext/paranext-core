@@ -3190,11 +3190,13 @@ step, no automation. Just a record.
 - **Decision:** A paste inserts what was pasted and nothing else. It never deletes a marker the user
   did not select, and it never invents one they did not paste. Two paragraph markers in a row is what
   the bytes say, and the line splits — leaving an empty predecessor — exactly as typing the same
-  bytes does. This matches Paratext 9, whose `NormalizeTokenUsfm` (`ParatextData/UsfmToken.cs`) emits
-  a line break before every Paragraph token. The corollary is the injection half: a multi-line paste
-  replays each line break as a paragraph split, and the engine injects a marker prefix onto every
-  fresh split paragraph so it is not read as marker-deleted — that injection is now skipped when the
-  paragraph's own text already opens with a paragraph-marker literal.
+  bytes does. This matches Paratext 9, whose `NormalizeTokenUsfm` (`ParatextData/UsfmToken.cs`)
+  writes a line break before a Paragraph token whenever the output already has content and the
+  tokens are not already carrying their own whitespace (its legacy USFM-2.0-conversion mode skips
+  this) — exactly the two-markers-in-a-row case here. The corollary is the injection half: a
+  multi-line paste replays each line break as a paragraph split, and the engine injects a marker
+  prefix onto every fresh split paragraph so it is not read as marker-deleted — that injection is
+  now skipped when the paragraph's own text already opens with a paragraph-marker literal.
 - **Alternatives:** Keep the dedup only for an EMPTY host paragraph — rejected: the shape is not
   produced by any gesture in this app (Enter opens the marker palette rather than creating an empty
   paragraph), P9 keeps the empty paragraph anyway, and it would have preserved the whole provenance
@@ -3208,7 +3210,9 @@ step, no automation. Just a record.
   arguments and can no longer disagree — Invariant IV holds by construction rather than by
   bookkeeping. Removing the dedup also surfaced a defect it had masked: every `\b` in a pasted
   document gained an empty `\p` in front of it (16 in the 2sa fixture), because a blank-line marker
-  carries neither content nor a separator and so never resolved the injected prefix away.
+  carries neither content nor a separator and so never resolved the injected prefix away — closed by
+  the same injection-skip rule above (`$suppliesOwnParaMarker` in `markerEditDeletion.utils.ts`):
+  `\b`'s own text is nothing but the marker literal, so it qualifies via that rule's end-of-run case.
 - **Source:** `/code-review` of scripture-editors #13 + paranext-core #2656, and the follow-up
   triage with the epic lead.
 
