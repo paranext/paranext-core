@@ -4,7 +4,7 @@
 // and its bundled extensions can talk to Send/Receive with real types.
 //
 // Derived from
-// https://github.com/paranext/paratext-bible-internal-extensions/blob/0d01d96b71f43af0e94749e5092728831072dba4/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
+// https://github.com/paranext/paratext-bible-internal-extensions/blob/4421feebe3f4f88830d74c17bd8e51e602c954fe/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
 // NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
 // added in core before the upstream adopts them). Do not replace the module block wholesale.
@@ -535,15 +535,16 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
 
     /**
-     * Syncs projects: sends/receives each project, then reads connected resources and projects (one
-     * level deep — connections of connections are not included) for the project(s) this call
-     * settles on, and sends/receives connected translation projects or DBL-updates connected
-     * resources for those as needed. Unknown project IDs are skipped.
+     * Syncs projects: sends/receives the given projects, then handles connected resources and
+     * projects for the project(s) this call settles on: connected translation projects are
+     * sent/received, connected resources are DBL-updated. Connections are followed one level only —
+     * connections of connections are not included. Unknown project IDs are skipped.
      *
      * This signature matches this repository's C# stub (`String[]? projectIds`, no return value),
      * which core itself calls with `undefined` — see the cases below for what that actually syncs.
      * The Send/Receive extension's own declaration also returns the S/R results; core does not
-     * consume them.
+     * consume them. Callers MUST NOT assume every shared project is present locally once this
+     * resolves, no matter which form `projectIds` took.
      *
      * @param projectIds IDs of the projects to sync.
      *
@@ -558,12 +559,14 @@ declare module 'papi-shared-types' {
      *       genuine first sync, or every previously-local project has since gone missing from
      *       disk), an implementation is expected to try to make at least one project available for
      *       the current user to work in, if the account has one — but may stop short of downloading
-     *       every shared project in the account, trading completeness for performance. Callers MUST
-     *       NOT assume every shared project is present locally once this resolves.
+     *       every shared project in the account, trading completeness for performance.
      *   - An empty array is a no-op.
      *
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10)
+     * @throws When another Send/Receive is already in progress — rejects fail-fast rather than
+     *   queuing behind it — and for ordinary failure conditions such as an unregistered user or a
+     *   lost server connection.
      */
     'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
     /**
