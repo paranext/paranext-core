@@ -245,6 +245,34 @@ describe('prepareUsjForChapterSave', () => {
     expect(usjToSave?.content).toEqual([chapter('5'), para('p', 'first words')]);
   });
 
+  // The two ways into a restore want different carets. Typing into a chapter that never had a
+  // marker leaves the caret at the end of that text; deleting the marker of a chapter with text
+  // means the user was on the chapter line, so the caret goes back there.
+  describe('where a restore sends the caret', () => {
+    const RESTORED_CHAPTER_2_NUMBER = { start: { jsonPath: '$.content[0].content[0]', offset: 4 } };
+    const stored = usjOf(chapter('2', { sid: 'GEN 2' }), para('p', 'body'), para('q1', 'poem'));
+
+    it('to the end of the chapter line when only the marker was deleted', () => {
+      const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
+        usjOf(para('p', 'body'), para('q1', 'poem')),
+        stored,
+        2,
+      );
+      expect(repairedUsj?.content).toEqual([chapter('2'), para('p', 'body'), para('q1', 'poem')]);
+      expect(caretTarget).toEqual(RESTORED_CHAPTER_2_NUMBER);
+    });
+
+    it('to the end of the text when a chapter that never had a marker is typed into', () => {
+      const { caretTarget } = prepareUsjForChapterSave(usjOf(para('p', 'typed')), usjOf(), 2);
+      expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
+    });
+
+    it('to the end of the text when more than the marker changed', () => {
+      const { caretTarget } = prepareUsjForChapterSave(usjOf(para('p', 'typed over')), stored, 2);
+      expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
+    });
+  });
+
   it('keeps saving a SECOND edit made after a repair — the dead-save-loop regression', () => {
     const fromPdp = usjOf(chapter('3'), para('p', 'body'));
     const firstPass = prepareUsjForChapterSave(

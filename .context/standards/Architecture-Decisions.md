@@ -605,7 +605,10 @@ step, no automation. Just a record.
     resolves to the root's end. A restore is reached by typing into a chapter with no marker at all
     — in Power mode, a chapter the book has not reached yet — so the user was typing at the end,
     and keys typed into the new marker would become part of the chapter number for the next repair
-    to correct away.
+    to correct away. It is also reached by deleting the marker of a chapter with text (backspacing
+    the chapter line away); when that deletion is the ONLY difference from the stored chapter, the
+    user was working on the chapter line, so the caret goes back to just past the restored number
+    instead (`prepareUsjForChapterSave`).
   - **The target is computed from the repair, never carried across from the pre-repair selection.**
     `EditorRef.getSelection()` addresses the LIVE tree while the repair works on `getUsj()`'s
     SETTLED document, and the two differ for exactly the gesture that matters: a `\c` typed under

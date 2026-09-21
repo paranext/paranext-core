@@ -22,6 +22,7 @@ import {
   usjJsonPathFromIndexes,
 } from '@eten-tech-foundation/scripture-utilities';
 import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
+import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
 import { resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
@@ -64,6 +65,11 @@ interface NestedRemoval {
  * not reached yet being typed into, or a chapter whose content was wiped — so the user is building
  * the chapter up and was typing at its end. The new marker is the wrong place for the caret: keys
  * typed there become part of the chapter number, which the next repair corrects straight back out.
+ *
+ * The one restore that does not mean that is the user deleting the marker itself from a chapter
+ * with text, e.g. by backspacing the chapter line away. They were working on the chapter line, not
+ * typing at the end, so {@link prepareUsjForChapterSave} sends that caret back to the end of the
+ * restored chapter line instead.
  */
 export const CARET_AT_DOCUMENT_END = 'end-of-document';
 
@@ -356,6 +362,21 @@ export interface ChapterSavePreparation {
 }
 
 /**
+ * Whether the editor's document is the stored chapter with its chapter marker deleted and nothing
+ * else changed — the user removed the marker itself, rather than typing into a chapter that never
+ * had one.
+ */
+function isStoredChapterWithoutItsMarker(usjFromEditor: Usj, usjFromPdp: Usj | undefined): boolean {
+  if (!usjFromPdp) return false;
+  const storedContentWithoutMarkers = usjFromPdp.content.filter((item) => !isChapterObject(item));
+  if (storedContentWithoutMarkers.length === usjFromPdp.content.length) return false;
+  return areUsjContentsEqualExceptWhitespace(
+    { ...usjFromPdp, content: storedContentWithoutMarkers },
+    usjFromEditor,
+  );
+}
+
+/**
  * Decides what a chapter save should write and whether the editor's own document must be corrected
  * first.
  *
@@ -390,10 +411,20 @@ export function prepareUsjForChapterSave(
     didRepair,
     caretTarget,
   } = repairChapterMarkers(usjFromEditor, expectedChapterNum);
+  // A restored marker always goes at the start (chapter 1, which may lack one, is never restored).
+  const restoredMarkerCaret = caretAfterChapterNumber(
+    [0],
+    CHAPTER_MARKER,
+    String(expectedChapterNum),
+  );
   return {
     repairedUsj: didRepair ? repaired : undefined,
     usjToSave: resolveUsjToSaveToPdp(repaired, usjFromPdp),
-    caretTarget,
+    caretTarget:
+      caretTarget === CARET_AT_DOCUMENT_END &&
+      isStoredChapterWithoutItsMarker(usjFromEditor, usjFromPdp)
+        ? restoredMarkerCaret
+        : caretTarget,
   };
 }
 
