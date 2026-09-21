@@ -2659,9 +2659,7 @@ export async function waitForOpenWebViewIdByType(
     lastSeenTypes = types;
     const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
     if (sleepMs <= 0) break;
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, sleepMs);
-    });
+    await sleep(sleepMs);
   }
   /* eslint-enable no-await-in-loop */
   // Lists what WAS open at the final poll: an empty list points at the layout never materializing,
