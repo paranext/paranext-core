@@ -22,6 +22,7 @@ import {
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
+import { getShortcutHintForCommand } from '@shared/utils/keyboard-shortcut-hint.util';
 import { menuDocumentCombiner, onDidResyncContributions } from './contribution.service';
 
 /**
@@ -40,6 +41,21 @@ function filterItemsForInterfaceMode<TItem extends { hiddenInterfaceModes?: Inte
   return items.filter((item) => !item.hiddenInterfaceModes?.includes(currentMode));
 }
 
+/**
+ * Adds the catalogued keyboard shortcut to each item that runs a command which has one, written for
+ * `platform`. Items without a catalogued shortcut are returned untouched.
+ */
+function addShortcutHints<TItem extends object>(
+  items: TItem[],
+  platform: typeof process.platform,
+): TItem[] {
+  return items.map((item) => {
+    if (!('command' in item) || typeof item.command !== 'string') return item;
+    const shortcut = getShortcutHintForCommand(item.command, platform);
+    return shortcut ? { ...item, shortcut } : item;
+  });
+}
+
 class MenuDataDataProviderEngine
   extends DataProviderEngine<MenuDataDataTypes>
   implements IDataProviderEngine<MenuDataDataTypes>
@@ -56,9 +72,14 @@ class MenuDataDataProviderEngine
   private unsubscribeFromInterfaceMode: UnsubscriberAsync | undefined;
   private currentMode: InterfaceMode = 'power';
   private isDisposed = false;
+  private readonly platform: typeof process.platform;
 
-  constructor(unlocalizedMenuData: PlatformMenus) {
+  constructor(
+    unlocalizedMenuData: PlatformMenus,
+    platform: typeof process.platform = process.platform,
+  ) {
     super();
+    this.platform = platform;
     this.#loadAllMenuData(unlocalizedMenuData, unlocalizedMenuData);
     this.unsubscribeOnDidResyncContributions = onDidResyncContributions(() => this.rebuildMenus());
     this.#subscribeToInterfaceMode();
@@ -79,7 +100,7 @@ class MenuDataDataProviderEngine
 
   async getMainMenu(): Promise<Localized<MultiColumnMenu>> {
     if (!this.mainMenu) throw new Error('Missing/invalid main menu data');
-    const items = filterItemsForInterfaceMode(this.mainMenu.items, this.currentMode);
+    const items = this.#buildServedItems(this.mainMenu.items);
     return { ...this.mainMenu, items };
   }
 
@@ -95,6 +116,8 @@ class MenuDataDataProviderEngine
     // subscribeCurrentMacosMenubar (platform-macos-menubar.util.ts) builds the native macOS
     // application menu from this data, registered unconditionally on darwin — it must apply the
     // same interface-mode filter as getMainMenu, or a hidden item would still appear there.
+    // No shortcut hints: the native macOS menu would show a shortcut only as an Electron accelerator,
+    // and `platform-macos-menubar.util.ts` sets none.
     const items = filterItemsForInterfaceMode(this.unlocalizedMainMenu.items, this.currentMode);
     return { ...this.unlocalizedMainMenu, items };
   }
@@ -116,25 +139,19 @@ class MenuDataDataProviderEngine
         contextMenu: undefined,
         includeDefaults: false,
         topMenu: undefined,
-        tabMenu: this.#filteredTabMenu(this.defaultTabMenu),
+        tabMenu: this.#buildServedTabMenu(this.defaultTabMenu),
       };
     }
     const topMenu = webViewMenu.topMenu
-      ? {
-          ...webViewMenu.topMenu,
-          items: filterItemsForInterfaceMode(webViewMenu.topMenu.items, this.currentMode),
-        }
+      ? { ...webViewMenu.topMenu, items: this.#buildServedItems(webViewMenu.topMenu.items) }
       : undefined;
     const contextMenu = webViewMenu.contextMenu
-      ? {
-          ...webViewMenu.contextMenu,
-          items: filterItemsForInterfaceMode(webViewMenu.contextMenu.items, this.currentMode),
-        }
+      ? { ...webViewMenu.contextMenu, items: this.#buildServedItems(webViewMenu.contextMenu.items) }
       : undefined;
     // Unlike the top and context menus, the tab menu is not opt-in: its items act on the tab frame
     // rather than on the web view's contents, so every tab gets them whether or not the web view
     // asked for platform defaults. A web view that contributes none of its own gets exactly these
-    const tabMenu = this.#filteredTabMenu(webViewMenu.tabMenu ?? this.defaultTabMenu);
+    const tabMenu = this.#buildServedTabMenu(webViewMenu.tabMenu ?? this.defaultTabMenu);
     return { ...webViewMenu, topMenu, contextMenu, tabMenu };
   }
 
@@ -159,9 +176,19 @@ class MenuDataDataProviderEngine
     return true;
   }
 
-  /** Apply the interface-mode filter to a tab menu */
-  #filteredTabMenu(tabMenu: Localized<SingleColumnMenu>): Localized<SingleColumnMenu> {
-    return { ...tabMenu, items: filterItemsForInterfaceMode(tabMenu.items, this.currentMode) };
+  /** Builds the tab menu to serve by building its items */
+  #buildServedTabMenu(tabMenu: Localized<SingleColumnMenu>): Localized<SingleColumnMenu> {
+    return { ...tabMenu, items: this.#buildServedItems(tabMenu.items) };
+  }
+
+  /**
+   * Builds the items to serve: removes the items hidden in the current interface mode, then adds
+   * each remaining item's shortcut hint
+   */
+  #buildServedItems<TItem extends { hiddenInterfaceModes?: InterfaceMode[] }>(
+    items: TItem[],
+  ): TItem[] {
+    return addShortcutHints(filterItemsForInterfaceMode(items, this.currentMode), this.platform);
   }
 
   /**
@@ -259,8 +286,11 @@ export async function initialize(): Promise<void> {
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingMenuDataService = {
-  implementMenuDataDataProviderEngine: (dataObj: PlatformMenus) => {
-    return new MenuDataDataProviderEngine(dataObj);
+  implementMenuDataDataProviderEngine: (
+    dataObj: PlatformMenus,
+    platform?: typeof process.platform,
+  ) => {
+    return new MenuDataDataProviderEngine(dataObj, platform);
   },
 };
 
