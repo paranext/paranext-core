@@ -514,6 +514,8 @@
   "%projectPicker_toolbar_more_projects%": "Más proyectos…",
   "%projectPicker_toolbar_no_projects%": "No hay proyectos disponibles",
   "%projectPicker_toolbar_select_project%": "Seleccionar proyecto",
+  "%projectPicker_toolbar_trigger_label%": "Seleccionar proyecto, {fullName} ({shortName})",
+  "%projectPicker_toolbar_trigger_label_error%": "Seleccionar proyecto, {errorMessage}",
   "%projectSelector_boundButClosedTooltip%": "Enlazado a {group} · no está abierto actualmente",
   "%projectSelector_clearAll%": "Borrar todo",
   "%projectSelector_commandEmptyMessage%": "No se encontraron proyectos",

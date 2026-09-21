@@ -44,6 +44,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%projectPicker_toolbar_more_projects%': 'Test more projects',
       '%projectPicker_toolbar_no_projects%': 'Test no projects',
       '%projectPicker_toolbar_select_project%': 'Test select a project',
+      '%projectPicker_toolbar_trigger_label%': 'Test select a project, {fullName} ({shortName})',
+      '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [
@@ -210,6 +212,8 @@ async function renderSimpleToolbarWith(data: {
   currentSimpleProject?: (typeof PROJECTS)[number];
   recentProjects?: typeof PROJECTS;
   allProjects?: typeof PROJECTS;
+  currentSimpleProjectError?: string;
+  isLoading?: boolean;
 }) {
   const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
   vi.mocked(useProjectPickerData).mockReturnValue({
@@ -263,6 +267,59 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     await renderSimpleToolbarWith({ currentSimpleProject: undefined });
 
     expect(await screen.findByRole('combobox', { name: 'Test no projects' })).toBeInTheDocument();
+  });
+
+  it('names the error in the accessible name when the current project cannot be resolved', async () => {
+    await renderSimpleToolbarWith({
+      currentSimpleProject: undefined,
+      currentSimpleProjectError: 'Test could not load project',
+      allProjects: [PROJECTS[0]],
+    });
+
+    expect(
+      await screen.findByRole('combobox', {
+        name: 'Test select a project, Test could not load project',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('names the just-picked project in the accessible name, not the stale error', async () => {
+    const user = await renderSimpleToolbarWith({
+      currentSimpleProject: undefined,
+      currentSimpleProjectError: 'Test could not load project',
+      recentProjects: [PROJECTS[0]],
+    });
+
+    await user.click(await screen.findByRole('combobox', { name: /Test select a project/ }));
+    await user.click(await screen.findByText('Project One'));
+
+    // The visible label switches to the pick immediately; the accessible name has to move with it
+    // or a screen reader keeps announcing the previous project's failure over the new selection.
+    expect(
+      await screen.findByRole('combobox', { name: 'Test select a project, Project One (P1)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the rendered trigger enabled through a background refresh', async () => {
+    await renderSimpleToolbarWith({
+      currentSimpleProject: PROJECTS[0],
+      recentProjects: [PROJECTS[0]],
+      allProjects: [PROJECTS[1]],
+      isLoading: true,
+    });
+
+    // The real component disables on `isDisabled || isLoading`, so this is the assertion the
+    // stub-based unit test cannot make. A refresh over a list already on screen must not grey the
+    // control out — among other things, Radix refocuses this trigger after a keyboard pick, and
+    // `.focus()` on a disabled button silently drops the tab position to the document body.
+    expect(await screen.findByRole('combobox', { name: /Test select a project/ })).toBeEnabled();
+  });
+
+  it('leaves the rendered trigger enabled on a settled but empty project list', async () => {
+    await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: false });
+
+    // An empty list must not disable the trigger: "More projects…" is the only way out of it.
+    expect(await screen.findByRole('combobox', { name: 'Test no projects' })).toBeEnabled();
   });
 
   it('shows the toolbar-supplied sections and the more-projects footer when opened', async () => {

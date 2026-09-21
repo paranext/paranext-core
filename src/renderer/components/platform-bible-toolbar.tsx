@@ -57,7 +57,6 @@ import {
   TooltipTrigger,
   usePromise,
   useShrinkStepValue,
-  useTruncationTooltip,
 } from 'platform-bible-react';
 import {
   ProjectSelector,
@@ -65,8 +64,10 @@ import {
   type ProjectSelectorGrouping,
 } from 'platform-bible-react/experimental';
 import {
+  formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  isLocalizeKey,
   isPlatformError,
   type LanguageStrings,
   LocalizeKey,
@@ -117,6 +118,8 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_toolbar_select_project%',
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
+  '%projectPicker_toolbar_trigger_label%',
+  '%projectPicker_toolbar_trigger_label_error%',
   '%projectPicker_section_recent%',
   '%projectPicker_section_projects_localOnly%',
   '%projectPicker_search_placeholder%',
@@ -125,34 +128,43 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 ];
 
 /**
- * Single-line trigger text that offers its whole value on hover once the visible text is clipped.
+ * English text for every string the Simple-mode project picker renders, used whenever the
+ * localization service has not answered yet.
  *
- * Every string the trigger can show has to route through here rather than a native `title`:
- * `ProjectSelector` keeps `title` off its trigger on purpose (two tooltips over one control is
- * worse than none), so the browser default would never open, and at the narrowest shrink step the
- * trigger is ~96px — narrow enough to clip any of these. This is the same truncation-tooltip
- * mechanism {@link ToolbarCompoundLabel} uses for the project name.
+ * `useLocalizedStrings` seeds its state with the KEY for each requested string, and returns that
+ * seed both before the provider responds and permanently if it errors. `'%projectPicker_title%'` is
+ * a non-empty string, so it survives every `??` and `||` fallback downstream — a picker showing
+ * literal `%…%` text is what a user sees, rather than a blank one. Keep these in step with
+ * `assets/localization/en.json`; they are a startup fallback, not a second source of truth.
  */
-function TruncatingTriggerText({ text, className }: { text: string; className?: string }) {
-  const { ref, open, onPointerEnter, onPointerLeave } = useTruncationTooltip<HTMLSpanElement>();
+const PICKER_STRING_FALLBACKS = {
+  '%projectPicker_no_results%': 'No projects found',
+  '%projectPicker_readOnly_label%': 'Read-only',
+  '%projectPicker_search_placeholder%': 'Search projects…',
+  '%projectPicker_section_projects_localOnly%': 'Your projects on this computer',
+  '%projectPicker_section_recent%': 'Recent',
+  '%projectPicker_toolbar_more_projects%': 'More projects…',
+  '%projectPicker_toolbar_no_projects%': 'No projects',
+  '%projectPicker_toolbar_select_project%': 'Select project',
+  '%projectPicker_toolbar_trigger_label%': 'Select project, {fullName} ({shortName})',
+  '%projectPicker_toolbar_trigger_label_error%': 'Select project, {errorMessage}',
+} as const;
 
-  return (
-    <TooltipProvider>
-      <Tooltip open={open}>
-        <TooltipTrigger asChild>
-          <span
-            ref={ref}
-            className={cn('tw:min-w-0 tw:flex-1 tw:truncate', className)}
-            onPointerEnter={onPointerEnter}
-            onPointerLeave={onPointerLeave}
-          >
-            {text}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>{text}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
+type PickerStringKey = keyof typeof PICKER_STRING_FALLBACKS;
+
+/** Resolves every picker string, substituting English for any key the service has not answered. */
+function resolvePickerStrings(localizedStrings: LanguageStrings): Record<PickerStringKey, string> {
+  const keys = Object.keys(PICKER_STRING_FALLBACKS);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const resolved = {} as Record<PickerStringKey, string>;
+  keys.forEach((key) => {
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const pickerKey = key as PickerStringKey;
+    const value = localizedStrings[pickerKey];
+    resolved[pickerKey] =
+      value && !isLocalizeKey(value) ? value : PICKER_STRING_FALLBACKS[pickerKey];
+  });
+  return resolved;
 }
 
 /**
@@ -179,7 +191,13 @@ function ProjectSelectorLabel({
   // secondary slot would clip it mid-sentence and then drop it entirely at the narrowest step,
   // leaving red text as the only signal that anything is wrong.
   if (errorMessage) {
-    return <TruncatingTriggerText text={errorMessage} className="tw:text-destructive" />;
+    return (
+      <ToolbarCompoundLabel
+        primary={errorMessage}
+        fullText={errorMessage}
+        className="tw:text-destructive"
+      />
+    );
   }
 
   return (
@@ -229,6 +247,8 @@ function ToolbarProjectSelector({
   onShowMoreProjects: () => void;
 }) {
   const shrinkStep = useShrinkStepValue();
+
+  const strings = useMemo(() => resolvePickerStrings(localizedStrings), [localizedStrings]);
 
   // Derived here rather than taken as a prop: it is a function of the two above, and a caller given
   // the chance to pass all three can pass a combination that contradicts itself.
@@ -280,12 +300,12 @@ function ToolbarProjectSelector({
         // Never rendered — a single-entry `availableGroupings` suppresses the group-by menu — but
         // the descriptor requires a label, and one that names the grouping keeps it honest if the
         // toolbar ever offers a second.
-        label: localizedStrings['%projectPicker_section_recent%'],
+        label: strings['%projectPicker_section_recent%'],
         getGroupKey: (project) =>
           recentIndex.has(normalizeProjectId(project.id)) ? RECENT_GROUP_KEY : LOCAL_GROUP_KEY,
         getSectionHeading: (key) =>
           key === RECENT_GROUP_KEY
-            ? localizedStrings['%projectPicker_section_recent%']
+            ? strings['%projectPicker_section_recent%']
             : // Names its own boundary: this list is what is on this machine, so a project the
               // user can reach on the server but has not downloaded is accounted for rather than
               // silently absent.
@@ -294,20 +314,27 @@ function ToolbarProjectSelector({
               // from the footer action and is the surface slated to gain server-reachable projects
               // (PT-4552). The two labels name two different sets, so unifying them would make one
               // of them wrong.
-              localizedStrings['%projectPicker_section_projects_localOnly%'],
+              strings['%projectPicker_section_projects_localOnly%'],
         priorityKey: RECENT_GROUP_KEY,
-        // Recency, not alphabetical — alphabetical order defeats the recent section's purpose.
-        // Returning 0 for a pair with no recency between them lets the selector's canonical
-        // alphabetical order stand, which is what the local-projects bucket wants.
+        // Recency in the recent bucket — alphabetical order there defeats its purpose. Neither
+        // project has a rank in the local bucket, and that bucket sorts by FULL name rather than
+        // falling through to the selector's canonical short-name order: the "More projects…"
+        // dialog lists the same projects in full-name order (`useProjectPickerData` sorts
+        // `allProjects` that way and `ProjectPicker` does not re-sort), so leaving the canonical
+        // order in place reshuffles the same list under the user as they move between the two
+        // surfaces.
         compareProjects: (a, b) => {
           const aRank = recentIndex.get(normalizeProjectId(a.id));
           const bRank = recentIndex.get(normalizeProjectId(b.id));
-          if (aRank === undefined || bRank === undefined) return 0;
-          return aRank - bRank;
+          if (aRank !== undefined && bRank !== undefined) return aRank - bRank;
+          if (aRank !== undefined || bRank !== undefined) return 0;
+          return (a.fullName ?? '').localeCompare(b.fullName ?? '', undefined, {
+            sensitivity: 'base',
+          });
         },
       },
     ],
-    [localizedStrings, recentIndex],
+    [strings, recentIndex],
   );
 
   const renderProjectIndicator = useCallback(
@@ -316,15 +343,15 @@ function ToolbarProjectSelector({
         // No native title here, unlike the dialog's rows: a selector row is itself a shadcn tooltip
         // trigger, so a `title` inside one would open the browser's default tooltip on top of the
         // app's. The accessible name still reaches screen readers through the indicator's own role.
-        <ReadOnlyIndicator label={localizedStrings['%projectPicker_readOnly_label%']} />
+        <ReadOnlyIndicator label={strings['%projectPicker_readOnly_label%']} />
       ) : undefined,
-    [readOnlyIds, localizedStrings],
+    [readOnlyIds, strings],
   );
 
   const placeholder =
     selectorProjects.length > 0
-      ? localizedStrings['%projectPicker_toolbar_select_project%']
-      : localizedStrings['%projectPicker_toolbar_no_projects%'];
+      ? strings['%projectPicker_toolbar_select_project%']
+      : strings['%projectPicker_toolbar_no_projects%'];
 
   // Supplying `renderTriggerLabel` hands this function the whole trigger label, `buttonPlaceholder`
   // included, so the nothing-selected case has to be answered here or the trigger renders empty.
@@ -349,7 +376,7 @@ function ToolbarProjectSelector({
       if (currentProjectError)
         return <ProjectSelectorLabel fullName="" shortName="" errorMessage={currentProjectError} />;
       const named = selected ?? displayedProject;
-      if (!named) return <TruncatingTriggerText text={placeholder} />;
+      if (!named) return <ToolbarCompoundLabel primary={placeholder} fullText={placeholder} />;
       return <ProjectSelectorLabel fullName={named.fullName} shortName={named.shortName} />;
     },
     [pendingProject, displayedProject, currentProjectError, placeholder],
@@ -361,27 +388,42 @@ function ToolbarProjectSelector({
   // trigger — so the name carries the control and its current value, mirroring what
   // `renderTriggerLabel` shows.
   const triggerAriaLabel = useMemo(() => {
-    const selectProject = localizedStrings['%projectPicker_toolbar_select_project%'];
-    if (!pendingProject && currentProjectError) return `${selectProject}, ${currentProjectError}`;
+    if (!pendingProject && currentProjectError)
+      return formatReplacementString(strings['%projectPicker_toolbar_trigger_label_error%'], {
+        errorMessage: currentProjectError,
+      });
     if (!displayedProject) return placeholder;
-    return `${selectProject}, ${displayedProject.fullName} (${displayedProject.shortName})`;
-  }, [localizedStrings, pendingProject, displayedProject, currentProjectError, placeholder]);
+    return formatReplacementString(strings['%projectPicker_toolbar_trigger_label%'], {
+      fullName: displayedProject.fullName,
+      shortName: displayedProject.shortName,
+    });
+  }, [strings, pendingProject, displayedProject, currentProjectError, placeholder]);
 
   const selectorLocalizedStrings = useMemo(
     () => ({
-      searchPlaceholder: localizedStrings['%projectPicker_search_placeholder%'],
+      searchPlaceholder: strings['%projectPicker_search_placeholder%'],
       ariaLabel: triggerAriaLabel,
-      commandEmptyMessage: localizedStrings['%projectPicker_no_results%'],
+      commandEmptyMessage: strings['%projectPicker_no_results%'],
     }),
-    [localizedStrings, triggerAriaLabel],
+    [strings, triggerAriaLabel],
   );
+
+  // `isLoading` in `ProjectSelector` both shows the spinner AND disables the trigger, and
+  // `useProjectPickerData` raises it for every background refresh — a project-list change event, a
+  // late data-provider registration, a retry, a recents update. Passing it straight through would
+  // grey the control out repeatedly during normal use; worst of all right after a keyboard pick,
+  // where Radix refocuses the trigger just as a refresh starts and `.focus()` on a disabled button
+  // silently drops the tab position to `<body>`. Only the load that has nothing to show yet earns
+  // the disable. A genuinely empty list is not a loading state, so the trigger stays reachable and
+  // "More projects…" remains the way out.
+  const isFirstLoad = isLoading && selectorProjects.length === 0 && !displayedProject;
 
   const footerAction = useMemo(
     () => ({
-      label: localizedStrings['%projectPicker_toolbar_more_projects%'],
+      label: strings['%projectPicker_toolbar_more_projects%'],
       onSelect: onShowMoreProjects,
     }),
-    [localizedStrings, onShowMoreProjects],
+    [strings, onShowMoreProjects],
   );
 
   const handleChangeSelection = useCallback(
@@ -404,7 +446,7 @@ function ToolbarProjectSelector({
       renderProjectIndicator={renderProjectIndicator}
       renderTriggerLabel={renderTriggerLabel}
       footerAction={footerAction}
-      isLoading={isLoading}
+      isLoading={isFirstLoad}
       localizedStrings={selectorLocalizedStrings}
       buttonVariant="ghost"
       buttonClassName={cn(
