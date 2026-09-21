@@ -19,15 +19,15 @@ const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
  *   one, and leaves the control with no accessible name. That reads as broken rather than as
  *   untranslated, so it belongs on the fallback path too.
  *
- * TODO(PT-4673): ~83 sites repo-wide still read localized strings with the dead
- * `localizedStrings[key] ?? fallback` idiom and should route through here instead. Two older copies
- * of this rule also remain on a weaker test (`!value || value === key`, which misses a _different_
- * `%…%` key and whitespace-only text): `localizedOrEnglish` in
+ * TODO(PT-4673): this helper is not yet the canonical home. PT-4673 moves the rule into
+ * `platform-bible-utils`, where the renderer can reach it too, and adds a lint rule that keeps new
+ * code off the dead `localizedStrings[key] ?? fallback` idiom — ~108 call sites repo-wide still use
+ * it. Two older copies of the rule also remain on a weaker test (`!value || value === key`, which
+ * misses a _different_ `%…%` key and whitespace-only text): `localizedOrEnglish` in
  * `src/renderer/components/overlays/overlay-connection-lost.component.tsx` and
- * `createCrashedViewLocalizer` in `src/renderer/components/crashed-view.util.ts`. Both render the
- * crash and connection-lost screens, which is exactly the state an unresolved string is most likely
- * to be in, and both can reach this helper — the renderer already imports
- * `platform-bible-react/experimental` widely.
+ * `createCrashedViewLocalizer` in `src/renderer/components/crashed-view.util.ts`, both on the crash
+ * and connection-lost screens, which is exactly the state an unresolved string is most likely to be
+ * in.
  *
  * @param value The value read out of a localized-strings map, if any.
  * @returns Whether `value` carries real localized text.

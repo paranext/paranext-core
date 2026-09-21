@@ -182,28 +182,17 @@ The established contract for a localizable library component is four parts:
    `resolveLocalizedString` so the component still renders readable text when a key is unresolved:
 
    ```tsx
-   import { resolveLocalizedString } from 'platform-bible-react/experimental';
-
    const selectChapter = resolveLocalizedString(
      localizedStrings?.['%webView_bookChapterControl_selectChapter%'],
      'Select Chapter',
    );
    ```
 
-   **Do not use `?? 'Select Chapter'` here.** It looks like it falls back, and it never does.
-   `useLocalizedStrings` seeds its map with `{ [key]: key }` and keeps that seed until strings load
-   — permanently if the localization provider errors — so an unresolved lookup arrives as the
-   *defined* string `'%webView_bookChapterControl_selectChapter%'`, which `??` happily returns and
-   the component renders at the user. `resolveLocalizedString` treats three states as unresolved:
-   `undefined`, a raw `%…%` key, and blank or whitespace-only text.
-
-   A consumer merging its own `%webView_…%` overrides onto a component's string bag must judge them
-   the same way, and owns its own English: falling through to the component's generic default can
-   say the wrong thing (a picker whose placeholder reports "No open projects or resources" becomes
-   "Select a project" — an instruction to pick, at the moment there is nothing to pick).
-
-   <!-- TODO(PT-4673): ~83 call sites repo-wide still use the dead `?? fallback` idiom this section
-   used to teach. Triage them and decide on a `paranext/` lint rule so it cannot be reintroduced. -->
+   **Do not use `?? 'Select Chapter'` here.** `useLocalizedStrings` seeds its map with
+   `{ [key]: key }` and keeps that seed until strings load — permanently if the localization
+   provider errors — so an unresolved lookup arrives as the *defined* string
+   `'%webView_bookChapterControl_selectChapter%'`, which `??` returns and the component renders at
+   the user.
 
 4. **A shipped English value for every key in the tuple.** The tuple only *declares* what the
    component asks for; nothing about declaring a key produces a value. The **default** home for a
