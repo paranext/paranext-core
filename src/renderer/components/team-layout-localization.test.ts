@@ -94,3 +94,37 @@ describe('Team layout dialog localization keys', () => {
     selectKeys.forEach((key) => expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).toContain(key));
   });
 });
+
+/**
+ * The dialog's two resource tabs restate the resource panel's real tab titles, which live in the
+ * `platform-scripture-editor` extension. `src/renderer` cannot import across the extension
+ * boundary, so the file is parsed the same way `web-view.model.test.ts` parses its counterpart.
+ */
+const EXTENSION_STRINGS: { localizedStrings: { [locale: string]: { [key: string]: string } } } =
+  JSON.parse(
+    readFileSync(
+      resolve(
+        __dirname,
+        '../../../extensions/src/platform-scripture-editor/contributions/localizedStrings.json',
+      ),
+      'utf8',
+    ),
+  );
+
+describe('Team layout dialog tab labels', () => {
+  // PT-4216 records this dialog's implicit coupling to the real tab titles, and PT-4550 changes
+  // their formatting. Nothing links the two sides at runtime — the dialog hand-copies the values —
+  // so this test is what turns a silent drift into a failing build.
+  it.each([
+    ['%shareLayoutDialog_tab_scriptureResources%', '%webView_resourcePanel_bibleTexts_title%'],
+    ['%shareLayoutDialog_tab_commentaryResources%', '%webView_resourcePanel_commentaries_title%'],
+    ['%shareLayoutDialog_activeTab_scriptureResource%', '%webView_resourcePanel_bibleTexts_title%'],
+    [
+      '%shareLayoutDialog_activeTab_commentaryResource%',
+      '%webView_resourcePanel_commentaries_title%',
+    ],
+  ])('keeps %s in step with the resource panel title it restates', (dialogKey, panelKey) => {
+    expect(english[dialogKey]).toBe(EXTENSION_STRINGS.localizedStrings.en[panelKey]);
+    expect(spanish[dialogKey]).toBe(EXTENSION_STRINGS.localizedStrings.es[panelKey]);
+  });
+});

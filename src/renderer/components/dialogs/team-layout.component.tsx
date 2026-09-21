@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
   EmptyState,
+  Label,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -78,7 +79,9 @@ export const TEAM_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_reviewAndSyncNotice%',
   '%shareLayoutDialog_modelText_label%',
   '%shareLayoutDialog_modelText_none%',
+  '%shareLayoutDialog_teamLock_description%',
   '%shareLayoutDialog_teamLock_label%',
+  '%shareLayoutDialog_teamLock_loadError%',
   '%shareLayoutDialog_activeTab_label%',
   '%shareLayoutDialog_activeTab_sublabel%',
   '%shareLayoutDialog_activeTab_none%',
@@ -96,6 +99,7 @@ export const TEAM_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_cancel_label%',
   '%shareLayoutDialog_loading_label%',
   '%shareLayoutDialog_closePicker_label%',
+  '%shareLayoutDialog_saveFailed%',
   '%shareLayoutDialog_saveForTeam_label%',
   '%shareLayoutDialog_hiddenResources_loadError%',
   '%shareLayoutDialog_hiddenResources_unavailable%',
@@ -117,6 +121,17 @@ export type TeamLayoutDialogContentProps = {
    * edited value, and cancelling discards it.
    */
   initialIsStructureProtectedForTeam: boolean;
+  /**
+   * Whether the team structure lock could not be read. When true the lock switch is disabled and
+   * explains itself, and {@link TeamLayoutDialogContentProps.onConfirm} reports the value it was
+   * mounted with, so a failed read is never written back over the real setting.
+   */
+  isTeamLockUnknown: boolean;
+  /**
+   * Whether the last save attempt was refused — most often by the Send/Receive write gate during an
+   * automatic sync. The dialog stays open and says so rather than closing as though it had saved.
+   */
+  hasSaveError: boolean;
   /**
    * Display name of the project this layout is being set for, shown as the middle column's heading.
    * `undefined` while the name is unavailable, in which case the heading is omitted rather than
@@ -204,6 +219,81 @@ export function isTeamLayoutActiveTab(value: string): value is TeamLayoutActiveT
 type TabKey = 'ScriptureResource' | 'CommentaryResource';
 
 /**
+ * One resource in a tab's list: a text-collection checkbox and the resource's display name.
+ *
+ * Its own component rather than JSX inside the `.map()` because {@link useTruncationTooltip} is a
+ * per-instance hook and the list's length varies between renders, so calling it in the loop would
+ * break the Rules of Hooks.
+ */
+function ResourceRow({
+  displayName,
+  checkboxLabel,
+  isInTextCollection,
+  onToggleInTextCollection,
+}: {
+  displayName: string;
+  checkboxLabel: string;
+  isInTextCollection: boolean;
+  onToggleInTextCollection: (checked: boolean) => void;
+}) {
+  const { ref, open, onPointerEnter, onPointerLeave } = useTruncationTooltip<HTMLSpanElement>();
+  return (
+    <div className="tw:flex tw:items-center tw:gap-2">
+      <Checkbox
+        checked={isInTextCollection}
+        onCheckedChange={onToggleInTextCollection}
+        aria-label={checkboxLabel}
+      />
+      {/* Resource names run 30-50 characters and this column is a third of the dialog, so the name
+          is routinely clipped. No `delayDuration`: `open` is fully controlled, so the tooltip
+          appears only when the name is actually cut off. */}
+      <TooltipProvider>
+        <Tooltip open={open}>
+          <TooltipTrigger asChild>
+            <span
+              ref={ref}
+              className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm"
+              onPointerEnter={onPointerEnter}
+              onPointerLeave={onPointerLeave}
+            >
+              {displayName}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{displayName}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
+/**
+ * The dialog's Cancel/Save row, shared by {@link TeamLayoutDialogSkeleton} and
+ * {@link TeamLayoutDialogContent} so the two states cannot drift in height or in wiring. Handlers
+ * are optional: the skeleton renders the same buttons disabled, which is what stops the footer
+ * appearing from nowhere and shifting the dialog when the content lands.
+ */
+function TeamLayoutDialogFooter({
+  localizedStrings: strings,
+  onCancel,
+  onConfirm,
+}: {
+  localizedStrings: TeamLayoutDialogLocalizedStrings;
+  onCancel?: () => void;
+  onConfirm?: () => void;
+}) {
+  return (
+    <div className="tw:flex tw:justify-end tw:gap-2 tw:p-4">
+      <Button variant="outline" onClick={onCancel} disabled={!onCancel}>
+        {localizeString(strings, '%shareLayoutDialog_cancel_label%')}
+      </Button>
+      <Button onClick={onConfirm} disabled={!onConfirm}>
+        {localizeString(strings, '%shareLayoutDialog_saveForTeam_label%')}
+      </Button>
+    </div>
+  );
+}
+
+/**
  * The dialog at its real size with its content not yet arrived. Rendered while the project settings
  * and the resource catalog are still in flight — see the mount gate in `team-layout.dialog.tsx` for
  * why the real content cannot mount before then.
@@ -216,6 +306,15 @@ export function TeamLayoutDialogSkeleton({
 }: {
   localizedStrings: TeamLayoutDialogLocalizedStrings;
 }) {
+  // A `role="status"` region is announced from its text content changing, not from its `aria-label`
+  // — and a region mounted together with its text is not reliably announced at all. So the region
+  // mounts empty and an effect fills it in on the next tick, following the same shape as
+  // `sync-status-button.component.tsx`.
+  const [announcement, setAnnouncement] = useState('');
+  useEffect(() => {
+    setAnnouncement(localizeString(strings, '%shareLayoutDialog_loading_label%'));
+  }, [strings]);
+
   return (
     <>
       <DialogHeader className="tw:p-4 tw:pb-0">
@@ -230,13 +329,12 @@ export function TeamLayoutDialogSkeleton({
           className="tw:shrink-0 tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30"
           style={{ minHeight: RESOURCE_CARD_MIN_HEIGHT }}
           // One busy region for the whole card, so a screen reader announces the dialog as loading
-          // once instead of once per placeholder bar. `role` is required for the label to be
-          // announced at all; `aria-busy` alone conveys nothing without one.
+          // once instead of once per placeholder bar.
           role="status"
           aria-busy="true"
-          aria-label={localizeString(strings, '%shareLayoutDialog_loading_label%')}
         >
-          <div className="tw:grid tw:items-stretch tw:divide-y tw:divide-border tw:md:grid-cols-3 tw:md:divide-x tw:md:divide-y-0">
+          <span className="tw:sr-only">{announcement}</span>
+          <div className="tw:grid tw:items-stretch tw:divide-y tw:divide-border tw:xl:grid-cols-3 tw:xl:divide-x tw:xl:divide-y-0">
             {['modelText', 'editor', 'resources'].map((column) => (
               <div key={column} className="tw:flex tw:min-w-0 tw:flex-col tw:gap-3 tw:px-4 tw:py-3">
                 <div
@@ -257,14 +355,7 @@ export function TeamLayoutDialogSkeleton({
         </div>
       </div>
 
-      {/* The real actions, disabled. Keeping them in place is what stops the footer appearing from
-          nowhere and shifting the dialog when the content lands. */}
-      <div className="tw:flex tw:justify-end tw:gap-2 tw:p-4">
-        <Button variant="outline" disabled>
-          {localizeString(strings, '%shareLayoutDialog_cancel_label%')}
-        </Button>
-        <Button disabled>{localizeString(strings, '%shareLayoutDialog_saveForTeam_label%')}</Button>
-      </div>
+      <TeamLayoutDialogFooter localizedStrings={strings} />
     </>
   );
 }
@@ -275,6 +366,8 @@ export function TeamLayoutDialogContent({
   initialScriptureResources,
   initialCommentaryResources,
   initialIsStructureProtectedForTeam,
+  isTeamLockUnknown,
+  hasSaveError,
   projectName,
   allResources,
   isResourcesLoading,
@@ -302,8 +395,9 @@ export function TeamLayoutDialogContent({
   // The default-tab Select has no <label>, so name and describe it from the two spans beside it.
   const activeTabLabelId = useId();
   const activeTabSublabelId = useId();
-  // Same for the team-lock switch, which is named by the text beside it.
+  // Ties the team-lock switch to its label and to the explanation under it.
   const teamLockLabelId = useId();
+  const teamLockDescriptionId = useId();
   // The project-name heading truncates, so hovering a clipped one reveals the whole name.
   const {
     ref: projectNameRef,
@@ -311,10 +405,22 @@ export function TeamLayoutDialogContent({
     onPointerEnter: onProjectNamePointerEnter,
     onPointerLeave: onProjectNamePointerLeave,
   } = useTruncationTooltip<HTMLSpanElement>();
+  // Same for the model-text trigger, whose label is a full resource display name in a third of the
+  // dialog's width. A single instance, so the hook can be called here rather than in a subcomponent.
+  const {
+    ref: modelTextLabelRef,
+    open: isModelTextLabelTooltipOpen,
+    onPointerEnter: onModelTextLabelPointerEnter,
+    onPointerLeave: onModelTextLabelPointerLeave,
+  } = useTruncationTooltip<HTMLSpanElement>();
 
   // Any open picker dims and blurs the dialog behind it, so the picker reads as the surface in
   // focus rather than as a panel floating over equally-live content.
   const isAnyPickerOpen = isModelTextPickerOpen || openAddPickerTab !== undefined;
+
+  const modelTextLabel = modelText
+    ? formatResourceDisplayName(modelText, allResources)
+    : localizeString(strings, '%shareLayoutDialog_modelText_none%');
 
   const handleSelectModelText = useCallback((resource: DblResourceData) => {
     setModelText(toResourceReference(resource));
@@ -383,6 +489,10 @@ export function TeamLayoutDialogContent({
   // Dedicated keys rather than the `activeTab_*` ones the Default-tab select uses: the two controls
   // happen to read alike today, but they are different sentences in different places, and sharing a
   // key means rewording one silently rewords the other.
+  // TODO(PT-4216): re-check against PT-4550 — these restate
+  // %webView_resourcePanel_bibleTexts_title% / %webView_resourcePanel_commentaries_title% from
+  // platform-scripture-editor's localizedStrings.json. `team-layout-localization.test.ts` pins them
+  // equal; a wording change on either side must be made on both.
   const tabLabelKey: Record<TabKey, keyof TeamLayoutDialogLocalizedStrings> = {
     ScriptureResource: '%shareLayoutDialog_tab_scriptureResources%',
     CommentaryResource: '%shareLayoutDialog_tab_commentaryResources%',
@@ -462,23 +572,23 @@ export function TeamLayoutDialogContent({
           is stated once, under the tabs, where it reads as one rule covering both of them. */}
       {resources.length > 0 ? (
         <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-2">
-          {resources.map((ref) => (
-            <div key={referenceKey(ref)} className="tw:flex tw:items-center tw:gap-2">
-              <Checkbox
-                checked={!!ref.isInTextCollection}
-                onCheckedChange={(checked: boolean) =>
+          {resources.map((ref) => {
+            const displayName = formatResourceDisplayName(ref, allResources);
+            return (
+              <ResourceRow
+                key={referenceKey(ref)}
+                displayName={displayName}
+                checkboxLabel={formatReplacementString(
+                  localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
+                  { resourceName: displayName },
+                )}
+                isInTextCollection={!!ref.isInTextCollection}
+                onToggleInTextCollection={(checked: boolean) =>
                   handleToggleShownByDefault(tab, ref, checked)
                 }
-                aria-label={formatReplacementString(
-                  localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
-                  { resourceName: formatResourceDisplayName(ref, allResources) },
-                )}
               />
-              <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm">
-                {formatResourceDisplayName(ref, allResources)}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         /* An empty tab with nothing in it reads as a failed load rather than as an empty set
@@ -492,7 +602,11 @@ export function TeamLayoutDialogContent({
   );
 
   return (
-    <>
+    /* `relative` is what the picker scrim below positions against, and the flex classes are the
+       ones the modal host puts on the wrapper it renders this into — carried forward here because
+       this element now sits between them, and without them the scroll region loses its bounded
+       height and `overflow-y-auto` stops working. */
+    <div className="tw:relative tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-hidden">
       <DialogHeader className="tw:p-4 tw:pb-0">
         <DialogTitle>{localizeString(strings, '%shareLayoutDialog_teamLayout_title%')}</DialogTitle>
         <DialogDescription>
@@ -500,8 +614,7 @@ export function TeamLayoutDialogContent({
         </DialogDescription>
       </DialogHeader>
 
-      {/* `relative` so the picker scrim below can cover exactly this scrolling region. */}
-      <div className="tw:relative tw:flex tw:min-h-0 tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
+      <div className="tw:flex tw:min-h-0 tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
         {/* Named here rather than left to the embedded pickers. A picker explains why ITS list is
             empty only once the admin opens it; the rows on this screen are what the dialog promises
             a review of, and a saved resource missing from them is invisible until someone notices it
@@ -537,29 +650,39 @@ export function TeamLayoutDialogContent({
           className="tw:shrink-0 tw:divide-y tw:divide-border tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30"
           style={{ minHeight: RESOURCE_CARD_MIN_HEIGHT }}
         >
-          <div className="tw:grid tw:items-stretch tw:divide-y tw:divide-border tw:md:grid-cols-3 tw:md:divide-x tw:md:divide-y-0">
+          <div className="tw:grid tw:items-stretch tw:divide-y tw:divide-border tw:xl:grid-cols-3 tw:xl:divide-x tw:xl:divide-y-0">
             <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-3 tw:px-4 tw:py-3">
               <span className="tw:font-medium">
                 {localizeString(strings, '%shareLayoutDialog_modelText_label%')}
               </span>
               {/* Modal for the same reason as the tab picker above. */}
               <Popover modal open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="tw:w-full tw:justify-between tw:gap-2 tw:font-normal"
-                  >
-                    <span className="tw:truncate">
-                      {modelText
-                        ? formatResourceDisplayName(modelText, allResources)
-                        : localizeString(strings, '%shareLayoutDialog_modelText_none%')}
-                    </span>
-                    <ChevronDown
-                      className="tw:size-4 tw:shrink-0 tw:text-muted-foreground"
-                      aria-hidden
-                    />
-                  </Button>
-                </PopoverTrigger>
+                <TooltipProvider>
+                  <Tooltip open={isModelTextLabelTooltipOpen}>
+                    <TooltipContent>{modelTextLabel}</TooltipContent>
+                    <TooltipTrigger asChild>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="tw:w-full tw:justify-between tw:gap-2 tw:font-normal"
+                        >
+                          <span
+                            ref={modelTextLabelRef}
+                            className="tw:truncate"
+                            onPointerEnter={onModelTextLabelPointerEnter}
+                            onPointerLeave={onModelTextLabelPointerLeave}
+                          >
+                            {modelTextLabel}
+                          </span>
+                          <ChevronDown
+                            className="tw:size-4 tw:shrink-0 tw:text-muted-foreground"
+                            aria-hidden
+                          />
+                        </Button>
+                      </PopoverTrigger>
+                    </TooltipTrigger>
+                  </Tooltip>
+                </TooltipProvider>
                 {/*
                   Opened from the FIRST column, so the picker body sits to the trigger's end side
                   and opens inward across the dialog rather than off its leading edge. See the tab
@@ -617,15 +740,36 @@ export function TeamLayoutDialogContent({
               )}
               {/* A switch rather than a pair of Yes/No pills: the lock is one boolean, and a switch
                   carries its state in the control itself instead of in which of two identical pills
-                  happens to be pressed. */}
-              <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
-                <Switch
-                  checked={isStructureProtectedForTeam}
-                  onCheckedChange={setIsStructureProtectedForTeam}
-                  aria-labelledby={teamLockLabelId}
-                />
-                <span className="tw:text-sm" id={teamLockLabelId}>
-                  {localizeString(strings, '%shareLayoutDialog_teamLock_label%')}
+                  happens to be pressed. The label is a `Label htmlFor` rather than a bare span with
+                  `aria-labelledby`: Radix renders the switch as a native `<button>`, so `htmlFor`
+                  makes the words themselves activate it, as they do at every other Switch in the
+                  app. */}
+              <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-1">
+                <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
+                  <Switch
+                    id={teamLockLabelId}
+                    checked={isStructureProtectedForTeam}
+                    onCheckedChange={setIsStructureProtectedForTeam}
+                    disabled={isTeamLockUnknown}
+                    aria-describedby={teamLockDescriptionId}
+                  />
+                  <Label
+                    htmlFor={teamLockLabelId}
+                    className="tw:cursor-pointer tw:text-sm tw:font-medium"
+                  >
+                    {localizeString(strings, '%shareLayoutDialog_teamLock_label%')}
+                  </Label>
+                </div>
+                {/* What the lock actually prevents, and when it is the right choice. The switch's
+                    own on/off position reports the state, so this stays a fixed explanation rather
+                    than restating the boolean. */}
+                <span className="tw:text-xs tw:text-muted-foreground" id={teamLockDescriptionId}>
+                  {localizeString(
+                    strings,
+                    isTeamLockUnknown
+                      ? '%shareLayoutDialog_teamLock_loadError%'
+                      : '%shareLayoutDialog_teamLock_description%',
+                  )}
                 </span>
               </div>
             </div>
@@ -687,6 +831,10 @@ export function TeamLayoutDialogContent({
                       />
                     </SelectTrigger>
                     <SelectContent>
+                      {/* TODO(PT-4216): re-check against PT-4550 — these two options restate
+                          %webView_resourcePanel_bibleTexts_title% /
+                          %webView_resourcePanel_commentaries_title%. The Comments and
+                          TextCollection options below have no resource-panel counterpart. */}
                       <SelectItem value="ScriptureResource">
                         {localizeString(strings, '%shareLayoutDialog_activeTab_scriptureResource%')}
                       </SelectItem>
@@ -719,31 +867,42 @@ export function TeamLayoutDialogContent({
             </div>
           </div>
         </div>
-
-        {/* Dims and blurs the dialog while a picker is open. Local to the dialog's own stacking
-            context — the picker portals to `document.body` at `Z_INDEX_ABOVE_DOCK` and never
-            competes with this — so a plain low z-index is correct here and a scale tier is not.
-            Purely visual: the pickers are modal, so what makes the content behind them inert is
-            Radix's own focus trap and outside-pointer handling, not this element. Deliberately left
-            hit-testable so a click on it still reads as an outside click and closes the picker. */}
-        {isAnyPickerOpen && (
-          <div
-            className="tw:absolute tw:inset-0 tw:z-10 tw:bg-background/50 tw:backdrop-blur-sm"
-            aria-hidden
-            data-testid="resource-picker-scrim"
-          />
-        )}
       </div>
 
-      <div className="tw:flex tw:justify-end tw:gap-2 tw:p-4">
-        <Button variant="outline" onClick={onCancel}>
-          {localizeString(strings, '%shareLayoutDialog_cancel_label%')}
-        </Button>
-        <Button onClick={handleConfirm}>
-          {localizeString(strings, '%shareLayoutDialog_saveForTeam_label%')}
-        </Button>
-      </div>
-    </>
+      {/* Dims and blurs the dialog while a picker is open. Local to the dialog's own stacking
+          context — the picker portals to `document.body` at `Z_INDEX_ABOVE_DOCK` and never
+          competes with this — so a plain low z-index is correct here and a scale tier is not.
+          Purely visual: the pickers are modal, so what makes the content behind them inert is
+          Radix's own focus trap and outside-pointer handling, not this element. Deliberately left
+          hit-testable so a click on it still reads as an outside click and closes the picker.
+
+          A SIBLING of the header, the scroll region and the footer, not a child of the scroll
+          region: an `inset-0` element inside a scrolling box is positioned against that box's
+          padding edges at scroll offset 0 and then scrolls away with the content, and it could
+          never have covered the header or the footer at all — leaving a disabled Save button
+          looking live. */}
+      {isAnyPickerOpen && (
+        <div
+          className="tw:absolute tw:inset-0 tw:z-10 tw:bg-background/50 tw:backdrop-blur-sm"
+          aria-hidden
+          data-testid="resource-picker-scrim"
+        />
+      )}
+
+      {hasSaveError && (
+        <Alert variant="destructive" className="tw:mx-4 tw:shrink-0">
+          <AlertDescription>
+            {localizeString(strings, '%shareLayoutDialog_saveFailed%')}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <TeamLayoutDialogFooter
+        localizedStrings={strings}
+        onCancel={onCancel}
+        onConfirm={handleConfirm}
+      />
+    </div>
   );
 }
 

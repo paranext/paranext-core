@@ -1,13 +1,15 @@
 import { render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { DblResourceData } from 'platform-bible-utils';
+import { newPlatformError } from 'platform-bible-utils';
+import type { DblResourceData, PlatformError } from 'platform-bible-utils';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { Dialog } from 'platform-bible-react';
 import { SHARE_LAYOUT_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { DIALOGS } from '@renderer/components/dialogs/index';
 import { TEAM_LAYOUT_DIALOG } from '@renderer/components/dialogs/team-layout.dialog';
 import { sendCommand } from '@shared/services/command.service';
+import { useProjectDataProvider } from '@renderer/hooks/papi-hooks';
 
 // Importing the real `DIALOGS` map transitively pulls in `project-picker.dialog.tsx` ->
 // `use-project-picker-data.hook.ts` -> the renderer web view host and `papi-frontend.service.ts`,
@@ -38,8 +40,15 @@ type MockState = {
   setModelTexts: ReturnType<typeof vi.fn>;
   sharedLayoutDefaultTab: string;
   setSharedLayoutDefaultTab: ReturnType<typeof vi.fn>;
-  structureProtected: boolean;
+  structureProtected: boolean | PlatformError;
   setStructureProtected: ReturnType<typeof vi.fn>;
+  /**
+   * The two settings the heading is composed from. Through `mockState` like the rest, so a test can
+   * vary them — the composition rule (skip the full name when it is absent or equal to the short
+   * name) is otherwise unexercised.
+   */
+  projectShortName: string;
+  projectFullName: string;
   /**
    * The promise `canUserWriteProjectTextConnectionSettings` returns. Tests assign a fresh
    * controllable promise (or an already-resolved one) before rendering so they can drive the
@@ -64,6 +73,8 @@ const mockState: MockState = {
   setSharedLayoutDefaultTab: vi.fn(),
   structureProtected: false,
   setStructureProtected: vi.fn(),
+  projectShortName: 'HNF',
+  projectFullName: 'Hanif Bible',
   canWritePromise: undefined,
   loadingProjectSettingKeys: new Set<string>(),
 };
@@ -109,8 +120,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       ];
     // The project's own name, rendered straight through rather than snapshotted, so it is not
     // part of the mount gate and needs no per-key loading flag.
-    if (key === 'platform.name') return ['HNF', vi.fn(), vi.fn(), false];
-    if (key === 'platform.fullName') return ['Hanif Bible', vi.fn(), vi.fn(), false];
+    if (key === 'platform.name') return [mockState.projectShortName, vi.fn(), vi.fn(), false];
+    if (key === 'platform.fullName') return [mockState.projectFullName, vi.fn(), vi.fn(), false];
     return [undefined, vi.fn(), vi.fn(), isProjectSettingLoading];
   }),
   useProjectDataProvider: vi.fn(() => mockTextConnectionsProvider),
@@ -175,14 +186,45 @@ beforeEach(() => {
   mockState.setSharedLayoutDefaultTab = vi.fn();
   mockState.structureProtected = false;
   mockState.setStructureProtected = vi.fn();
+  mockState.projectShortName = 'HNF';
+  mockState.projectFullName = 'Hanif Bible';
   mockState.canWritePromise = undefined;
   mockState.loadingProjectSettingKeys = new Set<string>();
   mockTextConnectionsProvider.canUserWriteProjectTextConnectionSettings.mockClear();
-  mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockClear();
-  mockTextConnectionsProvider.getUserModelTexts.mockClear();
+  // `mockReset` rather than `mockClear`: a test that installs a never-resolving implementation and
+  // fails before restoring it would otherwise leak that pending promise into every test after it,
+  // turning one real regression into a cascade of five-second timeouts pointing at the wrong tests.
+  mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockReset();
+  mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockImplementation(
+    async () => EMPTY_RESOURCE_LIST,
+  );
+  mockTextConnectionsProvider.getUserModelTexts.mockReset();
+  mockTextConnectionsProvider.getUserModelTexts.mockImplementation(async () => EMPTY_RESOURCE_LIST);
   vi.mocked(sendCommand).mockReset();
   vi.mocked(sendCommand).mockResolvedValue({ status: 'available', resources: [] });
 });
+
+/**
+ * Toggles a resource row's text-collection checkbox — the cheapest real edit to the resource lists.
+ *
+ * `handleConfirm` writes a setting only when its field actually changed, so a test that confirms
+ * without editing anything asserts nothing about the write path. See the change-detection comment
+ * in `team-layout.dialog.tsx`.
+ */
+function editResourceList() {
+  act(() => {
+    screen.getAllByRole('checkbox')[0].click();
+  });
+}
+
+/** Clicks Save and flushes the awaited setter promises `handleConfirm` now waits on. */
+async function confirmDialog() {
+  const confirmButton = screen.getByText('%shareLayoutDialog_saveForTeam_label%');
+  await act(async () => {
+    confirmButton.click();
+    await Promise.resolve();
+  });
+}
 
 describe('TeamLayoutDialogWrapper catalog gate', () => {
   it('waits for the catalog before mounting the body, so Confirm cannot erase the saved resource list', async () => {
@@ -219,16 +261,14 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     });
 
     await screen.findByText('%shareLayoutDialog_modelText_label%');
-    const confirmButton = screen.getByText('%shareLayoutDialog_saveForTeam_label%');
-    act(() => {
-      confirmButton.click();
-    });
+    editResourceList();
+    await confirmDialog();
 
     // Mounting early would make this an empty list: the memo recomputes `otherResources` to empty
     // once the catalog lands, while the body's snapshot stays empty too, and Confirm writes both.
     expect(mockState.setReferencedProjectsAndResources).toHaveBeenCalledWith({
       dataVersion: '2.0.0',
-      items: [savedResource],
+      items: [{ ...savedResource, isInTextCollection: true }],
     });
   });
 
@@ -242,6 +282,11 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     mockState.loadingProjectSettingKeys = new Set([
       'platformScripture.referencedProjectsAndResources',
     ]);
+    // A catalog entry for the saved reference, so it renders as an editable row below.
+    vi.mocked(sendCommand).mockResolvedValue({
+      status: 'available',
+      resources: [makeDblResource({ dblEntryUid: 'esv-uid', type: 'ScriptureResource' })],
+    });
 
     const { rerender } = renderWrapper();
 
@@ -260,14 +305,12 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     });
 
     await screen.findByText('%shareLayoutDialog_modelText_label%');
-    const confirmButton = screen.getByText('%shareLayoutDialog_saveForTeam_label%');
-    act(() => {
-      confirmButton.click();
-    });
+    editResourceList();
+    await confirmDialog();
 
     expect(mockState.setReferencedProjectsAndResources).toHaveBeenCalledWith({
       dataVersion: '2.0.0',
-      items: [savedResource],
+      items: [{ ...savedResource, isInTextCollection: true }],
     });
   });
 
@@ -294,9 +337,6 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     });
 
     await screen.findByText('%shareLayoutDialog_modelText_label%');
-    mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockImplementation(
-      async () => EMPTY_RESOURCE_LIST,
-    );
   });
 
   it('renders the dialog with a stated count and a retry when the catalog fetch failed', async () => {
@@ -314,17 +354,21 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
       return undefined;
     });
 
-    renderWrapper();
+    // `finally` so a failing assertion below cannot leave `console.error` stubbed for every test
+    // after this one, swallowing the React warnings a reviewer relies on.
+    try {
+      renderWrapper();
 
-    // The dialog still opens: the tab and model-text settings have nothing to do with DBL, and
-    // replacing the whole dialog would put them out of reach over a transient fetch.
-    await screen.findByText('%shareLayoutDialog_modelText_label%');
-    // The saved DBL reference cannot be classified without a catalog, so it is absent from the
-    // rows — said out loud rather than left for the admin to notice.
-    expect(screen.getByText('%shareLayoutDialog_hiddenResources_loadError%')).toBeInTheDocument();
-    expect(screen.getByText('%shareLayoutDialog_retry%')).toBeInTheDocument();
-
-    vi.restoreAllMocks();
+      // The dialog still opens: the tab and model-text settings have nothing to do with DBL, and
+      // replacing the whole dialog would put them out of reach over a transient fetch.
+      await screen.findByText('%shareLayoutDialog_modelText_label%');
+      // The saved DBL reference cannot be classified without a catalog, so it is absent from the
+      // rows — said out loud rather than left for the admin to notice.
+      expect(screen.getByText('%shareLayoutDialog_hiddenResources_loadError%')).toBeInTheDocument();
+      expect(screen.getByText('%shareLayoutDialog_retry%')).toBeInTheDocument();
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it('states the hidden count without a retry when this installation has no DBL credentials', async () => {
@@ -345,21 +389,27 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
 
   it('preserves references it could not classify when the catalog never arrives', async () => {
     mockState.canWritePromise = Promise.resolve(true);
-    const savedResource: ResourceReference = { type: 'dblResource', name: 'ESV', id: 'esv-uid' };
-    mockState.referencedProjectsAndResources = { dataVersion: '2.0.0', items: [savedResource] };
+    // A `dblResource` with no catalog row has no knowable type, so it lands in `otherResources` —
+    // neither displayed nor editable, but it must survive the write-back or it is lost for good.
+    const unclassifiable: ResourceReference = { type: 'dblResource', name: 'ESV', id: 'esv-uid' };
+    // A `project` reference is classified without the catalog, so it renders as an editable row —
+    // which is what makes the write fire at all, and therefore what makes this test falsifiable.
+    const editableResource: ResourceReference = { type: 'project', name: 'HNF' };
+    mockState.referencedProjectsAndResources = {
+      dataVersion: '2.0.0',
+      items: [unclassifiable, editableResource],
+    };
     vi.mocked(sendCommand).mockResolvedValue({ status: 'unavailable', reason: 'notConfigured' });
 
     renderWrapper();
 
     await screen.findByText('%shareLayoutDialog_modelText_label%');
-    const confirmButton = screen.getByText('%shareLayoutDialog_saveForTeam_label%');
-    act(() => {
-      confirmButton.click();
-    });
+    editResourceList();
+    await confirmDialog();
 
     expect(mockState.setReferencedProjectsAndResources).toHaveBeenCalledWith({
       dataVersion: '2.0.0',
-      items: [savedResource],
+      items: [{ ...editableResource, isInTextCollection: true }, unclassifiable],
     });
   });
 
@@ -388,6 +438,98 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     // The mount gate consumed the FIRST settle only. Unmounting here would discard the tab,
     // model-text and resource edits the admin has made since the dialog opened.
     expect(screen.getByText('%shareLayoutDialog_saveForTeam_label%')).toBeInTheDocument();
+  });
+});
+
+describe('TeamLayoutDialogWrapper heading', () => {
+  // The heading is the only thing telling an admin which project they are about to change
+  // team-wide settings for, and the composition rule is shared with `ProjectSelector`'s
+  // `shortNameAndFullName` branch — so both of its paths are pinned here.
+  it('heads the dialog with the short and full project name', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+
+    renderWrapper();
+
+    expect(await screen.findByText('HNF - Hanif Bible')).toBeInTheDocument();
+  });
+
+  it('shows the short name alone when the full name adds nothing', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.projectFullName = mockState.projectShortName;
+
+    renderWrapper();
+
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    expect(screen.getByText('HNF')).toBeInTheDocument();
+    expect(screen.queryByText('HNF - HNF')).not.toBeInTheDocument();
+  });
+});
+
+describe('TeamLayoutDialogWrapper admin-gate failure paths', () => {
+  // `usePromise` reports a REJECTION as `isLoading: false` with the value left `undefined`, which is
+  // indistinguishable from "not decided yet" — so a dialog gating on that alone waits on a skeleton
+  // forever, and the skeleton is convincing enough (real title, real description, disabled buttons)
+  // to read as a slow load rather than a failure.
+  it('closes rather than waiting forever when the permission check fails', async () => {
+    mockState.canWritePromise = Promise.reject(new Error('the permission check failed'));
+
+    const { cancelDialog } = renderWrapper();
+
+    await waitFor(() => {
+      expect(cancelDialog).toHaveBeenCalled();
+    });
+  });
+
+  it('does not close the dialog during the renders before the provider resolves', async () => {
+    // The provider is unresolved, so the optional-chained permission call resolves immediately to
+    // `undefined` and `hasSettled` flips true on the first render. An effect keyed on `hasSettled`
+    // alone would close the dialog on open.
+    vi.mocked(useProjectDataProvider).mockReturnValueOnce(undefined);
+    mockState.canWritePromise = Promise.resolve(true);
+
+    const { cancelDialog } = renderWrapper();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(cancelDialog).not.toHaveBeenCalled();
+  });
+});
+
+describe('TeamLayoutDialogWrapper mount-gate latches', () => {
+  // `useProjectSetting` flips `isLoading` back to `true` whenever its data provider's identity
+  // changes, and installing, updating or removing ANY extension reloads them all and churns those
+  // network objects. Without a settled-once latch that reopens the gate, unmounts the body, and
+  // destroys every edit the admin has staged.
+  it("keeps the admin's staged edits through a background provider reconnect", async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+
+    const { rerender } = renderWrapper();
+
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+    expect(
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }),
+    ).toBeChecked();
+
+    // The reconnect: a setting reports loading again, then settles.
+    mockState.loadingProjectSettingKeys = new Set(['platformScripture.modelTexts']);
+    await act(async () => {
+      rerender();
+      await Promise.resolve();
+    });
+    mockState.loadingProjectSettingKeys = new Set<string>();
+    await act(async () => {
+      rerender();
+      await Promise.resolve();
+    });
+
+    // Unmounting for the reconnect would have discarded this back to its persisted `false`.
+    expect(
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }),
+    ).toBeChecked();
   });
 });
 
@@ -551,7 +693,7 @@ describe('TeamLayoutDialogWrapper team structure lock', () => {
     expect(mockState.setStructureProtected).toHaveBeenCalledWith(true);
   });
 
-  it('does not write the team lock when the dialog is cancelled', async () => {
+  it('does not write the team lock eagerly when the switch is toggled', async () => {
     mockState.canWritePromise = Promise.resolve(true);
     mockState.structureProtected = false;
 
@@ -562,6 +704,30 @@ describe('TeamLayoutDialogWrapper team structure lock', () => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
 
+    expect(mockState.setStructureProtected).not.toHaveBeenCalled();
+  });
+
+  // The lock is a project-wide setting an admin can flip for the whole team, and this dialog is now
+  // its only control — so a Cancel path that writes it, easy to introduce by routing Cancel through
+  // a shared handler, would ship silently. The test above only proves the toggle is not eager; this
+  // one actually presses Cancel.
+  it('does not write the team lock when the dialog is cancelled', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.structureProtected = false;
+
+    const { cancelDialog, submitDialog } = renderWrapper();
+
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+    await act(async () => {
+      screen.getByText('%shareLayoutDialog_cancel_label%').click();
+      await Promise.resolve();
+    });
+
+    expect(cancelDialog).toHaveBeenCalled();
+    expect(submitDialog).not.toHaveBeenCalled();
     expect(mockState.setStructureProtected).not.toHaveBeenCalled();
   });
 });
@@ -594,20 +760,43 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     renderWrapper();
 
     await screen.findByText('%shareLayoutDialog_modelText_label%');
-    const confirmButton = screen.getByText('%shareLayoutDialog_saveForTeam_label%');
-    act(() => {
-      confirmButton.click();
-    });
+    editResourceList();
+    await confirmDialog();
 
     expect(mockState.setReferencedProjectsAndResources).toHaveBeenCalledWith({
       dataVersion: '2.0.0',
-      items: [scriptureItem, otherItem],
+      items: [{ ...scriptureItem, isInTextCollection: true }, otherItem],
     });
-    expect(mockState.setModelTexts).toHaveBeenCalledWith({
-      dataVersion: EMPTY_RESOURCE_LIST.dataVersion,
-      items: [],
+    // Untouched, so not written. An admin who opens this dialog only to flip the team lock must not
+    // publish their own model text and default tab to the team as a side effect.
+    expect(mockState.setModelTexts).not.toHaveBeenCalled();
+    expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
+  });
+
+  // On a project that has never shared a layout, `seedResourceList` seeds the resource lists from
+  // the ADMIN'S PERSONAL selections — so writing them unconditionally would publish one person's
+  // resource list to the whole team as a side effect of flipping an unrelated switch.
+  it('does not publish the personal resource list when only the team lock is changed', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = EMPTY_RESOURCE_LIST;
+    mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockImplementation(
+      async (): Promise<ResourceReferenceList> => ({
+        dataVersion: '2.0.0',
+        items: [{ type: 'dblResource', name: 'ESV', id: 'esv-uid' }],
+      }),
+    );
+
+    renderWrapper();
+
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
-    expect(mockState.setSharedLayoutDefaultTab).toHaveBeenCalledWith('ScriptureResource');
+    await confirmDialog();
+
+    expect(mockState.setStructureProtected).toHaveBeenCalledWith(true);
+    expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
+    expect(mockState.setModelTexts).not.toHaveBeenCalled();
   });
 
   it('calls submitDialog(true) after a successful confirm', async () => {
@@ -616,11 +805,48 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     const { submitDialog } = renderWrapper();
 
     await screen.findByText('%shareLayoutDialog_modelText_label%');
-    const confirmButton = screen.getByText('%shareLayoutDialog_saveForTeam_label%');
-    act(() => {
-      confirmButton.click();
-    });
+    await confirmDialog();
 
     expect(submitDialog).toHaveBeenCalledWith(true);
+  });
+
+  // A project-setting write can be REFUSED — the Send/Receive write gate rejects during an
+  // automatic sync. Closing the dialog then would tell the admin the team lock was saved when
+  // nothing was, and this dialog is the lock's only UI, so there is no second place to notice.
+  it('keeps the dialog open and reports the failure when a write is refused', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.setStructureProtected = vi.fn(async () => {
+      throw new Error('(SR_EDIT_BLOCKED)');
+    });
+
+    const { submitDialog } = renderWrapper();
+
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+    await confirmDialog();
+
+    expect(submitDialog).not.toHaveBeenCalled();
+    expect(screen.getByText('%shareLayoutDialog_saveFailed%')).toBeInTheDocument();
+  });
+
+  // A delivered `PlatformError` clears the loading flag exactly like a real value, so the mount gate
+  // passes and the switch renders its `false` fallback. Writing that back would silently unlock USFM
+  // structure for every translator on the project.
+  it('never writes the team lock back when its current value could not be read', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.structureProtected = newPlatformError('could not read the setting');
+
+    renderWrapper();
+
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    expect(
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }),
+    ).toBeDisabled();
+
+    await confirmDialog();
+
+    expect(mockState.setStructureProtected).not.toHaveBeenCalled();
   });
 });

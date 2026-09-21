@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useMemo, useState } from 'react';
-import { Lock, LockOpen } from 'lucide-react';
+
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import {
   LockToggleButtonView,
@@ -47,8 +47,6 @@ function PersonalLockHarness({ initialLocked }: { initialLocked: boolean }) {
       isLocked={isLocked}
       isDisabled={false}
       onToggle={() => setIsLocked((previous) => !previous)}
-      lockedIcon={<Lock />}
-      unlockedIcon={<LockOpen />}
       unlockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateEditable%"
       lockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateProtected%"
       disabledTooltipKey="%webView_platformScriptureEditor_structureProtection_lockedByAdmin%"
@@ -82,8 +80,6 @@ export const LockedByAdmin: Story = {
       isLocked
       isDisabled
       onToggle={() => {}}
-      lockedIcon={<Lock />}
-      unlockedIcon={<LockOpen />}
       unlockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateEditable%"
       lockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateProtected%"
       disabledTooltipKey="%webView_platformScriptureEditor_structureProtection_lockedByAdmin%"

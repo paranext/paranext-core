@@ -188,6 +188,56 @@ describe('StructureProtectionButton — personal button', () => {
     }
   });
 
+  // WCAG 1.4.13 (Content on Hover or Focus) requires hover content to stay visible until the
+  // pointer moves away — and here it could not come back if it did not: Radix gates its
+  // pointer-move open to once per hover session, so a tooltip dismissed under a stationary pointer
+  // stays gone. This tooltip is also the only place the lock state is stated, since the aria-label
+  // is the constant "Toggle structure protection".
+  it('keeps a hover-opened tooltip up while the pointer is still on the button', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
+      render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+
+      const button = screen.getByRole('button', { name: 'Toggle structure protection' });
+      await act(async () => {
+        fireEvent.pointerMove(button, { pointerType: 'mouse' });
+      });
+      expect((await screen.findAllByText('USFM structure protected')).length).toBeGreaterThan(0);
+
+      await act(async () => {
+        vi.advanceTimersByTime(3000);
+      });
+
+      // The auto-dismiss timer is scoped to auto-opens; a hover is not one.
+      expect(screen.getAllByText('USFM structure protected').length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The accessible name is a constant, and the tooltip carrying the state is not a live region — so
+  // without `aria-pressed` a screen-reader user pressing Ctrl+Shift+L is told nothing at all.
+  it('reports the lock state through aria-pressed in both states', async () => {
+    setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
+    const { rerender } = render(
+      <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Toggle structure protection' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    setState({ isStructureProtected: false });
+    rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
+
+    expect(screen.getByRole('button', { name: 'Toggle structure protection' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
   // A reader must be able to tell locked from unlocked without inferring it from an action verb.
   // Both states are asserted, since a tooltip that reports one state but names the action in the
   // other still leaves the state ambiguous.

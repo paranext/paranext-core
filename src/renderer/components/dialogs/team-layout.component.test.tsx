@@ -71,6 +71,8 @@ function renderContent(overrides: Partial<Parameters<typeof TeamLayoutDialogCont
         initialScriptureResources={[ESV, NIV]}
         initialCommentaryResources={[]}
         initialIsStructureProtectedForTeam={false}
+        isTeamLockUnknown={false}
+        hasSaveError={false}
         projectName="HNF - Hanif Bible"
         allResources={ALL_RESOURCES}
         isResourcesLoading={false}
@@ -368,7 +370,38 @@ describe('TeamLayoutDialogContent', () => {
     fireEvent.click(screen.getByText('%shareLayoutDialog_cancel_label%'));
 
     expect(onCancel).toHaveBeenCalled();
+    // The staged `true` must not reach the caller by any route. `onCancel` is wired straight to the
+    // button's `onClick`, so React invokes it with a SyntheticEvent — hence `not.toHaveBeenCalledWith`
+    // on the value rather than an argument-less assertion, which would fail against correct code.
+    expect(onCancel).not.toHaveBeenCalledWith(true);
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  // The label is a `Label htmlFor`, not a bare span named by `aria-labelledby` — the words
+  // themselves activate the switch, as they do at every other Switch in the app.
+  it('toggles the team lock when its label text is clicked', () => {
+    renderContent({ initialIsStructureProtectedForTeam: false });
+
+    fireEvent.click(screen.getByText(TEAM_LOCK_LABEL));
+
+    expect(screen.getByRole('switch', { name: TEAM_LOCK_LABEL })).toBeChecked();
+  });
+
+  // A failed read of the team lock falls back to `false` so the switch has something to render, and
+  // that fallback must never be savable — writing it would unlock structure for the whole team.
+  it('disables the team lock and explains itself when the current value could not be read', () => {
+    renderContent({ isTeamLockUnknown: true });
+
+    expect(screen.getByRole('switch', { name: TEAM_LOCK_LABEL })).toBeDisabled();
+    expect(screen.getByText('%shareLayoutDialog_teamLock_loadError%')).toBeInTheDocument();
+    expect(screen.queryByText('%shareLayoutDialog_teamLock_description%')).not.toBeInTheDocument();
+  });
+
+  // A refused save keeps the dialog open and says so, rather than closing as though it had worked.
+  it('reports a refused save in place of closing silently', () => {
+    renderContent({ hasSaveError: true });
+
+    expect(screen.getByText('%shareLayoutDialog_saveFailed%')).toBeInTheDocument();
   });
 
   // One control carrying the answer in its own state, rather than two look-alike pills where the
@@ -409,9 +442,16 @@ describe('TeamLayoutDialogContent', () => {
   it('dims the dialog while the model-text picker is open too', () => {
     renderContent();
 
+    // Control, as in the manage-picker case below: both are reachable first, so their absence
+    // afterwards means the picker is genuinely modal rather than that they were never exposed.
+    expect(screen.getByRole('button', { name: SAVE_LABEL })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: TEAM_LOCK_LABEL })).toBeInTheDocument();
+
     fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
 
     expect(screen.getByTestId('resource-picker-scrim')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SAVE_LABEL })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: TEAM_LOCK_LABEL })).not.toBeInTheDocument();
   });
 
   // The scrim claims the dialog behind an open picker is inert, so it has to actually be inert. The

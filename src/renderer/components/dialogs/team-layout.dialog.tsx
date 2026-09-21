@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useLocalizedStrings,
   useProjectDataProvider,
@@ -87,6 +87,17 @@ function TeamLayoutDialogWrapper({
   if (hasResourcesSettled) hasCatalogSettledOnceRef.current = true;
   const hasCatalogSettledOnce = hasCatalogSettledOnceRef.current;
 
+  // Same latch, for the same reason, for every other input to the mount gate. `useProjectSetting`
+  // flips its `isLoading` back to `true` whenever its data provider's identity changes, and
+  // installing, updating or removing ANY extension reloads them all and churns those network
+  // objects — an ordinary operation, not a host restart. Without a latch, that reopens the gate,
+  // unmounts the body, and destroys every `useState` snapshot the admin has edited.
+  const settledOnceRef = useRef<Record<string, boolean>>({});
+  const hasSettledOnce = (key: string, isLoading: boolean, isReady = true) => {
+    if (isReady && !isLoading) settledOnceRef.current[key] = true;
+    return settledOnceRef.current[key] === true;
+  };
+
   const [projectResourcesSetting, setProjectResources, , isProjectResourcesLoading] =
     useProjectSetting(
       projectId,
@@ -117,17 +128,29 @@ function TeamLayoutDialogWrapper({
     projectId,
   );
 
-  const [canWrite, isCanWriteLoading] = usePromise(
+  // `useRetryablePromise` rather than `usePromise` for its `hasError`: `usePromise` reports a
+  // REJECTION as `isLoading: false` with the value left at its `undefined` default, which is
+  // indistinguishable from "not decided yet" — so the gate below would hold the dialog on a
+  // convincing skeleton forever, with no cancel path, whenever this one call fails.
+  const {
+    data: canWrite,
+    isLoading: isCanWriteLoading,
+    hasError: hasCanWriteError,
+  } = useRetryablePromise(
     useCallback(
       async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
       [textConnectionsProvider],
     ),
-    undefined,
   );
 
+  // An explicit denial or a genuine rejection closes the dialog. Deliberately NOT keyed on a
+  // settled flag: while the project data provider is unresolved the optional-chained call above
+  // resolves immediately to `undefined`, so a settled-flag check would close the dialog on open —
+  // and the flag's reset lags a render behind the provider arriving, so the race is not
+  // theoretical. `canWrite === undefined` is "not decided yet" and never denies.
   useEffect(() => {
-    if (!isCanWriteLoading && canWrite === false) cancelDialog();
-  }, [isCanWriteLoading, canWrite, cancelDialog]);
+    if (canWrite === false || hasCanWriteError) cancelDialog();
+  }, [canWrite, hasCanWriteError, cancelDialog]);
 
   const [personalResources, isPersonalResourcesLoading] = usePromise(
     useCallback(
@@ -144,6 +167,9 @@ function TeamLayoutDialogWrapper({
     undefined,
   );
 
+  const mountedOtherResourcesRef = useRef<ResourceReference[] | undefined>(undefined);
+  const [hasSaveError, setHasSaveError] = useState(false);
+
   const projectResources = isPlatformError(projectResourcesSetting)
     ? undefined
     : projectResourcesSetting;
@@ -153,11 +179,13 @@ function TeamLayoutDialogWrapper({
   const projectActiveTab = isPlatformError(projectActiveTabSetting)
     ? undefined
     : projectActiveTabSetting;
-  // A failed read falls back to "not locked", matching `useStructureProtectionState`'s own fallback
-  // for this setting. The dialog is still usable for everything else it edits.
-  const isStructureProtectedForTeam = isPlatformError(projectStructureProtectedSetting)
-    ? false
-    : projectStructureProtectedSetting;
+  // A failed read falls back to "not locked" only so the switch has something to render. It must
+  // never be SAVED: writing that fallback back would silently unlock USFM structure for every
+  // translator on the project, which is the same team-wide erasure the mount gate below exists to
+  // prevent, reached through the error path instead of the loading path. So the dialog disables the
+  // control and skips its write instead, following `useStructureProtectionState`'s `adminSettingError`.
+  const isTeamLockUnknown = isPlatformError(projectStructureProtectedSetting);
+  const isStructureProtectedForTeam = isTeamLockUnknown ? false : projectStructureProtectedSetting;
 
   const projectName = useMemo(() => {
     const shortName = isPlatformError(projectShortNameSetting) ? '' : projectShortNameSetting;
@@ -202,26 +230,72 @@ function TeamLayoutDialogWrapper({
       : undefined;
 
   const handleConfirm = useCallback(
-    (result: TeamLayoutResult) => {
-      setProjectResources?.({
-        dataVersion: projectResources?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
-        items: [...result.scriptureResources, ...result.commentaryResources, ...otherResources],
-      });
-      setProjectModelTexts?.({
-        dataVersion: projectModelTexts?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
-        items: result.modelText ? [result.modelText] : [],
-      });
-      setProjectActiveTab?.(result.activeTab ?? '');
+    async (result: TeamLayoutResult) => {
+      // Each setter runs only if its own field actually changed. The lock is now the only control
+      // in this dialog for a setting that has no other UI, so an admin opening it purely to flip the
+      // lock is an ordinary path — and on a project that has never shared a layout, `seedResourceList`
+      // seeds the resource lists from the admin's PERSONAL selections. Writing those unconditionally
+      // would publish one person's resource list to the whole team as a side effect of an action
+      // that has nothing to do with resources.
+      //
+      // Reference equality is the right test: the wrapper passes its own memoized values as the
+      // `initial*` props and the mounted body never mutates them, so an untouched field comes back
+      // as the identical array.
+      const writes: (Promise<unknown> | undefined)[] = [];
+      if (
+        result.scriptureResources !== scriptureResources ||
+        result.commentaryResources !== commentaryResources
+      ) {
+        writes.push(
+          setProjectResources?.({
+            dataVersion: projectResources?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
+            items: [
+              ...result.scriptureResources,
+              ...result.commentaryResources,
+              ...(mountedOtherResourcesRef.current ?? otherResources),
+            ],
+          }),
+        );
+      }
+      if (result.modelText !== seededModelText) {
+        writes.push(
+          setProjectModelTexts?.({
+            dataVersion: projectModelTexts?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
+            items: result.modelText ? [result.modelText] : [],
+          }),
+        );
+      }
+      if (result.activeTab !== seededActiveTab)
+        writes.push(setProjectActiveTab?.(result.activeTab ?? ''));
       // Written whatever mode the app is in. The lock is a team-wide project setting an admin is
       // explicitly here to set, so this dialog is the one place it can be changed regardless of the
-      // admin's own mode; enforcing the lock in the editor remains Simple-mode only.
-      setProjectStructureProtected?.(result.isStructureProtectedForTeam);
+      // admin's own mode; enforcing the lock in the editor remains Simple-mode only. Skipped
+      // entirely when the current value could not be read — see `isTeamLockUnknown`.
+      if (!isTeamLockUnknown)
+        writes.push(setProjectStructureProtected?.(result.isStructureProtectedForTeam));
+
+      // A project-setting write can be REFUSED — the Send/Receive write gate rejects during an
+      // automatic sync — so the dialog must not report success until every write has landed.
+      // Closing optimistically would tell the admin the team lock was saved when nothing was, and
+      // this dialog is the lock's only UI, so there is no second place to notice.
+      try {
+        await Promise.all(writes);
+      } catch {
+        setHasSaveError(true);
+        return;
+      }
+      setHasSaveError(false);
       submitDialog(true);
     },
     [
       projectResources,
       projectModelTexts,
       otherResources,
+      scriptureResources,
+      commentaryResources,
+      seededModelText,
+      seededActiveTab,
+      isTeamLockUnknown,
       setProjectResources,
       setProjectModelTexts,
       setProjectActiveTab,
@@ -273,17 +347,32 @@ function TeamLayoutDialogWrapper({
   // The window is the normal case rather than a narrow race: mounting needs only `canWrite` (one
   // method round-trip), while a project setting needs a second PDP plus a subscribe plus its first
   // delivery.
+  // Each flag is consumed through its settled-once latch rather than read raw — see `hasSettledOnce`.
+  // The two personal lists additionally require `textConnectionsProvider`: their promises are bare
+  // optional-chained calls that resolve to `undefined` immediately while the provider is
+  // unresolved, so latching on the flag alone would mark an EMPTY personal list settled and
+  // reintroduce the "share an untimely-empty list with the whole team" failure this gate exists to
+  // prevent.
   if (
     !hasCatalogSettledOnce ||
-    isProjectResourcesLoading ||
-    isProjectModelTextsLoading ||
-    isProjectActiveTabLoading ||
-    isProjectStructureProtectedLoading ||
-    isPersonalResourcesLoading ||
-    isPersonalModelTextsLoading
+    !hasSettledOnce('projectResources', isProjectResourcesLoading) ||
+    !hasSettledOnce('projectModelTexts', isProjectModelTextsLoading) ||
+    !hasSettledOnce('projectActiveTab', isProjectActiveTabLoading) ||
+    !hasSettledOnce('projectStructureProtected', isProjectStructureProtectedLoading) ||
+    !hasSettledOnce('personalResources', isPersonalResourcesLoading, !!textConnectionsProvider) ||
+    !hasSettledOnce('personalModelTexts', isPersonalModelTextsLoading, !!textConnectionsProvider)
   ) {
     return <TeamLayoutDialogSkeleton localizedStrings={localizedStrings} />;
   }
+
+  // Latched at the same render the gate first lets the body through, NOT earlier: `otherResources`
+  // is a partition of `seededItems`, and latching before the gate would capture a partition of a
+  // list the mounted body was never seeded from. The body snapshots its two visible lists at mount
+  // and never re-seeds; Confirm concatenates all three, so they must all come from that one
+  // `seededItems`. Without this, retrying a failed catalog fetch from inside the open dialog
+  // re-partitions `otherResources` underneath the mounted body and a save erases the difference.
+  if (mountedOtherResourcesRef.current === undefined)
+    mountedOtherResourcesRef.current = otherResources;
 
   return (
     <TeamLayoutDialogContent
@@ -292,6 +381,8 @@ function TeamLayoutDialogWrapper({
       initialScriptureResources={scriptureResources}
       initialCommentaryResources={commentaryResources}
       initialIsStructureProtectedForTeam={isStructureProtectedForTeam}
+      isTeamLockUnknown={isTeamLockUnknown}
+      hasSaveError={hasSaveError}
       projectName={projectName}
       allResources={allResources ?? []}
       // `!hasResourcesSettled` counts as loading, as it does in the other two picker hosts. The

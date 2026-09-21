@@ -28,12 +28,18 @@ const TEAM_LAYOUT_STRINGS: TeamLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_manageCommentaryResources_label%': 'Manage',
   '%shareLayoutDialog_textCollection_hint%':
     'Text collection includes checked resources from all tabs ({count})',
-  '%shareLayoutDialog_teamLock_label%': 'Lock USFM structure for your team',
+  '%shareLayoutDialog_teamLock_description%':
+    'Prevent team members from being able to change USFM structure including paragraphs, poetry, section headings, titles and introductions and more. Not typically recommended except when strictly following a model text or creating a revision.',
+  '%shareLayoutDialog_teamLock_label%': 'Lock USFM paragraph markers',
+  '%shareLayoutDialog_teamLock_loadError%':
+    "Can't read the current team lock setting, so it can't be changed here.",
   '%shareLayoutDialog_resources_empty%':
     'Add resources to choose which appear in the text collection.',
   '%shareLayoutDialog_shownByDefault_label%': 'Show {resourceName} by default',
   '%shareLayoutDialog_closePicker_label%': 'Close',
   '%shareLayoutDialog_cancel_label%': 'Cancel',
+  '%shareLayoutDialog_saveFailed%':
+    "Couldn't save the team layout. Nothing was changed \u2014 try again.",
   '%shareLayoutDialog_saveForTeam_label%': 'Save layout for team',
   '%shareLayoutDialog_hiddenResources_loadError%':
     "{count} shared resources can't be shown because the list of available resources couldn't be loaded. They will be kept unchanged when you save.",
@@ -154,6 +160,8 @@ const meta: Meta<typeof TeamLayoutDialogContent> = {
     initialScriptureResources: [ESV, NIV],
     initialCommentaryResources: [IVP],
     initialIsStructureProtectedForTeam: false,
+    isTeamLockUnknown: false,
+    hasSaveError: false,
     projectName: 'HNF - Hanif Bible',
     allResources: ALL_RESOURCES,
     isResourcesLoading: false,
@@ -222,6 +230,12 @@ export const StructureLockedForTeam: Story = {
 
 /** No project name available yet — the middle column drops its heading rather than inventing one. */
 export const NoProjectName: Story = { args: { projectName: undefined } };
+
+/** The team lock could not be read, so it is disabled and says why rather than offering a value. */
+export const TeamLockUnavailable: Story = { args: { isTeamLockUnknown: true } };
+
+/** A save the Send/Receive write gate refused: the dialog stays open and reports it. */
+export const SaveRefused: Story = { args: { hasSaveError: true } };
 
 /**
  * The placeholder shown while the layout loads. It holds the card at its full height so the modal

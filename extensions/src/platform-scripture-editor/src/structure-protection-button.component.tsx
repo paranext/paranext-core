@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   isMacOs,
@@ -62,16 +62,12 @@ export type LockToggleButtonViewProps = {
   isDisabled: boolean;
   /** Invoked on click or matching shortcut when not disabled. */
   onToggle: () => void;
-  /** Icon shown while locked. */
-  lockedIcon: ReactNode;
-  /** Icon shown while unlocked. */
-  unlockedIcon: ReactNode;
   /** Tooltip shown while unlocked — reports that state, rather than naming a click's action. */
   unlockedTooltipKey: StructureProtectionStringKey;
   /** Tooltip shown while locked — reports that state, rather than naming a click's action. */
   lockedTooltipKey: StructureProtectionStringKey;
-  /** Tooltip shown while disabled. Falls back to the lock/unlock tooltip if omitted. */
-  disabledTooltipKey?: StructureProtectionStringKey;
+  /** Tooltip shown while disabled, in place of the state tooltip. */
+  disabledTooltipKey: StructureProtectionStringKey;
   /** Localization key for the button's aria-label. */
   ariaLabelKey: StructureProtectionStringKey;
   /** The keyboard shortcut bound while enabled. */
@@ -94,8 +90,6 @@ export function LockToggleButtonView({
   isLocked,
   isDisabled,
   onToggle,
-  lockedIcon,
-  unlockedIcon,
   unlockedTooltipKey,
   lockedTooltipKey,
   disabledTooltipKey,
@@ -116,10 +110,16 @@ export function LockToggleButtonView({
   // Radix closes it again on click-away and Escape via onOpenChange; scroll dismissal is handled by
   // the effect below, and the auto-dismiss timer covers the case where none of those ever fire.
   const [tooltipOpen, setTooltipOpen] = useState(false);
+  // Distinguishes the two ways this controlled tooltip opens. Radix routes hover and focus opens
+  // through `onOpenChange`; a programmatic `setTooltipOpen(true)` does not, so setting the ref in
+  // the state-change effect and clearing it in `onOpenChange` tells the timer below which kind of
+  // open it is looking at.
+  const wasAutoOpenedRef = useRef(false);
   const prevDisplayState = useRef(displayState);
   useEffect(() => {
     if (prevDisplayState.current !== displayState) {
       prevDisplayState.current = displayState;
+      wasAutoOpenedRef.current = true;
       setTooltipOpen(true);
     }
   }, [displayState]);
@@ -129,8 +129,13 @@ export function LockToggleButtonView({
   // blur, and (while a modal covers this web view's iframe) no click-away or Escape either, since
   // the iframe stops receiving input entirely. Without this timer such a tooltip stays on screen
   // indefinitely, over whatever opened the modal. Hovering re-opens it, so it stays reachable.
+  //
+  // Scoped to auto-opens only. A hover-opened tooltip must stay up until the pointer leaves (WCAG
+  // 1.4.13), and it could not come back if it did not: Radix gates its pointer-move open to once per
+  // hover session, so a tooltip dismissed under a stationary pointer stays gone until the pointer
+  // leaves and returns.
   useEffect(() => {
-    if (!tooltipOpen) return undefined;
+    if (!tooltipOpen || !wasAutoOpenedRef.current) return undefined;
     const timeoutId = setTimeout(() => setTooltipOpen(false), AUTO_OPEN_TOOLTIP_DURATION_MS);
     return () => clearTimeout(timeoutId);
   }, [tooltipOpen]);
@@ -159,7 +164,7 @@ export function LockToggleButtonView({
   }, [shortcut, onToggle, isDisabled]);
 
   let tooltipKey: StructureProtectionStringKey;
-  if (isDisabled && disabledTooltipKey) tooltipKey = disabledTooltipKey;
+  if (isDisabled) tooltipKey = disabledTooltipKey;
   else tooltipKey = isLocked ? lockedTooltipKey : unlockedTooltipKey;
 
   // Unlocked + enabled is the "danger" state (structure is editable) — warn with the destructive
@@ -168,17 +173,28 @@ export function LockToggleButtonView({
 
   return (
     <TooltipProvider>
-      <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
+      <Tooltip
+        open={tooltipOpen}
+        onOpenChange={(open) => {
+          // Only a hover or focus open reaches here, so this open is not an auto-open.
+          wasAutoOpenedRef.current = false;
+          setTooltipOpen(open);
+        }}
+      >
         <TooltipTrigger asChild>
           <Button
             aria-label={localize(localizedStrings, ariaLabelKey)}
+            // The accessible name is a constant "Toggle structure protection", and the state lives
+            // in a tooltip that is not a live region — so without this a screen-reader user pressing
+            // the shortcut is told nothing about whether structure is now locked or editable.
+            aria-pressed={isLocked}
             className={className}
             size="icon"
             variant={variant}
             disabled={isDisabled}
             onClick={onToggle}
           >
-            {isLocked ? lockedIcon : unlockedIcon}
+            {isLocked ? <Lock /> : <LockOpen />}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -259,8 +275,6 @@ export function StructureProtectionButton({
       isLocked={isStructureProtected}
       isDisabled={personalDisabled}
       onToggle={handlePersonalToggle}
-      lockedIcon={<Lock />}
-      unlockedIcon={<LockOpen />}
       unlockedTooltipKey={STATE_EDITABLE_KEY}
       lockedTooltipKey={STATE_PROTECTED_KEY}
       disabledTooltipKey={personalDisabledTooltipKey}

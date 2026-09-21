@@ -4821,7 +4821,7 @@ step, no automation. Just a record.
 
 - **Date:** 2026-09-03
 - **Status:** Accepted
-- **Context:** `ShareLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
+- **Context:** `TeamLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
   Confirm writes that snapshot back over `platformScripture.referencedProjectsAndResources`. Every
   input to that snapshot is indistinguishable from a legitimate empty value while it is in flight: a
   project setting resolves to its `defaultValue` (`createUseDataHook`), the personal lists are
@@ -4833,7 +4833,9 @@ step, no automation. Just a record.
   to do with DBL) out of reach, and on a core build with no DBL credentials the dialog would then
   never open at all, because `notConfigured` is the normal state there.
 - **Decision:** The dialog blocks on **delivery**, not on success. It renders a spinner until
-  `canWrite`, all three project settings, both personal lists and the catalog have each settled once
+  `canWrite`, all four project settings (`referencedProjectsAndResources`, `modelTexts`,
+  `sharedLayoutDefaultTab` and the team structure lock `structureProtected`), both personal lists
+  and the catalog have each settled once
   — and then it always renders, whatever the catalog said. References it cannot classify stay in
   `otherResources` (round-tripped unchanged by Confirm, as before) and are **counted out loud** in a
   notice above the tabs, carrying a retry only when the reason is recoverable. The settle gate
@@ -5499,6 +5501,52 @@ step, no automation. Just a record.
   not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
   `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
   a manual pass rather than by automation.
+
+## adr-team-lock-lives-in-the-team-layout-dialog: The team-wide USFM structure lock is staged in the Team layout dialog, not toggled from the toolbar
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** The editor toolbar carried two adjacent lock buttons: a personal structure-protection
+  toggle (`Lock`/`LockOpen`, Ctrl/Cmd+Shift+L) and, for admins only, a team-wide one
+  (`Shield`/`ShieldOff`, Ctrl/Cmd+Alt+Shift+L) wired straight to
+  `platformScripture.structureProtected`. Two near-identical icon buttons whose only difference is
+  *whose* structure they lock is not a distinction a toolbar can make. Putting the team-wide lock in
+  the Team layout dialog instead was the original design intent — raised by Sebastian in a comment on
+  the design document — which did not carry into the implementation design, so the toolbar pair got
+  built. PT-4557's NTH-2 then proposed resolving the ambiguity a different way: one button for
+  translators plus a popover for admins.
+- **Decision:** The team-wide lock moves out of the toolbar entirely and becomes a switch in the Team
+  layout dialog's middle column, staged and saved with the rest of the layout — restoring the
+  original intent, approved by the product owner. The toolbar keeps the personal toggle alone. The
+  NTH-2 admin popover was built first and then abandoned: it reproduced the ambiguity it was meant to
+  remove — a control that *looks* like the personal toggle beside it but changes a setting for
+  everyone — and it applied on click, so a team-wide change had no review step. Two rules follow.
+  (1) **Authoring is any-mode; enforcement is Simple-mode only.** The lock is a project setting an
+  admin is explicitly here to set, so the dialog writes it whatever mode the admin is in; the editor
+  only *enforces* it in Simple mode, where structure protection is active at all. (2) **Staged, not
+  immediate.** The lock joins the dialog's other settings behind Save, so an admin sees what they are
+  about to change for the team before it happens — and Cancel must discard it.
+- **Alternatives:** **(a) The NTH-2 admin popover on the toolbar** — built, then rejected: see above.
+  **(b) Keep the second toolbar button as it was** — rejected: two look-alike icon buttons whose only
+  difference is scope, with no review step on the team-wide one. **(c) Write the lock immediately on
+  toggle while staging everything else in the same dialog** — rejected: the Applying Changes
+  guideline forbids interleaving immediate- and explicit-apply controls as siblings, and the one
+  control that reaches every translator is the worst place to break that rule. **(d) Put it in
+  project settings instead** — rejected: it is a statement about what the team's editor does, which
+  is what the Team layout dialog is for; splitting it out would leave an admin setting the team's
+  layout in one place and the team's editing rules in another.
+- **Consequences:** The lock now has exactly one control in the whole app, so this dialog's failure
+  modes are its failure modes: a refused write must not be reported as a save, and a setting that
+  could not be READ must not be written back (its `false` fallback would unlock structure for every
+  translator on the project). Both are handled in `team-layout.dialog.tsx` and pinned by tests. Three
+  localization keys for the retired project-wide toolbar toggle were deprecated with no successor.
+  An admin opening the dialog only to flip the lock must not publish anything else: `handleConfirm`
+  writes each setting only when its own field changed, because on a project that has never shared a
+  layout the resource lists are seeded from the admin's *personal* selections. One question is still
+  open: the modal shell renders a ✕ that resolves the dialog with `undefined`, discarding the staged
+  edits silently, which a staged-commit dialog should not offer beside Cancel — whether to remove it
+  or make it behave as Cancel is with the product owner (TODO(PT-4557)).
+- **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25).
 
 ## adr-theme-hosted-in-main: The theme service is hosted in main, and each window caches the current theme
 
