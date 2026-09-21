@@ -112,8 +112,12 @@ function DropdownMenuTrigger({
 // max-width, not the other way around), so at high zoom in a pane narrower than 8rem painted, the
 // fixed class alone would force the menu past the pane's edge. Mirrors FOOTNOTE_POPOVER_MIN_WIDTH
 // (platform-scripture-editor.web-view.tsx).
+// CUSTOM: The inner max(available-width, 8rem) keeps that floor at a full 8rem whenever the zoom
+// factor is 1, so a menu merely aligned near a narrow pane's edge behaves like any unzoomed dropdown
+// menu elsewhere. Dividing by the factor only pulls the floor below 8rem once zoom itself would push
+// the fixed floor past the available space — the case the max-width cap above exists to prevent.
 const ZOOMED_MIN_WIDTH =
-  'min(8rem, calc(var(--radix-dropdown-menu-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))';
+  'min(8rem, calc(max(var(--radix-dropdown-menu-content-available-width, 100vw), 8rem) / var(--platform-content-zoom-popup-factor, 1)))';
 
 /** @inheritdoc DropdownMenuProps */
 // CUSTOM: Lifted the prop shape out of the function signature into the named
