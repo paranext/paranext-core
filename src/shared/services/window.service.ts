@@ -1,12 +1,11 @@
 import { getByType as getDataProviderByType } from '@shared/services/data-provider.service';
 import { sendCommand } from '@shared/services/command.service';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import {
   IWindowService,
   windowServiceObjectToProxy,
   windowServiceProviderName,
 } from '@shared/services/window.service-model';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let dataProvider: IWindowService | undefined;
 

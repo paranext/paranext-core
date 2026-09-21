@@ -1,19 +1,19 @@
+import { areProjectInterfacesIncluded } from '@shared/models/project-lookup.service-model';
 import {
   projectSettingsServiceNetworkObjectName,
   IProjectSettingsService,
   projectSettingsServiceObjectToProxy,
 } from '@shared/services/project-settings.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
+import { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import {
+  createCachedInitializer,
   createSyncProxyForAsyncObject,
   Localized,
   ReferencedItem,
   transformAndEnsureRegExpRegExpArray,
 } from 'platform-bible-utils';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
-import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
-import { ProjectDataProviderInterfaces } from 'papi-shared-types';
-import { areProjectInterfacesIncluded } from '@shared/models/project-lookup.service-model';
 
 /**
  * Filters project settings contributions based on the provided project interfaces.

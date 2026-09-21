@@ -53,10 +53,10 @@ import {
 } from '@shared/services/scroll-group.service-model';
 import { SCROLL_GROUP_STATE_QUERY_PARAMETER } from '@shared/data/platform.data';
 import { refreshWindowCreationState } from '@renderer/services/window-creation-state.util';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   compareScrRefs,
+  createCachedInitializer,
   deepClone,
   deserialize,
   getErrorMessage,

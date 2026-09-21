@@ -8,8 +8,7 @@ import {
   networkObjectService,
   onDidCreateNetworkObject,
 } from '@shared/services/network-object.service';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
-import { AsyncVariable, isSubset } from 'platform-bible-utils';
+import { AsyncVariable, createCachedInitializer, isSubset } from 'platform-bible-utils';
 
 let networkObject: NetworkObjectStatusRemoteServiceType;
 const initialize = createCachedInitializer(async () => {

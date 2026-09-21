@@ -1,11 +1,10 @@
 import { dataProviderService } from '@shared/services/data-provider.service';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import {
   IMenuDataService,
   menuDataServiceObjectToProxy,
   menuDataServiceProviderName,
 } from '@shared/services/menu-data.service-model';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let dataProvider: IMenuDataService;
 const initialize = createCachedInitializer(async () => {

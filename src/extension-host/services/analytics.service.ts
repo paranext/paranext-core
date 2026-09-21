@@ -1,7 +1,6 @@
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage } from 'platform-bible-utils';
 import {
   AnalyticsEnvironment,
   AnalyticsEvent,
@@ -9,7 +8,7 @@ import {
   UnresolvedAnalyticsEvent,
 } from '@shared/models/analytics.model';
 import { ConsoleAnalyticsProvider } from '@extension-host/services/analytics-providers/console-analytics.provider';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { createCachedInitializer, getErrorMessage } from 'platform-bible-utils';
 
 /**
  * Env var that forces analytics to target the test environment regardless of build/S/R target, for
