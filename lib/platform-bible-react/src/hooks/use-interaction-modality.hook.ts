@@ -15,5 +15,3 @@ export function useInteractionModality() {
     trackInteractionModality();
   }, []);
 }
-
-export default useInteractionModality;

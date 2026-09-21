@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fireEvent, screen, waitFor } from 'storybook/test';
+import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -9,6 +10,8 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/shadcn-ui/context-menu';
+import { Dialog, DialogContent, DialogTitle } from '@/components/shadcn-ui/dialog';
+import { Drawer, DrawerContent, DrawerTitle } from '@/components/shadcn-ui/drawer';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +39,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { DEFAULT_STORYBOOK_THEME, STORYBOOK_THEME_IDS } from '../../../.storybook/theme-decorator';
 import { applyPlatformBibleThemeToElement } from '../../../.storybook/theme-apply';
 
@@ -261,5 +270,74 @@ export const PopoverSurface: Story = {
   ),
   play: async () => {
     await expectSurfacesOpaqueInEveryTheme(['popover-content']);
+  },
+};
+
+// The surfaces below are guarded so that re-applying a shadcn preset with a translucent menu color
+// cannot quietly make them translucent (adr-opaque-menu-surfaces).
+
+/** `Command` is the body of every combobox popover, e.g. `ProjectSelector` and `BookChapterControl`. */
+export const CommandSurface: Story = {
+  render: () => (
+    <>
+      <TranslucentControl />
+      <Command>
+        <CommandList>
+          <CommandItem>Item</CommandItem>
+        </CommandList>
+      </Command>
+    </>
+  ),
+  play: async () => {
+    await expectSurfacesOpaqueInEveryTheme(['command']);
+  },
+};
+
+export const TooltipSurface: Story = {
+  render: () => (
+    <>
+      <TranslucentControl />
+      <TooltipProvider>
+        <Tooltip defaultOpen>
+          <TooltipTrigger>Hover me</TooltipTrigger>
+          <TooltipContent>Tooltip body</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </>
+  ),
+  play: async () => {
+    await expectSurfacesOpaqueInEveryTheme(['tooltip-content']);
+  },
+};
+
+export const DialogSurface: Story = {
+  render: () => (
+    <>
+      <TranslucentControl />
+      <Dialog defaultOpen>
+        <DialogContent>
+          <DialogTitle>Dialog</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    </>
+  ),
+  play: async () => {
+    await expectSurfacesOpaqueInEveryTheme(['dialog-content']);
+  },
+};
+
+export const DrawerSurface: Story = {
+  render: () => (
+    <>
+      <TranslucentControl />
+      <Drawer defaultOpen>
+        <DrawerContent>
+          <DrawerTitle>Drawer</DrawerTitle>
+        </DrawerContent>
+      </Drawer>
+    </>
+  ),
+  play: async () => {
+    await expectSurfacesOpaqueInEveryTheme(['drawer-content']);
   },
 };

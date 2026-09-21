@@ -2847,7 +2847,13 @@ step, no automation. Just a record.
   triggers keep Radix's default, so the app has two close-focus behaviors until someone unifies them.
   Between a pointer close and the user's next keystroke, focus sits on the trigger with nothing to
   show where it is — a brief, deliberate gap in WCAG 2.4.7. The keydown that ends it clears the mark
-  before it acts, so pressing Enter paints the ring on the trigger it is about to reopen. Because
+  before it acts, so pressing Enter paints the ring on the trigger it is about to reopen. The same
+  gap applies to assistive input that emulates a pointer (switch access, head and eye pointers, some
+  touch-screen-reader modes): a `pointerdown` is all the tracker sees, so such a user is treated as a
+  pointer user, and the gap ends at their next keystroke or blur. The gap is not opened at all under
+  `forced-colors: active`: forced colors drops the ring (a box-shadow) and repaints the border in a
+  system color whether or not the trigger has focus, leaving `outline` as the only indicator, so
+  `hideFocusRing` does nothing there. Because
   the suppression is ordinary CSS and an inline style rather than a browser capability, it
   behaves the same in the shipped Electron as in a newer Chromium. Automated coverage stops at the
   signal rather than the paint: the jsdom test pins that focus returns and that the attribute tracks

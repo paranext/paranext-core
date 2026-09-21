@@ -5,22 +5,19 @@
 // Making `ResizeObserver` ambiently present flips that default to the narrowest step for every such
 // test in the repo — so a test that opens a Radix overlay and needs one to exist opts in here
 // instead, by calling `installNoopResizeObserver()` from its own `beforeAll`.
+
+const doNothing = () => {};
+
+/**
+ * Observes nothing and never calls back. A class rather than a factory because Radix constructs it
+ * with `new`, and TypeScript only accepts a class there without a cast.
+ */
 class NoopResizeObserver implements ResizeObserver {
-  // Keep an internal record of observed targets so the no-op methods touch `this` and don't
-  // trip @typescript-eslint/class-methods-use-this. No test inspects this state.
-  private readonly targets = new Set<Element>();
+  observe = doNothing;
 
-  observe(target: Element) {
-    this.targets.add(target);
-  }
+  unobserve = doNothing;
 
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
+  disconnect = doNothing;
 }
 
 /** Installs a no-op `ResizeObserver` for a test that opens a Radix overlay and needs one to exist. */

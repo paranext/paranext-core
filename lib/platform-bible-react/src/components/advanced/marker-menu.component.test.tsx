@@ -31,10 +31,6 @@ beforeAll(() => {
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
   }
-  // cmdk scrolls the active item into view on selection; jsdom doesn't implement it.
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
 });
 
 const DEFAULT_LOCALIZED_STRINGS = {

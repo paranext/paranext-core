@@ -170,6 +170,8 @@ export default function TabDropdownMenu({
   // ring does not belong there after a pointer close, though — it would sit on a button the pointer
   // has long left. Mark the trigger so CSS hides the ring, and clear the mark on the next keydown so
   // keyboard users get it back.
+  // Only the tab menus behave this way; every other menu keeps Radix's default.
+  // TODO(PT-4727): Lift this into DropdownMenuContent so all menus close alike, and drop it here.
   useInteractionModality();
   // `null` is React's canonical "not yet attached" ref value; there's no undefined equivalent in the
   // DOM/ref API (same pattern as navigation-history-buttons' button refs)

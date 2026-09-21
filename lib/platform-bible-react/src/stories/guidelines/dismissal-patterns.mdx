@@ -106,9 +106,12 @@ Dismissal is a keyboard and screen-reader concern, not just a pointer one:
   focus ring: after a close the user drove with the pointer, the ring would sit on a control the
   pointer has left. Suppress the ring for that case rather than withholding the focus — see
   `TabDropdownMenu`, which marks its trigger with `data-quiet-focus` and clears the mark on the next
-  keydown. For why the browser's own "focus without the indicator" option is not usable here, see
-  the `adr-menu-close-focus-restores-without-the-ring` entry in
-  `.context/standards/Architecture-Decisions.md`.
+  keydown. The ring stays under forced colors (Windows High Contrast), where it is the only focus
+  indicator left. For why the browser's own "focus without the indicator" option is not usable here,
+  see the `adr-menu-close-focus-restores-without-the-ring` entry in
+  `.context/standards/Architecture-Decisions.md`. The helpers behind this (`QUIET_FOCUS_*`,
+  `useInteractionModality`) are internal to this library for now and not exported, so an extension
+  cannot reuse them yet.
 - **Escape closes the topmost surface only.** When surfaces stack (e.g. a popover inside a dialog —
   supported here via `PopoverPortalContainerProvider`), Escape should dismiss the innermost first.
   Radix handles this per layer; preserve it rather than adding a global Escape handler.

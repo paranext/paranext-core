@@ -135,9 +135,9 @@ vi.mock('platform-bible-react', () => {
 });
 const mockGetStatus = vi.mocked(store.getFirstRunStatus);
 
-// jsdom doesn't ship ResizeObserver or scrollIntoView; cmdk (used inside LanguageStep's
-// InterfaceLanguagePicker) instantiates a ResizeObserver on mount. No-op stubs are sufficient
-// since these tests don't assert layout or scroll behavior.
+// jsdom doesn't ship ResizeObserver; cmdk (used inside LanguageStep's InterfaceLanguagePicker)
+// instantiates one on mount. A no-op stub is sufficient since these tests don't assert layout
+// behavior. scrollIntoView is shimmed repo-wide in vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   // `targets` gives the no-op methods a `this` use (satisfies class-methods-use-this); unused by tests.
   private readonly targets = new Set<Element>();
@@ -158,9 +158,6 @@ class NoopResizeObserver implements ResizeObserver {
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 

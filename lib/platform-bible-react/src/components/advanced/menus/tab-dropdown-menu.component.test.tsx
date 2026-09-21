@@ -279,4 +279,38 @@ describe('TabDropdownMenu focus after the menu closes', () => {
     expect(trigger.hasAttribute(QUIET_FOCUS_ATTRIBUTE)).toBe(false);
     expect(trigger.style.outline).toBe('');
   });
+
+  // Forced colors drops every box-shadow, so the outline is the only focus indicator left there.
+  it('keeps the focus indicator after a pointer close when forced colors are active', async () => {
+    const matchMedia = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: query === '(forced-colors: active)',
+      media: query,
+      // MediaQueryList types `onchange` as nullable, so a stub of it has to use null.
+      // eslint-disable-next-line no-null/no-null
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+    try {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      render(
+        <TabDropdownMenu onSelectMenuItem={vi.fn()} menuData={MENU_DATA} tabLabel="Project" />,
+      );
+      const trigger = screen.getByRole('button', { name: 'Project' });
+
+      await openWith.pointer(user, trigger);
+      await screen.findByRole('menu');
+      await closeWith['pointer selection'](user);
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+
+      expect(trigger).toHaveFocus();
+      expect(trigger.hasAttribute(QUIET_FOCUS_ATTRIBUTE)).toBe(false);
+      expect(trigger.style.outline).toBe('');
+    } finally {
+      matchMedia.mockRestore();
+    }
+  });
 });

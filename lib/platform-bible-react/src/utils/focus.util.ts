@@ -134,9 +134,20 @@ export const QUIET_FOCUS_ATTRIBUTE = 'data-quiet-focus';
  * host document beats every layered rule whatever its specificity. A web view that styles
  * `:focus-visible` itself — the scripture editor does — would therefore win against any class we
  * could add, so the outline has to be overridden where nothing but `!important` can reach it.
+ *
+ * Does nothing under `forced-colors: active` (Windows High Contrast). CSS Color Adjust forces
+ * `box-shadow: none` there, which removes the ring, so the outline is the only focus indicator left
+ * — and clearing it would leave focus on the trigger with nothing on screen saying so. The same
+ * reasoning is behind the forced-colors outline in {@link LIST_ITEM_KEYBOARD_FOCUS_RING}.
  */
 export function hideFocusRing(element: HTMLElement | undefined) {
   if (!element) return;
+  if (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(forced-colors: active)').matches
+  )
+    return;
   element.setAttribute(QUIET_FOCUS_ATTRIBUTE, '');
   element.style.outline = 'none';
 }

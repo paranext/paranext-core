@@ -185,14 +185,8 @@ if (typeof Element !== 'undefined') {
   }
 }
 
-// `ResizeObserver` is deliberately NOT installed unconditionally above like the two shims it sits
-// next to. `use-shrink-step.hook.ts` (lib/platform-bible-react) branches on
-// `typeof ResizeObserver === 'undefined'` on purpose, so that any render test in the repo that
-// doesn't care about layout gets the widest shrink step by default instead of the 0-width jsdom
-// would otherwise report. Making `ResizeObserver` ambiently present here would silently flip that
-// default to the narrowest step for every such test, and this file is shared by every jsdom test in
-// the repo. A test that opens a Radix overlay and needs one to exist opts in explicitly:
-// `installNoopResizeObserver()` in `lib/platform-bible-react/src/test-utils/resize-observer.util.ts`.
+// `ResizeObserver` is deliberately NOT shimmed here — tests opt in with `installNoopResizeObserver()`.
+// Why: lib/platform-bible-react/src/test-utils/resize-observer.util.ts.
 
 // ─── NOTICES_POLICY_OVERLAY ──────────────────────────────────────────────────
 //
