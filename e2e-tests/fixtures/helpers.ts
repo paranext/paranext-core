@@ -2103,65 +2103,6 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
   await expect(page.locator('.pr-twp [role="status"]')).not.toBeVisible({ timeout });
 }
 
-/**
- * WORKAROUND for an app-level race, not a fix for it. Click past the first-run gate (PT-4175) if it
- * is still showing despite `platform.firstRunComplete` being pinned before launch.
- *
- * The pin is a file write that lands before Electron starts, but the renderer's own read of it at
- * boot — `src/renderer/services/first-run-store.ts`'s `resolveInternal()` — is a separate, later
- * async round-trip, and on a slow/cold CI runner (observed on Windows, occasionally macOS) that
- * round-trip can resolve to `undefined` rather than `true` if it lands before the settings service
- * has finished loading the file. When that happens, the app falls back to treating first-run as
- * incomplete, probes local registration validity, and renders the gate — a full-screen modal that
- * aria-hides the rest of the app and intercepts pointer events. A test proceeding past it then
- * fails on whatever it clicks next with a generic timeout that gives no hint the gate is why: the
- * locator it clicked can even resolve to a real, visible, enabled element (the app underneath is
- * still there) while Playwright's actionability check keeps failing because the gate's overlay is
- * covering the click point.
- *
- * The gate — `data-testid="first-run-dialog"` — mounts in the SAME initial React commit as
- * `dock-layout` (both are siblings rendered by `Main()`), showing a `'loading'` spinner until
- * resolution settles, so waiting for it to become not-visible is meaningful from the very first
- * paint, not a check that can spuriously pass before React has rendered anything. `dock-layout`
- * being merely _attached_ is NOT that signal: it mounts regardless of the gate's status (confirmed
- * from a CI trace where dock-layout attached successfully while the gate was still blocking
- * clicks), which is why this checks the gate directly rather than piggy-backing on the earlier
- * dock-layout wait above.
- *
- * This tells three states apart. The gate clearing is the normal path — resolution settles and the
- * brief `'loading'` flash goes. An escape-hatch button appearing means the resolve is slow but
- * recoverable, and it can come from either of two places: the loading branch reveals its own once
- * its startup probe runs long (`REGISTRATION_SLOW_REVEAL_MS` in `first-run-overlay.component.tsx`,
- * 15 s, so a budget shorter than that can never see it), or `first-run-store.ts`'s
- * `startBackgroundRegistrationRecheck` swaps a fully-loaded, already-running app onto the wizard's
- * identify step at `allowContinueWithoutRegistration: true` once it resolves the machine's Paratext
- * registration as invalid — that step renders the same kind of button only when it has no `onBack`
- * handler AND `allowContinueWithoutRegistration` is true (both hold for this route), in the same
- * commit as its heading, before its own localized strings resolve (see `ESCAPE_HATCH_NAME_PATTERN`
- * for why a raw `%key%` label still counts). The setup wizard's stepper appearing with NO escape
- * hatch at all is the one state genuinely stuck: only `first-run.reducer.ts`'s `startWizard`
- * reaches it, and that branch renders no such button by design — so this fails immediately naming
- * the cause instead of waiting out a budget it cannot recover from.
- *
- * Anything else within the budget is inconclusive and returns quietly, because this is a recovery
- * step: the readiness waits after it will fail with their own message if something is genuinely
- * wrong, and treating "I could not tell" as failure turned a merely slow start into a hard error.
- * That is the app's own intended remedy for a slow/stuck resolve, so using it here is low-risk —
- * but it treats the SYMPTOM. The real fix is closing the read race in `resolveInternal()` itself,
- * which is app onboarding code used by real users on slow machines, not just CI, and belongs in its
- * own reviewed change, not a tooling branch. If the warning below starts firing often, that is the
- * signal to do that work.
- *
- * Deliberately loud when it fires, with a stable, greppable tag: this is called from
- * `waitForAppReady`, which is about POST-first-run behaviour, never first-run itself (that is
- * `first-run-wizard.spec.ts`, which documents why it cannot call `waitForAppReady` at all), so
- * recovering silently here would hide a real, if rare, product-level race behind a passing test.
- *
- * Takes and respects a caller-supplied budget rather than its own fixed timeout, matching every
- * other step in `waitForAppReady`: a stuck gate that never resolves must not be allowed to run out
- * the clock on its own, independent 120 s wait on top of whatever the overall readiness budget
- * already spent getting here.
- */
 /** What the gate is showing, once it is known to be showing something. */
 interface StuckGateObservations {
   escapeHatchVisible: boolean;
@@ -2248,6 +2189,17 @@ export function rethrowIfTargetClosed(error: unknown): void {
     );
 }
 
+/** Seams {@link pollFirstRunGate} calls through, so a test can drive its loop without real timers. */
+export interface PollFirstRunGateDeps {
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+}
+
+const defaultPollFirstRunGateDeps: PollFirstRunGateDeps = { sleep, now: () => Date.now() };
+
+/** Consecutive sample failures {@link pollFirstRunGate} tolerates before giving up early. */
+const MAX_CONSECUTIVE_SAMPLE_FAILURES = 3;
+
 /**
  * Poll a first-run-gate sample until it clears, shows a recognisably stuck state, or the budget
  * runs out — one snapshot per iteration, deliberately not a race of several `waitFor` calls against
@@ -2277,16 +2229,6 @@ export function rethrowIfTargetClosed(error: unknown): void {
  *   not burn the whole ~90s budget silently — the first such failure is logged once, with a stable
  *   `[e2e-first-run-gate]` prefix, and the streak resets on the next successful sample).
  */
-export interface PollFirstRunGateDeps {
-  sleep: (ms: number) => Promise<void>;
-  now: () => number;
-}
-
-const defaultPollFirstRunGateDeps: PollFirstRunGateDeps = { sleep, now: () => Date.now() };
-
-/** Consecutive sample failures {@link pollFirstRunGate} tolerates before giving up early. */
-const MAX_CONSECUTIVE_SAMPLE_FAILURES = 3;
-
 export async function pollFirstRunGate(
   sample: () => Promise<FirstRunGateSample>,
   timeout: number,
@@ -2341,6 +2283,65 @@ export async function pollFirstRunGate(
 export const ESCAPE_HATCH_NAME_PATTERN =
   /continue without (finishing setup|registration)|%firstRun_button_continueWithout(FinishingSetup|Registration)%/i;
 
+/**
+ * WORKAROUND for an app-level race, not a fix for it. Click past the first-run gate (PT-4175) if it
+ * is still showing despite `platform.firstRunComplete` being pinned before launch.
+ *
+ * The pin is a file write that lands before Electron starts, but the renderer's own read of it at
+ * boot — `src/renderer/services/first-run-store.ts`'s `resolveInternal()` — is a separate, later
+ * async round-trip, and on a slow/cold CI runner (observed on Windows, occasionally macOS) that
+ * round-trip can resolve to `undefined` rather than `true` if it lands before the settings service
+ * has finished loading the file. When that happens, the app falls back to treating first-run as
+ * incomplete, probes local registration validity, and renders the gate — a full-screen modal that
+ * aria-hides the rest of the app and intercepts pointer events. A test proceeding past it then
+ * fails on whatever it clicks next with a generic timeout that gives no hint the gate is why: the
+ * locator it clicked can even resolve to a real, visible, enabled element (the app underneath is
+ * still there) while Playwright's actionability check keeps failing because the gate's overlay is
+ * covering the click point.
+ *
+ * The gate — `data-testid="first-run-dialog"` — mounts in the SAME initial React commit as
+ * `dock-layout` (both are siblings rendered by `Main()`), showing a `'loading'` spinner until
+ * resolution settles, so waiting for it to become not-visible is meaningful from the very first
+ * paint, not a check that can spuriously pass before React has rendered anything. `dock-layout`
+ * being merely _attached_ is NOT that signal: it mounts regardless of the gate's status (confirmed
+ * from a CI trace where dock-layout attached successfully while the gate was still blocking
+ * clicks), which is why this checks the gate directly rather than piggy-backing on the earlier
+ * dock-layout wait above.
+ *
+ * This tells three states apart. The gate clearing is the normal path — resolution settles and the
+ * brief `'loading'` flash goes. An escape-hatch button appearing means the resolve is slow but
+ * recoverable, and it can come from either of two places: the loading branch reveals its own once
+ * its startup probe runs long (`REGISTRATION_SLOW_REVEAL_MS` in `first-run-overlay.component.tsx`,
+ * 15 s, so a budget shorter than that can never see it), or `first-run-store.ts`'s
+ * `startBackgroundRegistrationRecheck` swaps a fully-loaded, already-running app onto the wizard's
+ * identify step at `allowContinueWithoutRegistration: true` once it resolves the machine's Paratext
+ * registration as invalid — that step renders the same kind of button only when it has no `onBack`
+ * handler AND `allowContinueWithoutRegistration` is true (both hold for this route), in the same
+ * commit as its heading, before its own localized strings resolve (see `ESCAPE_HATCH_NAME_PATTERN`
+ * for why a raw `%key%` label still counts). The setup wizard's stepper appearing with NO escape
+ * hatch at all is the one state genuinely stuck: only `first-run.reducer.ts`'s `startWizard`
+ * reaches it, and that branch renders no such button by design — so this fails immediately naming
+ * the cause instead of waiting out a budget it cannot recover from.
+ *
+ * Anything else within the budget is inconclusive and returns quietly, because this is a recovery
+ * step: the readiness waits after it will fail with their own message if something is genuinely
+ * wrong, and treating "I could not tell" as failure turned a merely slow start into a hard error.
+ * That is the app's own intended remedy for a slow/stuck resolve, so using it here is low-risk —
+ * but it treats the SYMPTOM. The real fix is closing the read race in `resolveInternal()` itself,
+ * which is app onboarding code used by real users on slow machines, not just CI, and belongs in its
+ * own reviewed change, not a tooling branch. If the warning below starts firing often, that is the
+ * signal to do that work.
+ *
+ * Deliberately loud when it fires, with a stable, greppable tag: this is called from
+ * `waitForAppReady`, which is about POST-first-run behaviour, never first-run itself (that is
+ * `first-run-wizard.spec.ts`, which documents why it cannot call `waitForAppReady` at all), so
+ * recovering silently here would hide a real, if rare, product-level race behind a passing test.
+ *
+ * Takes and respects a caller-supplied budget rather than its own fixed timeout, matching every
+ * other step in `waitForAppReady`: a stuck gate that never resolves must not be allowed to run out
+ * the clock on its own, independent 120 s wait on top of whatever the overall readiness budget
+ * already spent getting here.
+ */
 async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<FirstRunGateOutcome> {
   const start = Date.now();
   const firstRunDialog = page.getByTestId('first-run-dialog');
