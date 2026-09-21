@@ -2956,7 +2956,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * click has to leave focus in the row editor it just opened. That the caret ends up in the verse
    * being published also keeps the editor's own reference handling quiet — its scrRef-driven
    * placement no-ops when the caret is already in the target verse, so publishing here cannot yank
-   * the caret to the verse start.
+   * the caret to the verse start. That holds for a note at the very END of its verse too, where the
+   * caret lands on the slot the NEXT verse's marker occupies: the editor counts a position before a
+   * verse number as belonging to the verse before it.
    *
    * The reference is resolved from the editor's LIVE document, the same one the pane's indexes are
    * computed against; `usjFromPdp` lags it by the save debounce.
