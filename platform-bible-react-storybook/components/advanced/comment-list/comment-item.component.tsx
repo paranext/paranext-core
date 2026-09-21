@@ -9,15 +9,17 @@ import {
 import { Avatar, AvatarFallback } from '@/components/shadcn-ui/avatar';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
+import { DisabledTooltipWrapper } from '@/components/basics/disabled-tooltip-wrapper.component';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { SerializedEditorState } from 'lexical';
-import { ArrowUp, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
+import { ArrowUp, MoreHorizontal, Pencil, Trash2, Undo2 } from 'lucide-react';
 import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
 import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentItemProps } from './comment-list.types';
@@ -25,7 +27,9 @@ import {
   actionToOutcome,
   COMMENT_BODY_PROSE_CLASSES,
   didPressCtrlOrCmdEnter,
+  EMPTY_EDITOR_STATE,
   getAssignedUserDisplayName,
+  localizeOrFallback,
 } from './comment-list.utils';
 
 /**
@@ -42,17 +46,58 @@ export function CommentItem({
   handleDeleteComment,
   onEditingChange,
   canEditOrDelete = false,
+  draftEditorState,
+  onDraftEditorStateChange,
 }: CommentItemProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editorState, setEditorState] = useState<SerializedEditorState>();
+  // Sometimes-controlled: a consumer that supplies `draftEditorState` owns the in-progress edit, so
+  // unmounting (a filter change) and remounting comes back showing the same edit instead of losing
+  // it. `internalEditorState` is the fallback for callers that don't manage this draft.
+  // `isEditing` is derived rather than tracked separately: a defined editor state is exactly what
+  // "editing" means.
+  const [internalEditorState, setInternalEditorState] = useState<SerializedEditorState>();
+  const editorState = draftEditorState ?? internalEditorState;
+  const isEditing = editorState !== undefined;
+  // A restored edit (draftEditorState survives its thread collapsing/remounting) must never render
+  // as an open editor while the comment's own card is collapsed — the root CommentItem always
+  // mounts regardless of thread selection, so `isEditing` alone is not enough to gate the editor
+  // vs. plain-text render: a collapsed card must always show its comment text.
+  const showEditingUi = isEditing && isThreadExpanded;
+
+  // A consumer that supplies `onDraftEditorStateChange` owns this state exclusively, for the whole
+  // lifetime of the component — not just while `draftEditorState` happens to be defined. Gating on
+  // the current value instead would seed `internalEditorState` from the first write (while
+  // `draftEditorState` is still undefined) and then, once the consumer echoes that value back,
+  // block every later write — including the clearing one — leaving the stale seed to resurface the
+  // moment `draftEditorState` itself is cleared.
+  const isControlled = onDraftEditorStateChange !== undefined;
+
+  const setEditorState = useCallback(
+    (value: SerializedEditorState | undefined) => {
+      // Only write the fallback while it is actually the source of truth — see the matching guard
+      // in CommentThread's `updateDraft` for why writing it while controlled would let stale
+      // content resurface after the consumer drops `draftEditorState` for a reason of its own.
+      if (!isControlled) setInternalEditorState(value);
+      onDraftEditorStateChange?.(value);
+    },
+    [isControlled, onDraftEditorStateChange],
+  );
 
   // Ref must default to null so React can attach it to the DOM element
   // eslint-disable-next-line no-null/no-null
   const editContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Sentinel for "the user just clicked Edit Comment during this mount" — the only case the
+  // dropdown-close focus workaround below should fire for. `isEditing` alone also turns true for a
+  // restored edit that is already active when this component mounts (or becomes visible again via
+  // `showEditingUi`), and that case must NOT steal focus from wherever the user is currently
+  // typing.
+  const shouldFocusOnEditRef = useRef(false);
+
   // Focus the editor when entering edit mode, after dropdown menu has fully closed
   useEffect(() => {
-    if (!isEditing) return undefined;
+    if (!showEditingUi) return undefined;
+    if (!shouldFocusOnEditRef.current) return undefined;
+    shouldFocusOnEditRef.current = false;
 
     let isMounted = true;
     const container = editContainerRef.current;
@@ -74,16 +119,15 @@ export function CommentItem({
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [isEditing]);
+  }, [showEditingUi]);
 
   const handleCancelEdit = useCallback(
     (e?: MouseEvent) => {
       if (e) e.stopPropagation();
-      setIsEditing(false);
       setEditorState(undefined);
       onEditingChange?.(false);
     },
-    [onEditingChange],
+    [onEditingChange, setEditorState],
   );
 
   const handleSaveEdit = useCallback(
@@ -95,12 +139,11 @@ export function CommentItem({
         editorStateToHtml(editorState),
       );
       if (isUpdateSuccessful) {
-        setIsEditing(false);
         setEditorState(undefined);
         onEditingChange?.(false);
       }
     },
-    [editorState, handleUpdateComment, comment.id, onEditingChange],
+    [editorState, handleUpdateComment, comment.id, onEditingChange, setEditorState],
   );
 
   const displayDate = useMemo(() => {
@@ -156,8 +199,13 @@ export function CommentItem({
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
-            setIsEditing(true);
-            setEditorState(htmlToEditorState(comment.contents));
+            shouldFocusOnEditRef.current = true;
+            // htmlToEditorState rejects empty HTML outright (a platform-created
+            // conflict-resolution comment carries exactly that shape — see
+            // `hasResolutionBodyText` below) — start from an empty editor state instead of
+            // parsing it in that case.
+            const hasBody = comment.contents.trim() !== '';
+            setEditorState(hasBody ? htmlToEditorState(comment.contents) : EMPTY_EDITOR_STATE);
             onEditingChange?.(true);
           }}
         >
@@ -185,18 +233,23 @@ export function CommentItem({
     comment.id,
     handleDeleteComment,
     onEditingChange,
+    setEditorState,
   ]);
+
+  // Shared with the disabled-tooltip wrapper below the button that reads it, so the tooltip
+  // explanation and the actual disabled condition can never drift apart.
+  const isSaveDisabled = !hasEditorContent(editorState);
 
   return (
     <div
-      className={cn('tw:flex tw:w-full tw:flex-row tw:items-baseline tw:gap-3 tw:space-y-3', {
+      className={cn('tw:flex tw:w-full tw:flex-row tw:items-baseline tw:gap-2', {
         'tw:text-sm': isReply,
       })}
     >
       <Avatar className="tw:h-8 tw:w-8">
         <AvatarFallback className="tw:text-xs tw:font-medium">{initials}</AvatarFallback>
       </Avatar>
-      <div className="tw:flex tw:flex-1 tw:flex-col tw:gap-2">
+      <div className="tw:flex tw:flex-1 tw:flex-col tw:gap-1">
         <div className="tw:flex tw:w-full tw:flex-row tw:flex-wrap tw:items-baseline tw:gap-x-2">
           <p className="tw:text-sm tw:font-medium">{userLabel}</p>
           <p className="tw:text-xs tw:font-normal tw:text-muted-foreground">{displayDate}</p>
@@ -207,7 +260,7 @@ export function CommentItem({
             </Badge>
           )}
         </div>
-        {isEditing && (
+        {showEditingUi && (
           <div
             role="textbox"
             tabIndex={-1}
@@ -249,28 +302,83 @@ export function CommentItem({
               )}
               editorSerializedState={editorState}
               onSerializedChange={(value) => setEditorState(value)}
+              actions={
+                <>
+                  <div className="tw:flex-1" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {/* Reverts the in-progress edit rather than deleting the comment -- `Trash2`
+                          is already this card's Delete Comment icon (in the "..." menu, reachable
+                          at the same time as this button), so reusing it here would put two
+                          differently-scoped destructive actions behind one glyph. `Undo2` still
+                          signals that unsaved content is discarded (unlike `X`, reserved for
+                          "nothing will be lost"), without colliding with Delete. */}
+                      <Button
+                        size="icon-sm"
+                        onClick={handleCancelEdit}
+                        variant="outline"
+                        className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                        aria-label={localizeOrFallback(
+                          '%comment_aria_cancel_edit%',
+                          localizedStrings,
+                          'Cancel edit',
+                        )}
+                      >
+                        <Undo2 />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {localizeOrFallback(
+                        '%comment_aria_cancel_edit%',
+                        localizedStrings,
+                        'Cancel edit',
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {/* Disabled buttons are removed from the tab order and don't fire the
+                          pointer/focus events Tooltip listens for, so without this wrapper a
+                          keyboard or screen-reader user gets no explanation for why there's
+                          nothing to save. */}
+                      <DisabledTooltipWrapper
+                        isDisabled={isSaveDisabled}
+                        disabledExplanation={localizeOrFallback(
+                          '%comment_aria_save_edit%',
+                          localizedStrings,
+                          'Save edit',
+                        )}
+                        className="tw:inline-flex"
+                      >
+                        <Button
+                          size="icon-sm"
+                          onClick={handleSaveEdit}
+                          className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                          disabled={isSaveDisabled}
+                          aria-label={localizeOrFallback(
+                            '%comment_aria_save_edit%',
+                            localizedStrings,
+                            'Save edit',
+                          )}
+                        >
+                          <ArrowUp />
+                        </Button>
+                      </DisabledTooltipWrapper>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {localizeOrFallback(
+                        '%comment_aria_save_edit%',
+                        localizedStrings,
+                        'Save edit',
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              }
             />
-            <div className="tw:flex tw:flex-row tw:items-start tw:justify-end tw:gap-2">
-              <Button
-                size="icon"
-                onClick={handleCancelEdit}
-                variant="outline"
-                className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-              >
-                <X />
-              </Button>
-              <Button
-                size="icon"
-                onClick={handleSaveEdit}
-                className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                disabled={!hasEditorContent(editorState)}
-              >
-                <ArrowUp />
-              </Button>
-            </div>
           </div>
         )}
-        {!isEditing && (
+        {!showEditingUi && (
           <>
             {comment.status === 'Resolved' && !showsConflictOutcome && (
               <div className="tw:text-sm tw:italic">
