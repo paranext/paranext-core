@@ -68,20 +68,12 @@ describe('content zoom markers (Enhanced Resources)', () => {
     );
   });
 
-  it('does not mark the wrapper around all three, which would nest them', () => {
-    // A marked element inside another marked element is ignored by the platform and logged once,
-    // so marking the wrapper would leave the viewer with one area and no way to tell.
-    expect(webView).not.toMatch(
-      /<ContentZoomRoot[^>]*> <div className="tw:flex tw:min-h-0 tw:flex-1">/,
-    );
-    expect(webView).not.toMatch(/<ContentZoomRoot className="tw:flex tw:min-h-0 tw:flex-1">/);
-  });
-
   it('marks exactly three areas across the whole extension — main, entries, footnotes — with no others added anywhere', () => {
     // Swept across every source file in the extension, not just the two that carry markers: a
     // ContentZoomRoot added to any other component (a tab, the scripture pane, the article viewer)
-    // would nest inside `main` or `entries`, which the platform ignores and logs rather than
-    // erroring on.
+    // would nest inside `main` or `entries`, and one around the wrapper that holds all three would
+    // contain them. The platform ignores a nested marker and logs it rather than erroring, so the
+    // viewer would be left with one area and no way to tell.
     const areaAttrs = listSourceFiles(SRC_DIR, THIS_FILE).flatMap((filePath) => {
       const fileSource = readFileSync(filePath, 'utf-8').replace(/\s+/g, ' ');
       return [...fileSource.matchAll(/<ContentZoomRoot(?:\s+area="([a-z-]+)")?[ >]/g)].map(

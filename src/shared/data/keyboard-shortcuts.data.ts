@@ -227,7 +227,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'content-zoom-in',
     purpose:
-      'Zoom the focused zoom area of the pane in by 10 % (the area containing keyboard focus, else the area last used)',
+      'Zoom the active zoom area of the pane in by 10 % (the area last clicked or focused; a click keeps its area even when the view answers it by moving focus elsewhere)',
     category: 'Zoom',
     context:
       'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
@@ -282,13 +282,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'content-zoom-wheel',
-    purpose: 'Zoom the content of the pane in or out one step per wheel notch',
+    purpose:
+      'Zoom the content of the pane in or out — one step per wheel notch, or by travel for a trackpad pinch',
     category: 'Zoom',
     context:
-      'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area)',
+      'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area). A trackpad pinch also zooms with no modifier held — the browser synthesizes it as Ctrl+wheel, which the handler recognizes as pinch travel rather than a notch chord',
     // The handler accepts Ctrl or ⌘ as the modifier on every platform, and ignores the gesture when
     // Shift or Alt is held as well.
-    keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    keys: { macOS: '⌘ wheel / ⌃ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
     locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
   },
   {
