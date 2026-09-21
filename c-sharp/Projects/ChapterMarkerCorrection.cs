@@ -23,7 +23,10 @@ namespace Paranext.DataProvider.Projects;
 /// <para>
 /// Ported from Paratext 9's <c>UsfmEditorTextLoader.FixChapterNumbers</c>, keeping its behavior —
 /// including the two shapes chapter 1 alone allows: an introduction ahead of the chapter marker,
-/// and a chapter that is introduction only and so carries no chapter marker at all.
+/// and a chapter that is introduction only and so carries no chapter marker at all. It differs in
+/// one respect: a correctly numbered marker whose line carries more than the marker, such as its
+/// alternate number, is left as it is rather than rewritten onto a line of its own (see
+/// <see cref="IsMarkerForChapter"/>).
 /// </para>
 /// </remarks>
 internal static partial class ChapterMarkerCorrection
@@ -88,7 +91,7 @@ internal static partial class ChapterMarkerCorrection
         // marker; the walk below moves that choice earlier when an earlier one starts Scripture.
         var keepIndex = chapterMarkers[^1].Index;
 
-        if (chapterMarkers.Count == 1 && StartsWithAt(usfm, keepIndex, expectedMarker))
+        if (chapterMarkers.Count == 1 && IsMarkerForChapter(usfm, keepIndex, 1))
             return null;
 
         // Working back from the last marker, every earlier marker that does NOT open more
@@ -132,7 +135,7 @@ internal static partial class ChapterMarkerCorrection
     )
     {
         var expectedMarker = $"\\c {chapterNum}{StringUtils.Crlf}";
-        if (chapterMarkers.Count == 1 && usfm.StartsWith(expectedMarker, StringComparison.Ordinal))
+        if (chapterMarkers.Count == 1 && IsMarkerForChapter(usfm, 0, chapterNum))
             return null;
 
         // Take every marker out — working backwards so the remaining matches keep their indexes.
@@ -141,6 +144,28 @@ internal static partial class ChapterMarkerCorrection
             strippedUsfm = strippedUsfm.Remove(chapterMarkers[i].Index, chapterMarkers[i].Length);
 
         return expectedMarker + strippedUsfm;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="usfm"/> holds the chapter marker for <paramref name="chapterNum"/> at
+    /// <paramref name="index"/>: <c>\c N</c> with its number ended by whitespace or the end of the
+    /// text.
+    /// </summary>
+    /// <remarks>
+    /// Paratext 9 accepts only the marker on a line of its own (<c>\c N</c> and a line break), and
+    /// otherwise rewrites the marker onto its own line. That moves anything the marker's line
+    /// legitimately carries — its alternate number, <c>\c 2 \ca 3\ca*</c> — onto the next line:
+    /// a whitespace-only change, reported as a correction and written to disk. Paratext itself reads
+    /// the number from the marker's line up to the first non-word character, so a marker followed
+    /// on its line by other content is already one Paratext takes, and there is nothing to correct.
+    /// </remarks>
+    private static bool IsMarkerForChapter(string usfm, int index, int chapterNum)
+    {
+        var marker = $"\\c {chapterNum}";
+        if (!StartsWithAt(usfm, index, marker))
+            return false;
+        var numberEnd = index + marker.Length;
+        return numberEnd == usfm.Length || char.IsWhiteSpace(usfm[numberEnd]);
     }
 
     /// <summary>

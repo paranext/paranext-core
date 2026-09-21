@@ -139,6 +139,26 @@ internal class ChapterMarkerCorrectionTests
         2,
         TestName = "Alternate and published chapter numbering survives a correction"
     )]
+    // Paratext 9 would move the alternate number off the marker's line and call that a correction;
+    // the marker is right, so there is nothing to correct (see IsMarkerForChapter).
+    [TestCase(
+        "\\c 2 \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        "\\c 2 \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        2,
+        TestName = "An alternate number on the marker's line needs no correction"
+    )]
+    [TestCase(
+        "\\ip intro\r\n\\c 1 \\ca 2\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        "\\ip intro\r\n\\c 1 \\ca 2\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        1,
+        TestName = "An alternate number on chapter 1's marker line needs no correction"
+    )]
+    [TestCase(
+        "\\c 2\r\n \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        "\\c 23 \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        2,
+        TestName = "A number that only begins with the chapter's is still corrected"
+    )]
     public void FixChapterMarkers_KeepsAlternateAndPublishedNumbering(
         string expected,
         string usfm,

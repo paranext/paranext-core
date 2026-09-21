@@ -71,6 +71,16 @@ internal class ChapterMarkerCorrectionWiringTests : PapiTestBase
     }
 
     [Test]
+    public void SetChapterUsfm_AlternateNumberOnTheMarkerLine_IsWrittenAsItIs()
+    {
+        const string usfm = "\\c 2 \\ca 3\\ca*\r\n\\p\r\n\\v 1 edited\r\n";
+        var provider = CreateProvider();
+
+        Assert.That(provider.SetChapterUsfm(ChapterToWrite, usfm), Is.True);
+        Assert.That(provider.GetChapterUsfm(ChapterToWrite), Is.EqualTo(usfm));
+    }
+
+    [Test]
     public void SetChapterUsx_MarkerNamesAnotherChapter_CorrectsAndWrites()
     {
         var provider = CreateProvider();
