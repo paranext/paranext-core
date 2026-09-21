@@ -51,6 +51,7 @@ import {
   Toolbar,
   ToolbarCompoundLabel,
   Tooltip,
+  TOOLTIP_DELAY_MS,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
@@ -61,7 +62,7 @@ import {
 import {
   ProjectSelector,
   type ProjectSelectorProject,
-  type ProjectSelectorSection,
+  type ProjectSelectorGrouping,
 } from 'platform-bible-react/experimental';
 import {
   getErrorMessage,
@@ -73,8 +74,6 @@ import {
 } from 'platform-bible-utils';
 import { CSSProperties, useCallback, useMemo } from 'react';
 
-const TOOLTIP_DELAY = 300;
-
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
 // Stable identity for the "nothing extra to offer" case, so the memo below does not hand
@@ -83,7 +82,11 @@ const EMPTY_BOOK_IDS: string[] = [];
 
 // Stable identities so the selector does not re-partition or re-render on every toolbar render.
 const EMPTY_OPEN_TABS: never[] = [];
-const CUSTOM_ONLY_GROUPINGS = ['custom'] as const;
+
+// The two buckets the toolbar's grouping partitions into. Keys, not headings — the headings are
+// localized in `getSectionHeading`.
+const RECENT_GROUP_KEY = 'recent';
+const LOCAL_GROUP_KEY = 'yours';
 
 // Visual breathing room between content and the native buttons on top of the live-measured overlay
 // width. Tuned by eye — smaller than the static reserved-space guess's 1rem (see
@@ -267,27 +270,41 @@ function ToolbarProjectSelector({
 
   // Memoized because `ProjectSelector` re-partitions the whole list whenever this array's identity
   // changes — an inline literal would re-partition on every search keystroke.
-  const customSections = useMemo<ProjectSelectorSection[]>(
+  //
+  // One entry, which locks the selector into this grouping and drops the group-by funnel button:
+  // the toolbar offers no other way to order this list.
+  const availableGroupings = useMemo<readonly ProjectSelectorGrouping[]>(
     () => [
       {
-        id: 'recent',
+        id: 'recentAndLocal',
+        // Never rendered — a single-entry `availableGroupings` suppresses the group-by menu — but
+        // the descriptor requires a label, and one that names the grouping keeps it honest if the
+        // toolbar ever offers a second.
         label: localizedStrings['%projectPicker_section_recent%'],
-        match: (project) => recentIndex.has(normalizeProjectId(project.id)),
-        // Recency, not alphabetical — alphabetical order defeats the section's purpose.
-        compare: (a, b) =>
-          (recentIndex.get(normalizeProjectId(a.id)) ?? Number.MAX_SAFE_INTEGER) -
-          (recentIndex.get(normalizeProjectId(b.id)) ?? Number.MAX_SAFE_INTEGER),
-      },
-      {
-        // Names its own boundary: this list is what is on this machine, so a project the user can
-        // reach on the server but has not downloaded is accounted for rather than silently absent.
-        //
-        // Deliberately narrower than the dialog's plain "Your projects", which is reached from the
-        // footer action and is the surface slated to gain server-reachable projects (PT-4552). The
-        // two labels name two different sets, so unifying them would make one of them wrong.
-        id: 'yours',
-        label: localizedStrings['%projectPicker_section_projects_localOnly%'],
-        match: () => true,
+        getGroupKey: (project) =>
+          recentIndex.has(normalizeProjectId(project.id)) ? RECENT_GROUP_KEY : LOCAL_GROUP_KEY,
+        getSectionHeading: (key) =>
+          key === RECENT_GROUP_KEY
+            ? localizedStrings['%projectPicker_section_recent%']
+            : // Names its own boundary: this list is what is on this machine, so a project the
+              // user can reach on the server but has not downloaded is accounted for rather than
+              // silently absent.
+              //
+              // Deliberately narrower than the dialog's plain "Your projects", which is reached
+              // from the footer action and is the surface slated to gain server-reachable projects
+              // (PT-4552). The two labels name two different sets, so unifying them would make one
+              // of them wrong.
+              localizedStrings['%projectPicker_section_projects_localOnly%'],
+        priorityKey: RECENT_GROUP_KEY,
+        // Recency, not alphabetical — alphabetical order defeats the recent section's purpose.
+        // Returning 0 for a pair with no recency between them lets the selector's canonical
+        // alphabetical order stand, which is what the local-projects bucket wants.
+        compareProjects: (a, b) => {
+          const aRank = recentIndex.get(normalizeProjectId(a.id));
+          const bRank = recentIndex.get(normalizeProjectId(b.id));
+          if (aRank === undefined || bRank === undefined) return 0;
+          return aRank - bRank;
+        },
       },
     ],
     [localizedStrings, recentIndex],
@@ -356,8 +373,12 @@ function ToolbarProjectSelector({
   }, [localizedStrings, pendingProject, displayedProject, currentProjectError, placeholder]);
 
   const selectorLocalizedStrings = useMemo(
-    () => ({ searchPlaceholder: localizedStrings['%projectPicker_search_placeholder%'] }),
-    [localizedStrings],
+    () => ({
+      searchPlaceholder: localizedStrings['%projectPicker_search_placeholder%'],
+      ariaLabel: triggerAriaLabel,
+      commandEmptyMessage: localizedStrings['%projectPicker_no_results%'],
+    }),
+    [localizedStrings, triggerAriaLabel],
   );
 
   const footerAction = useMemo(
@@ -384,17 +405,12 @@ function ToolbarProjectSelector({
       openTabs={EMPTY_OPEN_TABS}
       selection={{ projectId: displayedProject?.id }}
       onChangeSelection={handleChangeSelection}
-      customSections={customSections}
-      availableGroupings={CUSTOM_ONLY_GROUPINGS}
-      defaultGrouping="custom"
-      hideFilterMenu
+      availableGroupings={availableGroupings}
       renderProjectIndicator={renderProjectIndicator}
       renderTriggerLabel={renderTriggerLabel}
       footerAction={footerAction}
       isLoading={isLoading}
       localizedStrings={selectorLocalizedStrings}
-      ariaLabel={triggerAriaLabel}
-      commandEmptyMessage={localizedStrings['%projectPicker_no_results%']}
       buttonVariant="ghost"
       buttonClassName={cn(
         'tw:w-auto tw:max-w-64 tw:border-0 tw:bg-transparent',
@@ -721,8 +737,9 @@ export function PlatformBibleToolbar() {
         menuData={menuData}
         onSelectMenuItem={handleMenuCommand}
         className={cn(
-          // If the toolbar height changes, the top inset for the workspace updating overlay and
-          // getDockLayoutOuterInset (platform-dock-layout-positioning.util.ts) will need updating too.
+          // If these heights change, update POWER_MODE_TOOLBAR_HEIGHT / SIMPLE_MODE_TOOLBAR_HEIGHT
+          // in toolbar-height.util.ts to match. Every layer positioned below the toolbar reads its
+          // clearance from there, so that is the only other place to change.
           isPowerMode ? 'tw:h-12' : 'tw:h-14',
           'tw:bg-transparent',
           // Only reserve the static guess when there's no live measurement to reserve it above instead.
@@ -786,7 +803,7 @@ export function PlatformBibleToolbar() {
               )}
             </div>
             {marketingVersion !== '' && (
-              <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+              <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge
@@ -807,7 +824,7 @@ export function PlatformBibleToolbar() {
         }
       >
         {isPowerMode && (
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+          <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

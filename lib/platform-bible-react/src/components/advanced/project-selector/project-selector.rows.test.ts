@@ -3,13 +3,14 @@
 // just-asserted value. Both are idiomatic for test code; the lint rule's strict prohibition fits
 // production code better than test fixtures.
 /* eslint-disable no-type-assertion/no-type-assertion */
-import { describe, it, expect, vi } from 'vitest';
-import { normalizeProjectId, type ScrollGroupId } from 'platform-bible-utils';
+import { describe, it, expect } from 'vitest';
+import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   computeRows,
-  partitionAndSort,
-  partitionByCustomSections,
-  type ProjectRow,
+  partitionByGrouping,
+  partitionByOpenTabs,
+  partitionFlat,
+  type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from './project-selector.rows';
@@ -30,7 +31,7 @@ const openTabs: ProjectSelectorOpenTab[] = [
   { projectId: 'b', scrollGroupId: A },
 ];
 
-describe('computeRows — case-insensitive open-tab join (I12 regression)', () => {
+describe('computeRows — case-insensitive open-tab join', () => {
   // Real-world casing mismatch: canonical project ids are UPPERCASE (C# ProjectSummary →
   // Guid.ToUpperInvariant), but the open-tabs hook lowercases projectId. The join must still match
   // so the "Open Tabs" section renders. All-lowercase fixtures above never exercise this path.
@@ -365,27 +366,27 @@ describe('computeRows — projectScrollGroup mode', () => {
   });
 });
 
-describe('partitionAndSort', () => {
-  it('flat mode returns a single section with no section kind header', () => {
+describe('partitionFlat / partitionByOpenTabs', () => {
+  it('partitionFlat returns a single section with no section kind header', () => {
     const rows = computeRows({
       mode: 'project',
       projects,
       openTabs,
       selection: { projectId: 'b' },
     });
-    const sections = partitionAndSort(rows, false);
+    const sections = partitionFlat(rows);
     expect(sections).toHaveLength(1);
     expect(sections[0].kind).toBe('flat');
   });
 
-  it('grouped mode splits into Open tabs / Other projects for project mode', () => {
+  it('partitionByOpenTabs splits into Open tabs / Other projects for project mode', () => {
     const rows = computeRows({
       mode: 'project',
       projects,
       openTabs,
       selection: { projectId: undefined },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
     expect(sections[0].rows.map((r) => r.projectId).sort()).toEqual(['a', 'b']);
     expect(sections[1].rows.map((r) => r.projectId)).toEqual(['c']);
@@ -398,7 +399,7 @@ describe('partitionAndSort', () => {
       openTabs,
       selection: { projectId: 'a', scrollGroupId: C },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     const other = sections.find((s) => s.kind === 'other');
     expect(other).toBeDefined();
     expect(other!.rows.some((r) => r.isBoundButClosed && r.projectId === 'a')).toBe(true);
@@ -419,20 +420,20 @@ describe('partitionAndSort', () => {
       openTabs: [{ projectId: 'z', scrollGroupId: A }],
       selection: { pairs: [{ projectId: 'm' }] },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     const other = sections.find((s) => s.kind === 'other');
     expect(other!.rows.map((r) => r.projectId)).toEqual(['a', 'm']);
   });
 
-  it('selection state is preserved across groupByOpenTabs flips', () => {
+  it('selection state is preserved across flat / openTabs flips', () => {
     const rows = computeRows({
       mode: 'projectScrollGroup',
       projects,
       openTabs,
       selection: { projectId: 'a', scrollGroupId: B },
     });
-    const flat = partitionAndSort(rows, false);
-    const grouped = partitionAndSort(rows, true);
+    const flat = partitionFlat(rows);
+    const grouped = partitionByOpenTabs(rows);
     const flatSelected = flat.flatMap((s) => s.rows).filter((r) => r.isSelected);
     const groupedSelected = grouped.flatMap((s) => s.rows).filter((r) => r.isSelected);
     expect(flatSelected.map((r) => `${r.projectId}:${r.scrollGroupId}`)).toEqual(
@@ -447,11 +448,11 @@ describe('partitionAndSort', () => {
       openTabs,
       selection: { projectId: 'a' },
     });
-    const flatKeys = partitionAndSort(rows, false)
+    const flatKeys = partitionFlat(rows)
       .flatMap((s) => s.rows)
       .map((r) => r.rowKey)
       .sort();
-    const groupedKeys = partitionAndSort(rows, true)
+    const groupedKeys = partitionByOpenTabs(rows)
       .flatMap((s) => s.rows)
       .map((r) => r.rowKey)
       .sort();
@@ -474,7 +475,7 @@ describe('partitionAndSort', () => {
       openTabs: tabs,
       selection: { projectId: undefined, scrollGroupId: undefined },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     const open = sections.find((s) => s.kind === 'openTabs');
     expect(open!.rows.map((r) => `${r.projectId}:${r.scrollGroupId}`)).toEqual([
       'p:0',
@@ -557,15 +558,15 @@ describe('computeRows — isDisabled / disabledReason flow-through', () => {
   });
 });
 
-describe('partitionAndSort — flat fallback when no Open Tabs section', () => {
-  it('returns a single flat section (no headings) when grouping is on but no rows belong to Open Tabs', () => {
+describe('partitionByOpenTabs — flat fallback when no Open Tabs section', () => {
+  it('returns a single flat section (no headings) when no rows belong to Open Tabs', () => {
     const rows = computeRows({
       mode: 'project',
       projects,
       openTabs: [],
       selection: { projectId: undefined },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     expect(sections).toHaveLength(1);
     expect(sections[0].kind).toBe('flat');
     expect(sections[0].rows).toHaveLength(projects.length);
@@ -578,7 +579,7 @@ describe('partitionAndSort — flat fallback when no Open Tabs section', () => {
       openTabs: [{ projectId: 'a', scrollGroupId: A }],
       selection: { projectId: undefined },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
   });
 
@@ -589,292 +590,186 @@ describe('partitionAndSort — flat fallback when no Open Tabs section', () => {
       openTabs: [],
       selection: { pairs: [] },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     expect(sections).toHaveLength(1);
     expect(sections[0].kind).toBe('flat');
   });
 });
 
-describe('partitionByCustomSections', () => {
-  const byId = (list: ProjectSelectorProject[]) =>
-    new Map(list.map((p) => [normalizeProjectId(p.id), p]));
-
-  const rowsFor = (list: ProjectSelectorProject[], tabs: ProjectSelectorOpenTab[] = []) =>
-    computeRows({ mode: 'project', projects: list, openTabs: tabs, selection: {} });
-
-  it('renders sections in the supplied order, not alphabetically', () => {
-    const list: ProjectSelectorProject[] = [
-      { id: 'z', shortName: 'Z', fullName: 'Zebra' },
-      { id: 'a', shortName: 'A', fullName: 'Apple' },
-    ];
-    const sections = partitionByCustomSections(
-      rowsFor(list),
-      [
-        { id: 'second', label: 'Second', match: (p) => p.id === 'a' },
-        { id: 'first', label: 'First', match: () => true },
-      ],
-      byId(list),
-    );
-    expect(sections.map((s) => s.label)).toEqual(['Second', 'First']);
+describe('partitionByGrouping — dispatch', () => {
+  const p: ProjectSelectorProject[] = [
+    { id: 'en1', shortName: 'EN1', fullName: 'English 1', customData: { language: 'English' } },
+    { id: 'en2', shortName: 'EN2', fullName: 'English 2', customData: { language: 'English' } },
+    { id: 'de1', shortName: 'DE1', fullName: 'German 1', customData: { language: 'German' } },
+    { id: 'legacy', shortName: 'LEG', fullName: 'Legacy' },
+  ];
+  const rows = computeRows({
+    mode: 'project',
+    projects: p,
+    openTabs: [],
+    selection: { projectId: undefined },
   });
 
-  it('assigns each project to the first matching section', () => {
-    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-    const sections = partitionByCustomSections(
-      rowsFor(list),
-      [
-        { id: 'one', label: 'One', match: () => true },
-        { id: 'two', label: 'Two', match: () => true },
-      ],
-      byId(list),
-    );
+  it("delegates the reserved 'openTabs' id to partitionByOpenTabs", () => {
+    const rowsWithTabs = computeRows({
+      mode: 'project',
+      projects: p,
+      openTabs: [{ projectId: 'en1', scrollGroupId: A }],
+      selection: { projectId: undefined },
+    });
+    const openTabsGrouping: ProjectSelectorGrouping = { id: 'openTabs', label: 'Open tabs' };
+    const sections = partitionByGrouping(rowsWithTabs, openTabsGrouping);
+    expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
+  });
+
+  it('buckets rows by getGroupKey, emitting one grouping section per key', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      unknownSectionHeading: 'Unknown',
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    const labels = sections.map((s) => s.label);
+    // Alphabetical by heading (English before German), unknown bucket last.
+    expect(labels).toEqual(['English', 'German', 'Unknown']);
+    expect(sections[0].rows.map((r) => r.projectId).sort()).toEqual(['en1', 'en2']);
+    expect(sections[2].rows.map((r) => r.projectId)).toEqual(['legacy']);
+  });
+
+  it('drops the unknown bucket when unknownSectionHeading is absent', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections.map((s) => s.label)).toEqual(['English', 'German']);
+    // 'legacy' is elided since it has no language and no unknown heading was provided.
+    expect(sections.flatMap((s) => s.rows).find((r) => r.projectId === 'legacy')).toBeUndefined();
+  });
+
+  it('honors priorityKey by pinning that bucket first', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      priorityKey: 'German',
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections.map((s) => s.label)).toEqual(['German', 'English']);
+    expect(sections[0].isPriority).toBe(true);
+    expect(sections[1].isPriority).toBe(false);
+  });
+
+  it('honors compareSections for non-priority ordering', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      // Reverse alphabetic.
+      compareSections: (a, b) => b.heading.localeCompare(a.heading),
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections.map((s) => s.label)).toEqual(['German', 'English']);
+  });
+
+  it('getSectionHeading receives all projects in the bucket so it can lift a friendlier heading', () => {
+    const typed: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'A', customData: { type: 'std' } },
+      {
+        id: 'b',
+        shortName: 'B',
+        fullName: 'B',
+        customData: { type: 'std', typeName: 'Standard translation' },
+      },
+    ];
+    const rowsTyped = computeRows({
+      mode: 'project',
+      projects: typed,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    const grouping: ProjectSelectorGrouping = {
+      id: 'type',
+      label: 'Type',
+      getGroupKey: (project) =>
+        typeof project.customData?.type === 'string' ? project.customData.type : undefined,
+      getSectionHeading: (key, bucketProjects) => {
+        const first = bucketProjects.find(
+          (project) => typeof project.customData?.typeName === 'string',
+        );
+        const heading = first?.customData?.typeName;
+        return typeof heading === 'string' ? heading : key;
+      },
+    };
+    const sections = partitionByGrouping(rowsTyped, grouping);
     expect(sections).toHaveLength(1);
-    expect(sections[0].label).toBe('One');
+    expect(sections[0].label).toBe('Standard translation');
   });
 
-  it('collects unmatched rows into a trailing unlabeled section', () => {
-    const list: ProjectSelectorProject[] = [
-      { id: 'a', shortName: 'A', fullName: 'Apple' },
-      { id: 'b', shortName: 'B', fullName: 'Banana' },
-    ];
-    const sections = partitionByCustomSections(
-      rowsFor(list),
-      [{ id: 'only-a', label: 'Only A', match: (p) => p.id === 'a' }],
-      byId(list),
-    );
-    expect(sections).toHaveLength(2);
-    expect(sections[0].label).toBe('Only A');
-    expect(sections[1].label).toBeUndefined();
-    expect(sections[1].rows.map((r) => r.shortName)).toEqual(['B']);
-  });
-
-  it('elides sections that match no rows', () => {
-    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-    const sections = partitionByCustomSections(
-      rowsFor(list),
-      [
-        { id: 'empty', label: 'Empty', match: () => false },
-        { id: 'all', label: 'All', match: () => true },
-      ],
-      byId(list),
-    );
-    expect(sections.map((s) => s.label)).toEqual(['All']);
-  });
-
-  it('falls back to a single flat section when no sections are supplied', () => {
-    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-    const sections = partitionByCustomSections(rowsFor(list), [], byId(list));
+  it('falls back to a flat section when the grouping has no getGroupKey and is not `openTabs`', () => {
+    const grouping: ProjectSelectorGrouping = { id: 'no-op', label: 'No-op' };
+    const sections = partitionByGrouping(rows, grouping);
     expect(sections).toHaveLength(1);
     expect(sections[0].kind).toBe('flat');
   });
+});
 
-  it('applies one match verdict to every row a project produces', () => {
-    // project-multi fans one project out into one row per scroll group. All of those rows must
-    // land in the same section, and `match` must be consulted once per project, not per row.
-    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-    const tabs: ProjectSelectorOpenTab[] = [
-      { projectId: 'a', scrollGroupId: A },
-      { projectId: 'a', scrollGroupId: B },
-    ];
-    const rows = computeRows({
-      mode: 'project-multi',
-      projects: list,
-      openTabs: tabs,
-      selection: { pairs: [] },
+describe('partitionByGrouping — compareProjects', () => {
+  const recencyOf = (project: ProjectSelectorProject): number =>
+    typeof project.customData?.lastUsedAt === 'number' ? project.customData.lastUsedAt : 0;
+
+  // Deliberately reverse-alphabetical by recency, so canonical ordering cannot produce this result
+  // by accident.
+  const recencyProjects: ProjectSelectorProject[] = [
+    { id: 'aaa', shortName: 'AAA', fullName: 'Oldest', customData: { bucket: 'x', lastUsedAt: 1 } },
+    { id: 'bbb', shortName: 'BBB', fullName: 'Middle', customData: { bucket: 'x', lastUsedAt: 2 } },
+    { id: 'ccc', shortName: 'CCC', fullName: 'Newest', customData: { bucket: 'x', lastUsedAt: 3 } },
+    { id: 'zzz', shortName: 'ZZZ', fullName: 'No bucket' },
+  ];
+  const rows = computeRows({
+    mode: 'project',
+    projects: recencyProjects,
+    openTabs: [],
+    selection: { projectId: undefined },
+  });
+  const bucketed: ProjectSelectorGrouping = {
+    id: 'recent',
+    label: 'Recent',
+    getGroupKey: (project) =>
+      typeof project.customData?.bucket === 'string' ? project.customData.bucket : undefined,
+    unknownSectionHeading: 'Other',
+  };
+
+  it('orders rows within a bucket by the supplied comparator', () => {
+    const sections = partitionByGrouping(rows, {
+      ...bucketed,
+      compareProjects: (a, b) => recencyOf(b) - recencyOf(a),
     });
-    expect(rows.length).toBeGreaterThan(1);
-    const match = vi.fn(() => true);
-    const sections = partitionByCustomSections(
-      rows,
-      [{ id: 'all', label: 'All', match }],
-      byId(list),
-    );
-    expect(sections).toHaveLength(1);
-    expect(sections[0].rows).toHaveLength(rows.length);
-    expect(match).toHaveBeenCalledTimes(1);
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['ccc', 'bbb', 'aaa']);
   });
 
-  it('normalizes projectId casing when looking up a project in the map', () => {
-    // Callers key the map by canonical project id; a row's projectId may arrive in any casing.
-    // The lookup must normalize or the row falls through to the unmatched section.
-    const project: ProjectSelectorProject = { id: 'ABC123', shortName: 'A', fullName: 'Apple' };
-    const row: ProjectRow = {
-      rowKey: 'test-key',
-      projectId: 'abc123',
-      shortName: 'A',
-      fullName: 'Apple',
-      openGroups: [],
-      isSelected: false,
-      isMuted: false,
-      isBoundButClosed: false,
-      isDisabled: false,
-    };
-    const sections = partitionByCustomSections(
-      [row],
-      [{ id: 'mine', label: 'Mine', match: (p) => p.id === 'ABC123' }],
-      byId([project]),
-    );
-    expect(sections).toHaveLength(1);
-    expect(sections[0].label).toBe('Mine');
+  it('falls back to canonical order when the comparator reports a tie', () => {
+    const sections = partitionByGrouping(rows, { ...bucketed, compareProjects: () => 0 });
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['aaa', 'bbb', 'ccc']);
   });
 
-  it('uses a per-section compare when supplied, overriding alphabetical order', () => {
-    // The canonical order is alphabetical by shortName, which would render a "Recent" section
-    // alphabetically — useless. A section may impose its own order.
-    const list: ProjectSelectorProject[] = [
-      { id: 'a', shortName: 'A', fullName: 'Apple' },
-      { id: 'b', shortName: 'B', fullName: 'Banana' },
-      { id: 'c', shortName: 'C', fullName: 'Cherry' },
-    ];
-    const recency = ['c', 'a', 'b'];
-    const sections = partitionByCustomSections(
-      rowsFor(list),
-      [
-        {
-          id: 'recent',
-          label: 'Recent',
-          match: () => true,
-          compare: (x, y) => recency.indexOf(x.id) - recency.indexOf(y.id),
-        },
-      ],
-      byId(list),
-    );
-    expect(sections[0].rows.map((r) => r.shortName)).toEqual(['C', 'A', 'B']);
+  it('uses canonical order within a bucket when no comparator is supplied', () => {
+    const sections = partitionByGrouping(rows, bucketed);
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['aaa', 'bbb', 'ccc']);
   });
 
-  it('falls back to compareRows when a caller compare treats two rows as equal', () => {
-    // The project is open in scroll group B and separately selected (but not open) in scroll
-    // group A, so `computeRows` produces the B row before the synthetic A row — descending, not
-    // canonical order. A caller `compare` that does not consider scroll group returns 0 for that
-    // pair, so the canonical tie-break must decide their relative order.
-    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-    const rows = computeRows({
-      mode: 'project-multi',
-      projects: list,
-      openTabs: [{ projectId: 'a', scrollGroupId: B }],
-      selection: { pairs: [{ projectId: 'a', scrollGroupId: A }] },
+  it('leaves the unknown bucket canonically ordered', () => {
+    const sections = partitionByGrouping(rows, {
+      ...bucketed,
+      compareProjects: (a, b) => recencyOf(b) - recencyOf(a),
     });
-    expect(rows.map((r) => r.scrollGroupId)).toEqual([B, A]);
-    const sections = partitionByCustomSections(
-      rows,
-      [{ id: 'all', label: 'All', match: () => true, compare: () => 0 }],
-      byId(list),
-    );
-    expect(sections).toHaveLength(1);
-    expect(sections[0].rows.map((r) => r.scrollGroupId)).toEqual([A, B]);
-  });
-
-  it('gives two unlabeled sections distinct ids so React keys stay stable', () => {
-    const list: ProjectSelectorProject[] = [
-      { id: 'a', shortName: 'A', fullName: 'Apple' },
-      { id: 'b', shortName: 'B', fullName: 'Banana' },
-    ];
-    const sections = partitionByCustomSections(
-      rowsFor(list),
-      [{ id: 'just-a', match: (p) => p.id === 'a' }],
-      byId(list),
-    );
-    // One caller-supplied unlabeled section plus the trailing unmatched one.
-    expect(sections).toHaveLength(2);
-    expect(sections[0].label).toBeUndefined();
-    expect(sections[1].label).toBeUndefined();
-    expect(sections[0].id).not.toBe(sections[1].id);
-  });
-
-  it('warns once per duplicate id no matter how many times it partitions', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-      const sections = [
-        { id: 'dup', label: 'One', match: () => false },
-        { id: 'dup', label: 'Two', match: () => true },
-      ];
-      // The selector re-partitions on every search keystroke, so a per-call warning would bury
-      // the console under the same message the caller can only act on once.
-      partitionByCustomSections(rowsFor(list), sections, byId(list));
-      partitionByCustomSections(rowsFor(list), sections, byId(list));
-      partitionByCustomSections(rowsFor(list), sections, byId(list));
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy.mock.calls[0][0]).toContain('dup');
-    } finally {
-      warnSpy.mockRestore();
-    }
-  });
-
-  it('warns about a second, distinct duplicate id', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-      partitionByCustomSections(
-        rowsFor(list),
-        [
-          { id: 'other-dup', label: 'One', match: () => false },
-          { id: 'other-dup', label: 'Two', match: () => true },
-        ],
-        byId(list),
-      );
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy.mock.calls[0][0]).toContain('other-dup');
-    } finally {
-      warnSpy.mockRestore();
-    }
-  });
-
-  it('warns when a caller section id collides with the reserved unmatched-bucket id', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-      partitionByCustomSections(
-        rowsFor(list),
-        [{ id: '__unmatched__', label: 'Mine', match: () => true }],
-        byId(list),
-      );
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy.mock.calls[0][0]).toContain('__unmatched__');
-    } finally {
-      warnSpy.mockRestore();
-    }
-  });
-
-  it('does not warn when supplied section ids are unique', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-      partitionByCustomSections(
-        rowsFor(list),
-        [{ id: 'unique', label: 'One', match: () => true }],
-        byId(list),
-      );
-      expect(warnSpy).not.toHaveBeenCalled();
-    } finally {
-      warnSpy.mockRestore();
-    }
-  });
-
-  it('heads the unmatched bucket with the supplied label', () => {
-    const list: ProjectSelectorProject[] = [
-      { id: 'a', shortName: 'A', fullName: 'Apple' },
-      { id: 'b', shortName: 'B', fullName: 'Banana' },
-    ];
-    const sections = partitionByCustomSections(
-      rowsFor(list),
-      [{ id: 'just-a', label: 'Mine', match: (p) => p.id === 'a' }],
-      byId(list),
-      'Other',
-    );
-    expect(sections.map((section) => section.label)).toEqual(['Mine', 'Other']);
-    expect(sections[1].rows.map((r) => r.shortName)).toEqual(['B']);
-  });
-
-  it('keeps rows whose project is missing from the map in the unmatched section', () => {
-    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
-    const sections = partitionByCustomSections(
-      rowsFor(list),
-      [{ id: 'all', label: 'All', match: () => true }],
-      new Map(), // deliberately empty
-    );
-    expect(sections).toHaveLength(1);
-    expect(sections[0].label).toBeUndefined();
-    expect(sections[0].rows).toHaveLength(1);
+    const unknown = sections.find((s) => s.label === 'Other');
+    expect(unknown?.rows.map((r) => r.projectId)).toEqual(['zzz']);
   });
 });

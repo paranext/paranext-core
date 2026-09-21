@@ -1,5 +1,7 @@
 import { FloatPosition } from 'rc-dock';
 import { vi } from 'vitest';
+import { render } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { FloatLayout, TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
 import {
@@ -11,6 +13,7 @@ import {
   TAB_GROUP,
   TAB_GROUP_RESOURCES,
 } from './platform-dock-layout-positioning.util';
+import { createDockContext, createPanel } from './__tests__/rc-dock.test-utils';
 
 /** Minimal WebView {@link TabInfo} fixture for `getTabGroup` tests. */
 function makeWebViewTabInfo(webViewType: string, isClosable?: boolean): TabInfo {
@@ -33,6 +36,9 @@ vi.mock('@renderer/services/theme.service', () => ({
 
 describe('Dock Layout Component', () => {
   describe('getGroups()', () => {
+    // `floatable`/`tabLocked`/`disableDock` below pin what this app's groups actually set; see
+    // `resolveTabBarDropZoneSource`'s TSDoc (tab-bar-drop-zone.util.ts) for why its own gates don't
+    // replicate rc-dock's `disableDock` branch — no group registered here ever sets it.
     it('power mode: returns TAB_GROUP with panelExtra and without tabLocked', () => {
       const groups = getGroups(true);
       expect(typeof groups[TAB_GROUP].panelExtra).toBe('function');
@@ -40,6 +46,7 @@ describe('Dock Layout Component', () => {
       expect(groups[TAB_GROUP].maximizable).toBe(false);
       expect(groups[TAB_GROUP].floatable).toBe(false);
       expect(groups[TAB_GROUP].animated).toBe(false);
+      expect(groups[TAB_GROUP].disableDock).toBeUndefined();
     });
 
     it('simple mode: returns TAB_GROUP with tabLocked and without panelExtra', () => {
@@ -49,6 +56,7 @@ describe('Dock Layout Component', () => {
       expect(groups[TAB_GROUP].maximizable).toBe(false);
       expect(groups[TAB_GROUP].floatable).toBe(false);
       expect(groups[TAB_GROUP].animated).toBe(false);
+      expect(groups[TAB_GROUP].disableDock).toBeUndefined();
     });
 
     it('simple mode: registers HEADLESS_GROUP and TAB_GROUP_RESOURCES with locked config', () => {
@@ -58,7 +66,27 @@ describe('Dock Layout Component', () => {
         expect(groups[groupKey].panelExtra).toBeUndefined();
         expect(groups[groupKey].maximizable).toBe(false);
         expect(groups[groupKey].floatable).toBe(false);
+        expect(groups[groupKey].disableDock).toBeUndefined();
       });
+    });
+
+    it('power mode: panelExtra renders both the new-tab button and the tab-bar drop zone, in that order', () => {
+      const { panelExtra } = getGroups(true)[TAB_GROUP];
+      if (!panelExtra) throw new Error('Expected power mode TAB_GROUP to define panelExtra');
+
+      const { container } = render(panelExtra(createPanel(), createDockContext()));
+      const newTabButton = container.querySelector('.new-tab-button');
+      const dropZone = container.querySelector('.platform-tab-bar-drop-zone');
+      if (!newTabButton || !dropZone)
+        throw new Error('Expected both the "+" button and the drop zone to render');
+
+      // Outside a drag both keep their default flex order, so this DOM order is what actually
+      // positions "+" before the drop zone at rest (only the drag-time CSS rule in
+      // dock-layout-wrapper.component.scss moves "+" to the bar's end).
+      const position = newTabButton.compareDocumentPosition(dropZone);
+      // Node.compareDocumentPosition's contract is a bitmask.
+      // eslint-disable-next-line no-bitwise
+      expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
   });
 

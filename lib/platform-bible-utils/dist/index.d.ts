@@ -4941,6 +4941,96 @@ export interface PaletteItem {
 	 */
 	muted?: boolean;
 }
+/**
+ * Well-known keys the ProjectSelector's built-in groupings (`language`, `type`, `lastUsed`) read
+ * from `ProjectSelectorProject.customData`. Reference these constants rather than typing the key
+ * strings inline so a rename here surfaces at every callsite.
+ */
+export declare const PROJECT_SELECTOR_CUSTOM_DATA_KEYS: Readonly<{
+	readonly language: "language";
+	readonly type: "type";
+	readonly typeName: "typeName";
+	readonly lastUsedAt: "lastUsedAt";
+}>;
+/**
+ * The typed shape of the well-known {@link PROJECT_SELECTOR_CUSTOM_DATA_KEYS} entries. Every field
+ * is optional — a grouping whose key is missing routes that project into its "unknown" bucket (or
+ * is elided per the grouping's `unknownSectionHeading` config).
+ */
+export type ProjectSelectorCustomDataShape = {
+	/**
+	 * Language name — bucketed by exact equality by the built-in `language` grouping and used as the
+	 * section heading verbatim. Consumer supplies a localized human-readable name.
+	 */
+	language?: string;
+	/**
+	 * Locale-stable type key — bucketed by exact equality by the built-in `type` grouping. Free form;
+	 * consumers pair it with `typeName` for display.
+	 */
+	type?: string;
+	/**
+	 * Human-readable label for {@link type}. The built-in `type` grouping uses the first non-empty
+	 * `typeName` observed in a bucket as the section heading (falls back to the raw `type` key when
+	 * no row in the bucket carries one).
+	 */
+	typeName?: string;
+	/**
+	 * Millisecond-epoch timestamp of the last time the caller-relevant "use" of this project
+	 * happened.
+	 *
+	 * The built-in `lastUsed` grouping reads this as a PRESENCE FLAG, not as a sort key: any finite
+	 * number routes the project into the "Recently used" bucket and its absence routes it into
+	 * "Other". The magnitude is never compared. Rows WITHIN every bucket are ordered by the
+	 * component's own stable sort — alphabetical by short name, tie-broken by scroll group — so a
+	 * larger `lastUsedAt` does not move a project higher up the list.
+	 *
+	 * If your data source is an ordered recency list rather than per-project timestamps (as
+	 * `platformScripture.recentlyOpenedProjects.RecentProjects` returns), synthesize values via
+	 * {@link recencyMapFromOrderedIds}.
+	 */
+	lastUsedAt?: number;
+};
+/**
+ * Pack a subset of {@link ProjectSelectorCustomDataShape} into a plain record ready to assign to
+ * `ProjectSelectorProject.customData`. Keys with a wrong-typed value (or `undefined`) are omitted
+ * so groupings see them as "missing" rather than as a bogus empty string / NaN.
+ *
+ * Consumers with additional custom groupings can spread the returned record with their own keys:
+ *
+ * ```ts
+ * const customData = {
+ *   ...makeProjectSelectorCustomData({ language, type, typeName, lastUsedAt }),
+ *   versificationId, // consumer-defined key for a custom `versification` grouping
+ * };
+ * ```
+ */
+export declare function makeProjectSelectorCustomData(input: ProjectSelectorCustomDataShape): Readonly<Record<string, unknown>>;
+/**
+ * Convert a recency-ordered list of project ids (most-recent FIRST, as returned by
+ * `platformScripture.recentlyOpenedProjects.RecentProjects`) into a map of projectId → synthetic
+ * `lastUsedAt` value suitable for feeding into `ProjectSelectorProject.customData`.
+ *
+ * The recently-opened-projects service exposes order without timestamps; this helper synthesizes a
+ * monotonic descending value (higher = more recent). Projects NOT in the list get no entry, so they
+ * fall into the grouping's "Other" bucket per the built-in behavior.
+ *
+ * The synthesized ORDER is not consumed by the built-in `lastUsed` grouping, which reads
+ * `lastUsedAt` only as a presence flag and leaves each bucket in the component's stable
+ * alphabetical order. What this helper guarantees the grouping is that every listed id gets a
+ * strictly positive, unambiguously-present number. The descending values are still meaningful to a
+ * consumer-defined grouping that chooses to compare them.
+ *
+ * The synthesized values are DETERMINISTIC (do not call `Date.now()`), so calling this at render
+ * time is safe — the returned map has stable content and consumers can memoize on the input list
+ * identity.
+ *
+ * DUPLICATE IDS: the FIRST occurrence wins. The input is most-recent-first, so the earliest
+ * position is the most recent use and is the score the id keeps; later occurrences are ignored.
+ * Duplicates are reachable in practice because callers normalize ids on the way in (e.g.
+ * `orderedProjectIds.map(normalizeProjectId)`), which can collapse two differently-cased raw ids
+ * into one.
+ */
+export declare function recencyMapFromOrderedIds(orderedProjectIds: readonly string[]): ReadonlyMap<string, number>;
 export type ResourceType = "ScriptureResource" | "CommentaryResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;
@@ -4954,19 +5044,26 @@ export type DblResourceData = {
 	projectId: string;
 };
 /**
- * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or
- * by the `startsWith(dblEntryUid)` convention (the local project id of an installed DBL resource
- * begins with its DBL entry UID).
+ * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or,
+ * failing that, by the `startsWith(dblEntryUid)` convention.
+ *
+ * The prefix branch is a best-effort fallback, not an invariant. A resource project's id is
+ * unrelated to the DBL entry it was installed from: ParatextData records the entry uid in the
+ * project's settings and matches on that, so the prefix holds for many installed resources and not
+ * for others. The `projectId` the backend reports is authoritative, so the exact match is tried
+ * first — but the prefix test is a fallthrough, not an `else`, so a row naming project A can still
+ * claim a prefix-sharing project B. `buildLocalNonDblResources` depends on that today, which is
+ * what makes tightening it a behaviour change rather than a cleanup. See
+ * `adr-dbl-install-status-from-backend`.
  *
  * Both branches require the row to have been reconciled against disk at least once (`installed`, or
  * a non-empty `projectId`). A never-synced row carries `installed: false, projectId: ''`, and
  * `''.startsWith('')` is true for every string, so trusting such a row would let a stale entry for
  * a DBL-reassigned UID hide a local project whose real UID still matches.
  *
- * This is the single home for that rule. Producers on both sides of the picker consult it — the one
- * that decides which local projects are NOT already in the catalog, and the one that decides which
- * catalog row describes a downloaded project. They must agree, or a project is claimed by one and
- * disowned by the other.
+ * Producers on both sides of the picker consult this — the one that decides which local projects
+ * are NOT already in the catalog, and the one that decides which catalog row describes a downloaded
+ * project. They must agree, or a project is claimed by one and disowned by the other.
  *
  * @param row The DBL catalog row to test
  * @param localProjectId The id of the local project to test it against

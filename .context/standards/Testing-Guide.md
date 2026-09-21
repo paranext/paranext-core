@@ -395,6 +395,8 @@ export default defineConfig(async () => {
       // Warms the lazy one-time ICU init behind Intl.* so it never lands inside a test's
       // timeout window on a slow CI worker. See vitest.setup.ts for the rationale.
       setupFiles: ['./vitest.setup.ts'],
+      // Must stay comfortably above vitest.setup.ts's asyncUtilTimeout — see note below.
+      testTimeout: 15000,
       include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     },
   };
@@ -404,6 +406,16 @@ export default defineConfig(async () => {
 > The workspace configs (`extensions/vitest.config.ts`, `lib/platform-bible-utils/vite.config.ts`,
 > `lib/platform-bible-react/vitest.config.ts`) reference this same repo-root `vitest.setup.ts` via a
 > relative `setupFiles` path, so every vitest worker warms Intl once before any timed test.
+
+> **`testTimeout` vs. `asyncUtilTimeout`.** `vitest.setup.ts` also raises testing-library's own
+> `asyncUtilTimeout` — the deadline a bare `waitFor`/`findBy*` gives up at — independently of
+> vitest's per-test `testTimeout`. `testTimeout`'s clock starts at the beginning of the test body,
+> while a given `waitFor` call only starts its own `asyncUtilTimeout` countdown when that call is
+> reached, so whichever deadline elapses first wins. Every project that loads this shared setup
+> file must keep its own `testTimeout` comfortably above `asyncUtilTimeout` — not just nominally
+> above it, since any work a test does before reaching the `waitFor` call eats into that margin —
+> or a failing `waitFor` is reported as vitest's bare timeout instead of testing-library's richer
+> error (with its DOM dump), silently losing the more useful failure message.
 
 ### Key Dependencies
 

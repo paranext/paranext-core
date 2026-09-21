@@ -9,20 +9,7 @@ import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import JSON5 from 'json5';
 import { parse as parseYaml } from 'yaml';
-
-/**
- * The GNOME platform content snap that pairs with each snap base.
- *
- * These must stay in step: a base and a platform snap from different Ubuntu releases put the app's
- * staged libraries and the mounted platform libraries out of sync, and the app fails to launch. The
- * full rationale lives beside `base` in `electron-builder.json5`.
- */
-const GNOME_PLATFORM_BY_BASE: Readonly<Record<string, string>> = {
-  core18: 'gnome-3-28-1804',
-  core20: 'gnome-3-38-2004',
-  core22: 'gnome-42-2204',
-  core24: 'gnome-46-2404',
-};
+import { GNOME_PLATFORM_BY_BASE, GNOME_PLATFORM_TARGET } from './snap-platform-pairing';
 
 /**
  * The Ubuntu runner each snap base is built on.
@@ -43,8 +30,14 @@ const UBUNTU_RUNNER_BY_BASE: Readonly<Record<string, string>> = {
 /** Workflows that pin the Linux runner the snap is built on, via an `OS_LINUX` env value. */
 const LINUX_RUNNER_WORKFLOWS = ['test.yml', 'package-main.yml', 'publish.yml'];
 
-/** Mount point the snap's launch scripts read the GNOME platform from. */
-const GNOME_PLATFORM_TARGET = '$SNAP/gnome-platform';
+/**
+ * The step each of those workflows installs snapcraft and LXD under.
+ *
+ * The three copies exist because the step runs BEFORE `actions/checkout`, so it cannot be a local
+ * composite action — nothing is on disk to `uses:` yet. Duplication is therefore the only option;
+ * silent divergence is not, which is what the test below is for.
+ */
+const SNAP_TOOLS_STEP_NAME = 'Install snap tools on Linux';
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
 
@@ -59,10 +52,14 @@ type PlugAttributes = {
   interface?: string;
   target?: string;
   'default-provider'?: string;
+  content?: string;
 };
 
 /** A found plug, keyed by the name it is declared under. */
 type NamedPlug = { key: string; descriptor: PlugAttributes };
+
+/** A workflow step, as far as the comparison below needs to see one. */
+type WorkflowStep = Record<string, unknown>;
 
 /** A plain object, for walking into parsed config and YAML without asserting a shape. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -178,6 +175,52 @@ function readWorkflowLinuxRunners(): { workflow: string; runner: string | undefi
   });
 }
 
+/**
+ * The snap-toolchain step from each snap-building workflow.
+ *
+ * Parsed rather than text-sliced so that indentation and the YAML comments around the step cannot
+ * register as a difference. The shell script is a single scalar, so the comments _inside_ it are
+ * compared along with the commands — which is wanted: a comment that still describes the old
+ * behavior is its own kind of drift.
+ */
+function readSnapToolsSteps(): { workflow: string; step: WorkflowStep | undefined }[] {
+  return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
+    const parsed: unknown = parseYaml(
+      readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8'),
+    );
+    const jobs: unknown[] =
+      isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : [];
+    const step = jobs
+      .filter(isRecord)
+      .flatMap((job) => (Array.isArray(job.steps) ? job.steps : []))
+      .filter(isRecord)
+      .find((candidate) => candidate.name === SNAP_TOOLS_STEP_NAME);
+    return { workflow, step };
+  });
+}
+
+/** The npm script that checks the built snap's own metadata, as a workflow would invoke it. */
+const SNAP_METADATA_CHECK = 'npm run assert:snap-metadata';
+
+/**
+ * Whether one workflow's text invokes the snap metadata check.
+ *
+ * Split out from the reader below so it can be exercised against a workflow that does NOT invoke
+ * it. Every real workflow does, so a predicate asserted only against those would pass just as
+ * happily if it always returned true.
+ */
+function workflowInvokesSnapMetadataCheck(contents: string): boolean {
+  return contents.includes(SNAP_METADATA_CHECK);
+}
+
+/** Whether each snap-building workflow invokes the check, named so a failure says which one. */
+function readWorkflowSnapMetadataChecks(): { workflow: string; checks: boolean }[] {
+  return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
+    const contents = readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8');
+    return { workflow, checks: workflowInvokesSnapMetadataCheck(contents) };
+  });
+}
+
 describe('electron-builder snap configuration', () => {
   it('declares a snap base whose matching GNOME platform snap and runner are known', () => {
     // Bumping `base` without teaching these maps the new pairings should fail loudly rather than
@@ -209,6 +252,46 @@ describe('electron-builder snap configuration', () => {
     );
   });
 
+  it('installs the snap toolchain identically in every snap-building workflow', () => {
+    // All three legs build the snap through snapcraft and LXD, so all three meet the same snap
+    // store outages, the same auto-refresh mid-pack, and the same failures whose evidence is only
+    // in snapcraft's log. Hardening one copy and not another is invisible in review -- the diff
+    // looks complete -- and leaves the flake live on whichever leg was missed, including the one
+    // behind branch protection.
+    const steps = readSnapToolsSteps();
+
+    // Checked first and separately: if the step were renamed everywhere, every entry below would
+    // be `undefined` and the equality would pass while comparing nothing.
+    expect(steps.filter(({ step }) => !step).map(({ workflow }) => workflow)).toEqual([]);
+
+    // Compared against the first workflow rather than pairwise so a failure's diff names the file
+    // that drifted.
+    const [reference, ...others] = steps;
+    expect(others).toEqual(others.map(({ workflow }) => ({ workflow, step: reference.step })));
+  });
+
+  it('checks the built snap in every workflow that builds one', () => {
+    // This file reads the inputs; `assert-generated-snap-metadata` reads the snap those inputs
+    // produced. A workflow that builds a snap without invoking it produces an artifact nothing has
+    // checked, and the gap is invisible from the workflow that does invoke it -- so the coverage
+    // itself is asserted rather than left to whoever adds the next snap-building workflow.
+    expect(readWorkflowSnapMetadataChecks()).toEqual(
+      LINUX_RUNNER_WORKFLOWS.map((workflow) => ({ workflow, checks: true })),
+    );
+  });
+
+  it('can tell a workflow that skips the check from one that runs it', () => {
+    // The reject side of the assertion above, which every real workflow satisfies. Without this, a
+    // detector that always answered "yes" would keep that assertion green while seeing nothing.
+    const buildsOnly = ['        run: |', '          npx electron-builder build --linux'].join(
+      '\n',
+    );
+    const buildsAndChecks = [buildsOnly, `          ${SNAP_METADATA_CHECK}`].join('\n');
+
+    expect(workflowInvokesSnapMetadataCheck(buildsOnly)).toBe(false);
+    expect(workflowInvokesSnapMetadataCheck(buildsAndChecks)).toBe(true);
+  });
+
   it('mounts exactly one GNOME platform plug, named for snap.base', () => {
     const expected = GNOME_PLATFORM_BY_BASE[readSnapBase()];
     const plugs = findGnomePlatformPlugs();
@@ -224,6 +307,11 @@ describe('electron-builder snap configuration', () => {
     expect(plugs[0].descriptor.interface).toBe('content');
     // A name/provider mismatch means snapd installs the wrong platform snap to satisfy the plug.
     expect(plugs[0].descriptor['default-provider']).toBe(expected);
+    // `content` names the slot the plug connects to and defaults to the plug's own name, so a plug
+    // can install the right snap and still connect to nothing, mounting an empty directory. The
+    // template sets no `content`, so this passes by default today -- asserted so that a `snap.plugs`
+    // entry adding one has to agree with `base`.
+    expect(plugs[0].descriptor.content ?? expected).toBe(expected);
   });
 
   it('keeps the rename in a committed patch, not just in an installed node_modules', () => {

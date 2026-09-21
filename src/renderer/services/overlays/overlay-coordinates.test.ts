@@ -89,6 +89,31 @@ describe('overlay-coordinates', () => {
       const result = translateCoordinates('non-existent', { x: 10, y: 20 });
       expect(result).toEqual({ x: 10, y: 20 });
     });
+
+    it('should scale the iframe-relative offset by the iframe CSS zoom', () => {
+      mockIframe.style.zoom = '1.5';
+      expect(mockIframe.style.zoom).toBe('1.5');
+
+      // An inner point at x renders zoom * x from the iframe's left edge, and the iframe's own
+      // rect is unchanged by its zoom: (100 + 1.5 * 300, 50 + 1.5 * 200)
+      const result = translateCoordinates('test-webview-1', { x: 300, y: 200 });
+      expect(result).toEqual({ x: 550, y: 350 });
+    });
+
+    it('should not scale when the iframe carries no CSS zoom', () => {
+      mockIframe.style.zoom = '';
+
+      const result = translateCoordinates('test-webview-1', { x: 300, y: 200 });
+      expect(result).toEqual({ x: 400, y: 250 });
+    });
+
+    it('should treat a unit-bearing CSS zoom as unscaled', () => {
+      mockIframe.style.zoom = '150%';
+      expect(mockIframe.style.zoom).toBe('150%');
+
+      const result = translateCoordinates('test-webview-1', { x: 300, y: 200 });
+      expect(result).toEqual({ x: 400, y: 250 });
+    });
   });
 
   describe('clampToViewport', () => {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
 import type { BrowserWindow } from 'electron';
 import {
@@ -16,20 +16,24 @@ import {
   getUnreachableWindowIds,
   getWindowIdOf,
   getWindows,
+  handleWindowBlurred,
   isWindowAbandoned,
   isWindowClosing,
   isWindowReady,
   isWindowTracked,
   markWindowAbandoned,
   markWindowClosing,
+  markWindowNotClosing,
   markWindowNotReady,
   markWindowReady,
   onDidChangeRoutingTarget,
   removeWindow,
   resetForTesting,
   setFocusedWindowId,
+  startFocusedWindowIdEvent,
   wasWindowEverReady,
 } from '@main/services/window-state.service';
+import * as networkServiceTypes from '@shared/services/network.service';
 
 // `window-state.service` only imports BrowserWindow as a type, but the module graph resolves
 // `electron`, which is unavailable outside the Electron runtime. `vi.mock` is hoisted above the
@@ -41,6 +45,7 @@ const mocks = vi.hoisted(() => ({
   loggerWarn: vi.fn(),
   nextMintedId: { current: 1 },
   useRealRandomUuid: { current: false },
+  focusedWindowIdEmit: vi.fn(),
 }));
 
 // A real mint is a random GUID, which would make every test below that names a window by the id
@@ -69,6 +74,10 @@ vi.mock('crypto', async (importOriginal) => {
 // merely swallowed, and so the real logger's file/console transports stay out of the test run
 vi.mock('@shared/services/logger.service', () => ({
   logger: { error: mocks.loggerError, warn: mocks.loggerWarn, info: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('@shared/services/network.service', () => ({
+  createNetworkEventEmitterAsync: vi.fn(),
 }));
 
 /**
@@ -746,6 +755,78 @@ describe('window state tracking', () => {
     });
   });
 
+  describe('focused window id event', () => {
+    beforeAll(async () => {
+      vi.mocked(networkServiceTypes.createNetworkEventEmitterAsync).mockResolvedValue(
+        // Only `emit` is exercised here; the rest of the emitter surface is irrelevant
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { emit: mocks.focusedWindowIdEmit } as unknown as Awaited<
+          ReturnType<typeof networkServiceTypes.createNetworkEventEmitterAsync>
+        >,
+      );
+      await startFocusedWindowIdEvent();
+    });
+
+    beforeEach(() => {
+      mocks.focusedWindowIdEmit.mockClear();
+    });
+
+    test('announces the window that took focus', () => {
+      const onlyId = addWindow(fakeWindow(1));
+
+      setFocusedWindowId(onlyId);
+
+      expect(mocks.focusedWindowIdEmit).toHaveBeenCalledWith({ focusedWindowId: onlyId });
+    });
+
+    test('announces again when a different window takes focus', () => {
+      const firstId = addWindow(fakeWindow(1));
+      const secondId = addWindow(fakeWindow(2));
+      setFocusedWindowId(firstId);
+      mocks.focusedWindowIdEmit.mockClear();
+
+      setFocusedWindowId(secondId);
+
+      expect(mocks.focusedWindowIdEmit).toHaveBeenCalledWith({ focusedWindowId: secondId });
+    });
+
+    test('stays quiet when the same window is re-reported as focused', () => {
+      const onlyId = addWindow(fakeWindow(1));
+      setFocusedWindowId(onlyId);
+      mocks.focusedWindowIdEmit.mockClear();
+
+      setFocusedWindowId(onlyId);
+
+      expect(mocks.focusedWindowIdEmit).not.toHaveBeenCalled();
+    });
+
+    test('does not fire on a blur — the last focused window id survives the app losing OS focus', () => {
+      // The whole app being backgrounded (e.g. alt-tab to another application) must not announce a
+      // change: consumers of this event key per-window UI (an active-tab focus ring) on which
+      // window the user was last in, and that answer is meant to survive the app losing OS focus.
+      const only = fakeWindow(1);
+      const onlyId = addWindow(only);
+      setFocusedWindowId(onlyId);
+      mocks.focusedWindowIdEmit.mockClear();
+
+      handleWindowBlurred(onlyId);
+
+      expect(mocks.focusedWindowIdEmit).not.toHaveBeenCalled();
+      expect(getFocusedWindowId()).toBe(onlyId);
+    });
+
+    test('announces undefined when the focused window closes', () => {
+      const only = fakeWindow(1);
+      const onlyId = addWindow(only);
+      setFocusedWindowId(onlyId);
+      mocks.focusedWindowIdEmit.mockClear();
+
+      removeWindow(only, onlyId);
+
+      expect(mocks.focusedWindowIdEmit).toHaveBeenCalledWith({ focusedWindowId: undefined });
+    });
+  });
+
   describe('routing readiness', () => {
     test('keeps routing to a window that can answer while a new one is still starting', () => {
       // A window is tracked and takes OS focus as soon as it is shown, long before its renderer has
@@ -1216,6 +1297,63 @@ describe('window state tracking', () => {
       expect(isWindowClosing('1')).toBe(false);
     });
 
+    test('reports that a window had been given up on, and clears the mark', () => {
+      // Removing a window clears its marks so nothing is left answering for a window that no longer
+      // exists — which means a caller that needs to know what it WAS cannot ask afterwards, and
+      // asking beforehand is an ordering rule nothing enforces. The removal reports it instead.
+      const window = fakeWindow(1);
+      addWindow(window);
+      markWindowReady('1');
+      markWindowAbandoned('1');
+
+      const { wasAbandoned } = removeWindow(window, '1');
+
+      expect(wasAbandoned).toBe(true);
+      // …and the mark itself is gone, which is why it had to be reported
+      expect(isWindowAbandoned('1')).toBe(false);
+    });
+
+    test('reports that a window had not been given up on when it never was', () => {
+      // The negative control: a rule that answered `true` for every removal would read as working
+      // and would keep the entry of every window the user deliberately closed
+      const window = fakeWindow(1);
+      addWindow(window);
+      markWindowReady('1');
+
+      expect(removeWindow(window, '1').wasAbandoned).toBe(false);
+    });
+
+    test('takes a closing mark back, so the window can be routed to again', () => {
+      // The counterpart to the mark, and load-bearing: `closingWindowIds` is what
+      // `getRoutingTarget` reads to decide a window cannot take new work, so a mark left on a
+      // window whose close never happened leaves it permanently unroutable — the failure the
+      // interface-mode switch's recovery exists to prevent. Exercised here against the real
+      // implementation, since the orchestration only ever sees it through an injected mock.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowClosing('1');
+      expect(isWindowClosing('1')).toBe(true);
+
+      markWindowNotClosing('1');
+
+      expect(isWindowClosing('1')).toBe(false);
+      // Only the window named: window 2's close is still going ahead
+      markWindowClosing('2');
+      markWindowNotClosing('1');
+      expect(isWindowClosing('2')).toBe(true);
+    });
+
+    test('taking back a mark a window never had changes nothing', () => {
+      // The recovery calls this for any window it is putting back, including ones whose mark was
+      // never recorded — an untracked id is ignored by the mark itself — so it has to be a no-op
+      // rather than an announcement of a change that did not happen.
+      addWindow(fakeWindow(1));
+
+      expect(() => markWindowNotClosing('1')).not.toThrow();
+
+      expect(isWindowClosing('1')).toBe(false);
+    });
+
     test('reports the app going down when the only window closes', () => {
       addWindow(fakeWindow(1));
 
@@ -1299,6 +1437,25 @@ describe('window state tracking', () => {
       unsubscribe();
 
       expect(heard).toEqual(['2']);
+    });
+
+    test('announces routing coming back to a window whose close was taken back', () => {
+      // The mark's counterpart has to tell the routing proxies too: they hold a resolved service
+      // for whichever window the mark moved routing to, and nothing else would tell them it moved
+      // back — so a window rescued from a close that never happened would stay unused.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady('1');
+      markWindowReady('2');
+      setFocusedWindowId('1');
+      markWindowClosing('1');
+      const heard: (string | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowNotClosing('1');
+      unsubscribe();
+
+      expect(heard).toEqual(['1']);
     });
 
     test('keeps routing to the closing window when every window is closing', () => {

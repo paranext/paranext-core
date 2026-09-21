@@ -4,6 +4,10 @@ import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { forwardRef, ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
+import {
+  reportConnectionLost,
+  resetConnectionLost,
+} from '@renderer/services/connection-lost-store';
 import { FirstRunOverlay } from './first-run-overlay.component';
 
 vi.mock('@renderer/services/first-run-store', async (importActual) => {
@@ -167,6 +171,9 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  // The connection-lost store is a module-level singleton and never clears itself, so a test that
+  // latches it would leave every later test permanently stood down.
+  resetConnectionLost();
 });
 
 describe('FirstRunOverlay', () => {
@@ -297,5 +304,35 @@ describe('FirstRunOverlay', () => {
       captured?.();
     });
     expect(screen.getByText(/choose your language/i)).toBeInTheDocument();
+  });
+
+  // Both orderings, because the gate can be raised at any time: a background registration re-check
+  // or a probe that was in flight when the socket dropped both resolve into `applyStatus` long
+  // after startup. z-index cannot cover this — Radix arbitrates the focus trap between two open
+  // modal dialogs by mount order — so a gate that mounts after the connection-lost state would
+  // steal focus into a wizard the user cannot see, leaving the visible Reload button unreachable.
+  it('stands down when the connection is lost while the gate is already showing', () => {
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    const { container } = render(<FirstRunOverlay />);
+    expect(screen.getByText(/choose your language/i)).toBeInTheDocument();
+
+    act(() => {
+      reportConnectionLost();
+    });
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('stays stood down when the gate is raised after the connection is already lost', () => {
+    reportConnectionLost();
+    mockGetStatus.mockReturnValue({ kind: 'app' });
+    const { container, rerender } = render(<FirstRunOverlay />);
+    expect(container).toBeEmptyDOMElement();
+
+    // The late raise: status flips to a gating kind well after the loss latched.
+    mockGetStatus.mockReturnValue({ kind: 'error' });
+    rerender(<FirstRunOverlay />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 });
