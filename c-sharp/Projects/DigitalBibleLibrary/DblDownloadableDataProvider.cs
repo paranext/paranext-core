@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
@@ -131,6 +132,33 @@ internal class DblResourcesDataProvider(
     {
         return Task.CompletedTask;
     }
+
+    // Only these two recompute functions are marked: their contract is untested beyond the one
+    // caller that awaits them (see refreshResourceFlags's own experimental marker in
+    // platform-get-resources). GetDblResources, InstallDblResource, UninstallDblResource and
+    // IsGetDblResourcesAvailable are unaffected and stay undocumented, so `Experimental` is left
+    // unset rather than fanning out to the whole object.
+    protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
+        new()
+        {
+            Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
+            {
+                ["recomputeDblResourcesUpdateStatus"] = ExperimentalMethodDocumentation.Create(
+                    "Recompute, for each resource in the already-loaded catalog, whether the DBL has a newer version than the copy installed locally.",
+                    result: ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "Whether an update is available, keyed by DBL entry uid."
+                    )
+                ),
+                ["recomputeDblResourcesInstallStatus"] = ExperimentalMethodDocumentation.Create(
+                    "Recompute which resources in the already-loaded catalog are installed locally, and under which project id.",
+                    result: ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "The local project id of each catalogued resource, keyed by DBL entry uid; empty string for one that is not installed."
+                    )
+                ),
+            },
+        };
 
     #endregion
 
