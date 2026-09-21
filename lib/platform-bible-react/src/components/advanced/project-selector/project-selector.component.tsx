@@ -180,7 +180,17 @@ export type ProjectSelectorLocalizedStrings = {
 // bare Storybook render), not production copy: every real consumer merges its own values for
 // these two fields on top via `localizedStrings`. They exist so the trigger never renders with an
 // empty accessible name or empty text before localized strings resolve.
-const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
+/**
+ * English text for every {@link ProjectSelectorLocalizedStrings} key, used for any key a consumer
+ * leaves unset.
+ *
+ * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
+ * a consumer typically localizes only the handful of keys its configuration can reach, and which
+ * keys those are is a property of the configuration rather than of the component. Looping over this
+ * map keeps such a guard honest when a key is renamed or added; a hand-copied list of strings
+ * silently stops asserting anything.
+ */
+export const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   ariaLabel: 'Projects & resources',
   buttonPlaceholder: 'Select a project',
   commandEmptyMessage: 'No projects found',
@@ -202,7 +212,7 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): Required<ProjectSelectorLocalizedStrings> {
-  return { ...DEFAULT_STRINGS, ...partial };
+  return { ...PROJECT_SELECTOR_DEFAULT_STRINGS, ...partial };
 }
 
 /**
@@ -388,7 +398,13 @@ export type ProjectSelectorProps =
       triggerLabelFormat?: 'shortName' | 'shortNameAndFullName';
       /**
        * Render the trigger's label yourself, in place of the derived `shortName` / `shortName -
-       * fullName` string. Receives the selected project, or `undefined` when nothing is selected.
+       * fullName` string.
+       *
+       * Receives the entry of `projects` that `selection.projectId` names, or `undefined` — which
+       * means either that nothing is selected OR that the selected id matches no entry of
+       * `projects`. The second case is reachable whenever the selection and the list come from
+       * different sources, so a caller that can name the selected project from its own state should
+       * fall back to that rather than treating `undefined` as "nothing is open".
        *
        * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
        * deliberate rather than an omission: a caller reaching for this prop is rendering a label
@@ -1272,11 +1288,22 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                       />
                     ))}
                   </CommandGroup>
-                  {index < sections.length - 1 && <CommandSeparator />}
+                  {/* `alwaysRender` for the same reason the footer's separator below carries it:
+                      a plain CommandSeparator returns null as soon as cmdk's `state.search` is
+                      non-empty, so one keystroke would drop the rule between two sections that
+                      are both still on screen. */}
+                  {index < sections.length - 1 && <CommandSeparator alwaysRender />}
                 </Fragment>
               ))}
               {props.footerAction && (
-                <>
+                // Stuck to the bottom of the scroll box rather than merely last in it. The footer
+                // is the list's escape hatch, and `CommandList` is `max-h-72 overflow-y-auto`, so
+                // as a plain last child it scrolls out of reach on any list long enough to need
+                // it — which is the state a user is most likely to be looking for it in. It stays
+                // INSIDE `CommandList` because that is the subtree cmdk's `getValidItems()` walks
+                // for arrow-key, Home/End and Enter navigation; moving it out would make it
+                // pointer-only. Opaque background so rows scroll behind it rather than through it.
+                <div className="tw:sticky tw:bottom-0 tw:z-10 tw:bg-popover">
                   {/* `alwaysRender`: a plain CommandSeparator returns null as soon as cmdk's
                       `state.search` is non-empty, so the footer would lose its rule mid-search.
                       Only rendered when a section above it actually has rows — with none, the
@@ -1297,6 +1324,11 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                     forceMount
                     value={FOOTER_ACTION_VALUE}
                     data-testid="project-selector-footer-action"
+                    // cmdk renders every CommandItem as `role="option"`, which promises a screen
+                    // reader that activating it selects a value from this list. This one closes
+                    // the popover and opens a modal dialog instead, so it says so.
+                    aria-haspopup="dialog"
+                    className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
                     onSelect={() => {
                       props.footerAction?.onSelect();
                       // Close through the handler rather than `setOpen`, so the search query is
@@ -1304,9 +1336,26 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                       handleOpenChange(false);
                     }}
                   >
-                    {props.footerAction.label}
+                    {/* Empty stand-ins for the check and indicator slots every project row leads
+                        with. Without them the footer's text starts ~40px to the left of every
+                        label above it — the same ragged edge `reserveIndicatorSlot` exists to
+                        prevent between rows. Mirrors `ProjectRowView`'s leading spans, so the two
+                        stay aligned if that layout changes. */}
+                    <span
+                      aria-hidden
+                      className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
+                    />
+                    {Boolean(props.renderProjectIndicator) && (
+                      <span
+                        aria-hidden
+                        className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
+                      />
+                    )}
+                    <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-start">
+                      {props.footerAction.label}
+                    </span>
                   </CommandItem>
-                </>
+                </div>
               )}
             </CommandList>
           </Command>

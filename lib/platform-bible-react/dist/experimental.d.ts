@@ -384,6 +384,17 @@ export type ProjectSelectorLocalizedStrings = {
 	clearAll?: string;
 };
 /**
+ * English text for every {@link ProjectSelectorLocalizedStrings} key, used for any key a consumer
+ * leaves unset.
+ *
+ * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
+ * a consumer typically localizes only the handful of keys its configuration can reach, and which
+ * keys those are is a property of the configuration rather than of the component. Looping over
+ * this map keeps such a guard honest when a key is renamed or added; a hand-copied list of strings
+ * silently stops asserting anything.
+ */
+export declare const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings>;
+/**
  * Convert the raw `%projectSelector_*%` resolved strings into a
  * {@link ProjectSelectorLocalizedStrings} bag ready to pass as the `localizedStrings` prop. Merge
  * consumer-specific strings (`ariaLabel`, `buttonPlaceholder`) on top afterwards.
@@ -496,7 +507,13 @@ export type ProjectSelectorProps = (CommonProps & {
 	triggerLabelFormat?: "shortName" | "shortNameAndFullName";
 	/**
 	 * Render the trigger's label yourself, in place of the derived `shortName` / `shortName -
-	 * fullName` string. Receives the selected project, or `undefined` when nothing is selected.
+	 * fullName` string.
+	 *
+	 * Receives the entry of `projects` that `selection.projectId` names, or `undefined` — which
+	 * means either that nothing is selected OR that the selected id matches no entry of
+	 * `projects`. The second case is reachable whenever the selection and the list come from
+	 * different sources, so a caller that can name the selected project from its own state
+	 * should fall back to that rather than treating `undefined` as "nothing is open".
 	 *
 	 * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
 	 * deliberate rather than an omission: a caller reaching for this prop is rendering a label

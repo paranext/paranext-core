@@ -715,8 +715,7 @@ describe('renderTriggerLabel', () => {
     expect(screen.getByTestId('custom-trigger-label')).toHaveTextContent('custom:none');
   });
 
-  it('renders no tooltip of its own, so a caller label carrying one cannot double up', async () => {
-    const user = setupUser();
+  it('renders no tooltip of its own, so a caller label carrying one cannot double up', () => {
     render(
       <ProjectSelector
         mode="project"
@@ -725,17 +724,43 @@ describe('renderTriggerLabel', () => {
         selection={{ projectId: 'web' }}
         onChangeSelection={() => {}}
         localizedStrings={{ ariaLabel: 'Project' }}
+        // Load-bearing: it is what makes the suppressed tooltip's text the full name. Under the
+        // default `'shortName'` format the derived title is just `'WEB'`, so the assertion below
+        // would pass whether or not the tooltip were suppressed.
+        triggerLabelFormat="shortNameAndFullName"
         renderTriggerLabel={() => <span data-testid="custom-trigger-label">WEB</span>}
       />,
     );
 
-    await user.hover(screen.getByTestId('custom-trigger-label'));
+    // Asserted on the rendered structure rather than by hovering: Radix opens its tooltip from a
+    // pointer sequence jsdom does not produce, so a hover-then-expect-nothing test passes whether
+    // the tooltip is suppressed or not. The selector wraps its trigger in a `TooltipTrigger` only
+    // when it has a title to show, so the wrapper's absence IS the suppression.
+    expect(screen.getByRole('combobox', { name: 'Project' })).not.toHaveAttribute(
+      'data-slot',
+      'tooltip-trigger',
+    );
+  });
 
-    // The selector's own tooltip renders the selected project's full name. With a caller-supplied
-    // label it must stay absent — `ToolbarCompoundLabel` brings its own truncation tooltip.
-    await expect(
-      waitFor(() => screen.getByText('World English Bible'), { timeout: 700 }),
-    ).rejects.toThrow();
+  it('does wrap the trigger in its own tooltip when the caller supplies no label', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        triggerLabelFormat="shortNameAndFullName"
+      />,
+    );
+
+    // The control case for the assertion above: without `renderTriggerLabel` the wrapper is
+    // present, so its absence there is a real difference and not just how this trigger renders.
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveAttribute(
+      'data-slot',
+      'tooltip-trigger',
+    );
   });
 
   it('still uses the derived string when the prop is absent', () => {
