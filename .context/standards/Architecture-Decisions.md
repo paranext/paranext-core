@@ -1616,8 +1616,9 @@ step, no automation. Just a record.
   - a host that mounts the editor inside a zoom area and does not supply its area's element leaves
     its right-click menu at interface size against `document.body`, with no other signal, so each
     host's tests pin its wiring. `scripture-text-grid`'s `resource-cell-view` is not a host of this
-    kind: it zooms its cells itself and intercepts `onContextMenuCapture` with its own menu, so the
-    editor's menu never opens there.
+    kind: it zooms its cells itself and intercepts `onContextMenuCapture` with its own menu — the
+    grid web view always supplies the labels that enable it, and only a story or test renders a cell
+    without them — so the editor's menu never opens there.
 - **Source:** PT-4713.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
@@ -3963,6 +3964,9 @@ step, no automation. Just a record.
   property lives on the requesting iframe's own document, so `OverlayHost` reads the requesting
   pane's scale directly from the content-zoom service (`getContentZoomScaleForWebView`) and passes
   it down to `OverlayCommandPalette`, `OverlayPopover` and `OverlayContextMenu` as a plain prop.
+  The request carries no area, so the scale is that of the pane's active area — the one last clicked
+  or focused. That is the area the user is working in when they open a pop-up by click or key, and
+  it can differ from the opener's area for a pop-up opened by hover in a pane with several areas.
   Each applies it as CSS `zoom`, capped by the space Radix reports available divided by the scale —
   the same shape as the library's own cap. The popover and command palette combine that cap with the
   size cap actually in force via `min()` once zoomed — the caller's `maxWidth`/`maxHeight` when one
@@ -4701,9 +4705,11 @@ step, no automation. Just a record.
   through `createContentZoomWheelReader` from `platform-bible-utils`, while the platform's injected
   bootstrap (`web-view-content-zoom.bootstrap-script.ts`) keeps its own separate copy of the same
   notch/pinch reading for chrome-driven chords; `web-view-content-zoom.wheel-parity.test.ts` pins
-  both copies to identical totals over the same gesture sequences so they cannot silently drift
-  apart. Enhanced Resources has no leftover zoom fallback that could fall out of step with the
-  platform mechanism. Each pane that mounts the Scripture editor also hands it its zoom area's
+  both copies to identical totals over the same Ctrl-held wheel sequences, so their step arithmetic
+  cannot silently drift apart. It does not compare their physical-modifier tracking (a held Control
+  or ⌘, a pointer event reporting Ctrl, clearing on blur), which is what tells a macOS mouse notch
+  from a trackpad pinch. Enhanced Resources has no leftover zoom fallback that could fall out of
+  step with the platform mechanism. Each pane that mounts the Scripture editor also hands it its zoom area's
   element for the editor's right-click menu; see
   `adr-editor-context-menu-follows-its-area-via-a-container`.
 - **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
@@ -6196,7 +6202,7 @@ step, no automation. Just a record.
   reaches a view from behind a cover.
   **Revisit** if a second platform-injected shortcut appears
   — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
-- **Amended 2026-09-19 (PT-4582/PT-4583):** three statements above no longer hold. Enhanced
+- **Amended 2026-09-19 (PT-4582/PT-4583):** four statements above no longer hold. Enhanced
   Resources' own `keydown` handler for its scripture-pane zoom — named above as what answers the
   chords — is gone; the view now answers through the three areas it marks (`main`, `entries`,
   `footnotes`), the same mechanism as the Scripture editor and the comment list, not a handler of

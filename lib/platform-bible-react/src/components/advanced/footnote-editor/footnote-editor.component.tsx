@@ -69,7 +69,11 @@ export interface FootnoteEditorProps {
   scrRef: SerializedVerseRef;
   /** The unique note key to identify the note being edited used to apply changes to the note */
   noteKey: string | undefined;
-  /** View options of the parent editor */
+  /**
+   * View options of the parent editor. The component overrides `contextMenuContainer` (the menu is
+   * drawn inside the popover, so it takes the popover's zoom and stays within its bounds) and drops
+   * any inherited context-menu extras, so a `contextMenuContainer` supplied here has no effect.
+   */
   editorOptions: EditorOptions;
   /** Trigger key to open the footnote editor marker menu */
   defaultMarkerMenuTrigger: string;

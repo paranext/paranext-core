@@ -424,10 +424,12 @@ export function resolveContentZoomArea(
 /**
  * The scale a pane's content is drawn at, for a platform surface that has to match it but renders
  * outside the pane - an overlay in the renderer's own document, which cannot read the pane's zoom
- * variables. A pane with areas answers with the level of the area a request with no area of its own
- * resolves to - the Settings default when that area holds no level of its own; a pane with none
- * answers with the CSS `zoom` on its iframe, the whole-frame fallback. `1` is the answer for
- * anything it cannot resolve.
+ * variables. A pane with areas answers with the level of its active area - the one last clicked or
+ * focused, else the first, which is where a request with no area of its own resolves - and the
+ * Settings default when that area holds no level of its own. The scale is therefore that of the
+ * area the user is working in, which for a pop-up opened by hover can differ from the area that
+ * opened it; a pane with no areas answers with the CSS `zoom` on its iframe, the whole-frame
+ * fallback. `1` is the answer for anything it cannot resolve.
  *
  * Read at render time, with no subscription. For a command palette the level cannot change
  * underneath it while it is open: the palette blocks the window's input

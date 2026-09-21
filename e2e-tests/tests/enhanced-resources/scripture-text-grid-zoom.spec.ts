@@ -31,10 +31,10 @@
  *   which has no notion of a resource cell. So today they zoom the whole pane rather than the
  *   focused resource.
  *
- * Honest runnability: these tests require a running Platform.Bible instance with 2+ resources
- * flagged and visible in the Scripture Text Grid. They are skipped in CI (no real resource
- * fixtures) and must be run locally after opening the app with --remote-debugging-port=9223 and
- * configuring at least two resources via View Options. Written and typechecked here; NOT run.
+ * Runnability: these tests require a running Platform.Bible instance with 2+ resources flagged and
+ * visible in the Scripture Text Grid. They are skipped in CI (no real resource fixtures) and must
+ * be run locally after opening the app with --remote-debugging-port=9223 and configuring at least
+ * two resources via View Options.
  *
  * The zoom CSS property is applied inline (`style="zoom: 1.1"`) on the content wrapper div. In a
  * real Chromium (unlike jsdom), `locator('[style*="zoom"]')` reliably matches this element.
