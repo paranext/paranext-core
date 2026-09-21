@@ -262,11 +262,26 @@ describe('row width', () => {
     const fullNameCell = screen.getByText(LONG_NAME);
     expect(fullNameCell.className).toContain('tw:truncate');
     expect(fullNameCell.className).toContain('tw:min-w-0');
-    // The clipped text stays reachable on hover.
-    expect(fullNameCell).toHaveAttribute('title', LONG_NAME);
 
     const shortNameText = screen.getByText('LONG');
     expect(shortNameText.className).toContain('tw:truncate');
+  });
+
+  // The hover label is gated on the text actually being clipped, so a name that fits does not get a
+  // tooltip repeating what the user can already read. jsdom has no layout and reports `scrollWidth`
+  // and `clientWidth` as 0, so every cell here measures as unclipped — which makes this the "not
+  // clipped" half of the gate and nothing more. The clipped half needs real layout and lives in
+  // `RowHoverLabelsAppearOnlyWhenClipped` in `project-picker.stories.tsx`.
+  it('leaves a hover label off a name that is not clipped', () => {
+    renderDialog({
+      currentProject: undefined,
+      recentProjects: [],
+      allProjects: [{ id: 'short', fullName: 'Short', shortName: 'SHORT', language: 'en' }],
+    });
+
+    expect(screen.getByText('Short')).not.toHaveAttribute('title');
+    expect(screen.getByText('SHORT')).not.toHaveAttribute('title');
+    expect(screen.getByText('en')).not.toHaveAttribute('title');
   });
 
   it('floors every text track at zero width and hides the horizontal axis', () => {
@@ -301,7 +316,11 @@ describe('row width', () => {
   // reach. `overflow-x-hidden` above removed the scrollbar that used to recover a clipped language
   // tag, so the tag needs a hover label of its own — and the tag is what gets clipped, so a tooltip
   // naming only the display name does not recover it.
-  it('keeps a clipped language tag reachable on hover, with and without a display name', () => {
+  //
+  // What this pins is the MECHANISM that carries that label — the plain branch reaches the user
+  // through a native `title` on the truncating cell rather than a tooltip. Whether the label
+  // actually appears is the gate's business, asserted above and in the story named there.
+  it('carries a clipped language tag on the cell itself rather than in a tooltip', () => {
     renderDialog({
       currentProject: undefined,
       recentProjects: [],
@@ -310,9 +329,11 @@ describe('row width', () => {
       ],
     });
 
-    // No display name: a native title, safe because these rows are listbox options rather than
-    // tooltip triggers.
-    expect(screen.getByText(LONG_LANGUAGE)).toHaveAttribute('title', LONG_LANGUAGE);
+    // The truncating cell, not an inner wrapper: the `title` has to sit on the element that clips,
+    // because that is the element whose overflow is measured to decide whether to show it at all.
+    const languageCell = screen.getByText(LONG_LANGUAGE);
+    expect(languageCell.className).toContain('tw:truncate');
+    expect(languageCell.closest('[data-slot="tooltip-trigger"]')).toBeNull();
   });
 
   it('names the language tag alongside its display name in the row tooltip', () => {

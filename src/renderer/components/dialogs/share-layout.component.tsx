@@ -18,16 +18,12 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
   Z_INDEX_NESTED_MODAL,
   Z_INDEX_NESTED_MODAL_BACKDROP,
 } from 'platform-bible-react';
 import { focusResourcePickerOnOpen, ResourcePickerDialog } from 'platform-bible-react/experimental';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 // Provides `overlay-modal-backdrop`, the 40%-black backdrop `OverlayModalDialog` gives this
 // dialog. The nested pickers below reuse it so both layers dim by the same amount; see
 // `RESOURCE_PICKER_OVERLAY_CLASS`.
@@ -188,48 +184,6 @@ export function isShareLayoutActiveTab(value: string): value is ShareLayoutActiv
 
 type TabKey = 'ScriptureResource' | 'CommentaryResource';
 
-/**
- * Close button for an embedded picker modal, replacing the one `DialogContent` builds in. Every
- * picker here opts out of the built-in (`showCloseButton={false}`) because its screen-reader label
- * is a hardcoded English "Close" that no consumer can translate, and these dialogs already ship a
- * localized string for it.
- *
- * Rendered after the picker in DOM order so it comes last in the tab order rather than first. Where
- * focus actually lands on open is stated by `focusPickerSearchOnOpen`, not inferred from this
- * ordering — the picker disables its search box whenever there is nothing to filter, and DOM order
- * alone would put a keyboard user on "leave" in exactly that state.
- *
- * This is a local workaround, not the fix: the untranslated label lives in `DialogContent` itself,
- * so every dialog in the app carries it. Giving `DialogContent` a `closeButtonLabel` prop would
- * retire this component. TODO(PT-4675): drop `PickerCloseButton` once `DialogContent` takes a
- * `closeButtonLabel`.
- */
-function PickerCloseButton({ label, onClose }: { label: string; onClose: () => void }) {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
-            onClick={onClose}
-            aria-label={label}
-          >
-            <X className="tw:size-4" aria-hidden />
-          </Button>
-        </TooltipTrigger>
-        {/* The same string as the button's `aria-label`, so a screen reader hears it as the name
-            and again as the description. That duplication is Radix's own wiring for a tooltip on an
-            icon button — Tooltip renders a visually-hidden copy of its content as the trigger's
-            description, which `aria-hidden` here cannot reach — and an icon button needs both the
-            name and the sighted-user hover label. Left as-is rather than fought. */}
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
 export function ShareLayoutDialogContent({
   initialModelText,
   initialActiveTab,
@@ -342,7 +296,7 @@ export function ShareLayoutDialogContent({
           style={{ zIndex: Z_INDEX_NESTED_MODAL }}
           overlayStyle={{ zIndex: Z_INDEX_NESTED_MODAL_BACKDROP }}
           overlayClassName={RESOURCE_PICKER_OVERLAY_CLASS}
-          showCloseButton={false}
+          closeButtonLabel={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
           onOpenAutoFocus={(event) =>
             focusResourcePickerOnOpen(event, pickerSearchInputRef.current, pickerContentRef.current)
           }
@@ -359,10 +313,6 @@ export function ShareLayoutDialogContent({
             localizedStrings={resourcePickerLocalizedStrings}
             allowDeselect
             onSelect={(resource) => handleTogglePickedResource(tab, resource)}
-          />
-          <PickerCloseButton
-            label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
-            onClose={() => setOpenAddPickerTab(undefined)}
           />
         </DialogContent>
       </Dialog>
@@ -435,7 +385,7 @@ export function ShareLayoutDialogContent({
                 style={{ zIndex: Z_INDEX_NESTED_MODAL }}
                 overlayStyle={{ zIndex: Z_INDEX_NESTED_MODAL_BACKDROP }}
                 overlayClassName={RESOURCE_PICKER_OVERLAY_CLASS}
-                showCloseButton={false}
+                closeButtonLabel={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
                 onOpenAutoFocus={(event) =>
                   focusResourcePickerOnOpen(
                     event,
@@ -455,13 +405,6 @@ export function ShareLayoutDialogContent({
                   selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
                   localizedStrings={resourcePickerLocalizedStrings}
                   onSelect={handleSelectModelText}
-                />
-                {/* Picking a model text closes this dialog, so unlike the multi-select Manage
-                    pickers this button is the cancel path rather than the way out. It is still
-                    the same control, and carries the same localized label. */}
-                <PickerCloseButton
-                  label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
-                  onClose={() => setIsModelTextPickerOpen(false)}
                 />
               </DialogContent>
             </Dialog>

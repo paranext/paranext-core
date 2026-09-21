@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { expect, within } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 import { Dialog } from 'platform-bible-react';
 import ProjectPicker, {
   type ProjectItem,
@@ -12,6 +12,8 @@ const STRINGS: ProjectPickerLocalizedStrings = {
   '%projectPicker_section_projects%': 'Your projects',
   '%projectPicker_search_placeholder%': 'Search projects…',
   '%projectPicker_no_results%': 'No results found',
+  '%projectPicker_current_project_label%': 'Current project',
+  '%projectPicker_readOnly_label%': 'Read-only',
 };
 
 const WEB: ProjectItem = {
@@ -103,6 +105,39 @@ export const EmptySearchResult: Story = {
   },
 };
 
+const BSB_READ_ONLY: ProjectItem = {
+  id: 'bsb',
+  fullName: 'Berean Standard Bible',
+  shortName: 'BSB',
+  language: 'English',
+  isEditable: false,
+};
+const LSG_READ_ONLY: ProjectItem = {
+  id: 'lsg',
+  fullName: 'Louis Segond 1910',
+  shortName: 'LSG',
+  language: 'French',
+  isEditable: false,
+};
+
+/**
+ * The read-only padlock has no visual surface of its own, and it shares a row with the
+ * current-project check mark. Both glyph slots are rendered for every row whether or not they hold
+ * a glyph, so that every short name starts at the same offset — a claim that is only checkable by
+ * looking at rows which differ in what those slots contain.
+ *
+ * The current project here is itself read-only, so BSB carries both glyphs at once — the only
+ * combination in which the two slots have to cooperate. LSG carries the padlock alone, WEB and KJV
+ * neither. The check mark alone is what every other story in this file already shows.
+ */
+export const EditableAndReadOnlyRows: Story = {
+  args: {
+    currentProject: BSB_READ_ONLY,
+    recentProjects: [BSB_READ_ONLY, WEB],
+    allProjects: [KJV, LSG_READ_ONLY],
+  },
+};
+
 const LONG_NAME_FULL_NAME =
   'An Unreasonably Long Translation Name That Has No Intention Of Fitting In This Column';
 
@@ -158,6 +193,38 @@ export const LongNamesDoNotScrollHorizontally: Story = {
  * content inside the meta decorator's fixed-width shell, since a story-level decorator nests inside
  * that one rather than replacing it.
  */
+/**
+ * Invariant 4 of `.claude/rules/ux/picker-row-layout.md` has two halves, and jsdom can only see
+ * one. A cell carries its full text as a native `title` exactly while that text is clipped: the
+ * jsdom suite pins the "not clipped, so no label" half, because jsdom reports every cell as
+ * unclipped. Deciding the other half needs real layout, which only this story has.
+ *
+ * Both rows in one story on purpose — a `title` that never appears and a `title` that always
+ * appears each satisfy one of these assertions, and only the pair rules out both.
+ */
+export const RowHoverLabelsAppearOnlyWhenClipped: Story = {
+  args: {
+    currentProject: undefined,
+    recentProjects: [],
+    allProjects: [LONG_NAME_PROJECT, WEB],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The measurement runs in a layout effect and lands as state, so the attribute appears a
+    // commit after the text does.
+    await waitFor(async () =>
+      expect(await canvas.findByText(LONG_NAME_FULL_NAME)).toHaveAttribute(
+        'title',
+        LONG_NAME_FULL_NAME,
+      ),
+    );
+
+    // Comfortably inside the same column at this story's width, so it is the unclipped control.
+    expect(await canvas.findByText(WEB.fullName)).not.toHaveAttribute('title');
+  },
+};
+
 export const LongNamesDoNotScrollHorizontallyWhenNarrow: Story = {
   decorators: [
     (Story) => (

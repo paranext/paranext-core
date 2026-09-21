@@ -3751,6 +3751,48 @@ step, no automation. Just a record.
   lives in the hosts.
 - **Source:** PT-4433 (NN5d, Sprint 89 Simple Quality), resource-picker dead-ends.
 
+## adr-picker-row-hover-label-gated-on-truncation: A picker row's hover label appears only while its text is actually clipped
+
+- **Date:** 2026-09-21
+- **Status:** Accepted. Follows up `adr-picker-row-truncates-never-scrolls`, which is unchanged —
+  this entry settles a question that one left open rather than reversing anything in it.
+- **Context:** Invariant 4 of the row layout contract says clipped text stays reachable on hover,
+  and leaves the mechanism to each surface: a native `title` where the row is plain markup, the
+  row's own tooltip where the row is already a tooltip trigger. `ProjectPicker` read that as an
+  unconditional `title` on every name cell, so a short name that is not clipped still raised a
+  tooltip repeating the label directly under the pointer. `ProjectSelector` reached the same
+  invariant through `useTruncationTooltip`, which measures `scrollWidth > clientWidth` and opens
+  nothing when the text fits. Hovering the same project in the two surfaces therefore behaved
+  differently, and the difference was an accident of which helper each surface had to hand rather
+  than a decision either had made.
+- **Decision:** The invariant is about **recovering text the reader cannot see**, so the hover label
+  is gated on measured clipping wherever it is a bare restatement of the visible text —
+  independently of which mechanism carries it. `ProjectPicker` keeps the native `title` (its rows
+  are listbox options; a `title` inside a tooltip trigger opens the browser's tooltip on top of the
+  app's) and gates it with a local `useTruncationTitle`, measured in a layout effect and re-measured
+  by a `ResizeObserver`. Measured from layout rather than on `pointerenter`, which is how
+  `useTruncationTooltip` drives a controlled Radix tooltip: a `title` attached once the pointer is
+  already inside races the browser's own tooltip timer.
+
+  A hover label that says something the cell does not is **not** gated — the language column's
+  tooltip pairs the tag with its display name, and that pairing is worth reading whether or not the
+  tag fits.
+- **Alternatives:** **Converge both surfaces on `useTruncationTooltip`** — rejected for now: it
+  would make every picker row a tooltip trigger, which is what the native `title` was chosen to
+  avoid, and the two mechanisms are not the problem once both are gated on the same condition.
+  **Promote `useTruncationTitle` into `platform-bible-react` beside `useTruncationTooltip`** —
+  deferred until a second consumer wants it; one caller does not settle the shape of a shared hook.
+  **Leave the `title` unconditional** — rejected: a tooltip that repeats the text under the pointer
+  is noise on every row in the list, and it is the majority case.
+- **Consequences:** jsdom reports `scrollWidth` and `clientWidth` as `0`, so it sees every cell as
+  unclipped and can only pin the "no label when it fits" half. The other half needs real layout and
+  lives in the `RowHoverLabelsAppearOnlyWhenClipped` story in `project-picker.stories.tsx`, beside
+  the `LongNamesDoNotScrollHorizontally*` pair — which, as that file records, runs when someone
+  opens Storybook rather than on every push. A regression that made the label unconditional again
+  would therefore go unseen by CI; the jsdom half is what stands between it and a review.
+- **Source:** PT-4675 item 3, deferred from PT-4551.
+
+
 ## adr-picker-row-truncates-never-scrolls: A picker row truncates and starts its short name at the leading edge; it never scrolls horizontally
 
 - **Date:** 2026-09-17

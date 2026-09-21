@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi, describe, it, expect, beforeAll } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
@@ -294,7 +294,7 @@ describe('ShareLayoutDialogContent', () => {
     fireEvent.click(manageButton);
     expect(screen.getByRole('button', { name: 'NLT' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
+    fireEvent.click(screen.getByRole('button', { name: '%shareLayoutDialog_closePicker_label%' }));
     expect(screen.queryByRole('button', { name: 'NLT' })).not.toBeInTheDocument();
   });
 
@@ -323,7 +323,7 @@ describe('ShareLayoutDialogContent', () => {
     // set in the first place".
     expect(hostContent).toHaveAttribute('aria-hidden', 'true');
 
-    fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
+    fireEvent.click(screen.getByRole('button', { name: '%shareLayoutDialog_closePicker_label%' }));
 
     // The host is reachable again, and still modal in its own right.
     expect(hostContent).not.toHaveAttribute('aria-hidden');
@@ -356,12 +356,11 @@ describe('ShareLayoutDialogContent', () => {
     expect(getPickerOverlay()).toBeInTheDocument();
   });
 
-  // `DialogContent` builds in a close button whose screen-reader label is a hardcoded English
-  // "Close" no consumer can translate, so every picker here opts out of it. Without this, dropping
-  // `showCloseButton={false}` on the Manage pickers ships two stacked close buttons and that
-  // untranslated label, and every other test in this file still passes. The model-text picker has
-  // the same assertion in its own test.
-  it('gives the manage pickers the localized close button rather than the built-in one', () => {
+  // `DialogContent` names its close button "Close" unless the caller passes `closeButtonLabel`, and
+  // that default is a hardcoded English string. Asserting the absence of it is the load-bearing
+  // half: a picker that forgets the prop still has a working close button, so testing only that it
+  // closes would pass. The model-text picker has the same assertion in its own test.
+  it('gives the manage pickers a localized close button', () => {
     renderContent();
 
     const [manageButton] = screen.getAllByText(
@@ -369,29 +368,34 @@ describe('ShareLayoutDialogContent', () => {
     );
     fireEvent.click(manageButton);
 
-    expect(screen.getByLabelText('%shareLayoutDialog_closePicker_label%')).toBeInTheDocument();
-    // Matched on the slot rather than on the name 'Close': that name is the untranslatable string
-    // this assertion exists to keep out, so localizing it would turn the name lookup green against
-    // a dialog still shipping two stacked close buttons. Scoped to the picker's own content,
-    // because the host dialog ships the built-in close button this picker opts out of.
-    expect(getPickerContent().querySelector('[data-slot="dialog-close"]')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: '%shareLayoutDialog_closePicker_label%' }),
+    ).toBeInTheDocument();
+    // Scoped to the picker's own content: the host dialog ships a close button too, and it takes
+    // the English default, so an unscoped lookup would fail on a correctly labelled picker.
+    expect(
+      within(getPickerContent()).queryByRole('button', { name: 'Close' }),
+    ).not.toBeInTheDocument();
   });
 
-  // Every embedded picker replaces `DialogContent`'s built-in close button, whose screen-reader
-  // label is a hardcoded English "Close" no consumer can translate. Asserting the absence of that
-  // label is the load-bearing half: a picker that forgets `showCloseButton={false}` still has a
-  // working close button, so testing only that it closes would pass.
+  // The same contract as the Manage pickers above, on the picker that closes this dialog rather
+  // than staying open: the close button reaches the user by the localized name, never the English
+  // default `DialogContent` falls back to.
   it('gives the model-text picker the same localized close button as the manage pickers', () => {
     renderContent({ initialModelText: undefined });
 
     fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
 
-    expect(screen.getByLabelText('%shareLayoutDialog_closePicker_label%')).toBeInTheDocument();
-    // See the manage-picker test above on why this matches the slot rather than the name 'Close',
-    // and why it is scoped to the picker: the host dialog ships the built-in close button too.
-    expect(getPickerContent().querySelector('[data-slot="dialog-close"]')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: '%shareLayoutDialog_closePicker_label%' }),
+    ).toBeInTheDocument();
+    // See the manage-picker test above on why this is scoped to the picker: the host dialog ships
+    // a close button too, and it keeps the English default.
+    expect(
+      within(getPickerContent()).queryByRole('button', { name: 'Close' }),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
+    fireEvent.click(screen.getByRole('button', { name: '%shareLayoutDialog_closePicker_label%' }));
     expect(screen.queryByText('%resourcePicker_search_placeholder%')).not.toBeInTheDocument();
   });
 
@@ -481,7 +485,9 @@ describe('ShareLayoutDialogContent', () => {
     // asserting the fallback branch against a state that never reaches it.
     expect(searchBox).toBeDisabled();
 
-    const closeButton = screen.getByLabelText('%shareLayoutDialog_closePicker_label%');
+    const closeButton = screen.getByRole('button', {
+      name: '%shareLayoutDialog_closePicker_label%',
+    });
     expect(closeButton).not.toHaveFocus();
     expect(
       screen.getByText('%resourcePicker_title%').closest('[data-slot="dialog-content"]'),

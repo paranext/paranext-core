@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import type { ComponentProps } from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
 } from '@/components/shadcn-ui/dialog';
 import {
@@ -62,5 +63,69 @@ describe('DialogContent overlay styling', () => {
     expect(document.querySelector<HTMLElement>('[data-slot="dialog-content"]')?.style.zIndex).toBe(
       String(Z_INDEX_MODAL),
     );
+  });
+});
+
+/**
+ * Both close buttons fall back to a hardcoded English "Close". A dialog that leaves
+ * `closeButtonLabel` unset therefore ships an untranslated label, so the default is a real part of
+ * the contract rather than a placeholder — it is what every consumer that forgets the prop gets.
+ */
+describe('dialog close button labelling', () => {
+  it('names DialogContent close button with the caller supplied label', () => {
+    render(
+      <Dialog open>
+        <DialogContent closeButtonLabel="Cerrar">
+          <DialogTitle>Title</DialogTitle>
+          <DialogDescription>Description</DialogDescription>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument();
+    // The point of the prop: the English default must be gone, not merely joined by a translation.
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+  });
+
+  it('falls back to "Close" when DialogContent is given no label', () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Title</DialogTitle>
+          <DialogDescription>Description</DialogDescription>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  // `DialogFooter`'s close button carries the same string as visible text rather than as
+  // screen-reader-only text, so it is the same defect on a different surface.
+  it('labels the DialogFooter close button, defaulting to "Close"', () => {
+    const { rerender } = render(
+      <Dialog open>
+        <DialogContent showCloseButton={false}>
+          <DialogTitle>Title</DialogTitle>
+          <DialogDescription>Description</DialogDescription>
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+
+    rerender(
+      <Dialog open>
+        <DialogContent showCloseButton={false}>
+          <DialogTitle>Title</DialogTitle>
+          <DialogDescription>Description</DialogDescription>
+          <DialogFooter showCloseButton closeButtonLabel="Cerrar" />
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
   });
 });

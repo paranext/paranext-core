@@ -101,6 +101,15 @@ export type DialogContentProps = React.ComponentProps<typeof DialogPrimitive.Con
    */
   overlayStyle?: React.CSSProperties;
   showCloseButton?: boolean;
+  // CUSTOM: Added closeButtonLabel so the close button's screen-reader name can be localized; the
+  // original hardcodes an English "Close", which every consumer ships untranslated
+  /**
+   * Screen-reader name for the close button. Pass a localized string; the default is English, so a
+   * dialog that leaves it unset ships an untranslated label.
+   *
+   * @default 'Close'
+   */
+  closeButtonLabel?: string;
 };
 
 /**
@@ -114,6 +123,8 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  // CUSTOM: Destructure closeButtonLabel so a caller can localize the close button's accessible name
+  closeButtonLabel = 'Close',
   // CUSTOM: Destructure overlayClassName to forward to DialogOverlay for per-call backdrop styling
   overlayClassName,
   // CUSTOM: Destructure overlayStyle to forward to DialogOverlay for per-call backdrop z-index
@@ -146,7 +157,9 @@ function DialogContent({
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button variant="ghost" className="tw:absolute tw:top-2 tw:end-2" size="icon-sm">
               <IconX />
-              <span className="tw:sr-only">Close</span>
+              {/* CUSTOM: Replaced the hardcoded English "Close" with the closeButtonLabel prop so
+                  consumers can supply a localized screen-reader name */}
+              <span className="tw:sr-only">{closeButtonLabel}</span>
             </Button>
           </DialogPrimitive.Close>
         )}
@@ -184,10 +197,21 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
 function DialogFooter({
   className,
   showCloseButton = false,
+  // CUSTOM: Destructure closeButtonLabel so a caller can localize the close button's visible text
+  closeButtonLabel = 'Close',
   children,
   ...props
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean;
+  // CUSTOM: Added closeButtonLabel so the footer close button's text can be localized; the original
+  // hardcodes an English "Close"
+  /**
+   * Visible text for the footer's close button. Pass a localized string; the default is English, so
+   * a dialog that leaves it unset ships an untranslated label.
+   *
+   * @default 'Close'
+   */
+  closeButtonLabel?: string;
 }) {
   return (
     <div
@@ -202,7 +226,9 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          {/* CUSTOM: Replaced the hardcoded English "Close" with the closeButtonLabel prop so
+              consumers can supply a localized label */}
+          <Button variant="outline">{closeButtonLabel}</Button>
         </DialogPrimitive.Close>
       )}
     </div>

@@ -3023,6 +3023,13 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
 	 */
 	overlayStyle?: React$1.CSSProperties;
 	showCloseButton?: boolean;
+	/**
+	 * Screen-reader name for the close button. Pass a localized string; the default is English, so a
+	 * dialog that leaves it unset ships an untranslated label.
+	 *
+	 * @default 'Close'
+	 */
+	closeButtonLabel?: string;
 };
 /**
  * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
@@ -3031,7 +3038,7 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare function DialogContent({ className, children, showCloseButton, overlayClassName, overlayStyle, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DialogContent({ className, children, showCloseButton, closeButtonLabel, overlayClassName, overlayStyle, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Container for the dialog's header area. Stacks title and description vertically.
  *
@@ -3045,8 +3052,15 @@ export declare function DialogHeader({ className, ...props }: React$1.ComponentP
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare function DialogFooter({ className, showCloseButton, children, ...props }: React$1.ComponentProps<"div"> & {
+export declare function DialogFooter({ className, showCloseButton, closeButtonLabel, children, ...props }: React$1.ComponentProps<"div"> & {
 	showCloseButton?: boolean;
+	/**
+	 * Visible text for the footer's close button. Pass a localized string; the default is English, so
+	 * a dialog that leaves it unset ships an untranslated label.
+	 *
+	 * @default 'Close'
+	 */
+	closeButtonLabel?: string;
 }): import("react/jsx-runtime").JSX.Element;
 /**
  * Renders the dialog's title as a styled heading. Used inside DialogHeader.
