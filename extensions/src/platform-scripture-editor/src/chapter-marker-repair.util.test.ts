@@ -362,7 +362,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
-      isUserTyping: false,
+      isUserEditing: false,
       applyRepairToEditor,
       notifyRepair,
     });
@@ -382,7 +382,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 4',
-      isUserTyping: false,
+      isUserEditing: false,
       applyRepairToEditor,
       notifyRepair,
     });
@@ -404,7 +404,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
-      isUserTyping: true,
+      isUserEditing: true,
       applyRepairToEditor,
       notifyRepair,
     });
@@ -421,7 +421,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
-      isUserTyping: false,
+      isUserEditing: false,
       applyRepairToEditor: vi.fn(),
       notifyRepair: sameChapterNotify,
     });
@@ -432,7 +432,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 4',
-      isUserTyping: false,
+      isUserEditing: false,
       applyRepairToEditor: vi.fn(),
       notifyRepair: crossChapterNotify,
     });
@@ -447,7 +447,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: REPAIRED, usjToSave: undefined, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
-      isUserTyping: false,
+      isUserEditing: false,
       applyRepairToEditor,
       notifyRepair,
     });
@@ -465,7 +465,7 @@ describe('applyChapterSavePreparation', () => {
       preparation: { repairedUsj: undefined, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
-      isUserTyping: false,
+      isUserEditing: false,
       applyRepairToEditor,
       notifyRepair,
     });
@@ -603,7 +603,7 @@ describe('the caret target on the way to the editor', () => {
       },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
-      isUserTyping: false,
+      isUserEditing: false,
       applyRepairToEditor,
       notifyRepair: vi.fn(),
     });

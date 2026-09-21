@@ -2851,10 +2851,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // chapter it was scheduled for against the chapter actually on screen now.
         currentChapterKey: chapterKeyRef.current,
         // The debounced save fires only once typing has paused this long, so a save seeing a newer
-        // edit is one that ran mid-typing.
-        isUserTyping:
-          lastLocalEditTimestamp.current !== undefined &&
-          Date.now() - lastLocalEditTimestamp.current < PDP_SAVE_DEBOUNCE_MS,
+        // edit is one that ran mid-typing. An open palette or note editor never stamps that edit
+        // time, so it is asked about directly, with the same staleness bound the PDP sync uses.
+        // Resolved here rather than through `isEditingSessionActive`, which also closes a stale
+        // note session: a save is no place to close the user's editor.
+        isUserEditing:
+          (lastLocalEditTimestamp.current !== undefined &&
+            Date.now() - lastLocalEditTimestamp.current < PDP_SAVE_DEBOUNCE_MS) ||
+          resolveEditingSessionActivity({
+            hasPaletteSession: paletteSession.current !== undefined,
+            editingNoteKey: editingNoteKey.current,
+            noteSessionRefreshedAtMs: editingNoteSessionRefreshedAt.current,
+            nowMs: Date.now(),
+          }).isActive,
         applyRepairToEditor: putRepairedUsjInEditor,
         notifyRepair: () =>
           notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum),

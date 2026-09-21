@@ -434,8 +434,8 @@ export function prepareUsjForChapterSave(
  * document to write.
  *
  * The push-back into the editor is not bookkeeping — without it the bad marker stays on screen, so
- * every later save repairs it again and reports it again, forever. It is skipped in two cases, and
- * the user is told either way, because the correction was still made to what gets written:
+ * every later save repairs it again and reports it again, forever. It is skipped in three cases,
+ * and the user is told either way, because the correction was still made to what gets written:
  *
  * - The chapter being saved is no longer the chapter being shown. A save can fire after the user has
  *   navigated away (a trailing save, a chapter-switch flush) through the closure captured for the
@@ -446,6 +446,10 @@ export function prepareUsjForChapterSave(
  *   the keys that follow land wherever the browser leaves them — at the end of the chapter,
  *   deleting or adding text there. The save that follows once typing pauses makes the same repair
  *   and pushes it back then.
+ * - The user has a marker palette or a note editor open over the editor. Replacing the document
+ *   regenerates every node, which ends that session under them: a palette's pick lands at a caret
+ *   that may no longer mean the same place, and a note editor's own save no longer finds its note.
+ *   The next save after the session closes makes the same repair and pushes it back then.
  *
  * `applyRepairToEditor` is responsible for its own failures: the PDP write has to run even when the
  * editor refuses the repaired document, because it is that write which un-poisons the chapter.
@@ -453,8 +457,8 @@ export function prepareUsjForChapterSave(
  * @param preparation What {@link prepareUsjForChapterSave} returned for this save.
  * @param savedChapterKey The chapter this save was scheduled for.
  * @param currentChapterKey The chapter the editor is showing now.
- * @param isUserTyping Whether the user has edited the document too recently for it to be replaced
- *   under them.
+ * @param isUserEditing Whether the document must not be replaced under the user: they edited it too
+ *   recently, or have a marker palette or note editor open over it.
  * @param applyRepairToEditor Puts the repaired document back into the editor and the caret back
  *   where the correction was made. Must not throw.
  * @param notifyRepair Tells the user the chapter marker was corrected.
@@ -464,20 +468,20 @@ export function applyChapterSavePreparation({
   preparation,
   savedChapterKey,
   currentChapterKey,
-  isUserTyping,
+  isUserEditing,
   applyRepairToEditor,
   notifyRepair,
 }: {
   preparation: ChapterSavePreparation;
   savedChapterKey: string;
   currentChapterKey: string;
-  isUserTyping: boolean;
+  isUserEditing: boolean;
   applyRepairToEditor: (usj: Usj, caretTarget: ChapterMarkerCaretTarget | undefined) => void;
   notifyRepair: () => void;
 }): Usj | undefined {
   const { repairedUsj, usjToSave, caretTarget } = preparation;
   if (repairedUsj) {
-    if (savedChapterKey === currentChapterKey && !isUserTyping)
+    if (savedChapterKey === currentChapterKey && !isUserEditing)
       applyRepairToEditor(repairedUsj, caretTarget);
     notifyRepair();
   }
