@@ -370,7 +370,7 @@ describe('usePendingProject — reporting a failed open', () => {
     });
 
     await act(async () => {
-      result.current.beginOpenProject(NEW_PROJECT);
+      result.current.beginOpenProject(NEW_PROJECT.id, NEW_PROJECT);
     });
 
     expect(mockSendNotification).toHaveBeenCalledWith(
@@ -398,10 +398,10 @@ describe('usePendingProject — reporting a failed open', () => {
 
     // Pick the slow-to-fail project, then pick another one that opens.
     act(() => {
-      result.current.beginOpenProject(NEW_PROJECT);
+      result.current.beginOpenProject(NEW_PROJECT.id, NEW_PROJECT);
     });
     await act(async () => {
-      result.current.beginOpenProject(THIRD_PROJECT);
+      result.current.beginOpenProject(THIRD_PROJECT.id, THIRD_PROJECT);
     });
     // Without this the optional call below is a no-op when the mock never captured a rejecter, and
     // "no notification" would hold for the wrong reason.
@@ -422,7 +422,7 @@ describe('usePendingProject — reporting a failed open', () => {
       const { result } = renderPendingProject(OLD_PROJECT);
 
       act(() => {
-        result.current.beginOpenProject(NEW_PROJECT);
+        result.current.beginOpenProject(NEW_PROJECT.id, NEW_PROJECT);
       });
       act(() => {
         vi.advanceTimersByTime(PENDING_PROJECT_TIMEOUT_MS);

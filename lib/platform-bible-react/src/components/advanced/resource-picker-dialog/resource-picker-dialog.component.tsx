@@ -496,7 +496,7 @@ export default function ResourcePickerDialog({
             ships the id twice and `aria-describedby` resolves to whichever is first in document
             order. A host that wraps this in its own `Dialog.Root` (the embedded pickers in Share
             Layout) is fine; a host that shares one must suppress its own — see
-            `providesOwnTitleAndDescription` on paranext-core's `DialogDefinition`. */}
+            `providesOwnDescription` on paranext-core's `DialogDefinition`. */}
         <DialogDescription className="tw:sr-only">{descriptionText}</DialogDescription>
       </DialogHeader>
       <div className="tw:flex tw:gap-2 tw:p-4">

@@ -278,6 +278,9 @@ export const SHARE_LAYOUT_DIALOG: DialogDefinition<typeof SHARE_LAYOUT_DIALOG_TY
     ...DIALOG_BASE,
     tabType: SHARE_LAYOUT_DIALOG_TYPE,
     defaultTitle: '%shareLayoutDialog_title%',
+    // The component renders both halves itself (`share-layout.component.tsx`), unconditionally.
+    providesOwnTitle: true,
+    providesOwnDescription: true,
     initialSize: { width: 640, height: 720 },
     Component: ShareLayoutDialogWrapper,
   },

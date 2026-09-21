@@ -583,9 +583,9 @@ describe('renderProjectIndicator', () => {
         // The natural shape of a "mark only the resources" renderer. Keying the column on what it
         // returned per row would indent R1's label one glyph further than P1's.
         renderProjectIndicator={(project) =>
-          project.customData?.type === 'ScriptureResource' ? (
-            <span data-testid="indicator-resource" aria-label="Resource" />
-          ) : undefined
+          project.customData?.type === 'ScriptureResource'
+            ? { node: <span data-testid="indicator-resource" />, label: 'Resource' }
+            : undefined
         }
       />,
     );

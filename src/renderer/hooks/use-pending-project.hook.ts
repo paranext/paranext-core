@@ -61,6 +61,14 @@ export type PendingProjectState = {
    */
   pendingProject: ProjectItem | undefined;
   /**
+   * The project to name right now: the pending pick when there is one, otherwise whatever the
+   * editor reports.
+   *
+   * Resolved here rather than by each surface so the rule for which of the two wins lives in one
+   * place — a caller handed both can combine them into a state that contradicts itself.
+   */
+  displayedProject: ProjectItem | undefined;
+  /**
    * Opens a project, and — when `item` carries the display fields to do it with — starts naming it
    * immediately, ahead of the editor reporting it.
    *
@@ -180,7 +188,7 @@ export function usePendingProject(
     [],
   );
 
-  return { pendingProject, beginOpenProject };
+  return { pendingProject, displayedProject: pendingProject ?? currentProject, beginOpenProject };
 }
 
 export default usePendingProject;

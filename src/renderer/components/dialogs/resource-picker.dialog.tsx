@@ -123,7 +123,8 @@ export const RESOURCE_PICKER_DIALOG: DialogDefinition<typeof RESOURCE_PICKER_DIA
     // `ResourcePickerDialog` renders its own `DialogTitle` and `DialogDescription`, both localized
     // and both specific to this list. Without this the modal shell adds a second, generic pair
     // under the same Radix ids, and a screen reader announces the shell's text instead.
-    providesOwnTitleAndDescription: true,
+    providesOwnTitle: true,
+    providesOwnDescription: true,
     Component: ResourcePickerDialogWrapper,
   });
 

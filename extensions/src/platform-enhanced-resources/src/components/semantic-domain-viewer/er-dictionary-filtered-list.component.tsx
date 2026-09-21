@@ -19,7 +19,6 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  Z_INDEX_ABOVE_DOCK,
   cn,
 } from 'platform-bible-react';
 import { type IndexedListItem, type SemanticDomain } from 'platform-bible-react/experimental';
@@ -525,13 +524,11 @@ function SegmentDropdown({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
+        // No `zIndex` override: `DropdownMenuContent` sets its own tier, which already clears the
+        // drawer this list lives in. A consumer that pins an overlay's z-index itself is what
+        // `.claude/rules/ux/z-index-tiers.md` rule 2 rules out, and this one matched the tier the
+        // component already emits, so it never did anything.
         className="tw:max-h-[500px] tw:w-[300px] tw:overflow-y-auto tw:p-1"
-        // This viewer opens as a dialog, so its menu has to clear the host modal; the popover tier
-        // is where the rest of the popover family sits and is the named tier that does it. Use a
-        // tier rather than arithmetic on one — a computed value lands between named tiers, where
-        // nothing orders it against anything and no test can pin it. See the scale's own doc in
-        // `lib/platform-bible-react/src/components/z-index.ts`.
-        style={{ zIndex: Z_INDEX_ABOVE_DOCK }}
         onEscapeKeyDown={(e) => {
           e.stopPropagation();
           e.preventDefault();

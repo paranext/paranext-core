@@ -383,6 +383,17 @@ describe('SHARE_LAYOUT_DIALOG registration', () => {
   it('defines a Component to render', () => {
     expect(typeof SHARE_LAYOUT_DIALOG.Component).toBe('function');
   });
+
+  // The component renders both halves itself, so the modal shell must render neither. Without
+  // these the shell adds a second title and a second description under the same ids, and because
+  // this dialog carries no `prompt` the shell's description falls back to the TITLE and wins on
+  // document order — so a screen-reader user hears the title as the description and never hears
+  // `%shareLayoutDialog_description%`. The shell's own tests cover the mechanism; nothing but this
+  // covers the wiring, which is how the flag came to be set on one dialog and not this one.
+  it('declares that it provides its own title and description', () => {
+    expect(SHARE_LAYOUT_DIALOG.providesOwnTitle).toBe(true);
+    expect(SHARE_LAYOUT_DIALOG.providesOwnDescription).toBe(true);
+  });
 });
 
 describe('ShareLayoutDialogWrapper admin gate', () => {

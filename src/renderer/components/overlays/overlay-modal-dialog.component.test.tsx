@@ -49,9 +49,12 @@ describe('OverlayModalDialog', () => {
   // given, so a component whose own title says the same thing would make a text-based assertion
   // ambiguous.
   describe('when the hosted dialog provides its own title and description', () => {
-    function renderWithOwnPair(providesOwnTitleAndDescription: boolean) {
+    function renderWithOwnPair(
+      providesOwnTitle: boolean,
+      providesOwnDescription = providesOwnTitle,
+    ) {
       const overlay = createMockOverlay('Content', {
-        props: { title: 'Shell fallback title', providesOwnTitleAndDescription },
+        props: { title: 'Shell fallback title', providesOwnTitle, providesOwnDescription },
         Component: () => (
           <>
             <DialogTitle>Component title</DialogTitle>
@@ -85,12 +88,25 @@ describe('OverlayModalDialog', () => {
     // pair, so the ids really are duplicated and really do resolve to the shell's text. Without
     // this, "one element carries the id" would pass against a shell that had stopped rendering a
     // fallback for every dialog, silently dropping the accessible name from the ones that need it.
-    it('still renders its own fallback pair when the flag is not set', () => {
+    it('still renders its own fallback pair when neither flag is set', () => {
       const { titleIds, descriptionIds } = renderWithOwnPair(false);
 
       expect(titleIds).toHaveLength(2);
       expect(descriptionIds).toHaveLength(2);
       expect(titleIds[0]).toHaveTextContent('Shell fallback title');
+    });
+
+    // The two flags are suppressed independently, which is the whole reason the field is split:
+    // a dialog that renders a title and no description (Project Picker) must keep the shell's
+    // description rather than being left with none. A combined flag passes the tests above and
+    // fails this one.
+    it('suppresses only the half its flag names', () => {
+      const { titleIds, descriptionIds } = renderWithOwnPair(true, false);
+
+      expect(titleIds).toHaveLength(1);
+      expect(titleIds[0]).toHaveTextContent('Component title');
+      // The component's own description plus the shell's, because only the title was suppressed.
+      expect(descriptionIds).toHaveLength(2);
     });
   });
 });

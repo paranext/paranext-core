@@ -67,7 +67,15 @@ function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>
   return { onSelect };
 }
 
-/** Same as {@link renderDialog}, but keeps the handle needed to re-render with changed props. */
+/**
+ * Same as {@link renderDialog}, but keeps the handle needed to re-render with changed props.
+ *
+ * Wrapped in a real `DialogContent`, unlike {@link renderDialog}: the focus catch-up treats an
+ * element carrying `data-slot="dialog-content"` as "parked on the shell", and that is the branch
+ * `focusResourcePickerOnOpen`'s fallback actually produces in the app. Without the wrapper there is
+ * no such element to focus, so the tests below silently fall through to the `document.body` arm and
+ * the clause they exist for is never executed.
+ */
 function renderDialogForRerender(
   overrides: Partial<Parameters<typeof ResourcePickerDialog>[0]> = {},
 ) {
@@ -80,14 +88,18 @@ function renderDialogForRerender(
   };
   const view = render(
     <Dialog open>
-      <ResourcePickerDialog {...props} />
+      <DialogContent>
+        <ResourcePickerDialog {...props} />
+      </DialogContent>
     </Dialog>,
   );
   return {
     rerender: (next: Partial<Parameters<typeof ResourcePickerDialog>[0]>) =>
       view.rerender(
         <Dialog open>
-          <ResourcePickerDialog {...props} {...next} />
+          <DialogContent>
+            <ResourcePickerDialog {...props} {...next} />
+          </DialogContent>
         </Dialog>,
       ),
   };
@@ -106,8 +118,14 @@ describe('ResourcePickerDialog', () => {
     // test could pass against a picker that never disabled the box in the first place.
     expect(searchBox).toBeDisabled();
     // Stand in for `focusResourcePickerOnOpen`'s fallback, which parks focus on the host's content.
+    // Asserted non-null before focusing: an optional call against a missing shell no-ops, and the
+    // test would then pass through the `document.body` arm instead of the `dialog-content` one it
+    // is here to pin.
     const shell = document.querySelector<HTMLElement>('[data-slot="dialog-content"]');
-    shell?.focus();
+    if (!shell)
+      throw new Error('The harness must render a DialogContent for this test to mean anything');
+    shell.focus();
+    expect(shell).toHaveFocus();
 
     rerender({ isResourcesLoading: false });
 
@@ -117,15 +135,19 @@ describe('ResourcePickerDialog', () => {
   // The other half: a user who has already moved focus keeps their place. Taking it back from a
   // control they chose is worse than the stranding the catch-up above fixes.
   //
-  // The control is a host-rendered button rather than one of the picker's own, because while the
+  // The control is a host-rendered one rather than one of the picker's own, because while the
   // catalog is loading the picker's search box and language filter are both disabled — so the only
   // place a user's focus can actually be is on something the host rendered, typically its close
-  // button.
+  // button. `DialogContent`'s own close button is exactly that, and being inside the dialog it is
+  // somewhere focus can genuinely rest: a detached button on `document.body` sits outside the
+  // focus trap, which pulls focus back in and makes the test fail for a reason unrelated to the
+  // catch-up.
   it('leaves focus alone when the catalog arrives and the user has already moved it', () => {
     const { rerender } = renderDialogForRerender({ isResourcesLoading: true });
 
-    const hostControl = document.createElement('button');
-    document.body.appendChild(hostControl);
+    const hostControl = document.querySelector<HTMLElement>('[data-slot="dialog-close"]');
+    if (!hostControl)
+      throw new Error('The harness must render a DialogContent, which supplies the close button');
     hostControl.focus();
     expect(hostControl).toHaveFocus();
 
