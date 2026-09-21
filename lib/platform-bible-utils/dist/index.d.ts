@@ -4791,7 +4791,9 @@ export type ContentZoomWheelReaderOptions = {
 	 */
 	maxSteps?: number;
 	/**
-	 * Zoom step the pinch calibration is derived from. Default 0.1.
+	 * Zoom step the pinch calibration is derived from. Default 0.1. Must be a positive, finite
+	 * number; the reader does not validate it, and a zero or negative step yields a meaningless
+	 * calibration.
 	 *
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
