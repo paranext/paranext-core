@@ -750,10 +750,11 @@ export const ProjectAndResourceIndicators: Story = {
           ariaLabel: 'Project or resource',
         }}
         renderProjectIndicator={(project) =>
-          project.customData?.type === 'ScriptureResource' ? (
-            <BookOpen className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+          typeof project.customData?.type === 'string' &&
+          project.customData.type.endsWith('Resource') ? (
+            <BookOpen className="tw:h-3 tw:w-3 tw:opacity-60" aria-label="Resource" role="img" />
           ) : (
-            <FileText className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+            <FileText className="tw:h-3 tw:w-3 tw:opacity-60" aria-label="Project" role="img" />
           )
         }
       />
@@ -763,7 +764,7 @@ export const ProjectAndResourceIndicators: Story = {
     docs: {
       description: {
         story:
-          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `customData.type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon for resources, a document icon for everything else. The selector renders whatever node the caller returns and treats it as decorative — the icons here are `aria-hidden` because the row text already names the project.",
+          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `customData.type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories): a book icon for the two resource types, a document icon for everything else.\n\nThe selector renders whatever node the caller returns, verbatim. It adds no accessible name of its own, because only the caller knows what its glyph means.\n\nSo the icons here are labelled: nothing else in the row says whether it is a project or a resource, and an unlabelled icon would put that distinction out of reach of a screen reader. Use `aria-hidden` instead only where the row text already carries the same information.",
       },
     },
   },
