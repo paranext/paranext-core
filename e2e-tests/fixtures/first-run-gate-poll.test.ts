@@ -7,7 +7,7 @@
  * transient read failure.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { pollFirstRunGate, rethrowIfTargetClosed } from './helpers';
+import { buildFirstRunGateSample, pollFirstRunGate, rethrowIfTargetClosed } from './helpers';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -183,6 +183,70 @@ describe('pollFirstRunGate', () => {
     expect(result).toEqual({ sampleReadFailure: persistentError });
     expect(warnSpy).toHaveBeenLastCalledWith(expect.stringContaining('persistent B'));
     expect(warnSpy).not.toHaveBeenLastCalledWith(expect.stringContaining('transient A'));
+  });
+});
+
+describe('buildFirstRunGateSample', () => {
+  it('reports cleared even when a discriminator read throws, once the gate itself reads false', async () => {
+    // Promise.all would let escapeHatch's rejection discard the gate's own (cleanly read) false —
+    // turning an ordinary "the gate closed" moment into a sample failure.
+    const locators = {
+      gate: { isVisible: vi.fn().mockResolvedValue(false) },
+      escapeHatch: { isVisible: vi.fn().mockRejectedValue(new Error('detached from DOM')) },
+      heading: { isVisible: vi.fn().mockResolvedValue(false) },
+      errorScreen: { count: vi.fn().mockResolvedValue(0) },
+    };
+
+    await expect(buildFirstRunGateSample(locators)).resolves.toEqual({
+      gateVisible: false,
+      escapeHatchVisible: false,
+      headingVisible: false,
+      onErrorScreen: false,
+    });
+  });
+
+  it('defaults an individually-rejected discriminator to false rather than losing the whole sample', async () => {
+    const locators = {
+      gate: { isVisible: vi.fn().mockResolvedValue(true) },
+      escapeHatch: { isVisible: vi.fn().mockRejectedValue(new Error('detached from DOM')) },
+      heading: { isVisible: vi.fn().mockResolvedValue(true) },
+      errorScreen: { count: vi.fn().mockResolvedValue(0) },
+    };
+
+    await expect(buildFirstRunGateSample(locators)).resolves.toEqual({
+      gateVisible: true,
+      escapeHatchVisible: false,
+      headingVisible: true,
+      onErrorScreen: false,
+    });
+  });
+
+  it('rethrows when the gateVisible read itself rejects, rather than defaulting it', async () => {
+    // gateVisible is the core signal pollFirstRunGate's streak-counting depends on — unlike the
+    // three discriminators, its own rejection must still fail the sample, not resolve to a guess.
+    const gateError = new Error('gate locator read failed');
+    const locators = {
+      gate: { isVisible: vi.fn().mockRejectedValue(gateError) },
+      escapeHatch: { isVisible: vi.fn().mockResolvedValue(false) },
+      heading: { isVisible: vi.fn().mockResolvedValue(false) },
+      errorScreen: { count: vi.fn().mockResolvedValue(0) },
+    };
+
+    await expect(buildFirstRunGateSample(locators)).rejects.toBe(gateError);
+  });
+
+  it('rethrows a TargetClosedError from any of the four reads, not just gateVisible', async () => {
+    const closedError = new TargetClosedError('Target page, context or browser has been closed');
+    const locators = {
+      gate: { isVisible: vi.fn().mockResolvedValue(true) },
+      escapeHatch: { isVisible: vi.fn().mockRejectedValue(closedError) },
+      heading: { isVisible: vi.fn().mockResolvedValue(false) },
+      errorScreen: { count: vi.fn().mockResolvedValue(0) },
+    };
+
+    await expect(buildFirstRunGateSample(locators)).rejects.toThrow(
+      /page, its context, or the browser closed/,
+    );
   });
 });
 

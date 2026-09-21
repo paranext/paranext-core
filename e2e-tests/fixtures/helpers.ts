@@ -2304,6 +2304,65 @@ export async function pollFirstRunGate(
 export const ESCAPE_HATCH_NAME_PATTERN =
   /continue without (finishing setup|registration)|%firstRun_button_continueWithout(FinishingSetup|Registration)%/i;
 
+/** Locator reads {@link buildFirstRunGateSample} joins into one snapshot. */
+interface FirstRunGateLocators {
+  gate: { isVisible: () => Promise<boolean> };
+  escapeHatch: { isVisible: () => Promise<boolean> };
+  heading: { isVisible: () => Promise<boolean> };
+  errorScreen: { count: () => Promise<number> };
+}
+
+/**
+ * Join the first-run gate's four DOM reads into one {@link FirstRunGateSample}, tolerating any ONE
+ * of them individually rejecting rather than losing the whole snapshot to it.
+ *
+ * `Promise.allSettled` rather than `Promise.all`: with `.all`, a single rejected discriminator
+ * (escape hatch, heading, or error screen) discards `gateVisible` along with it, so the whole read
+ * counts as a sample failure even when the gate itself was cleanly read as gone or as still up. All
+ * four reads stay concurrent either way — the point of one sample is a single-instant snapshot, not
+ * sequential reads that could straddle a state change.
+ *
+ * `gateVisible` is the one read this cannot paper over: if ITS OWN promise rejected, this rethrows
+ * rather than defaulting it, so {@link pollFirstRunGate}'s streak-counting still treats an
+ * unreadable core signal as a failed sample, same as before this existed. A page/context/browser
+ * closing out from under any of the four reads rethrows immediately, via the same check
+ * {@link rethrowIfTargetClosed} uses, regardless of which one hit it. Once `gateVisible` itself
+ * resolves `false`, its siblings are moot and this returns the all-false shape without looking at
+ * them — an escape hatch or heading rejecting or resolving true means nothing once the gate is
+ * gone.
+ */
+export async function buildFirstRunGateSample(
+  locators: FirstRunGateLocators,
+): Promise<FirstRunGateSample> {
+  const [gateVisible, escapeHatchVisible, headingVisible, errorScreenCount] =
+    await Promise.allSettled([
+      locators.gate.isVisible(),
+      locators.escapeHatch.isVisible(),
+      locators.heading.isVisible(),
+      locators.errorScreen.count(),
+    ]);
+
+  [gateVisible, escapeHatchVisible, headingVisible, errorScreenCount].forEach((settled) => {
+    if (settled.status === 'rejected') rethrowIfTargetClosed(settled.reason);
+  });
+  if (gateVisible.status === 'rejected') throw gateVisible.reason;
+
+  if (!gateVisible.value)
+    return {
+      gateVisible: false,
+      escapeHatchVisible: false,
+      headingVisible: false,
+      onErrorScreen: false,
+    };
+  return {
+    gateVisible: true,
+    escapeHatchVisible:
+      escapeHatchVisible.status === 'fulfilled' ? escapeHatchVisible.value : false,
+    headingVisible: headingVisible.status === 'fulfilled' ? headingVisible.value : false,
+    onErrorScreen: errorScreenCount.status === 'fulfilled' ? errorScreenCount.value > 0 : false,
+  };
+}
+
 /**
  * WORKAROUND for an app-level race, not a fix for it. Click past the first-run gate (PT-4175) if it
  * is still showing despite `platform.firstRunComplete` being pinned before launch.
@@ -2386,20 +2445,16 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
   // See pollFirstRunGate's own docblock for why this polls one snapshot per iteration rather than
   // racing the three `waitFor`s against each other. Local to this call: `isVisible`/`count` never
   // auto-wait or time out, so the sample itself needs no timeout of its own.
-  const polled = await pollFirstRunGate(async () => {
-    const [gateVisible, escapeHatchVisible, headingVisible, errorScreenCount] = await Promise.all([
-      firstRunDialog.isVisible(),
-      escapeHatch.isVisible(),
-      dialogHeading.isVisible(),
-      errorScreen.count(),
-    ]);
-    return {
-      gateVisible,
-      escapeHatchVisible,
-      headingVisible,
-      onErrorScreen: errorScreenCount > 0,
-    };
-  }, timeout);
+  const polled = await pollFirstRunGate(
+    () =>
+      buildFirstRunGateSample({
+        gate: firstRunDialog,
+        escapeHatch,
+        heading: dialogHeading,
+        errorScreen,
+      }),
+    timeout,
+  );
 
   if (polled === 'cleared') return 'settled';
   if (polled === 'inconclusive') return 'inconclusive';
