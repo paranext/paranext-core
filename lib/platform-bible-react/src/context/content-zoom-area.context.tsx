@@ -88,8 +88,11 @@ export type ContentZoomAreaProviderProps = {
  * for a pop-up that belongs to an area but is rendered outside that area's element — for example a
  * popover the view renders beside its content and anchors to a position in the text.
  *
- * Popovers, dropdown menus and tooltips from this library that open inside an area are scaled with
- * that area's zoom, and their size is capped so they stay inside the pane.
+ * Popovers and dropdown menus from this library that open inside an area are scaled with that
+ * area's zoom and cap their own width and height to the pane, scrolling their content if it doesn't
+ * fit; tooltips are scaled with the area's zoom too but cap only their width, so a tooltip taller
+ * than the available space is clipped at the pane's edge. Dropdown sub-menu content does not follow
+ * an area yet.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */

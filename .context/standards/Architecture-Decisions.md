@@ -4428,7 +4428,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     internals);
   - keeping pop-ups at interface scale (rejected by the product owner).
 - **Consequences:**
-  - three shadcn files carry `CUSTOM` changes;
+  - six shadcn files carry `CUSTOM` changes - three functional (popover, dropdown menu, tooltip)
+    and three recording the components that do not follow an area yet;
   - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
     (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
     when first opened from zoomed content;
