@@ -141,8 +141,10 @@ function PopoverContent({
           // CUSTOM: Inside a content-zoom area, cap the width at the space Radix reports as available,
           // divided by the area's zoom factor: Radix measures in unzoomed pixels while this element's
           // own lengths are zoomed, so the division keeps a zoomed popover inside the pane
+          // CUSTOM: Falls back to 100vw until Radix's size middleware publishes the real available
+          // width, so the measuring pass gets a real cap instead of an invalid var() computing to none
           zoomArea !== undefined &&
-            'tw:max-w-[calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
+            'tw:max-w-[calc(var(--radix-popover-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1))]',
           // CUSTOM: Inside a content-zoom area, also cap the height at the space Radix reports as
           // available, divided by the area's zoom factor, so a tall zoomed popover stays inside the
           // pane vertically too (same unzoomed-vs-zoomed pixel reason as the width cap above). The
@@ -150,8 +152,10 @@ function PopoverContent({
           // painting past its edges. Nothing portals into a PopoverContent (the portal-container
           // provider's consumers target dialog and dropdown-menu contents), so the scroll box clips
           // no nested pop-up.
+          // CUSTOM: Falls back to 100vh until Radix's size middleware publishes the real available
+          // height, so the measuring pass gets a real cap instead of an invalid var() computing to none
           zoomArea !== undefined &&
-            'tw:max-h-[calc(var(--radix-popover-content-available-height)/var(--platform-content-zoom-popup-factor,1))] tw:overflow-y-auto',
+            'tw:max-h-[calc(var(--radix-popover-content-available-height,100vh)/var(--platform-content-zoom-popup-factor,1))] tw:overflow-y-auto',
           className,
         )}
         // CUSTOM: z-index uses shared constant instead of default tw:z-50, ensuring popover renders above the dock

@@ -109,8 +109,10 @@ function TooltipContent({
           // CUSTOM: Inside a content-zoom area, keep the tooltip's usual 20rem limit (zoomed with its
           // text) but never wider than the space Radix reports as available, divided by the area's
           // zoom factor, so a zoomed tooltip stays inside the pane. Replaces the base max-w-xs.
+          // CUSTOM: Falls back to 100vw until Radix's size middleware publishes the real available
+          // width, so the measuring pass gets a real cap instead of an invalid var() computing to none
           zoomArea !== undefined &&
-            'tw:max-w-[min(20rem,calc(var(--radix-tooltip-content-available-width)/var(--platform-content-zoom-popup-factor,1)))]',
+            'tw:max-w-[min(20rem,calc(var(--radix-tooltip-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1)))]',
           className,
         )}
         // CUSTOM: Inside a content-zoom area, mark the content with that area so the platform's
