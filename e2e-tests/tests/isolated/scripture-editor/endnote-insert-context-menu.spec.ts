@@ -35,10 +35,28 @@
  *    chapter change — which is why the chapter round trip runs BETWEEN the two inserts rather than
  *    after both: it is what clears the popover off the second insert's paragraph.
  *
+ * Later steps widen the coverage of the menu's keyboard ownership and its own layout:
+ *
+ * - A one-shot read of `[data-overlay-command-palette]` right after a keypress cannot see a palette
+ *   that is still crossing the async `papi.overlays.showCommandPalette` round trip, so the
+ *   no-stray-palette checks install a `MutationObserver` instead and read it back after a barrier
+ *   that is guaranteed to be on the far side of that round trip.
+ * - The insert shortcuts (Ctrl+T, Ctrl+Shift+T) are pressed WHILE the menu is open and must be inert,
+ *   proven by note counts taken immediately before them and re-checked both right after and after
+ *   the chapter round trip (an async insert that slipped through would still be racing the PDP at
+ *   the first check).
+ * - Cycling the SAME editor to Formatted view proves the `\` guard holds outside Standard view too,
+ *   with a positive control (the same key with the menu closed) showing the check is falsifiable.
+ * - A real window resize (never `page.setViewportSize()` — see `setWindowHeight`) forces the menu's
+ *   list past its natural height, proving the scrollbar declared in the step above is not just
+ *   declared but load-bearing: the list actually caps, actually scrolls, and stays open while doing
+ *   so.
+ *
  * ONE test() per spec file (isolated-fixture constraint — see standard-default-power-mode.spec.ts).
  * Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { setWindowHeight } from '../../../fixtures/helpers';
 import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
@@ -56,6 +74,7 @@ test.use({
 test.describe('scripture editor endnote insert + context-menu parity', () => {
   test('right-click menu mirrors the Insert menu and inserts a \\fe endnote', async ({
     mainPage,
+    electronApp,
   }) => {
     test.slow();
 
@@ -63,7 +82,10 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     await makeSampleProjectEditable();
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
-    await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+    // Scoped by view-agnostic markup (not `.editor-input.marker-editable`, which only matches
+    // Standard view) so it stays valid once a later step cycles the view to Formatted.
+    const editorContainer = editorFrame.locator('.editor-container');
+    await editorContainer.waitFor({ timeout: 60_000 });
     await navigateToolbarBcv(mainPage, 'Jonah 1:2');
 
     const editorInput = editorFrame.locator('.editor-input.marker-editable');
@@ -87,6 +109,74 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
      */
     const nextClearVersePara = () =>
       mainEditor.locator('p.usfm_p:has(span.verse):not(:has(span.note))').first();
+
+    /**
+     * Same idea as {@link nextClearVersePara}, scoped to {@link editorContainer} instead of
+     * {@link mainEditor}: the later Formatted-view and overflow steps run after a view switch that
+     * drops the `.marker-editable` class `mainEditor` depends on, but `.editor-container` is stable
+     * across every view.
+     */
+    const nextClearVersePicker = () =>
+      editorContainer.locator('p.usfm_p:has(span.verse):not(:has(span.note))').first();
+
+    /**
+     * Watches `document` in the MAIN page for the command palette overlay ever appearing, from
+     * install through whatever barrier the caller checks it after. A one-shot `.count()` read taken
+     * right after a keypress cannot see a palette that is still crossing the cross-process
+     * `papi.overlays.showCommandPalette` round trip — this catches it even if it opens and is gone
+     * again before the caller gets a chance to look.
+     *
+     * @returns A check that disconnects the observer and asserts the palette was never seen.
+     */
+    const watchForStrayCommandPalette = async (): Promise<() => Promise<void>> => {
+      await mainPage.evaluate(() => {
+        // Stashed on `window` so the disconnect-and-check call below can find the same observer and
+        // flag; neither is part of the standard DOM typings.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const w = window as unknown as {
+          strayPaletteObserver?: MutationObserver;
+          strayPaletteSeen?: boolean;
+        };
+        const markIfPresent = () => {
+          if (document.querySelector('[data-overlay-command-palette]')) w.strayPaletteSeen = true;
+        };
+        w.strayPaletteSeen = false;
+        markIfPresent();
+        const observer = new MutationObserver(markIfPresent);
+        observer.observe(document, { childList: true, subtree: true });
+        w.strayPaletteObserver = observer;
+      });
+
+      return async () => {
+        const seen = await mainPage.evaluate(() => {
+          // See the install call above for why this cast is needed.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          const w = window as unknown as {
+            strayPaletteObserver?: MutationObserver;
+            strayPaletteSeen?: boolean;
+          };
+          w.strayPaletteObserver?.disconnect();
+          w.strayPaletteObserver = undefined;
+          const result = w.strayPaletteSeen;
+          w.strayPaletteSeen = undefined;
+          return result;
+        });
+        expect(seen).toBe(false);
+      };
+    };
+
+    // Baselines for the insert-shortcut inertness checks, set immediately before the shortcuts are
+    // pressed (in the arrow-keys step) and re-checked both right after and after the chapter
+    // round-trip step, since an insert that slipped through the guard is itself async (it awaits a
+    // version-history snapshot) and could still be in flight at the first check.
+    let footnoteCountBeforeGuardedShortcuts = 0;
+    let crossReferenceCountBeforeGuardedShortcuts = 0;
+
+    /**
+     * Natural (uncapped) height of the menu's option list, measured while it fits at full window
+     * size.
+     */
+    let menuNaturalScrollHeightPx = 0;
 
     // ContextMenuPlugin suppresses the menu when the right-click target IS the content-editable
     // root, so aim at a paragraph inside it. The right-click also moves the caret there, which is
@@ -127,7 +217,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       ]);
     });
 
-    await test.step('the menu shows all of itself, and says so when it cannot', async () => {
+    await test.step('the menu fits without scrolling at full window height, and declares a visible scrollbar for when it cannot', async () => {
       // Re-opened rather than reused from the step above: the plugin closes the menu on a scroll of
       // anything but itself, and the chapter is still settling, so an already-open menu is not
       // something a later step can rely on.
@@ -145,6 +235,10 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
         clientHeight: ul.clientHeight,
       }));
       expect(listOverflow.scrollHeight).toBeLessThanOrEqual(listOverflow.clientHeight + 1);
+      // Not clipped here means `scrollHeight` IS the list's natural content height — saved for the
+      // short-panel step at the end of this test, which needs a real (not guessed) target to shrink
+      // the window below.
+      menuNaturalScrollHeightPx = listOverflow.scrollHeight;
 
       // …and when the panel IS too short for the whole list, the fold has to be visible. The rule
       // this menu inherits hides the scrollbar, which suits the filterable marker typeahead and
@@ -184,13 +278,23 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       // Neither key may start a palette underneath the menu, and neither may reach the document
       // behind it: the editor still holds DOM focus, so an unclaimed Enter plain-splits the
       // paragraph and an unclaimed backslash types a `\\` into it.
+      const checkNoStrayPalette = await watchForStrayCommandPalette();
       await mainPage.keyboard.press('Enter');
       await mainPage.keyboard.press('\\');
 
-      await expect(mainPage.locator('[data-overlay-command-palette]')).toHaveCount(0);
+      await checkNoStrayPalette();
       await expect(contextMenu).toBeAttached();
       expect(await mainEditor.locator('p').count()).toBe(paraCountBefore);
       expect(await versePara.innerText()).toBe(textBefore);
+
+      // A strong, falsifiable version of the check above: if either trigger HAD opened a palette
+      // underneath the menu, that palette's session would claim this Escape one capture step above
+      // the menu's own `document` listener, and the menu would survive it — its highlighted item
+      // (there is none here, but the mechanism is the same one the next step depends on) would stay
+      // armed for a later Enter. Detaching here is what proves no such palette is sitting on top of
+      // the dismissal.
+      await mainPage.keyboard.press('Escape');
+      await expect(contextMenu).not.toBeAttached({ timeout: 15_000 });
     });
 
     await test.step('arrow keys then Enter invoke the highlighted item, not the Enter palette', async () => {
@@ -201,29 +305,53 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       // A freshly opened menu has nothing highlighted, so the first ArrowDown highlights option 0
       // and reaching option N takes N + 1 presses.
       await openContextMenu();
+
+      // Insert shortcuts pressed while the menu is open must be inert — the menu is the only
+      // keyboard mode on screen, and none of these may open a popup over it. Baselines are taken
+      // here, immediately before the presses, so the later checks can tell "nothing happened" from
+      // "something happened and was later undone".
+      footnoteCountBeforeGuardedShortcuts = await mainEditor.locator('span.note.usfm_f').count();
+      crossReferenceCountBeforeGuardedShortcuts = await mainEditor
+        .locator('span.note.usfm_x')
+        .count();
+      await mainPage.keyboard.press('Control+t');
+      await mainPage.keyboard.press('Control+Shift+T');
+      await mainPage.keyboard.press('Control+Alt+m');
+
       for (let i = 0; i <= endNoteIndex; i += 1) {
         await mainPage.keyboard.press('ArrowDown');
       }
+      // Proves the shortcuts above did not steal the highlight or close the menu out from under
+      // this loop.
       await expect(contextMenu.locator('li.selected')).toHaveText('Insert end note');
 
+      const checkNoStrayPalette = await watchForStrayCommandPalette();
       await mainPage.keyboard.press('Enter');
 
-      // The Enter-triggered paragraph marker palette must NOT have opened: the web view stands
-      // down for as long as the menu is open, and the menu invokes its highlighted item instead of
-      // handing the press back. Sampled HERE, before
-      // the note-count wait below: the insert auto-opens the footnote editor, which takes focus,
-      // and a palette that opened on Enter and was then dismissed by that focus change would
-      // satisfy a check made afterwards.
-      const paletteCountAfterEnter = await mainPage
-        .locator('[data-overlay-command-palette]')
-        .count();
-
+      // The note-count wait below is the barrier: the insert awaits a PAPI round trip, so by the
+      // time it resolves, an Enter-triggered palette that opened and was then dismissed by the
+      // insert's own focus change would already have shown up in the observer above.
       await expect(endnotes).toHaveCount(endnotesBefore + 1, { timeout: 15_000 });
-      expect(paletteCountAfterEnter).toBe(0);
+      await checkNoStrayPalette();
       // The note has to have landed where an end note belongs. One anchored outside a verse still
       // saves, so a count on its own never notices a caret that never reached the text.
       await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
       endnotesExpected = endnotesBefore + 1;
+
+      // None of the insert shortcuts pressed while the menu was open produced anything: only the
+      // end note above landed.
+      await expect(mainEditor.locator('span.note.usfm_f')).toHaveCount(
+        footnoteCountBeforeGuardedShortcuts,
+      );
+      await expect(mainEditor.locator('span.note.usfm_x')).toHaveCount(
+        crossReferenceCountBeforeGuardedShortcuts,
+      );
+      // The comment editor's "Assign to" label is the one text unique to it, rendered inside the
+      // Popover CommentEditor mounts; that Popover has no `forceMount`, so nothing of it exists in
+      // the DOM unless `insertCommentAtCurrentSelection` actually ran. The isolated sample project's
+      // current user CAN create comments here, so this is a real check, not a vacuous one that would
+      // pass whether or not the guard exists.
+      await expect(editorFrame.getByText('Assign to', { exact: true })).toHaveCount(0);
     });
 
     await test.step('the endnote survives a save and chapter-navigation round-trip', async () => {
@@ -243,6 +371,16 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       await expect(mainEditor).toContainText('word came to Jonah', { timeout: 60_000 });
       await expect(endnotes).toHaveCount(endnotesExpected, { timeout: 30_000 });
       await expect(endnotesInVerseParas).toHaveCount(endnotesExpected);
+      // Re-checked after the round trip, not just right after the keypresses: an insert that
+      // slipped through the menu-open guard is itself async (it awaits a version-history snapshot
+      // before it writes), so it could still have been in flight at the earlier check and only
+      // land — or fail to — somewhere around this one.
+      await expect(mainEditor.locator('span.note.usfm_f')).toHaveCount(
+        footnoteCountBeforeGuardedShortcuts,
+      );
+      await expect(mainEditor.locator('span.note.usfm_x')).toHaveCount(
+        crossReferenceCountBeforeGuardedShortcuts,
+      );
       // The chapter change is also what closed the footnote editor the insert opened, which leaves
       // the chapter clickable again for the step below.
       await expect(editorInput).toHaveCount(1);
@@ -269,6 +407,161 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
         endnotesBefore + 1,
       );
       await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
+    });
+
+    await test.step('the backslash does not open the inline markers menu while the context menu is open, in Formatted view', async () => {
+      // The footnote editor popover from earlier steps has no `onOpenChange` and only closes on a
+      // chapter change; leaving it open here would sit over the click below. Also re-establishes a
+      // rendered chapter (rather than the empty mid-navigation editor) before the view switch.
+      await navigateToolbarBcv(mainPage, 'Jonah 2:1');
+      await expect(mainEditor).toContainText('prayed to Yahweh, his God', { timeout: 60_000 });
+      await navigateToolbarBcv(mainPage, 'Jonah 1:2');
+      await expect(mainEditor).toContainText('word came to Jonah', { timeout: 60_000 });
+
+      // Power mode cycles Standard -> Markers -> Formatted; Simple mode's view is pinned to the
+      // same 'formatted' endpoint. Waiting for the intermediate Markers step to land before firing
+      // the second command avoids racing a stale pre-cycle state.
+      await sendPapiCommandWhenRegistered('platformScriptureEditor.changeView', editorId);
+      await expect(editorFrame.locator('.editor-input.marker-visible')).toBeAttached({
+        timeout: 20_000,
+      });
+      await sendPapiCommandWhenRegistered('platformScriptureEditor.changeView', editorId);
+      await expect(editorFrame.locator('.editor-input.marker-hidden')).toBeAttached({
+        timeout: 20_000,
+      });
+
+      const versePara = nextClearVersePicker();
+      await expect(versePara).toBeVisible({ timeout: 30_000 });
+      await versePara.click();
+      await openContextMenu(versePara);
+
+      // The inline markers menu's search input (`.marker-menu-search`, the one class unique to this
+      // popover's `CommandInput`) is the DOM signal to watch for: its `Popover` has no
+      // `forceMount`, so nothing of it exists until React actually opens it. Watched inside the
+      // EDITOR frame's own document — this popover renders there, not in the main page.
+      await editorContainer.evaluate(() => {
+        // Stashed on `window` so the disconnect-and-check call below can find the same observer and
+        // flag; neither is part of the standard DOM typings.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const w = window as unknown as {
+          strayMarkerMenuObserver?: MutationObserver;
+          strayMarkerMenuSeen?: boolean;
+        };
+        const markIfPresent = () => {
+          if (document.querySelector('.marker-menu-search')) w.strayMarkerMenuSeen = true;
+        };
+        w.strayMarkerMenuSeen = false;
+        markIfPresent();
+        const observer = new MutationObserver(markIfPresent);
+        observer.observe(document, { childList: true, subtree: true });
+        w.strayMarkerMenuObserver = observer;
+      });
+
+      await mainPage.keyboard.press('\\');
+
+      // The open is a synchronous React state update from a discrete keydown handler, so it has
+      // committed (or not) by the time two animation frames inside the editor frame have run.
+      await editorContainer.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }),
+      );
+
+      const strayMarkerMenuSeen = await editorContainer.evaluate(() => {
+        // See the install call above for why this cast is needed.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const w = window as unknown as {
+          strayMarkerMenuObserver?: MutationObserver;
+          strayMarkerMenuSeen?: boolean;
+        };
+        w.strayMarkerMenuObserver?.disconnect();
+        w.strayMarkerMenuObserver = undefined;
+        const result = w.strayMarkerMenuSeen;
+        w.strayMarkerMenuSeen = undefined;
+        return result;
+      });
+      expect(strayMarkerMenuSeen).toBe(false);
+      await expect(contextMenu).toBeAttached();
+
+      // Positive control: the same backslash DOES open the inline markers menu once the context
+      // menu is out of the way — proof the check above is falsifiable rather than vacuously true
+      // because Formatted view never opens that menu at all.
+      await mainPage.keyboard.press('Escape');
+      await expect(contextMenu).not.toBeAttached({ timeout: 15_000 });
+      await versePara.click();
+      await mainPage.keyboard.press('\\');
+      const markerMenuSearch = editorFrame.locator('.marker-menu-search');
+      await expect(markerMenuSearch).toBeVisible({ timeout: 15_000 });
+      await mainPage.keyboard.press('Escape');
+      await expect(markerMenuSearch).not.toBeVisible({ timeout: 15_000 });
+    });
+
+    await test.step('the menu genuinely overflows and scrolls when the editor panel is too short to fit it', async () => {
+      // How much of the window belongs to chrome outside the editor iframe (toolbars, tab strip),
+      // measured at the window's current size, so the target height below is computed rather than
+      // guessed. Run LAST, after the view switch above, because shrinking the real window affects
+      // every locator after it.
+      const iframeInnerHeightBefore = await editorContainer.evaluate(() => window.innerHeight);
+      const windowOuterHeightBefore = await mainPage.evaluate(() => window.outerHeight);
+      const chromeOverheadPx = windowOuterHeightBefore - iframeInnerHeightBefore;
+
+      // Half the menu's own measured natural height is clearly below it, forcing the
+      // `max-height: calc(100vh - 16px)` rule to actually cap the list rather than merely approach
+      // the cap.
+      const targetIframeInnerHeightPx = Math.round(menuNaturalScrollHeightPx / 2);
+      await setWindowHeight(electronApp, mainPage, targetIframeInnerHeightPx + chromeOverheadPx);
+
+      const iframeInnerHeightAfter = await editorContainer.evaluate(() => window.innerHeight);
+      // The resize actually produced a short-enough panel — otherwise everything below would be
+      // vacuous, passing regardless of whether the menu's own cap does anything.
+      expect(iframeInnerHeightAfter).toBeLessThan(menuNaturalScrollHeightPx);
+
+      const versePara = nextClearVersePicker();
+      await expect(versePara).toBeVisible({ timeout: 30_000 });
+      await openContextMenu(versePara);
+
+      const list = contextMenu.locator('ul');
+      const overflow = await list.evaluate((ul) => ({
+        scrollHeight: ul.scrollHeight,
+        clientHeight: ul.clientHeight,
+        bottom: ul.getBoundingClientRect().bottom,
+        overflowY: getComputedStyle(ul).overflowY,
+        scrollbarWidth: getComputedStyle(ul).scrollbarWidth,
+      }));
+      // The list is genuinely capped shorter than its content — not merely declared scrollable
+      // while secretly still showing everything.
+      expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight + 1);
+      // The menu never grows past the panel it opened in, whatever the list's true content height.
+      // Compared against the SETTLED iframe height, not the requested target: Electron's own
+      // rounding can leave the two a pixel or two apart.
+      expect(overflow.bottom).toBeLessThanOrEqual(iframeInnerHeightAfter + 1);
+      expect(overflow.overflowY).toBe('auto');
+      expect(overflow.scrollbarWidth).toBe('thin');
+
+      // The fold is reachable: scrolling the list to its own end does not close the menu — the
+      // plugin closes only on a scroll of something else — and the last option ends up inside the
+      // list's own visible box rather than still hidden past it.
+      await list.evaluate((ul) => {
+        ul.scrollTop = ul.scrollHeight;
+      });
+      await expect(contextMenu).toBeAttached();
+      // `getBoundingClientRect()` itself is not returned — its fields sit on the prototype, not as
+      // own properties, so Playwright's structured-clone serialization would hand back `{}`. Each
+      // number is pulled out explicitly instead.
+      const lastOptionBox = await contextMenu
+        .locator('[role="option"]')
+        .last()
+        .evaluate((el) => {
+          const rect = el.getBoundingClientRect();
+          return { top: rect.top, bottom: rect.bottom };
+        });
+      const listBox = await list.evaluate((ul) => {
+        const rect = ul.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom };
+      });
+      expect(lastOptionBox.bottom).toBeLessThanOrEqual(listBox.bottom + 1);
+      expect(lastOptionBox.top).toBeGreaterThanOrEqual(listBox.top - 1);
     });
   });
 });
