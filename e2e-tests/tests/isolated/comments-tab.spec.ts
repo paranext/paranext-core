@@ -398,9 +398,26 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
     const presetFilter = commentsFrame.locator('[data-testid="comment-preset-filter"]');
 
+    // The filter selection persists per project in localStorage (comment-filter-store.ts), so a
+    // prior test in this file — or a prior local run sharing this worker's user-data dir — can
+    // leave a non-default preset saved for projectScroll. Clear it and reopen the panel so the
+    // component remounts against a known default rather than whatever was last saved, then assert
+    // the reset actually landed before relying on "starts on All comments" below.
+    await expect(presetFilter).toBeVisible({ timeout: 90_000 });
+    await commentsFrame.locator(':root').evaluate((root, storageKey) => {
+      root.ownerDocument.defaultView?.localStorage.removeItem(storageKey);
+    }, `legacyCommentManager.filters.${projectScroll.projectId}`);
+    await sendPapiRequestOnce(
+      'command:legacyCommentManager.openCommentListPanel',
+      [projectScroll.projectId],
+      DEFAULT_WEBSOCKET_PORT,
+      OPEN_EDITOR_TIMEOUT_MS,
+    );
+    await expect(presetFilter).toBeVisible({ timeout: 90_000 });
+    await expect(presetFilter).toContainText('All comments');
+
     // The preset dropdown sits directly in the toolbar, so reach it by keyboard with no popover
     // step in between.
-    await expect(presetFilter).toBeVisible({ timeout: 90_000 });
     await presetFilter.focus();
     await expect(presetFilter).toBeFocused();
 

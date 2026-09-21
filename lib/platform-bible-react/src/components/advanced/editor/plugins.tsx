@@ -58,14 +58,16 @@ export function Plugins({
       {/* toolbar plugins */}
       <ToolbarPlugin>
         {() => (
-          // Deliberately not sticky. A z-index here competes for paint order with any host chrome
-          // this toolbar shares no scroll container with, and wins on DOM position — the comments
-          // panel's sticky filter toolbar is the case that surfaced it. The editor box never
-          // scrolls internally, so there is nothing for the toolbar to stick to in any current
-          // consumer.
+          // Sticky, but deliberately with no z-index of its own. `position: sticky` pins relative
+          // to the nearest scrolling ancestor, not this element's own overflow — `Plugins` is
+          // shared by consumers (e.g. the comments panel's editor, whose scrolling ancestor is the
+          // thread list) where the toolbar does need to stay pinned while its container scrolls.
+          // With z-index left at its default (auto), this box establishes no stacking level of its
+          // own, so a host's positioned chrome with an explicit z-index (e.g. a sticky panel
+          // header) paints above it on stacking order rather than losing to it on DOM position.
           <div
             data-testid="editor-format-toolbar"
-            className="tw:flex tw:gap-2 tw:overflow-auto tw:border-b tw:p-1"
+            className="tw:sticky tw:top-0 tw:flex tw:gap-2 tw:overflow-auto tw:border-b tw:p-1"
           >
             <FontFormatToolbarPlugin />
           </div>

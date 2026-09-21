@@ -12,6 +12,15 @@ const cssPath = path.resolve(__dirname, '../../../index.css');
 const css = readFileSync(cssPath, 'utf-8');
 const themes = parseCssThemes(css);
 
+// The component's own source, read the same way as index.css above: this file computes contrast
+// for `--foreground` on the assumption that `tw:border-foreground` is the class actually painting
+// the selected-thread bar, but nothing here reads the component to confirm that. Without this, the
+// whole sweep below would keep passing green even if the component were changed to use a different
+// token (e.g. `tw:border-primary`) for that bar -- it would just be computing contrast for a CSS
+// variable nothing renders.
+const commentThreadComponentPath = path.resolve(__dirname, './comment-thread.component.tsx');
+const commentThreadComponentSource = readFileSync(commentThreadComponentPath, 'utf-8');
+
 /**
  * Every theme actually defined in index.css, keyed by a readable name. `parseCssThemes` also
  * synthesizes `user-*` placeholder families with empty `cssVariables` (there's no CSS for them to
@@ -33,6 +42,16 @@ describe('active-comment bar contrast', () => {
     // `forEach` below with nothing to iterate, and every check would silently pass by never
     // running.
     expect(realThemes.length).toBeGreaterThan(0);
+  });
+
+  it('ties the sweep to the class CommentThread actually applies to the selected-thread bar', () => {
+    // Matches `'tw:border-foreground ...': isSelected` in the Card className's status/selection
+    // class map (see the `isSelected` entry alongside `tw:shadow-md`) -- the literal class this
+    // whole file's contrast math is checking. A change to a different border-color utility there
+    // (with this file left untouched) fails here rather than passing silently.
+    expect(commentThreadComponentSource).toMatch(
+      /['"]tw:border-foreground\b[^'"]*['"]\s*:\s*isSelected/,
+    );
   });
 
   // Every surface a card can take: `card` when read, `muted` when resolved, `accent` when unread.

@@ -1,7 +1,12 @@
 import { isMacOs } from '@/utils/platform.util';
-import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
+import { LanguageStrings, LegacyComment, LocalizeKey } from 'platform-bible-utils';
 import { KeyboardEvent } from 'react';
-import { SerializedEditorState } from 'lexical';
+import {
+  SerializedEditorState,
+  SerializedElementNode,
+  SerializedParagraphNode,
+  SerializedTextNode,
+} from 'lexical';
 import { CommentDraft } from './comment-list.types';
 import { ConflictResolutionOutcome, VERSE_TEXT_CONFLICT } from './conflict-note-card.types';
 
@@ -105,3 +110,56 @@ export function didPressCtrlOrCmdEnter(event: KeyboardEvent): boolean {
   const isMac = isMacOs();
   return event.key === 'Enter' && ((isMac && event.metaKey) || (!isMac && event.ctrlKey));
 }
+
+/**
+ * Resolves a localize key against `localizedStrings`, falling back when the key has not actually
+ * resolved to translated text. `useLocalizedStrings` seeds every requested key to itself and
+ * returns that seed both before the subscription delivers and permanently on a `PlatformError`, so
+ * `localizedStrings[key] ?? fallback` can never catch that case — the value is a truthy string
+ * equal to the key, not `undefined`. Centralized so every visible (non-aria-label) localized string
+ * in this component tree resolves the same way.
+ *
+ * @param key The localize key to look up.
+ * @param localizedStrings The localized strings to resolve `key` against.
+ * @param fallback English text to show while `key` has not resolved to anything else.
+ * @returns The resolved string, or `fallback` when `key` is missing or still unresolved.
+ */
+export function localizeOrFallback(
+  key: LocalizeKey,
+  localizedStrings: LanguageStrings,
+  fallback: string,
+): string {
+  const value = localizedStrings[key];
+  return value === undefined || value === key ? fallback : value;
+}
+
+/**
+ * An empty Lexical editor state — the starting point for entering edit mode on a comment with no
+ * existing text (e.g. a platform-created conflict-resolution comment, whose body is empty by
+ * design; see `hasResolutionBodyText` in comment-item.component.tsx). `htmlToEditorState` rejects
+ * empty HTML outright, so entering edit mode on an empty-bodied comment has to start from this
+ * state instead of parsing the (empty) HTML.
+ */
+export const EMPTY_EDITOR_STATE: SerializedEditorState<
+  SerializedParagraphNode & SerializedElementNode<SerializedTextNode>
+> = {
+  root: {
+    children: [
+      {
+        children: [],
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        type: 'paragraph',
+        version: 1,
+        textFormat: 0,
+        textStyle: '',
+      },
+    ],
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    type: 'root',
+    version: 1,
+  },
+};

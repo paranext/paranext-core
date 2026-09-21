@@ -520,30 +520,32 @@ declare module 'legacy-comment-manager' {
   // #region Legacy comment filter types (deprecated, mapped onto the current model)
 
   /**
-   * @deprecated One axis of the legacy four-axis filter model, replaced by {@link CommentPreset} via
-   *   `CommentFilters.preset`. Still accepted at the filter boundaries only for backward
-   *   compatibility — see {@link LegacyCommentFilters} for how a legacy combination maps onto a
-   *   preset.
+   * @deprecated 2026-09-18. One axis of the legacy four-axis filter model, replaced by
+   *   {@link CommentPreset} via `CommentFilters.preset`. Still accepted at the filter boundaries
+   *   only for backward compatibility — see {@link LegacyCommentFilters} for how a legacy
+   *   combination maps onto a preset.
    */
   export type ResolvedFilter = 'all' | 'unresolved' | 'resolved';
 
-  /** @deprecated See {@link ResolvedFilter}. */
+  /** @deprecated 2026-09-18. See {@link ResolvedFilter}. */
   export type ReadFilter = 'all' | 'unread' | 'read';
 
-  /** @deprecated See {@link ResolvedFilter}. */
+  /** @deprecated 2026-09-18. See {@link ResolvedFilter}. */
   export type TypeFilter = 'all' | 'conflicts' | 'comments';
 
   /**
-   * @deprecated See {@link ResolvedFilter}. `'team'` and `'unassigned'` have no counterpart in the
-   *   current preset set — a legacy combination naming either always maps to `'all'`.
+   * @deprecated 2026-09-18. See {@link ResolvedFilter}. `'team'` and `'unassigned'` have no
+   *   counterpart in the current preset set — a legacy combination naming either always maps to
+   *   `'all'`.
    */
   export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team' | 'unassigned';
 
   /**
-   * @deprecated The legacy four-orthogonal-axis filter shape, replaced by {@link CommentFilters}'
-   *   single `preset`. Still accepted at {@link OpenCommentListWebViewOptions.filtersToSet}, the
-   *   `setFilters` web view message, and {@link CommentListWebViewController.setFilters} for
-   *   backward compatibility, and mapped onto the preset whose meaning matches:
+   * @deprecated 2026-09-18. The legacy four-orthogonal-axis filter shape, replaced by
+   *   {@link CommentFilters}' single `preset`. Still accepted at
+   *   {@link OpenCommentListWebViewOptions.filtersToSet}, the `setFilters` web view message, and
+   *   {@link CommentListWebViewController.setFilters} for backward compatibility, and mapped onto
+   *   the preset whose meaning matches:
    *
    *   - Every axis `'all'` (or the shape omitted entirely) → `'all'`
    *   - `type: 'conflicts'` → `'conflict'`
@@ -553,11 +555,14 @@ declare module 'legacy-comment-manager' {
    *   - `resolved: 'resolved'` → `'resolved'`
    *   - `resolved: 'unresolved'` + `assignment: 'assigned-to-me'` → `'unresolved-assigned-to-me'`
    *   - `read: 'unread'` + `assignment: 'assigned-to-me'` → `'unread-assigned-to-me'`
+   *   - `type: 'conflicts'` combined with any OTHER active axis (e.g. `resolved: 'unresolved'` + `type:
+   *       'conflicts'`, the Send/Receive "unresolved conflicts" view) → `'conflict'`, dropping only
+   *       the other axis rather than the conflict constraint too
    *   - Any other combination — including `type: 'comments'`, `assignment: 'team'` or `'unassigned'`,
-   *       `read: 'read'`, or a mix of active axes that matches none of the rows above — → `'all'`,
-   *       since the current preset set has nothing narrower to offer it and dropping one of the
-   *       requested axes to force a fit would silently show a different query than what was asked
-   *       for
+   *       `read: 'read'`, or a mix of active axes that matches none of the rows above and doesn't
+   *       name `type: 'conflicts'` — → `'all'`, since the current preset set has nothing narrower
+   *       to offer it and dropping one of the requested axes to force a fit would silently show a
+   *       different query than what was asked for
    */
   export type LegacyCommentFilters = {
     resolved?: ResolvedFilter;
@@ -567,9 +572,9 @@ declare module 'legacy-comment-manager' {
   };
 
   /**
-   * @deprecated Replaced by `'all-books'` on {@link ScopeFilter}, which `'unfiltered'` maps onto
-   *   exactly (both mean "no Scripture-range restriction"). Still accepted at the same boundaries
-   *   as {@link LegacyCommentFilters}.
+   * @deprecated 2026-09-18. Replaced by `'all-books'` on {@link ScopeFilter}, which `'unfiltered'`
+   *   maps onto exactly (both mean "no Scripture-range restriction"). Still accepted at the same
+   *   boundaries as {@link LegacyCommentFilters}.
    */
   export type LegacyScopeFilter = 'unfiltered';
 

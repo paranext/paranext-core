@@ -7,6 +7,7 @@ import {
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
+import { DisabledTooltipWrapper } from '@/components/basics/disabled-tooltip-wrapper.component';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { cn } from '@/utils/shadcn-ui/utils';
 import {
@@ -17,7 +18,7 @@ import {
 } from 'lexical';
 import { ArrowUp, AtSign, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
-import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn-ui/tooltip';
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
@@ -34,6 +35,7 @@ import {
   getAssignedUserDisplayName,
   hasCommentEdits,
   isCommentDraftEmpty,
+  localizeOrFallback,
 } from './comment-list.utils';
 
 const initialValue: SerializedEditorState<
@@ -73,9 +75,15 @@ const initialValue: SerializedEditorState<
 /**
  * Represents a thread of comments
  *
+ * Wrapped in `memo`: `CommentList` rebuilds a fresh `commonThreadProps` object for every thread on
+ * every render (e.g. one keystroke into one thread's draft re-renders `CommentList` itself), but
+ * each individual prop value it spreads onto an unrelated thread is unchanged by reference — memo's
+ * shallow comparison is exactly what turns that per-prop stability into a skipped re-render for
+ * every thread but the one actually affected.
+ *
  * @props CommentThreadProps
  */
-export function CommentThread({
+export const CommentThread = memo(function CommentThread({
   classNameForVerseText,
   comments,
   localizedStrings,
@@ -124,9 +132,25 @@ export function CommentThread({
   // itself is cleared.
   const isControlled = onDraftChange !== undefined;
 
+  // `updateDraft` is captured by callbacks (`clearEditor`, `handleSubmitComment`) that themselves
+  // get invoked from an event whose async work (e.g. a submit round trip) outlives the render they
+  // were created on. Reading `effectiveDraft` straight from the render closure means such a
+  // callback merges its patch on top of whatever the draft looked like when the *callback* was
+  // created, silently discarding any patch applied in between (e.g. an in-progress comment edit
+  // started while the submit was still in flight). Routing every read through this ref instead
+  // means `updateDraft` always merges onto the most recently applied draft, however stale the
+  // closure invoking it is. Assigning unconditionally on every render (not in an effect) keeps it
+  // current before any same-render event handler can fire.
+  const effectiveDraftRef = useRef(effectiveDraft);
+  effectiveDraftRef.current = effectiveDraft;
+
   const updateDraft = useCallback(
     (patch: Partial<CommentDraft>) => {
-      const next: CommentDraft = { ...effectiveDraft, ...patch };
+      const next: CommentDraft = { ...effectiveDraftRef.current, ...patch };
+      // Keep the ref current immediately, not just on the next render: two `updateDraft` calls in
+      // the same synchronous tick (or one right after another before React re-renders) must each
+      // see the other's patch rather than both merging onto the same pre-update snapshot.
+      effectiveDraftRef.current = next;
       // Only write the fallback while it is actually the source of truth. While controlled,
       // writing it anyway would let stale content resurface later: if the consumer drops the
       // `draft` prop to `undefined` for a reason that did not go through `onDraftChange` (e.g.
@@ -135,7 +159,7 @@ export function CommentThread({
       if (!isControlled) setInternalDraft(next);
       onDraftChange?.(threadId, isCommentDraftEmpty(next) ? undefined : next);
     },
-    [isControlled, effectiveDraft, onDraftChange, threadId],
+    [isControlled, onDraftChange, threadId],
   );
 
   // An in-progress edit to an existing comment is tracked separately from the reply draft above
@@ -168,10 +192,8 @@ export function CommentThread({
   // remount, and a non-empty entry resumes its own CommentItem into edit mode on mount (see
   // `draftEditorState` below) without ever calling `onEditingChange`. So the thread-wide gate has to
   // read both, or the one-edit-at-a-time rule holds before a remount and silently stops holding
-  // after one.
+  // after one. (`isAnyCommentEditing` itself is computed below, once `activeComments` exists.)
   const [isAnyCommentEditingLocal, setIsAnyCommentEditingLocal] = useState<boolean>(false);
-  const isAnyCommentEditing =
-    isAnyCommentEditingLocal || hasCommentEdits(effectiveDraft.commentEdits);
   const [isAssignPopoverOpen, setIsAssignPopoverOpen] = useState<boolean>(false);
   const [canAssign, setCanAssign] = useState<boolean>(false);
   const [canResolve, setCanResolve] = useState<boolean>(false);
@@ -285,6 +307,24 @@ export function CommentThread({
     [providedActiveComments, comments],
   );
 
+  // A persisted `commentEdits` entry can outlive the comment it belongs to — e.g. another user
+  // deletes it via Send/Receive while the edit was in progress. That comment is filtered out of
+  // `activeComments`, so its own CommentItem can never mount again and nothing in the UI can ever
+  // clear the entry. Ignore entries for comments no longer active so a stranded one cannot gate
+  // every other comment's edit affordance forever; an entry for a still-active comment (e.g. a
+  // reply currently outside the visible reply tail — see `visibleReplies` below, which keeps that
+  // comment mounted instead) continues to count normally.
+  const activeCommentEdits = useMemo(() => {
+    const { commentEdits } = effectiveDraft;
+    if (!commentEdits) return commentEdits;
+    const activeIds = new Set(activeComments.map((comment) => comment.id));
+    const filtered = Object.fromEntries(
+      Object.entries(commentEdits).filter(([commentId]) => activeIds.has(commentId)),
+    );
+    return hasCommentEdits(filtered) ? filtered : undefined;
+  }, [effectiveDraft, activeComments]);
+  const isAnyCommentEditing = isAnyCommentEditingLocal || hasCommentEdits(activeCommentEdits);
+
   // Check edit/delete permissions for all comments when thread is selected or comments change
   useEffect(() => {
     let isPromiseCurrent = true;
@@ -393,21 +433,28 @@ export function CommentThread({
   const replyCount = useMemo(() => replies.length ?? 0, [replies.length]);
   const hasReplies = useMemo(() => replyCount > 0, [replyCount]);
 
-  // For expanded threads with more than 2 replies, show only the last 2 replies
+  // For expanded threads with more than 2 replies, show only the last 2 replies. `showAllReplies`
+  // resets to false on every mount (see the effect above) — the same state a filter-change remount
+  // produces — so a reply with an in-progress edit that falls outside that tail must still be kept
+  // visible here: otherwise its own CommentItem (and its only reachable Cancel/Save) never mounts,
+  // permanently stranding the edit and the thread-wide gate it holds (see `activeCommentEdits`
+  // above).
   const visibleReplies = useMemo(() => {
     if (showAllReplies || replyCount <= 2) {
       return replies;
     }
-    // Show only the last 2 replies
-    return replies.slice(-2);
-  }, [replies, replyCount, showAllReplies]);
+    const lastTwoIds = new Set(replies.slice(-2).map((reply) => reply.id));
+    return replies.filter(
+      (reply) => lastTwoIds.has(reply.id) || effectiveDraft.commentEdits?.[reply.id] !== undefined,
+    );
+  }, [replies, replyCount, showAllReplies, effectiveDraft.commentEdits]);
 
   const hiddenReplyCount = useMemo(() => {
     if (showAllReplies || replyCount <= 2) {
       return 0;
     }
-    return replyCount - 2;
-  }, [replyCount, showAllReplies]);
+    return replyCount - visibleReplies.length;
+  }, [replyCount, showAllReplies, visibleReplies.length]);
 
   const replyText = useMemo(
     () =>
@@ -519,6 +566,18 @@ export function CommentThread({
 
   // If all comments have been deleted there is nothing to render
   if (activeComments.length === 0) return undefined;
+
+  // Shared with the disabled-tooltip wrapper below the button that reads it, so the tooltip
+  // explanation and the actual disabled condition can never drift apart.
+  const isAssignDisabled =
+    !canAssign ||
+    !assignableUsers ||
+    assignableUsers.length === 0 ||
+    !assignableUsers.includes(currentUser);
+  const isSubmitDisabled =
+    !hasEditorContent(pendingCommentEditorState) &&
+    (pendingCommentAssignedUser === undefined ||
+      pendingCommentAssignedUser === lastSubmittedAssignedUser);
 
   // The default root-comment render, used unless a rootContentSlot override is supplied (e.g. a
   // conflict thread's summary or resolution card).
@@ -785,28 +844,40 @@ export function CommentThread({
                           <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    size="icon-sm"
-                                    variant="outline"
-                                    className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                                    disabled={
-                                      !canAssign ||
-                                      !assignableUsers ||
-                                      assignableUsers.length === 0 ||
-                                      !assignableUsers.includes(currentUser)
-                                    }
-                                    aria-label={
-                                      localizedStrings['%comment_aria_assign_user%'] ??
-                                      'Assign user'
-                                    }
-                                  >
-                                    <AtSign />
-                                  </Button>
-                                </PopoverTrigger>
+                                {/* Disabled buttons are removed from the tab order and don't fire
+                                    the pointer/focus events Tooltip listens for, so without this
+                                    wrapper a keyboard or screen-reader user hovering/focusing the
+                                    greyed-out button gets no explanation for why it's disabled. */}
+                                <DisabledTooltipWrapper
+                                  isDisabled={isAssignDisabled}
+                                  disabledExplanation={localizeOrFallback(
+                                    '%comment_aria_assign_user%',
+                                    localizedStrings,
+                                    'Assign user',
+                                  )}
+                                >
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      size="icon-sm"
+                                      variant="outline"
+                                      className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                                      disabled={isAssignDisabled}
+                                      aria-label={
+                                        localizedStrings['%comment_aria_assign_user%'] ??
+                                        'Assign user'
+                                      }
+                                    >
+                                      <AtSign />
+                                    </Button>
+                                  </PopoverTrigger>
+                                </DisabledTooltipWrapper>
                               </TooltipTrigger>
                               <TooltipContent>
-                                {localizedStrings['%comment_aria_assign_user%'] ?? 'Assign user'}
+                                {localizeOrFallback(
+                                  '%comment_aria_assign_user%',
+                                  localizedStrings,
+                                  'Assign user',
+                                )}
                               </TooltipContent>
                             </Tooltip>
                             <PopoverContent
@@ -850,18 +921,24 @@ export function CommentThread({
                           </Popover>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              {/* span wrapper so the tooltip still receives pointer events when
-                                  the button is disabled (nothing to submit) */}
-                              <span className="tw:inline-flex">
+                              {/* Disabled buttons are removed from the tab order and don't fire
+                                  the pointer/focus events Tooltip listens for, so without this
+                                  wrapper a keyboard or screen-reader user gets no explanation for
+                                  why there's nothing to submit. */}
+                              <DisabledTooltipWrapper
+                                isDisabled={isSubmitDisabled}
+                                disabledExplanation={localizeOrFallback(
+                                  '%comment_aria_submit_comment%',
+                                  localizedStrings,
+                                  'Submit comment',
+                                )}
+                                className="tw:inline-flex"
+                              >
                                 <Button
                                   size="icon-sm"
                                   onClick={handleSubmitComment}
                                   className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                                  disabled={
-                                    !hasEditorContent(pendingCommentEditorState) &&
-                                    (pendingCommentAssignedUser === undefined ||
-                                      pendingCommentAssignedUser === lastSubmittedAssignedUser)
-                                  }
+                                  disabled={isSubmitDisabled}
                                   aria-label={
                                     localizedStrings['%comment_aria_submit_comment%'] ??
                                     'Submit comment'
@@ -869,11 +946,14 @@ export function CommentThread({
                                 >
                                   <ArrowUp />
                                 </Button>
-                              </span>
+                              </DisabledTooltipWrapper>
                             </TooltipTrigger>
                             <TooltipContent>
-                              {localizedStrings['%comment_aria_submit_comment%'] ??
-                                'Submit comment'}
+                              {localizeOrFallback(
+                                '%comment_aria_submit_comment%',
+                                localizedStrings,
+                                'Submit comment',
+                              )}
                             </TooltipContent>
                           </Tooltip>
                         </>
@@ -887,4 +967,4 @@ export function CommentThread({
       </CardContent>
     </Card>
   );
-}
+});

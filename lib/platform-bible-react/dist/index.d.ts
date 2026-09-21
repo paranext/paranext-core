@@ -645,7 +645,12 @@ export interface CommentListProps {
 	 * when this is not provided.
 	 */
 	conflictResolution?: ConflictResolutionCallbacks;
-	/** Uncommitted drafts by thread id. A thread with no entry has no draft. */
+	/**
+	 * Uncommitted drafts by thread id. A thread with no entry has no draft.
+	 *
+	 * Pass this together with `onDraftChange`, or omit both — `CommentThreadProps.draft` documents
+	 * what goes wrong with only one of the pair.
+	 */
 	drafts?: Readonly<Record<string, CommentDraft>>;
 	/**
 	 * Called when a thread's draft changes. `draft` is `undefined` when the draft becomes empty, so a

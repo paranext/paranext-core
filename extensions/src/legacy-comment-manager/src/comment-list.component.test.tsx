@@ -125,6 +125,51 @@ describe('CommentListPanel empty state', () => {
   });
 });
 
+describe('CommentListPanel current-user-unavailable state', () => {
+  it('shows the explanatory message instead of skeletons when loading is also true', () => {
+    // currentUserNameUnavailable must win over isLoading: the whole point is that the panel stops
+    // showing skeletons once the fetch is known to have failed, rather than leaving both states
+    // simultaneously true and never reaching the explanatory message.
+    renderPanel({ isLoading: true, currentUserNameUnavailable: true });
+    expect(
+      screen.getByText(EN_STRINGS['%comment_filter_current_user_unavailable%']),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the explanatory message instead of the empty state', () => {
+    renderPanel({ isLoading: false, threads: [], currentUserNameUnavailable: true });
+    expect(
+      screen.getByText(EN_STRINGS['%comment_filter_current_user_unavailable%']),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(EN_STRINGS['%no_comments%'])).not.toBeInTheDocument();
+  });
+
+  it('calls the retry callback when the retry button is clicked', async () => {
+    const onRetry = vi.fn();
+    renderPanel({ currentUserNameUnavailable: true, onRetryFetchCurrentUserName: onRetry });
+
+    await userEvent.click(
+      screen.getByRole('button', { name: EN_STRINGS['%comment_filter_retry_current_user%'] }),
+    );
+
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('omits the retry button when no retry callback is provided', () => {
+    renderPanel({ currentUserNameUnavailable: true });
+    expect(
+      screen.queryByRole('button', { name: EN_STRINGS['%comment_filter_retry_current_user%'] }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not show the message when currentUserNameUnavailable is false (default)', () => {
+    renderPanel();
+    expect(
+      screen.queryByText(EN_STRINGS['%comment_filter_current_user_unavailable%']),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('CommentListPanel filter toolbar', () => {
   it('renders the preset and scope dropdowns directly in the toolbar', () => {
     renderPanel();

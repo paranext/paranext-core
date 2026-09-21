@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { useCallback, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import papi from '@papi/frontend';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
@@ -34,6 +36,8 @@ const mocks = vi.hoisted(() => {
     onScopeFilterChange: (scopeFilter: ScopeFilter) => void;
     drafts?: Readonly<Record<string, { editorState?: string }>>;
     onDraftChange?: (threadId: string, draft: { editorState?: string } | undefined) => void;
+    currentUserNameUnavailable?: boolean;
+    onRetryFetchCurrentUserName?: () => void;
   }[] = [];
   /**
    * A settable stand-in for the comments PDP's server-side filtering: `useProjectData(...)
@@ -127,6 +131,8 @@ vi.mock('./comment-list.component', () => ({
     onScopeFilterChange,
     drafts,
     onDraftChange,
+    currentUserNameUnavailable,
+    onRetryFetchCurrentUserName,
   }: {
     isLoading: boolean;
     threads: { id: string }[];
@@ -136,6 +142,8 @@ vi.mock('./comment-list.component', () => ({
     onScopeFilterChange: (scopeFilter: ScopeFilter) => void;
     drafts?: Readonly<Record<string, { editorState?: string }>>;
     onDraftChange?: (threadId: string, draft: { editorState?: string } | undefined) => void;
+    currentUserNameUnavailable?: boolean;
+    onRetryFetchCurrentUserName?: () => void;
   }) => {
     mocks.panelPropsLog.push({
       isLoading,
@@ -146,6 +154,8 @@ vi.mock('./comment-list.component', () => ({
       onScopeFilterChange,
       drafts,
       onDraftChange,
+      currentUserNameUnavailable,
+      onRetryFetchCurrentUserName,
     });
     // A minimal stand-in for the real toolbar's reply-box editor: one text input per currently
     // rendered thread, wired straight to `drafts`/`onDraftChange`, so a test can exercise "the web
@@ -854,11 +864,70 @@ describe('stored comment filter selection', () => {
       latestPanelProps().onFiltersChange({ preset: 'resolved' });
     });
 
-    // The write carries the override's current-verse scope forward (not the stored current-book)
-    // -- another sign the override, not the stored selection, was live when the change was made.
+    // Finding 17: BEFORE this fix, this assertion read `scopeFilter: 'current-verse'` -- the
+    // override's scope, carried forward from `currentViewRef` and persisted even though the user
+    // never touched scope at all. That was the bug (a programmatic override leaking into the user's
+    // standing preference), not a real invariant: the correct persisted scope is the user's actual
+    // last choice, 'current-book' (from UNREAD_CURRENT_BOOK_SELECTION above), which
+    // `lastUserChosenViewRef` now recovers even while the override is still on screen.
     await waitFor(() => {
       expect(readStoredSelection('project-1')).toEqual({
         preset: 'resolved',
+        scopeFilter: 'current-book',
+      });
+    });
+  });
+
+  it("does not let a setFilters message override's scope leak into the next user-driven persist", async () => {
+    // Finding 17's literal scenario: the S/R conflict link's setFilters message resets the ENTIRE
+    // view (per its documented contract), including an axis the user never touched.
+    seedStoredSelection('project-1', UNREAD_CURRENT_BOOK_SELECTION);
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unread' }));
+
+    act(() => {
+      dispatchSetFilters({ filters: { preset: 'conflict' }, scopeFilter: 'current-chapter' });
+    });
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'conflict' }));
+    expect(latestPanelProps().scopeFilter).toBe('current-chapter');
+
+    // The user picks ANY preset from the dropdown afterward -- they never touched scope themselves.
+    act(() => {
+      latestPanelProps().onFiltersChange({ preset: 'resolved' });
+    });
+
+    // The persisted scope must be the user's real last choice ('current-book'), never the
+    // programmatic override's scope ('current-chapter') that merely happened to be on screen when
+    // they changed the preset.
+    await waitFor(() => {
+      expect(readStoredSelection('project-1')).toEqual({
+        preset: 'resolved',
+        scopeFilter: 'current-book',
+      });
+    });
+  });
+
+  it("does not let a setFilters message override's preset leak into the next user-driven persist", async () => {
+    // The mirror image, driven through handleScopeFilterChange instead.
+    seedStoredSelection('project-1', UNREAD_CURRENT_BOOK_SELECTION);
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unread' }));
+
+    act(() => {
+      dispatchSetFilters({ filters: { preset: 'conflict' }, scopeFilter: 'current-chapter' });
+    });
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'conflict' }));
+
+    // The user changes ONLY scope from the panel -- they never touched the preset themselves.
+    act(() => {
+      latestPanelProps().onScopeFilterChange('current-verse');
+    });
+
+    // The persisted preset must be the user's real last choice ('unread'), never the override's
+    // 'conflict'.
+    await waitFor(() => {
+      expect(readStoredSelection('project-1')).toEqual({
+        preset: 'unread',
         scopeFilter: 'current-verse',
       });
     });
@@ -941,6 +1010,35 @@ describe('unsaved preset filtering', () => {
     expect(latestPanelProps().threads.map((thread) => thread.id)).toEqual([threadB.id]);
   });
 
+  it('keeps a drafted thread mounted under the unsaved preset after its draft is emptied', async () => {
+    // Regression coverage: filtering by the LIVE drafts map (`thread.id in drafts`) drops a
+    // thread from the list the instant its draft is cleared -- e.g. select-all + delete while
+    // typing, or a successful submit that clears the editor -- unmounting the CommentThread (and
+    // the Lexical editor holding the caret) out from under the user. The thread must stay visible
+    // for the rest of this preset session so the user can keep typing.
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    typeDraftInto(threadA.id, 'half a thought');
+    selectPreset('Unsaved comments');
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unsaved' }));
+    expect(latestPanelProps().threads.map((thread) => thread.id)).toEqual([threadA.id]);
+
+    // Clear the draft entirely -- the thread's `drafts` entry is removed, exactly like select-all
+    // + delete or a submit that clears the compose box.
+    typeDraftInto(threadA.id, '');
+
+    // The thread (and its input -- the stand-in for the mounted CommentThread/editor) must still
+    // be there: the user must be able to keep typing without the preset kicking them out.
+    expect(latestPanelProps().threads.map((thread) => thread.id)).toEqual([threadA.id]);
+    expect(screen.getByLabelText(`draft-${threadA.id}`)).toBeInTheDocument();
+
+    // And typing into it must still work -- proof the editor genuinely never unmounted, not just
+    // that the thread id is still counted somewhere.
+    typeDraftInto(threadA.id, 'typing again after clearing');
+    expect(await draftTextIn(threadA.id)).toBe('typing again after clearing');
+  });
+
   it('still excludes a drafted thread the scope excludes', async () => {
     // Deliberately unlike Paratext 9, where a drafted thread survives every filter: PT10 filters in
     // the query, so a thread the scope excludes never arrives in the query result, and the
@@ -976,5 +1074,203 @@ describe('unsaved preset filtering', () => {
 
     await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unsaved' }));
     expect(latestPanelProps().threads.map((thread) => thread.id)).toEqual([threadA.id]);
+  });
+});
+
+describe('legacy per-web-view scopeFilter migration', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('migrates the pre-localStorage scopeFilter web-view state when this project has nothing stored yet', async () => {
+    // Simulates a user upgrading mid-session: the merge base persisted scope under this exact
+    // per-web-view-state key, and this project's new localStorage-backed store has never seen it.
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-1', {
+      scopeFilter: 'current-chapter',
+    });
+
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    expect(latestPanelProps().scopeFilter).toBe('current-chapter');
+    expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS);
+  });
+
+  it('does not let the legacy scopeFilter web-view state override a real stored selection', async () => {
+    seedStoredSelection('project-1', UNREAD_CURRENT_BOOK_SELECTION);
+
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-1', {
+      scopeFilter: 'current-verse',
+    });
+
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    // The real stored selection wins -- 'current-book', not the legacy key's 'current-verse'.
+    expect(latestPanelProps().scopeFilter).toBe('current-book');
+    expect(latestPanelProps().filters).toEqual({ preset: 'unread' });
+  });
+
+  it('falls back to the default scope when neither a stored selection nor a legacy value exists', async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    expect(latestPanelProps().scopeFilter).toBe(DEFAULT_SCOPE_FILTER);
+  });
+});
+
+describe('initial selection when projectId resolves after mount', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('re-reads the stored selection once projectId resolves on the same mounted instance', async () => {
+    // A panel can render before its project is known (see useCommentDrafts' projectId doc). Without
+    // the projectId-resolves correction, the selection latched on that first, necessarily-default
+    // render would stick forever even once the project -- and its real stored selection -- becomes
+    // known on this SAME mounted instance.
+    seedStoredSelection('project-1', UNREAD_CURRENT_BOOK_SELECTION);
+
+    const CommentListWebView = globalThis.webViewComponent;
+    // MUST be stable across renders (see UseWebViewStateHook's own doc), matching the real contract.
+    const useWebViewState = makeUseWebViewState({ editorWebViewId: 'editor-1' });
+
+    const { rerender } = render(
+      <CommentListWebView
+        webViewType="legacyCommentManager.commentList"
+        id="comment-list-1"
+        projectId={undefined}
+        useWebViewState={useWebViewState}
+        useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+        updateWebViewDefinition={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS);
+    expect(latestPanelProps().scopeFilter).toBe(DEFAULT_SCOPE_FILTER);
+
+    rerender(
+      <CommentListWebView
+        webViewType="legacyCommentManager.commentList"
+        id="comment-list-1"
+        projectId="project-1"
+        useWebViewState={useWebViewState}
+        useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+        updateWebViewDefinition={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unread' }));
+    expect(latestPanelProps().scopeFilter).toBe('current-book');
+  });
+
+  it('does not clobber a change that reached the panel before projectId resolved', async () => {
+    seedStoredSelection('project-1', UNREAD_CURRENT_BOOK_SELECTION);
+
+    const CommentListWebView = globalThis.webViewComponent;
+    const useWebViewState = makeUseWebViewState({ editorWebViewId: 'editor-1' });
+
+    const { rerender } = render(
+      <CommentListWebView
+        webViewType="legacyCommentManager.commentList"
+        id="comment-list-1"
+        projectId={undefined}
+        useWebViewState={useWebViewState}
+        useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+        updateWebViewDefinition={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    // A setFilters message reaches this view before projectId is known.
+    act(() => {
+      dispatchSetFilters({ filters: { preset: 'resolved' }, scopeFilter: 'current-verse' });
+    });
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'resolved' }));
+
+    rerender(
+      <CommentListWebView
+        webViewType="legacyCommentManager.commentList"
+        id="comment-list-1"
+        projectId="project-1"
+        useWebViewState={useWebViewState}
+        useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+        updateWebViewDefinition={vi.fn()}
+      />,
+    );
+
+    // The late correction must never override a real change that already reached the panel: the
+    // view still shows the message's filters, not the project's stored selection.
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    expect(latestPanelProps().filters).toEqual({ preset: 'resolved' });
+    expect(latestPanelProps().scopeFilter).toBe('current-verse');
+  });
+});
+
+describe('current-user registration-data fetch failure recovery', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+    vi.mocked(papi.commands.sendCommand).mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('recovers from a failed fetch into an explanatory state instead of loading forever', async () => {
+    vi.mocked(papi.commands.sendCommand).mockRejectedValue(new Error('network down'));
+
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    act(() => {
+      latestPanelProps().onFiltersChange({ preset: 'unresolved-assigned-to-me' });
+    });
+
+    // Before the fix: isAwaitingCurrentUserName (and so isLoading) stayed true forever once the
+    // fetch failed, with no way for the panel to recover except picking a different preset.
+    await waitFor(() => {
+      expect(latestPanelProps().currentUserNameUnavailable).toBe(true);
+      expect(latestPanelProps().isLoading).toBe(false);
+    });
+  });
+
+  it('does not treat a preset that does not need the current user as unavailable', async () => {
+    vi.mocked(papi.commands.sendCommand).mockRejectedValue(new Error('network down'));
+
+    renderCommentListWebView();
+
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    // The default preset ('all') never needed the current user in the first place.
+    await waitFor(() => expect(latestPanelProps().currentUserNameUnavailable).toBe(false));
+  });
+
+  it('recovers once a retry succeeds', async () => {
+    vi.mocked(papi.commands.sendCommand).mockRejectedValueOnce(new Error('network down'));
+    vi.mocked(papi.commands.sendCommand).mockResolvedValueOnce({ name: 'Tester' });
+
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    act(() => {
+      latestPanelProps().onFiltersChange({ preset: 'unresolved-assigned-to-me' });
+    });
+    await waitFor(() => expect(latestPanelProps().currentUserNameUnavailable).toBe(true));
+
+    await act(async () => {
+      await latestPanelProps().onRetryFetchCurrentUserName?.();
+    });
+
+    await waitFor(() => {
+      expect(latestPanelProps().currentUserNameUnavailable).toBe(false);
+      expect(latestPanelProps().isLoading).toBe(false);
+    });
   });
 });

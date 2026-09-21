@@ -1,7 +1,25 @@
 {
   "metadata": {
+    "%comment_filter_read_unread%": {
+      "fallbackKey": "%comment_filter_preset_unread%"
+    },
+    "%comment_filter_resolved_resolved%": {
+      "fallbackKey": "%comment_filter_preset_resolved%"
+    },
+    "%comment_filter_resolved_unresolved%": {
+      "fallbackKey": "%comment_filter_preset_unresolved%"
+    },
+    "%comment_filter_scope_current_book%": {
+      "fallbackKey": "%webView_inventory_scope_currentBook%"
+    },
     "%comment_filter_scope_current_chapter%": {
       "fallbackKey": "%webView_inventory_scope_chapter%"
+    },
+    "%comment_filter_scope_current_verse%": {
+      "fallbackKey": "%webView_inventory_scope_verse%"
+    },
+    "%comment_filter_type_conflicts%": {
+      "fallbackKey": "%comment_filter_preset_conflict%"
     },
     "%no_comments_match_filter%": {
       "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_7%"
@@ -52,6 +70,8 @@
       "%comment_filter_scope_current_book%": "Current book",
       "%comment_filter_scope_current_chapter%": "Current chapter",
       "%comment_filter_scope_current_verse%": "Current verse",
+      "%comment_filter_current_user_unavailable%": "Couldn't load your user name, so comments assigned to you can't be shown right now.",
+      "%comment_filter_retry_current_user%": "Try again",
       "%conflict_note_choose_aria_label%": "Choose resolution",
       "%conflict_note_choose_prompt%": "Select which change to keep:",
       "%conflict_note_description_verseText%": "Conflicting changes were made to the verse text.",
@@ -116,6 +136,8 @@
       "%comment_filter_scope_current_book%": "Libro actual",
       "%comment_filter_scope_current_chapter%": "Capítulo actual",
       "%comment_filter_scope_current_verse%": "Versículo actual",
+      "%comment_filter_current_user_unavailable%": "No se pudo cargar su nombre de usuario, por lo que los comentarios asignados a usted no se pueden mostrar en este momento.",
+      "%comment_filter_retry_current_user%": "Intentar de nuevo",
       "%conflict_note_choose_aria_label%": "Elegir resolución",
       "%conflict_note_choose_prompt%": "Seleccione qué cambio conservar:",
       "%conflict_note_description_verseText%": "Se hicieron cambios en conflicto en el texto del versículo.",

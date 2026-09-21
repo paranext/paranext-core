@@ -367,9 +367,9 @@ describe('CommentThread generic resolve check', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Resolve thread' }));
 
-    // CommentThread has no built-in notion of conflicts anymore (that branching now lives in
-    // ConflictThread, which overrides resolveActionSlot) — its own header ✓ always goes through the
-    // generic handleAddCommentToThread status path.
+    // CommentThread renders no conflict-specific branching of its own — that lives entirely in
+    // ConflictThread, which overrides resolveActionSlot. CommentThread's own header ✓ always goes
+    // through the generic handleAddCommentToThread status path.
     expect(handleAddCommentToThread).toHaveBeenCalledWith(
       expect.objectContaining({ threadId: 'thread-1', status: 'Resolved' }),
     );
@@ -569,12 +569,12 @@ describe('CommentThread comment-edit drafts', () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const reply: LegacyComment = { ...baseComment, id: 'comment-2' };
     // Pre-seed stored edits for BOTH comments directly, rather than starting the root's edit via
-    // its dropdown as a live user action would: once one comment's edit is resumed, the gate this
-    // thread now enforces (see the "gates every other comment's edit affordance" tests below)
-    // correctly refuses to let a second one be opened that way — this map state can otherwise only
-    // arise from data the thread did not itself create (e.g. carried over from before the gate
-    // fix). Both entries resume into their own independent edit-mode display, which is why the
-    // root's own "Cancel edit" is picked out by index 0 (document order) rather than `getBy*`.
+    // its dropdown as a live user action would: the UI itself enforces one edit at a time (see the
+    // "gates every other comment's edit affordance" tests below), so this two-edits-at-once shape
+    // can only arise from data the thread did not itself create — e.g. a draft written by another
+    // client, or persisted before this thread's one-edit-at-a-time gate existed. Both entries
+    // resume into their own independent edit-mode display, which is why the root's own "Cancel
+    // edit" is picked out by index 0 (document order) rather than `getBy*`.
     const { container } = renderThread({
       isSelected: true,
       comments: [baseComment, reply],
@@ -643,9 +643,53 @@ describe('CommentThread comment-edit drafts', () => {
 
     await startEditingFirstComment(container, user);
 
-    // Starting the root's edit this mount must still block the reply's affordance — the ordinary,
-    // pre-remount case the fix must not have changed.
+    // Starting the root's edit live (this mount, via a click) must still block the reply's
+    // affordance, the same as the persisted-draft/remount case above — exercised separately so the
+    // two paths can't silently diverge.
     expect(container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(0);
+  });
+});
+
+describe('CommentThread stranded comment-edit drafts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('a comment edit for a comment no longer among the active comments does not block editing forever', async () => {
+    // Simulates a comment deleted by another user (e.g. via Send/Receive) while its edit was still
+    // in progress: `activeComments` filters it out, so its own CommentItem can never mount again
+    // and nothing can ever clear this entry through the UI.
+    const target = renderThread({
+      isSelected: true,
+      canUserEditOrDeleteCommentCallback: async () => true,
+      canUserResolveThreadCallback: async () => true,
+      draft: { commentEdits: { 'comment-now-deleted': NON_EMPTY_EDITOR_STATE } },
+    });
+    await target.findByRole('button', { name: 'Resolve thread' });
+
+    // The stranded entry must not gate the one still-active (and still reachable) comment's own
+    // edit affordance.
+    expect(target.container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(1);
+  });
+
+  it('an edit for a reply outside the visible last-two tail remains reachable after a remount', async () => {
+    const reply1: LegacyComment = { ...baseComment, id: 'reply-1' };
+    const reply2: LegacyComment = { ...baseComment, id: 'reply-2' };
+    const reply3: LegacyComment = { ...baseComment, id: 'reply-3' };
+
+    // `showAllReplies` always starts false on mount — the same state a filter-change remount
+    // produces — so with more than two replies only the last two (reply-2, reply-3) show by
+    // default. reply-1's edit survived the remount via the persisted draft, but reply-1 itself
+    // falls outside that tail.
+    renderThread({
+      isSelected: true,
+      comments: [baseComment, reply1, reply2, reply3],
+      draft: { commentEdits: { [reply1.id]: NON_EMPTY_EDITOR_STATE } },
+    });
+
+    // reply-1's own Cancel button must still be reachable, or neither it nor the thread-wide edit
+    // gate it holds can ever be cleared.
+    expect(await screen.findByRole('button', { name: 'Cancel edit' })).toBeInTheDocument();
   });
 });
 
@@ -687,6 +731,54 @@ describe('CommentThread draft write-guard on a real round trip', () => {
       expect(screen.getByRole('button', { name: 'Submit comment' })).toBeDisabled();
     });
   });
+
+  it('preserves a comment edit started while an earlier reply submission is still in flight', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    let resolveSubmit: (commentId: string) => void = () => {};
+    const handleAddCommentToThread = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveSubmit = resolve;
+        }),
+    );
+    const onDraftChange = vi.fn();
+    const { container } = render(
+      <ControlledDraftThread
+        canUserEditOrDeleteCommentCallback={async () => true}
+        handleAddCommentToThread={handleAddCommentToThread}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    // Type a reply and click Submit. The compose editor is not disabled while the round trip is
+    // pending, so the click's `clearEditor`/`updateDraft` closures are captured now, before the
+    // comment edit below ever starts -- that gap is exactly what this test exercises.
+    await user.click(screen.getByText('Type reply'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Submit comment' })).not.toBeDisabled();
+    });
+    await user.click(screen.getByRole('button', { name: 'Submit comment' }));
+    expect(handleAddCommentToThread).toHaveBeenCalledTimes(1);
+
+    // While that submission is still pending, start editing the existing comment and type into it.
+    await startEditingFirstComment(container, user);
+    await user.click(screen.getByText('Type comment edit'));
+    expect(screen.getByRole('button', { name: 'Cancel edit' })).toBeInTheDocument();
+
+    // Now let the pending submission resolve. Its success path calls the `clearEditor` captured
+    // back at click time.
+    resolveSubmit('new-comment-id');
+    await waitFor(() => {
+      const [, lastDraft] = onDraftChange.mock.calls.at(-1) ?? [];
+      expect(lastDraft?.editorState).toBeUndefined();
+    });
+
+    // The comment edit, applied strictly after that stale closure was captured, must survive: a
+    // merge performed against the click-time snapshot would silently drop it along with the reply.
+    expect(screen.getByRole('button', { name: 'Cancel edit' })).toBeInTheDocument();
+    const [, finalDraft] = onDraftChange.mock.calls.at(-1) ?? [];
+    expect(finalDraft?.commentEdits?.[baseComment.id]).toBeDefined();
+  });
 });
 
 describe('CommentThread DOM id', () => {
@@ -711,6 +803,84 @@ describe('CommentThread icon-button tooltips', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     await user.hover(cancelButton);
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Cancel edit');
+  });
+
+  it('does not render a raw localize key in the assign-user tooltip before the key resolves', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    // Enabling the button (rather than relying on its aria-label, which uses the exact same
+    // unresolved-key expression and so is equally broken here) lets the test find it by a
+    // label-independent selector below.
+    const { container } = renderThread({
+      canUserAssignThreadCallback: async () => true,
+      localizedStrings: {
+        ...localizedStrings,
+        // Mirrors useLocalizedStrings seeding every requested key to itself before the
+        // subscription delivers (or permanently, on a PlatformError) — the exact shape a
+        // hovering user sees during panel load.
+        '%comment_aria_assign_user%': '%comment_aria_assign_user%',
+      },
+    });
+
+    const getAssignTrigger = () =>
+      container.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]');
+    await waitFor(() => {
+      expect(getAssignTrigger()).not.toBeDisabled();
+    });
+    const assignTrigger = getAssignTrigger();
+    if (!assignTrigger) throw new Error('assign-user tooltip trigger not rendered');
+    await user.hover(assignTrigger);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).not.toHaveTextContent('%comment_aria_assign_user%');
+    expect(tooltip).toHaveTextContent('Assign user');
+  });
+
+  it('does not render a raw localize key in the submit-comment tooltip before the key resolves', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { container } = renderThread({
+      localizedStrings: {
+        ...localizedStrings,
+        '%comment_aria_submit_comment%': '%comment_aria_submit_comment%',
+      },
+    });
+
+    const triggers = container.querySelectorAll<HTMLElement>('[data-slot="tooltip-trigger"]');
+    // Submit comment is the second tooltip trigger in the compose editor's actions bar, after
+    // Assign user.
+    const submitTrigger = triggers[triggers.length - 1];
+    expect(submitTrigger).toBeDefined();
+    await user.hover(submitTrigger);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).not.toHaveTextContent('%comment_aria_submit_comment%');
+    expect(tooltip).toHaveTextContent('Submit comment');
+  });
+});
+
+describe('CommentThread disabled-action tooltips are keyboard reachable', () => {
+  // A disabled `<button>` is removed from the tab order and carries no accessible name from its
+  // own attributes in this markup, so a keyboard or screen-reader user relies entirely on the
+  // focusable, labeled wrapper around it -- verified here by role and name, independent of mouse
+  // hover (already covered above).
+  it('the disabled assign button is reachable and named via its wrapper, not the button itself', () => {
+    render(<CommentThread {...defaultProps} />);
+    // canAssign starts false with no canUserAssignThreadCallback supplied, so Assign stays
+    // disabled without needing to await anything.
+    const assignButton = screen.getByRole('button', { name: 'Assign user' });
+    expect(assignButton).toBeDisabled();
+
+    const wrapper = screen.getByRole('group', { name: 'Assign user' });
+    expect(wrapper).toHaveAttribute('tabindex', '0');
+    expect(wrapper).toContainElement(assignButton);
+  });
+
+  it('the disabled submit button is reachable and named via its wrapper, not the button itself', () => {
+    render(<CommentThread {...defaultProps} />);
+    // No draft content and no pending assignee, so Submit stays disabled from first render.
+    const submitButton = screen.getByRole('button', { name: 'Submit comment' });
+    expect(submitButton).toBeDisabled();
+
+    const wrapper = screen.getByRole('group', { name: 'Submit comment' });
+    expect(wrapper).toHaveAttribute('tabindex', '0');
+    expect(wrapper).toContainElement(submitButton);
   });
 });
 

@@ -225,7 +225,7 @@ internal class UserTextConnectionSettingTests : PapiTestBase
         var v100 = new ResourceReferenceList { DataVersion = "1.0.0", Items = [] };
         Assert.That(
             () => _provider.SetUserModelTexts(v100.SerializeToJson()),
-            Throws.TypeOf<InvalidDataException>()
+            Throws.TypeOf<InvalidDataException>().With.Message.Contains("downgrade")
         );
     }
 

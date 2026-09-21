@@ -1,4 +1,5 @@
 import {
+  Button,
   CommentList,
   Label,
   Select,
@@ -20,26 +21,25 @@ import {
   scopeFilterToLabelKey,
 } from './comment-list-filters.model';
 
-/** Extra localization keys this panel needs beyond `COMMENT_LIST_STRING_KEYS`. */
+/**
+ * Extra localization keys this panel needs beyond `COMMENT_LIST_STRING_KEYS`. The preset/scope
+ * portions are DERIVED from the compile-checked `presetToLabelKey`/`scopeFilterToLabelKey` maps
+ * (rather than hand-listed) so a preset or scope added to those maps can never be forgotten here —
+ * a hand-copied list stays green when a new value's string is simply never requested, which is
+ * exactly how a real key gap (the dropdown renders the option, but the panel never asks for its
+ * localized label, so it shows blank) would slip past `localized-strings.test.ts`, since that test
+ * filters this very array rather than the maps themselves.
+ */
 export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   '%comment_filter_aria_preset%',
   '%comment_filter_aria_scope%',
-  '%comment_filter_preset_all%',
-  '%comment_filter_preset_unresolved_assigned_to_me%',
-  '%comment_filter_preset_unresolved%',
-  '%comment_filter_preset_unread_assigned_to_me%',
-  '%comment_filter_preset_unread%',
-  '%comment_filter_preset_unread_and_unresolved%',
-  '%comment_filter_preset_resolved%',
-  '%comment_filter_preset_unsaved%',
-  '%comment_filter_preset_conflict%',
-  '%comment_filter_scope_all_books%',
-  '%comment_filter_scope_current_book%',
-  '%comment_filter_scope_current_chapter%',
-  '%comment_filter_scope_current_verse%',
+  ...Object.values(presetToLabelKey),
+  ...Object.values(scopeFilterToLabelKey),
   '%no_comments%',
   '%no_comments_match_filter%',
   '%webView_legacyCommentManager_syncEditBlocked_notice%',
+  '%comment_filter_current_user_unavailable%',
+  '%comment_filter_retry_current_user%',
 ] as const;
 
 /**
@@ -89,6 +89,16 @@ export type CommentListPanelProps = Pick<
    * by the web view via the capability callbacks. Defaults to `false`.
    */
   isSyncBlocked?: boolean;
+  /**
+   * True when the active preset needs the current user's name (see `presetRequiresCurrentUser`) and
+   * fetching it has failed — as opposed to `isLoading`, which covers the (recoverable)
+   * still-loading case. Shows an explanatory message with a retry action instead of the loading
+   * skeletons, so a failed fetch doesn't leave the panel loading forever with no way out but
+   * changing preset.
+   */
+  currentUserNameUnavailable?: boolean;
+  /** Retries the current user's registration-data fetch; wired to the message above's action. */
+  onRetryFetchCurrentUserName?: () => void;
 };
 
 /**
@@ -164,6 +174,8 @@ export function CommentListPanel({
   scopeFilter,
   onScopeFilterChange,
   isSyncBlocked = false,
+  currentUserNameUnavailable = false,
+  onRetryFetchCurrentUserName,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
@@ -182,10 +194,25 @@ export function CommentListPanel({
 }: CommentListPanelProps) {
   const noFiltersActive = isShowingAllThreads({ filters, scopeFilter });
 
-  // The list area swaps between skeletons (loading), an empty-state message, and the list — but the
-  // toolbar below always renders, so isLoading only governs this region.
+  // The list area swaps between an explanatory "current user unavailable" message, skeletons
+  // (loading), an empty-state message, and the list — but the toolbar below always renders, so none
+  // of this governs anything but this region. `currentUserNameUnavailable` takes priority over
+  // `isLoading`: once the fetch has failed, `isAwaitingCurrentUserName` (the web view's `isLoading`
+  // input) stops forcing the loading state, so this branch is what the panel actually recovers into
+  // instead of skeletons with no escape.
   let listContent: ReactNode;
-  if (isLoading) {
+  if (currentUserNameUnavailable) {
+    listContent = (
+      <div className="tw:m-4 tw:flex tw:flex-col tw:items-center tw:gap-2">
+        <Label>{localizedStrings['%comment_filter_current_user_unavailable%']}</Label>
+        {onRetryFetchCurrentUserName && (
+          <Button variant="outline" size="sm" onClick={onRetryFetchCurrentUserName}>
+            {localizedStrings['%comment_filter_retry_current_user%']}
+          </Button>
+        )}
+      </div>
+    );
+  } else if (isLoading) {
     listContent = (
       <div className="tw:p-2 tw:space-y-4">
         {[...Array(10)].map((_, index) => (

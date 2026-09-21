@@ -654,8 +654,9 @@ step, no automation. Just a record.
 - **Decision:** Collapse every axis behind a single `Filters` trigger opening a popover that gives
   each axis a labelled full-width row, and render a dismissible chip beside the trigger for each
   axis not at its default. A fresh list therefore shows the trigger alone (~48px), below the
-  previous baseline rather than above it. See `CommentListPanel` and `buildFilterChips` in
-  `extensions/src/legacy-comment-manager/src/comment-list.component.tsx`.
+  previous baseline rather than above it. Implemented in `CommentListPanel` in
+  `extensions/src/legacy-comment-manager/src/comment-list.component.tsx`, via a chip-building
+  helper that no longer exists there (see this entry's Status).
 - **Alternatives:**
   - *Seven inline dropdowns.* Smallest diff, but spends most of a comment card on chrome.
   - *Drop the `min-w-32` floor so triggers size to content.* Measured and rejected: the shipped

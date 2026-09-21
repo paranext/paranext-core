@@ -454,11 +454,14 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
               },
               scopeFilterToSet: {
                 type: 'string',
-                // The enum is derived from scopeFilterToLabelKey's keys, so it always matches the
-                // ScopeFilter union exactly. The deprecated 'unfiltered' value is documented in the
-                // description below rather than appended here, so this stays the current, always-
-                // accurate set rather than a hand-maintained one.
-                enum: Object.keys(scopeFilterToLabelKey),
+                // The current values are derived from scopeFilterToLabelKey's keys, so they always
+                // match the ScopeFilter union exactly. Unlike filtersToSet's object schema (which
+                // has no additionalProperties: false and so accepts undeclared properties without
+                // any schema change), a string enum has no such escape hatch — an unlisted value
+                // fails schema validation even though resolveScopeFilter still accepts it. So the
+                // deprecated 'unfiltered' value is appended explicitly to keep the published
+                // OpenRPC contract honest about what the shim actually accepts.
+                enum: [...Object.keys(scopeFilterToLabelKey), 'unfiltered'],
                 description:
                   'Scope to pre-apply; omitting it resets scope to all-books. Also accepts the ' +
                   "deprecated 'unfiltered' value, which maps to all-books.",

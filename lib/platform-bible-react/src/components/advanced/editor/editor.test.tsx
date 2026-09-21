@@ -5,18 +5,22 @@ import { expect, test } from 'vitest';
 import { Editor } from './editor';
 
 /**
- * The editor's format toolbar must not be sticky. It shares no scroll container with the comment
- * panel's filter toolbar, so an equal z-index plus a later DOM position made it paint over that
- * toolbar. The editor box never scrolls internally, so sticky buys nothing here either.
+ * The editor's format toolbar pins itself to its nearest scrolling ancestor via `position: sticky`
+ * — `Plugins` renders inside consumers whose editor box itself scrolls (the comments panel's
+ * compose editor is one), and the toolbar needs to stay visible while that happens. It must not
+ * claim its own explicit z-index, though: a hard-coded numeric z-index competes with a host's own
+ * positioned chrome (e.g. the comments panel's sticky header) for paint order by DOM position,
+ * whereas leaving z-index at its default lets it lose that contest on ordinary stacking order
+ * instead.
  */
-test('the format toolbar is not sticky, so it cannot paint over panel chrome', () => {
+test('the format toolbar stays sticky without claiming its own numeric z-index', () => {
   const { container } = render(<Editor />);
 
   const toolbar = container.querySelector('[data-testid="editor-format-toolbar"]');
   expect(toolbar).not.toBeNull();
-  expect(toolbar?.className).not.toMatch(/\b(sticky|fixed)\b/);
-  expect(toolbar?.className).not.toMatch(/\bz-/);
-  expect(toolbar?.getAttribute('style') ?? '').not.toMatch(/position|z-index/);
+  expect(toolbar?.className).toMatch(/\bsticky\b/);
+  expect(toolbar?.className).not.toMatch(/\bz-\d/);
+  expect(toolbar?.getAttribute('style') ?? '').not.toMatch(/z-index/);
 });
 
 test('renders the actions slot inside the bordered box, after the content area', () => {

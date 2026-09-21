@@ -192,7 +192,12 @@ export interface CommentListProps {
    * when this is not provided.
    */
   conflictResolution?: ConflictResolutionCallbacks;
-  /** Uncommitted drafts by thread id. A thread with no entry has no draft. */
+  /**
+   * Uncommitted drafts by thread id. A thread with no entry has no draft.
+   *
+   * Pass this together with `onDraftChange`, or omit both — `CommentThreadProps.draft` documents
+   * what goes wrong with only one of the pair.
+   */
   drafts?: Readonly<Record<string, CommentDraft>>;
   /**
    * Called when a thread's draft changes. `draft` is `undefined` when the draft becomes empty, so a
@@ -305,12 +310,25 @@ export interface CommentThreadProps {
   spaceRootContentFromReplies?: boolean;
   /**
    * This thread's uncommitted draft — reply-box contents, a pending assignee, or both. When
-   * provided, it is rendered instead of internal state (see {@link CommentListProps.drafts}). Falls
-   * back to internal state when omitted, so callers that don't manage drafts keep working.
+   * provided (even as `{}`), it is rendered instead of internal state (see
+   * {@link CommentListProps.drafts}). Falls back to internal state when omitted, so callers that
+   * don't manage drafts keep working.
    *
-   * Read-only without its matching `onDraftChange`: passing `draft` alone renders it, but every
-   * subsequent keystroke keeps re-rendering that same unchanging value, so typing appears to do
-   * nothing. Pass both together, or neither.
+   * Pass `draft` and `onDraftChange` together, or omit both — either one without the other silently
+   * freezes the tracked draft, and in a way that is easy to miss: the underlying Lexical editor
+   * keeps its own internal typing buffer regardless (its initial content is read once at mount, not
+   * on every render), so characters keep appearing as the user types. What breaks is everything
+   * that reads the _tracked_ draft instead of the editor's live buffer — most visibly, the Submit
+   * button (gated on the tracked draft having content) stays disabled forever with content visibly
+   * in the box. Concretely:
+   *
+   * - `onDraftChange` supplied, `draft` omitted: this component is "controlled" and stops writing its
+   *   own internal fallback state, but with no `draft` prop to read back from, the tracked draft
+   *   stays at its empty initial value forever.
+   * - `draft` supplied (to any fixed value, `{}` included), `onDraftChange` omitted: this component
+   *   keeps updating its internal fallback state on every keystroke as normal, but the defined
+   *   `draft` prop always takes precedence over that internal state, so the tracked draft stays
+   *   pinned at whatever `draft` was on the first render.
    */
   draft?: CommentDraft;
   /**
@@ -365,9 +383,21 @@ export interface CommentItemProps {
    * instead of internal state, and entering/leaving edit mode is derived from whether it is
    * defined. Falls back to internal state when omitted.
    *
-   * Read-only without its matching `onDraftEditorStateChange`: passing `draftEditorState` alone
-   * renders it, but every keystroke keeps re-rendering that same unchanging value, so typing
-   * appears to do nothing. Pass both together, or neither.
+   * Pass `draftEditorState` and `onDraftEditorStateChange` together, or omit both — this follows
+   * the same sometimes-controlled shape as `CommentThreadProps.draft`, and either prop without the
+   * other is dangerous in its own way, not merely inert:
+   *
+   * - `onDraftEditorStateChange` supplied, `draftEditorState` omitted: this component stops writing
+   *   its internal fallback state, but with nothing to read back from, the tracked state stays
+   *   `undefined` forever — `isEditing` (derived from it) never becomes true, so entering edit mode
+   *   never visibly happens at all.
+   * - `draftEditorState` supplied (to any defined value), `onDraftEditorStateChange` omitted: this
+   *   component keeps updating its internal fallback state as the user types, but the defined
+   *   `draftEditorState` prop always takes precedence over it, so the tracked state stays pinned at
+   *   whatever was passed on the first render. Because Lexical's own editing buffer is independent
+   *   of that prop after mount, the user still sees their keystrokes — but Save reads the frozen
+   *   tracked state, not the buffer, so it silently commits the stale content instead of what was
+   *   typed.
    */
   draftEditorState?: SerializedEditorState;
   /**

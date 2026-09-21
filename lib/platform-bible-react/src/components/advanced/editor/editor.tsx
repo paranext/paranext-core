@@ -11,7 +11,7 @@
 import { InitialConfigType, LexicalComposer } from '@lexical/react/LexicalComposer';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { EditorState, SerializedEditorState } from 'lexical';
-import { ReactNode } from 'react';
+import { ReactNode, useCallback, useState } from 'react';
 
 import { editorTheme } from '@/components/advanced/editor/themes/editor-theme';
 import { TooltipProvider } from '@/components/shadcn-ui/tooltip';
@@ -60,6 +60,25 @@ export function Editor({
    */
   actions?: ReactNode;
 }) {
+  // `LexicalComposer` reads `initialConfig` only once, at mount (it is genuinely an "initial"
+  // config, not a controlled prop) — so building it fresh on every render, `JSON.stringify` of
+  // `editorSerializedState` included, redoes work whose result is thrown away on every render but
+  // the first. `useState`'s lazy initializer runs exactly once (unlike `useMemo`, which React does
+  // not guarantee to cache permanently), matching how the value is actually consumed.
+  const [initialConfig] = useState<InitialConfigType>(() => ({
+    ...editorConfig,
+    ...(editorState ? { editorState } : {}),
+    ...(editorSerializedState ? { editorState: JSON.stringify(editorSerializedState) } : {}),
+  }));
+
+  const handleChange = useCallback(
+    (latestEditorState: EditorState) => {
+      onChange?.(latestEditorState);
+      onSerializedChange?.(latestEditorState.toJSON());
+    },
+    [onChange, onSerializedChange],
+  );
+
   return (
     // CUSTOM: Added `className` prop
     <div
@@ -68,13 +87,7 @@ export function Editor({
         className,
       )}
     >
-      <LexicalComposer
-        initialConfig={{
-          ...editorConfig,
-          ...(editorState ? { editorState } : {}),
-          ...(editorSerializedState ? { editorState: JSON.stringify(editorSerializedState) } : {}),
-        }}
-      >
+      <LexicalComposer initialConfig={initialConfig}>
         <TooltipProvider>
           <Plugins
             placeholder={placeholder}
@@ -83,13 +96,7 @@ export function Editor({
             actions={actions}
           />
 
-          <OnChangePlugin
-            ignoreSelectionChange
-            onChange={(latestEditorState) => {
-              onChange?.(latestEditorState);
-              onSerializedChange?.(latestEditorState.toJSON());
-            }}
-          />
+          <OnChangePlugin ignoreSelectionChange onChange={handleChange} />
         </TooltipProvider>
       </LexicalComposer>
     </div>

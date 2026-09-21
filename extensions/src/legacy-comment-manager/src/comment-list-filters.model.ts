@@ -1,3 +1,4 @@
+import { logger } from '@papi/frontend';
 import type {
   LegacyCommentThreadSelector,
   CommentPreset,
@@ -39,6 +40,30 @@ export function isCommentPreset(value: string): value is CommentPreset {
 }
 
 export const DEFAULT_COMMENT_FILTERS: CommentFilters = { preset: 'all' };
+
+/**
+ * Whether a preset's query needs the current user's name before it can run (see
+ * `buildCommentThreadSelector`'s `currentUserName` branches, which only add `assignedTo` once the
+ * name has loaded — an empty `assignedTo` means "unassigned" to the provider, not "not yet known").
+ * Carried on the preset itself, keyed alongside every other preset via `satisfies
+ * Record<CommentPreset, boolean>`, rather than left as a hardcoded name check off in the web view:
+ * that hardcoding is exactly what let a future "assigned to me"-shaped preset compile cleanly and
+ * ship with a blank `assignedTo` live, caught by neither `buildCommentThreadSelector`'s
+ * exhaustiveness guard (which only checks that every preset has SOME case, not that a
+ * current-user-dependent one flags itself here) nor any test. Adding a preset without a row here is
+ * now a compile error instead.
+ */
+export const presetRequiresCurrentUser = {
+  all: false,
+  'unresolved-assigned-to-me': true,
+  unresolved: false,
+  'unread-assigned-to-me': true,
+  unread: false,
+  'unread-and-unresolved': false,
+  resolved: false,
+  unsaved: false,
+  conflict: false,
+} as const satisfies Record<CommentPreset, boolean>;
 
 // --- Scope axis (how much Scripture the list covers) ---
 
@@ -130,11 +155,10 @@ export function isShowingAllThreads({
 /**
  * Legacy four-axis combinations that have an exact counterpart among the current presets, keyed by
  * `${resolved}|${read}|${type}|${assignment}` with each axis defaulted to `'all'` when absent from
- * the input. A combination not listed here — including any combination of active (non-`'all'`) axes
- * that is a superset of one listed below, e.g. `resolved: 'unresolved'` together with `type:
- * 'conflicts'` — has no matching preset; {@link presetFromLegacyAxes} falls back to `'all'` rather
- * than guess which axis to drop to force a fit. See {@link LegacyCommentFilters}'s TSDoc for the
- * same table with the reasoning per row.
+ * the input. A combination not listed here has no EXACT preset match; {@link presetFromLegacyAxes}
+ * narrows it as closely as it can rather than guessing which axis to drop to force an exact fit —
+ * see that function's doc for the `type: 'conflicts'` special case and the generic fallback. See
+ * {@link LegacyCommentFilters}'s TSDoc for the same table with the reasoning per row.
  */
 const LEGACY_AXES_TO_PRESET: Partial<Record<string, CommentPreset>> = {
   'all|all|all|all': 'all',
@@ -148,11 +172,21 @@ const LEGACY_AXES_TO_PRESET: Partial<Record<string, CommentPreset>> = {
 };
 
 /**
- * Maps a legacy four-axis filter selection onto the {@link CommentPreset} with matching meaning, via
- * an exact match against {@link LEGACY_AXES_TO_PRESET}. A combination with no counterpart — e.g.
- * `assignment: 'team'`/`'unassigned'` (dropped entirely by the new model), `type: 'comments'` (no
- * preset excludes conflicts), or any combination of active axes not in the table — falls back to
- * `'all'` rather than throw or guess.
+ * Maps a legacy four-axis filter selection onto the {@link CommentPreset} with matching meaning.
+ *
+ * Tries an exact match against {@link LEGACY_AXES_TO_PRESET} first. Failing that, a combination
+ * naming `type: 'conflicts'` alongside another active axis — e.g. `resolved: 'unresolved'` + `type:
+ * 'conflicts'`, the Send/Receive "unresolved conflicts" view — narrows to `'conflict'` rather than
+ * the generic `'all'` fallback: `'conflict'` still honors the one constraint the current preset set
+ * CAN express (only conflict-type threads), dropping just the other axis, while `'all'` would drop
+ * the conflict constraint too and hand back the complete unfiltered list — the opposite of what a
+ * user clicking "merge conflicts occurred" asked for.
+ *
+ * Any other combination with no counterpart at all — e.g. `assignment: 'team'`/`'unassigned'`
+ * (dropped entirely by the new model), `type: 'comments'` (no preset excludes conflicts), or a mix
+ * of active axes the table doesn't recognize — widens to `'all'` rather than throw or guess which
+ * axis to drop. Either fallback logs, naming the combination: this is the direction nobody notices
+ * without one, since a silent widen just shows extra rows rather than failing loudly.
  */
 function presetFromLegacyAxes(legacy: LegacyCommentFilters): CommentPreset {
   const key = [
@@ -161,7 +195,23 @@ function presetFromLegacyAxes(legacy: LegacyCommentFilters): CommentPreset {
     legacy.type ?? 'all',
     legacy.assignment ?? 'all',
   ].join('|');
-  return LEGACY_AXES_TO_PRESET[key] ?? DEFAULT_COMMENT_FILTERS.preset;
+
+  const exactMatch = LEGACY_AXES_TO_PRESET[key];
+  if (exactMatch) return exactMatch;
+
+  if (legacy.type === 'conflicts') {
+    logger.warn(
+      `Legacy comment filter combination "${key}" has no exact preset match; narrowing to ` +
+        `'conflict' (dropping the other axis) rather than widening to 'all' (which would also ` +
+        `drop the conflict constraint).`,
+    );
+    return 'conflict';
+  }
+
+  logger.warn(
+    `Legacy comment filter combination "${key}" has no matching preset; widening to 'all'.`,
+  );
+  return DEFAULT_COMMENT_FILTERS.preset;
 }
 
 /**
@@ -169,11 +219,15 @@ function presetFromLegacyAxes(legacy: LegacyCommentFilters): CommentPreset {
  * would leave `Partial<CommentFilters>` in both branches after narrowing — every field on both
  * shapes is optional, so TS can't prove `{}` couldn't be either — so this is written as an explicit
  * type predicate to force the negative branch to `LegacyCommentFilters`.
+ *
+ * Guards with `typeof overrides === 'object'` before the `in` check: `overrides` is typed as an
+ * object here, but malformed input crossing the command/message bus can be any truthy primitive (a
+ * string, a number), and `in` throws a `TypeError` on a non-object operand.
  */
 function isNewCommentFiltersShape(
   overrides: Partial<CommentFilters> | LegacyCommentFilters,
 ): overrides is Partial<CommentFilters> {
-  return 'preset' in overrides;
+  return typeof overrides === 'object' && 'preset' in overrides;
 }
 
 /**
