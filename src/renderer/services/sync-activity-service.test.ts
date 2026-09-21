@@ -191,8 +191,8 @@ describe('initSyncActivityService', () => {
     });
 
     it('accepts a snapshot whose projectIds are absent', async () => {
-      // A Studio build predating that field answers without it; "the projects are unknown" is a
-      // usable snapshot, unlike a malformed one.
+      // A Paratext 10 build predating that field answers without it; "the projects are unknown"
+      // is a usable snapshot, unlike a malformed one.
       dispose = initSyncActivityService();
       await flushSeeding();
 

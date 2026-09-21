@@ -3324,8 +3324,9 @@ step, no automation. Just a record.
 - **Consequences:** `paratext-10-studio` generates and commits its own pair, copies it over this
   repository's in its clone before packaging, and runs `--verify-shipping-set` on every platform
   and `--verify` on Linux against its own lock. An identifier a downstream entry needs (`PSF-2.0`,
-  `OpenSSL`, `blessing`, `TCL` and `ZPL-2.1` today) is added to `allowed` here, because `allowed`
-  is what `reachableIds` walks to decide which canonical texts the committed corpus index holds.
+  `OpenSSL`, `blessing`, `TCL`, `ZPL-2.1` and `bzip2-1.0.6` today) is added to `allowed` here,
+  because `allowed` is what `reachableIds` walks to decide which canonical texts the committed
+  corpus index holds.
   The overlay reaches `build-corpus-index.ts` like every other policy reader, so a downstream that
   runs the corpus builder with it set rewrites the committed index in its clone; `corpus-texts.ts`
   asserts the index is exactly what the committed policy reaches, so such an index fails CI here
@@ -4121,6 +4122,74 @@ step, no automation. Just a record.
   deprecation cycle, which `experimental.ts` sanctions by its own contract but which any
   out-of-repo consumer (e.g. Paratext 10 Studio) must absorb at once.
 - **Source:** PR #2673 (project-selector groupings).
+
+## adr-project-selector-per-bucket-row-order: A grouping descriptor owns its bucket's row order, via an optional comparator
+
+- **Date:** 2026-09-19
+- **Status:** Accepted
+- **Context:** `ProjectSelector` sorted every bucket by its own canonical order (alphabetical by
+  `shortName`, tie-broken by scroll group). A grouping whose meaning implies an order — a bucket
+  ordered by a caller-side score, say — had no way to express it, so the picker lane's first plan
+  was a parallel `customSections` API: ordered `{ id, label, match, compare? }` descriptors selected
+  by a `'custom'` grouping option. `adr-project-selector-consumer-driven-groupings` then landed from
+  #2673 and made the bucketing half of that redundant — `getGroupKey` / `getSectionHeading` /
+  `compareSections` already let a consumer express "Recent / Your projects". Only row order inside a
+  bucket was still unreachable.
+- **Decision:** No parallel sections API. `ProjectSelectorGrouping` gains one optional member,
+  `compareProjects`, a standard comparator over `ProjectSelectorProject`. Ties fall back to the
+  canonical order, which keeps a project fanned across several scroll groups in a stable sequence,
+  since a comparator seeing only the project cannot tell those rows apart. It is ignored where the
+  descriptor does not own the bucketing: the `'openTabs'` and `'selection'` groupings, any grouping
+  with no `getGroupKey`, and the unknown bucket — whose rows are precisely the ones the grouping
+  could not classify, so its own axis cannot order them.
+- **Alternatives considered:**
+  - **`customSections` — a second, parallel descriptor API.** Rejected once the grouping descriptors
+    landed: two ways to say "these are my sections" is one too many, and the sections half of it was
+    already expressible. Adding a `'custom'` member to the grouping option union would also have
+    re-centralized in the component knowledge that `adr-project-selector-consumer-driven-groupings`
+    had just pushed out to consumers.
+  - **Sorting every bucket by the caller's comparator, including the unknown one.** Rejected: the
+    unknown bucket collects rows the grouping's own axis could not classify, so ordering them by
+    that axis is meaningless.
+  - **Making the canonical order itself configurable.** Rejected: that is a component-wide knob for
+    a per-grouping concern, and it would let one consumer's ordering leak across every grouping the
+    picker offers.
+- **Consequences:** A list can now mix two orders — a comparator-ordered bucket above an
+  alphabetical "Other" — which the `compareProjects` TSDoc calls out for callers. The built-in
+  `lastUsed` grouping deliberately supplies no comparator: it reads `lastUsedAt` as a presence flag
+  for bucketing only, and its rows stay alphabetical, matching what
+  `platform-bible-utils/src/project-selector-custom-data.ts` documents.
+- **Source:** PR #2790 (project-selector type indicator and per-bucket row order).
+
+## adr-project-selector-stays-experimental: ProjectSelector keeps its experimental entry point while its shape is still moving
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** `ProjectSelector` is the platform's shared project/resource picker, and the picker
+  lane adds capabilities to it across several consecutive work items — a row type indicator and
+  per-bucket row order here, an "All projects…" footer affordance and further consumers after. The
+  question was whether to move it to the stable barrel now, on the strength of its consumer count,
+  or leave it on `platform-bible-react/experimental` until the surface settles.
+- **Decision:** It stays on `experimental`. The capabilities land; the barrel move does not. The
+  stable barrel is a support promise, and the component is still acquiring surface with each
+  consumer — `renderProjectIndicator`, `ProjectSelectorGrouping.compareProjects`, and the footer
+  affordance deferred to the next item all arrived or will arrive after the promotion was first
+  proposed.
+- **Alternatives considered:**
+  - **Promote now.** Rejected: it fixes the public shape at the point of greatest churn. The
+    immediately preceding work item is the evidence — #2673 removed roughly 16 public
+    `ProjectSelectorProps` members and replaced the component's fixed grouping prop set with
+    consumer-supplied descriptors (see `adr-project-selector-consumer-driven-groupings`). A change
+    of that size is what `experimental` exists to allow, and it landed weeks before promotion was
+    proposed, not years.
+  - **Promote with the experimental barrel kept as a deprecated re-export.** Rejected: that entry
+    point's own header declares no stability guarantee and promises no deprecation cycle, so the
+    shim would buy nothing while putting the component in two bundles.
+- **Consequences:** Consumers import from `platform-bible-react/experimental` and accept the
+  no-guarantee contract, which is what they already did. Renames and prop reshapes stay free until
+  promotion. Promotion becomes its own work item, whose entry criterion is that a consumer can be
+  added without adding a prop — and it should carry the API-surface TSDoc and localized-key
+  conventions the stable barrel expects, rather than bundling them into a capability change.
 
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
@@ -5486,6 +5555,49 @@ step, no automation. Just a record.
   ScrTag's `Raw*` reads (an authored `\FirstLineIndent 0` serializes as 0, distinct from absent),
   which matters because project CSS is layered over a base sheet.
 - **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
+
+## adr-tab-bar-drop-zone-app-side-target: The whole tab bar accepts tab drops through an app-registered rc-dock drop target, not a patched or stretched rc-dock tab
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** In Power mode, a tab dropped on a tab bar's empty remainder did nothing: rc-dock only
+  registers drop targets per tab (`TabCache.onDragOver` in `node_modules/rc-dock/src/DockTabs.tsx`),
+  and its `after-tab` indicator is a fixed 30px strip. Users aiming at "the end of the bar" got a
+  silent no-op — the defect reported as PT-3288. This decision addresses that defect but does not
+  close it; PT-3330 tracks the follow-up.
+- **Decision:** Render `TabBarDropZone` (`src/renderer/components/docking/tab-bar-drop-zone.component.tsx`)
+  through `TabGroup.panelExtra` beside the "+" button. It is an rc-dock `DragDropDiv` that fills
+  the bar's remainder and appends the dragged tab or panel with `dockMove(source, panel, 'middle')`.
+  Acceptance mirrors rc-dock's own gates for this app's group config
+  (`resolveTabBarDropZoneSource`) instead of inventing rules. During a drag, "+" slides to the bar's
+  end, and absolutely positioned pseudo-elements extend the zone's hit area backward over the last
+  tab's trailing half and forward over "+" and the bar's trailing padding, so the bar reads as one
+  target and flex layout never changes. The drawn indicator over that claimed trailing half is
+  widened toward a legible minimum width, capped so it never reaches back further than the region
+  the hit area actually claims — and the zone accepts a drop there if and only if it claimed that
+  region, so the visible indicator and the acceptance decision can never disagree. rc-dock's
+  edge-split layer is moved below the app's taller tab bar. rc-dock is patched only for bugs (the
+  `isPopupDiv` fix this work needed), never for features, and is pinned to exactly the patched
+  version.
+- **Alternatives:** Stretch the last tab's hit area, as proposed upstream (ticlo/rc-dock#222) —
+  rejected: it changes the tab's measured size, which rc-tabs' overflow math reads. Patch
+  `TabCache` to accept past the last tab — rejected: a feature patch that has to be carried across
+  every upgrade. Widen the zone's real box with a negative margin during a drag — rejected: on a
+  crowded bar it feeds back into flex sizing, resizes the tab strip mid-drag, and can move tabs in
+  or out of the overflow dropdown.
+- **Consequences:** The app depends on rc-dock internals: DOM classes, drag-listener ordering, and
+  `setDropRect` semantics. `src/renderer/components/docking/README.md` lists them as an upgrade
+  checklist, and the `docking` e2e subset exercises the layout that unit tests cannot. Simple mode has
+  no `panelExtra`, so no zone; the CSS that hides rc-tabs' idle overflow box applies in both modes. On
+  a last tab too narrow for even the widened indicator to reach a visible width, the zone leaves that
+  tab uncovered and rc-dock's own per-tab handler takes the drop there instead — the same outcome,
+  reached through a different target. On a crowded bar the zone's own box is squeezed to zero width,
+  so the forward hit extension over the gap before "+", "+" itself, and the bar's trailing padding
+  also refuses every drop there — roughly a button's width plus a gap and the trailing padding of
+  dead space that accepts nothing, though a release past the last visible tab still appends through
+  rc-dock's own per-tab target. Revisit if rc-dock gains a native bar-level drop target, or
+  when the PT-3330 follow-up reshapes tab-bar dropping.
+- **Source:** Reported defect PT-3288; implemented in PR #2767 and its review.
 
 ## adr-tab-menu-channel-and-window-naming: The tab context menu is a contribution channel, and a window is named by its content
 

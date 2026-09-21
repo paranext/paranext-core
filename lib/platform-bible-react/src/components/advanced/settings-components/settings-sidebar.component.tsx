@@ -1,5 +1,6 @@
 import {
   ProjectSelector,
+  type ProjectSelectorLocalizedStrings,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
 import {
@@ -48,6 +49,18 @@ export type SettingsSidebarProps = {
   /** Placeholder text for the button */
   buttonPlaceholderText: string;
 
+  /**
+   * Placeholder text for the project picker's search box. Falls back to the picker's English string
+   * when omitted.
+   */
+  searchPlaceholderText?: string;
+
+  /**
+   * Message the project picker shows when no project matches the search. Falls back to the picker's
+   * English string when omitted.
+   */
+  noResultsText?: string;
+
   /** Additional css classes to help with unique styling of the sidebar */
   className?: string;
 };
@@ -68,6 +81,8 @@ export function SettingsSidebar({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
+  searchPlaceholderText,
+  noResultsText,
   className,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
@@ -98,6 +113,20 @@ export function SettingsSidebar({
       })),
     [projectInfo],
   );
+
+  // `buttonPlaceholder` and `ariaLabel` are this sidebar's own copy; the popover's two strings are
+  // optional. Unsupplied entries are left off the bag rather than set to `undefined`, because
+  // ProjectSelector layers this bag over its own English defaults with a plain spread — an explicit
+  // `undefined` would blank the default it lands on instead of falling back to it.
+  const projectSelectorStrings = useMemo((): ProjectSelectorLocalizedStrings => {
+    const strings: ProjectSelectorLocalizedStrings = {
+      buttonPlaceholder: buttonPlaceholderText,
+      ariaLabel: projectsSidebarGroupLabel,
+    };
+    if (searchPlaceholderText) strings.searchPlaceholder = searchPlaceholderText;
+    if (noResultsText) strings.commandEmptyMessage = noResultsText;
+    return strings;
+  }, [buttonPlaceholderText, projectsSidebarGroupLabel, searchPlaceholderText, noResultsText]);
 
   const getIsActive: (label: string) => boolean = useCallback(
     (label: string) => !selectedSidebarItem.projectId && label === selectedSidebarItem.label,
@@ -172,10 +201,7 @@ export function SettingsSidebar({
                 }}
                 buttonVariant="ghost"
                 buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
-                localizedStrings={{
-                  buttonPlaceholder: buttonPlaceholderText,
-                  ariaLabel: projectsSidebarGroupLabel,
-                }}
+                localizedStrings={projectSelectorStrings}
               />
             </div>
           </SidebarGroupContent>
