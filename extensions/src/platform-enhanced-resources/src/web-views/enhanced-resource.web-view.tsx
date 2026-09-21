@@ -563,6 +563,14 @@ export function EnhancedResourceWebView({
   const emptyTitle = String(getString('%enhancedResources_shell_emptyTitle%'));
   const emptyDescription = String(getString('%enhancedResources_shell_emptyDescription%'));
 
+  // The Bible text's zoom area's element, handed to the scripture pane so the editor's right-click
+  // menu portals inside the area: the menu then takes the area's zoom and stays bounded by the pane.
+  // Declared above the loading early return so the hook order never changes.
+  // An element ref starts out null.
+  // eslint-disable-next-line no-null/no-null
+  const scriptureZoomRootRef = useRef<HTMLDivElement>(null);
+  const getScriptureZoomRoot = useCallback(() => scriptureZoomRootRef.current ?? undefined, []);
+
   // Each child component does its own getLocalizedString lookup against the same bag, so we forward
   // the entire bag down. This keeps the wiring layer simple - one `useLocalizedStrings` call.
   const childStrings: [Record<string, LocalizedStringValue | undefined>, boolean] = [
@@ -646,7 +654,10 @@ export function EnhancedResourceWebView({
                 selectedFootnote={selectedFootnote}
                 onFootnoteSelected={onFootnoteSelected}
               >
-                <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+                <ContentZoomRoot
+                  ref={scriptureZoomRootRef}
+                  className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+                >
                   <EnhancedScripturePane
                     usj={usj}
                     annotations={annotations}
@@ -661,6 +672,7 @@ export function EnhancedResourceWebView({
                     erProxy={erProxy}
                     resourceId={resourceId}
                     glossLanguage={glossLanguage}
+                    contextMenuContainer={getScriptureZoomRoot}
                   />
                 </ContentZoomRoot>
               </EnhancedResourceFootnotesPane>
