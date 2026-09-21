@@ -109,7 +109,24 @@ function PopoverPortalContainerProvider({
 }
 /* #endregion CUSTOM */
 
-/** @inheritdoc Popover */
+/**
+ * @inheritdoc Popover
+ *
+ * By default the content is capped to the height Radix has available on whichever side it lands
+ * (`max-h-(--radix-popover-content-available-height)`) and scrolls whatever does not fit
+ * (`overflow-y-auto`, plus `overflow-x-hidden` so the y-axis scroller cannot promote the x-axis to
+ * `auto`). Two consequences to know about:
+ *
+ * - The content is a scroll container, so a floating child that is not portaled out gets clipped
+ *   rather than overflowing. Portal nested popovers in with `PopoverPortalContainerProvider`.
+ * - A child whose own `overflow` is not `visible` shrinks inside the capped flex column on its
+ *   own, because that gives it an automatic minimum size of 0 — a `Command`/`CommandList` pair
+ *   keeps its search input in place and scrolls the list with no extra classes. A child that does
+ *   NOT manage its own overflow is sized by its content instead, so it holds the column open and
+ *   the outer scroller here is what makes the overspill reachable.
+ *
+ * Pass `className` to override any of these.
+ */
 function PopoverContent({
   className,
   align = 'center',
@@ -132,7 +149,18 @@ function PopoverContent({
         sideOffset={sideOffset}
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation; removed tw:z-50 to use shared constant below
-          'pr-twp tw:flex tw:w-72 tw:origin-(--radix-popover-content-transform-origin) tw:flex-col tw:gap-2.5 tw:rounded-lg tw:bg-popover tw:p-2.5 tw:text-sm tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:outline-hidden tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',
+          // CUSTOM: Added tw:max-h-(--radix-popover-content-available-height), tw:overflow-y-auto,
+          // and tw:overflow-x-hidden to cap the popover at the space Radix actually has on
+          // whichever side it lands and to scroll whatever does not fit. A trigger sitting low in
+          // its container makes Radix flip the popover upward, and uncapped content then overruns
+          // the top of the web view's iframe, which clips it away with no way to scroll to it.
+          // Defaulting the cap and the y-axis scroller together keeps every call site capped
+          // without each one having to remember the pair, and keeps the cap from silently clipping
+          // content that has no scroller of its own. overflow-x-hidden belongs to the same set
+          // because CSS promotes a `visible` axis to `auto` when the other axis is not `visible`,
+          // so a y-axis scroller on its own would grow a horizontal scrollbar on every popover.
+          // Call sites can still override any of the three.
+          'pr-twp tw:flex tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:overflow-x-hidden tw:overflow-y-auto tw:origin-(--radix-popover-content-transform-origin) tw:flex-col tw:gap-2.5 tw:rounded-lg tw:bg-popover tw:p-2.5 tw:text-sm tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:outline-hidden tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',
           className,
         )}
         // CUSTOM: z-index uses shared constant instead of default tw:z-50, ensuring popover renders above the dock
