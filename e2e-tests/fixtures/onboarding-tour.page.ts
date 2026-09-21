@@ -224,9 +224,16 @@ export async function advanceTour(page: Page): Promise<void> {
   await waitForStepCounterChange(page, stepBeforeClick);
 }
 
-/** Clicks the Back button to return to the previous step. */
+/**
+ * Clicks the Back button to return to the previous step and waits for the step counter to actually
+ * change before returning, so callers always see a settled state rather than a mid-transition frame
+ * — mirrors {@link advanceTour}.
+ */
 export async function goBackTour(page: Page): Promise<void> {
+  const stepCounter = getStepCounter(page);
+  const stepBeforeClick = await stepCounter.textContent();
   await getTourBackButton(page).click();
+  await waitForStepCounterChange(page, stepBeforeClick);
 }
 
 /**
