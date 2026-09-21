@@ -20,7 +20,7 @@ import { useLocalProjects } from './use-local-projects.hook';
 const defaultInterfaceLanguages: string[] = ['en'];
 
 // Bounded retries for the two send/receive-dependent calls below, sized to outlast the remaining
-// extension activations (~1.5s in a Paratext 10 Studio build).
+// extension activations (~1.5s in a Paratext 10 build).
 const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
