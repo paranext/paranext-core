@@ -9,6 +9,21 @@
  * after the rejection settles retry. The initializer must therefore be safe to run again after a
  * failure, e.g. it should not leave partial registrations behind.
  *
+ * @example
+ *
+ * ```typescript
+ * const getEntryService = createCachedInitializer(async () => {
+ *   await papi.networkObjectStatus.waitForNetworkObject(
+ *     { id: 'lexicon.entryService' },
+ *     10_000,
+ *   );
+ *   return papi.networkObjects.get<LexiconEntryService>('lexicon.entryService');
+ * });
+ *
+ * // One wait and one fetch, however many callers arrive while it is still in flight
+ * const [service, sameService] = await Promise.all([getEntryService(), getEntryService()]);
+ * ```
+ *
  * @param initializer Asynchronous function that performs the initialization
  * @returns Function that returns the cached initialization promise, starting a new initialization
  *   attempt if there is no cached promise

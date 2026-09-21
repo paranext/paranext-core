@@ -4985,6 +4985,15 @@ step, no automation. Just a record.
   it is hiding rather than rendering a short list silently.
 - **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13).
 
+## adr-shared-utils-live-in-platform-bible-utils: A utility that extensions need lives in `platform-bible-utils`, not in `src/shared/utils`
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** `createCachedInitializer` runs an async initializer at most once and caches the promise, so concurrent callers share one attempt and a failure is retried rather than pinned. Eighteen core services use it. Extensions need exactly this to wait on a network object owned by a process that is still starting up, but could not import it. Left to hand-roll it, they reach for the version that caches the resolved value rather than the promise, so callers arriving during a look-up each start their own.
+- **Decision:** Move it to `lib/platform-bible-utils/src/promises/`, alongside `AsyncVariable`, `Mutex` and `PromiseChainingMap`, and export it from `platform-bible-utils`. Core imports it from the package like any other consumer.
+- **Alternatives:** **Re-export from `platform-bible-utils`, source left in `src/shared/utils/`** — not available: the package is standalone and cannot import from core's `src/`. **Export through `@papi/core`** — that surface is types-only (an empty default object plus `export type` lines); a runtime function does not belong there. **Leave it core-internal and let each extension hand-roll it** — the zero-diff option, and it hands every extension the same promise-versus-value caching bug.
+- **Consequences:** Such a utility is now held to the `lib/platform-bible-utils/` API-surface TSDoc bar rather than core-internal expectations. Each further move costs a repoint of every core import plus a `papi.d.ts` regeneration, so batch them. A utility needing both extension reach and a core-only dependency cannot follow: nothing in `platform-bible-utils` can import from `src/`.
+
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 
 - **Date:** 2026-08-26
