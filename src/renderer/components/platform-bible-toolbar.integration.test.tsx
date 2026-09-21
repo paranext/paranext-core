@@ -404,8 +404,8 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
       allProjects: [],
     });
 
-    // The trigger stays enabled with nothing to list — the escape hatch matters most here, and the
-    // picker this replaced disabled itself in exactly this state.
+    // The trigger stays enabled with nothing to list: "More projects…" is the only way out of an
+    // empty list, so this is the state the escape hatch matters most in.
     const trigger = await screen.findByRole('combobox', { name: 'Test no projects' });
     expect(trigger).toBeEnabled();
     await user.click(trigger);

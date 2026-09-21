@@ -13,6 +13,7 @@ import {
 } from 'platform-bible-react';
 import { Z_INDEX_TOOLTIP } from 'platform-bible-react/experimental';
 import { CheckIcon } from 'lucide-react';
+import LabelledGlyph from '@renderer/components/projects/labelled-glyph.component';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { RefObject, useMemo, useState } from 'react';
 
@@ -133,13 +134,9 @@ function ProjectSection({
           {/* Column 1 — short name, right-aligned */}
           <div className="tw:flex tw:items-center tw:justify-end tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
             {p.id === currentProjectId && (
-              // Wrapped rather than labelled directly so it carries a hover label like the
-              // read-only padlock beside it — a Lucide icon takes no `title`, and without the
-              // wrapper one glyph in the row names itself on hover while its neighbour stays
-              // silent. `role="img"` hosts the accessible name, as it does there.
-              <span role="img" aria-label={currentProjectLabel} title={currentProjectLabel}>
-                <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
-              </span>
+              <LabelledGlyph label={currentProjectLabel} showNativeTitle>
+                <CheckIcon className="tw:h-3 tw:w-3" aria-hidden />
+              </LabelledGlyph>
             )}
             {/* Rows here are plain listbox options rather than tooltip triggers, so the native
                 hover label is safe to show and matches the check mark beside it. */}

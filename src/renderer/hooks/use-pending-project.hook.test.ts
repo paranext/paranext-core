@@ -54,7 +54,7 @@ describe('usePendingProject', () => {
     expect(result.current.displayedProject?.id).toBe('old');
 
     act(() => {
-      result.current.beginOpenProject(NEW_PROJECT);
+      result.current.beginOpenProject(NEW_PROJECT.id, NEW_PROJECT);
     });
 
     // The editor still reports `old`; the hook must already name `new`.
@@ -69,7 +69,7 @@ describe('usePendingProject', () => {
     const { result, rerender } = renderPendingProject(OLD_PROJECT);
 
     act(() => {
-      result.current.beginOpenProject(NEW_PROJECT);
+      result.current.beginOpenProject(NEW_PROJECT.id, NEW_PROJECT);
     });
     expect(result.current.displayedProject?.id).toBe('new');
 
@@ -92,10 +92,10 @@ describe('usePendingProject', () => {
     });
 
     act(() => {
-      result.current.beginOpenProject(projectA);
+      result.current.beginOpenProject(projectA.id, projectA);
     });
     act(() => {
-      result.current.beginOpenProject(projectB);
+      result.current.beginOpenProject(projectB.id, projectB);
     });
     await act(async () => {
       rejectOpeningA(new Error('boom'));
@@ -119,10 +119,10 @@ describe('usePendingProject', () => {
     });
 
     act(() => {
-      result.current.beginOpenProject(projectA);
+      result.current.beginOpenProject(projectA.id, projectA);
     });
     act(() => {
-      result.current.beginOpenProject(projectA);
+      result.current.beginOpenProject(projectA.id, projectA);
     });
     await act(async () => {
       rejectFirstOpen(new Error('boom'));
@@ -139,10 +139,10 @@ describe('usePendingProject', () => {
     const { result, rerender } = renderPendingProject(OLD_PROJECT);
 
     act(() => {
-      result.current.beginOpenProject(projectA);
+      result.current.beginOpenProject(projectA.id, projectA);
     });
     act(() => {
-      result.current.beginOpenProject(projectB);
+      result.current.beginOpenProject(projectB.id, projectB);
     });
     // A resolves last: the editor lands on A while B is the outstanding pick. Holding B until the
     // bound expires would have the trigger contradict the editor for up to 15 seconds.
@@ -156,13 +156,29 @@ describe('usePendingProject', () => {
     const { result, rerender } = renderPendingProject(OLD_PROJECT);
 
     act(() => {
-      result.current.beginOpenProject(NEW_PROJECT);
+      result.current.beginOpenProject(NEW_PROJECT.id, NEW_PROJECT);
     });
     // The same project the editor already reported — it has not moved, so the bridge stands. This
     // is the case a bare "current is not the pick" exit would retire instantly.
     rerender({ current: { ...OLD_PROJECT } });
 
     expect(result.current.pendingProject).toEqual(NEW_PROJECT);
+  });
+
+  it('opens an unnamed pick without bridging, so no fabricated name reaches the surface', () => {
+    const openProject = vi.fn(async () => {});
+    const { result } = renderPendingProject(OLD_PROJECT, openProject);
+
+    act(() => {
+      result.current.beginOpenProject('dialog-only');
+    });
+
+    // A project reachable only through the dialog has no row to take display fields from. Standing
+    // its raw id in for them would put `dialog-only (dialog-only)` in the trigger for the whole
+    // bound; naming nothing leaves the open project's name up until the editor reports the change.
+    expect(openProject).toHaveBeenCalledWith('dialog-only');
+    expect(result.current.pendingProject).toBeUndefined();
+    expect(result.current.displayedProject).toEqual(OLD_PROJECT);
   });
 
   it('falls back to the current project when the editor never reports the selection', () => {
@@ -172,7 +188,7 @@ describe('usePendingProject', () => {
       const { result } = renderPendingProject(OLD_PROJECT);
 
       act(() => {
-        result.current.beginOpenProject(ghost);
+        result.current.beginOpenProject(ghost.id, ghost);
       });
       expect(result.current.displayedProject?.id).toBe('ghost');
 
@@ -203,7 +219,7 @@ describe('usePendingProject', () => {
       const { result, rerender } = renderPendingProject(OLD_PROJECT);
 
       act(() => {
-        result.current.beginOpenProject(otherWindowProject);
+        result.current.beginOpenProject(otherWindowProject.id, otherWindowProject);
       });
 
       // This window's editor never changes, so re-rendering with the same current project is what
@@ -232,13 +248,13 @@ describe('usePendingProject', () => {
       const { result } = renderPendingProject(OLD_PROJECT);
 
       act(() => {
-        result.current.beginOpenProject(NEW_PROJECT);
+        result.current.beginOpenProject(NEW_PROJECT.id, NEW_PROJECT);
       });
       act(() => {
         vi.advanceTimersByTime(PENDING_PROJECT_TIMEOUT_MS - 1);
       });
       act(() => {
-        result.current.beginOpenProject(later);
+        result.current.beginOpenProject(later.id, later);
       });
       // Past the first pick's deadline, nowhere near the second's.
       act(() => {
@@ -260,7 +276,7 @@ describe('usePendingProject', () => {
     displayedIds.length = 0;
 
     act(() => {
-      result.current.beginOpenProject({
+      result.current.beginOpenProject('open', {
         id: 'open',
         shortName: 'OP',
         fullName: 'Open Project',
@@ -281,12 +297,12 @@ describe('usePendingProject', () => {
     const { result } = renderPendingProject(OLD_PROJECT);
 
     act(() => {
-      result.current.beginOpenProject(NEW_PROJECT);
+      result.current.beginOpenProject(NEW_PROJECT.id, NEW_PROJECT);
     });
     expect(result.current.displayedProject?.id).toBe('new');
 
     act(() => {
-      result.current.beginOpenProject(OLD_PROJECT);
+      result.current.beginOpenProject(OLD_PROJECT.id, OLD_PROJECT);
     });
 
     expect(result.current.pendingProject).toBeUndefined();
@@ -299,7 +315,7 @@ describe('usePendingProject', () => {
       const { result, unmount } = renderPendingProject(OLD_PROJECT);
 
       act(() => {
-        result.current.beginOpenProject(NEW_PROJECT);
+        result.current.beginOpenProject(NEW_PROJECT.id, NEW_PROJECT);
       });
       const armedTimerCount = vi.getTimerCount();
 

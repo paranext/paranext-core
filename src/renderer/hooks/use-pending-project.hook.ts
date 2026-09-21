@@ -26,8 +26,15 @@ export type PendingProjectState = {
    * there is nothing to bridge.
    */
   pendingProject: ProjectItem | undefined;
-  /** Opens a project and starts naming it immediately, ahead of the editor reporting it. */
-  beginOpenProject: (item: ProjectItem) => void;
+  /**
+   * Opens a project, and — when `item` carries the display fields to do it with — starts naming it
+   * immediately, ahead of the editor reporting it.
+   *
+   * Omit `item` when the project's name is not known. Nothing is bridged in that case, so the
+   * surface keeps naming whatever is currently open until the editor reports the new project; that
+   * degrades more gracefully than bridging with a fabricated name.
+   */
+  beginOpenProject: (projectId: string, item?: ProjectItem) => void;
 };
 
 /**
@@ -65,15 +72,15 @@ export function usePendingProject(
   // The one entry point every selection path takes, so the trigger names the picked project the
   // moment it is picked whether it came from the popover or from the dialog.
   const beginOpenProject = useCallback(
-    (item: ProjectItem) => {
+    (projectId: string, item?: ProjectItem) => {
       // Already the current project: there is nothing to bridge. Arming anyway would swap the
       // trigger onto this item's spelling of an id the editor already reports, and leave a timer
-      // to unwind.
+      // to unwind. An unnamed pick is likewise nothing to bridge — there is no name to show.
       const isAlreadyCurrent =
-        !!currentProject && normalizeProjectId(currentProject.id) === normalizeProjectId(item.id);
+        !!currentProject && normalizeProjectId(currentProject.id) === normalizeProjectId(projectId);
       attemptRef.current += 1;
       const attempt = attemptRef.current;
-      if (!isAlreadyCurrent) {
+      if (item && !isAlreadyCurrent) {
         armedAgainstIdRef.current = currentProject
           ? normalizeProjectId(currentProject.id)
           : undefined;
@@ -84,12 +91,13 @@ export function usePendingProject(
           setPendingProject(undefined);
         }, PENDING_PROJECT_TIMEOUT_MS);
       } else {
-        // Picking the open project is also the user correcting the trigger: an earlier pick whose
-        // editor never reported here would otherwise keep its name up until the bound expired.
+        // Re-picking the open project is also the user correcting the trigger, and an unnamed pick
+        // has nothing to put there: either way an earlier pick whose editor never reported here
+        // would otherwise keep its name up until the bound expired.
         setPendingProject(undefined);
       }
-      openProject(item.id).catch((e: unknown) => {
-        logger.warn(`Could not open project ${item.id}: ${getErrorMessage(e)}`);
+      openProject(projectId).catch((e: unknown) => {
+        logger.warn(`Could not open project ${projectId}: ${getErrorMessage(e)}`);
         // Latest-wins, keyed on the attempt rather than the project: a slow failure for an earlier
         // pick must not clear a newer one, even when both name the same project.
         if (attempt === attemptRef.current) setPendingProject(undefined);

@@ -154,17 +154,29 @@ type PickerStringKey = keyof typeof PICKER_STRING_FALLBACKS;
 
 /** Resolves every picker string, substituting English for any key the service has not answered. */
 function resolvePickerStrings(localizedStrings: LanguageStrings): Record<PickerStringKey, string> {
-  const keys = Object.keys(PICKER_STRING_FALLBACKS);
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const resolved = {} as Record<PickerStringKey, string>;
-  keys.forEach((key) => {
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const pickerKey = key as PickerStringKey;
-    const value = localizedStrings[pickerKey];
-    resolved[pickerKey] =
-      value && !isLocalizeKey(value) ? value : PICKER_STRING_FALLBACKS[pickerKey];
-  });
-  return resolved;
+  const resolve = (key: PickerStringKey) => {
+    const value = localizedStrings[key];
+    return value && !isLocalizeKey(value) ? value : PICKER_STRING_FALLBACKS[key];
+  };
+  // Written out key by key rather than looped: `Object.keys` widens to `string[]`, so a loop needs
+  // a type assertion to get back to `PickerStringKey`. Listing them keeps the compiler checking
+  // that every key of `PICKER_STRING_FALLBACKS` is resolved and none is invented.
+  return {
+    '%projectPicker_no_results%': resolve('%projectPicker_no_results%'),
+    '%projectPicker_readOnly_label%': resolve('%projectPicker_readOnly_label%'),
+    '%projectPicker_search_placeholder%': resolve('%projectPicker_search_placeholder%'),
+    '%projectPicker_section_projects_localOnly%': resolve(
+      '%projectPicker_section_projects_localOnly%',
+    ),
+    '%projectPicker_section_recent%': resolve('%projectPicker_section_recent%'),
+    '%projectPicker_toolbar_more_projects%': resolve('%projectPicker_toolbar_more_projects%'),
+    '%projectPicker_toolbar_no_projects%': resolve('%projectPicker_toolbar_no_projects%'),
+    '%projectPicker_toolbar_select_project%': resolve('%projectPicker_toolbar_select_project%'),
+    '%projectPicker_toolbar_trigger_label%': resolve('%projectPicker_toolbar_trigger_label%'),
+    '%projectPicker_toolbar_trigger_label_error%': resolve(
+      '%projectPicker_toolbar_trigger_label_error%',
+    ),
+  };
 }
 
 /**
@@ -288,8 +300,11 @@ function ToolbarProjectSelector({
     [projects],
   );
 
-  // Memoized because `ProjectSelector` re-partitions the whole list whenever this array's identity
-  // changes — an inline literal would re-partition on every search keystroke.
+  // Memoized because `ProjectSelector` re-partitions and re-sorts the whole list whenever this
+  // array's identity changes, and this component re-renders on every verse move. (Typing in the
+  // selector's search box re-partitions regardless — the query is the component's own state and
+  // the sections derive from the filtered rows — so this is about the renders that are NOT the
+  // user interacting with the list.)
   //
   // One entry, which locks the selector into this grouping and drops the group-by funnel button:
   // the toolbar offers no other way to order this list.
@@ -426,6 +441,12 @@ function ToolbarProjectSelector({
     [strings, onShowMoreProjects],
   );
 
+  // Memoized for the same reason `availableGroupings` is: `ProjectSelector` memoizes its rows on
+  // `props.selection`, and that memo cascades into the filtered rows and the partitioned sections.
+  // A fresh object literal each render re-partitions and re-sorts the whole list on every verse
+  // move, with the popover closed.
+  const selection = useMemo(() => ({ projectId: displayedProject?.id }), [displayedProject?.id]);
+
   const handleChangeSelection = useCallback(
     ({ projectId }: { projectId: string }) => {
       if (projectId) onSelectProject(projectId);
@@ -440,7 +461,7 @@ function ToolbarProjectSelector({
       // Empty on purpose: `openTabs` drives the scroll-group chips and the "Opened tabs" section,
       // and Simple mode exposes neither.
       openTabs={EMPTY_OPEN_TABS}
-      selection={{ projectId: displayedProject?.id }}
+      selection={selection}
       onChangeSelection={handleChangeSelection}
       availableGroupings={availableGroupings}
       renderProjectIndicator={renderProjectIndicator}
@@ -623,11 +644,14 @@ export function PlatformBibleToolbar() {
       const item = pickerProjects.find(
         (project) => normalizeProjectId(project.id) === normalizeProjectId(projectId),
       );
-      // A project reachable only through the dialog has no list row to take display fields from,
-      // so its id stands in for them until the editor reports the project itself.
+      // A project reachable only through the dialog has no list row to take display fields from.
+      // Open it unnamed rather than standing its raw id in for them: an id in the titlebar (and in
+      // the trigger's accessible name) for as long as the bound lasts reads as a bug, and a
+      // fabricated item carries no `isEditable`, so the row would also lose its read-only mark.
+      // Unnamed, the trigger simply keeps naming what is open until the editor reports the change.
       // TODO(PT-4552): Carry the chosen project's name in the dialog response. PT-4552 adds
       // server-reachable projects, which make this the common case rather than the exception.
-      beginOpenProject(item ?? { id: projectId, shortName: projectId, fullName: projectId });
+      beginOpenProject(projectId, item);
     },
     [pickerProjects, beginOpenProject],
   );

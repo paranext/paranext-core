@@ -62,7 +62,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [
-    { book: 1, chapter: 1, verse: 1 },
+    // `SerializedVerseRef`: a book ID string plus `chapterNum`/`verseNum`. The same mock in
+    // `platform-bible-toolbar.integration.test.tsx` has to agree with this one.
+    { book: 'GEN', chapterNum: 1, verseNum: 1 },
     vi.fn(),
     0,
     vi.fn(),
@@ -1531,11 +1533,11 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
 
     const { footerAction, isDisabled, isLoading } = requireCapturedProjectSelectorProps();
     expect(footerAction).toBeDefined();
-    // An empty list must not disable the trigger — the picker this replaced tied `disabled` to the
-    // list being non-empty, which took the escape hatch away exactly when it was the only way out.
-    // `ProjectSelector` disables on `isDisabled || isLoading`, so both levers are checked: asserting
-    // `isDisabled` alone would pass against a prop the toolbar never passes. That the rendered
-    // trigger really is enabled here is asserted in the integration test.
+    // An empty list must not disable the trigger: "More projects…" is the only way out of one, so
+    // disabling here would take the escape hatch away exactly when it is the only thing left.
+    // `ProjectSelector` disables on `isDisabled || isLoading`, so both levers are checked —
+    // asserting `isDisabled` alone would pass against a prop the toolbar never passes. That the
+    // rendered trigger really is enabled is asserted in the integration test.
     expect(isDisabled ?? false).toBe(false);
     expect(isLoading).toBe(false);
   });
@@ -1685,7 +1687,7 @@ describe('PlatformBibleToolbar — pending project display', () => {
     });
   }
 
-  it('names a pending project chosen from the dialog, without adding a row for it', async () => {
+  it('opens a dialog-only project without naming it, and without adding a row for it', async () => {
     await renderSimpleToolbarWith({ allProjects: [] });
 
     const { footerAction } = requireCapturedProjectSelectorProps();
@@ -1693,16 +1695,21 @@ describe('PlatformBibleToolbar — pending project display', () => {
       footerAction?.onSelect();
     });
     // The dialog is the slower of the two paths, and it can return a project the short list never
-    // contained.
+    // contained — so there are no display fields to name it with.
     resolveProjectPickerDialogWith('far');
 
     const props = requireCapturedProjectSelectorProps();
-    expect(getSelection(props)?.projectId).toBe('far');
-    // Named by the trigger's own fallback, so no phantom row is injected into the visible list.
+    // No phantom row is injected into the visible list, and nothing is marked as selected — a
+    // selection naming a project with no row would leave the list with no visible check.
     expect(props.projects.some((project) => project.id === 'far')).toBe(false);
+    expect(getSelection(props)?.projectId).toBeUndefined();
+    // And the trigger does not fall back to the raw id. Standing `far (far)` in for a name would
+    // sit in the titlebar and in the trigger's accessible name for the whole pending bound, and
+    // reads as a bug rather than as a project. The placeholder is the graceful degradation here;
+    // the editor supplies the real name when it reports the project.
     const trigger = screen.getByTestId('project-picker-value');
-    expect(trigger).toHaveTextContent('far');
-    expect(trigger).not.toHaveTextContent('Test no projects');
+    expect(trigger).not.toHaveTextContent('far');
+    expect(trigger).toHaveTextContent('Test no projects');
   });
 
   it('names the newly picked project instead of a stale error for the project that failed to resolve', async () => {

@@ -4031,6 +4031,15 @@ step, no automation. Just a record.
   added without adding a prop — and it should carry the API-surface TSDoc and localized-key
   conventions the stable barrel expects, rather than bundling them into a capability change.
 
+  Two known sharp edges are deliberately being carried on `experimental` rather than fixed at the
+  point they were found, on the strength of that freedom, and should be settled before promotion:
+  `ariaLabel` REPLACES the trigger's visible label in the accessible-name computation (so every
+  consumer passing a control-only name, as its TSDoc instructs, hides the selected project from
+  screen readers — the titlebar composes the whole name at its own call site instead); and
+  read-only is consumer-derived through `renderProjectIndicator`, which leaves the row tooltip
+  unable to explain the padlock to sighted pointer users. Both are written up in
+  `PT-4549-followup-projectselector-accessible-name.md`.
+
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
 - **Date:** 2026-08-25
