@@ -60,6 +60,7 @@ import {
   createCommentThreads,
   openCommentListPanel,
 } from '../../fixtures/comment-test-helpers';
+import { openScriptureEditor } from '../../fixtures/simple-mode-columns.page';
 
 const SETTINGS_TIMEOUT_MS = 60_000;
 /**
@@ -130,40 +131,6 @@ async function waitForSimpleLayout(mainPage: Page): Promise<string> {
  */
 function commentsFrameLocator(mainPage: Page, commentListPanelId: string) {
   return mainPage.frameLocator(`iframe[data-web-view-id="${commentListPanelId}"]`);
-}
-
-/**
- * Calls `openScriptureEditor` via PAPI to open the main (editable) project, retrying up to
- * `maxRetries` times if the dock throws "Replacing tab failed". That error is a known transient
- * race condition: `openOrUpdateRelatedPanels` can trigger a dock rebuild that briefly removes the
- * editor slot from the layout, causing the subsequent replace to fail. A short delay and retry
- * reliably succeeds once the dock settles.
- */
-async function openScriptureEditor(
-  projectId: string,
-  port: number,
-  timeout: number,
-  maxRetries = 2,
-): Promise<void> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0)
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 2_000);
-      });
-    try {
-      await sendPapiRequestOnce(
-        'command:platformScriptureEditor.openScriptureEditor',
-        [projectId],
-        port,
-        timeout,
-      );
-      return;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (attempt >= maxRetries || !msg.includes('Replacing tab failed')) throw e;
-      // Otherwise fall through to the next loop iteration to retry after a short delay
-    }
-  }
 }
 
 // Own this spec's Electron app so it is not inherited from another spec that has already replaced
@@ -438,7 +405,10 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // Open Project A and wait for the dock rebuilds triggered by openOrUpdateRelatedPanels to
     // settle. The overlay intercepts pointer events while it is visible; clickCommentsTab fails
     // if called while a rebuild is in progress.
-    await openScriptureEditor(projectA.projectId, DEFAULT_WEBSOCKET_PORT, OPEN_EDITOR_TIMEOUT_MS);
+    await openScriptureEditor(projectA.projectId, {
+      port: DEFAULT_WEBSOCKET_PORT,
+      timeoutMs: OPEN_EDITOR_TIMEOUT_MS,
+    });
     await waitForOverlayGone(mainPage, 90_000);
 
     await clickCommentsTab(mainPage, commentListPanelId);
@@ -451,7 +421,10 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     });
 
     // Switch to Project B and wait for dock rebuilds to settle before asserting.
-    await openScriptureEditor(projectB.projectId, DEFAULT_WEBSOCKET_PORT, OPEN_EDITOR_TIMEOUT_MS);
+    await openScriptureEditor(projectB.projectId, {
+      port: DEFAULT_WEBSOCKET_PORT,
+      timeoutMs: OPEN_EDITOR_TIMEOUT_MS,
+    });
     await waitForOverlayGone(mainPage, 90_000);
 
     await expect(commentsFrame.locator('body')).toContainText('Project B unique comment text', {
