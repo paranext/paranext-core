@@ -1529,6 +1529,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
     }
 
+    // Try to find the selected text element to anchor the popover to. No rendered editor content
+    // means there is nothing to anchor to — bail out before recording the pending range or setting
+    // the highlight annotation below, not just before opening the popover: either one left behind
+    // with no popover open to clear it would strand a highlight in the text with no way to remove
+    // it, and would misdirect the next comment actually saved to this stale range.
+    const editorContainer = document.querySelector<HTMLElement>('.usfm');
+    if (!editorContainer) return;
+
     pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
 
     // Create a temporary annotation to highlight the selected text
@@ -1538,14 +1546,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       PENDING_COMMENT_ANNOTATION_ID,
     );
 
-    // Position the popover near the annotation
-    // Try to find the selected text element for positioning
-    const editorContainer = document.querySelector<HTMLElement>('.usfm');
-    // No rendered editor content to anchor the popover to; opening it anyway would pin it at the
-    // pane's origin or a stale previous anchor.
-    if (!editorContainer) return;
-
-    // Use the browser's selection to get the bounding rect of the selected text
+    // Position the popover near the annotation. Use the browser's selection to get the bounding
+    // rect of the selected text
     const domSelection = window.getSelection();
     if (domSelection && domSelection.rangeCount > 0) {
       const range = domSelection.getRangeAt(0).cloneRange();
