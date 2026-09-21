@@ -770,8 +770,11 @@ export type ContentZoomAreaProviderProps = {
  * for a pop-up that belongs to an area but is rendered outside that area's element — for example a
  * popover the view renders beside its content and anchors to a position in the text.
  *
- * Popovers, dropdown menus and tooltips from this library that open inside an area are scaled with
- * that area's zoom, and their size is capped so they stay inside the pane.
+ * Popovers and dropdown menus from this library that open inside an area are scaled with that
+ * area's zoom and cap their own width and height to the pane, scrolling their content if it doesn't
+ * fit; tooltips are scaled with the area's zoom too but cap only their width, so a tooltip taller
+ * than the available space is clipped at the pane's edge. Dropdown sub-menu content does not follow
+ * an area yet.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -813,10 +816,12 @@ export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLDivElement> & {
  * found inside another marked element is ignored. Keep toolbars, dividers and headers outside the
  * marked element so they are not scaled along with the content.
  *
- * Popovers, dropdown menus and tooltips from this library that open from inside the element follow
- * its zoom and stay inside the pane. A pop-up rendered outside the element (beside the content,
- * anchored to a position in it) belongs to the area only when wrapped in
- * {@link ContentZoomAreaProvider}.
+ * Popovers and dropdown menus from this library that open from inside the element follow its zoom
+ * and cap their own width and height to the pane, scrolling their content if it doesn't fit;
+ * tooltips follow the zoom too but cap only their width, so a tooltip taller than the available
+ * space is clipped at the pane's edge. Dropdown sub-menu content does not follow an area yet. A
+ * pop-up rendered outside the element (beside the content, anchored to a position in it) belongs to
+ * the area only when wrapped in {@link ContentZoomAreaProvider}.
  *
  * This component renders a plain `div` in normal flow and applies no classes of its own — the
  * caller supplies whatever layout classes its parent expects.
@@ -4166,6 +4171,50 @@ export declare const useViewVisibility: () => boolean;
  *   effect re-firing on every visibility flip.
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
+/** What a popover is placed against, re-measured every time the popover is positioned. */
+export type LivePopoverAnchorSource = {
+	/**
+	 * Reads the anchor's current viewport rect. Returns `undefined` when the source can no longer be
+	 * measured; the anchor then keeps its last rect.
+	 */
+	measure: () => DOMRect | undefined;
+	/**
+	 * An element of the content the anchor belongs to that stays in the document while the popover is
+	 * open (the editor's root, not a text span the editor may re-render). The popover's positioning
+	 * watches this element's scroll ancestors, its size and its movement while the popover is open.
+	 */
+	contextElement: Element;
+};
+type VirtualAnchorElement = {
+	getBoundingClientRect: () => DOMRect;
+	readonly contextElement: Element | undefined;
+};
+export type LivePopoverAnchor = {
+	/** Pass as `PopoverAnchor`'s `virtualRef`. */
+	virtualRef: React$1.RefObject<VirtualAnchorElement>;
+	/** Points the anchor at a new source. Call it before opening the popover. */
+	setSource: (source: LivePopoverAnchorSource) => void;
+};
+/**
+ * A popover anchor that follows its text instead of keeping the rect it had when the popover
+ * opened. The popover's own positioning (floating-ui's auto-update, run by Radix while the popover
+ * is open) re-reads the rect on scroll of the text's scroll container, on resize, and when the text
+ * reflows under a zoom change, so the popover stays beside its caller or selection.
+ *
+ * Hidden-tab case: needs no catch-up. A popover is only open while its pane is visible, and every
+ * listener belongs to the open popover.
+ */
+export declare function useLivePopoverAnchor(): LivePopoverAnchor;
+/**
+ * The current viewport rect of a text range, or `undefined` when the range no longer lies in
+ * rendered text (its nodes were replaced, so it collapsed to an element boundary that has no box).
+ */
+export declare function measureRange(range: Range): DOMRect | undefined;
+/**
+ * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
+ * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
+ */
+export declare function leftEdgeRect(rect: DOMRect): DOMRect;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */
