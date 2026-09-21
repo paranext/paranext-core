@@ -2366,7 +2366,10 @@ export const ESCAPE_HATCH_NAME_PATTERN =
 async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<FirstRunGateOutcome> {
   const start = Date.now();
   const firstRunDialog = page.getByTestId('first-run-dialog');
-  const escapeHatch = page.getByRole('button', {
+  // Scoped to the dialog, not the whole page: isVisible()/click() both hardcode Playwright's strict
+  // mode, so a second matching button anywhere else on the page would throw a strict-mode violation
+  // out of the sampler's concurrent read instead of resolving to the gate's own escape hatch.
+  const escapeHatch = firstRunDialog.getByRole('button', {
     name: ESCAPE_HATCH_NAME_PATTERN,
   });
   // The wizard branch renders the setup shell and NO escape hatch, so it is the one stuck state
