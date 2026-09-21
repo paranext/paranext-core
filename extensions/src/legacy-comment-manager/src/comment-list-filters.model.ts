@@ -1,41 +1,121 @@
+import { logger } from '@papi/frontend';
 import type {
   LegacyCommentThreadSelector,
-  ResolvedFilter,
-  ReadFilter,
-  TypeFilter,
-  AssignmentFilter,
+  CommentPreset,
   CommentFilters,
   ScopeFilter,
+  LegacyCommentFilters,
+  LegacyScopeFilter,
 } from 'legacy-comment-manager';
-import { deepEqual } from 'platform-bible-utils';
 import type { LocalizeKey } from 'platform-bible-utils';
 
-export type {
-  ResolvedFilter,
-  ReadFilter,
-  TypeFilter,
-  AssignmentFilter,
-  CommentFilters,
-  ScopeFilter,
-};
+export type { CommentPreset, CommentFilters, ScopeFilter, LegacyCommentFilters, LegacyScopeFilter };
 
 // Filter constants, types, and the selector mapping — shared between the presentational panel (which
 // renders the filter toolbar) and the web view (which uses the values to build its comment-thread
 // query). Kept free of React/DOM dependencies so the mapping is unit-testable.
 //
-// The comment filters are orthogonal axes (resolved status, read status, note type, assignment) that
-// AND together, plus a separate scope axis. Each axis defaults to 'all' (no filtering), so the
-// out-of-the-box view is every thread. This mirrors the axes of Paratext 9's "Define Filter" dialog;
-// PT9's own presets are reachable by combining axes (see buildCommentThreadSelector).
+// The comment filters are ONE closed set of named presets rather than orthogonal axes: each preset
+// is a combination users actually work in, offered directly instead of composed from separate
+// resolved/read/type/assignment/date/author axes. A separate scope axis narrows the Scripture range
+// independently of the preset. Both default to values that contribute nothing to the query, so the
+// out-of-the-box view is every thread.
 
-// --- Scope axis (current chapter vs all books) ---
+// --- Preset axis (the named filter combinations the toolbar offers) ---
 
-export const UNFILTERED = 'unfiltered';
-export const SCOPE_FILTER_CURRENT_CHAPTER = 'current-chapter';
+export const presetToLabelKey = {
+  all: '%comment_filter_preset_all%',
+  'unresolved-assigned-to-me': '%comment_filter_preset_unresolved_assigned_to_me%',
+  unresolved: '%comment_filter_preset_unresolved%',
+  'unread-assigned-to-me': '%comment_filter_preset_unread_assigned_to_me%',
+  unread: '%comment_filter_preset_unread%',
+  'unread-and-unresolved': '%comment_filter_preset_unread_and_unresolved%',
+  resolved: '%comment_filter_preset_resolved%',
+  unsaved: '%comment_filter_preset_unsaved%',
+  conflict: '%comment_filter_preset_conflict%',
+} as const satisfies Record<CommentPreset, LocalizeKey>;
+
+export function isCommentPreset(value: string): value is CommentPreset {
+  return Object.hasOwn(presetToLabelKey, value);
+}
+
+/**
+ * English fallback text for each preset, shown via `localizeOrFallback` in place of a
+ * `presetToLabelKey` lookup that has not resolved to translated text yet (either still loading, or
+ * permanently on a `PlatformError`). `satisfies Record<CommentPreset, string>` keeps this in
+ * lockstep with `presetToLabelKey` — a preset added to the union without a row here is a compile
+ * error.
+ */
+export const presetToFallbackLabel = {
+  all: 'All comments',
+  'unresolved-assigned-to-me': 'Unresolved comments assigned to me',
+  unresolved: 'Unresolved comments',
+  'unread-assigned-to-me': 'Unread comments assigned to me',
+  unread: 'Unread comments',
+  'unread-and-unresolved': 'Unread and unresolved comments',
+  resolved: 'Resolved comments',
+  unsaved: 'Unsaved comments',
+  conflict: 'Conflicts',
+} as const satisfies Record<CommentPreset, string>;
+
+export const DEFAULT_COMMENT_FILTERS: CommentFilters = { preset: 'all' };
+
+/**
+ * Whether a preset's query needs the current user's name before it can run (see
+ * `buildCommentThreadSelector`'s `currentUserName` branches, which only add `assignedTo` once the
+ * name has loaded — an empty `assignedTo` means "unassigned" to the provider, not "not yet known").
+ * Carried on the preset itself, keyed alongside every other preset via `satisfies
+ * Record<CommentPreset, boolean>`, rather than left as a hardcoded name check off in the web view:
+ * that hardcoding is exactly what let a future "assigned to me"-shaped preset compile cleanly and
+ * ship with a blank `assignedTo` live, caught by neither `buildCommentThreadSelector`'s
+ * exhaustiveness guard (which only checks that every preset has SOME case, not that a
+ * current-user-dependent one flags itself here) nor any test. Adding a preset without a row here is
+ * now a compile error instead.
+ */
+export const presetRequiresCurrentUser = {
+  all: false,
+  'unresolved-assigned-to-me': true,
+  unresolved: false,
+  'unread-assigned-to-me': true,
+  unread: false,
+  'unread-and-unresolved': false,
+  resolved: false,
+  unsaved: false,
+  conflict: false,
+} as const satisfies Record<CommentPreset, boolean>;
+
+/**
+ * Whether a preset's membership must be frozen at entry and only ever grown while it stays active,
+ * the same treatment `'unsaved'` already gets (see `useFrozenPresetThreadIds`'s doc). True for
+ * every preset whose displayed set depends on live read state: `buildCommentThreadSelector`
+ * deliberately does not send `isRead` to the provider for these, because a thread marked read (the
+ * auto-read timer fires ~5 seconds after selection) would otherwise leave the query result and
+ * unmount its card mid-visit. Carried alongside every other preset via `satisfies
+ * Record<CommentPreset, boolean>` so a future preset that also narrows by `isRead` can't be added
+ * without deciding this, the same way `presetRequiresCurrentUser` above guards against a silent
+ * `assignedTo` gap.
+ */
+export const presetNeedsFrozenReadMembership = {
+  all: false,
+  'unresolved-assigned-to-me': false,
+  unresolved: false,
+  'unread-assigned-to-me': true,
+  unread: true,
+  'unread-and-unresolved': true,
+  resolved: false,
+  unsaved: false,
+  conflict: false,
+} as const satisfies Record<CommentPreset, boolean>;
+
+// --- Scope axis (how much Scripture the list covers) ---
+
+export const DEFAULT_SCOPE_FILTER: ScopeFilter = 'all-books';
 
 export const scopeFilterToLabelKey = {
-  [SCOPE_FILTER_CURRENT_CHAPTER]: '%comment_filter_scope_current_chapter%',
-  [UNFILTERED]: '%comment_filter_scope_all_books%',
+  'all-books': '%comment_filter_scope_all_books%',
+  'current-book': '%comment_filter_scope_current_book%',
+  'current-chapter': '%comment_filter_scope_current_chapter%',
+  'current-verse': '%comment_filter_scope_current_verse%',
 } as const satisfies Record<ScopeFilter, LocalizeKey>;
 
 export function isScopeFilter(value: string): value is ScopeFilter {
@@ -43,128 +123,203 @@ export function isScopeFilter(value: string): value is ScopeFilter {
 }
 
 /**
- * Resolves the scope value that should actually drive both the query and the toolbar display.
- *
- * "Current chapter" only makes sense when the list has a live Scripture reference to follow. When
- * it doesn't (`canScopeToCurrentChapter` is false — e.g. a cross-project list with no wired
- * editor), a `current-chapter` value — whether persisted from a prior context or set via the public
- * `setFilters` controller — is coerced back to {@link UNFILTERED}. This keeps the displayed value,
- * the offered options, and the query in agreement instead of scoping to a reference that isn't
- * there.
- *
- * Co-located with the scope-axis definitions so the single rule is testable and every caller stays
- * consistent, rather than re-deriving the coercion at each use site.
+ * English fallback text for each scope, shown via `localizeOrFallback` in place of a
+ * `scopeFilterToLabelKey` lookup that has not resolved to translated text yet. `satisfies
+ * Record<ScopeFilter, string>` keeps this in lockstep with `scopeFilterToLabelKey` — a scope added
+ * to the union without a row here is a compile error.
  */
-export function resolveEffectiveScopeFilter(
-  scopeFilter: ScopeFilter,
-  canScopeToCurrentChapter: boolean,
-): ScopeFilter {
-  return !canScopeToCurrentChapter && scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER
-    ? UNFILTERED
-    : scopeFilter;
+export const scopeFilterToFallbackLabel = {
+  'all-books': 'All books',
+  'current-book': 'Current book',
+  'current-chapter': 'Current chapter',
+  'current-verse': 'Current verse',
+} as const satisfies Record<ScopeFilter, string>;
+
+/**
+ * Resolves a scope value arriving at any filter boundary (the `openCommentList` command's
+ * `scopeFilterToSet`, the web view's `initialScopeFilter` seed, or a `setFilters` message) onto a
+ * valid {@link ScopeFilter}. This is the one place all three boundaries route through, so the
+ * mapping/validation lives here rather than being repeated at each call site.
+ *
+ * Maps the deprecated {@link LegacyScopeFilter} `'unfiltered'` onto its exact replacement,
+ * `'all-books'` — both mean "no Scripture-range restriction". Anything else this build doesn't
+ * recognize — a scope from a newer build, or a malformed value crossing the command/message bus —
+ * resolves to the default rather than reaching `scopeFieldsUsed`, which throws on an unrecognized
+ * key.
+ */
+export function resolveScopeFilter(candidate?: ScopeFilter | LegacyScopeFilter): ScopeFilter {
+  if (candidate === 'unfiltered') return DEFAULT_SCOPE_FILTER;
+  return typeof candidate === 'string' && isScopeFilter(candidate)
+    ? candidate
+    : DEFAULT_SCOPE_FILTER;
 }
 
-// --- Resolved-status axis (the thread's note-lifecycle Resolved state) ---
+/** The Scripture-range granularity each scope queries at; `all-books` queries no range at all. */
+const scopeToGranularity = {
+  'current-book': 'book',
+  'current-chapter': 'chapter',
+  'current-verse': 'verse',
+} as const satisfies Record<Exclude<ScopeFilter, 'all-books'>, 'book' | 'chapter' | 'verse'>;
 
-export const resolvedFilterToLabelKey = {
-  all: '%comment_filter_resolved_all%',
-  unresolved: '%comment_filter_resolved_unresolved%',
-  resolved: '%comment_filter_resolved_resolved%',
-} as const satisfies Record<ResolvedFilter, LocalizeKey>;
+/**
+ * Which scrRef fields each scope's query granularity actually reads: `book` granularity ignores
+ * chapter/verse, `chapter` granularity ignores verse, and `all-books` reads nothing (it sends no
+ * scriptureRanges at all). A caller driving a live reference (e.g. the web view following the
+ * window's scroll group) uses this to freeze the fields a scope doesn't need to constants, so a
+ * change to an unused field can't invalidate an identity-based memo of the query and force a
+ * needless PDP resubscribe. `satisfies Record<ScopeFilter, ...>` makes a scope added to the union
+ * without an entry here a compile error, rather than a silent fall-through that freezes every field
+ * for the new scope.
+ */
+export const scopeFieldsUsed = {
+  'all-books': { book: false, chapterNum: false, verseNum: false },
+  'current-book': { book: true, chapterNum: false, verseNum: false },
+  'current-chapter': { book: true, chapterNum: true, verseNum: false },
+  'current-verse': { book: true, chapterNum: true, verseNum: true },
+} as const satisfies Record<ScopeFilter, { book: boolean; chapterNum: boolean; verseNum: boolean }>;
 
-export function isResolvedFilter(value: string): value is ResolvedFilter {
-  return Object.hasOwn(resolvedFilterToLabelKey, value);
+/** True when the preset is at its default, i.e. no preset filtering is applied. */
+export function areCommentFiltersAtDefault(filters: CommentFilters): boolean {
+  return filters.preset === DEFAULT_COMMENT_FILTERS.preset;
 }
 
-// --- Read-status axis (the current user's per-thread read state) ---
-
-export const readFilterToLabelKey = {
-  all: '%comment_filter_read_all%',
-  unread: '%comment_filter_read_unread%',
-  read: '%comment_filter_read_read%',
-} as const satisfies Record<ReadFilter, LocalizeKey>;
-
-export function isReadFilter(value: string): value is ReadFilter {
-  return Object.hasOwn(readFilterToLabelKey, value);
+/**
+ * True when neither filter axis is narrowing the view: the preset is at its default AND the scope
+ * covers every book. Shared by two readers that must never disagree:
+ *
+ * - The web view uses it to decide which comment-thread drafts are safe to prune (see
+ *   `useCommentDrafts`'s `isShowingAllCommentThreads` parameter). Only the complete, unfiltered
+ *   thread list can be trusted for pruning -- a narrowed preset or scope would otherwise make every
+ *   thread it merely hides look deleted, permanently discarding that thread's draft.
+ * - The panel uses the identical fact to choose the empty-state copy (an empty project vs. a filter
+ *   that matched nothing).
+ *
+ * Two independently written copies of this expression could drift; keeping one definition here
+ * means a change to either axis is reflected at both call sites at once.
+ */
+export function isShowingAllThreads({
+  filters,
+  scopeFilter,
+}: {
+  filters: CommentFilters;
+  scopeFilter: ScopeFilter;
+}): boolean {
+  return areCommentFiltersAtDefault(filters) && scopeFilter === DEFAULT_SCOPE_FILTER;
 }
 
-// --- Note-type axis (conflict notes vs regular comments) ---
-
-export const typeFilterToLabelKey = {
-  all: '%comment_filter_type_all%',
-  conflicts: '%comment_filter_type_conflicts%',
-  comments: '%comment_filter_type_comments%',
-} as const satisfies Record<TypeFilter, LocalizeKey>;
-
-export function isTypeFilter(value: string): value is TypeFilter {
-  return Object.hasOwn(typeFilterToLabelKey, value);
-}
-
-// --- Assignment axis (who the thread is assigned to) ---
-
-export const assignmentFilterToLabelKey = {
-  all: '%comment_filter_assignment_all%',
-  'assigned-to-me': '%comment_filter_assignment_me%',
-  team: '%comment_filter_assignment_team%',
-  unassigned: '%comment_filter_assignment_unassigned%',
-} as const satisfies Record<AssignmentFilter, LocalizeKey>;
-
-export function isAssignmentFilter(value: string): value is AssignmentFilter {
-  return Object.hasOwn(assignmentFilterToLabelKey, value);
-}
-
-export const DEFAULT_COMMENT_FILTERS: CommentFilters = {
-  resolved: 'all',
-  read: 'all',
-  type: 'all',
-  assignment: 'all',
+/**
+ * Legacy four-axis combinations that have an exact counterpart among the current presets, keyed by
+ * `${resolved}|${read}|${type}|${assignment}` with each axis defaulted to `'all'` when absent from
+ * the input. A combination not listed here has no EXACT preset match; {@link presetFromLegacyAxes}
+ * narrows it as closely as it can rather than guessing which axis to drop to force an exact fit —
+ * see that function's doc for the `type: 'conflicts'` special case and the generic fallback. See
+ * {@link LegacyCommentFilters}'s TSDoc for the same table with the reasoning per row.
+ */
+const LEGACY_AXES_TO_PRESET: Partial<Record<string, CommentPreset>> = {
+  'all|all|all|all': 'all',
+  'all|all|conflicts|all': 'conflict',
+  'unresolved|all|all|all': 'unresolved',
+  'all|unread|all|all': 'unread',
+  'unresolved|unread|all|all': 'unread-and-unresolved',
+  'resolved|all|all|all': 'resolved',
+  'unresolved|all|all|assigned-to-me': 'unresolved-assigned-to-me',
+  'all|unread|all|assigned-to-me': 'unread-assigned-to-me',
 };
 
 /**
- * True when every comment-filter axis is at its `'all'` default — i.e. no axis is actively
- * filtering. Does not consider the separate scope axis. Co-locates the axis-default knowledge with
- * the axis definitions instead of duplicating the per-axis checks at call sites.
- */
-export function areCommentFiltersAtDefault(filters: CommentFilters): boolean {
-  return deepEqual(filters, DEFAULT_COMMENT_FILTERS);
-}
-
-/**
- * Applies partial filter overrides onto {@link DEFAULT_COMMENT_FILTERS}. Any axis not present in
- * `overrides` is reset to its `'all'` default — the overrides are NOT merged with the user's
- * current selection — so a programmatic open (e.g. the S/R conflict link) shows exactly the
- * requested view. Shared by the web view's initial state and its `setFilters` message handler so
- * both apply the same merge semantics.
- */
-export function applyFilterOverrides(overrides?: Partial<CommentFilters>): CommentFilters {
-  // Build from the known axes rather than spreading `overrides`, so a present-but-nullish axis
-  // (e.g. `{ type: null }` surviving the JSON bus) resets to its default instead of leaking a null
-  // that would blank the dropdown while the query still behaves as 'all'. A new axis on
-  // CommentFilters forces a compile error here, which is the intended safety net.
-  return {
-    resolved: overrides?.resolved ?? DEFAULT_COMMENT_FILTERS.resolved,
-    read: overrides?.read ?? DEFAULT_COMMENT_FILTERS.read,
-    type: overrides?.type ?? DEFAULT_COMMENT_FILTERS.type,
-    assignment: overrides?.assignment ?? DEFAULT_COMMENT_FILTERS.assignment,
-  };
-}
-
-// Paratext 9's literal "assigned to the whole team" token (UserFilter/CommentTags): threads assigned
-// to the team carry this exact `AssignedUser` value.
-export const TEAM_ASSIGNED_USER = 'Team';
-
-// Paratext 9's "unassigned" token (`CommentThread.unassignedUser`): threads with no assignee carry
-// this exact empty-string `AssignedUser` value. Distinct from omitting the assignment filter
-// entirely (an absent `assignedTo`), which the provider treats as "any assignee".
-export const UNASSIGNED_USER = '';
-
-/**
- * Builds the comment-thread query from the current filter selections. Each axis contributes at most
- * one selector clause; an axis left at `'all'` contributes nothing. All clauses AND together.
+ * Maps a legacy four-axis filter selection onto the {@link CommentPreset} with matching meaning.
  *
- * Paratext 9's notes-filter presets are reached by composition — e.g. "Unresolved conflicts" = `{
- * type: 'conflicts', resolved: 'unresolved' }`; "Unresolved assigned to me" = `{ resolved:
- * 'unresolved', assignment: 'assigned-to-me' }`.
+ * Tries an exact match against {@link LEGACY_AXES_TO_PRESET} first. Failing that, a combination
+ * naming `type: 'conflicts'` alongside another active axis — e.g. `resolved: 'unresolved'` + `type:
+ * 'conflicts'`, the Send/Receive "unresolved conflicts" view — narrows to `'conflict'` rather than
+ * the generic `'all'` fallback: `'conflict'` still honors the one constraint the current preset set
+ * CAN express (only conflict-type threads), dropping just the other axis, while `'all'` would drop
+ * the conflict constraint too and hand back the complete unfiltered list — the opposite of what a
+ * user clicking "merge conflicts occurred" asked for.
+ *
+ * Any other combination with no counterpart at all — e.g. `assignment: 'team'`/`'unassigned'`
+ * (dropped entirely by the new model), `type: 'comments'` (no preset excludes conflicts), or a mix
+ * of active axes the table doesn't recognize — widens to `'all'` rather than throw or guess which
+ * axis to drop. Either fallback logs, naming the combination: this is the direction nobody notices
+ * without one, since a silent widen just shows extra rows rather than failing loudly.
+ */
+function presetFromLegacyAxes(legacy: LegacyCommentFilters): CommentPreset {
+  const key = [
+    legacy.resolved ?? 'all',
+    legacy.read ?? 'all',
+    legacy.type ?? 'all',
+    legacy.assignment ?? 'all',
+  ].join('|');
+
+  const exactMatch = LEGACY_AXES_TO_PRESET[key];
+  if (exactMatch) return exactMatch;
+
+  if (legacy.type === 'conflicts') {
+    logger.warn(
+      `Legacy comment filter combination "${key}" has no exact preset match; narrowing to ` +
+        `'conflict' (dropping the other axis) rather than widening to 'all' (which would also ` +
+        `drop the conflict constraint).`,
+    );
+    return 'conflict';
+  }
+
+  logger.warn(
+    `Legacy comment filter combination "${key}" has no matching preset; widening to 'all'.`,
+  );
+  return DEFAULT_COMMENT_FILTERS.preset;
+}
+
+/**
+ * Distinguishes the two shapes {@link applyFilterOverrides} accepts. A plain `in` check on the union
+ * would leave `Partial<CommentFilters>` in both branches after narrowing — every field on both
+ * shapes is optional, so TS can't prove `{}` couldn't be either — so this is written as an explicit
+ * type predicate to force the negative branch to `LegacyCommentFilters`.
+ *
+ * Guards with `typeof overrides === 'object'` before the `in` check: `overrides` is typed as an
+ * object here, but malformed input crossing the command/message bus can be any truthy primitive (a
+ * string, a number), and `in` throws a `TypeError` on a non-object operand.
+ */
+function isNewCommentFiltersShape(
+  overrides: Partial<CommentFilters> | LegacyCommentFilters,
+): overrides is Partial<CommentFilters> {
+  return typeof overrides === 'object' && 'preset' in overrides;
+}
+
+/**
+ * Applies a partial filter override onto {@link DEFAULT_COMMENT_FILTERS}. An axis absent from
+ * `overrides` is reset to its default rather than merged with a prior selection, so a programmatic
+ * open shows exactly the requested view.
+ *
+ * This is the one place all three filter boundaries (the `openCommentList` command's
+ * `filtersToSet`, the web view's `initialFilters` seed, and a `setFilters` message) route through,
+ * so both kinds of untrusted input are handled here rather than repeated at each call site:
+ *
+ * - The deprecated {@link LegacyCommentFilters} four-axis shape (detected by the absence of a `preset`
+ *   key) is mapped onto its matching preset via {@link presetFromLegacyAxes}.
+ * - A `preset` this build doesn't recognize — from a newer build, or a malformed value crossing the
+ *   command/message bus — resolves to the default rather than reaching
+ *   {@link buildCommentThreadSelector}, whose exhaustiveness guard throws on an unhandled preset.
+ */
+export function applyFilterOverrides(
+  overrides?: Partial<CommentFilters> | LegacyCommentFilters,
+): CommentFilters {
+  if (!overrides) return { ...DEFAULT_COMMENT_FILTERS };
+
+  if (isNewCommentFiltersShape(overrides)) {
+    const { preset } = overrides;
+    const resolvedPreset =
+      typeof preset === 'string' && isCommentPreset(preset)
+        ? preset
+        : DEFAULT_COMMENT_FILTERS.preset;
+    return { preset: resolvedPreset };
+  }
+
+  return { preset: presetFromLegacyAxes(overrides) };
+}
+
+/**
+ * Builds the comment-thread query from the current selections. The preset and the scope contribute
+ * independently and AND together.
  */
 export function buildCommentThreadSelector({
   filters,
@@ -179,37 +334,54 @@ export function buildCommentThreadSelector({
 }): LegacyCommentThreadSelector {
   const selector: LegacyCommentThreadSelector = {};
 
-  // Scope (Scripture ranges)
-  if (scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER) {
+  // Scope
+  if (scopeFilter !== 'all-books') {
     selector.scriptureRanges = [
-      {
-        granularity: 'chapter' as const,
-        start: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
-        end: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
-      },
+      { granularity: scopeToGranularity[scopeFilter], start: scrRef, end: scrRef },
     ];
   }
 
-  // Resolved status (thread status is Resolved or not)
-  if (filters.resolved === 'unresolved') selector.isResolved = false;
-  else if (filters.resolved === 'resolved') selector.isResolved = true;
-
-  // Read status (current user's per-thread read state)
-  if (filters.read === 'unread') selector.isRead = false;
-  else if (filters.read === 'read') selector.isRead = true;
-
-  // Note type
-  if (filters.type === 'conflicts') selector.type = 'Conflict';
-  else if (filters.type === 'comments') selector.type = 'Normal';
-
-  // Assignment
-  if (filters.assignment === 'assigned-to-me') {
-    // Only filter once the current user's name has loaded. While it is still empty we must NOT fall
-    // through to an empty `assignedTo`, which now means "unassigned" (UNASSIGNED_USER) — the web
-    // view holds a loading state during this window (see comment-list.web-view.tsx).
-    if (currentUserName) selector.assignedTo = currentUserName;
-  } else if (filters.assignment === 'team') selector.assignedTo = TEAM_ASSIGNED_USER;
-  else if (filters.assignment === 'unassigned') selector.assignedTo = UNASSIGNED_USER;
+  // Preset
+  switch (filters.preset) {
+    case 'unresolved':
+      selector.isResolved = false;
+      break;
+    case 'resolved':
+      selector.isResolved = true;
+      break;
+    case 'unread':
+      // isRead is deliberately NOT sent to the provider -- see presetNeedsFrozenReadMembership's
+      // doc: an unread preset's membership is instead frozen and narrowed client-side, so a thread
+      // marked read while the user is looking at it doesn't leave the query result and unmount.
+      break;
+    case 'unread-and-unresolved':
+      selector.isResolved = false;
+      break;
+    case 'conflict':
+      selector.type = 'Conflict';
+      break;
+    case 'unresolved-assigned-to-me':
+      selector.isResolved = false;
+      // Only filter once the name has loaded: an empty assignedTo means "unassigned" to the
+      // provider, which would silently show the wrong threads rather than none.
+      if (currentUserName) selector.assignedTo = currentUserName;
+      break;
+    case 'unread-assigned-to-me':
+      // See the 'unread' case above: isRead is deliberately not sent.
+      if (currentUserName) selector.assignedTo = currentUserName;
+      break;
+    case 'all':
+    case 'unsaved':
+      // Neither narrows the query: `all` by definition, and `unsaved` because a draft is
+      // client-side state the provider has never heard of.
+      break;
+    default: {
+      // Exhaustiveness guard: a preset added to the union without a case here fails to compile,
+      // rather than silently producing an unnarrowed selector that reads as "show everything".
+      const unhandled: never = filters.preset;
+      throw new Error(`Unhandled comment preset: ${String(unhandled)}`);
+    }
+  }
 
   return selector;
 }
