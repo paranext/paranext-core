@@ -1,10 +1,41 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import * as React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
+import { ResourceCellView } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
+
+// jsdom doesn't ship a ResizeObserver (needed by the grip's Radix tooltip), or PointerCapture APIs.
+// Stubs are sufficient since these tests don't inspect layout behavior.
+class NoopResizeObserver implements ResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = NoopResizeObserver;
+  }
+  if (typeof Element.prototype.hasPointerCapture !== 'function') {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => {};
+  }
+});
 
 const mockResourceCell = vi.fn(
   ({
@@ -15,7 +46,12 @@ const mockResourceCell = vi.fn(
     viewMode,
     showDragHandle,
     reorderHandleLabel,
+    reorderHint,
     onReorderKeyDown,
+    onDisclosureActivate,
+    disclosureAccessibleName,
+    isDisclosureExpanded,
+    disclosureControlsId,
   }: {
     resourceRef: { label: string; projectId: string; resourceId: string };
     scrRef: { verseNum: number };
@@ -23,28 +59,59 @@ const mockResourceCell = vi.fn(
     viewMode?: string;
     showDragHandle?: boolean;
     reorderHandleLabel?: string;
+    reorderHint?: string;
     onReorderKeyDown?: (event: React.KeyboardEvent) => void;
+    onDisclosureActivate?: () => void;
+    disclosureAccessibleName?: string;
+    isDisclosureExpanded?: boolean;
+    disclosureControlsId?: string;
   }) => (
     <div data-testid={`cell-${resourceRef.projectId}`} data-view-mode={viewMode}>
-      {`${resourceRef.label}@${scrRef.verseNum}`}
-      {showDragHandle ? (
-        // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
-        <button
-          type="button"
-          data-reorder-handle-id={resourceRef.resourceId}
-          data-testid={`grip-${resourceRef.resourceId}`}
-          aria-label={reorderHandleLabel}
-          // Mirror the real grip: stop click bubbling so a reorder grip click never activates the
-          // enclosing verse listitem's chapter-context split.
-          onClick={(event: React.MouseEvent) => event.stopPropagation()}
-          onKeyDown={onReorderKeyDown}
-        >
-          grip
-        </button>
-      ) : undefined}
+      {/* Only the PAPI fetch/direction/availability wiring is stubbed; the presentation delegates to
+          the real ResourceCellView so the grip renders exactly where production renders it. A
+          hand-rolled grip here would keep passing for a view mode that ships without one. */}
+      <ResourceCellView
+        state="ready"
+        label={resourceRef.label}
+        textDirection="ltr"
+        localizedStrings={{}}
+        editor={`${resourceRef.label}@${scrRef.verseNum}`}
+        nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
+        showDragHandle={showDragHandle}
+        reorderHandleId={resourceRef.resourceId}
+        reorderHandleLabel={reorderHandleLabel}
+        reorderHint={reorderHint}
+        onReorderKeyDown={onReorderKeyDown}
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName={disclosureAccessibleName}
+        isDisclosureExpanded={isDisclosureExpanded}
+        disclosureControlsId={disclosureControlsId}
+      />
     </div>
   ),
 );
+
+/**
+ * A verse row's disclosure control — the name button that owns the tab stop, the accessible name
+ * and `aria-expanded`. Found by the attribute the grid's focus-restore effects query.
+ */
+function getDisclosure(resourceId: string): HTMLElement {
+  const control = document.querySelector<HTMLElement>(
+    `[data-resource-id="${resourceId}"] [data-disclosure-control]`,
+  );
+  if (!control) throw new Error(`No disclosure control rendered for resource "${resourceId}"`);
+  return control;
+}
+
+/**
+ * The reorder grip, found by the attribute production actually queries for focus restore. Throws a
+ * named error rather than returning null so a view mode that renders no grip fails loudly.
+ */
+function getGrip(resourceId: string): HTMLElement {
+  const grip = document.querySelector<HTMLElement>(`[data-reorder-handle-id="${resourceId}"]`);
+  if (!grip) throw new Error(`No reorder grip rendered for resource "${resourceId}"`);
+  return grip;
+}
 
 vi.mock('./resource-cell.component', () => ({
   ResourceCell: (props: Parameters<typeof mockResourceCell>[0]) => mockResourceCell(props),
@@ -247,7 +314,7 @@ describe('ScriptureTextGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close chapter view' }));
     expect(onChapterContextClose).toHaveBeenCalledTimes(1);
   });
-  it('restores focus to the opening listitem when the split closes', () => {
+  it("restores focus to the opening row's control when the split closes", () => {
     const { rerender } = render(
       <ScriptureTextGrid
         resources={resources}
@@ -277,9 +344,8 @@ describe('ScriptureTextGrid', () => {
         onChapterContextChange={vi.fn()}
       />,
     );
-    // The listitem with data-project-id="b" should receive focus.
-    const focusedListitem = document.querySelector('[data-project-id="b"]');
-    expect(focusedListitem).toHaveFocus();
+    // Focus lands on the row's disclosure control, which is what owns the tab stop.
+    expect(getDisclosure('r-b')).toHaveFocus();
   });
 });
 
@@ -414,6 +480,168 @@ describe('ScriptureTextGrid — chapter view', () => {
 
 // Reorder (drag + keyboard) is also wired into the verse view's vertical listitems, reusing the
 // same handlers but with vertical drag and ArrowUp/ArrowDown on the grips.
+describe('ScriptureTextGrid — chapter-context toggle', () => {
+  it('closes the split when the already-open row is activated again', () => {
+    const onChapterContextChange = vi.fn();
+    const onChapterContextClose = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={onChapterContextChange}
+        onChapterContextClose={onChapterContextClose}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole('listitem')[1]);
+    expect(onChapterContextClose).toHaveBeenCalledTimes(1);
+    expect(onChapterContextChange).not.toHaveBeenCalled();
+  });
+  it('switches the split to a different row rather than closing it', () => {
+    const onChapterContextChange = vi.fn();
+    const onChapterContextClose = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={onChapterContextChange}
+        onChapterContextClose={onChapterContextClose}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole('listitem')[2]);
+    expect(onChapterContextChange).toHaveBeenCalledWith(resources[2]);
+    expect(onChapterContextClose).not.toHaveBeenCalled();
+  });
+  it('marks only the open row as expanded', () => {
+    const { rerender } = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    expect(
+      resources.map((resource) => getDisclosure(resource.resourceId).getAttribute('aria-expanded')),
+    ).toEqual(['false', 'false', 'false']);
+
+    rerender(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    expect(
+      resources.map((resource) => getDisclosure(resource.resourceId).getAttribute('aria-expanded')),
+    ).toEqual(['false', 'true', 'false']);
+  });
+  it('points aria-controls at the open panel, and drops it when closed', () => {
+    const { rerender } = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    const openControl = getDisclosure('r-b');
+    const panelId = screen.getByTestId('scripture-text-grid-chapter-context').id;
+    expect(panelId).not.toBe('');
+    expect(openControl).toHaveAttribute('aria-expanded', 'true');
+    expect(openControl).toHaveAttribute('aria-controls', panelId);
+
+    rerender(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    resources.forEach((resource) => {
+      expect(getDisclosure(resource.resourceId)).not.toHaveAttribute('aria-controls');
+    });
+  });
+  it('toggles from the keyboard the same way as from a click', () => {
+    const onChapterContextClose = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={vi.fn()}
+        onChapterContextClose={onChapterContextClose}
+      />,
+    );
+    // A native button activates on both Enter and Space without a key handler of its own.
+    fireEvent.click(getDisclosure('r-b'));
+    fireEvent.click(getDisclosure('r-b'));
+    expect(onChapterContextClose).toHaveBeenCalledTimes(2);
+  });
+  it('ignores a click that ends a text selection, so copying does not toggle the split', () => {
+    const onChapterContextChange = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onChapterContextChange={onChapterContextChange}
+      />,
+    );
+
+    // A real selection over the cell's text, rather than a stubbed one, so this exercises the same
+    // window.getSelection() the guard reads.
+    const range = document.createRange();
+    range.selectNodeContents(screen.getByText('KJV@3'));
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    // Positive control: without a non-empty selection this test would pass vacuously.
+    expect(window.getSelection()?.toString().trim()).not.toBe('');
+
+    fireEvent.click(screen.getAllByRole('listitem')[1]);
+    expect(onChapterContextChange).not.toHaveBeenCalled();
+
+    // The control activates regardless: the guard is on the row's pointer shortcut, which is what
+    // a drag-selection release lands on.
+    fireEvent.click(getDisclosure('r-b'));
+    expect(onChapterContextChange).toHaveBeenCalledWith(resources[1]);
+
+    selection?.removeAllRanges();
+  });
+  it('restores focus to the opening listitem when the split OPENS', () => {
+    // The verse column remounts on open as well as close, so without a restore on both transitions
+    // focus falls to <body> and a keyboard toggle cannot fire a second time.
+    const { rerender } = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(getDisclosure('r-b'));
+    rerender(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    expect(getDisclosure('r-b')).toHaveFocus();
+  });
+});
+
 describe('ScriptureTextGrid — verse view reorder', () => {
   it('calls onReorder with the reordered id sequence after a drag-and-drop', () => {
     const onReorder = vi.fn();
@@ -443,7 +671,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
         getReorderHandleLabel={(name) => `Reorder ${name}`}
       />,
     );
-    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowDown' });
+    fireEvent.keyDown(getGrip('r-a'), { key: 'ArrowDown' });
     expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
   });
   it('keyboard: ArrowUp on the first item is a no-op at the start boundary', () => {
@@ -458,7 +686,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
         getReorderHandleLabel={(name) => `Reorder ${name}`}
       />,
     );
-    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowUp' });
+    fireEvent.keyDown(getGrip('r-a'), { key: 'ArrowUp' });
     expect(onReorder).not.toHaveBeenCalled();
   });
   it('highlights the hovered drop-target item and clears the highlight on dragEnd', () => {
@@ -493,7 +721,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
         getReorderHandleLabel={(name) => `Reorder ${name}`}
       />,
     );
-    fireEvent.click(screen.getByTestId('grip-r-a'));
+    fireEvent.click(getGrip('r-a'));
     expect(onChapterContextChange).not.toHaveBeenCalled();
   });
 });
@@ -580,7 +808,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         getReorderHandleLabel={(name) => `Reorder ${name}`}
       />,
     );
-    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowRight' });
+    fireEvent.keyDown(getGrip('r-a'), { key: 'ArrowRight' });
     expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
   });
   it('keyboard: ArrowLeft on the first cell is a no-op at the start boundary', () => {
@@ -595,7 +823,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         getReorderHandleLabel={(name) => `Reorder ${name}`}
       />,
     );
-    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowLeft' });
+    fireEvent.keyDown(getGrip('r-a'), { key: 'ArrowLeft' });
     expect(onReorder).not.toHaveBeenCalled();
   });
   it('keyboard: the live region announces the move after a successful keyboard reorder', () => {
@@ -613,7 +841,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
       />,
     );
     expect(screen.getByRole('status')).toHaveTextContent('');
-    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowRight' });
+    fireEvent.keyDown(getGrip('r-a'), { key: 'ArrowRight' });
     expect(screen.getByRole('status')).toHaveTextContent('Moved WEB to position 2 of 3');
   });
   it('keyboard: ArrowLeft on a middle cell moves it one position toward the start', () => {
@@ -628,7 +856,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         getReorderHandleLabel={(name) => `Reorder ${name}`}
       />,
     );
-    fireEvent.keyDown(screen.getByTestId('grip-r-b'), { key: 'ArrowLeft' });
+    fireEvent.keyDown(getGrip('r-b'), { key: 'ArrowLeft' });
     expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
   });
   it('keyboard: ArrowRight on the last cell is a no-op at the end boundary', () => {
@@ -643,7 +871,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         getReorderHandleLabel={(name) => `Reorder ${name}`}
       />,
     );
-    fireEvent.keyDown(screen.getByTestId('grip-r-c'), { key: 'ArrowRight' });
+    fireEvent.keyDown(getGrip('r-c'), { key: 'ArrowRight' });
     expect(onReorder).not.toHaveBeenCalled();
   });
   it('keyboard: arrows move by logical index for an RTL cell (not visually flipped)', () => {
@@ -659,7 +887,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
       />,
     );
     // 'r-c' (עברית) is the last logical cell; ArrowLeft moves it one slot toward the start.
-    fireEvent.keyDown(screen.getByTestId('grip-r-c'), { key: 'ArrowLeft' });
+    fireEvent.keyDown(getGrip('r-c'), { key: 'ArrowLeft' });
     expect(onReorder).toHaveBeenCalledWith(['r-a', 'r-c', 'r-b']);
   });
   it('keyboard: restores focus to the moved cell grip after the row re-renders', () => {
@@ -673,7 +901,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         getReorderHandleLabel={(name) => `Reorder ${name}`}
       />,
     );
-    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowRight' });
+    fireEvent.keyDown(getGrip('r-a'), { key: 'ArrowRight' });
     // The parent persists → the reordered resources come back as a new prop; the row re-renders
     // with 'r-a' in its new slot and focus must follow it to the moved grip.
     rerender(
@@ -686,6 +914,6 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         getReorderHandleLabel={(name) => `Reorder ${name}`}
       />,
     );
-    expect(screen.getByTestId('grip-r-a')).toHaveFocus();
+    expect(getGrip('r-a')).toHaveFocus();
   });
 });

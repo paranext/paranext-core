@@ -4,4 +4,8 @@
 @use './usj-nodes';
 @use './editor';
 @use './editor-overrides';
+// After the editor styles, whose `.editor-input` min-height the verse rows override. It must also
+// precede `./tailwind`, which is a plain .css file: Sass inlines its rules, and no `@use` may follow
+// real CSS rules.
+@use './scripture-text-grid-verse';
 @use './tailwind';

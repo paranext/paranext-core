@@ -772,3 +772,228 @@ describe('ResourceCellView reorder grip', () => {
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
 });
+
+describe('ResourceCellView verse row layout', () => {
+  it('renders the reorder grip in verse mode, not only in the header', () => {
+    const onReorderKeyDown = vi.fn();
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="web"
+        reorderHandleLabel="Reorder WEB"
+        onReorderKeyDown={onReorderKeyDown}
+      />,
+    );
+    const grip = screen.getByRole('button', { name: 'Reorder WEB' });
+    expect(grip).toHaveAttribute('data-reorder-handle-id', 'web');
+    fireEvent.keyDown(grip, { key: 'ArrowDown' });
+    expect(onReorderKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no grip in verse mode without showDragHandle', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        reorderHandleId="web"
+      />,
+    );
+    expect(document.querySelector('[data-reorder-handle-id]')).toBeNull();
+  });
+
+  it('carries the classes the verse stylesheet scopes its float exclusion on', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const name = screen.getByText('WEB');
+    const row = name.parentElement;
+    expect(row).toHaveClass('stg-verse-row');
+    expect(name).toHaveClass('stg-verse-name');
+    expect(screen.getByText('In the beginning').closest('.stg-verse-content')).not.toBeNull();
+  });
+
+  it('keeps the row flush at the inline edge so the reclaimed width is not given back', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = screen.getByText('WEB').parentElement;
+    const inlinePadding = [...(row?.classList ?? [])].filter((className) =>
+      /^tw:(p|px|ps|pl)-/.test(className),
+    );
+    expect(inlinePadding).toEqual([]);
+  });
+
+  it('publishes the zoom factor on the row while zooming only the content', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        zoomFactor={1.4}
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = screen.getByText('WEB').parentElement;
+    // The name must stay unzoomed, or rows at different zooms stop aligning with each other. The
+    // custom property above is the positive control that this row does carry an inline style.
+    expect(row?.style.getPropertyValue('--stg-zoom')).toBe('1.4');
+    // jsdom doesn't serialize `zoom` into the style attribute string; read the CSSOM property.
+    expect(row?.style.zoom).toBeFalsy();
+    const content = screen.getByText('In the beginning').closest('.stg-verse-content');
+    expect(content instanceof HTMLElement && content.style.zoom).toBe('1.4');
+  });
+
+  it('reserves the name width on placeholders, which have no line boxes to shorten', () => {
+    const { unmount } = renderCells(
+      <ResourceCellView
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    expect(document.querySelector('.stg-verse-name-reserve')).not.toBeNull();
+    unmount();
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        isVerseEmpty
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    expect(document.querySelector('.stg-verse-name-reserve')).not.toBeNull();
+  });
+
+  it('does not reserve placeholder width in header mode, which has no hanging name', () => {
+    renderCells(
+      <ResourceCellView
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    expect(document.querySelector('.stg-verse-name-reserve')).toBeNull();
+  });
+});
+
+describe('ResourceCellView verse row disclosure control', () => {
+  it("makes the name the row's focusable disclosure control when wired", () => {
+    const onDisclosureActivate = vi.fn();
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded={false}
+        disclosureControlsId="panel-1"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    expect(control).toHaveAttribute('aria-expanded', 'false');
+    // Absent while collapsed: a dangling idref is an ARIA error.
+    expect(control).not.toHaveAttribute('aria-controls');
+    control.focus();
+    expect(control).toHaveFocus();
+    fireEvent.click(control);
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it('points aria-controls at the panel only while expanded', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded
+        disclosureControlsId="panel-1"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(control).toHaveAttribute('aria-controls', 'panel-1');
+  });
+
+  it('keeps the name a presentational label when no disclosure is wired', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    // The row itself is named by the parent listitem in that case, so the visible copy stays hidden.
+    expect(screen.getByText('WEB')).toHaveAttribute('aria-hidden', 'true');
+    expect(document.querySelector('[data-disclosure-control]')).toBeNull();
+  });
+
+  it('does not let a disclosure click also reach the row underneath', () => {
+    const onDisclosureActivate = vi.fn();
+    const onRowClick = vi.fn();
+    render(
+      <div onClick={onRowClick} role="presentation">
+        <ResourceCellView
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          editor={<span>In the beginning</span>}
+          onDisclosureActivate={onDisclosureActivate}
+          disclosureAccessibleName="WEB, MAT 5:3"
+        />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'WEB, MAT 5:3' }));
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
+    // The row's own click shortcut must not double-toggle behind the control.
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+});

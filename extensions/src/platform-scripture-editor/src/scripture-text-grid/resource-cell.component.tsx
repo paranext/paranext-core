@@ -48,6 +48,14 @@ type ResourceCellProps = {
   reorderHint?: string;
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
+  /** Verse mode: makes the name this row's disclosure control for its chapter-context panel. */
+  onDisclosureActivate?: () => void;
+  /** Accessible name for the disclosure control (e.g. "WEB, MAT 5:3"). */
+  disclosureAccessibleName?: string;
+  /** Whether this row's chapter-context panel is currently open. */
+  isDisclosureExpanded?: boolean;
+  /** Id of the chapter-context panel, for `aria-controls` while it is open. */
+  disclosureControlsId?: string;
 };
 
 /**
@@ -68,6 +76,10 @@ export function ResourceCell({
   reorderHandleLabel,
   reorderHint,
   onReorderKeyDown,
+  onDisclosureActivate,
+  disclosureAccessibleName,
+  isDisclosureExpanded,
+  disclosureControlsId,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -248,6 +260,10 @@ export function ResourceCell({
       reorderHandleLabel={reorderHandleLabel}
       reorderHint={reorderHint}
       onReorderKeyDown={onReorderKeyDown}
+      onDisclosureActivate={onDisclosureActivate}
+      disclosureAccessibleName={disclosureAccessibleName}
+      isDisclosureExpanded={isDisclosureExpanded}
+      disclosureControlsId={disclosureControlsId}
       editor={
         <Editorial
           ref={editorRef}

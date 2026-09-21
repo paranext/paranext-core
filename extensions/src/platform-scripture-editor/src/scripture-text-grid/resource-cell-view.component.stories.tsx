@@ -99,6 +99,73 @@ function SampleVerse({ rtl = false }: { rtl?: boolean }) {
   );
 }
 
+/**
+ * The verse row's shape comes from a float generated inside `.editor-input`, so a stand-in must
+ * carry the real class chain — `SampleVerse` renders a bare `<div><p>` and cannot show it.
+ *
+ * These rules mirror `_editor.scss` and `_scripture-text-grid-verse.scss`, which Storybook does not
+ * compile into this story. They are a copy and can drift; the e2e geometry spec is what checks the
+ * real cascade.
+ */
+const VERSE_ROW_STYLE = `
+  .editor-container { color: inherit; position: relative; line-height: 20px; text-align: start; }
+  .editor-input { min-height: 150px; font-size: 15px; position: relative; tab-size: 1; outline: 0; padding: 15px 10px; flex: auto; }
+  .editor-input > p { direction: inherit; margin-top: 0; margin-bottom: 0; line-height: 1.5; }
+  .text-spacing .usfm_p { text-indent: 2.5vw; }
+  .text-spacing .usfm_q1 { text-indent: -10vw; }
+  .text-spacing[dir='ltr'] .usfm_q1 { margin-left: 15vw; }
+  .text-spacing[dir='rtl'] .usfm_q1 { margin-right: 15vw; }
+
+  .stg-verse-row { --stg-name-reserve: 6.5rem; padding-block: 0.5rem; }
+  .stg-verse-name { inset-inline-start: 0.5rem; inset-block-start: 0.5rem; inline-size: 6rem; }
+  .stg-verse-grip { inset-inline-start: calc(0.5rem + 6rem - 1.5rem); inset-block-start: 0.25rem; }
+  .stg-verse-content .editor-input::before {
+    content: ''; float: inline-start;
+    inline-size: calc(var(--stg-name-reserve) / var(--stg-zoom, 1)); block-size: 1px;
+  }
+  .stg-verse-content .editor-input { min-block-size: 0; }
+  .stg-verse-name-reserve { padding-inline-start: calc(var(--stg-name-reserve) / var(--stg-zoom, 1)); }
+`;
+
+/** Stand-in for the read-only `Editorial` carrying the class chain the verse rules are scoped on. */
+function SampleEditorial({
+  rtl = false,
+  poetry = false,
+  text,
+}: {
+  rtl?: boolean;
+  poetry?: boolean;
+  text?: string;
+}) {
+  const body =
+    text ??
+    (rtl
+      ? 'אַשְׁרֵי הָאִישׁ אֲשֶׁר לֹא הָלַךְ בַּעֲצַת רְשָׁעִים וּבְדֶרֶךְ חַטָּאִים לֹא עָמָד וּבְמוֹשַׁב לֵצִים לֹא יָשָׁב'
+      : 'Blessed are the poor in spirit, for theirs is the kingdom of heaven, and blessed are those who mourn, for they shall be comforted.');
+  return (
+    <div className="editor-container">
+      <div
+        className={`editor-input usfm marker-hidden text-spacing formatted-font${poetry ? ' poetry' : ''}`}
+        dir={rtl ? 'rtl' : 'ltr'}
+      >
+        <p className={poetry ? 'usfm_q1' : 'usfm_p'}>
+          <sup>3</sup> {body}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Wraps a verse-row story with the stylesheet rules Storybook does not compile. */
+function VerseRowBox({ children, width }: { children: React.ReactNode; width?: string }) {
+  return (
+    <>
+      <style>{VERSE_ROW_STYLE}</style>
+      <CellBox width={width}>{children}</CellBox>
+    </>
+  );
+}
+
 /** Chapter USJ is still downloading — a Spinner plus the localized "Downloading…" subtitle. */
 export const Downloading: Story = {
   render: () => (
@@ -251,9 +318,10 @@ export const VerseRightToLeft: Story = {
 };
 
 /**
- * Verse mode, inline name beside a longer verse — shows the verse text wrapping within its own
- * column to the right of the name (the P9-style compact treatment; later lines stay in the text
- * column rather than tucking under the name).
+ * Verse mode, inline name beside a longer verse — line 1 starts after the hanging name and later
+ * lines tuck beneath it at the row's flush inline edge (the PT9 wrap-around shape). The exclusion
+ * that shortens line 1 is generated inside `.editor-input`, so this only reproduces faithfully with
+ * an editor stand-in carrying that class; see `SampleEditorial`.
  */
 export const VerseInlineWrapping: Story = {
   render: () => (
@@ -825,5 +893,190 @@ export const MixedDirectionRow: Story = {
         />
       </div>
     </CellRowBox>
+  ),
+};
+
+/**
+ * The wrap-around shape: line 1 begins after the hanging name, line 2+ tuck beneath it at the row's
+ * flush inline edge. This is what a two-column flex split cannot produce.
+ */
+export const VerseWrapAround: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial />}
+      />
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * The same shape mirrored. `float: inline-start` resolves against the editor's own `direction`, so
+ * no RTL-specific rule exists — this story is what proves that claim visually.
+ */
+export const VerseWrapAroundRightToLeft: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="עברית"
+        textDirection="rtl"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial rtl />}
+      />
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * Rows with short, medium and long names. Every row's verse text must begin on the same column —
+ * that alignment is the whole reason the name area is a fixed width rather than a cap.
+ */
+export const VerseNameAlignmentRow: Story = {
+  render: () => (
+    <VerseRowBox>
+      <div>
+        {['WEB', 'ESVUS16', 'A'].map((label) => (
+          <ResourceCellView
+            key={label}
+            state="ready"
+            label={label}
+            textDirection="ltr"
+            localizedStrings={localizedStrings}
+            nameDisplay="inline"
+            editor={<SampleEditorial />}
+          />
+        ))}
+      </div>
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * The zoom-compensation proof. The name sits outside the zoomed subtree and the float inside it
+ * divides by `--stg-zoom`, so rows at 0.5x, 1x and 2x still start their text on the same column.
+ */
+export const VerseNameAlignmentRowZoomed: Story = {
+  render: () => (
+    <VerseRowBox>
+      <div>
+        {[0.5, 1, 2].map((zoomFactor) => (
+          <ResourceCellView
+            key={zoomFactor}
+            state="ready"
+            label="WEB"
+            textDirection="ltr"
+            localizedStrings={localizedStrings}
+            nameDisplay="inline"
+            zoomFactor={zoomFactor}
+            editor={<SampleEditorial />}
+          />
+        ))}
+      </div>
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * Poetry keeps its hanging indent. A float shortens the line box and composes with `usfm_q1`'s
+ * indent; reserving the name width with `text-indent` instead would destroy it.
+ */
+export const VerseWrapAroundPoetry: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial poetry />}
+      />
+    </VerseRowBox>
+  ),
+};
+
+/** A name long enough to truncate inside the fixed area; the tooltip still reveals it in full. */
+export const VerseLongNameTruncated: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="Berean Standard Bible 2024"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial />}
+      />
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * The reorder grip in verse mode, pinned at the inline-end of the reserved name area so it costs no
+ * row width. Revealed on hover/focus; always visible on touch.
+ */
+export const VerseWithGrip: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial />}
+        showDragHandle
+        reorderHandleId="web"
+        reorderHandleLabel="Reorder WEB"
+        reorderHint="Drag or press arrow keys to reorder"
+      />
+    </VerseRowBox>
+  ),
+};
+
+/** The RTL grip, which mirrors with the row because its offset is logical, not left/right. */
+export const VerseRightToLeftWithGrip: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="עברית"
+        textDirection="rtl"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial rtl />}
+        showDragHandle
+        reorderHandleId="heb"
+        reorderHandleLabel="Reorder עברית"
+        reorderHint="Drag or press arrow keys to reorder"
+      />
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * A zoomed placeholder. Centered placeholders have no line boxes for the float to shorten, so they
+ * reserve the name width with padding — compensated by the same factor.
+ */
+export const VerseZoomedPlaceholder: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        zoomFactor={2}
+        editor={undefined}
+      />
+    </VerseRowBox>
   ),
 };

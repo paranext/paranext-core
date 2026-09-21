@@ -2,7 +2,15 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
 import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import { X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { ResourceCell, GridResource } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { useResourceZoomInput } from './use-resource-zoom-input.hook';
@@ -69,9 +77,11 @@ type ScriptureTextGridProps = {
  * `WebViewProps.useWebViewScrollGroupScrRef`) and passed in — this component is presentational and
  * calls no scroll-group hook.
  *
- * In verse mode, clicking (or pressing Enter/Space on) a listitem opens a resizable chapter-context
- * panel beside the list showing that resource's full chapter. When the panel closes, focus returns
- * to the listitem that opened it (WCAG 2.4.3).
+ * In verse mode each row discloses a resizable chapter-context panel beside the list showing that
+ * resource's full chapter, and activating the open row again closes it. The keyboard-accessible
+ * control is the row's name button (rendered by the cell); the row itself toggles on click as a
+ * pointer convenience, so the row contributes no second tab stop. Focus returns to that control on
+ * both transitions (WCAG 2.4.3) — the verse column remounts either way.
  *
  * Each resource container carries `data-resource-id` and the outer container carries `gridRef` so
  * `useResourceZoomInput` can wire wheel-zoom and resolve which resource an event targets.
@@ -97,6 +107,8 @@ export function ScriptureTextGrid({
   // React's ref API requires `null` as the initial value for DOM refs.
   // eslint-disable-next-line no-null/no-null
   const gridRef = useRef<HTMLDivElement>(null);
+  // Ties each verse row's aria-controls to the chapter-context panel it discloses.
+  const chapterContextPanelId = useId();
   // resourceId of the listitem that opened the split, so focus can return to it when the split closes.
   const focusRestoreResourceIdRef = useRef<string | undefined>(undefined);
   const draggedIdRef = useRef<string | undefined>(undefined);
@@ -169,16 +181,21 @@ export function ScriptureTextGrid({
     gridRef.current?.querySelector<HTMLElement>(`[data-reorder-handle-id="${movedId}"]`)?.focus();
   }, [resources]);
 
-  // On close, return focus to the listitem that opened the split (WCAG 2.4.3). The list remounts
-  // when the split toggles, so restore by identity (resourceId) against the freshly-rendered DOM,
-  // not by a stale element reference. Uses data-resource-id (always present) rather than
-  // data-project-id (absent for unavailable resources whose projectId is undefined).
+  // Return focus to the listitem that opened or closed the split (WCAG 2.4.3). The verse column
+  // remounts on BOTH transitions — it moves between a bare wrapper and a ResizablePanel — so restore
+  // on every change, not only on close, or a keyboard toggle cannot fire a second time: the row that
+  // opened the split would be destroyed with focus falling to <body>. Restore by identity
+  // (resourceId) against the freshly-rendered DOM, not by a stale element reference. Uses
+  // data-resource-id (always present) rather than data-project-id (absent for unavailable resources
+  // whose projectId is undefined).
   useEffect(() => {
-    if (chapterContext) return;
     const resourceId = focusRestoreResourceIdRef.current;
     if (!resourceId) return;
-    focusRestoreResourceIdRef.current = undefined;
-    gridRef.current?.querySelector<HTMLElement>(`[data-resource-id="${resourceId}"]`)?.focus();
+    // Clear the latch only once the split is closed, so a later Escape or X close still has a target.
+    if (!chapterContext) focusRestoreResourceIdRef.current = undefined;
+    gridRef.current
+      ?.querySelector<HTMLElement>(`[data-resource-id="${resourceId}"] [data-disclosure-control]`)
+      ?.focus();
   }, [chapterContext]);
 
   const resourceIds = useMemo(() => resources.map((r) => r.resourceId), [resources]);
@@ -357,37 +374,43 @@ export function ScriptureTextGrid({
         {reorderAnnouncement}
       </div>
       {resources.map((resource) => {
-        // Activating a verse item latches the focus-restore target and reports the chapter context
-        // change. Shared by the click and keyboard paths so they can never drift apart.
+        const isOpen = chapterContext?.resourceId === resource.resourceId;
+        // Activating a verse item latches the focus-restore target and toggles this resource's
+        // chapter context. Shared by the click and keyboard paths so they can never drift apart.
+        // Activating a different row switches the split rather than closing it.
         const activate = onChapterContextChange
           ? () => {
               focusRestoreResourceIdRef.current = resource.resourceId;
-              onChapterContextChange(resource);
+              if (isOpen) onChapterContextClose?.();
+              else onChapterContextChange(resource);
             }
           : undefined;
         return (
-          // The listitem is an interactive resource entry. jsx-a11y flags role="listitem" with
-          // tabIndex/handlers as "non-interactive", but it IS keyboard-accessible (Tab to focus,
-          // Enter/Space to activate) per WCAG 2.1 §2.1.1 and the A12 ARIA spec — the suppression is
-          // justified by the explicit handler and tabIndex below.
-          /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
+          // The row's click handler is a pointer-only convenience that widens the hit area to the
+          // whole row. The keyboard-accessible control is the name button the cell renders (see
+          // ResourceNameDisclosure), which owns the tab stop, the accessible name and
+          // aria-expanded. jsx-a11y flags both the handler on a non-interactive role and the
+          // missing key listener beside it; adding either a role or a key handler here is what
+          // would be wrong, because it would make the row a second tab stop for the control it
+          // already contains.
+          /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */
           <div
             key={resource.resourceId}
             role="listitem"
             data-project-id={resource.projectId}
             data-resource-id={resource.resourceId}
             data-testid={onReorder ? 'scripture-text-grid-cell-draggable' : undefined}
-            aria-label={verseItemName(resource.label)}
-            tabIndex={activate ? 0 : undefined}
+            // Named here only when no disclosure control exists to name it: with one, the control
+            // carries the row's accessible name and labelling both would announce it twice.
+            aria-label={activate ? undefined : verseItemName(resource.label)}
             draggable={onReorder ? true : undefined}
-            onClick={activate}
-            onKeyDown={
+            onClick={
               activate
-                ? (event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      activate();
-                    }
+                ? () => {
+                    // A click that ends a drag-selection inside the verse must not toggle the split:
+                    // closing it would destroy the selection the context-menu Copy item reads.
+                    if (window.getSelection()?.toString().trim()) return;
+                    activate();
                   }
                 : undefined
             }
@@ -417,7 +440,7 @@ export function ScriptureTextGrid({
                 : undefined
             }
             onDrop={onReorder ? () => handleReorderDrop(resource.resourceId) : undefined}
-            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${activate ? ' tw:cursor-pointer' : ''}${onReorder && dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
+            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${activate ? ' tw:cursor-pointer tw:transition-colors tw:hover:bg-accent/50 tw:aria-expanded:bg-accent' : ''}${onReorder && dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
           >
             <ResourceCell
               resourceRef={resource}
@@ -433,12 +456,16 @@ export function ScriptureTextGrid({
                   : undefined
               }
               reorderHint={onReorder ? reorderHint : undefined}
+              onDisclosureActivate={activate}
+              disclosureAccessibleName={verseItemName(resource.label)}
+              isDisclosureExpanded={isOpen}
+              disclosureControlsId={chapterContextPanelId}
               onReorderKeyDown={
                 onReorder ? (event) => handleReorderKeyDown(event, resource) : undefined
               }
             />
           </div>
-          /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
+          /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */
         );
       })}
     </div>
@@ -463,6 +490,7 @@ export function ScriptureTextGrid({
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={45} minSize={25} className="tw:min-h-0">
           <div
+            id={chapterContextPanelId}
             role="region"
             aria-label={chapterContext.label}
             data-testid="scripture-text-grid-chapter-context"
