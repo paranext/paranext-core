@@ -16,9 +16,10 @@ import { PanelRetryableErrorView, LoadingView } from './panel-state-views.compon
  * display — from a single `readiness` value.
  *
  * Used by BOTH the Resource (Bible Texts / Commentaries) and Model Text panels, so neither can
- * drift from the other on the question that caused this bug. Keeping the states here also gives the
- * Resource panel its only testable seam for them: it lives entirely in a web view with no extracted
- * component.
+ * drift from the other on the question that caused this bug. Both panels have an extracted
+ * component (`resource-text-panel.component.tsx`, `model-text-panel.component.tsx`), so these
+ * states are reachable from a component test through either of them as well as from this view's own
+ * stories.
  *
  * Deciding these states inline is what went wrong in both panels: an empty prompt was rendered from
  * a value that was only meaningful once the data had arrived. Taking one `readiness` value makes
@@ -38,6 +39,9 @@ import { PanelRetryableErrorView, LoadingView } from './panel-state-views.compon
  *   the settings error this one IS recoverable, so it is paired with a working retry.
  * @param loadingLabel Already-localized status text shown beside the loading spinner.
  * @param emptyPrompt Already-localized prompt shown when nothing is configured.
+ * @param moreInfo Optional disclosure rendered between the empty prompt and the pick button, for
+ *   panels whose prompt alone does not explain what the user is being asked to choose. Omitted
+ *   where the prompt is self-explanatory, so the empty state stays as short as it can be.
  * @param pickLabel Already-localized label for the resource picker button.
  * @param retryLabel Already-localized label for the catalog retry button.
  * @param onPick Opens the resource picker.
@@ -49,6 +53,7 @@ export function PanelReadinessView({
   catalogErrorMessage,
   loadingLabel,
   emptyPrompt,
+  moreInfo,
   pickLabel,
   retryLabel,
   onPick,
@@ -59,6 +64,7 @@ export function PanelReadinessView({
   catalogErrorMessage: ReactNode;
   loadingLabel: ReactNode;
   emptyPrompt: ReactNode;
+  moreInfo?: ReactNode;
   pickLabel: ReactNode;
   retryLabel: ReactNode;
   onPick: () => void;
@@ -104,6 +110,7 @@ export function PanelReadinessView({
           <EmptyDescription>{emptyPrompt}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
+          {moreInfo}
           <Button onClick={() => onPick()}>{pickLabel}</Button>
         </EmptyContent>
       </Empty>

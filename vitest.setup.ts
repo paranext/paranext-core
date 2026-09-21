@@ -53,6 +53,13 @@ new Intl.ListFormat(locale).format(['a', 'b']);
 // that were queued while cb() ran — a bare Promise.resolve() only drains one microtask level
 // and misses multi-await async chains (e.g., two sequential sendCommand() awaits in a hook).
 configure({
+  // Testing-library's own budget, which is separate from vitest's `testTimeout` and is NOT raised by
+  // it: a bare `waitFor` gives up after this long and fails the test while vitest is still content.
+  // Timing-sensitive component tests here spend it waiting for React state to settle, and on a
+  // contended windows-latest runner that wait crosses 1 s while the assertion is sound — the same
+  // class as the per-test budget, one level down. Five seconds absorbs the contention and still
+  // bounds a wait that is never going to succeed.
+  asyncUtilTimeout: 5000,
   asyncWrapper: async (cb) => {
     // Temporarily clear the React act environment flag so that `waitFor` polling intervals don't
     // produce "not wrapped in act" warnings (mirrors the intent of @testing-library/react's original
@@ -135,3 +142,43 @@ console.error = (...args: unknown[]) => {
   originalConsoleError(...args);
 };
 /* eslint-enable no-console */
+
+// ─── window.matchMedia stub ──────────────────────────────────────────────────
+//
+// jsdom does not implement window.matchMedia, and several modules call it at module-init time
+// (theme.service-host.ts does, reached via papi-frontend.service.ts and the dock-layout import
+// chain). Any test file that transitively imports one of those throws on import without a stub.
+//
+// Setup files run before the test file's own imports are evaluated, so defining it here covers
+// every jsdom test in the repo — which is what this file is for. It stays writable so a test that
+// needs real media-query behaviour can still redefine it.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: undefined,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+// ─── NOTICES_POLICY_OVERLAY ──────────────────────────────────────────────────
+//
+// `loadPolicy` defaults its overlay from this variable at call time, so several notices suites that
+// read "the shipped policy" as DATA would read a merged one instead — and that variable is exported
+// in exactly one place: the shell of a downstream-product developer, who is also the person most
+// likely to run this suite. Pointed at a missing file it fails those files at COLLECTION; pointed at
+// a real overlay it is worse, because the inclusion-based assertions pass against determinations the
+// committed policy does not carry.
+//
+// Deleted here rather than guarded at each call site: the suites' subject is the committed file, and
+// `degradation.test.ts` and `verify-shipping-set.test.ts` spawn the generator with `{...process.env}`,
+// so only removing it from this process covers the children too. A test that wants an overlay passes
+// the path explicitly.
+delete process.env.NOTICES_POLICY_OVERLAY;

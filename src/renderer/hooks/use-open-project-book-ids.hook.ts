@@ -39,9 +39,13 @@ const SEPARATOR = '\u0000';
  * open anywhere in the window is one they are working with, and the books it reports are the same
  * books either way.
  *
- * The active project is NOT excluded here. Which project is active is not something a web view
- * event reports, so it is applied where it can react to a prop changing - during render, in the
- * caller - rather than baked into the value this read produces.
+ * The navigation target's own project is NOT excluded here, and must not be. Subtracting it would
+ * make this set — and the subscription fingerprint derived from it — change every time the resolved
+ * navigation target changes, including the brief `undefined` a dock rebuild produces while the
+ * editor slot has no project yet. In Simple mode every open panel carries the same project id, so
+ * such a set swings between "one project" and "none" on each navigation, and every subscription is
+ * torn down and rebuilt at that cadence. The active project is filtered out at READ time instead,
+ * where changing its mind costs nothing.
  */
 function getOpenProjectIds(): string[] {
   let definitions;
@@ -94,11 +98,12 @@ function readOpenProjectIdsKey(): string {
  * The flow, so the stages below can be checked against a whole: a web view event requests a
  * DEFERRED read of the dock layout (deferred because the close event is emitted before the dock has
  * adopted the new layout) → the read lands in state as a membership KEY covering every open project
- * → the active project is excluded from it during RENDER, so a prop change lands in the same commit
  * → a change in membership rebuilds the per-project `booksPresent` subscriptions → their values are
- * unioned in canon order. Each stage has its own note where it is declared.
+ * unioned in canon order, with the active project's books left out of the union during RENDER, so a
+ * prop change lands in the same commit. Each stage has its own note where it is declared.
  *
- * @param activeProjectId The project whose books are already offered, excluded from the result
+ * @param activeProjectId The project whose books are already offered, excluded from the result. It
+ *   may still be subscribed to — only the result excludes it (see {@link getOpenProjectIds}).
  * @param isEnabled Whether to do the work at all. When false the hook subscribes to nothing and
  *   returns an empty list, so a caller that discards the result pays none of its cost. Defaults to
  *   true.
@@ -119,7 +124,7 @@ export function useOpenProjectBookIds(
   // an `activeProjectId` change would not reach the returned list until a commit later — one
   // committed frame in which the newly active project's own books are offered as "books outside
   // this project", the exact set this hook exists to exclude. The exclusion is applied during
-  // render instead, below.
+  // render instead, where the books are unioned below.
   const [allOpenProjectIdsKey, setAllOpenProjectIdsKey] = useState('');
   const { requestRead: refreshOpenWebViews, cancelPendingRead } = useDeferredDockLayoutRead(
     useCallback(() => setAllOpenProjectIdsKey(readOpenProjectIdsKey()), []),
@@ -152,17 +157,15 @@ export function useOpenProjectBookIds(
     }
   }, [isEnabled, refreshOpenWebViews, cancelPendingRead]);
 
-  // The active project is excluded HERE, during render, so a change to it lands in the same commit
-  // that renders it. Identity still tracks membership rather than event count — the memo's inputs
-  // are the key and the props, none of which a no-op web view event changes — so the subscription
+  // The set to subscribe to: every open project, the active one included. Identity tracks
+  // membership rather than event count — the memo's inputs are the key and `isEnabled`, neither of
+  // which a no-op web view event or a change of navigation target moves — so the subscription
   // effect, the returned book list, and the consumers that memoize on it all stay stable across an
   // unchanged set. The empty key must short-circuit: splitting it yields `['']`, not `[]`.
   const openProjectIds = useMemo(() => {
     if (!isEnabled) return EMPTY_IDS;
-    const ids = allOpenProjectIdsKey ? allOpenProjectIdsKey.split(SEPARATOR) : EMPTY_IDS;
-    const withoutActive = activeProjectId ? ids.filter((id) => id !== activeProjectId) : ids;
-    return withoutActive.length > 0 ? withoutActive : EMPTY_IDS;
-  }, [allOpenProjectIdsKey, activeProjectId, isEnabled]);
+    return allOpenProjectIdsKey ? allOpenProjectIdsKey.split(SEPARATOR) : EMPTY_IDS;
+  }, [allOpenProjectIdsKey, isEnabled]);
 
   // Entries persist for projects that have since closed rather than being pruned as each project
   // closes; the final useMemo below filters them out by membership at read time. This is fine
@@ -227,11 +230,21 @@ export function useOpenProjectBookIds(
     Object.entries(bookIdsByProjectId).forEach(([projectId, bookIds]) => {
       // A project that has since closed may still have an entry from a settled subscription.
       if (!openIds.has(projectId)) return;
+      // The navigation target's books are the control's baseline, so this hook never offers them.
+      // Filtered here rather than out of the subscribed set — see `getOpenProjectIds` for why.
+      //
+      // While `activeProjectId` is `undefined` nothing matches, so through the brief gap a dock
+      // rebuild produces this deliberately offers the navigation target's own books, and a caller's
+      // "show more books" affordance may appear for that gap. Tolerated rather than guarded: holding
+      // the last non-`undefined` target in a ref would also suppress those books when `undefined` is
+      // the settled answer — no editor open, so the project really is just another open project —
+      // and that failure is silent and persistent, where this one is visible and sub-frame.
+      if (projectId === activeProjectId) return;
       bookIds.forEach((bookId) => books.add(bookId));
     });
     if (books.size === 0) return EMPTY_IDS;
     return CANON_BOOK_IDS.filter((bookId) => books.has(bookId));
-  }, [bookIdsByProjectId, openProjectIds]);
+  }, [bookIdsByProjectId, openProjectIds, activeProjectId]);
 }
 
 export default useOpenProjectBookIds;

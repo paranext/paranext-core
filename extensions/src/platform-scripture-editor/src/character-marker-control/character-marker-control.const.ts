@@ -1,12 +1,13 @@
 import { LocalizeKey } from 'platform-bible-utils';
 
 /**
- * The localize keys {@link CharacterMarkerControl} resolves.
+ * The localize keys `CharacterMarkerControl` resolves.
  *
  * Kept in their own module, apart from the component, so that consumers which only need the key
  * list — the editor web view's preload list, the localized-strings parity test — can import it
- * without pulling in React and the component library. The parity test runs in a `node` environment
- * and cannot load a module that reaches for `document`.
+ * without pulling React and the component library into their module graph. That keeps the parity
+ * test's collect time down; the component imports fine from a `node` test, so this is a cost choice
+ * rather than a load-time constraint.
  */
 
 export const ARIA_LABEL_KEY: LocalizeKey =
@@ -28,10 +29,14 @@ export const NONE_KEY: LocalizeKey =
 export const NO_MARKERS_TOOLTIP_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%';
 /**
- * Lives in `platform-bible-react` beside its two siblings (`_insert`, `_paragraph`) rather than in
- * this extension: all three are placeholders for the same shared `MarkerMenu` search field, and the
- * editor web view already preloads `MARKER_MENU_STRING_KEYS`, so it needs no separate
- * registration.
+ * Declared in `MARKER_MENU_STRING_KEYS` (`platform-bible-react`), not in this extension: this key
+ * and its `_insert`/`_paragraph` siblings are placeholders for the same shared `MarkerMenu` search
+ * field, and the editor web view already preloads `MARKER_MENU_STRING_KEYS`, so it needs no
+ * separate registration here.
+ *
+ * Its value ships in `assets/localization/en.json` and `es.json` beside those siblings — not in
+ * this extension's `contributions/localizedStrings.json` — because that is where the whole
+ * `markerMenu` family already lives. Guarded by `src/node/data/shipped-locale-assets.test.ts`.
  */
 export const SEARCH_PLACEHOLDER_KEY: LocalizeKey = '%markerMenu_searchPlaceholder_character%';
 /** Reuses the shipped sync-blocked wording rather than adding a second phrasing of it. */

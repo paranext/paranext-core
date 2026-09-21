@@ -312,7 +312,7 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export type { Scope } from './components/utils/scripture.util';
+export type { Scope, ScopeWithRange } from './components/utils/scripture.util';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
@@ -346,17 +346,32 @@ export {
 export { useShrinkStep } from './hooks/use-shrink-step.hook';
 
 // Contexts
-export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/shrink-step.context';
+export {
+  ShrinkStepContext,
+  ShrinkStepOverrideContext,
+  useShrinkStepValue,
+  useShrinkStepOverride,
+  SHRINK_STEP,
+} from './context/shrink-step.context';
+export {
+  ShrinkStepOverride,
+  type ShrinkStepOverrideProps,
+} from './context/shrink-step-override.component';
 
 // Z-index scale
 export {
   Z_INDEX_ABOVE_DOCK,
+  Z_INDEX_CONNECTION_LOST,
   Z_INDEX_FIRST_RUN,
   Z_INDEX_ABOVE_POPOVER,
+  Z_INDEX_ONBOARDING_TOUR,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,
 } from './components/z-index';
+
+// Tooltip delay
+export { TOOLTIP_DELAY_MS } from './components/tooltip-delay';
 
 // Utils
 export { cn } from './utils/shadcn-ui/utils';

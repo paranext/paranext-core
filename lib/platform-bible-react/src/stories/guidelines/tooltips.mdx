@@ -1,4 +1,5 @@
 import { Meta } from '@storybook/addon-docs/blocks';
+import LinkTo from '@storybook/addon-links/react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/shadcn-ui/tooltip';
 import { Kbd, KbdGroup } from '@/components/shadcn-ui/kbd';
@@ -55,6 +56,10 @@ toolbar items.
 ## Keep text short
 
 Tooltip text must be short enough to scan at a glance. A tooltip is a hint, not an explanation.
+
+**Carve-out for info icon buttons:** a tooltip attached to an `Info` icon button (see
+<LinkTo title="Guidelines/Providing Help">Providing Help</LinkTo>) may run to 1–2 sentences,
+because the button's whole purpose is to reveal a longer clarification.
 
 <ExampleBlockGroup>
   <ExampleBlock
@@ -195,3 +200,6 @@ tooltip closes.
 A concrete example: an info icon next to "API key" could show a tooltip saying
 "Used to authenticate requests." But if the panel also includes a *Copy key* button,
 that interaction belongs in a click-triggered popover, not a tooltip.
+
+See also: <LinkTo title="Guidelines/Providing Help">Providing Help</LinkTo> — the full ladder
+from label to online help, and where info icon buttons fit.
