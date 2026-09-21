@@ -11,7 +11,7 @@ import {
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
 import { Check, CloudOff, SearchX } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
 import { useProgressiveList } from './resource-picker-dialog.utils';
 
@@ -182,7 +182,12 @@ function ResourceSection({
               per-cell `max-width` is not consulted at all. `max-w-0` is belt-and-braces for anyone
               who renders these rows under the default auto layout; removing `table-fixed` or the
               colgroup is what brings the horizontal scrollbar back. */}
-          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pe-2 tw:font-normal">
+          {/* `text-start` is the table default, and stated anyway: it is the one invariant of the
+              picker row layout contract that has no class of its own to point at, so a test can
+              only assert its absence otherwise — and "not end-aligned" stays green against a column
+              centred, indented, or realigned some other way. See
+              `.claude/rules/ux/picker-row-layout.md`. */}
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pe-2 tw:text-start tw:font-normal">
             <span title={r.displayName}>{r.displayName}</span>
           </TableCell>
           <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-2">
@@ -447,6 +452,30 @@ export default function ResourcePickerDialog({
   const areFiltersInert =
     !!isResourcesLoading || !!hasResourcesError || typeScopedResources.length === 0;
 
+  // Opening focus is only half-answered at open time. `focusResourcePickerOnOpen` parks focus on
+  // the dialog shell while there is nothing to type into — but "nothing to filter" is the ordinary
+  // state for the first moment after a host opens this, because the catalog fetch is still in
+  // flight. Without this the catalog arrives, the search box enables, and focus stays on the shell.
+  //
+  // Only claimed back from the shell itself: once focus is on a real control the user put it there,
+  // and moving it out from under them mid-fetch is worse than the stranding this fixes.
+  const wereFiltersInert = useRef(areFiltersInert);
+  useEffect(() => {
+    const filtersJustBecameUsable = wereFiltersInert.current && !areFiltersInert;
+    wereFiltersInert.current = areFiltersInert;
+    if (!filtersJustBecameUsable) return;
+
+    const searchInput = searchInputRef.current;
+    if (!searchInput || searchInput.disabled) return;
+
+    const { activeElement } = document;
+    const isParkedOnShell =
+      !activeElement ||
+      activeElement === document.body ||
+      activeElement.getAttribute('data-slot') === 'dialog-content';
+    if (isParkedOnShell) searchInput.focus();
+  }, [areFiltersInert, searchInputRef]);
+
   const bodyState = getResourcePickerBodyState({
     isResourcesLoading: !!isResourcesLoading,
     hasResourcesError: !!hasResourcesError,
@@ -461,9 +490,13 @@ export default function ResourcePickerDialog({
         <DialogTitle>{titleText}</DialogTitle>
         {/* Visually hidden rather than absent: Radix warns when dialog content has no description,
             and a screen-reader user opening this needs to be told what the list is and that picking
-            a row downloads. Living here rather than at each host means every host gets it — and
-            gets it localized, which a host silencing the warning with `aria-describedby={undefined}`
-            does not. */}
+            a row downloads. Living here rather than at each host keeps one localized answer instead
+            of one per host — but it only reaches the user if the host renders no description of its
+            own. Radix derives the id from the `Dialog.Root` context, so a host that also renders one
+            ships the id twice and `aria-describedby` resolves to whichever is first in document
+            order. A host that wraps this in its own `Dialog.Root` (the embedded pickers in Share
+            Layout) is fine; a host that shares one must suppress its own — see
+            `providesOwnTitleAndDescription` on paranext-core's `DialogDefinition`. */}
         <DialogDescription className="tw:sr-only">{descriptionText}</DialogDescription>
       </DialogHeader>
       <div className="tw:flex tw:gap-2 tw:p-4">

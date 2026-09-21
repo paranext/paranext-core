@@ -3,7 +3,13 @@ import '@testing-library/jest-dom';
 import { vi, describe, it, expect, beforeAll } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
-import { Dialog, Z_INDEX_NESTED_MODAL, Z_INDEX_NESTED_MODAL_BACKDROP } from 'platform-bible-react';
+import {
+  Dialog,
+  DialogContent,
+  Z_INDEX_MODAL,
+  Z_INDEX_NESTED_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
+} from 'platform-bible-react';
 import { ShareLayoutDialogContent } from './share-layout.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip wires ResizeObservers.
@@ -64,28 +70,93 @@ function renderContent(overrides: Partial<Parameters<typeof ShareLayoutDialogCon
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
   render(
+    // The host is a real modal `DialogContent` at `Z_INDEX_MODAL`, because that is what
+    // `OverlayModalDialog` gives this dialog in the app. Rendering the content bare leaves the
+    // page non-modal and emits no host overlay, which silently weakens every assertion here about
+    // the nested picker's relationship to the dialog it covers — a document-wide
+    // `[data-slot="dialog-overlay"]` query would find the picker's own overlay and pass against
+    // any z-index at all.
     <Dialog open>
-      <ShareLayoutDialogContent
-        initialModelText={undefined}
-        initialActiveTab="ScriptureResource"
-        initialScriptureResources={[ESV, NIV]}
-        initialCommentaryResources={[]}
-        allResources={ALL_RESOURCES}
-        isResourcesLoading={false}
-        hasResourcesError={false}
-        onRetryResources={vi.fn()}
-        areDownloadsUnavailable={false}
-        hiddenResourceCount={0}
-        resourcePickerLocalizedStrings={{}}
-        localizedStrings={{}}
-        onConfirm={onConfirm}
-        onCancel={onCancel}
-        {...overrides}
-      />
+      <DialogContent style={{ zIndex: Z_INDEX_MODAL }} data-testid="host-dialog-content">
+        <ShareLayoutDialogContent
+          initialModelText={undefined}
+          initialActiveTab="ScriptureResource"
+          initialScriptureResources={[ESV, NIV]}
+          initialCommentaryResources={[]}
+          allResources={ALL_RESOURCES}
+          isResourcesLoading={false}
+          hasResourcesError={false}
+          onRetryResources={vi.fn()}
+          areDownloadsUnavailable={false}
+          hiddenResourceCount={0}
+          resourcePickerLocalizedStrings={{}}
+          localizedStrings={{}}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+          {...overrides}
+        />
+      </DialogContent>
     </Dialog>,
   );
   return { onConfirm, onCancel };
 }
+
+/**
+ * The picker's own `DialogContent`, found from something only it renders.
+ *
+ * Every query about the picker is scoped through this. The host dialog is a `DialogContent` with an
+ * overlay and a close button of its own, so a document-wide `querySelector` for any dialog part
+ * answers about the host just as readily as about the picker.
+ */
+function getPickerContent(): HTMLElement {
+  const pickerTitle = screen.getByText('%resourcePicker_title%');
+  const content = pickerTitle.closest<HTMLElement>('[data-slot="dialog-content"]');
+  if (!content) throw new Error('The resource picker is not rendering inside a dialog content.');
+  return content;
+}
+
+/**
+ * The overlay Radix portals alongside the picker's content, as opposed to the host's own.
+ *
+ * Both dialogs portal straight to `<body>`, so the two overlays are siblings and cannot be told
+ * apart by position in the tree. `DialogPortal` appends in mount order and the picker mounts
+ * second, so the picker's is the last one. The count assertion is what keeps that reading honest:
+ * if the harness ever stops nesting, this returns the host's overlay and every assertion built on
+ * it goes quietly green.
+ */
+function getPickerOverlay(): HTMLElement {
+  const overlays = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-slot="dialog-overlay"]'),
+  );
+  expect(overlays).toHaveLength(2);
+  return overlays[overlays.length - 1];
+}
+
+/**
+ * Every embedded picker, by how it is opened.
+ *
+ * All three `DialogContent`s in this dialog carry the same nested-tier `style`/`overlayStyle`/
+ * `overlayClassName` triple and the same `onOpenAutoFocus`, from one shared constant and one shared
+ * helper — but each spells them out at its own call site, so dropping one is invisible unless
+ * something opens that picker. The model-text picker is the one that had no coverage.
+ */
+const PICKER_OPENERS: [name: string, open: () => void][] = [
+  [
+    'manage picker',
+    () => {
+      const [manageButton] = screen.getAllByText(
+        '%shareLayoutDialog_manageScriptureResources_label%',
+      );
+      fireEvent.click(manageButton);
+    },
+  ],
+  [
+    'model-text picker',
+    () => {
+      fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
+    },
+  ],
+];
 
 describe('ShareLayoutDialogContent', () => {
   it('confirms with the initial state unchanged when nothing is edited', () => {
@@ -230,26 +301,33 @@ describe('ShareLayoutDialogContent', () => {
   // Dismissing the inner modal has to leave the outer one usable. A nested dialog that takes the
   // outer dialog's focus trap or backdrop down with it still passes "the picker is gone".
   //
-  // The body-level assertion is the load-bearing half. `fireEvent.click` dispatches straight at the
-  // node and goes through `pointer-events: none`, so a share dialog left inert by the dismissed
-  // picker would still satisfy the confirm click below; what Radix actually leaves behind on a
-  // botched teardown is `pointer-events: none` on `<body>`.
+  // The `aria-hidden` assertions are the load-bearing half. `fireEvent.click` dispatches straight
+  // at the node and goes through `pointer-events: none`, so a share dialog left inert by the
+  // dismissed picker would still satisfy the confirm click below; what Radix actually leaves behind
+  // on a botched teardown is the host marked hidden from assistive technology.
+  //
+  // Scoped to the host rather than to `<body>`: the host here is a real modal, as it is in the app,
+  // so `body` legitimately keeps `pointer-events: none` for as long as the share dialog is open. A
+  // `body`-level assertion would be asserting that the outer dialog had stopped being modal.
   it('leaves the share dialog usable after the manage picker is dismissed', () => {
     const { onConfirm } = renderContent();
+    const hostContent = screen.getByTestId('host-dialog-content');
 
     const [manageButton] = screen.getAllByText(
       '%shareLayoutDialog_manageScriptureResources_label%',
     );
     fireEvent.click(manageButton);
 
-    // The positive control: while the picker is open Radix holds the page inert, so the assertion
-    // after dismissal can tell "correctly restored" apart from "never set in the first place".
-    expect(document.body.style.pointerEvents).toBe('none');
+    // The positive control: while the picker is open Radix hides the host from assistive
+    // technology, so the assertion after dismissal can tell "correctly restored" apart from "never
+    // set in the first place".
+    expect(hostContent).toHaveAttribute('aria-hidden', 'true');
 
     fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
 
-    // Nothing is holding the page inert any more.
-    expect(document.body.style.pointerEvents).not.toBe('none');
+    // The host is reachable again, and still modal in its own right.
+    expect(hostContent).not.toHaveAttribute('aria-hidden');
+    expect(document.body.style.pointerEvents).toBe('none');
 
     // The outer dialog's own controls still respond, and its state survived the round trip.
     fireEvent.click(screen.getByText('%shareLayoutDialog_confirm_label%'));
@@ -274,7 +352,8 @@ describe('ShareLayoutDialogContent', () => {
     const pickerTitle = screen.getByText('%resourcePicker_title%');
     expect(pickerTitle.closest('[data-slot="dialog-content"]')).not.toBeNull();
     expect(pickerTitle.closest('[data-slot="popover-content"]')).toBeNull();
-    expect(document.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull();
+    // The picker's own backdrop, not the host's — the host is a modal `DialogContent` here too.
+    expect(getPickerOverlay()).toBeInTheDocument();
   });
 
   // `DialogContent` builds in a close button whose screen-reader label is a hardcoded English
@@ -293,8 +372,9 @@ describe('ShareLayoutDialogContent', () => {
     expect(screen.getByLabelText('%shareLayoutDialog_closePicker_label%')).toBeInTheDocument();
     // Matched on the slot rather than on the name 'Close': that name is the untranslatable string
     // this assertion exists to keep out, so localizing it would turn the name lookup green against
-    // a dialog still shipping two stacked close buttons.
-    expect(document.querySelector('[data-slot="dialog-close"]')).toBeNull();
+    // a dialog still shipping two stacked close buttons. Scoped to the picker's own content,
+    // because the host dialog ships the built-in close button this picker opts out of.
+    expect(getPickerContent().querySelector('[data-slot="dialog-close"]')).toBeNull();
   });
 
   // Every embedded picker replaces `DialogContent`'s built-in close button, whose screen-reader
@@ -307,8 +387,9 @@ describe('ShareLayoutDialogContent', () => {
     fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
 
     expect(screen.getByLabelText('%shareLayoutDialog_closePicker_label%')).toBeInTheDocument();
-    // See the manage-picker test above on why this matches the slot rather than the name 'Close'.
-    expect(document.querySelector('[data-slot="dialog-close"]')).toBeNull();
+    // See the manage-picker test above on why this matches the slot rather than the name 'Close',
+    // and why it is scoped to the picker: the host dialog ships the built-in close button too.
+    expect(getPickerContent().querySelector('[data-slot="dialog-close"]')).toBeNull();
 
     fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
     expect(screen.queryByText('%resourcePicker_search_placeholder%')).not.toBeInTheDocument();
@@ -331,7 +412,7 @@ describe('ShareLayoutDialogContent', () => {
     // makes it read as replacing this dialog rather than hanging off it.
     expect(pickerRow.closest('[data-slot="dialog-content"]')).not.toBeNull();
     expect(pickerRow.closest('[data-slot="popover-content"]')).toBeNull();
-    expect(document.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull();
+    expect(getPickerOverlay()).toBeInTheDocument();
   });
 
   // The backdrop above is only half the claim: an overlay that renders at the shared modal tier
@@ -342,37 +423,44 @@ describe('ShareLayoutDialogContent', () => {
   //
   // Compared as declared strings rather than through `Number(...)`, since `Number('')` is `0` and
   // would make a missing z-index look like a deliberate one.
-  it('stacks the nested picker and its backdrop above the dialog hosting them', () => {
+  it.each(PICKER_OPENERS)('stacks the nested %s and its backdrop above its host', (_name, open) => {
     renderContent();
 
-    const [manageButton] = screen.getAllByText(
-      '%shareLayoutDialog_manageScriptureResources_label%',
-    );
-    fireEvent.click(manageButton);
+    open();
 
-    const pickerContent = screen
-      .getByRole('button', { name: 'NLT' })
-      .closest<HTMLElement>('[data-slot="dialog-content"]');
-    const overlay = document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]');
+    const pickerContent = getPickerContent();
+    const pickerOverlay = getPickerOverlay();
+    const hostContent = screen.getByTestId('host-dialog-content');
 
-    expect(pickerContent?.style.zIndex).toBe(String(Z_INDEX_NESTED_MODAL));
-    expect(overlay?.style.zIndex).toBe(String(Z_INDEX_NESTED_MODAL_BACKDROP));
+    expect(pickerContent.style.zIndex).toBe(String(Z_INDEX_NESTED_MODAL));
+    expect(pickerOverlay.style.zIndex).toBe(String(Z_INDEX_NESTED_MODAL_BACKDROP));
+
+    // The relation, not just the two values: both picker layers have to clear the host. Without
+    // this the test passes for any pair of constants, including a pair that puts the backdrop
+    // back underneath the dialog it is meant to dim.
+    expect(Number(pickerOverlay.style.zIndex)).toBeGreaterThan(Number(hostContent.style.zIndex));
+    expect(Number(pickerContent.style.zIndex)).toBeGreaterThan(Number(hostContent.style.zIndex));
+
+    // The backdrop also has to dim as much as the host's does. At `DialogOverlay`'s default
+    // `bg-black/10` it paints over the host without visibly darkening it, so the host still reads
+    // as live while Radix holds it inert — the exact effect the nested tier exists to prevent.
+    expect(pickerOverlay.className).toContain('overlay-modal-backdrop');
   });
 
   // A dialog focuses its first tabbable element on open, which would be the close button: it pops
   // its own tooltip over the picker the instant it opens and starts the keyboard user on "leave"
   // rather than on the search they came to do. The picker names its target in `onOpenAutoFocus`
   // rather than relying on DOM order, so reordering the JSX for layout cannot move opening focus.
-  it('puts opening focus on the search box, not on the close button', () => {
-    renderContent();
+  it.each(PICKER_OPENERS)(
+    'puts opening focus in the %s on the search box, not on the close button',
+    (_name, open) => {
+      renderContent();
 
-    const [manageButton] = screen.getAllByText(
-      '%shareLayoutDialog_manageScriptureResources_label%',
-    );
-    fireEvent.click(manageButton);
+      open();
 
-    expect(screen.getByPlaceholderText('%resourcePicker_search_placeholder%')).toHaveFocus();
-  });
+      expect(screen.getByPlaceholderText('%resourcePicker_search_placeholder%')).toHaveFocus();
+    },
+  );
 
   // The case the ordering alone never covered: an empty picker disables its own search box, so
   // Radix's default auto-focus falls through to the next tabbable element — the close button. This

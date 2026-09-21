@@ -1274,7 +1274,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     if (showSelectedOnly) setShowSelectedOnly(false);
   };
 
-  const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
+  // Not memoized. The only key this could take is `props`, which is a fresh object every render,
+  // so a `useMemo` here would never hit — protection in appearance only. The body is a map lookup
+  // and a join over the current selection, and nothing downstream consumes this value's identity.
+  const triggerContent = ((): { node: ReactNode; title: string } => {
     switch (props.mode) {
       case 'project': {
         const selected = lookUpProject(props.selection.projectId);
@@ -1349,7 +1352,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       default:
         return { node: '', title: '' };
     }
-  }, [props, lookUpProject]);
+  })();
 
   let triggerIcon;
   // While the project list is loading, show a spinner in place of the chevron (even in

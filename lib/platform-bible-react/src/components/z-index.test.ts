@@ -36,6 +36,14 @@ describe('z-index scale', () => {
     expect(Z_INDEX_TOOLTIP).toBeGreaterThan(Z_INDEX_NESTED_MODAL);
   });
 
+  // Nor above the popover tier. A nested modal's own content opens popovers — the resource picker
+  // embedded in Share Layout renders its language filter on `PopoverContent` — and a popover that
+  // paints behind the modal that opened it is unusable. This holds today only because
+  // `Z_INDEX_TOOLTIP` happens to sit between the two, so it needs saying in its own right.
+  it('keeps popover-tier content above the nested modal tier', () => {
+    expect(Z_INDEX_ABOVE_DOCK).toBeGreaterThan(Z_INDEX_NESTED_MODAL);
+  });
+
   // The first-run wizard gates the entire app at startup; nothing may cover it.
   it('keeps the first-run gate above everything else', () => {
     expect(Z_INDEX_FIRST_RUN).toBeGreaterThan(Z_INDEX_ABOVE_POPOVER);

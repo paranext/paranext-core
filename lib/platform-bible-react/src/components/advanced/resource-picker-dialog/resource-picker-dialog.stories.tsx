@@ -13,6 +13,8 @@ import {
 
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_title%': 'Resource picker',
+  '%resourcePicker_description%':
+    "Choose a resource to add. Picking one downloads it if it isn't already installed.",
   '%resourcePicker_section_already_selected%': 'Included',
   '%resourcePicker_section_installed%': 'Installed',
   '%resourcePicker_section_available_to_download%': 'Available to download',

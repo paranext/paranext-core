@@ -25,9 +25,13 @@ import {
   Z_INDEX_NESTED_MODAL,
   Z_INDEX_NESTED_MODAL_BACKDROP,
 } from 'platform-bible-react';
-import { ResourcePickerDialog } from 'platform-bible-react/experimental';
+import { focusResourcePickerOnOpen, ResourcePickerDialog } from 'platform-bible-react/experimental';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
 import { ChevronDown, X } from 'lucide-react';
+// Provides `overlay-modal-backdrop`, the 40%-black backdrop `OverlayModalDialog` gives this
+// dialog. The nested pickers below reuse it so both layers dim by the same amount; see
+// `RESOURCE_PICKER_OVERLAY_CLASS`.
+import '@renderer/components/overlays/overlay-modal-dialog.component.scss';
 
 /**
  * Shape of an embedded picker modal, layered over this dialog.
@@ -46,31 +50,15 @@ const RESOURCE_PICKER_DIALOG_CLASS =
   'tw:flex tw:max-h-[min(720px,85vh)] tw:min-h-0 tw:flex-col tw:gap-0 tw:overflow-hidden tw:p-0 tw:sm:max-w-xl';
 
 /**
- * Where focus goes when an embedded picker opens.
+ * Backdrop for an embedded picker.
  *
- * Rendering the close button after the picker gets this right only while the search box is enabled
- * — the picker disables it whenever there is nothing to filter (an empty commentary catalog, a
- * failed fetch), and the mount auto-focus then falls through to the Retry button or to the close
- * button itself, starting a keyboard user on "leave". Stating the target directly also survives
- * anyone reordering the JSX or adding a focusable control above the search box.
+ * `DialogOverlay`'s default is `bg-black/10`, a quarter of the 40% black `OverlayModalDialog` gives
+ * the dialog these pickers open over. At 10% the picker's own backdrop lands on top of this dialog
+ * without visibly dimming it, so the dialog still reads as live while Radix holds it inert — the
+ * exact effect the nested tier exists to prevent. Reusing the host's own class rather than
+ * restating the value keeps the two from drifting apart.
  */
-function focusPickerSearchOnOpen(
-  event: Event,
-  searchInput: HTMLInputElement | null | undefined,
-  content: HTMLDivElement | null,
-) {
-  if (searchInput && !searchInput.disabled) {
-    event.preventDefault();
-    searchInput.focus();
-    return;
-  }
-  // Nothing to type into: hold focus on the dialog itself rather than on whatever happens to be
-  // tabbable. Escape and the screen-reader announcement both still work from there.
-  if (content) {
-    event.preventDefault();
-    content.focus();
-  }
-}
+const RESOURCE_PICKER_OVERLAY_CLASS = 'overlay-modal-backdrop';
 
 export type ShareLayoutActiveTab =
   | 'ScriptureResource'
@@ -266,8 +254,10 @@ export function ShareLayoutDialogContent({
   const [openAddPickerTab, setOpenAddPickerTab] = useState<TabKey | undefined>(undefined);
 
   // One pair of refs shared by all three `DialogContent`s here — the manage picker renders once per
-  // TabKey, plus the model-text picker. Opening any of them requires clicking a trigger in this
-  // dialog, and Radix unmounts closed content, so only one is ever mounted at a time.
+  // TabKey, plus the model-text picker. Safe because no two can be open at once: opening one
+  // requires clicking a trigger that the already-open picker covers, and this dialog is modal. Not
+  // because Radix unmounts closed content — `Presence` keeps it mounted through its exit
+  // animation, so briefly there really are two.
   // React writes `null` into a detached DOM ref itself, so there is no `undefined` equivalent here.
   /* eslint-disable no-null/no-null */
   const pickerSearchInputRef = useRef<HTMLInputElement | null>(null);
@@ -351,9 +341,10 @@ export function ShareLayoutDialogContent({
           className={RESOURCE_PICKER_DIALOG_CLASS}
           style={{ zIndex: Z_INDEX_NESTED_MODAL }}
           overlayStyle={{ zIndex: Z_INDEX_NESTED_MODAL_BACKDROP }}
+          overlayClassName={RESOURCE_PICKER_OVERLAY_CLASS}
           showCloseButton={false}
           onOpenAutoFocus={(event) =>
-            focusPickerSearchOnOpen(event, pickerSearchInputRef.current, pickerContentRef.current)
+            focusResourcePickerOnOpen(event, pickerSearchInputRef.current, pickerContentRef.current)
           }
         >
           <ResourcePickerDialog
@@ -443,9 +434,10 @@ export function ShareLayoutDialogContent({
                 className={RESOURCE_PICKER_DIALOG_CLASS}
                 style={{ zIndex: Z_INDEX_NESTED_MODAL }}
                 overlayStyle={{ zIndex: Z_INDEX_NESTED_MODAL_BACKDROP }}
+                overlayClassName={RESOURCE_PICKER_OVERLAY_CLASS}
                 showCloseButton={false}
                 onOpenAutoFocus={(event) =>
-                  focusPickerSearchOnOpen(
+                  focusResourcePickerOnOpen(
                     event,
                     pickerSearchInputRef.current,
                     pickerContentRef.current,

@@ -1,3 +1,10 @@
+---
+paths:
+  - lib/platform-bible-react/src/components/advanced/project-selector/**
+  - lib/platform-bible-react/src/components/advanced/resource-picker-dialog/**
+  - src/renderer/components/projects/**
+---
+
 ## Picker Rows Truncate — They Never Scroll Horizontally
 
 Platform.Bible lists the same three things in several project/resource pickers — a short name, a
@@ -33,7 +40,7 @@ When you add a picker, or change the row layout of one that exists:
    one opens the browser's default tooltip on top of the app's.
 5. **The short name starts at the leading edge** of its column, with any check mark / indicator
    glyph in a fixed-width slot rendered for every row. A slot rendered only when it has something in
-   it ragges the leading edge of the one column the list aligns on.
+   it leaves the one column the list aligns on with a ragged leading edge.
 
 ### Testing it
 

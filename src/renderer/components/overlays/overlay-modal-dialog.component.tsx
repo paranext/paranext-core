@@ -41,6 +41,8 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
     [overlay],
   );
 
+  const providesOwnTitleAndDescription = overlay.props.providesOwnTitleAndDescription === true;
+
   const rawSize = overlay.props.initialSize;
   const initialSize =
     typeof rawSize === 'object' &&
@@ -67,22 +69,30 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
         }
       >
         {/* Radix requires DialogTitle and DialogDescription inside DialogContent for
-            accessibility. The inner dialog component may render its own visible versions;
-            these hidden ones satisfy Radix for dialogs that don't. */}
-        <VisuallyHidden.Root asChild>
-          <DialogTitle>
-            {typeof overlay.props.title === 'string' ? overlay.props.title : 'Dialog'}
-          </DialogTitle>
-        </VisuallyHidden.Root>
-        <VisuallyHidden.Root asChild>
-          <DialogDescription>
-            {(() => {
-              if (typeof overlay.props.prompt === 'string') return overlay.props.prompt;
-              if (typeof overlay.props.title === 'string') return overlay.props.title;
-              return 'Dialog';
-            })()}
-          </DialogDescription>
-        </VisuallyHidden.Root>
+            accessibility. These hidden ones satisfy it for dialogs that render neither.
+            A dialog that renders its own pair sets `providesOwnTitleAndDescription` on its
+            `DialogDefinition` and gets no fallback here: both ids come from the one
+            `Dialog.Root` context, so rendering the pair twice duplicates the ids and leaves
+            `aria-labelledby`/`aria-describedby` resolving to whichever comes first in document
+            order — this generic text rather than the dialog's own localized text. */}
+        {!providesOwnTitleAndDescription && (
+          <>
+            <VisuallyHidden.Root asChild>
+              <DialogTitle>
+                {typeof overlay.props.title === 'string' ? overlay.props.title : 'Dialog'}
+              </DialogTitle>
+            </VisuallyHidden.Root>
+            <VisuallyHidden.Root asChild>
+              <DialogDescription>
+                {(() => {
+                  if (typeof overlay.props.prompt === 'string') return overlay.props.prompt;
+                  if (typeof overlay.props.title === 'string') return overlay.props.title;
+                  return 'Dialog';
+                })()}
+              </DialogDescription>
+            </VisuallyHidden.Root>
+          </>
+        )}
         {/* Flex-1 + min-h-0 + overflow-hidden fills the modal shell; each dialog body scrolls its
             own region. An outer overflow-y here scrolls the whole body and can push action buttons
             off-screen for tall dialogs (e.g. select books), breaking hit-testing in E2E. */}

@@ -134,9 +134,9 @@ function ProjectSection({
               entry in `.context/standards/Architecture-Decisions.md`. */}
           <div className="tw:flex tw:min-w-0 tw:items-center tw:justify-start tw:gap-1 tw:pe-2 tw:text-sm tw:font-medium">
             {/* Both glyph slots are fixed-width and rendered for every row, empty or not, so every
-                short name starts at the same offset. Rendering them conditionally would ragged the
-                leading edge of the one column this list aligns on. `ProjectSelector` reserves its
-                indicator slot the same way. */}
+                short name starts at the same offset. Rendering them conditionally would leave the
+                leading edge of the one column this list aligns on ragged. `ProjectSelector`
+                reserves its indicator slot the same way. */}
             <span className="tw:flex tw:h-3 tw:w-3 tw:shrink-0 tw:items-center tw:justify-center">
               {p.id === currentProjectId && (
                 // Wrapped rather than labelled directly so it carries a hover label like the
@@ -164,25 +164,30 @@ function ProjectSection({
           <div className="tw:min-w-0 tw:truncate tw:px-3 tw:text-sm" title={p.fullName}>
             {p.fullName}
           </div>
-          {/* Column 3 — language tag with tooltip. Floored and truncating like the two columns
-              before it: its min-content contribution is a whole unbreakable word, so a track that
-              could not shrink would satisfy itself by crushing the short name and full name
-              instead — and `overflow-x-hidden` on the scroll container means there is no longer a
-              scrollbar to recover them with. `language` is a BCP-47 tag by convention only, and
-              nothing enforces it. */}
+          {/* Column 3 — language tag. Floored and truncating like the two columns before it: its
+              min-content contribution is a whole unbreakable word, so a track that could not shrink
+              would satisfy itself by crushing the short name and full name instead — and
+              `overflow-x-hidden` on the scroll container means there is no longer a scrollbar to
+              recover them with. `language` is a BCP-47 tag by convention only, and nothing enforces
+              it, so it can be long enough to clip.
+
+              Both branches keep the clipped tag itself reachable, per invariant 4 of
+              `.claude/rules/ux/picker-row-layout.md`. The tooltip branch carries the tag alongside
+              its display name rather than the display name alone — a different string does not
+              recover the one that was clipped. The plain branch uses a native `title`, safe here
+              because these rows are listbox options rather than tooltip triggers, as for the two
+              columns before it. */}
           <div className="tw:min-w-0 tw:truncate tw:text-end tw:text-sm tw:text-muted-foreground">
             {p.language &&
               (p.languageDisplayName ? (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="tw:cursor-default">{p.language}</span>
-                    </TooltipTrigger>
-                    <TooltipContent>{p.languageDisplayName}</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:cursor-default">{p.language}</span>
+                  </TooltipTrigger>
+                  <TooltipContent>{`${p.language} — ${p.languageDisplayName}`}</TooltipContent>
+                </Tooltip>
               ) : (
-                p.language
+                <span title={p.language}>{p.language}</span>
               ))}
           </div>
         </div>
@@ -249,7 +254,10 @@ export default function ProjectPicker({
   });
 
   return (
-    <>
+    // One provider for the whole list rather than one per row: the language cells are the only
+    // tooltip triggers here, and a provider per row is a fresh delay/timer context each, so
+    // moving between two rows never counts as "already open" for the skip-delay behavior.
+    <TooltipProvider>
       <DialogHeader className="tw:px-4 tw:pt-4">
         <DialogTitle>{titleText}</DialogTitle>
       </DialogHeader>
@@ -311,6 +319,6 @@ export default function ProjectPicker({
           </div>
         )}
       </div>
-    </>
+    </TooltipProvider>
   );
 }

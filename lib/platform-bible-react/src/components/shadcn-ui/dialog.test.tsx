@@ -9,7 +9,12 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/shadcn-ui/dialog';
-import { Z_INDEX_MODAL, Z_INDEX_MODAL_BACKDROP } from '@/components/z-index';
+import {
+  Z_INDEX_MODAL,
+  Z_INDEX_MODAL_BACKDROP,
+  Z_INDEX_NESTED_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
+} from '@/components/z-index';
 
 /**
  * `DialogOverlay` sets its `zIndex` inline, and inline styles beat classes — so `overlayClassName`
@@ -31,14 +36,20 @@ describe('DialogContent overlay styling', () => {
       </Dialog>,
     );
 
+  // Through the nested-modal constants rather than their literal values: this asserts that what a
+  // caller passes is what arrives, so pinning the numbers would leave it passing against stale ones
+  // if either tier is ever re-valued.
   it('forwards overlayStyle to the backdrop', () => {
-    renderDialog({ overlayStyle: { zIndex: 510 }, style: { zIndex: 520 } });
+    renderDialog({
+      overlayStyle: { zIndex: Z_INDEX_NESTED_MODAL_BACKDROP },
+      style: { zIndex: Z_INDEX_NESTED_MODAL },
+    });
 
     expect(document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]')?.style.zIndex).toBe(
-      '510',
+      String(Z_INDEX_NESTED_MODAL_BACKDROP),
     );
     expect(document.querySelector<HTMLElement>('[data-slot="dialog-content"]')?.style.zIndex).toBe(
-      '520',
+      String(Z_INDEX_NESTED_MODAL),
     );
   });
 

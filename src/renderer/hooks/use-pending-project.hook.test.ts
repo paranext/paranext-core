@@ -361,7 +361,12 @@ describe('usePendingProject — localization', () => {
       readFileSync(path.join(__dirname, '../../../assets/localization/en.json'), 'utf8'),
     );
 
-    expect(englishStrings).toHaveProperty(PROJECT_OPEN_FAILED_MESSAGE_KEY);
+    // `toHaveProperty` alone is satisfied by an empty string, which ships an empty toast. Both
+    // arms assert the same thing, so neither locale can be the weaker guard.
+    expect(englishStrings[PROJECT_OPEN_FAILED_MESSAGE_KEY]).toBeTruthy();
+    expect(englishStrings[PROJECT_OPEN_FAILED_MESSAGE_KEY]).not.toBe(
+      PROJECT_OPEN_FAILED_MESSAGE_KEY,
+    );
   });
 
   // en and es are both maintained in this repo, and nothing in the build enforces parity — so a key

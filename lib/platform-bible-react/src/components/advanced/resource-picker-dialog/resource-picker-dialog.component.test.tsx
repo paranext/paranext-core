@@ -94,6 +94,49 @@ function renderDialogForRerender(
 }
 
 describe('ResourcePickerDialog', () => {
+  // A host opening this picker gets its opening focus from `focusResourcePickerOnOpen`, which parks
+  // focus on the dialog shell while the search box is disabled. That is the ORDINARY state for the
+  // first moment after opening, because the catalog fetch is still in flight — so without a
+  // catch-up the catalog arrives, the box enables, and focus is left on the shell for good.
+  it('moves focus to the search box when the catalog arrives and enables it', () => {
+    const { rerender } = renderDialogForRerender({ isResourcesLoading: true });
+
+    const searchBox = screen.getByPlaceholderText('Search resources…');
+    // The premise: while loading there is genuinely nothing to type into. Without this control the
+    // test could pass against a picker that never disabled the box in the first place.
+    expect(searchBox).toBeDisabled();
+    // Stand in for `focusResourcePickerOnOpen`'s fallback, which parks focus on the host's content.
+    const shell = document.querySelector<HTMLElement>('[data-slot="dialog-content"]');
+    shell?.focus();
+
+    rerender({ isResourcesLoading: false });
+
+    expect(screen.getByPlaceholderText('Search resources…')).toHaveFocus();
+  });
+
+  // The other half: a user who has already moved focus keeps their place. Taking it back from a
+  // control they chose is worse than the stranding the catch-up above fixes.
+  //
+  // The control is a host-rendered button rather than one of the picker's own, because while the
+  // catalog is loading the picker's search box and language filter are both disabled — so the only
+  // place a user's focus can actually be is on something the host rendered, typically its close
+  // button.
+  it('leaves focus alone when the catalog arrives and the user has already moved it', () => {
+    const { rerender } = renderDialogForRerender({ isResourcesLoading: true });
+
+    const hostControl = document.createElement('button');
+    document.body.appendChild(hostControl);
+    hostControl.focus();
+    expect(hostControl).toHaveFocus();
+
+    rerender({ isResourcesLoading: false });
+
+    expect(hostControl).toHaveFocus();
+    expect(screen.getByPlaceholderText('Search resources…')).not.toHaveFocus();
+
+    hostControl.remove();
+  });
+
   it('shows "Already Selected" section heading with selected resource names', () => {
     renderDialog();
     // The section heading and sr-only row labels both contain this text, so use getAllByText
@@ -525,10 +568,13 @@ describe('ResourcePickerDialog', () => {
     const languageCell = screen.getAllByText('English')[0].closest('td');
     expect(languageCell?.className).toContain('tw:text-end');
 
-    // The leading edge is the table default, so there is no positive class to match on the short
-    // name — the absence of the end-alignment above is what holds it. Both spellings are checked:
-    // `tw:text-end` is what this file uses today, and `tw:text-right` is the physical class a
-    // regression would most likely reintroduce, since it is what the column carried before.
+    // Asserted positively. "Not end-aligned" is satisfied by every other way of moving this edge —
+    // `text-center`, a start indent, a centring wrapper — so it would stay green against a column
+    // that had stopped being leading-aligned by some other means. The cell states `tw:text-start`
+    // rather than leaning on the table default precisely so there is something to assert.
+    expect(shortNameCell?.className).toContain('tw:text-start');
+    // Kept alongside it: `tw:text-right` is the physical class a regression would most likely
+    // reintroduce, and it would sit next to `tw:text-start` rather than replacing it.
     expect(shortNameCell?.className).not.toContain('tw:text-end');
     expect(shortNameCell?.className).not.toContain('tw:text-right');
   });

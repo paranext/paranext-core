@@ -704,6 +704,27 @@ export declare function getResourcePickerBodyState(input: {
  */
 export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Puts opening focus where a `ResourcePickerDialog` host wants it, from the host's
+ * `DialogContent`'s `onOpenAutoFocus`.
+ *
+ * A dialog focuses its first tabbable element on open, which for an embedded picker is whatever the
+ * host renders first — typically a close button, so a keyboard user starts on "leave" rather than
+ * on the search they came to do. Ordering the JSX is not enough on its own: the picker disables its
+ * search box whenever there is nothing to filter, and focus then falls through to Retry or to the
+ * close button anyway.
+ *
+ * This lives beside the picker rather than at each host because the disabled condition is the
+ * picker's own state. A host that re-derived it would go stale the moment that condition changed.
+ * The picker re-claims focus itself once the box becomes enabled, so a host that opens the picker
+ * mid-fetch does not strand the user on the shell.
+ *
+ * @param event The `onOpenAutoFocus` event. Prevented whenever this function places focus itself.
+ * @param searchInput The picker's search box, from the ref passed as `searchInputRef`.
+ * @param content The host's own dialog content, used when there is nothing to type into. Escape and
+ *   the screen-reader announcement both still work from there.
+ */
+export declare function focusResourcePickerOnOpen(event: Event, searchInput: HTMLInputElement | null | undefined, content: HTMLElement | null | undefined): void;
+/**
  * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
  *
  * Yields an empty array rather than throwing when `availableBookInfo` holds no flags. Every caller

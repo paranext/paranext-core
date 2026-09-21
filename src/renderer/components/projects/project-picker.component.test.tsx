@@ -1,11 +1,19 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { beforeAll, vi } from 'vitest';
 import { Dialog } from 'platform-bible-react';
 import ProjectPicker, {
   type ProjectItem,
   type ProjectPickerLocalizedStrings,
 } from './project-picker.component';
+
+// jsdom implements no ResizeObserver; the row tooltip's popper wires one.
+beforeAll(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
+  );
+});
 
 const STRINGS: ProjectPickerLocalizedStrings = {
   '%projectPicker_title%': 'Project Picker',
@@ -269,11 +277,60 @@ describe('row width', () => {
       'tw:grid-cols-[minmax(0,auto)_minmax(0,1fr)_minmax(0,auto)]',
     );
 
-    const languageCell = screen.getByText(LONG_LANGUAGE);
-    expect(languageCell.className).toContain('tw:truncate');
-    expect(languageCell.className).toContain('tw:min-w-0');
+    // The cell, not the text inside it: the tag is wrapped so it can carry its own hover label, so
+    // the truncation classes sit on the cell one level up.
+    const languageCell = screen.getByText(LONG_LANGUAGE).closest('div[class*="tw:truncate"]');
+    expect(languageCell?.className).toContain('tw:truncate');
+    expect(languageCell?.className).toContain('tw:min-w-0');
 
     const scrollContainer = listbox.parentElement;
     expect(scrollContainer?.className).toContain('tw:overflow-x-hidden');
+  });
+
+  // Invariant 4 of `.claude/rules/ux/picker-row-layout.md`: truncation must not put anything out of
+  // reach. `overflow-x-hidden` above removed the scrollbar that used to recover a clipped language
+  // tag, so the tag needs a hover label of its own — and the tag is what gets clipped, so a tooltip
+  // naming only the display name does not recover it.
+  it('keeps a clipped language tag reachable on hover, with and without a display name', () => {
+    renderDialog({
+      currentProject: undefined,
+      recentProjects: [],
+      allProjects: [
+        { id: 'plain', fullName: 'Plain', shortName: 'PLAIN', language: LONG_LANGUAGE },
+      ],
+    });
+
+    // No display name: a native title, safe because these rows are listbox options rather than
+    // tooltip triggers.
+    expect(screen.getByText(LONG_LANGUAGE)).toHaveAttribute('title', LONG_LANGUAGE);
+  });
+
+  it('names the language tag alongside its display name in the row tooltip', () => {
+    renderDialog({
+      currentProject: undefined,
+      recentProjects: [],
+      allProjects: [
+        {
+          id: 'named',
+          fullName: 'Named',
+          shortName: 'NAMED',
+          language: LONG_LANGUAGE,
+          languageDisplayName: 'Some Language',
+        },
+      ],
+    });
+
+    // The trigger carries no native `title` here — a `title` inside a tooltip trigger opens the
+    // browser's default tooltip on top of the app's.
+    const trigger = screen.getByText(LONG_LANGUAGE);
+    expect(trigger).not.toHaveAttribute('title');
+
+    fireEvent.focus(trigger);
+
+    // Both strings: the tooltip's job here is to recover the clipped tag, and the display name is a
+    // different string. Asserting only the display name would pass against a tooltip that leaves
+    // the clipped text unreachable.
+    const tooltip = screen.getAllByText(`${LONG_LANGUAGE} — Some Language`)[0];
+    expect(tooltip).toBeInTheDocument();
   });
 });
