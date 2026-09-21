@@ -329,8 +329,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-markers-menu',
     purpose: 'Open the inline markers menu',
     category: 'Editing',
-    // Inert while the editor's right-click menu is open: that menu is the only keyboard mode on
-    // screen while it is up, and the key is swallowed rather than typed into the document.
+    // Inert in every view while the editor's right-click menu is open: that menu is the only
+    // keyboard mode on screen while it is up, and the key is swallowed rather than typed into the
+    // document (see `isEditorContextMenuOpen`).
     context: 'Scripture editor web view',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
@@ -444,6 +445,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-insert-comment',
     purpose: 'Insert a comment at the selection',
     category: 'Editing',
+    // Swallowed while the editor's right-click menu is open (see `isEditorContextMenuOpen`).
     context: 'Scripture editor web view',
     // Ctrl+Shift+N first (not code order) so the menu hint shows it
     keys: {
@@ -460,6 +462,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-insert-footnote',
     purpose: 'Insert a footnote at the selection (Standard view, editable)',
     category: 'Editing',
+    // Swallowed while the editor's right-click menu is open (see `isEditorContextMenuOpen`).
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
@@ -473,6 +476,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-insert-cross-reference',
     purpose: 'Insert a cross-reference at the selection (Standard view, editable)',
     category: 'Editing',
+    // Swallowed while the editor's right-click menu is open (see `isEditorContextMenuOpen`).
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
