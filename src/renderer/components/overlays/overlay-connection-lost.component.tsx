@@ -34,8 +34,8 @@ export const CONNECTION_LOST_MESSAGE_KEY = '%overlay_connectionLost%' satisfies 
 export const CONNECTION_LOST_RELOAD_KEY = '%overlay_connectionLostReload%' satisfies LocalizeKey;
 /**
  * Referenced as `{%product_name%}` inside the message, and expanded by `formatReplacementString`,
- * so the app name lives in one place and swaps cleanly for Paratext 10 Studio. Fetched alongside
- * the message rather than hardcoded for the same reason every other product-named string is.
+ * so the app name lives in one place and swaps cleanly for Paratext 10. Fetched alongside the
+ * message rather than hardcoded for the same reason every other product-named string is.
  */
 export const PRODUCT_NAME_KEY = '%product_name%' satisfies LocalizeKey;
 

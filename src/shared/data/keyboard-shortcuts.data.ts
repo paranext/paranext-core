@@ -1,19 +1,17 @@
-import { KeyboardShortcutEntry } from './keyboard-shortcuts-catalog/keyboard-shortcuts-catalog.component';
+import type { KeyboardShortcutEntry } from '@shared/data/keyboard-shortcuts.model';
 
 /**
  * The complete catalog of keyboard shortcuts used across the entire Platform.Bible application:
  * shortcuts handled in the Electron main process, shortcuts defined by bundled extensions, and
  * shortcuts defined inside the shared `platform-bible-react` component library. This is the single
  * source of truth — when you add, change, or remove any keyboard handler anywhere in the app,
- * update the matching entry here.
+ * update the matching entry here. Set `command` on an entry to show its chord as a hint beside menu
+ * items that run that command.
  *
- * Note on macOS modifier order: the `Guidelines/Keyboard shortcuts` page documents the macOS
- * display order as Control, Option, Shift, Command. A few entries intentionally deviate and show
- * Command before Option (`⌘⌥…`) because their `keys` mirror the modifier order written in the code
- * that handles them (`next-tab-group`, `previous-tab-group`, `scripture-insert-comment`). These are
- * raw `keydown` handlers, not OS-rendered menu accelerators, so the chord is identical regardless
- * of display order; the entries are kept in code order so they read the same as the handler
- * source.
+ * Note on macOS modifier order: the `Guidelines/Keyboard shortcuts` page orders macOS modifiers
+ * Control, Option, Shift, Command. `next-tab-group` and `previous-tab-group` show Command before
+ * Option (`⌘⌥…`) to mirror their handler code. Entries with a `command` are shown in menus, so
+ * their macOS keys follow the guideline order.
  */
 export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
@@ -463,21 +461,23 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture/src/main.ts',
       'extensions/src/platform-scripture/src/find/use-focus-search-on-invoke.hook.ts',
     ],
+    command: 'platformScripture.openFind',
   },
   {
     id: 'scripture-insert-comment',
     purpose: 'Insert a comment at the selection',
     category: 'Editing',
     context: 'Scripture editor web view',
-    // macOS combo mirrors code order (`event.metaKey && event.altKey`); see file note on modifier order
+    // Ctrl+Shift+N first (not code order) so the menu hint shows it
     keys: {
-      macOS: '⌘⌥M',
-      windows: 'Ctrl+Alt+M / Ctrl+Shift+N',
-      linux: 'Ctrl+Alt+M / Ctrl+Shift+N',
+      macOS: '⌥⌘M',
+      windows: 'Ctrl+Shift+N / Ctrl+Alt+M',
+      linux: 'Ctrl+Shift+N / Ctrl+Alt+M',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
+    command: 'platformScriptureEditor.insertCommentAtSelection',
   },
   {
     id: 'scripture-insert-footnote',
@@ -486,6 +486,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
+    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
@@ -498,6 +499,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
+    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
@@ -521,6 +523,31 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌃Space', windows: 'Ctrl+Space', linux: 'Ctrl+Space' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'scripture-toggle-structure-lock',
+    purpose: 'Lock or unlock the structure for yourself (your personal structure protection)',
+    category: 'Editing',
+    context: 'Scripture editor web view (Simple mode)',
+    // Does nothing while the button is disabled: the lock state failed to load, or a Project
+    // Administrator locked the structure and you cannot change project settings. The handler also
+    // accepts ⌃ for ⌘ on macOS, and Meta for Ctrl on Windows/Linux.
+    keys: { macOS: '⇧⌘L', windows: 'Ctrl+Shift+L', linux: 'Ctrl+Shift+L' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-toggle-project-structure-lock',
+    purpose: 'Lock or unlock the structure for everyone on the project',
+    category: 'Editing',
+    context: 'Scripture editor web view (Simple mode, users who can change project settings)',
+    // Does nothing while the lock state failed to load. The handler also accepts ⌃ for ⌘ on macOS,
+    // and Meta for Ctrl on Windows/Linux.
+    keys: { macOS: '⌥⇧⌘L', windows: 'Ctrl+Shift+Alt+L', linux: 'Ctrl+Alt+Shift+L' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
     ],
   },
   {

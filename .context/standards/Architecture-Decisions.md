@@ -261,7 +261,7 @@ step, no automation. Just a record.
   pick a key that is genuinely free — F8/F9 are taken by chapter/book navigation in
   `src/main/verse-navigation-shortcuts.util.ts`). Do **not** build a general declarative keybinding
   API for a single shortcut. Every added branch also requires a matching `KeyboardShortcutEntry` in
-  `src/stories/keyboard-shortcuts.data.ts` (mandated by `.claude/rules/keyboard-shortcuts-catalog.md`).
+  `src/shared/data/keyboard-shortcuts.data.ts` (mandated by `.claude/rules/keyboard-shortcuts-catalog.md`).
 - **Alternatives:** (a) renderer-level global `keydown` — rejected: web-view iframes are
   `about:srcdoc`, so their key events don't bubble to the top renderer; coverage gaps unless
   duplicated into every web-view. (b) Build a declarative keybinding-contribution API — **deferred**:
@@ -2589,6 +2589,73 @@ step, no automation. Just a record.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
 
+## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** Menus needed titled sections (e.g. the target design for Simple's Project menu,
+  to be implemented in PT-4534: Project / View / Insert / Tools). Every menu column already carries a
+  required, localized `label`; `TabDropdownMenu` stacked columns as divider-separated sections and
+  discarded the label. The interface-mode filter removes items, never columns, and at least one
+  shipping column (`platformScriptureEditor.info`) has no items in any mode.
+- **Decision:** `TabDropdownMenu` renders each non-empty column as a section headed by its label,
+  in every interface mode, but only when two or more non-empty sections remain. Columns with no
+  items render nothing — no heading, no separator — so hiding every item in a column hides the
+  section. Headings are opt-in per call site (`showSectionHeadings`), turned on by Platform.Bible's
+  tab chrome — `TabToolbar` and `TabFloatingMenu` — so a library consumer rendering its own menu
+  data into `TabDropdownMenu` keeps the previous unlabeled look. The menubar (whose columns are its
+  top-level triggers) and single-column context/tab menus have no section headings.
+- **Alternatives:** A `label` on menu groups — rejected: groups have none, the group schema is a
+  two-branch closed `oneOf`, and columns already express sections. Headings in Simple mode only —
+  rejected: needs the interface mode threaded into every consumer of a shared component, and
+  headings help Power too. Always heading a lone section — rejected: it only repeats the trigger.
+  Headings unconditionally for every `TabDropdownMenu` consumer — rejected: the component's
+  documented behavior was that column labels are ignored, so an out-of-repo consumer would see its
+  menus change without asking.
+- **Consequences:** Power's scripture editor and markers checklist menus gain headings. Adding a
+  column now adds a visible heading, so column labels must read as section titles. A submenu item
+  counts as content even when its submenu is empty, so a section can survive with only an empty
+  flyout in it.
+- **Source:** PT-4532 (parent PT-4530); showing headings in both interface modes was agreed during
+  implementation, 2026-09-11.
+
+## adr-menu-shortcut-hints-joined-from-catalog: Menu shortcut hints are joined from the keyboard shortcuts catalog by the menu data service
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** Menus should show the keyboard shortcut for a command. Shortcuts are handled in three
+  unrelated places (main-process `before-input-event`, `useHotkeys`, per-web-view handlers), and the
+  only per-OS display strings live in the hand-maintained catalog. The menu that most needs hints —
+  the scripture editor's Project menu — is rendered inside the extension's iframe, which cannot
+  import `src/shared`.
+- **Decision:** The catalog lives in `src/shared/data/keyboard-shortcuts.data.ts`, and an entry's
+  optional `command` names the PAPI command its chord runs. The extension-host menu data service
+  sets `MenuItemContainingCommand.shortcut` on matching items in the localized menus it serves,
+  using the first alternative for `process.platform`. Renderers only display it, and the menus
+  schema rejects it from contributions. An entry gets a `command` only if its chord works
+  everywhere those items appear, so focus-blind main-process chords (PT-4143) and view-gated
+  chords get none. `keyboard-shortcuts.data.test.ts` pins each `command`'s hint and the menus
+  that show it, and rejects a chord shared with a main-process entry.
+- **Alternatives:** A `shortcut` property in `menus.json` — rejected: every manifest would need
+  re-authoring against a closed schema, and a hint declared in a manifest sits apart from the
+  catalog entry that records its handler. Renderers reading the catalog directly — rejected:
+  extension-rendered menus cannot import it. A lookup table inside `platform-bible-react` —
+  rejected: app-specific command names in the shared component library, and a second source of
+  truth.
+- **Consequences:** Third-party extensions cannot declare hints. The unlocalized main menu (the
+  native macOS menu) carries none. Menus the editor package builds itself (its right-click menu)
+  cannot show them. The catalog is bundled into the extension host. Hints are per operating
+  system, never per view, so a chord that works only in some editor views cannot be joined. Any
+  menu that reuses a `command` inherits its hint, which `keyboard-shortcuts.data.test.ts` pins for
+  bundled menus only. Commands from extensions outside this repo cannot get hints, because
+  `command` is typed against this repo's `CommandNames` and the test scans only bundled manifests.
+  Menus built in TypeScript compile with `shortcut` set even though the schema rejects it in
+  `menus.json`. Key names are English catalog strings, not localized, so a hint reads `Ctrl+Shift+N`
+  in a translated menu; the Localization-Guide asks for key names to go through
+  `getLocalizeKeyForPhysicalKey`, and routing them there is follow-up work (PT-4629).
+- **Source:** PT-4532 (parent PT-4530); sourcing hints in the menu data service was agreed during
+  implementation, 2026-09-11.
+
 ## adr-menus-always-available-gate-at-submission: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
 
 - **Formerly:** ADR-0003
@@ -3142,8 +3209,9 @@ step, no automation. Just a record.
 - **Consequences:** `paratext-10-studio` generates and commits its own pair, copies it over this
   repository's in its clone before packaging, and runs `--verify-shipping-set` on every platform
   and `--verify` on Linux against its own lock. An identifier a downstream entry needs (`PSF-2.0`,
-  `OpenSSL`, `blessing`, `TCL` and `ZPL-2.1` today) is added to `allowed` here, because `allowed`
-  is what `reachableIds` walks to decide which canonical texts the committed corpus index holds.
+  `OpenSSL`, `blessing`, `TCL`, `ZPL-2.1` and `bzip2-1.0.6` today) is added to `allowed` here,
+  because `allowed` is what `reachableIds` walks to decide which canonical texts the committed
+  corpus index holds.
   The overlay reaches `build-corpus-index.ts` like every other policy reader, so a downstream that
   runs the corpus builder with it set rewrites the committed index in its clone; `corpus-texts.ts`
   asserts the index is exactly what the committed policy reaches, so such an index fails CI here
@@ -3523,7 +3591,7 @@ step, no automation. Just a record.
 - **Consequences:** Ctrl+F works only in tabs that mount the hook, so **each new scripture tab type
   is an opt-in** — the real coverage gap of the renderer-level approach, and the one thing the
   main-process handler would have given for free. Adding a tab type is one hook call plus a resolved
-  source project. The catalog entry `scripture-find` in `src/stories/keyboard-shortcuts.data.ts` lists
+  source project. The catalog entry `scripture-find` in `src/shared/data/keyboard-shortcuts.data.ts` lists
   the hook plus every mount site, so the current coverage is greppable in one place; keeping it
   accurate is what stops the gap from going unnoticed. **Revisit** if (b) is ever built, or once
   enough view-context-dependent shortcuts accumulate to justify a general channel.
@@ -3939,6 +4007,74 @@ step, no automation. Just a record.
   deprecation cycle, which `experimental.ts` sanctions by its own contract but which any
   out-of-repo consumer (e.g. Paratext 10 Studio) must absorb at once.
 - **Source:** PR #2673 (project-selector groupings).
+
+## adr-project-selector-per-bucket-row-order: A grouping descriptor owns its bucket's row order, via an optional comparator
+
+- **Date:** 2026-09-19
+- **Status:** Accepted
+- **Context:** `ProjectSelector` sorted every bucket by its own canonical order (alphabetical by
+  `shortName`, tie-broken by scroll group). A grouping whose meaning implies an order — a bucket
+  ordered by a caller-side score, say — had no way to express it, so the picker lane's first plan
+  was a parallel `customSections` API: ordered `{ id, label, match, compare? }` descriptors selected
+  by a `'custom'` grouping option. `adr-project-selector-consumer-driven-groupings` then landed from
+  #2673 and made the bucketing half of that redundant — `getGroupKey` / `getSectionHeading` /
+  `compareSections` already let a consumer express "Recent / Your projects". Only row order inside a
+  bucket was still unreachable.
+- **Decision:** No parallel sections API. `ProjectSelectorGrouping` gains one optional member,
+  `compareProjects`, a standard comparator over `ProjectSelectorProject`. Ties fall back to the
+  canonical order, which keeps a project fanned across several scroll groups in a stable sequence,
+  since a comparator seeing only the project cannot tell those rows apart. It is ignored where the
+  descriptor does not own the bucketing: the `'openTabs'` and `'selection'` groupings, any grouping
+  with no `getGroupKey`, and the unknown bucket — whose rows are precisely the ones the grouping
+  could not classify, so its own axis cannot order them.
+- **Alternatives considered:**
+  - **`customSections` — a second, parallel descriptor API.** Rejected once the grouping descriptors
+    landed: two ways to say "these are my sections" is one too many, and the sections half of it was
+    already expressible. Adding a `'custom'` member to the grouping option union would also have
+    re-centralized in the component knowledge that `adr-project-selector-consumer-driven-groupings`
+    had just pushed out to consumers.
+  - **Sorting every bucket by the caller's comparator, including the unknown one.** Rejected: the
+    unknown bucket collects rows the grouping's own axis could not classify, so ordering them by
+    that axis is meaningless.
+  - **Making the canonical order itself configurable.** Rejected: that is a component-wide knob for
+    a per-grouping concern, and it would let one consumer's ordering leak across every grouping the
+    picker offers.
+- **Consequences:** A list can now mix two orders — a comparator-ordered bucket above an
+  alphabetical "Other" — which the `compareProjects` TSDoc calls out for callers. The built-in
+  `lastUsed` grouping deliberately supplies no comparator: it reads `lastUsedAt` as a presence flag
+  for bucketing only, and its rows stay alphabetical, matching what
+  `platform-bible-utils/src/project-selector-custom-data.ts` documents.
+- **Source:** PR #2790 (project-selector type indicator and per-bucket row order).
+
+## adr-project-selector-stays-experimental: ProjectSelector keeps its experimental entry point while its shape is still moving
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** `ProjectSelector` is the platform's shared project/resource picker, and the picker
+  lane adds capabilities to it across several consecutive work items — a row type indicator and
+  per-bucket row order here, an "All projects…" footer affordance and further consumers after. The
+  question was whether to move it to the stable barrel now, on the strength of its consumer count,
+  or leave it on `platform-bible-react/experimental` until the surface settles.
+- **Decision:** It stays on `experimental`. The capabilities land; the barrel move does not. The
+  stable barrel is a support promise, and the component is still acquiring surface with each
+  consumer — `renderProjectIndicator`, `ProjectSelectorGrouping.compareProjects`, and the footer
+  affordance deferred to the next item all arrived or will arrive after the promotion was first
+  proposed.
+- **Alternatives considered:**
+  - **Promote now.** Rejected: it fixes the public shape at the point of greatest churn. The
+    immediately preceding work item is the evidence — #2673 removed roughly 16 public
+    `ProjectSelectorProps` members and replaced the component's fixed grouping prop set with
+    consumer-supplied descriptors (see `adr-project-selector-consumer-driven-groupings`). A change
+    of that size is what `experimental` exists to allow, and it landed weeks before promotion was
+    proposed, not years.
+  - **Promote with the experimental barrel kept as a deprecated re-export.** Rejected: that entry
+    point's own header declares no stability guarantee and promises no deprecation cycle, so the
+    shim would buy nothing while putting the component in two bundles.
+- **Consequences:** Consumers import from `platform-bible-react/experimental` and accept the
+  no-guarantee contract, which is what they already did. Renames and prop reshapes stay free until
+  promotion. Promotion becomes its own work item, whose entry criterion is that a consumer can be
+  added without adding a prop — and it should carry the API-surface TSDoc and localized-key
+  conventions the stable barrel expects, rather than bundling them into a capability change.
 
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
