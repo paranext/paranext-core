@@ -188,7 +188,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `// TODO: Hook into something that checks for whether the platform is in offline mode` sit in the
   socket and XHR services). Meanwhile Home — `extensions/src/platform-get-resources/` — already
   merges local and shared projects, de-duplicates them by `projectId`, gates its own server fetch on
-  `useSendReceiveAvailability`, and offers Sync rather than Open for rows not on disk.
+  the `platformGetResources.isSendReceiveAvailable` command (Home is an extension web view, so the
+  renderer-side `useSendReceiveAvailability` hook is not reachable from it), and offers Get rather
+  than Open for rows not on disk.
 - **Decision:** The affordance opens Home. Core does not call `getSharedProjects`, gains no
   send/receive awareness in the picker, and needs no build-flavour gate on the affordance — Home
   degrades to a local-only list where send/receive is absent. Home owns the honesty requirement
@@ -213,7 +215,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   retiring it is a breaking change that belongs to its own decision, not a side effect of this one.
   Revisit if
   `getSharedProjects` moves out of the Studio patch layer into core, or if an app-wide offline signal
-  lands — either would make an inline, server-aware picker cheap enough to reconsider.
+  lands — either would make an inline, server-aware picker cheap enough to reconsider. The affordance
+  needs no build-flavour gate, but it does inherit a data-driven one: the picker renders its dropdown
+  only when it has items (`hasProjectPickerItems`), so a user with no local project metadata — including
+  after `MAX_METADATA_FETCH_RETRIES` is exhausted in `use-project-picker-data.hook.ts` — cannot reach
+  Home through it. That is an awkward state rather than a dead end, because `menus.json` contributes
+  `%mainMenu_open%` → `platformGetResources.openHome` with no `hiddenInterfaceModes`, and
+  `dockHomeInThisWindow` auto-opens Home when the dock empties. Home's availability check is also a
+  second implementation of what `src/renderer/hooks/use-send-receive-availability.hook.ts` already
+  models — a shorter retry window that fails closed rather than open — and the two cannot be merged
+  without a module shared across the renderer/web-view boundary, so unifying them is deferred rather
+  than done here.
 - **Amended 2026-09-18 (PT-4552, demo feedback):** the affordance opens Home **scoped to editable
   projects**, leaving out the published resources. The open question this entry recorded — whether
   Home's resource rows are noise on this path or the other half of "get me to the project I mean" —

@@ -14,7 +14,7 @@ import {
 } from 'platform-bible-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Home, HOME_STRING_KEYS } from './home.component';
+import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
 import { useLocalProjects } from './use-local-projects.hook';
 
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -77,13 +77,30 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     papi.commands.sendCommand('platformGetResources.openGetResources');
   }, []);
 
-  const openProject = (projectId: string, isPublished: boolean) =>
-    papi.commands.sendCommand(
+  const openProject = async (projectId: string, isPublished: boolean) => {
+    await papi.commands.sendCommand(
       isPublished
         ? 'platformScriptureEditor.openResourceViewer'
         : 'platformScriptureEditor.openScriptureEditor',
       projectId,
     );
+
+    // Recorded for editable projects only, matching what the title bar's picker lists. Home is the
+    // title bar's route to a project that is not in that list yet, so a project opened here has to
+    // join it — otherwise the escape hatch for finding a non-recent project never makes it recent.
+    if (isPublished) return;
+    try {
+      const recentlyOpenedProjects = await papi.dataProviders.get(
+        'platformScripture.recentlyOpenedProjects',
+      );
+      await recentlyOpenedProjects?.recordProjectOpened(projectId);
+    } catch (e) {
+      // The project did open; failing to remember it is not worth reporting to the user.
+      logger.warn(
+        `Home web view could not record project ${projectId} as recently opened: ${getErrorMessage(e)}`,
+      );
+    }
+  };
 
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
@@ -94,6 +111,12 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
    * at once, and only the settled one should reach the user.
    */
   const [didAvailabilityCheckGiveUp, setDidAvailabilityCheckGiveUp] = useState<boolean>(false);
+  /**
+   * Identifies the newest availability check. Mount and `onDidReloadExtensions` can both start one,
+   * and each runs for several seconds, so two can be in flight at once — without this, an older run
+   * exhausting its attempts would overwrite a newer run's answer.
+   */
+  const availabilityCheckRunRef = useRef(0);
 
   const getStarted = useCallback(() => {
     papi.commands.sendCommand(
@@ -103,6 +126,8 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   }, []);
 
   const checkIfSendReceiveAvailable = useCallback(async () => {
+    availabilityCheckRunRef.current += 1;
+    const thisRun = availabilityCheckRunRef.current;
     // A throw means the extension host couldn't answer yet, not that send/receive is missing, so
     // retry: without one the answer stays unknown for the session, since
     // `platform.onDidReloadExtensions` — the only other thing that re-checks — does not fire on a
@@ -122,7 +147,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
     );
 
-    if (!isMounted.current) return;
+    if (!isMounted.current || thisRun !== availabilityCheckRunRef.current) return;
     if (isAvailable === undefined) {
       // Still unknown after every attempt. This is a third state, distinct from both "send/receive
       // is absent from this build" (a definite `false`, where a local-only list is the whole truth)
@@ -222,14 +247,17 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   };
 
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
-  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
-  const [didRemoteProjectsFailToLoad, setDidRemoteProjectsFailToLoad] = useState<boolean>(false);
+  /**
+   * How the last fetch of the server's project list ended. Only meaningful once
+   * `isSendReceiveAvailable` is `true` — what Home is told is derived from both below, so that the
+   * combinations that describe no real situation cannot be reached.
+   */
+  const [sharedProjectsFetchState, setSharedProjectsFetchState] = useState<
+    'loading' | 'loaded' | 'unreachable' | 'unavailable'
+  >('loading');
 
   useEffect(() => {
-    if (!isSendReceiveAvailable) {
-      setIsLoadingRemoteProjects(false);
-      return;
-    }
+    if (!isSendReceiveAvailable) return;
 
     let promiseIsCurrent = true;
     let retryTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -243,13 +271,17 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
         );
 
         if (promiseIsCurrent && isMounted.current) {
-          setIsLoadingRemoteProjects(false);
-          setDidRemoteProjectsFailToLoad(false);
+          setSharedProjectsFetchState('loaded');
           setSharedProjectsInfo(projectsInfo);
         }
       } catch (e) {
         const errorMessage = getErrorMessage(e);
+        // The server was reached and refused for a reason the user can act on, as opposed to not
+        // answering at all — the banner says so differently, because the notification sent here
+        // already names the cause and the fix.
+        let failureState: 'unreachable' | 'unavailable' = 'unreachable';
         if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
+          failureState = 'unavailable';
           papi.notifications.send({
             severity: 'error',
             message: '%data_loading_error_internetAccess_disabled_2%',
@@ -258,6 +290,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
             notificationId: sharedProjectErrorNotificationId,
           });
         } else if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
+          failureState = 'unavailable';
           papi.notifications.send({
             severity: 'error',
             message: '%data_loading_error_paratextData_auth_failure%',
@@ -283,8 +316,12 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
         // offer a fix, but they are dismissible and live outside the list, so Home still has to say
         // for itself that what it is showing is only the local half.
         if (promiseIsCurrent && isMounted.current) {
-          setIsLoadingRemoteProjects(false);
-          setDidRemoteProjectsFailToLoad(true);
+          setSharedProjectsFetchState(failureState);
+          // Dropped rather than left on screen: a re-fetch after a completed sync can fail with a
+          // previous run's rows still listed, and the banner's claim that this is only the local
+          // half has to be true of what is actually rendered. Those rows are also unusable — their
+          // Get and Sync buttons reach the same server that just refused.
+          setSharedProjectsInfo(undefined);
         }
       }
     };
@@ -292,6 +329,10 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     if (isSendReceiveInProgress) {
       return;
     }
+    // Each run starts over: without this the gate stays down through a re-fetch, and on the first
+    // run it was never raised at all — a user whose projects are all on the server would be told
+    // "Nothing here" for the seconds the fetch takes.
+    setSharedProjectsFetchState('loading');
     getSharedProjects();
 
     return () => {
@@ -325,6 +366,18 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     return interfaceLanguages;
   }, [interfaceLanguages]);
 
+  /**
+   * The one place the server half's status is decided. Availability outranks the fetch state,
+   * because a fetch state only means anything once there is known to be a server to fetch from —
+   * which is what keeps a give-up on a re-check from raising a banner over rows that loaded fine.
+   */
+  const remoteProjectsState: RemoteProjectsState = useMemo(() => {
+    if (isSendReceiveAvailable === false) return 'absent';
+    if (isSendReceiveAvailable === undefined)
+      return didAvailabilityCheckGiveUp ? 'unknown' : 'loading';
+    return sharedProjectsFetchState;
+  }, [isSendReceiveAvailable, didAvailabilityCheckGiveUp, sharedProjectsFetchState]);
+
   const dialogTitleText: string = localizedStringsWithLoadingState[0]['%home_dialog_title%'];
 
   return (
@@ -338,8 +391,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       showGetResourcesButton={showGetResourcesButton}
       isSendReceiveInProgress={isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
-      isLoadingRemoteProjects={isLoadingRemoteProjects}
-      didRemoteProjectsFailToLoad={didRemoteProjectsFailToLoad || didAvailabilityCheckGiveUp}
+      remoteProjectsState={remoteProjectsState}
       shouldShowProjectsOnly={shouldShowProjectsOnly}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}

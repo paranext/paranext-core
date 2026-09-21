@@ -161,6 +161,12 @@ vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
   })),
 }));
 
+/**
+ * Carries the stubbed `Select`'s open state down to the stubbed `SelectContent`, which is what
+ * Radix's own context does — the real `SelectContent` is mounted only while the dropdown is open.
+ */
+const SelectOpenContext = React.createContext(false);
+
 vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
@@ -237,7 +243,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
           data-testid="project-picker-open"
           onClick={() => onOpenChange?.(true)}
         />
-        {children}
+        <SelectOpenContext.Provider value={!!open}>{children}</SelectOpenContext.Provider>
       </div>
     ),
     SelectTrigger: ({
@@ -247,7 +253,13 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       children?: React.ReactNode;
       className?: string;
     }) => <div data-select-trigger-classname={className}>{children}</div>,
-    SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    // Radix mounts a `Select`'s content only while it is open. Rendering it unconditionally would
+    // let a test drive the dropdown's footer in a dropdown the user could not have opened, so a
+    // case about that footer would pass against a component where it is unreachable.
+    SelectContent: ({ children }: { children?: React.ReactNode }) => {
+      const isOpen = React.useContext(SelectOpenContext);
+      return isOpen ? <div>{children}</div> : undefined;
+    },
     SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
       <div data-value={value}>{children}</div>
     ),
@@ -729,9 +741,27 @@ describe('PlatformBibleToolbar — project picker footer reaches the rest of the
 
   const getMoreProjects = () => screen.getByRole('button', { name: 'More projects…' });
 
-  it('opens Home rather than the local-disk-only project picker dialog', async () => {
+  /**
+   * Renders the toolbar and opens the dropdown. The footer only exists while the dropdown is open,
+   * the way Radix renders a `Select`'s content, so every case here has to travel the same route a
+   * user does.
+   */
+  async function renderAndOpenDropdown() {
     render(<PlatformBibleToolbar />);
-    await screen.findByTestId('project-picker-select');
+    const select = await screen.findByTestId('project-picker-select');
+
+    act(() => {
+      screen.getByTestId('project-picker-open').click();
+    });
+    await waitFor(() => {
+      expect(select).toHaveAttribute('data-open', 'true');
+    });
+
+    return select;
+  }
+
+  it('opens Home', async () => {
+    await renderAndOpenDropdown();
 
     act(() => {
       getMoreProjects().click();
@@ -746,8 +776,7 @@ describe('PlatformBibleToolbar — project picker footer reaches the rest of the
   });
 
   it('asks Home for projects only, since a read-only resource is never an answer here', async () => {
-    render(<PlatformBibleToolbar />);
-    await screen.findByTestId('project-picker-select');
+    await renderAndOpenDropdown();
 
     act(() => {
       getMoreProjects().click();
@@ -759,17 +788,10 @@ describe('PlatformBibleToolbar — project picker footer reaches the rest of the
   });
 
   it('closes the dropdown so it does not sit on top of the Home tab it just opened', async () => {
-    render(<PlatformBibleToolbar />);
-    const select = await screen.findByTestId('project-picker-select');
-
-    act(() => {
-      screen.getByTestId('project-picker-open').click();
-    });
-    // Positive control: without this the dropdown is already closed and the assertion below
-    // would pass against a toolbar that never closes anything.
-    await waitFor(() => {
-      expect(select).toHaveAttribute('data-open', 'true');
-    });
+    // The open assertion inside the helper doubles as this case's positive control: without it the
+    // dropdown is already closed and the assertion below would pass against a toolbar that never
+    // closes anything.
+    const select = await renderAndOpenDropdown();
 
     act(() => {
       getMoreProjects().click();

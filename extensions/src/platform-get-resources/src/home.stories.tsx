@@ -5,7 +5,13 @@ import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useEffect, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import { alertCommand, rejectingMock } from '../../../../.storybook/story.utils';
-import { Home, HomeProps, LocalProjectInfo, HOME_STRING_KEYS } from './home.component';
+import {
+  Home,
+  HomeProps,
+  LocalProjectInfo,
+  HOME_STRING_KEYS,
+  type RemoteProjectsState,
+} from './home.component';
 
 const GET_STARTED_URL =
   'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio';
@@ -108,11 +114,11 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
   const [sharedProjectsAndResources, setSharedProjectsAndResources] = useState<SharedProjectsInfo>(
     {},
   );
-  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+  const [remoteProjectsState, setRemoteProjectsState] = useState<RemoteProjectsState>('loading');
   useEffect(() => {
     const timeout = setTimeout(() => {
       setSharedProjectsAndResources(staticProjectsAndResources);
-      setIsLoadingRemoteProjects(false);
+      setRemoteProjectsState('loaded');
     }, 2000);
     return () => clearTimeout(timeout);
   }, []);
@@ -124,7 +130,7 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
         localProjectsInfo: localProjectsAndResources,
         isLoadingLocalProjects,
         sharedProjectsInfo: sharedProjectsAndResources,
-        isLoadingRemoteProjects,
+        remoteProjectsState,
         headerContent: (
           <>
             <HomeIcon size="36" />
@@ -221,8 +227,7 @@ export const SendReceiveError: Story = {
 
 /**
  * The send/receive server could not be reached, so the list holds only what is already on this
- * computer. Without the banner this is indistinguishable from a server that simply has no projects
- * on it — and the local rows give no hint that anything is missing.
+ * computer.
  */
 function ServerUnreachableDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   return (
@@ -230,10 +235,9 @@ function ServerUnreachableDecorator(Story: (update?: { args: HomeProps }) => Rea
       args={{
         localizedStringsWithLoadingState: [localizedStrings, false],
         localProjectsInfo: staticLocalProjectsAndResources,
-        // Empty on purpose: an unreachable server yields no shared projects, which is exactly why
-        // the list alone cannot say whether the server was reached.
+        // Empty on purpose: an unreachable server yields no shared projects.
         sharedProjectsInfo: {},
-        didRemoteProjectsFailToLoad: true,
+        remoteProjectsState: 'unreachable',
         headerContent: (
           <>
             <HomeIcon size="36" />

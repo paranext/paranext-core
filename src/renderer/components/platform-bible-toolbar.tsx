@@ -592,7 +592,11 @@ export function PlatformBibleToolbar() {
         )}
         {isSimpleMode && (
           <Select
-            open={isProjectPickerOpen}
+            // Gated on what actually renders the dropdown, not just the flag: the `Select` unmounts
+            // when the interface mode changes or the project list empties, and Radix fires no
+            // `onOpenChange(false)` on the way out — so a flag left `true` would spring the
+            // dropdown open unprompted the next time the picker mounts.
+            open={hasProjectPickerItems && isProjectPickerOpen}
             onOpenChange={setIsProjectPickerOpen}
             value={currentSimpleProject?.id ?? ''}
             onValueChange={async (projectId: string) => {

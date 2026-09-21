@@ -3,7 +3,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { SharedProjectsInfo } from 'platform-scripture';
-import { Home, type LocalProjectInfo } from './home.component';
+import localizedStringsContribution from '../contributions/localizedStrings.json';
+import {
+  Home,
+  HOME_STRING_KEYS,
+  type LocalProjectInfo,
+  type RemoteProjectsState,
+} from './home.component';
 
 /*
  * `onSendReceiveProject`'s contract is that a rejection surfaces to the user: the prop's TSDoc says
@@ -16,7 +22,7 @@ import { Home, type LocalProjectInfo } from './home.component';
 
 const PROJECT_ID = 'sharedProject1';
 
-const sharedProjectsInfo: SharedProjectsInfo = {
+const SHARED_PROJECTS: SharedProjectsInfo = {
   [PROJECT_ID]: {
     id: PROJECT_ID,
     name: 'SHR',
@@ -31,7 +37,7 @@ function renderHome(onSendReceiveProject: (projectId: string) => Promise<void>) 
   return render(
     <Home
       headerContent={undefined}
-      sharedProjectsInfo={sharedProjectsInfo}
+      sharedProjectsInfo={SHARED_PROJECTS}
       onSendReceiveProject={onSendReceiveProject}
       localizedStringsWithLoadingState={[
         { '%resources_get%': 'Get', '%resources_syncFailed_title%': 'Sync failed' },
@@ -41,43 +47,54 @@ function renderHome(onSendReceiveProject: (projectId: string) => Promise<void>) 
   );
 }
 
-const SERVER_UNREACHABLE_TITLE = "Can't reach the sync server";
-const NOTHING_HERE = 'Nothing here.';
-const NOTHING_FOUND = 'Nothing found.';
+/*
+ * Drawn from the shipped `en` contribution rather than hand-written here, so a key that Home asks
+ * for but the contribution does not define fails these tests instead of rendering as a literal
+ * `%resources_…%` token in the app — `getLocalizedString` falls back to the key itself, which is
+ * truthy, so nothing else catches it.
+ */
+const EN_STRINGS: Record<string, string> = localizedStringsContribution.localizedStrings.en;
+const enString = (key: (typeof HOME_STRING_KEYS)[number]) => EN_STRINGS[key];
+
+const SERVER_UNREACHABLE_TITLE = enString('%resources_serverUnreachable_title%');
+const SERVER_UNREACHABLE_DESCRIPTION = enString('%resources_serverUnreachable_description%');
+const SERVER_PROJECTS_UNAVAILABLE_TITLE = enString('%resources_serverProjectsUnavailable_title%');
+const NOTHING_HERE = enString('%resources_noProjects%');
+const NOTHING_FOUND = enString('%resources_noSearchResults%');
+const NO_PROJECTS_INSTRUCTION = enString('%resources_noProjectsInstruction%');
+const NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES = enString(
+  '%resources_noProjectsInstructionWithoutResources%',
+);
 
 /**
  * Renders Home with the localized strings these tests assert on. Defaults to the state the
  * distinction under test is about: a reachable server that simply has nothing on it.
  */
 function renderHomeList({
-  didRemoteProjectsFailToLoad = false,
+  remoteProjectsState = 'loaded',
   localProjectsInfo = [],
-  sharedProjectsInfoOverride = {},
+  sharedProjectsInfo = {},
   shouldShowProjectsOnly = false,
+  showGetResourcesButton = true,
+  isLoadingLocalProjects = false,
 }: {
-  didRemoteProjectsFailToLoad?: boolean;
+  remoteProjectsState?: RemoteProjectsState;
   localProjectsInfo?: LocalProjectInfo[];
-  sharedProjectsInfoOverride?: SharedProjectsInfo;
+  sharedProjectsInfo?: SharedProjectsInfo;
   shouldShowProjectsOnly?: boolean;
+  showGetResourcesButton?: boolean;
+  isLoadingLocalProjects?: boolean;
 } = {}) {
   return render(
     <Home
       headerContent={undefined}
       localProjectsInfo={localProjectsInfo}
-      sharedProjectsInfo={sharedProjectsInfoOverride}
-      didRemoteProjectsFailToLoad={didRemoteProjectsFailToLoad}
+      sharedProjectsInfo={sharedProjectsInfo}
+      remoteProjectsState={remoteProjectsState}
       shouldShowProjectsOnly={shouldShowProjectsOnly}
-      localizedStringsWithLoadingState={[
-        {
-          '%resources_get%': 'Get',
-          '%resources_noProjects%': NOTHING_HERE,
-          '%resources_noSearchResults%': NOTHING_FOUND,
-          '%resources_serverUnreachable_title%': SERVER_UNREACHABLE_TITLE,
-          '%resources_serverUnreachable_description%':
-            'Showing only the projects already on your computer.',
-        },
-        false,
-      ]}
+      showGetResourcesButton={showGetResourcesButton}
+      isLoadingLocalProjects={isLoadingLocalProjects}
+      localizedStringsWithLoadingState={[EN_STRINGS, false]}
     />,
   );
 }
@@ -91,6 +108,17 @@ function renderHomeList({
 function clickSendReceive() {
   fireEvent.click(screen.getByRole('button', { name: 'Get' }));
 }
+
+describe('Home localized string keys', () => {
+  it('has an English string shipped for every key Home asks for', () => {
+    // Home renders the key itself when a lookup misses, and that fallback is truthy — so a key
+    // added here but not to the contribution reaches the user as a literal `%resources_…%` token
+    // with every other test still green.
+    const missingKeys = HOME_STRING_KEYS.filter((key) => !(key in EN_STRINGS));
+
+    expect(missingKeys).toEqual([]);
+  });
+});
 
 describe('Home send/receive failures', () => {
   it('shows the failure message when the send/receive callback rejects', async () => {
@@ -127,10 +155,20 @@ describe('Home send/receive failures', () => {
  * satisfy either one alone is to make the banner unconditional, or to drop it entirely.
  */
 describe('Home shared project list availability', () => {
+  const LOCAL_PROJECT: LocalProjectInfo = {
+    projectId: 'localProject1',
+    isPublished: false,
+    fullName: 'Local Project',
+    name: 'LCL',
+    language: 'en',
+  };
+
   it('reports an unreachable server rather than leaving the list looking complete', () => {
-    renderHomeList({ didRemoteProjectsFailToLoad: true });
+    renderHomeList({ remoteProjectsState: 'unreachable' });
 
     expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).not.toBeNull();
+    // The description carries the actual consequence, and is the half a reader acts on.
+    expect(screen.queryByText(SERVER_UNREACHABLE_DESCRIPTION)).not.toBeNull();
   });
 
   it('reports nothing when the server was reached and has no projects', () => {
@@ -139,25 +177,65 @@ describe('Home shared project list availability', () => {
     // Positive control: the empty state rendered, so the corpus could have carried the banner.
     expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
     expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).toBeNull();
+    expect(screen.queryByText(SERVER_UNREACHABLE_DESCRIPTION)).toBeNull();
+  });
+
+  it('reports nothing when this build has no send/receive at all', () => {
+    renderHomeList({ remoteProjectsState: 'absent' });
+
+    // A definite "there is no server here" makes the local list the whole truth, so there is no
+    // missing half to announce.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).toBeNull();
   });
 
   it('reports an unreachable server even when local projects fill the list', () => {
     renderHomeList({
-      didRemoteProjectsFailToLoad: true,
-      localProjectsInfo: [
-        {
-          projectId: 'localProject1',
-          isPublished: false,
-          fullName: 'Local Project',
-          name: 'LCL',
-          language: 'en',
-        },
-      ],
+      remoteProjectsState: 'unreachable',
+      localProjectsInfo: [LOCAL_PROJECT],
     });
 
     // The list is populated, so nothing about it hints that the server half is missing.
     expect(screen.queryByText('Local Project')).not.toBeNull();
     expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).not.toBeNull();
+  });
+
+  it('says the server refused rather than that it could not be reached', () => {
+    renderHomeList({ remoteProjectsState: 'unavailable' });
+
+    // A blocked-internet setting or an expired registration reaches the server and is refused, and
+    // a notification already names that cause — "can't reach the server" beside it contradicts it
+    // and points at the wrong fix.
+    expect(screen.queryByText(SERVER_PROJECTS_UNAVAILABLE_TITLE)).not.toBeNull();
+    expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).toBeNull();
+  });
+
+  it('waits rather than announcing an empty list while the server half is still loading', () => {
+    renderHomeList({ remoteProjectsState: 'loading' });
+
+    // A user whose projects are all on the server has nothing local to show in the meantime, so
+    // settling on "Nothing here." before the fetch returns states the opposite of the truth.
+    expect(screen.queryByText(NOTHING_HERE)).toBeNull();
+    expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).toBeNull();
+  });
+
+  it('keeps the banner off the loading state', () => {
+    renderHomeList({ remoteProjectsState: 'unreachable', isLoadingLocalProjects: true });
+
+    // Positive control below: the same state with local projects settled does show it.
+    expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).toBeNull();
+  });
+
+  it('lists the server-only projects that local metadata alone would miss', () => {
+    renderHomeList({
+      localProjectsInfo: [],
+      sharedProjectsInfo: SHARED_PROJECTS,
+    });
+
+    // The reason "More projects…" routes here at all: a project that exists on the server and not
+    // on this machine has no local metadata, so the title bar's picker cannot list it.
+    expect(screen.queryByText('Shared Project')).not.toBeNull();
+    expect(screen.queryByText(NOTHING_HERE)).toBeNull();
   });
 });
 
@@ -172,6 +250,22 @@ describe('Home empty state', () => {
 
     expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
     expect(screen.queryByText(NOTHING_FOUND)).toBeNull();
+  });
+
+  it('leaves the Get resources button out of the guidance when the caller suppresses it', () => {
+    renderHomeList({ showGetResourcesButton: false });
+
+    // New Tab renders Home with the button hidden, so the default instruction would point the user
+    // at something that is not on screen.
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES)).not.toBeNull();
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION)).toBeNull();
+  });
+
+  it('names the Get resources button in the guidance when it is on screen', () => {
+    renderHomeList();
+
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION)).not.toBeNull();
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES)).toBeNull();
   });
 
   it('offers the no-results message when a search excludes every project', () => {
@@ -242,7 +336,7 @@ describe('Home projects-only view', () => {
 
   it('keeps send/receive projects, which are never published resources', () => {
     renderHomeList({
-      sharedProjectsInfoOverride: sharedProjectsInfo,
+      sharedProjectsInfo: SHARED_PROJECTS,
       shouldShowProjectsOnly: true,
     });
 
