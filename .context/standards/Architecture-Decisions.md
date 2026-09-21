@@ -718,7 +718,7 @@ step, no automation. Just a record.
   state machine (`getGridBodyState`) treats an unresolved read as "show the grid", so that window
   needs no separate treatment. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
-  rather than giving it a signal to infer from. Five limits of this decision are recorded
+  rather than giving it a signal to infer from. Six limits of this decision are recorded
   deliberately rather than left to be re-derived:
   - **Published resources are not followed; read-only projects are.** `openOrUpdateRelatedPanels`
     reads `platform.isPublished` for the incoming project and skips the Text Collection re-point
@@ -734,14 +734,9 @@ step, no automation. Just a record.
     folder project carrying `<Editable>F</Editable>`, such as the bundled WEB sample; locally
     installed `.p8z` resources load as resource projects (`GetAllResourceScrTexts` in
     `LocalParatextProjects.cs` filters on `IsResourceProject`, which is exactly what
-    `platform.isPublished` reports), so they are published and stay skipped. As of 2026-09-18 it is
-    unchecked whether the grid offers controls that write to an `Editable=F` project — tracked on
-    PT-4724, which should first settle where to run that check: the shipped
-    `default-layout-supplement.json` lists the Scripture Text Grid behind
-    `platformScriptureEditor.enableScriptureTextGrid` (contributed default `true`), while
-    `default-layout-supplement.model.ts` and `filterEnabledSupplementEntries` describe the supplement
-    as empty in vanilla builds. Find follows every editor-column switch, resources included, and
-    withholds Replace itself per `adr-find-follows-editor-to-read-only`. Everything else
+    `platform.isPublished` reports), so they are published and stay skipped. Find follows every
+    editor-column switch, resources included, and withholds Replace itself per
+    `adr-find-follows-editor-to-read-only`. Everything else
     `openOrUpdateRelatedPanels` drives (Bible Texts, Commentaries and Comments in Column 3, plus
     Model Text in Column 1) follows the editor either way. The Power→Simple path
     (`finalizeProjectSwitch`) applies no gate of its own: a published resource cannot normally reach
@@ -751,6 +746,12 @@ step, no automation. Just a record.
     trip through a resource reloads Find twice, clearing its results, and an `Editable=F` project now
     reloads the grid. How an unbound grid gets its first project, and what following costs
     in Power mode, is recorded in `adr-active-editor-project-is-a-window-data-type`.
+  - **What a followed `Editable=F` project's grid offers is unchecked.** As of 2026-09-21, whether
+    the Text Collection exposes controls that write to such a project is an open question, tracked on
+    PT-4724, which should first settle where to run that check: `default-layout-supplement.json` lists
+    the Scripture Text Grid behind `platformScriptureEditor.enableScriptureTextGrid` (contributed
+    default `true`), while `default-layout-supplement.model.ts` and `filterEnabledSupplementEntries`
+    describe the supplement as empty in vanilla builds.
   - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
     window, so `.find()` returns whichever Text Collection comes first, not the one in the window
     that switched. If that panel already shows the target project the skip guard returns early and a

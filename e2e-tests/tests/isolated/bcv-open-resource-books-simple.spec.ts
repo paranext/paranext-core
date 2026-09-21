@@ -13,6 +13,7 @@ import {
   removeRevelationFromProject,
   type CommentTestProject,
 } from '../../fixtures/comment-test-helpers';
+import { openScriptureEditor } from '../../fixtures/simple-mode-columns.page';
 
 /**
  * End-to-end proof that the top toolbar's book/chapter/verse control reaches a book that exists
@@ -78,50 +79,6 @@ const DIMMED_BOOK_CLASS_PATTERN = /tw:text-muted-foreground\/50/;
  */
 const SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
-
-/**
- * `openScriptureEditor` sequentially awaits every related-panel step: the Column 3 panels open, the
- * Column 1 Model Text panel, the Text Collection re-point (skipped for a published resource) and
- * Find's re-point once the new editor exists — so the combined response routinely exceeds the
- * default 30 s PAPI request timeout.
- */
-const OPEN_EDITOR_TIMEOUT_MS = 150_000;
-
-/**
- * Opens the editable Scripture editor for `projectId`, retrying a dock "Replacing tab failed"
- * rejection. That failure is a known race: `openOrUpdateRelatedPanels` re-points the Column 3
- * panels, and the resulting dock rebuild can briefly remove the editor slot this open is trying to
- * replace. A short delay and retry settles it.
- *
- * @param projectId The project to open in the editor column
- * @returns The web view id of the editor the open produced
- */
-async function openScriptureEditor(projectId: string, maxRetries = 2): Promise<string> {
-  // Sequential retry loop: each attempt must await the PAPI response and find out whether it was
-  // the dock race before deciding whether to retry, so the awaits cannot be parallelized.
-  /* eslint-disable no-await-in-loop */
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    if (attempt > 0)
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 2_000);
-      });
-    try {
-      const editorId = await sendPapiRequestOnce<string | undefined>(
-        'command:platformScriptureEditor.openScriptureEditor',
-        [projectId],
-        undefined,
-        OPEN_EDITOR_TIMEOUT_MS,
-      );
-      if (editorId) return editorId;
-      throw new Error(`openScriptureEditor returned no web view id for project ${projectId}`);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (attempt >= maxRetries || !message.includes('Replacing tab failed')) throw e;
-    }
-  }
-  /* eslint-enable no-await-in-loop */
-  throw new Error(`Could not open a Scripture editor for project ${projectId}`);
-}
 
 // DEV_NOISY=false keeps the test-only extensions and their tabs out of the layout, so the only web
 // views carrying a project are the ones this test puts there.

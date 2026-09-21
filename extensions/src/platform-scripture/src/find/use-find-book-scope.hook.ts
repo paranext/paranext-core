@@ -26,30 +26,17 @@ export type FindBookScope = {
 };
 
 /**
- * Owns Find's `selectedBooks` book scope: which books are searched and shown for the project Find
- * is pointed at, and how a user edit of the picker reaches the saved selection.
+ * Resolves Find's `selectedBooks` scope: the saved selection narrowed to the books the current
+ * project has.
  *
- * Find follows the Simple-mode editor onto any project it opens, including read-only projects and
- * published resources, so the project under the panel changes without the user ever touching the
- * scope. Narrowing the selection is therefore DISPLAY-ONLY and is never written back: the saved
- * list keeps the user's books, so returning to a project that has them finds the scope intact. The
- * finder engine skips absent books gracefully (see `isScriptureNotFoundError` in the finder PDPE),
- * but a search built from the unnarrowed list would silently cover fewer books than the checkbox
- * list shows — hence searching the narrowed list rather than the saved one.
+ * The narrowing is DISPLAY-ONLY and never written back, because Find follows the Simple-mode editor
+ * onto whatever project it opens — the saved list keeps the user's books, so returning to a project
+ * that has them finds the scope intact. Searching the narrowed list keeps the search and the
+ * checkbox list in agreement.
  *
- * "Don't know the books yet" must not read as "the project has no books": `availableBookIds` is
- * `undefined` until the project's book list resolves rather than inferred from an empty list, and
- * the selection then passes through untouched. `useProjectSetting` re-enters loading whenever the
- * project changes and holds the previous project's value meanwhile, so emptiness alone cannot tell
- * an unread list from a project that genuinely has nothing to search — a real case here, because
- * Find withholds extra material.
- *
- * When nothing in the saved selection exists in the current project the result is empty, which
- * `isFindQueryValid` treats as an unrunnable query: the panel says to select a book instead of
- * running a search over a scope the user cannot see.
- *
- * The picker only ever offers books the current project has, so a user edit replaces the saved
- * selection outright — what the picker shows is what gets saved.
+ * `availableBookIds` is `undefined` — not `[]` — while the project's book list is still loading, so
+ * "don't know yet" cannot be read as "this project has no books". An empty result is an unrunnable
+ * query per `isFindQueryValid`, which is what the panel should say.
  */
 export function useFindBookScope({
   savedBookIds,
@@ -63,7 +50,5 @@ export function useFindBookScope({
     [availableBookIds, savedBookIds],
   );
 
-  // A user pick is saved as-is: what the picker shows is what the project keeps, so unchecking
-  // everything still clears the scope.
   return { searchableBookIds, selectBookIds: setSavedBookIds };
 }
