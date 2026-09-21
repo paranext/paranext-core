@@ -46,6 +46,7 @@ declare module 'platform-get-resources' {
      * removing a resource, where the user is already waiting on their own action.
      *
      * @returns Whether an update is available, keyed by DBL Entry UID.
+     * @experimental
      */
     recomputeDblResourcesUpdateStatus: () => Promise<DblResourceUpdateStatus>;
     /**
@@ -65,6 +66,7 @@ declare module 'platform-get-resources' {
      *
      * @returns The local project id of each catalogued resource, keyed by DBL Entry UID; an empty
      *   string for one that is not installed.
+     * @experimental
      */
     recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
     /**
