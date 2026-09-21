@@ -413,17 +413,23 @@ const EDITOR_CONTEXT_MENU = '.typeahead-popover.auto-embed-menu';
 /**
  * Whether the editor's right-click context menu is open at all.
  *
- * Gates BOTH of this web view's standard-view key triggers. While the menu is up it is the only
- * keyboard mode on screen: neither the `\\` marker palette nor the Enter paragraph palette may open
- * underneath it, and neither key may reach the document behind it. The menu has no idea the
- * palettes exist and stays open across one, and a palette session then claims Escape with
- * `stopPropagation` on `window` — one capture step above the menu's `document` listener — so a
- * palette opened underneath survives the dismissal that was meant for the menu, leaving a menu
- * whose highlighted item silently runs on the next Enter.
+ * Gates every key this web view acts on in the editor. While the menu is up it is the only keyboard
+ * mode on screen, and nothing else opens underneath it or over it:
+ *
+ * - Both standard-view triggers: neither the `\\` marker palette nor the Enter paragraph palette may
+ *   open, and neither key may reach the document behind the menu.
+ * - The other views' `\\` inline markers menu, and the footnote, cross-reference and comment insert
+ *   shortcuts. Each is swallowed rather than acted on: every one of them would open a popup (the
+ *   markers menu, the footnote editor, the comment editor) over a menu that stays open.
+ *
+ * The menu has no idea the palettes exist and stays open across one, and a palette session then
+ * claims Escape with `stopPropagation` on `window` — one capture step above the menu's `document`
+ * listener — so a palette opened underneath survives the dismissal that was meant for the menu,
+ * leaving a menu whose highlighted item silently runs on the next Enter.
  *
  * Keyed on the menu being OPEN rather than on a highlighted item, because a menu holding nothing to
- * invoke still holds the keyboard. The two triggers then stand down differently, because the menu
- * wants one of the keys and not the other:
+ * invoke still holds the keyboard. The two standard-view triggers then stand down differently,
+ * because the menu wants one of the keys and not the other:
  *
  * - `\\` is CLAIMED by the caller. The editor keeps DOM focus while the menu is up, so an unclaimed
  *   `\\` falls through to Lexical and types a backslash into the document behind the menu. The menu
