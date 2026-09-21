@@ -15,14 +15,13 @@ const meta: Meta<typeof TabDropdownMenu> = {
 A dropdown menu component designed specifically for tab contexts in Platform.Bible applications.
 
 This component provides:
-- Multi-column menu organization with automatic separators
+- Columns as sections: divided by separators, left out when empty, and with \`showSectionHeadings\` labeled when there are two or more
 - Tooltips for menu items
 - Support for icons (before and after text)
+- Keyboard shortcut hints at the end of an item's row
 - Custom trigger icons (defaults to hamburger menu)
 - Style variants (default, muted)
 - Accessibility with proper aria-label
-
-Unlike the platform menubar, this component ignores column headers and uses separators to distinguish between menu sections.
         `,
       },
     },
@@ -85,6 +84,10 @@ const createSampleMenuData = (): Localized<MultiColumnMenu> => ({
       label: 'Tools',
       order: 3,
     },
+    'tab.help': {
+      label: 'Help',
+      order: 4,
+    },
   },
   groups: {
     'tab.edit.clipboard': {
@@ -105,6 +108,11 @@ const createSampleMenuData = (): Localized<MultiColumnMenu> => ({
     },
     'tab.tools.main': {
       column: 'tab.tools',
+      order: 1,
+    },
+    // No items are contributed to this group, so the Help section is left out
+    'tab.help.main': {
+      column: 'tab.help',
       order: 1,
     },
   },
@@ -132,6 +140,7 @@ const createSampleMenuData = (): Localized<MultiColumnMenu> => ({
       group: 'tab.edit.text',
       order: 1,
       command: 'tab.find',
+      shortcut: 'Ctrl+F',
     },
     {
       label: 'Replace',
@@ -210,6 +219,7 @@ function TabMenuDemo({
           tabLabel={customLabel}
           icon={customIcon}
           variant={variant}
+          showSectionHeadings
         />
         <span className="tw:text-sm tw:text-muted-foreground">
           Click the menu button to see tab options
@@ -221,15 +231,105 @@ function TabMenuDemo({
           <strong>Last Command:</strong> {lastCommand || 'None'}
         </div>
         <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
-          Menu items are organized by columns and separated with dividers.
+          Menu items are organized into labeled sections separated with dividers.
         </p>
       </div>
     </div>
   );
 }
 
+/** Sample menu data with the shortcut hints one operating system shows */
+const createSampleMenuDataWithShortcuts = (
+  findShortcut: string,
+  insertCommentShortcut: string,
+): Localized<MultiColumnMenu> => {
+  const sampleMenuData = createSampleMenuData();
+  return {
+    ...sampleMenuData,
+    items: [
+      ...sampleMenuData.items.map((item) =>
+        'command' in item && item.command === 'tab.find'
+          ? { ...item, shortcut: findShortcut }
+          : item,
+      ),
+      {
+        label: 'Insert comment',
+        tooltip: 'Insert a comment at the selection',
+        localizeNotes: 'Insert comment command',
+        group: 'tab.tools.main',
+        order: 2,
+        command: 'tab.insertComment',
+        shortcut: insertCommentShortcut,
+      },
+    ],
+  };
+};
+
 export const Default: Story = {
   render: () => <TabMenuDemo />,
+};
+
+export const SingleSection: Story = {
+  tags: ['test'],
+  render: () => {
+    const sampleMenuData = createSampleMenuData();
+    const editGroups = ['tab.edit.clipboard', 'tab.edit.text'];
+    const editOnlyMenuData: Localized<MultiColumnMenu> = {
+      ...sampleMenuData,
+      items: sampleMenuData.items.filter((item) => editGroups.includes(item.group)),
+    };
+
+    return (
+      <TabDropdownMenu
+        menuData={editOnlyMenuData}
+        onSelectMenuItem={() => {}}
+        tabLabel="Edit Options"
+        showSectionHeadings
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Only the Edit column has items, so the menu has a single section: no heading and no divider, even with `showSectionHeadings` on.',
+      },
+    },
+  },
+};
+
+export const ShortcutHints: Story = {
+  tags: ['test'],
+  render: () => (
+    <div className="tw:flex tw:flex-wrap tw:gap-8">
+      <figure className="tw:flex tw:flex-col tw:items-start tw:gap-2">
+        <figcaption className="tw:text-sm tw:font-medium">Windows and Linux</figcaption>
+        <TabDropdownMenu
+          menuData={createSampleMenuDataWithShortcuts('Ctrl+F', 'Ctrl+Shift+N')}
+          onSelectMenuItem={() => {}}
+          tabLabel="Windows and Linux Options"
+          showSectionHeadings
+        />
+      </figure>
+      <figure className="tw:flex tw:flex-col tw:items-start tw:gap-2">
+        <figcaption className="tw:text-sm tw:font-medium">macOS</figcaption>
+        <TabDropdownMenu
+          menuData={createSampleMenuDataWithShortcuts('⌃F', '⌥⌘M')}
+          onSelectMenuItem={() => {}}
+          tabLabel="macOS Options"
+          showSectionHeadings
+        />
+      </figure>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Keyboard shortcut hints as Windows and Linux write them and as macOS writes them. Find shows a hint, and the Tools section shows a hinted item alongside one with an icon. Switch the toolbar direction to RTL: macOS symbols stay in order (⌃F, not F⌃) and hints stay at the end of the row.',
+      },
+    },
+  },
 };
 
 export const WithCustomIcon: Story = {
@@ -273,6 +373,7 @@ export const MultipleMenus: Story = {
             menuData={createSampleMenuData()}
             onSelectMenuItem={handleSelectMenuItem}
             tabLabel="Document Options"
+            showSectionHeadings
           />
 
           <span className="tw:ml-4 tw:text-sm tw:font-medium">Settings Tab:</span>
@@ -282,6 +383,7 @@ export const MultipleMenus: Story = {
             tabLabel="Settings Options"
             icon={<Settings className="tw:h-4 tw:w-4" />}
             variant="muted"
+            showSectionHeadings
           />
 
           <span className="tw:ml-4 tw:text-sm tw:font-medium">Home Tab:</span>
@@ -290,6 +392,7 @@ export const MultipleMenus: Story = {
             onSelectMenuItem={handleSelectMenuItem}
             tabLabel="Home Options"
             icon={<Home className="tw:h-4 tw:w-4" />}
+            showSectionHeadings
           />
         </div>
 
@@ -372,6 +475,7 @@ export const WithSubmenus: Story = {
             onSelectMenuItem={handleSelectMenuItem}
             tabLabel="Tab with Submenus"
             icon={<FileText className="tw:h-4 tw:w-4" />}
+            showSectionHeadings
           />
           <span className="tw:text-sm tw:text-muted-foreground">
             Tab menu with nested export options

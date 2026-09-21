@@ -75,6 +75,7 @@ export function TabToolbar({
           tabLabel="Project"
           icon={menuButtonIcon ?? <Menu />}
           buttonVariant="ghost"
+          showSectionHeadings
         />
       )}
       {/* Absorbing zone. `tw:min-w-0` is what lets the flex algorithm shrink this below its content
@@ -112,6 +113,7 @@ export function TabToolbar({
             tabLabel="View Info"
             icon={<EllipsisVertical />}
             className="tw:h-full"
+            showSectionHeadings
           />
         )}
         {endAreaChildren}
