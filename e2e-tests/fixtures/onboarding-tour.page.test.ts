@@ -59,4 +59,22 @@ describe('sampleStepCounterPoll', () => {
 
     expect(tracker.dialogAbsentSamples).toBe(0);
   });
+
+  it('throws instead of silently reading the first match if more than one step counter is found', async () => {
+    // Runs the real evaluateAll callback against two fake elements, the way Playwright would if a
+    // rendering bug left two step counters mounted at once.
+    const dialog = { isVisible: vi.fn().mockResolvedValue(true) };
+    const stepCounter = {
+      evaluateAll: vi
+        .fn()
+        .mockImplementation((callback: (els: { textContent: string }[]) => unknown) =>
+          Promise.resolve(callback([{ textContent: '1 of 5' }, { textContent: '2 of 5' }])),
+        ),
+    };
+    const tracker: StepCounterPollTracker = { dialogAbsentSamples: 0 };
+
+    await expect(sampleStepCounterPoll(dialog, stepCounter, '1 of 5', tracker, 4)).rejects.toThrow(
+      /more than one|expected at most one/i,
+    );
+  });
 });

@@ -145,7 +145,9 @@ export interface StepCounterPollTracker {
  * that wait would then never resolve, bounded only by the outer `expect.poll`'s own timeout.
  * `evaluateAll` runs against whichever elements (zero or one) are currently attached and returns
  * immediately either way, so a step counter that has just been unmounted reads as `undefined`
- * rather than stalling.
+ * rather than stalling. It throws instead of silently reading the first match if it ever finds more
+ * than one, so a rendering bug that leaves two step counters mounted at once still fails loudly
+ * rather than reading whichever happens to be first in document order.
  *
  * Mutates `tracker.dialogAbsentSamples` in place so the consecutive-absence count survives across
  * poll iterations, mirroring the closure variable this replaced.
@@ -159,7 +161,12 @@ export async function sampleStepCounterPoll(
 ): Promise<string | null> {
   const [dialogVisible, counterText] = await Promise.all([
     dialog.isVisible(),
-    stepCounter.evaluateAll((els) => els[0]?.textContent ?? undefined),
+    stepCounter.evaluateAll((els) => {
+      if (els.length > 1) {
+        throw new Error(`Expected at most one tour step counter, found ${els.length}`);
+      }
+      return els[0]?.textContent ?? undefined;
+    }),
   ]);
   if (!dialogVisible) {
     tracker.dialogAbsentSamples += 1;
