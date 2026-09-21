@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { newPlatformError } from 'platform-bible-utils';
-import { FindJobStatusReport } from 'platform-scripture';
+import { newPlatformError, SEARCH_WHITESPACE_GROUP_PREFIX } from 'platform-bible-utils';
+import { FindJobStatusReport, FindOptions } from 'platform-scripture';
 import {
   CharacterCategorizer,
   FIND_AVAILABLE_SCOPES,
@@ -8,6 +8,7 @@ import {
   OpenScrollGroupTab,
   applyPreserveCase,
   armBoundedWait,
+  buildReplacedAllMessage,
   buildSearchRegex,
   callControllerSafely,
   classifyPollAttempt,
@@ -22,6 +23,7 @@ import {
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
   resolveTargetReferencePanelWebViewId,
+  selectWrittenBookSnapshots,
   shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
@@ -400,6 +402,43 @@ describe('buildSearchRegex – trailing space', () => {
     );
     // "Abraham." ends the sentence — no space follows
     expect(matchAll(regex, 'the son of Abraham.')).toEqual([]);
+  });
+});
+
+describe('buildSearchRegex – leading space', () => {
+  it('does not match a word when no whitespace precedes it', () => {
+    const regex = buildSearchRegex(
+      { scope: [], searchString: ' Abraham', caseInsensitive: false, wordRestriction: 'none' },
+      DEFAULT_CATEGORIZER,
+    );
+    // "Abraham" here is not preceded by whitespace — must not match
+    expect(matchAll(regex, 'Abraham begot Isaac')).toEqual([]);
+  });
+
+  it('matches a word only where whitespace actually precedes it', () => {
+    const regex = buildSearchRegex(
+      { scope: [], searchString: ' Isaac', caseInsensitive: false, wordRestriction: 'none' },
+      DEFAULT_CATEGORIZER,
+    );
+    expect(matchAll(regex, 'Isaac begot Isaac')).toEqual([' Isaac']);
+  });
+
+  it('keeps a leading whitespace run mandatory when only a stripped diacritic precedes it', () => {
+    // A search string opening with a bare combining mark, once ignoreDiacritics normalizes and
+    // strips it, leaves only the leading space before "a" — the space must stay a leading run
+    // (mandatory), not be reclassified as interior just because a code point preceded it.
+    const regex = buildSearchRegex(
+      {
+        scope: [],
+        searchString: '́ a',
+        caseInsensitive: false,
+        wordRestriction: 'none',
+        ignoreDiacritics: true,
+      },
+      DEFAULT_CATEGORIZER,
+    );
+    expect(regex.source).not.toContain('(?<ws');
+    expect('a'.match(regex)).toBeNull();
   });
 });
 
@@ -1285,5 +1324,245 @@ describe('resolveTargetReferencePanelWebViewId', () => {
         REVEALABLE,
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('buildSearchRegex – block-boundary whitespace groups', () => {
+  const categorizer: CharacterCategorizer = {
+    baseCharacterClassRegex: '\\p{L}',
+    diacriticCharacterClassRegex: '\\p{Mn}',
+    wordMedialCharacterRegex: '',
+    wordBreakRegex: '\\s+',
+    allowInvisibleCharacters: false,
+  };
+  const baseOptions: FindOptions = {
+    scope: [{ bookId: 'MAT' }],
+    searchString: '',
+    caseInsensitive: true,
+    useRegex: false,
+    verseTextOnly: false,
+    wordRestriction: 'none',
+    ignoreWhitespaceDifferences: false,
+    ignoreDiacritics: false,
+  };
+
+  it('names each interior whitespace run uniquely so a multi-run query compiles', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'of Abraham. Abraham became' },
+      categorizer,
+    );
+    expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}0>`);
+    expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}1>`);
+    expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}2>`);
+    // The group name is also asserted literally, alongside every SEARCH_WHITESPACE_GROUP_PREFIX
+    // interpolation in this suite: an interpolated-only assertion can pass on a falsy imported
+    // constant.
+    expect(regex.source).toContain('(?<ws0>');
+    expect(regex.source).toContain('(?<ws1>');
+    expect(regex.source).toContain('(?<ws2>');
+    expect(regex.flags).toContain('d');
+  });
+
+  it('lets an interior run match zero characters', () => {
+    const regex = buildSearchRegex({ ...baseOptions, searchString: 'a b' }, categorizer);
+    expect(regex.test('ab')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('a b')).toBe(true);
+  });
+
+  it('keeps a whitespace-only query matching whitespace', () => {
+    const regex = buildSearchRegex({ ...baseOptions, searchString: ' ' }, categorizer);
+    expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    expect(regex.source).not.toContain('(?<ws');
+    expect('a b'.match(regex)?.length).toBe(1);
+  });
+
+  it('collapses an interior run when ignoring whitespace differences', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'a b', ignoreWhitespaceDifferences: true },
+      categorizer,
+    );
+    expect(regex.test('a   b')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('ab')).toBe(true);
+  });
+
+  it('treats ~ as whitespace inside the group when invisible characters are not allowed', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'a b', ignoreWhitespaceDifferences: true },
+      categorizer,
+    );
+    expect(regex.test('a~b')).toBe(true);
+  });
+
+  it('emits no groups and no d flag in regex mode', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'a\\s+b', useRegex: true },
+      categorizer,
+    );
+    expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    expect(regex.source).not.toContain('(?<ws');
+    expect(regex.flags).not.toContain('d');
+  });
+
+  it('tolerates a diacritic inside an interior whitespace run when whitespace is collapsed', () => {
+    // Collapsing whitespace must not match less than matching it exactly does: the diacritic class
+    // sits inside the run's repetition, so a combining mark between two spaces is tolerated under
+    // both settings of ignoreWhitespaceDifferences (see the sibling test below for the other one).
+    const regex = buildSearchRegex(
+      {
+        ...baseOptions,
+        searchString: 'a \u0301 b',
+        ignoreDiacritics: true,
+        ignoreWhitespaceDifferences: true,
+      },
+      categorizer,
+    );
+    regex.lastIndex = 0;
+    expect(regex.test('a   b')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('a \u0301 b')).toBe(true);
+  });
+
+  it('tolerates a diacritic between two whitespace code points when whitespace is matched exactly', () => {
+    // With ignoreWhitespaceDifferences off, an interior run compiles as a literal sequence of its
+    // code points. The diacritic class has to follow *each* of them: one class after the whole run
+    // would require the two spaces to be adjacent, so text carrying a combining mark between them
+    // would stop matching.
+    const regex = buildSearchRegex(
+      {
+        ...baseOptions,
+        searchString: 'a  b',
+        ignoreDiacritics: true,
+        ignoreWhitespaceDifferences: false,
+      },
+      categorizer,
+    );
+    regex.lastIndex = 0;
+    expect(regex.test('a  b')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('a \u0301 b')).toBe(true);
+  });
+});
+
+describe('buildReplacedAllMessage', () => {
+  // The real English templates, so the assertions below read as the sentences a user sees and a
+  // wording change that reintroduces a concatenation seam shows up here.
+  const STRINGS = {
+    '%webView_find_replacedOneOccurrence%': 'Replaced 1 occurrence',
+    '%webView_find_replacedNOccurrences%': 'Replaced {count} occurrences',
+    '%webView_find_replacedOneOccurrenceSkippedOneResult%':
+      'Replaced 1 occurrence. Skipped 1 result that would delete a marker.',
+    '%webView_find_replacedOneOccurrenceSkippedNResults%':
+      'Replaced 1 occurrence. Skipped {skippedCount} results that would delete a marker.',
+    '%webView_find_replacedNOccurrencesSkippedOneResult%':
+      'Replaced {replacedCount} occurrences. Skipped 1 result that would delete a marker.',
+    '%webView_find_replacedNOccurrencesSkippedNResults%':
+      'Replaced {replacedCount} occurrences. Skipped {skippedCount} results that would delete a marker.',
+  };
+
+  it('reports the plain replaced count when nothing was skipped', () => {
+    expect(buildReplacedAllMessage(STRINGS, 1, 0)).toBe('Replaced 1 occurrence');
+    expect(buildReplacedAllMessage(STRINGS, 3, 0)).toBe('Replaced 3 occurrences');
+  });
+
+  it('uses the singular skipped form for one skipped result', () => {
+    // One skipped result is the ordinary case, and a shared plural template renders it as
+    // "Skipped 1 results".
+    expect(buildReplacedAllMessage(STRINGS, 3, 1)).toBe(
+      'Replaced 3 occurrences. Skipped 1 result that would delete a marker.',
+    );
+    expect(buildReplacedAllMessage(STRINGS, 1, 1)).toBe(
+      'Replaced 1 occurrence. Skipped 1 result that would delete a marker.',
+    );
+  });
+
+  it('inflects both counts independently', () => {
+    expect(buildReplacedAllMessage(STRINGS, 1, 2)).toBe(
+      'Replaced 1 occurrence. Skipped 2 results that would delete a marker.',
+    );
+    expect(buildReplacedAllMessage(STRINGS, 3, 2)).toBe(
+      'Replaced 3 occurrences. Skipped 2 results that would delete a marker.',
+    );
+  });
+
+  it('leaves no placeholder unresolved and no clause seam in any outcome', () => {
+    [0, 1, 2].forEach((skippedCount) =>
+      [1, 2].forEach((replacedCount) => {
+        const message = buildReplacedAllMessage(STRINGS, replacedCount, skippedCount);
+        expect(message).not.toMatch(/[{}]/);
+        // A sentence joined in code shows up as ". " with no preceding period, or as two
+        // sentences run together — the template owns the punctuation instead.
+        expect(message).not.toMatch(/\woccurrences? Skipped/);
+      }),
+    );
+  });
+});
+
+describe('selectWrittenBookSnapshots', () => {
+  const SNAPSHOTS = new Map([
+    ['GEN', 'gen usfm'],
+    ['EXO', 'exo usfm'],
+    ['LEV', 'lev usfm'],
+  ]);
+  const BOOK_ORDER = ['GEN', 'EXO', 'LEV'];
+
+  function outcomes(...statuses: ('fulfilled' | 'rejected')[]): PromiseSettledResult<unknown>[] {
+    return statuses.map((status) =>
+      status === 'fulfilled'
+        ? { status, value: undefined }
+        : { status, reason: new Error('refused') },
+    );
+  }
+
+  it('drops the book whose replace was refused, since it never wrote', () => {
+    // Restoring a refused book's snapshot would overwrite whatever changed in it since the
+    // snapshot was taken — and a cache-invalidation rejection means something did.
+    const written = selectWrittenBookSnapshots(
+      SNAPSHOTS,
+      BOOK_ORDER,
+      outcomes('fulfilled', 'rejected', 'fulfilled'),
+    );
+
+    expect([...written.keys()]).toEqual(['GEN', 'LEV']);
+  });
+
+  it('returns nothing to roll back when the first book is the one that failed', () => {
+    expect(
+      selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        outcomes('rejected', 'rejected', 'rejected'),
+      ).size,
+    ).toBe(0);
+  });
+
+  it('keeps every book when all of them wrote', () => {
+    expect([
+      ...selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        outcomes('fulfilled', 'fulfilled', 'fulfilled'),
+      ).keys(),
+    ]).toEqual(BOOK_ORDER);
+  });
+
+  it('pairs each snapshot with its own outcome rather than by position in the snapshot map', () => {
+    // The snapshots are gathered per unique book id and the replace calls are issued per book
+    // group; nothing guarantees the two iterate in the same order, so the book id is what has to
+    // carry the pairing.
+    const written = selectWrittenBookSnapshots(
+      SNAPSHOTS,
+      ['LEV', 'GEN', 'EXO'],
+      outcomes('rejected', 'fulfilled', 'fulfilled'),
+    );
+
+    expect([...written.keys()]).toEqual(['GEN', 'EXO']);
+  });
+
+  it('drops a book that has no outcome at all rather than restoring it blindly', () => {
+    expect([
+      ...selectWrittenBookSnapshots(SNAPSHOTS, ['GEN'], outcomes('fulfilled')).keys(),
+    ]).toEqual(['GEN']);
   });
 });
