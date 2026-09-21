@@ -170,6 +170,7 @@ describe('content zoom settings', () => {
     // `null` is the only input that reaches the guard's own null branch — `undefined` is rejected
     // one test earlier by the `typeof !== 'object'` arm, and `typeof null` is `'object'`.
     // @ts-expect-error ts(2345) - intentional bad input
+    // eslint-disable-next-line no-null/no-null -- intentionally testing null rejection at runtime
     await expect(validate(null, {}, {})).resolves.toBe(false);
     // @ts-expect-error ts(2322) - intentional bad input
     await expect(validate({ 'some.view': 1 }, {}, {})).resolves.toBe(false);
