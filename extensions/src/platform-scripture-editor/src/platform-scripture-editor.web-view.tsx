@@ -2905,6 +2905,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // user has navigated to another chapter.
         if (chapterKeyRef.current !== savedChapterKey) return;
         try {
+          // Placed even when the editor already reports a selection: that is not the user's caret
+          // but wherever the browser collapsed its own selection when the load replaced the text
+          // under it — inside verse 1's number, say, where the next Backspace would delete it.
           // Focus first: the load leaves the editor with no selection to reconcile, and a caret
           // placed in an editor the load has dropped focus from would not show. Focusing an editor
           // with no selection is also what puts the caret at the end of the document (Lexical

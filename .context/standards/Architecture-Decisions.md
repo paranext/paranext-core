@@ -609,6 +609,16 @@ step, no automation. Just a record.
     the chapter line away); when that deletion is the ONLY difference from the stored chapter, the
     user was working on the chapter line, so the caret goes back to just past the restored number
     instead (`prepareUsjForChapterSave`).
+  - **The push-back has to load, and the caret is placed whatever selection the load leaves.** A
+    marker edit reaches the editor's node state only when it settles, so correcting one still in
+    progress — a number just backspaced out of the glyph — hands the editor a document equal to its
+    node state. `EditorRef.setUsj` once measured against node state and skipped that load: the
+    numberless glyph stayed, the caret target past the number had nothing to resolve against, and
+    the caret stayed where `focus()` put it — the end of the chapter, where the next keys deleted
+    text. `setUsj` now measures against the settled document (`scripture-editors`
+    `packages/platform/src/editor/Editor.tsx`), and a repair always differs from the settled
+    document it was computed from, so it always loads. A load can leave a stray browser selection
+    where the replaced text was, so an existing selection is not taken to be the user's caret.
   - **The target is computed from the repair, never carried across from the pre-repair selection.**
     `EditorRef.getSelection()` addresses the LIVE tree while the repair works on `getUsj()`'s
     SETTLED document, and the two differ for exactly the gesture that matters: a `\c` typed under
