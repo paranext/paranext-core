@@ -8,9 +8,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { selectableParagraphMarkers, LocalizeKey } from 'platform-bible-utils';
 import { findScrollContainer, paraAtPoint } from '../editor-dom.util';
-import { blockMarkerToBlockNames } from '../platform-scripture-editor.utils';
+import { getParagraphMarkerTitle } from '../platform-scripture-editor.utils';
 import { computePosition, extractMarker, TooltipPosition } from './paragraph-marker-tooltip.utils';
 
 type HoveredData = TooltipPosition & { marker: string };
@@ -80,16 +80,24 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   // component exists to fix, just for paragraphs 2..N of the sweep instead of paragraph 1.
   const lastRevealAtRef = useRef<number | undefined>(undefined);
 
-  const blockMarkerKeys = useMemo<LocalizeKey[]>(() => Object.values(blockMarkerToBlockNames), []);
+  const blockMarkerKeys = useMemo<LocalizeKey[]>(
+    () =>
+      selectableParagraphMarkers.map(
+        (marker): LocalizeKey => `%paragraphMenu_${marker}_markerDescription%`,
+      ),
+    [],
+  );
   const [localizedStrings] = useLocalizedStrings(blockMarkerKeys);
 
   // Falls back to the last-shown marker while closing (see lastMarkerRef) so the exit animation
   // fades real content instead of an empty box.
   const displayMarker = hoveredData?.marker ?? lastMarkerRef.current;
-  const descriptionKey = displayMarker ? blockMarkerToBlockNames[displayMarker] : undefined;
-  const localizedDescription = descriptionKey ? localizedStrings[descriptionKey] : undefined;
-  // For markers not yet in blockMarkerToBlockNames, fall back to the raw USFM marker (e.g. \sp).
-  // The \\ is intentional: it produces a single backslash so the tooltip reads as a USFM marker.
+  const localizedDescription = displayMarker
+    ? getParagraphMarkerTitle(displayMarker, localizedStrings)
+    : undefined;
+  // For markers outside selectableParagraphMarkers, or while the description string is still
+  // loading, fall back to the raw USFM marker (e.g. \sp). The \\ is intentional: it produces a
+  // single backslash so the tooltip reads as a USFM marker.
   const tooltipText = localizedDescription ?? (displayMarker ? `\\${displayMarker}` : '');
 
   const clearHoverTimer = useCallback(() => {

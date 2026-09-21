@@ -1,5 +1,10 @@
 import { MarkerCategoryType, MarkerType } from './usfm-marker.model';
-import { isBlockMarker, isCharacterMarker, usfmMarkers } from './usfm-markers';
+import {
+  selectableParagraphMarkers,
+  isBlockMarker,
+  isCharacterMarker,
+  usfmMarkers,
+} from './usfm-markers';
 
 describe('isBlockMarker', () => {
   it('treats paragraph-type markers as block markers', () => {
@@ -111,5 +116,42 @@ describe('isCharacterMarker and isBlockMarker invariants', () => {
     );
 
     expect(divisionMarkCharacterMarkers.sort()).toEqual(['ca', 'v', 'va', 'vp']);
+  });
+});
+
+describe('selectableParagraphMarkers', () => {
+  // No category or context curation: markers from every category — including Lists and most of
+  // Poetry/TitlesHeadings — are included, not just a curated subset.
+  it('includes every paragraph marker regardless of category, not just a curated subset', () => {
+    expect(selectableParagraphMarkers).toContain('li2');
+    expect(selectableParagraphMarkers).toContain('s1');
+    expect(selectableParagraphMarkers).toContain('q'); // bare `q`, distinct from `q1`
+    expect(selectableParagraphMarkers).toContain('q3');
+    expect(selectableParagraphMarkers).toContain('lh');
+    expect(selectableParagraphMarkers).toContain('b');
+    expect(selectableParagraphMarkers).toContain('h'); // Headers category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cl'); // DivisionMarks category — deliberately not excluded
+  });
+
+  // The one confirmed, deliberate exclusion (see the comment on PROGRAMMATICALLY_APPLIED_MARKERS):
+  // `id` is applied programmatically and must never be offered as something a user can choose.
+  it('excludes id even though it is a MarkerType.Paragraph marker', () => {
+    expect(usfmMarkers.id?.type).toBe(MarkerType.Paragraph);
+    expect(selectableParagraphMarkers).not.toContain('id');
+  });
+
+  it('excludes markers that are not MarkerType.Paragraph', () => {
+    expect(selectableParagraphMarkers).not.toContain('v'); // Character, special-cased by isBlockMarker only
+    expect(selectableParagraphMarkers).not.toContain('nd'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qs'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qac'); // Character
+  });
+
+  it('contains only MarkerType.Paragraph markers', () => {
+    const nonParagraphMembers = selectableParagraphMarkers.filter(
+      (marker) => usfmMarkers[marker]?.type !== MarkerType.Paragraph,
+    );
+
+    expect(nonParagraphMembers).toEqual([]);
   });
 });

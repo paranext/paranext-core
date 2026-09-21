@@ -3414,6 +3414,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   rung is the "hide undo/redo" alternative rejected below, which needs UX sign-off, and that has not
   changed. Measure `restore` at the 297px floor before choosing between adding that rung and
   accepting the residual overrun.
+- **Amended 2026-09-21:** `blockMarkerToBlockNames`, cited above, no longer exists — PT-4488/PT-4539
+  replaced it with `selectableParagraphMarkers` (`platform-bible-utils`), a full, unfiltered derivation
+  from `usfmMarkers` rather than a hand-maintained list. The substantive conclusion above is
+  unaffected: `selectableParagraphMarkers` is the *offered* (selectable) set, not a bound on `blockMarker`,
+  which is still read verbatim off the USJ para node and isn't bounded by `usfm.sty` either — a
+  project-custom marker, or one entered by mistake, can be any string. The **7-character** figure
+  holds only for standard USFM markers (`pubinfo`, `restore`) — `usfmMarkers` doesn't even cover
+  every marker `usfm.sty` itself defines (e.g. it has no `tr` entry at all), so it was never a
+  tighter bound than the hand list it replaced. If anything, the widened offered set makes the
+  7-character case more reachable day-to-day for standard markers, since `restore`/`usfm`/etc. are
+  now selectable from the switcher itself rather than only arriving via imported/typed USFM.
 - **Consequences:** Every marker length now fits at the column floor with ≥16px spare, and the
   `min-content` floor is deliberately applied *only* at `SHRINK_STEP.MINIMUM`: while the style name
   is still rendered it contributes its longest word to `min-content`, and a floor there makes the

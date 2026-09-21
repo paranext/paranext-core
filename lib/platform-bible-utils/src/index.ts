@@ -53,7 +53,12 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
-export { usfmMarkers, isBlockMarker, isCharacterMarker } from './markers/usfm-markers';
+export {
+  usfmMarkers,
+  isBlockMarker,
+  isCharacterMarker,
+  selectableParagraphMarkers,
+} from './markers/usfm-markers';
 
 // Enums
 export { Section } from './scripture/scripture-util';

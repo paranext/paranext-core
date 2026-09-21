@@ -25,6 +25,7 @@ import type PapiFrontend from '@papi/frontend';
 import type { MarkerContent, Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
+  selectableParagraphMarkers,
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
@@ -533,37 +534,44 @@ export async function convertScriptureRangeToEditorRange(
  */
 export const availableScrollGroupIds = [undefined, ...new Array(5).keys()];
 
-export type BlockMarkerBlockNames = typeof blockMarkerToBlockNames;
+// `id` is excluded from `selectableParagraphMarkers` — it must never be a choice in the switcher menu —
+// but it should still be named when it's what the caret/selection is actually on (the trigger label
+// and gutter tooltip should read "id - Book identifier", not the generic misc fallback or a raw
+// marker echo). Kept as a separate set rather than folding into `selectableParagraphMarkers`, so "can the
+// user pick this from the switcher" and "does this have a real displayed title" stay two different
+// questions that can have different answers.
+const DISPLAY_ONLY_PARAGRAPH_MARKERS: ReadonlySet<string> = new Set(['id']);
 
-// This list is incomplete.
-export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
-  cl: '%paragraphMenu_cl_markerDescription%',
-  h: '%paragraphMenu_h_markerDescription%',
-  h1: '%paragraphMenu_h1_markerDescription%',
-  h2: '%paragraphMenu_h2_markerDescription%',
-  h3: '%paragraphMenu_h3_markerDescription%',
-  ide: '%paragraphMenu_ide_markerDescription%',
-  m: '%paragraphMenu_m_markerDescription%',
-  ms: '%paragraphMenu_ms_markerDescription%',
-  ms1: '%paragraphMenu_ms1_markerDescription%',
-  ms2: '%paragraphMenu_ms2_markerDescription%',
-  ms3: '%paragraphMenu_ms3_markerDescription%',
-  mt: '%paragraphMenu_mt_markerDescription%',
-  mt1: '%paragraphMenu_mt1_markerDescription%',
-  mt2: '%paragraphMenu_mt2_markerDescription%',
-  mt3: '%paragraphMenu_mt3_markerDescription%',
-  mt4: '%paragraphMenu_mt4_markerDescription%',
-  nb: '%paragraphMenu_nb_markerDescription%',
-  p: '%paragraphMenu_p_markerDescription%',
-  pi: '%paragraphMenu_pi_markerDescription%',
-  q1: '%paragraphMenu_q1_markerDescription%',
-  q2: '%paragraphMenu_q2_markerDescription%',
-  r: '%paragraphMenu_r_markerDescription%',
-  s: '%paragraphMenu_s_markerDescription%',
-  toc1: '%paragraphMenu_toc1_markerDescription%',
-  toc2: '%paragraphMenu_toc2_markerDescription%',
-  toc3: '%paragraphMenu_toc3_markerDescription%',
-};
+/**
+ * True when a marker has a real localized title available via {@link getParagraphMarkerTitle} —
+ * either because it's offered by the switcher ({@link selectableParagraphMarkers}) or because it's
+ * one of the display-only exceptions ({@link DISPLAY_ONLY_PARAGRAPH_MARKERS}).
+ */
+export function isDisplayableParagraphMarkerTitle(marker: string): boolean {
+  return selectableParagraphMarkers.includes(marker) || DISPLAY_ONLY_PARAGRAPH_MARKERS.has(marker);
+}
+
+/**
+ * Resolves the localized title for a paragraph marker, for display in the paragraph-style trigger
+ * label, the gutter tooltip, or the switcher menu itself. Returns `undefined` both when the marker
+ * has no title available at all ({@link isDisplayableParagraphMarkerTitle} is `false` — a marker
+ * outside `usfmMarkers` entirely, or one deliberately excluded from both the offered set and the
+ * display-only exceptions) and when it does but its localized string hasn't loaded yet —
+ * deliberately not collapsed to a raw `%key%` fallback here, so each caller can choose its own
+ * loading-state behavior (the trigger label, the gutter tooltip, and the menu items all fall back
+ * differently; see their call sites).
+ *
+ * @param marker Marker code to look up, without its leading backslash (e.g. `p`, not `\p`)
+ * @param localizedStrings The localized strings to resolve the title from
+ */
+export function getParagraphMarkerTitle(
+  marker: string,
+  localizedStrings: LanguageStrings,
+): string | undefined {
+  if (!isDisplayableParagraphMarkerTitle(marker)) return undefined;
+  const key: LocalizeKey = `%paragraphMenu_${marker}_markerDescription%`;
+  return localizedStrings[key];
+}
 
 /**
  * Generates the marker menu list items specifically inserting appropriate action functions using
@@ -595,7 +603,7 @@ export function generateParagraphMenuListItems(
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
 ): MarkerMenuItem[] {
-  return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
+  return selectableParagraphMarkers.map((marker) => {
     // The trailing detail column would otherwise sit empty for exactly the menu this feature is
     // named after. `usfmMarkers[marker].description` is a localize key the web view already
     // resolves (it loads every marker description), so this needs no new key and no new
@@ -603,7 +611,7 @@ export function generateParagraphMenuListItems(
     const descriptionKey = usfmMarkers[marker]?.description;
     const markerMenuItem: MarkerMenuItem = {
       marker,
-      title: localizedStrings[title] ?? title,
+      title: getParagraphMarkerTitle(marker, localizedStrings) ?? marker,
       subtitle: descriptionKey ? localizedStrings[descriptionKey] : undefined,
       action: () => {
         // Defense-in-depth: unreachable while the paragraph control is disabled

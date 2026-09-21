@@ -4026,6 +4026,11 @@ export declare function isBlockMarker(marker: string): boolean;
  */
 export declare function isCharacterMarker(marker: string): boolean;
 /**
+ * Every USFM paragraph-style marker known to {@link usfmMarkers} that a user can validly choose to
+ * apply. (Excludes programmatically applied markers.)
+ */
+export declare const selectableParagraphMarkers: readonly string[];
+/**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
  * @param html - The HTML string to sanitize
