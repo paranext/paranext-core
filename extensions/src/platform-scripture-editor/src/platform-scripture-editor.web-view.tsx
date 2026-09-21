@@ -376,13 +376,28 @@ function warnUnlessReplaced(paletteDescription: string, error: unknown): void {
 }
 
 /**
- * Adapts one of the async insert actions for the editor's right-click menu, whose `onSelect` is
- * synchronous and so has nowhere to return a rejection to.
+ * Logs a failed note insert instead of leaving an unhandled promise. Every entry point to the note
+ * inserts — the right-click menu, the Insert top menu and the keyboard shortcuts — reports a
+ * failure through here, so how one surfaces is decided in one place.
  *
- * The menu decides which items are selectable when it opens, but each action awaits a
- * version-history snapshot before it inserts — so the editor can turn read-only in that window and
- * `EditorRef.insertMarker` throws. Log that the way the top-menu message path does rather than
- * leaving an unhandled promise.
+ * None of those entry points has a caller to hand a rejection back to, and an insert can fail after
+ * the entry point checked it was allowed: `EditorRef.insertMarker` throws when the editor is
+ * read-only or has no scripture reference, and each insert awaits a version-history snapshot first,
+ * during which the editor can turn read-only.
+ *
+ * @param editDescription Names the edit and where it came from, e.g. `'inserting footnote from
+ *   keyboard shortcut'`.
+ * @returns The insert, settled rather than rejected, for a caller that needs to wait for it.
+ */
+function logInsertRejection(insert: Promise<void>, editDescription: string): Promise<void> {
+  return insert.catch((error) => {
+    logger.warn(`Error ${editDescription}: ${getErrorMessage(error)}`);
+  });
+}
+
+/**
+ * Adapts one of the async insert actions for the editor's right-click menu, whose `onSelect` is
+ * synchronous and so has nowhere to return a rejection to. See {@link logInsertRejection}.
  *
  * @param editDescription Names the edit in the log line, e.g. `'inserting footnote'`.
  */
@@ -391,11 +406,7 @@ function runInsertFromContextMenu(
   editDescription: string,
 ): () => void {
   return () => {
-    insert().catch((error) => {
-      logger.warn(
-        `Error ${editDescription} from the editor context menu: ${getErrorMessage(error)}`,
-      );
-    });
+    logInsertRejection(insert(), `${editDescription} from the editor context menu`);
   };
 }
 
@@ -1748,11 +1759,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setFootnotesAutoShow(!current);
           break;
         }
-        // `insertMarker` throws when the editor is readonly or has no scripture reference, and
-        // these three arrive from top-menu commands that are enabled regardless. The command has
-        // already resolved by the time the message lands, so a rejection here has nobody to
-        // return to — log it deliberately instead of leaving an unhandled promise, the same way
-        // the Ctrl+T shortcut below does.
+        // These three arrive from top-menu commands that are enabled regardless of whether the
+        // editor can take the insert, and the command has already resolved by the time the message
+        // lands — so a rejection here has nobody to return to. See `logInsertRejection`.
         case 'insertFootnoteAtSelection':
         case 'insertCrossReferenceAtSelection':
         case 'insertEndnoteAtSelection': {
@@ -1761,11 +1770,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             insertCrossReferenceAtSelection: insertCrossReferenceAtCurrentSelection,
             insertEndnoteAtSelection: insertEndnoteAtCurrentSelection,
           };
-          try {
-            await insertByMethod[editorMessage.method]();
-          } catch (error) {
-            logger.warn(`Error handling ${editorMessage.method}: ${getErrorMessage(error)}`);
-          }
+          await logInsertRejection(
+            insertByMethod[editorMessage.method](),
+            `handling ${editorMessage.method}`,
+          );
           break;
         }
         case 'insertCommentAtSelection': {
@@ -2427,7 +2435,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           event.key === defaultMarkersMenuTrigger
         ) {
           event.preventDefault();
-          showInlineMarkersMenu();
+          // Swallowed while the editor's right-click menu is up rather than opening a second popup
+          // over it. See `isEditorContextMenuOpen`.
+          if (!isEditorContextMenuOpen()) showInlineMarkersMenu();
         } else if (showMarkersMenu && event.key === 'Escape') {
           event.preventDefault();
           setShowMarkersMenu(false);
@@ -2444,7 +2454,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (isInsertCommentHotkey) {
         event.preventDefault();
         event.stopPropagation();
-        insertCommentAtCurrentSelection();
+        // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.
+        // See `isEditorContextMenuOpen`.
+        if (!isEditorContextMenuOpen()) insertCommentAtCurrentSelection();
       } else if (
         !isReadOnlyEffective &&
         viewType === 'standard' &&
@@ -2464,18 +2476,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // popovers (which have their own separate `.editor-input`) have focus. Standard-view only,
         // matching the other Standard view PT9-parity entry points.
         event.preventDefault();
+        // Swallowed while the editor's right-click menu is up: the insert opens the footnote editor,
+        // which would land over a menu that is still open. See `isEditorContextMenuOpen`.
+        if (isEditorContextMenuOpen()) return;
         // Both are async and this handler is not, so surface a rejection instead of dropping it as
         // an unhandled promise: the user pressed a key and must not be left with no marker and no
         // explanation.
         const isCrossReference = event.shiftKey;
-        const insert = isCrossReference
-          ? insertCrossReferenceAtCurrentSelection()
-          : insertFootnoteAtCurrentSelection();
-        insert.catch((error) => {
-          logger.warn(
-            `Error inserting ${isCrossReference ? 'cross-reference' : 'footnote'} from keyboard shortcut: ${getErrorMessage(error)}`,
-          );
-        });
+        logInsertRejection(
+          isCrossReference
+            ? insertCrossReferenceAtCurrentSelection()
+            : insertFootnoteAtCurrentSelection(),
+          `inserting ${isCrossReference ? 'cross-reference' : 'footnote'} from keyboard shortcut`,
+        );
       }
     };
 
