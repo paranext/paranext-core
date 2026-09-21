@@ -1915,11 +1915,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   handler, and stores the returned element in state — never during render. Inside that element the
   menu inherits the area's CSS `zoom`; it divides its viewport coordinates by
   `Element.currentCSSZoom`, clamps to the container's rect narrowed by every clipping ancestor and
-  the viewport, and caps its height to that box. Both call sites are in place: the editor web view
-  supplies the text pane's `ContentZoomRoot`; `FootnoteEditor` overrides it with its own root,
-  because the web view's value would otherwise flow through `FootnoteEditor`'s own
-  `...editorOptions` spread and bind the pop-up's menu against the text pane's box instead of the
-  pop-up's own.
+  the viewport, and caps its height to that box. Every host that mounts the editor inside a zoom
+  area supplies that area's `ContentZoomRoot` element: the editor web view for the text pane, the
+  Model Text panel, the Bible Texts / Commentaries panel, and the Enhanced Resources web view for
+  its scripture pane. `FootnoteEditor` overrides the container with its own root, because the web
+  view's value would otherwise flow through `FootnoteEditor`'s own `...editorOptions` spread and
+  bind the pop-up's menu against the text pane's box instead of the pop-up's own.
 - **Alternatives:**
   - stamping `data-platform-content-zoom-root` + `data-platform-content-zoom-popup` on the
     portalled element, as our own pop-ups do — rejected: it puts our attribute names and
@@ -1949,12 +1950,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     the menu was usable in hand checks at 200 %. Revisit if a user reports a menu that will not
     scroll to its last item;
   - the fix reaches core through the `platform-yalc` pin, so the behaviour lives in
-    `scripture-editors` and core holds only the two call sites;
-  - the other hosts that mount the same editor — `model-text-panel`, `resource-text-panel`, and
-    `platform-enhanced-resources`' `scripture-pane` — each need a container of their own the
-    moment their view gets a zoom area (`model-text-panel`'s is PT-4582). `scripture-text-grid`'s
-    `resource-cell-view` is not one of them: it zooms its cells itself and intercepts
-    `onContextMenuCapture` with its own menu, so the editor's menu never opens there.
+    `scripture-editors` and core holds only the call sites;
+  - a host that mounts the editor inside a zoom area and does not supply its area's element leaves
+    its right-click menu at interface size against `document.body`, with no other signal, so each
+    host's tests pin its wiring. `scripture-text-grid`'s `resource-cell-view` is not a host of this
+    kind: it zooms its cells itself and intercepts `onContextMenuCapture` with its own menu, so the
+    editor's menu never opens there.
 - **Source:** PT-4713.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
@@ -5470,7 +5471,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   notch/pinch reading for chrome-driven chords; `web-view-content-zoom.wheel-parity.test.ts` pins
   both copies to identical totals over the same gesture sequences so they cannot silently drift
   apart. Enhanced Resources has no leftover zoom fallback that could fall out of step with the
-  platform mechanism.
+  platform mechanism. Each pane that mounts the Scripture editor also hands it its zoom area's
+  element for the editor's right-click menu; see
+  `adr-editor-context-menu-follows-its-area-via-a-container`.
 - **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
   PT-4583 (Enhanced Resources viewer).
 
