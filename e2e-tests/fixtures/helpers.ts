@@ -2639,6 +2639,39 @@ export async function waitForAppReady(
   if (!allowOnboardingTour) await suppressOnboardingTour(page);
 }
 
+/** The fields of an open web view definition these helpers read. */
+export interface OpenWebViewSummary {
+  id: string;
+  webViewType: string;
+  projectId?: string;
+}
+
+/**
+ * Read the renderer's currently open web view definitions.
+ *
+ * Queries `papi.webViews.getAllOpenWebViewDefinitions()` rather than the DOM: a web view's type and
+ * bound project are not exposed as DOM attributes — only the `data-web-view-id` it renders once its
+ * id is known. Projected down to {@link OpenWebViewSummary} in the renderer so only these fields
+ * cross the Playwright bridge.
+ */
+export async function getOpenWebViewDefinitions(page: Page): Promise<OpenWebViewSummary[]> {
+  return page.evaluate(async () => {
+    // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+    const { papi } = window as unknown as {
+      papi: {
+        webViews: {
+          getAllOpenWebViewDefinitions: () => Promise<
+            { id: string; webViewType: string; projectId?: string }[]
+          >;
+        };
+      };
+    };
+    const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
+    return definitions.map(({ id, webViewType, projectId }) => ({ id, webViewType, projectId }));
+  });
+}
+
 /**
  * Poll until a web view of `webViewType` is open, and return its id.
  *
@@ -2661,24 +2694,10 @@ export async function waitForOpenWebViewIdByType(
   // defeat the retry/backoff.
   /* eslint-disable no-await-in-loop */
   while (Date.now() - start < timeoutMs) {
-    const { id, types } = await page.evaluate(async (type) => {
-      // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
-      const { papi } = window as unknown as {
-        papi: {
-          webViews: {
-            getAllOpenWebViewDefinitions: () => Promise<{ id: string; webViewType: string }[]>;
-          };
-        };
-      };
-      const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
-      return {
-        id: definitions.find((d) => d.webViewType === type)?.id,
-        types: definitions.map((d) => d.webViewType),
-      };
-    }, webViewType);
+    const definitions = await getOpenWebViewDefinitions(page);
+    const id = definitions.find((d) => d.webViewType === webViewType)?.id;
     if (id) return id;
-    lastSeenTypes = types;
+    lastSeenTypes = definitions.map((d) => d.webViewType);
     const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
     if (sleepMs <= 0) break;
     await sleep(sleepMs);

@@ -443,7 +443,8 @@ async function open(
       .finally(emitDidFinish);
 
     // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find waits
-    // until here because it is the one panel that needs the id of the editor this call just created.
+    // until here because it is the one panel that needs the id of the editor this call just
+    // created. No Simple-mode check here — it owns its own mode guard.
     await updateRelatedFindPanel(papi, interfaceMode, projectForWebView.projectId, openedWebViewId);
 
     return openedWebViewId;

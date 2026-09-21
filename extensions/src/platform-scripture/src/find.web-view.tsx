@@ -717,8 +717,10 @@ global.webViewComponent = function FindWebView({
   //
   // A book list is "not known" while the setting is still resolving AND when the read fails.
   // `useProjectSetting` reports a delivered `PlatformError` as loaded, so the error branch has to be
-  // recognized explicitly: treating it as an answer would report zero available books, and the prune
-  // below would then wipe the user's persisted selection for good.
+  // recognized explicitly: treating it as an answer would report zero available books, and every
+  // consumer would read this project as having nothing to search. It also re-enters loading on a
+  // project change while still holding the previous project's value, so emptiness alone can never
+  // stand in for "not known" — `useFindBookScope` relies on that distinction.
   const bookLists = useMemo(() => {
     if (isBooksPresentLoading) return UNKNOWN_FIND_BOOK_LISTS;
     if (isPlatformError(booksPresentPossiblyError)) {
@@ -775,7 +777,7 @@ global.webViewComponent = function FindWebView({
   // so it can name books the CURRENT project doesn't have. `searchableBookIds` is that selection
   // narrowed to this project for display and search, while the saved list keeps the user's books —
   // see `use-find-book-scope.hook.ts` for why the narrowing is never persisted.
-  const { searchableBookIds: selectedBookIds, selectBookIds } = useFindBookScope({
+  const { searchableBookIds, selectBookIds } = useFindBookScope({
     savedBookIds,
     setSavedBookIds,
     availableBookIds: availableBooksIds,
@@ -1040,8 +1042,13 @@ global.webViewComponent = function FindWebView({
   // whether a job may start.
   const isSearchQueryValid = useMemo(
     () =>
-      isFindQueryValid({ searchTerm, scope, selectedBookIds, currentBookId: verseRefSetting.book }),
-    [scope, searchTerm, selectedBookIds, verseRefSetting.book],
+      isFindQueryValid({
+        searchTerm,
+        scope,
+        selectedBookIds: searchableBookIds,
+        currentBookId: verseRefSetting.book,
+      }),
+    [scope, searchTerm, searchableBookIds, verseRefSetting.book],
   );
 
   // Surface an unresolvable provider through the existing error path instead of leaving the panel
@@ -1072,13 +1079,13 @@ global.webViewComponent = function FindWebView({
         // Extra material is dropped here too, not only from the book picker. A selection restored
         // from a persisted tab is pruned against the project's book list, and that list arrives
         // asynchronously — this is the point the search cannot be built before.
-        return selectedBookIds
+        return searchableBookIds
           .filter((bookId) => !isExtraMaterialBookId(bookId))
           .map((bookId) => ({ bookId }));
       default:
         throw new Error(`Unsupported scope: ${scope}`);
     }
-  }, [scope, selectedBookIds, verseRefSetting]);
+  }, [scope, searchableBookIds, verseRefSetting]);
 
   /**
    * A stable string key capturing only the parts of scope/verseRef that affect the search query.
@@ -1087,10 +1094,10 @@ global.webViewComponent = function FindWebView({
    * setVerseRefSetting but stays within the already-searched book/chapter).
    */
   const relevantScopeKey = useMemo(() => {
-    if (scope === 'selectedBooks') return `selectedBooks:${selectedBookIds.join(',')}`;
+    if (scope === 'selectedBooks') return `selectedBooks:${searchableBookIds.join(',')}`;
     if (scope === 'book') return `book:${verseRefSetting.book}`;
     return `chapter:${verseRefSetting.book}:${verseRefSetting.chapterNum}`;
-  }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
+  }, [scope, searchableBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
 
   // When search options change (not the search term itself), add the current term to history — the
   // user is intentionally refining how to search for it.
@@ -1225,7 +1232,7 @@ global.webViewComponent = function FindWebView({
 
         setMonitoredScope(scope);
         setMonitoredVerseRef(verseRefSetting);
-        setMonitoredBookIds(selectedBookIds);
+        setMonitoredBookIds(searchableBookIds);
 
         setFocusedResultIndex(undefined);
 
@@ -1260,7 +1267,7 @@ global.webViewComponent = function FindWebView({
       scope,
       searchTerm,
       searchTextType,
-      selectedBookIds,
+      searchableBookIds,
       shouldMatchCase,
       verseRefSetting,
       wordRestriction,
@@ -2233,7 +2240,7 @@ global.webViewComponent = function FindWebView({
       booksPresent={booksPresent}
       hasExcludedExtraMaterial={hasExcludedExtraMaterial}
       allowInvisibleCharacters={allowInvisibleCharacters}
-      selectedBookIds={selectedBookIds}
+      selectedBookIds={searchableBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}
       ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}

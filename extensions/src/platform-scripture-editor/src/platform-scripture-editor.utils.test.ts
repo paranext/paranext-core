@@ -3704,7 +3704,8 @@ describe('updateRelatedFindPanel', () => {
     ['a translation project with editing switched off', READ_ONLY_PROJECT],
     ['a published resource', PUBLISHED_RESOURCE],
   ])('re-points Find at %s with the new editor id', async (_label, projectKind) => {
-    // Find follows the editor onto every project kind, because searching is a read.
+    // Find follows the editor onto every project kind, because searching is a read. The cases are
+    // identical by design: parameterizing by project kind is what makes adding a kind gate fail here.
     const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], projectKind);
 
     await updateRelatedFindPanel(papi, 'simple', 'proj-b', 'editor-2');
