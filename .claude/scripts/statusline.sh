@@ -139,16 +139,19 @@ process.stdin.on("end", () => {
   ].filter(Boolean).join(" | ");
 
   // Prompt cache: whole minutes until the cached prefix of the main
-  // conversation goes cold ("Cached 60m" right after a 1h-TTL request,
-  // "Cached 5m" after a 5m one). Rounded up so a live cache never reads "0m".
-  // prompt_cache is absent before the first API response of a session and on
-  // Claude Code older than v2.1.251; the segment is omitted then rather than
-  // guessing. (No apostrophes in this block: it is single-quoted for bash.)
+  // conversation goes cold ("Cached 59m" just after a 1h-TTL request,
+  // "Cached 4m" after a 5m one). Rounded down so it never claims more time
+  // than is left; the final minute reads "<1m". prompt_cache is absent before
+  // the first API response of a session and on Claude Code older than
+  // v2.1.251; the segment is omitted then rather than guessing. (No
+  // apostrophes in this block: it is single-quoted for bash.)
   const pc = j?.prompt_cache;
   let cache = "";
   if (pc && typeof pc === "object") {
-    const warm = pc.warm !== false && typeof pc.expires_at === "number" && pc.expires_at > nowSec;
-    cache = warm ? `Cached ${Math.ceil((pc.expires_at - nowSec) / 60)}m` : "Not cached";
+    const left = typeof pc.expires_at === "number" && pc.warm !== false ? pc.expires_at - nowSec : 0;
+    if (left <= 0) cache = "Not cached";
+    else if (left < 60) cache = "Cached <1m";
+    else cache = `Cached ${Math.floor(left / 60)}m`;
   }
 
   console.log(model);
