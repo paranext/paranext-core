@@ -776,9 +776,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // Not a shortcut the app registers: the browser raises `contextmenu` at the focused tab, which
     // the tab title forwards into the menu's trigger. macOS has no Menu key and no Shift+F10
     // equivalent for this, so the menu is reached there by right-clicking (or Control-clicking) the
-    // tab. Forwarded whenever the tab has menu items, which holds in both interface modes — Simple
-    // mode's menu is narrowed to the content-zoom group.
-    context: 'Renderer (focused tab, Power or Simple mode)',
+    // tab. Forwarded whenever the tab has menu items. Simple mode's menu is narrowed to the
+    // content-zoom group, so a Simple-mode tab whose pane is not zoomable has no menu and Shift+F10
+    // opens nothing.
+    context:
+      'Renderer (focused tab with menu items — always in Power mode; in Simple mode only on a tab whose pane takes content zoom)',
     keys: { macOS: '— (no equivalent)', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
     locations: ['src/renderer/components/docking/platform-tab-title.component.tsx'],
   },

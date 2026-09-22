@@ -51,13 +51,13 @@ export type TabMenuContext = {
    */
   isOnlyTabInWindowThatWouldClose: boolean;
   /**
-   * Whether this tab's web view reported a zoom area to act on when the menu was opened. Read once,
-   * at open, and not re-read while the menu stays up. A tab with a web view but no reported area
-   * still offers the zoom items — greyed out — rather than dropping them, so the menu's shape stays
-   * the same between one open and the next instead of items appearing and vanishing under the
-   * pointer.
+   * Whether this tab's pane takes content zoom: core declares its web view type zoomable, or it
+   * currently reports a zoom area (`isContentZoomable` in the content-zoom service). The zoom items
+   * exist only on a zoomable pane; on any other tab they are removed, not disabled, because a tab
+   * menu offers the zoom items exactly when the pane's chords and wheel work. The tab title holds
+   * this value steady while one menu is open, so the menu never changes shape under the pointer.
    */
-  hasZoomArea: boolean;
+  isContentZoomable: boolean;
 };
 
 /** Reads the target window id back out of a generated submenu entry, if that is what was selected */
@@ -78,9 +78,11 @@ function isUnavailable(item: OverlayContextMenuItem, context: TabMenuContext): b
     return !webViewId || isOnlyTabInWindowThatWouldClose;
   if (item.type === 'submenu' && item.id === MOVE_TO_WINDOW_ITEM_ID)
     return !webViewId || otherWindows.length === 0;
-  // Zooming needs something to zoom. A tab hosting no web view — a dialog or an error tab — has no
-  // content the zoom commands can reach, so the items are removed rather than offered as no-ops.
-  if (item.type === 'item' && CONTENT_ZOOM_ITEM_IDS.has(item.id)) return !webViewId;
+  // Zooming needs a zoomable pane. A tab hosting no web view (a dialog or an error tab), or one
+  // whose pane core does not declare zoomable and which reports no area, has nothing the zoom
+  // commands act on, so the items are removed rather than offered as no-ops.
+  if (item.type === 'item' && CONTENT_ZOOM_ITEM_IDS.has(item.id))
+    return !webViewId || !context.isContentZoomable;
   return false;
 }
 
@@ -128,11 +130,6 @@ export function buildTabMenuItems(
           label: window.label || emptyWindowLabel,
         })),
       };
-    }
-    // The tab has a web view (that much already cleared it above), but the pane reported no zoom
-    // area when this menu opened — greyed out rather than removed, so the item keeps its place.
-    if (item.type === 'item' && CONTENT_ZOOM_ITEM_IDS.has(item.id) && !context.hasZoomArea) {
-      return { ...item, disabled: true };
     }
     return item;
   });
