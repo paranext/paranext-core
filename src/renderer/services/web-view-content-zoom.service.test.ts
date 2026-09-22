@@ -2320,6 +2320,26 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it('isolates a throwing zoomability subscriber from the CSS push and from later subscribers', () => {
+    const pane = openUndeclaredPane('ext-1');
+    const laterEvents: Array<{ webViewId: string; isContentZoomable: boolean }> = [];
+    const unsubscribeThrowing = onDidChangeContentZoomable(() => {
+      throw new Error('a subscriber that misbehaves');
+    });
+    const unsubscribeLater = onDidChangeContentZoomable((event) => laterEvents.push(event));
+    try {
+      setContentZoomAreas('ext-1', ['main']);
+      // The later subscriber still hears the change...
+      expect(laterEvents).toEqual([{ webViewId: 'ext-1', isContentZoomable: true }]);
+      // ...and the CSS push that follows the emit in setContentZoomAreas still ran.
+      expect(cssVar(pane, '--platform-content-zoom-main')).not.toBe('');
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribeThrowing();
+      unsubscribeLater();
+    }
+  });
+
   it('answers from the reported areas alone when the definition read throws, rather than throwing', async () => {
     let definitionReadThrows = false;
     __setContentZoomDepsForTesting({
