@@ -911,9 +911,19 @@ export type LinkedScrRefButtonProps = {
 export declare function LinkedScrRefButton({ scrRef, onClick, tooltipContent, ariaLabel, className, testId, }: LinkedScrRefButtonProps): import("react/jsx-runtime").JSX.Element | undefined;
 /** Text and layout direction */
 export type Direction = "rtl" | "ltr";
-/** Read layout direction from localStorage or return 'ltr' */
+/**
+ * Read layout direction from localStorage, or return 'ltr' when storage is unavailable.
+ *
+ * The `try` also covers `getItem` itself, not just reaching `localStorage` - a `Storage` object
+ * that is reachable without throwing can still throw on the call (e.g. a sandboxed proxy that
+ * defers its `SecurityError` to the method rather than the property access).
+ */
 export declare function readDirection(): Direction;
-/** Write layout direction to localStorage */
+/**
+ * Write layout direction to localStorage. A no-op when storage is unavailable or the write itself
+ * throws (e.g. quota exceeded in Safari private browsing) - see `readDirection` for why the call,
+ * not just reaching `localStorage`, has to be inside the guard.
+ */
 export declare function persistDirection(dir: Direction): void;
 /**
  * What this table needs of a keydown. A DOM `KeyboardEvent` satisfies it, and so does a
