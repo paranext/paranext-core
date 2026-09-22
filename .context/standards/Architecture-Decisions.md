@@ -4468,6 +4468,61 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   added without adding a prop — and it should carry the API-surface TSDoc and localized-key
   conventions the stable barrel expects, rather than bundling them into a capability change.
 
+## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** `projectDataProviders.get(projectInterface, projectId)` looks cheap at the call site
+  and is not. It runs `projectLookupService.getMetadataForProject`, which waits for a matching PDP
+  factory and then asks EVERY registered factory for `getAvailableProjects`
+  (`src/shared/models/project-lookup.service-model.ts`, `internalGetMetadata`); each layering
+  factory in the extension host answers that by asking every other factory again, so one renderer
+  lookup reaches the C# factories several times over. PT-4597 showed what that costs when a
+  consumer treats it as free: the Simple-mode toolbar's `useOpenProjectBookIds` tore down and
+  rebuilt every `booksPresent` subscription on any change to the set of open project ids, resolving
+  a provider per open project each time. A resource panel republishing its navigable project ids in
+  a loop (~15 writes/s) turned that into ~20,000 lookups and ~52,000 extension-host-to-C# requests
+  in three minutes; .NET stopped answering, the extension host's socket to main died, and the app
+  hung. The PT-4501 late-unsubscriber throttle (#2772) had already fixed one flapping input to the
+  same hook, which shows that fixing inputs one at a time does not close the class.
+- **Decision:** Two rules, one at each end. (1) A **reactive consumer** whose inputs can change
+  repeatedly — a hook or effect keyed on the set of open web views, a selection, a setting that
+  another surface writes — acts on the **diff** of that set: it acquires only what joined, releases
+  only what left, and keeps resolved providers (and failed lookups) for its own lifetime so a
+  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, or a
+  provider that could not be subscribed to, is kept for a bounded delay (30 seconds in the hook)
+  and then looked up afresh on the next join, whatever the failure was: the lookup service's
+  `No project found` is also what a late-registering factory or a mid-session resource install
+  produces, so no message text is treated as a permanent verdict. `useOpenProjectBookIds`
+  (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the reference implementation; the
+  scroll-group service's `ensureVersificationSubscribed` is the older in-tree instance and evicts
+  immediately on failure, which suits a module-level cache with few callers. (2)
+  The **lookup service stays a broadcast** with no cache of its own for now: which factories serve
+  which project changes as factories register, as resources install, and as layering factories
+  come and go, and a stale answer there is a correctness bug for every caller, not a performance
+  one. The cost of a lookup is therefore the consumer's to bound.
+- **Alternatives:** (a) **Cache or coalesce inside `projectLookupService`** — deferred, not
+  rejected: an in-flight de-duplication (identical concurrent queries share one fan-out) is safe
+  and would help every caller, but a value cache needs invalidation on factory register/unregister
+  and on project install, which the lookup service cannot observe completely today. Worth doing as
+  platform work under its own ticket; it does not remove rule (1), because a rebuild-everything
+  consumer still pays a subscription round trip per member per change. (b) **Debounce the
+  consumer's input** — hides a flap but keeps the per-member cost, and delays legitimate updates by
+  the debounce window; a diff costs nothing when the set is unchanged, so it needs no delay.
+  (c) **Read `booksPresent` through one aggregating service** instead of a provider per project —
+  a larger redesign that would still have to answer where that service gets its providers from.
+- **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
+  `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
+  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup failed is
+  retried the next time it joins after the delay, so a project the backend begins serving later in
+  the session is picked up within that delay plus one membership change, never sooner; a
+  consumer that needs it sooner would subscribe to project-list or factory-registration events and
+  evict on those instead. The flap sources that exposed this are tracked as
+  PT-4592 (a panel republishing its navigable project ids while its reference list resolves
+  transiently empty) and PT-4743 (one installed resource yielding two picker rows under two project
+  id spellings). Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is
+  restated for agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
+
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
 - **Date:** 2026-08-25
