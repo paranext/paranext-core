@@ -32,7 +32,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { expect, type FrameLocator, type Page } from '@playwright/test';
+import { expect, type Frame, type FrameLocator, type Page } from '@playwright/test';
 import {
   addUsersToProject,
   DEFAULT_WEBSOCKET_PORT,
@@ -41,6 +41,7 @@ import {
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
+import { getEditorFrame } from './scripture-editor-helpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -690,6 +691,60 @@ export async function openCommentListPanel(
     port,
     sendTimeoutMs,
   );
+}
+
+/**
+ * Calls {@link openCommentListPanel}, brings its tab to front (which is also what mounts the panel's
+ * iframe the first time — Column 3's tabs render their content lazily, on first activation), and
+ * retries the whole sequence, bounded, until the iframe attaches and `expectedText` appears inside
+ * it — ARRANGEMENT only, for seeding the (fixed, non-closable Simple-mode) singleton Comments panel
+ * with content before a test acts on it. Returns the resolved content frame so the caller doesn't
+ * need a separate {@link getEditorFrame} call.
+ *
+ * TODO(PT-4745): every `openCommentListPanel` call re-points an already-mounted panel rather than
+ * creating a fresh instance (Simple mode's Comments panel is a singleton mounted before any test
+ * code runs), and the re-point sometimes never reaches the mounted component's props — the panel
+ * then keeps showing the previous project (or nothing), with no error. The command is idempotent,
+ * so reissuing it here is safe. Do NOT reach for this to retry an assertion that is itself testing
+ * the re-point path — see `comments-panel-content-zoom.spec.ts`'s "re-pointed panel" step, which is
+ * `test.step.skip`ped for the same underlying bug instead of retried, because retrying there would
+ * retry the very behavior under test.
+ *
+ * @param mainPage The Electron main window page the panel's iframe attaches in
+ * @param panelId The Comment List Panel's web view id (`data-web-view-id`)
+ * @param projectId The project id to point the panel at
+ * @param expectedText Text expected to appear in the panel body once it shows `projectId`'s content
+ * @param attempts Bounded retry count; the call is cheap and idempotent, so a few attempts absorb
+ *   the intermittent re-point failure without masking a persistent one
+ */
+export async function openCommentListPanelUntilVisible(
+  mainPage: Page,
+  panelId: string,
+  projectId: string,
+  expectedText: string,
+  attempts = 3,
+): Promise<Frame> {
+  let lastError: unknown;
+  // Sequential retry loop: each attempt must open the panel, activate its tab, wait for its iframe,
+  // and poll for its content before deciding whether to retry.
+  /* eslint-disable no-await-in-loop */
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    await openCommentListPanel(projectId);
+    await clickCommentsTab(mainPage, panelId);
+    const timeout = attempt < attempts - 1 ? 20_000 : 90_000;
+    try {
+      await mainPage
+        .locator(`iframe[data-web-view-id="${panelId}"]`)
+        .waitFor({ state: 'attached', timeout });
+      const frame = await getEditorFrame(mainPage, panelId);
+      await expect(frame.locator('body')).toContainText(expectedText, { timeout });
+      return frame;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+  throw lastError;
 }
 
 /** Returns the frame locator for the comment list web view iframe. */
