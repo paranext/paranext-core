@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
 import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-shard';
 import {
@@ -603,6 +603,48 @@ describe('useOpenProjectBookIds', () => {
       await emitWebViewEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
     }
 
+    /** Every lookup of `projectId` rejects, as for an id no factory ever serves. `stays` serves GEN. */
+    function neverServe(projectId: string) {
+      getProjectDataProvider.mockImplementation(async (_projectInterface, id) => {
+        if (id !== projectId) return pdpWithBooks(booksPresentFlags(1), 'stays');
+        throw new Error('still no factory');
+      });
+    }
+
+    /**
+     * `projectId`'s first lookup rejects (a factory that had not registered yet at a slow startup);
+     * every later lookup serves REV. `stays` always serves GEN.
+     */
+    function failFirstLookupThenServe(projectId: string) {
+      let lookups = 0;
+      getProjectDataProvider.mockImplementation(async (_projectInterface, id) => {
+        if (id !== projectId) return pdpWithBooks(booksPresentFlags(1), 'stays');
+        lookups += 1;
+        if (lookups === 1) throw new Error('wait for PDPF with platform.base threw! Timeout');
+        return pdpWithBooks(booksPresentFlags(66), projectId);
+      });
+    }
+
+    /**
+     * `projectId`'s first lookup serves a provider whose network object has since been disposed (an
+     * extension host restart), so its subscribe rejects; every later lookup serves REV. Returns the
+     * dead provider so a test can count the subscribe attempts against it.
+     */
+    function serveDeadProviderThenServe(projectId: string) {
+      const deadProvider = {
+        subscribeSetting: vi.fn(async () => {
+          throw new Error('network object has been disposed');
+        }),
+      };
+      let lookups = 0;
+      getProjectDataProvider.mockImplementation(async (_projectInterface, id) => {
+        if (id !== projectId) return pdpWithBooks(booksPresentFlags(1), 'stays');
+        lookups += 1;
+        return lookups === 1 ? deadProvider : pdpWithBooks(booksPresentFlags(66), projectId);
+      });
+      return deadProvider;
+    }
+
     test("drops a closed project's books from the result", async () => {
       openTwoResourceProjects();
 
@@ -704,15 +746,7 @@ describe('useOpenProjectBookIds', () => {
         webViewDefinition('staysView', { projectId: 'stays' }),
         webViewDefinition('slowView', { projectId: 'slow' }),
       ]);
-      let slowLookups = 0;
-      getProjectDataProvider.mockImplementation(async (_projectInterface, projectId) => {
-        if (projectId !== 'slow') return pdpWithBooks(booksPresentFlags(1), 'stays');
-        slowLookups += 1;
-        // A factory that had not registered yet at a slow startup: the same project is served fine
-        // a moment later.
-        if (slowLookups === 1) throw new Error('wait for PDPF with platform.base threw! Timeout');
-        return pdpWithBooks(booksPresentFlags(66), 'slow');
-      });
+      failFirstLookupThenServe('slow');
 
       const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
       await waitFor(() => expect(result.current).toEqual(['GEN']));
@@ -735,19 +769,7 @@ describe('useOpenProjectBookIds', () => {
         webViewDefinition('staysView', { projectId: 'stays' }),
         webViewDefinition('staleView', { projectId: 'stale' }),
       ]);
-      // A provider whose network object has since been disposed (an extension host restart): the
-      // cached proxy is dead, and only a fresh lookup can replace it.
-      const deadProvider = {
-        subscribeSetting: vi.fn(async () => {
-          throw new Error('network object has been disposed');
-        }),
-      };
-      let staleLookups = 0;
-      getProjectDataProvider.mockImplementation(async (_projectInterface, projectId) => {
-        if (projectId !== 'stale') return pdpWithBooks(booksPresentFlags(1), 'stays');
-        staleLookups += 1;
-        return staleLookups === 1 ? deadProvider : pdpWithBooks(booksPresentFlags(66), 'stale');
-      });
+      const deadProvider = serveDeadProviderThenServe('stale');
 
       const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
       await waitFor(() => expect(result.current).toEqual(['GEN']));
@@ -895,6 +917,264 @@ describe('useOpenProjectBookIds', () => {
           expect.stringMatching(/closes.*did not unsubscribe|did not unsubscribe.*closes/),
         ),
       );
+    });
+
+    describe('retrying a project that stays open', () => {
+      // These drive the retry timer, so they run under fake timers and advance time explicitly
+      // instead of polling with waitFor; every await below flushes the hook's promise chains.
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      /** Lets the hook's in-flight promise chains settle without moving the clock. */
+      async function flush() {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+      }
+
+      async function advance(ms: number) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(ms);
+        });
+      }
+
+      test('a project whose lookup failed is looked up again after the delay without leaving the set', async () => {
+        openTwoResourceProjects();
+        failFirstLookupThenServe('closes');
+
+        const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(result.current).toEqual(['GEN']);
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+
+        // Nothing joins or leaves. Just short of the delay: still no second lookup.
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS - 1);
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+
+        await advance(1);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(2);
+        expect(result.current).toEqual(['GEN', 'REV']);
+      });
+
+      test('a project whose subscribe failed is looked up again after the delay without leaving the set', async () => {
+        openTwoResourceProjects();
+        const deadProvider = serveDeadProviderThenServe('closes');
+
+        const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(deadProvider.subscribeSetting).toHaveBeenCalledTimes(1);
+        expect(result.current).toEqual(['GEN']);
+
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(2);
+        expect(result.current).toEqual(['GEN', 'REV']);
+      });
+
+      test('a retry that fails again is retried after another delay, not sooner', async () => {
+        openTwoResourceProjects();
+        neverServe('closes');
+
+        renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(2);
+
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS - 1);
+        expect(acquisitionsFor('closes')).toHaveLength(2);
+        await advance(1);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(3);
+      });
+
+      test('a retry that fails again leaves the result untouched', async () => {
+        openTwoResourceProjects();
+        neverServe('closes');
+
+        const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(result.current).toEqual(['GEN']);
+        const beforeRetry = result.current;
+
+        // The project reports the same empty list again. A toolbar that re-derived its book list
+        // on every failed retry would do so every delay for as long as the project stays open.
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(2);
+        expect(result.current).toBe(beforeRetry);
+      });
+
+      test('leaving the set cancels a pending retry', async () => {
+        openTwoResourceProjects();
+        neverServe('closes');
+
+        renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+
+        closeOneResourceProject();
+        await emitWebViewEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
+        // The timer itself is released, not merely neutralised by its own guard.
+        expect(vi.getTimerCount()).toBe(0);
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS * 2);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+      });
+
+      test('unmounting cancels a pending retry', async () => {
+        openTwoResourceProjects();
+        neverServe('closes');
+
+        const { unmount } = renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+
+        unmount();
+        expect(vi.getTimerCount()).toBe(0);
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS * 2);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+      });
+
+      test('an id that flaps inside the delay and then stays costs one fan-out per window', async () => {
+        openTwoResourceProjects();
+        neverServe('closes');
+
+        renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+
+        // Three departures and rejoins in the first second: each rejoin reuses the failed entry
+        // (no fan-out) and re-arms one timer for the remainder of the window.
+        for (let flap = 0; flap < 3; flap += 1) {
+          // Sequential on purpose: each rejoin must settle before the next departure, as live events do.
+          // eslint-disable-next-line no-await-in-loop
+          await leaveAndRejoin('closesView', 'closes');
+          // Same: the clock has to move between flaps so they land at distinct times inside the window.
+          // eslint-disable-next-line no-await-in-loop
+          await advance(100);
+        }
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+
+        // The retry fires once, at the delay from the FIRST failure, not later.
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS - 300);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(2);
+        await advance(1000);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(2);
+      });
+
+      test('a cached provider that failed once and then subscribed fine is not discarded after the delay', async () => {
+        openTwoResourceProjects();
+        let subscribeAttempts = 0;
+        const flakyProvider = {
+          subscribeSetting: vi.fn(async (_key: string, callback: (value: string) => void) => {
+            subscribeAttempts += 1;
+            if (subscribeAttempts === 1) throw new Error('transient');
+            callback(booksPresentFlags(66));
+            return unsubscriberFor('closes');
+          }),
+        };
+        getProjectDataProvider.mockImplementation(async (_projectInterface, projectId) =>
+          projectId === 'stays' ? pdpWithBooks(booksPresentFlags(1), 'stays') : flakyProvider,
+        );
+
+        const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(result.current).toEqual(['GEN']);
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+
+        // A rejoin INSIDE the delay reuses the stamped entry and its cached provider, and this time
+        // the subscribe succeeds. That success must clear the stamp on that same entry.
+        await advance(1000);
+        await leaveAndRejoin('closesView', 'closes');
+        await flush();
+        expect(result.current).toEqual(['GEN', 'REV']);
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+
+        // Past the original expiry, another rejoin must keep the working provider: a stale stamp
+        // would read as expired here and pay a fan-out for a provider that works.
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS);
+        await leaveAndRejoin('closesView', 'closes');
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+        expect(result.current).toEqual(['GEN', 'REV']);
+      });
+
+      test("a superseded subscription's late failure does not mark the provider its replacement subscribed to", async () => {
+        openTwoResourceProjects();
+        const firstSubscribe = deferred<never>();
+        let subscribeAttempts = 0;
+        const provider = {
+          subscribeSetting: vi.fn(async (_key: string, callback: (value: string) => void) => {
+            subscribeAttempts += 1;
+            if (subscribeAttempts === 1) return firstSubscribe.promise;
+            callback(booksPresentFlags(66));
+            return unsubscriberFor('closes');
+          }),
+        };
+        getProjectDataProvider.mockImplementation(async (_projectInterface, projectId) =>
+          projectId === 'stays' ? pdpWithBooks(booksPresentFlags(1), 'stays') : provider,
+        );
+
+        const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(subscribeAttempts).toBe(1);
+
+        // Leave while the first subscribe is still in flight; rejoin and subscribe fine on the same
+        // cached provider; then the first subscribe rejects, late.
+        await leaveAndRejoin('closesView', 'closes');
+        await flush();
+        expect(result.current).toEqual(['GEN', 'REV']);
+        firstSubscribe.reject(new Error('network object has been disposed'));
+        await flush();
+
+        // Past the delay, a rejoin keeps the working provider: a stamp from the late rejection
+        // would have read as expired and paid a fan-out.
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS);
+        await leaveAndRejoin('closesView', 'closes');
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(1);
+        expect(result.current).toEqual(['GEN', 'REV']);
+      });
+
+      test('a project whose provider stops answering on rejoin no longer contributes its old books', async () => {
+        openTwoResourceProjects();
+        let closesSubscribes = 0;
+        const provider = {
+          subscribeSetting: vi.fn(async (_key: string, callback: (value: string) => void) => {
+            closesSubscribes += 1;
+            if (closesSubscribes > 1) throw new Error('network object has been disposed');
+            callback(booksPresentFlags(66));
+            return unsubscriberFor('closes');
+          }),
+        };
+        getProjectDataProvider.mockImplementation(async (_projectInterface, projectId) =>
+          projectId === 'stays' ? pdpWithBooks(booksPresentFlags(1), 'stays') : provider,
+        );
+
+        const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(result.current).toEqual(['GEN', 'REV']);
+
+        // Leave and rejoin: the cached provider is reused and its subscribe now fails, so the
+        // project can no longer report its books and must stop contributing the old list.
+        closeOneResourceProject();
+        await emitWebViewEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
+        openTwoResourceProjects();
+        await emitWebViewEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW);
+        await flush();
+        expect(result.current).toEqual(['GEN']);
+      });
     });
 
     test('an event that leaves the project set unchanged does not rebuild subscriptions', async () => {
