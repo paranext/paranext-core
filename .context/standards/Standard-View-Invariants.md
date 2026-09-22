@@ -182,10 +182,12 @@ editor is running, never a default.
 `@eten-tech-foundation/scripture-utilities`
 (`packages/utilities/src/converters/usj/usj-document-location.model.ts` in the `scripture-editors`
 repo) each declare their own copy, and core assigns its copy into the editor's typed `EditorRef`
-API. Widen
-one alone and the cross-repo assignment stops type-checking — in the core→editor direction only, so
-the break surfaces as red CI in core after an editor bump, with nothing in either repo's own tests to
-catch it. Both repos carry a compile-time depth test; keep them mirrored.
+API. Both repos carry a compile-time depth test, so changing CORE's copy alone goes red in core's
+own `npm run typecheck` immediately: narrowing it fails the eight-clause assignment, and widening it
+turns the nine-clause `@ts-expect-error` into an unused-directive error. What nothing catches is
+widening the EDITOR's copy alone — core's narrower type stays assignable into the wider one, so the
+cross-repo assignment keeps type-checking and the two silently drift until core is widened to match.
+Keep the two declarations, and their depth tests, mirrored.
 
 Rationale and history: `adr-editor-positions-are-settled-coordinates` in
 [`Architecture-Decisions.md`](Architecture-Decisions.md).
