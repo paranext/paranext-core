@@ -57,6 +57,7 @@ import { useMemo, useState } from 'react';
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%general_error_title%',
   '%resources_action%',
+  '%resources_actionDidNotTakeEffect%',
   '%resources_any_language%',
   '%resources_any_type%',
   '%resources_dialog_subtitle%',
@@ -238,6 +239,39 @@ export function isResourceActionProviderNotReadyError(error: unknown): boolean {
   return message.includes(RESOURCE_ACTION_PROVIDER_NOT_READY);
 }
 
+/** Sentinel in the rejection for "the action reported success, but the list never agreed". */
+export const RESOURCE_ACTION_DID_NOT_TAKE_EFFECT = 'platformGetResources.actionDidNotTakeEffect';
+
+/**
+ * Builds the rejection a caller of `onInstallOrRemoveResource` raises when the action itself
+ * succeeded but the refreshed list still does not reflect it — an install whose resource is still
+ * missing, or a removal whose resource is still there.
+ *
+ * Something has to end the row's spinner in that case. The spinner stops when the list agrees, and
+ * a caller that cannot make it agree has no other way to say so: reporting success would leave the
+ * row spinning for as long as the dialog is open.
+ *
+ * `FAILED_PRECONDITION` because the fault is in the state of the system rather than in the request
+ * — the action was valid and was carried out.
+ *
+ * @returns The rejection reason to reject with.
+ */
+export function newResourceActionDidNotTakeEffectError(): PlatformError {
+  return newPlatformError(RESOURCE_ACTION_DID_NOT_TAKE_EFFECT, FAILED_PRECONDITION);
+}
+
+/**
+ * Whether a rejection from `onInstallOrRemoveResource` is "the list never reflected the action".
+ * Matched as a substring, for the reasons given on {@link isResourceActionProviderNotReadyError}.
+ *
+ * @param error The rejection reason.
+ * @returns Whether it is the did-not-take-effect sentinel.
+ */
+export function isResourceActionDidNotTakeEffectError(error: unknown): boolean {
+  const message = isPlatformError(error) ? error.message : getErrorMessage(error);
+  return message.includes(RESOURCE_ACTION_DID_NOT_TAKE_EFFECT);
+}
+
 // PAPI prepends `JSON-RPC Request error (<code>): ` to any rejection that crosses a process
 // boundary, and every real install/uninstall failure crosses one. That prefix is diagnostic noise
 // to whoever reads the alert, so strip it before showing the message. Spelled out rather than
@@ -341,6 +375,9 @@ export function GetResources({
   const noResultsErrorText: string = getLocalizedString('%resources_noResultsError%');
   const retryText: string = getLocalizedString('%resources_retry%');
   const providerNotReadyText: string = getLocalizedString('%resources_providerNotReady%');
+  const actionDidNotTakeEffectText: string = getLocalizedString(
+    '%resources_actionDidNotTakeEffect%',
+  );
   const downloadsUnavailableText: string = getLocalizedString('%resources_downloadsUnavailable%');
   const openText: string = getLocalizedString('%resources_open%');
   const removeText: string = getLocalizedString('%resources_remove%');
@@ -370,11 +407,11 @@ export function GetResources({
       // message, because the text the user reads has to be localized and this component is the half
       // that holds the localized strings. Any other rejection carries a message worth showing —
       // minus the cross-process prefix, which tells the user nothing.
-      setActionError(
-        isResourceActionProviderNotReadyError(e)
-          ? providerNotReadyText
-          : stripCrossProcessPrefix(getErrorMessage(e)),
-      );
+      // Both sentinels carry no prose of their own, so each is mapped to this component's own
+      // localized text; anything else arrives with a message worth showing.
+      if (isResourceActionProviderNotReadyError(e)) setActionError(providerNotReadyText);
+      else if (isResourceActionDidNotTakeEffectError(e)) setActionError(actionDidNotTakeEffectText);
+      else setActionError(stripCrossProcessPrefix(getErrorMessage(e)));
     }
   };
 
