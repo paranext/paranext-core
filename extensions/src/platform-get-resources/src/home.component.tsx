@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronsUpDown,
   ChevronUp,
+  CloudOff,
   ScrollText,
 } from 'lucide-react';
 import {
@@ -54,9 +55,13 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_language%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
+  '%resources_noProjectsInstructionWithoutResources%',
   '%resources_noSearchResults%',
   '%resources_open%',
   '%resources_searchedFor%',
+  '%resources_serverProjectsUnavailable_title%',
+  '%resources_serverUnreachable_description%',
+  '%resources_serverUnreachable_title%',
   '%resources_syncFailed_title%',
   '%resources_sync%',
 ] as const);
@@ -65,6 +70,42 @@ type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
 type HomeLocalizedStrings = {
   [localizedHomeKey in HomeLocalizedStringKey]?: LocalizedStringValue;
 };
+
+/**
+ * What Home knows about the send/receive server's half of the project list.
+ *
+ * The list Home shows is a merge of two halves, and only one of them can fail — so the component
+ * has to be told which of these it is looking at rather than inferring it from an empty merge. A
+ * single value rather than a pair of booleans because the states are mutually exclusive: the pairs
+ * that do not correspond to any real situation ("failed and still loading", "reached and
+ * unreachable") are then unrepresentable rather than merely untested. See
+ * `adr-async-hook-state-shape`.
+ *
+ * - `loading` — an answer is still on its way; the list is not yet worth reading.
+ * - `absent` — this build has no send/receive at all, so the local list is the whole truth and there
+ *   is no missing half to report.
+ * - `loaded` — the server answered; the merged list is complete.
+ * - `unreachable` — the server was asked and never answered.
+ * - `unavailable` — the server refused for a reason the user can act on (blocked internet access, an
+ *   expired registration), which a notification names alongside this.
+ * - `unknown` — whether this build even has a server was never established.
+ */
+export type RemoteProjectsState =
+  | 'loading'
+  | 'absent'
+  | 'loaded'
+  | 'unreachable'
+  | 'unavailable'
+  | 'unknown';
+
+/**
+ * Stable empty defaults. A default parameter allocates a fresh value on every render, which would
+ * make the merge and sort memos below miss on every keystroke for any caller that omits these —
+ * including every build without send/receive, where `sharedProjectsInfo` is absent all session.
+ */
+const NO_LOCAL_PROJECTS: LocalProjectInfo[] = [];
+const NO_SHARED_PROJECTS: SharedProjectsInfo = {};
+const NO_ACTIVE_SEND_RECEIVE_PROJECTS: string[] = [];
 
 export type SortConfig = {
   key: 'shortName' | 'fullName' | 'language' | 'activity' | 'action';
@@ -145,8 +186,20 @@ export type HomeProps = {
   isSendReceiveInProgress?: boolean;
   /** Whether loading local projects is in progress. */
   isLoadingLocalProjects?: boolean;
-  /** Whether loading remote projects is in progress. */
-  isLoadingRemoteProjects?: boolean;
+  /**
+   * What is known about the send/receive server's half of the list. Drives both the loading gate
+   * and the banner: without it, an unreachable server is indistinguishable from a server with no
+   * projects on it, and a user who is offline is told their projects do not exist. See
+   * {@link RemoteProjectsState} for what each value claims.
+   */
+  remoteProjectsState?: RemoteProjectsState;
+  /**
+   * Whether to list editable projects only, leaving out the published resources that otherwise
+   * share the list. Set by entry points that are answering "get me to one of my projects" — the
+   * title bar's project picker footer — where a resource is never a valid answer. Home's own entry
+   * points leave this unset and list both.
+   */
+  shouldShowProjectsOnly?: boolean;
   /** Array of local project information, containing projects and resources. */
   localProjectsInfo?: LocalProjectInfo[];
   /** Object of shared project information, containing projects on the send/receive server. */
@@ -174,7 +227,9 @@ export type HomeProps = {
  * @param {showGetResourcesButton} - Whether to show the Get Resources button.
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
- * @param {isLoadingRemoteProjects} - Whether loading remote projects is in progress.
+ * @param {remoteProjectsState} - What is known about the send/receive server's half of the list.
+ * @param {shouldShowProjectsOnly} - Whether to list editable projects only, leaving out published
+ *   resources.
  * @param {localProjectsInfo} - Array of local project information, containing projects and
  *   resources.
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
@@ -194,10 +249,11 @@ export function Home({
   showGetResourcesButton = true,
   isSendReceiveInProgress = false,
   isLoadingLocalProjects = false,
-  isLoadingRemoteProjects = false,
-  localProjectsInfo = [],
-  sharedProjectsInfo = {},
-  activeSendReceiveProjects = [],
+  remoteProjectsState = 'absent',
+  shouldShowProjectsOnly = false,
+  localProjectsInfo = NO_LOCAL_PROJECTS,
+  sharedProjectsInfo = NO_SHARED_PROJECTS,
+  activeSendReceiveProjects = NO_ACTIVE_SEND_RECEIVE_PROJECTS,
   headerContent,
 }: HomeProps) {
   const getLocalizedString = (localizeKey: HomeLocalizedStringKey) => {
@@ -219,7 +275,13 @@ export function Home({
     : getLocalizedString('%resources_items%');
   const languageText: string = getLocalizedString('%resources_language%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
-  const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
+  // The default instruction ends with "or get resources", naming the button beside it. Callers that
+  // suppress that button (New Tab) would otherwise point the user at something not on screen.
+  const noProjectsInstructionText: string = getLocalizedString(
+    showGetResourcesButton
+      ? '%resources_noProjectsInstruction%'
+      : '%resources_noProjectsInstructionWithoutResources%',
+  );
   const noSearchResultsText: string = getLocalizedString('%resources_noSearchResults%');
   const openText: string = getLocalizedString('%resources_open%');
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
@@ -227,6 +289,26 @@ export function Home({
   // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
+  const serverUnreachableDescriptionText: string = getLocalizedString(
+    '%resources_serverUnreachable_description%',
+  );
+
+  const isLoading = isLoadingLocalProjects || remoteProjectsState === 'loading';
+
+  /**
+   * Title for the banner that says the server half of the list is missing, or `undefined` when
+   * there is no missing half to report. `unavailable` gets its own title because the server was
+   * reached and refused: the notification beside it names the cause and offers the fix, and a
+   * "can't reach the server" title next to it would contradict it and point at the wrong thing.
+   */
+  let missingServerHalfTitleText: string | undefined;
+  if (remoteProjectsState === 'unavailable')
+    missingServerHalfTitleText = getLocalizedString('%resources_serverProjectsUnavailable_title%');
+  // `unknown` never established that there is a server to reach, which is a weaker claim than
+  // `unreachable` — but the user-facing consequence is the same missing half, and the description
+  // below ("showing only what is on your computer") is accurate for both.
+  else if (remoteProjectsState === 'unreachable' || remoteProjectsState === 'unknown')
+    missingServerHalfTitleText = getLocalizedString('%resources_serverUnreachable_title%');
 
   // Surfaces a business error (e.g. a project locked by another user) when an async action
   // callback rejects, so failures are visible in the UI rather than only logged by the webview.
@@ -275,8 +357,13 @@ export function Home({
       }
     });
 
-    return newMergedProjectInfo;
-  }, [localProjectsInfo, sharedProjectsInfo]);
+    // Filtered here rather than in the sort below so the empty list reads as "you have no
+    // projects" instead of "your search matched nothing" — the no-results message quotes the
+    // query, and nobody typed one.
+    return shouldShowProjectsOnly
+      ? newMergedProjectInfo.filter((project) => !project.isPublished)
+      : newMergedProjectInfo;
+  }, [localProjectsInfo, sharedProjectsInfo, shouldShowProjectsOnly]);
 
   const [textFilter, setTextFilter] = useState<string>('');
 
@@ -441,14 +528,37 @@ export function Home({
           </Alert>
         </div>
       )}
-      {isLoadingLocalProjects || isLoadingRemoteProjects ? (
+      {/*
+       * Sits above the list rather than inside its empty state: the server half can be missing
+       * while local projects still fill the table, and that is the case where nothing else on
+       * screen suggests the list is incomplete. Not `destructive` — the list shown is accurate as
+       * far as it goes, which is a narrower claim than the failed sync above. `role="status"`
+       * overrides the polite-by-default `Alert`'s assertive `role="alert"`: this appears when an
+       * async load settles and asks nothing of the user, so interrupting a screen reader mid
+       * sentence to announce it is the wrong register.
+       */}
+      {!isLoading && missingServerHalfTitleText && (
+        <div className="tw:mx-4 tw:mb-2">
+          <Alert role="status">
+            <CloudOff className="tw:h-4 tw:w-4" />
+            <AlertTitle>{missingServerHalfTitleText}</AlertTitle>
+            <AlertDescription>{serverUnreachableDescriptionText}</AlertDescription>
+          </Alert>
+        </div>
+      )}
+      {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
         </CardContent>
       ) : (
         <CardContent className="tw:flex-grow tw:overflow-auto tw:min-h-32 tw:px-0">
           <div className="tw:flex tw:flex-col tw:gap-4">
-            {!localProjectsInfo ? (
+            {/*
+             * Nothing to list at all, as opposed to a search that excluded everything: the two
+             * need different advice, and the no-results message quotes the query, so using it here
+             * would show `Searched for ""` to someone who never searched.
+             */}
+            {mergedProjectInfo.length === 0 ? (
               <div className="tw:flex-grow tw:h-full tw:border tw:border-muted tw:rounded-lg tw:p-6 tw:text-center tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-1">
                 <Label className="tw:text-muted-foreground">{noProjectsText}</Label>
                 <Label className="tw:text-muted-foreground tw:font-normal">

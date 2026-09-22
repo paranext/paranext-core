@@ -40,6 +40,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_status_syncing%': 'Test Syncing',
       '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
       '%mainMenu_openHome%': 'Home',
+      '%projectPicker_toolbar_more_projects%': 'More projects…',
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [
@@ -61,7 +62,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     MainMenu: vi.fn(() => [{ columns: {}, groups: {}, items: [] }, vi.fn(), false]),
   })),
   useDataProvider: vi.fn(() => undefined),
-  useDialogCallback: vi.fn(() => vi.fn()),
   useSetting: vi.fn(() => ['simple', vi.fn(), vi.fn(), false]),
   useProjectSetting: vi.fn(() => ['', vi.fn(), vi.fn(), false]),
 }));
@@ -161,6 +161,12 @@ vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
   })),
 }));
 
+/**
+ * Carries the stubbed `Select`'s open state down to the stubbed `SelectContent`, which is what
+ * Radix's own context does — the real `SelectContent` is mounted only while the dropdown is open.
+ */
+const SelectOpenContext = React.createContext(false);
+
 vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
@@ -214,9 +220,30 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       />
     ),
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
-    Select: ({ children, disabled }: { children?: React.ReactNode; disabled?: boolean }) => (
-      <div data-testid="project-picker-select" aria-disabled={disabled}>
-        {children}
+    // `open` is reflected onto the wrapper because the toolbar drives it: the dropdown's footer is
+    // a plain button rather than a `SelectItem`, so nothing else would close the dropdown when it
+    // opens Home. Without this the stub would swallow the only observable signal of that.
+    Select: ({
+      children,
+      disabled,
+      open,
+      onOpenChange,
+    }: {
+      children?: React.ReactNode;
+      disabled?: boolean;
+      open?: boolean;
+      onOpenChange?: (open: boolean) => void;
+    }) => (
+      <div data-testid="project-picker-select" aria-disabled={disabled} data-open={String(open)}>
+        {/* Stands in for Radix's trigger, which this stub replaces: the open state is the
+            toolbar's to drive, so a test needs some way to raise it. */}
+        <button
+          type="button"
+          aria-label="Open project picker"
+          data-testid="project-picker-open"
+          onClick={() => onOpenChange?.(true)}
+        />
+        <SelectOpenContext.Provider value={!!open}>{children}</SelectOpenContext.Provider>
       </div>
     ),
     SelectTrigger: ({
@@ -226,7 +253,13 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       children?: React.ReactNode;
       className?: string;
     }) => <div data-select-trigger-classname={className}>{children}</div>,
-    SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    // Radix mounts a `Select`'s content only while it is open. Rendering it unconditionally would
+    // let a test drive the dropdown's footer in a dropdown the user could not have opened, so a
+    // case about that footer would pass against a component where it is unreachable.
+    SelectContent: ({ children }: { children?: React.ReactNode }) => {
+      const isOpen = React.useContext(SelectOpenContext);
+      return isOpen ? <div>{children}</div> : undefined;
+    },
     SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
       <div data-value={value}>{children}</div>
     ),
@@ -688,6 +721,84 @@ describe('PlatformBibleToolbar — project picker Select visibility by interface
     rerender(<PlatformBibleToolbar />);
     await waitFor(() => {
       expect(screen.getByTestId('project-picker-select')).toBeInTheDocument();
+    });
+  });
+});
+
+/*
+ * The picker's own list is built from local metadata only, so the projects a user can reach on the
+ * send/receive server but has not downloaded are not in it. The footer is the way out to Home,
+ * which does merge both — and because that footer is a plain button rather than a `SelectItem`,
+ * closing the dropdown is the toolbar's job. The two are asserted together: opening Home while
+ * leaving the dropdown on top of it is the failure this pair exists to catch.
+ */
+describe('PlatformBibleToolbar — project picker footer reaches the rest of the projects', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  const getMoreProjects = () => screen.getByRole('button', { name: 'More projects…' });
+
+  /**
+   * Renders the toolbar and opens the dropdown. The footer only exists while the dropdown is open,
+   * the way Radix renders a `Select`'s content, so every case here has to travel the same route a
+   * user does.
+   */
+  async function renderAndOpenDropdown() {
+    render(<PlatformBibleToolbar />);
+    const select = await screen.findByTestId('project-picker-select');
+
+    act(() => {
+      screen.getByTestId('project-picker-open').click();
+    });
+    await waitFor(() => {
+      expect(select).toHaveAttribute('data-open', 'true');
+    });
+
+    return select;
+  }
+
+  it('opens Home', async () => {
+    await renderAndOpenDropdown();
+
+    act(() => {
+      getMoreProjects().click();
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'platformGetResources.openHome',
+        expect.anything(),
+      );
+    });
+  });
+
+  it('asks Home for projects only, since a read-only resource is never an answer here', async () => {
+    await renderAndOpenDropdown();
+
+    act(() => {
+      getMoreProjects().click();
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('platformGetResources.openHome', true);
+    });
+  });
+
+  it('closes the dropdown so it does not sit on top of the Home tab it just opened', async () => {
+    // The open assertion inside the helper doubles as this case's positive control: without it the
+    // dropdown is already closed and the assertion below would pass against a toolbar that never
+    // closes anything.
+    const select = await renderAndOpenDropdown();
+
+    act(() => {
+      getMoreProjects().click();
+    });
+
+    await waitFor(() => {
+      expect(select).toHaveAttribute('data-open', 'false');
     });
   });
 });
