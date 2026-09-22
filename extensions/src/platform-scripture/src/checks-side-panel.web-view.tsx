@@ -28,6 +28,7 @@ import {
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
+import { callControllerSafely } from './find/find.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
   ChecksSidePanel,
@@ -110,6 +111,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const [forceNewCheckRun, setForceNewCheckRun] = useState(1);
   const [checkResults, setCheckResults] = useState<CheckRunResult[]>(() => defaultCheckResults);
   const checkResultsRef = useRef<CheckRunResult[]>(checkResults);
+  /** The result id the editor was last asked to select, so a late failure knows if it is stale. */
+  const lastSelectRequestIdRef = useRef<string | undefined>(undefined);
   const [isResultLoadingCancelled, setIsResultLoadingCancelled] = useState(false);
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => [...CHECKS_SIDE_PANEL_STRING_KEYS], []),
@@ -591,19 +594,31 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 },
               }
             : location;
-        editorWebViewController
-          .selectRange({
-            // Transform deprecated check result locations to the new format. The old check result
-            // types don't have book/chapter info in the location, so we need to add them.
-            start: normalizeLocation(selectedResult.start),
-            end: normalizeLocation(selectedResult.end),
-          })
-          .catch((e) => {
+        // Records which result the editor was last asked for, so a failure that arrives late can
+        // tell whether the user has since moved on.
+        lastSelectRequestIdRef.current = id;
+        // `callControllerSafely`, not a bare `.catch`: the tab can close between this callback
+        // being handed to the result list and the user activating it, leaving a revoked proxy
+        // whose property read throws SYNCHRONOUSLY, before there is a promise to catch on.
+        callControllerSafely(
+          () =>
+            editorWebViewController.selectRange({
+              // Transform deprecated check result locations to the new format. The old check result
+              // types don't have book/chapter info in the location, so we need to add them.
+              start: normalizeLocation(selectedResult.start),
+              end: normalizeLocation(selectedResult.end),
+            }),
+          (e) => {
+            logger.warn(`Checks: failed to select result in editor: ${getErrorMessage(e)}`);
+            // Only fall back for the result still selected. A slow rejection for a result the user
+            // has already arrowed past would otherwise jump the editor back to it, away from the
+            // one they are now reading.
+            if (lastSelectRequestIdRef.current !== id) return;
             // The editor could not select the range, so fall back to the verse the way the branch
             // below does when there is no editor to ask.
-            logger.warn(`Checks: failed to select result in editor: ${getErrorMessage(e)}`);
             setScrRef(selectedResult.verseRef);
-          });
+          },
+        );
       } else {
         // Could not get controller to set specific range, so at least set the verse ref
         setScrRef(selectedResult.verseRef);
