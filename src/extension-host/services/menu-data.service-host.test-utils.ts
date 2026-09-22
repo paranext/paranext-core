@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import menuDataObject from '@extension-host/data/menu.data.json';
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
 import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
-import { DEV_ONLY_EXTENSION_NAMES } from '@node/utils/locale-assets.test-helper';
+import { DEV_ONLY_EXTENSION_NAMES } from '@node/utils/locale-assets.test-utils';
 import { JsonDocumentLike, PlatformMenus } from 'platform-bible-utils';
 import { vi } from 'vitest';
 
