@@ -63,11 +63,17 @@ describe('macosMenubarObject View menu', () => {
     expect(roles).not.toContain('resetZoom');
   });
 
-  it('keeps the reload, dev-tools and full-screen roles', () => {
+  it('keeps the reload and dev-tools roles', () => {
     const roles = submenu.map((item) => item.role);
     expect(roles).toContain('reload');
     expect(roles).toContain('toggleDevTools');
-    expect(roles).toContain('togglefullscreen');
+  });
+
+  it('does not add its own full-screen item, so macOS does not show a duplicate', () => {
+    // AppKit inserts "Toggle Full Screen" itself for a menu carrying `role: 'viewMenu'`; a
+    // hand-added one of the same role duplicated it (PT-4737).
+    const roles = submenu.map((item) => item.role);
+    expect(roles).not.toContain('togglefullscreen');
   });
 
   it('binds the zoom-in item to CommandOrControl+= with a click handler', () => {
