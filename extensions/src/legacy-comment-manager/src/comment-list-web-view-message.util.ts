@@ -1,3 +1,4 @@
+import { logger } from '@papi/frontend';
 import type {
   CommentFilters,
   LegacyCommentFilters,
@@ -32,7 +33,8 @@ export type CurrentCommentListView = {
  * ({@link LegacyCommentFilters}, {@link LegacyScopeFilter}) for backward compatibility with
  * out-of-repo senders; `applyFilterOverrides`/`resolveScopeFilter` map both onto the current model
  * and normalize anything unrecognized to its default, so this function never passes an invalid
- * preset or scope through to the caller.
+ * preset or scope through to the caller. This function runs only in a web view, so it supplies the
+ * `warn` sink `applyFilterOverrides` needs (see {@link WarnFn}).
  */
 export function resolveSetFiltersMessage(
   message: {
@@ -46,7 +48,7 @@ export function resolveSetFiltersMessage(
   scopeFilter: ScopeFilter;
   scopeFilterChanged: boolean;
 } {
-  const filters = applyFilterOverrides(message.filters);
+  const filters = applyFilterOverrides(message.filters, (warning) => logger.warn(warning));
   const scopeFilter = resolveScopeFilter(message.scopeFilter);
   return {
     filters,

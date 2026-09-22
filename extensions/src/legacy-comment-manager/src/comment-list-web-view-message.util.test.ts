@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { logger } from '@papi/frontend';
 import type {
   CommentPreset,
   LegacyCommentFilters,
@@ -7,8 +8,9 @@ import type {
 import { DEFAULT_COMMENT_FILTERS, DEFAULT_SCOPE_FILTER } from './comment-list-filters.model';
 import { resolveSetFiltersMessage } from './comment-list-web-view-message.util';
 
-// comment-list-filters.model.ts (imported transitively via resolveSetFiltersMessage) logs a warning
-// when a legacy combination has no matching preset -- see presetFromLegacyAxes.
+// This util is the web-view-side boundary that supplies the `warn` sink comment-list-filters.model.ts
+// takes as a parameter (the model itself must not import a logger -- see `WarnFn`'s doc and
+// extension-host-import-boundary.test.ts).
 vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -162,6 +164,14 @@ describe('resolveSetFiltersMessage — legacy shapes', () => {
       const resolved = resolveSetFiltersMessage({ filters: legacyFilters }, current);
       expect(resolved.filters).toEqual({ preset: 'all' });
     });
+  });
+
+  it('routes an unmatched legacy combination to the logger', () => {
+    // The model reports through an injected sink rather than logging itself, so this pins the half
+    // of that arrangement the model can no longer guarantee on its own: that this web-view caller
+    // actually wires the sink up to a real logger instead of swallowing the diagnostic.
+    resolveSetFiltersMessage({ filters: { assignment: 'team' } }, current);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('all|all|all|team'));
   });
 
   it("maps the legacy 'unfiltered' scope onto 'all-books', its exact replacement", () => {
