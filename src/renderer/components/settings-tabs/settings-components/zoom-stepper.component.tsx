@@ -8,9 +8,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
+import { adjustZoomFactor } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
 import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
-import { adjustZoomFactor, formatZoomPercent } from '@shared/utils/content-zoom.util';
+import { formatZoomPercent } from '@shared/utils/content-zoom.util';
 
 /**
  * How long an unconfirmed press stays the baseline for the arithmetic, the buttons and the readout.

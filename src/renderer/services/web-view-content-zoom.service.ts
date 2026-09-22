@@ -18,7 +18,6 @@ import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { settingsService } from '@shared/services/settings.service';
 import {
-  adjustZoomFactor,
   buildContentZoomMemoryKey,
   formatZoomPercent,
   isValidContentZoomAreaId,
@@ -26,6 +25,7 @@ import {
   parseContentZoomMemoryKey,
 } from '@shared/utils/content-zoom.util';
 import {
+  adjustZoomFactor,
   debounce,
   getErrorMessage,
   isPlatformError,

@@ -1,3 +1,4 @@
+import { adjustZoomFactor } from 'platform-bible-utils';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +7,6 @@ import {
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
 } from '@shared/models/content-zoom.model';
-import { adjustZoomFactor } from '@shared/utils/content-zoom.util';
 import { getContentZoomStyleElement } from './web-view-content-zoom.bootstrap-script';
 import { install } from './web-view-content-zoom.bootstrap-script.test-utils';
 
