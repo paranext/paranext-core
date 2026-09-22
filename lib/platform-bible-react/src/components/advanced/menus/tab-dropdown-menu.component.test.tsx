@@ -48,6 +48,15 @@ const SUBMENU_MENU: Localized<MultiColumnMenu> = {
   ],
 };
 
+/** A second action for the flyout in {@link SUBMENU_MENU}, for tests that move between items. */
+const REDO_ITEM: Localized<MultiColumnMenu>['items'][number] = {
+  label: 'Redo',
+  localizeNotes: '',
+  group: 'test.editActions',
+  order: 2,
+  command: 'test.redo',
+};
+
 /**
  * Shaped like the scripture editor's Project menu, including its empty Info column. Column keys are
  * in the order the served menu has them: the platform's column is merged in after the editor's
@@ -208,36 +217,7 @@ describe('TabDropdownMenu', () => {
     const onSelectMenuItem = vi.fn();
     render(
       <TabDropdownMenu
-        menuData={{
-          columns: { 'test.project': { label: 'Project', order: 1 } },
-          groups: {
-            'test.top': { column: 'test.project', order: 1 },
-            'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
-          },
-          items: [
-            {
-              id: 'test.editSubmenu',
-              label: 'Edit',
-              localizeNotes: '',
-              group: 'test.top',
-              order: 1,
-            },
-            {
-              label: 'Undo',
-              localizeNotes: '',
-              group: 'test.editActions',
-              order: 1,
-              command: 'test.undo',
-            },
-            {
-              label: 'Redo',
-              localizeNotes: '',
-              group: 'test.editActions',
-              order: 2,
-              command: 'test.redo',
-            },
-          ],
-        }}
+        menuData={{ ...SUBMENU_MENU, items: [...SUBMENU_MENU.items, REDO_ITEM] }}
         onSelectMenuItem={onSelectMenuItem}
         tabLabel="Project"
       />,
@@ -256,33 +236,45 @@ describe('TabDropdownMenu', () => {
     );
   });
 
+  it('opens a flyout with ArrowLeft in RTL', async () => {
+    persistDirection('rtl');
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu menuData={SUBMENU_MENU} onSelectMenuItem={() => {}} tabLabel="Project" />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    editTrigger.focus();
+    await user.keyboard('{ArrowLeft}');
+    const undo = await screen.findByRole('menuitem', { name: 'Undo' });
+    await waitFor(() => expect(undo).toHaveFocus());
+  });
+
+  it("reports an open flyout's state on its trigger", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu menuData={SUBMENU_MENU} onSelectMenuItem={() => {}} tabLabel="Project" />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    editTrigger.focus();
+    await user.keyboard('{ArrowRight}');
+    await screen.findByRole('menuitem', { name: 'Undo' });
+
+    expect(editTrigger).toHaveAttribute('data-state', 'open');
+    expect(editTrigger).toHaveAttribute('data-slot', 'dropdown-menu-sub-trigger');
+  });
+
   it("shows a submenu item's tooltip on hover", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const [editSubmenu, ...editActions] = SUBMENU_MENU.items;
     render(
       <TabDropdownMenu
         menuData={{
-          columns: { 'test.project': { label: 'Project', order: 1 } },
-          groups: {
-            'test.top': { column: 'test.project', order: 1 },
-            'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
-          },
-          items: [
-            {
-              id: 'test.editSubmenu',
-              label: 'Edit',
-              localizeNotes: '',
-              group: 'test.top',
-              order: 1,
-              tooltip: 'Edit actions',
-            },
-            {
-              label: 'Undo',
-              localizeNotes: '',
-              group: 'test.editActions',
-              order: 1,
-              command: 'test.undo',
-            },
-          ],
+          ...SUBMENU_MENU,
+          items: [{ ...editSubmenu, tooltip: 'Edit actions' }, ...editActions],
         }}
         onSelectMenuItem={() => {}}
         tabLabel="Project"

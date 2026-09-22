@@ -170,6 +170,19 @@ async function openCommentListPanel(projectId: string | undefined): Promise<stri
 }
 
 /**
+ * Raises an open tab of the requested type without reloading it, and creates nothing when none is
+ * open. Mirrors `showOrCreateTab` in
+ * `extensions/src/platform-scripture-editor/src/show-panel.util.ts`, which the scripture editor's
+ * other Simple Tools items use; keep the two in step so every Tools item raises its tab the same
+ * way.
+ */
+const RAISE_EXISTING_TAB_ONLY: OpenWebViewOptions = {
+  existingId: '?',
+  createNewIfNotFound: false,
+  bringToFront: true,
+};
+
+/**
  * Brings the Comments tab to the front, the way clicking it would. An open tab is raised, never
  * reloaded, so an in-progress comment edit survives. If no tab is open, opens one for the editor's
  * project.
@@ -180,11 +193,11 @@ async function openCommentListPanel(projectId: string | undefined): Promise<stri
 async function showCommentListPanel(
   editorWebViewId: string | undefined,
 ): Promise<string | undefined> {
-  const existingId = await papi.webViews.openWebView(commentListPanelWebViewType, undefined, {
-    existingId: '?',
-    createNewIfNotFound: false,
-    bringToFront: true,
-  });
+  const existingId = await papi.webViews.openWebView(
+    commentListPanelWebViewType,
+    undefined,
+    RAISE_EXISTING_TAB_ONLY,
+  );
   if (existingId) return existingId;
   let projectId: string | undefined;
   if (editorWebViewId) {
