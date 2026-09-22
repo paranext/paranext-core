@@ -108,10 +108,23 @@ function escapeClosingTags(jsSourceLiteral: string): string {
  * into content-zoom actions for THIS web view and one of its areas, and provides the on-area
  * indicator. Bubble phase on purpose: a view that owns Ctrl+wheel for a sub-region (the Text
  * Collection grid's per-resource zoom) stops propagation in capture phase and this listener never
- * sees the event. A view without areas ignores the input.
+ * sees the event. A view that is not zoomable (it reports no area, and the shard passes no declared
+ * area) ignores the input.
+ *
+ * @param webViewId The web view this script runs in
+ * @param declaredArea The default area core declares for the view's web view type
+ *   (`getContentZoomDeclaration(...).defaultArea`), or `undefined` for an undeclared type. While
+ *   the view reports no area, the chords and the wheel act on this area. A malformed id is
+ *   ignored.
  */
-export function getContentZoomBootstrapScript(webViewId: string): string {
+export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: string): string {
   const id = escapeClosingTags(JSON.stringify(webViewId));
+  // A validated area id is lower-case letters, digits and hyphens only, so its JSON literal needs
+  // no escaping inside the script tag.
+  const declared =
+    declaredArea !== undefined && isValidContentZoomAreaId(declaredArea)
+      ? JSON.stringify(declaredArea)
+      : 'undefined';
   const attr = CONTENT_ZOOM_ROOT_ATTRIBUTE;
   const chords = JSON.stringify(
     CONTENT_ZOOM_CHORDS.map(({ action, command, keys, codes }) => ({
@@ -124,6 +137,9 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
   return `
   (() => {
     const webViewId = ${id};
+    // The area core declares for this view's type: the chords and the wheel act on it while the view
+    // renders no marker (before a search, while loading), so a declared view stays zoomable.
+    const DECLARED_AREA = ${declared};
     const ATTR = '${attr}';
     // Pop-up content (a popover or menu portaled out of an area) carries its area's marker so the
     // zoom rule scales it, plus this flag: it is never a pane of its own, so it is left out of the
@@ -374,7 +390,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     window.addEventListener('keydown', onGestureKeyDown, true);
 
     const targetFor = (node) => {
-      if (areas.length === 0) return undefined;
+      if (areas.length === 0) return DECLARED_AREA;
       const hit = areaOf(node);
       return hit && areas.indexOf(hit) !== -1 ? hit : (activeArea || areas[0]);
     };
@@ -732,15 +748,15 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       requestZoomSteps(areaId, steps);
     };
     // A non-passive listener is what lets this cancel the gesture, but it also means the compositor
-    // consults the main thread for the first event of every scrolling sequence - a cost a pane with
-    // no zoom area can never repay, since every gesture there ends in targetFor returning undefined.
-    // So it is registered and removed on the 0 <-> n transition of the area list. It stays on the
-    // window rather than moving to the marked roots, so a gesture outside every area still reaches
-    // the fallback in targetFor.
+    // consults the main thread for the first event of every scrolling sequence - a cost a pane that
+    // is not zoomable can never repay, since every gesture there ends in targetFor returning
+    // undefined. So the listener is registered only while the pane reports an area or has a
+    // declared one. It stays on the window rather than moving to the marked roots, so a gesture
+    // outside every area still reaches the fallback in targetFor.
     const WHEEL_OPTIONS = { passive: false };
     let wheelListening = false;
     const syncWheelListener = () => {
-      const wanted = areas.length > 0;
+      const wanted = areas.length > 0 || DECLARED_AREA !== undefined;
       if (wanted === wheelListening) return;
       wheelListening = wanted;
       if (wanted) window.addEventListener('wheel', onWheel, WHEEL_OPTIONS);
