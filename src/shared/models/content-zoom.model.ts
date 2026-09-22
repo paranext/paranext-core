@@ -1,3 +1,4 @@
+import type { LocalizeKey, ReferencedItem } from 'platform-bible-utils';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import {
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
@@ -143,3 +144,105 @@ export const CONTENT_ZOOM_COMMANDS = {
   out: 'platform.webViewContentZoomOut',
   reset: 'platform.webViewContentZoomReset',
 } as const;
+
+/** One physical key that reaches a content-zoom action regardless of the layout's `key` for it. */
+export type ContentZoomChordKey = {
+  /** `KeyboardEvent.code` this entry matches. */
+  code: string;
+  /**
+   * `KeyboardEvent.key` that must accompany the code, when the code alone is not enough. Only
+   * `Numpad0` sets it: with NumLock off that key reports `key: 'Insert'`, and `Ctrl+Insert` is
+   * Chromium's legacy Copy chord, which content zoom must not swallow — losing Copy silently
+   * mid-edit is a data-entry hazard. (With NumLock on the key is `'0'`, which
+   * {@link ContentZoomChord.keys} already matches; the entry is kept so the table names every
+   * physical key a user may press for each action.) `NumpadAdd` and `NumpadSubtract` are
+   * NumLock-independent, so neither needs it.
+   */
+  requiredKey?: string;
+};
+
+/** One macOS View-menu item carrying an accelerator for a content-zoom action. */
+export type ContentZoomMacosMenuItem = {
+  /** `id` of the menu item, unique within the View menu. */
+  id: string;
+  /** The Electron accelerator this item binds. */
+  accelerator: string;
+  /**
+   * Hidden duplicates exist only to bind a second accelerator, since Electron allows one per item.
+   * The menu renders the visible item's accelerator; the hidden ones just work.
+   */
+  hidden?: boolean;
+};
+
+/** Everything that reaches one content-zoom action: its keys, its command and its menu items. */
+export type ContentZoomChord = {
+  action: 'in' | 'out' | 'reset';
+  /** The content-zoom command this action runs. */
+  command: (typeof CONTENT_ZOOM_COMMANDS)[keyof typeof CONTENT_ZOOM_COMMANDS];
+  /** `KeyboardEvent.key` values that mean this action, whatever the layout puts on the cap. */
+  keys: readonly string[];
+  /** Physical keys that mean this action regardless of what `key` the layout reports. */
+  codes: readonly ContentZoomChordKey[];
+  /** The macOS View-menu items bound to this action, most prominent first. */
+  macosMenuItems: readonly ContentZoomMacosMenuItem[];
+  /** The label key the macOS View menu shows for this action. */
+  macosLabel: LocalizeKey;
+};
+
+/**
+ * The one place the content-zoom chords are declared. The window-chrome keydown listener
+ * (`web-view-content-zoom.chrome-keys.ts`) and the macOS View menu
+ * (`platform-macos-menubar.data.ts`) import this table, and the in-view bootstrap
+ * (`web-view-content-zoom.bootstrap-script.ts`) serializes it into the script it injects, because
+ * that script runs as text inside the web view and cannot import anything.
+ *
+ * A chord is accepted with Ctrl or ⌘, and Alt rejects it; Shift is accepted for every action,
+ * because on AZERTY and Czech layouts the top-row `0` and `-` are shifted keys, so rejecting Shift
+ * would put reset out of reach there entirely. That modifier rule is two booleans and stays stated
+ * in each handler; the keys, the commands and the menu items live here.
+ */
+export const CONTENT_ZOOM_CHORDS: readonly ContentZoomChord[] = [
+  {
+    action: 'in',
+    command: CONTENT_ZOOM_COMMANDS.in,
+    keys: ['=', '+'],
+    codes: [{ code: 'NumpadAdd' }],
+    macosMenuItems: [
+      { id: 'contentZoomIn', accelerator: 'CommandOrControl+=' },
+      // ⌘+ on a Mac is ⇧⌘=, so without this item the key a Mac user presses — and the one the
+      // shortcut catalogue publishes — would never reach the menu path.
+      { id: 'contentZoomInShift', accelerator: 'CommandOrControl+Shift+=', hidden: true },
+      { id: 'contentZoomInNumpad', accelerator: 'CommandOrControl+numadd', hidden: true },
+    ],
+    macosLabel: '%mainMenu_view_zoomIn%',
+  },
+  {
+    action: 'out',
+    command: CONTENT_ZOOM_COMMANDS.out,
+    keys: ['-'],
+    codes: [{ code: 'NumpadSubtract' }],
+    macosMenuItems: [
+      { id: 'contentZoomOut', accelerator: 'CommandOrControl+-' },
+      { id: 'contentZoomOutNumpad', accelerator: 'CommandOrControl+numsub', hidden: true },
+    ],
+    macosLabel: '%mainMenu_view_zoomOut%',
+  },
+  {
+    action: 'reset',
+    command: CONTENT_ZOOM_COMMANDS.reset,
+    keys: ['0'],
+    codes: [{ code: 'Numpad0', requiredKey: '0' }],
+    macosMenuItems: [
+      { id: 'contentZoomReset', accelerator: 'CommandOrControl+0' },
+      { id: 'contentZoomResetNumpad', accelerator: 'CommandOrControl+num0', hidden: true },
+    ],
+    macosLabel: '%mainMenu_view_resetZoom%',
+  },
+];
+
+/**
+ * Contributed group holding the per-tab content-zoom items, the only group Simple mode's tab menu
+ * offers. Must match the group of this name in `src/extension-host/data/menu.data.json`;
+ * `menu.data.test.ts` pins the two together by importing the shipped data.
+ */
+export const CONTENT_ZOOM_TAB_MENU_GROUP = 'platform.tabZoom' satisfies ReferencedItem;
