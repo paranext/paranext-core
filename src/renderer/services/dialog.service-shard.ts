@@ -58,8 +58,9 @@ type DialogRequest<DialogTabType extends DialogTabTypes> = {
   reject: (reason?: unknown) => void;
   /**
    * Whether this request's tab has actually been placed in the dock. False from registration until
-   * `addTab` resolves for it, since a layout load can land in that window before the tab exists for
-   * it to drop.
+   * `addTab` places it — marked from `addTab`'s own synchronous callback rather than after its
+   * returned promise resolves, since a layout load can land in that window before the tab exists
+   * for it to drop, or in the gap between placement and this request's continuation resuming.
    */
   isTabDocked: boolean;
 };
@@ -343,14 +344,20 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
         type: 'float',
         position: 'center',
       },
+      true,
+      () => {
+        // Marked from `addTab`'s own synchronous callback, in the same tick the tab is actually
+        // placed in the dock, rather than after `addTab`'s promise resolves: the sweep below runs
+        // synchronously inside a whole-layout load, so a load landing in the one-tick gap between
+        // placement and this request's continuation resuming would otherwise find the tab already
+        // gone but this request still reading as undocked, and never settle it. Fresh map lookup
+        // rather than the `dialogRequest` closure variable: the id may already have been removed by
+        // the time this runs (e.g. the window closed while addTab was in flight), and a fresh lookup
+        // naturally skips marking a request that is no longer there.
+        const dockedRequest = dialogRequests.get(dialogId);
+        if (dockedRequest) dockedRequest.isTabDocked = true;
+      },
     );
-
-    // addTab resolving means the tab reached the dock. Mark it via a fresh map lookup rather than
-    // the `dialogRequest` closure variable: the id may already have been removed by the time this
-    // runs (e.g. the window closed while addTab was in flight), and a fresh lookup naturally skips
-    // marking a request that is no longer there.
-    const dockedRequest = dialogRequests.get(dialogId);
-    if (dockedRequest) dockedRequest.isTabDocked = true;
 
     // TODO: preserve requests between refreshes - add keepalive messages to indicate to the
     // requestor if the dialog request is still alive
