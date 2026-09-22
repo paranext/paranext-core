@@ -880,19 +880,27 @@ export const onLayoutLoadTabIds = layoutLoadTabIdsEmitter.event;
  * `platform.interfaceMode`) would close silently and close subscribers — the window service's
  * last-selected tracker, web view nonce cleanup — would keep references to web views that no longer
  * exist.
+ *
+ * Emits {@link onLayoutLoadTabIds} before the web view close events: `PlatformEventEmitter.emitFn`
+ * runs subscribers through a plain, non-isolating loop (see its doc comment; `emitIsolated` is the
+ * isolating alternative and is not used by either event here), so a subscriber that throws
+ * synchronously aborts whatever this function was about to do next. Emitting the tab ids first
+ * means a misbehaving `onDidCloseWebView` subscriber cannot suppress the non-web-view sweep (e.g.
+ * the dialog service shard's docked-request settling) that depends on {@link onLayoutLoadTabIds}
+ * having fired.
  */
 function emitCloseEventsForWebViewsRemovedByLayoutLoad(
   webViewsBeforeLoad: WebViewDefinition[],
   loadedLayout: LayoutInfo,
 ): void {
   const tabIdsAfterLoad = collectTabIdsFromLayoutInfo(loadedLayout);
+  layoutLoadTabIdsEmitter.emit(tabIdsAfterLoad);
   webViewsBeforeLoad.forEach((webViewDefinition) => {
     if (!tabIdsAfterLoad.has(webViewDefinition.id))
       onDidCloseWebViewBufferedEmitter.emit({
         webView: convertWebViewDefinitionToSaved(webViewDefinition),
       });
   });
-  layoutLoadTabIdsEmitter.emit(tabIdsAfterLoad);
 }
 
 /**
