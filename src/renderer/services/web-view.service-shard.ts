@@ -24,6 +24,7 @@ import {
   getContentZoomBootstrapScript,
   getContentZoomStyleElement,
 } from '@renderer/services/web-view-content-zoom.bootstrap-script';
+import { getContentZoomDeclaration } from '@shared/models/content-zoom.model';
 import {
   adjustContentZoom,
   getInitialContentZoomForWebView,
@@ -2872,7 +2873,7 @@ export async function openOrReloadWebView(
       document.addEventListener('DOMContentLoaded', setUpThemeStylesheet);
     else setUpThemeStylesheet();
   })();
-  ${getContentZoomBootstrapScript(webView.id)}
+  ${getContentZoomBootstrapScript(webView.id, getContentZoomDeclaration(webView.webViewType)?.defaultArea)}
   `;
 
   /** Nonce used to allow scripts and styles to run */
