@@ -105,7 +105,15 @@ For each entry point, add to `extensions/src/{ext}/contributions/menus.json`:
 **Notes:**
 - Use `localizeNotes` to document the menu path for translators
 - Order numbers determine sort order within the group
-- Commands must match exactly what's registered in main.ts
+- Commands must match exactly what's registered in main.ts — with one exception: a web view's
+  top-menu item can name a command id that its own `SelectMenuItemHandler` handles before any PAPI
+  call, never registered in `main.ts`. The scripture editor's Edit flyout
+  (Undo/Redo/Cut/Copy/Paste) works this way, because the clipboard needs the click's user
+  activation, which a PAPI round trip loses. `EDIT_MENU_COMMANDS` in
+  `extensions/src/platform-scripture-editor/src/edit-menu-actions.util.ts` is the list the handler
+  intercepts, and a test keeps it matched to the menu. See
+  `adr-menu-per-mode-layout-via-mode-gated-columns` in
+  [Architecture-Decisions.md](Architecture-Decisions.md).
 
 ### Menu Availability: Menus Stay Always-Available
 

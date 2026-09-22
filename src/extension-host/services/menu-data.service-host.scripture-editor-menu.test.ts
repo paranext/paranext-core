@@ -60,6 +60,16 @@ function describeItem(menu: Menu, item: Item): string {
 }
 
 /**
+ * Whether a group's items render under a column. Restates `isGroupUnderColumnOrSubMenu` in
+ * `lib/platform-bible-react/src/components/advanced/menus/menu.util.ts`, which the package does not
+ * export, so keep the two in sync: a group belongs to a column when it names that column, or when
+ * it is keyed the same as the column.
+ */
+function isGroupUnderColumn(groupKey: string, group: { column?: string }, columnKey: string) {
+  return group.column === columnKey || groupKey === columnKey;
+}
+
+/**
  * The menu as sections, the way `TabDropdownMenu` lays it out: columns by `order`, each column's
  * groups by `order`, each group's items by `order`, and columns with no items left out — the same
  * rule as `getMenuSectionsWithItems` in platform-bible-react.
@@ -71,7 +81,7 @@ function describeSections(menu: Menu): [string, string[]][] {
     .map(([columnKey]): [string, string[]] => [
       columnKey,
       groups
-        .filter(([, group]) => group.column === columnKey)
+        .filter(([groupKey, group]) => isGroupUnderColumn(groupKey, group, columnKey))
         .sort(([, a], [, b]) => a.order - b.order)
         .flatMap(([groupKey]) => itemsInGroup(menu, groupKey))
         .map((item) => describeItem(menu, item)),
@@ -232,7 +242,8 @@ describe("The scripture editor's Project menu, per mode", () => {
     'platformScripture.openMarkersChecklist',
     // Open Checks: Simple has no entry point for it.
     'platformScripture.openChecksSidePanel',
-    // The auto-show footnote pane toggle: Simple's View section has no place for it.
+    // The auto-show footnote pane toggle: Simple keeps PT9's manual footnotes pane, which Show
+    // footnotes opens and which then stays open, so Simple has no automatic behavior to turn on.
     'platformScriptureEditor.toggleFootnotesAutoShow',
     // Manage books: book management is a Power-mode task; Simple's missing-book message instead
     // tells the user to ask their project administrator.
@@ -241,6 +252,32 @@ describe("The scripture editor's Project menu, per mode", () => {
     // (legacyCommentManager.showCommentListPanel) fronts the shared Column 3 tab instead.
     'legacyCommentManager.openCommentList',
   ]);
+
+  /**
+   * Simple and Power serve some commands from separate copies of the same item, so a label edited
+   * in one copy and not the other would show one command under different names per mode.
+   */
+  test('a command served in both modes has the same label in each', async () => {
+    const labelsByCommand = (menu: Menu) =>
+      new Map(
+        menu.items.flatMap((item): [string, string][] =>
+          'command' in item ? [[item.command, item.label]] : [],
+        ),
+      );
+    const power = labelsByCommand(await getEditorTopMenuInMode('power'));
+    const simple = labelsByCommand(await getEditorTopMenuInMode('simple'));
+    const shared = [...simple.keys()].filter((command) => power.has(command));
+
+    // Positive control: the duplicated View and Find items are among the shared commands
+    expect(shared).toContain('platformScriptureEditor.changeView');
+    expect(shared).toContain('platformScripture.openFind');
+    shared.forEach((command) => {
+      expect({ command, label: simple.get(command) }).toEqual({
+        command,
+        label: power.get(command),
+      });
+    });
+  });
 
   test('every command the editor declares reaches Simple, or is a documented Power-only exception', async () => {
     const declared = declaredEditorCommandIds();

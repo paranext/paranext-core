@@ -14,6 +14,8 @@ import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-opti
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
 import editorMenus from '../contributions/menus.json';
+// An explicit relative import: `extensions/` has its own tsconfig with no `@node/*` path alias
+import { DEV_ONLY_EXTENSION_NAMES } from '../../../../src/node/utils/locale-assets.test-utils';
 
 type LocalizedStringsFile = {
   metadata?: Record<string, { fallbackKey?: string }>;
@@ -340,20 +342,6 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
   },
 );
 
-/**
- * Extensions the extension host loads only when "noisy dev mode" is enabled, so their contributions
- * never reach a production user. Mirrors `DEV_ONLY_EXTENSION_NAMES` in
- * `src/node/utils/locale-assets.test-helper.ts` (not importable here — `extensions/` has its own
- * tsconfig with no `@node/*` path alias), matched on the manifest `name` field.
- */
-const DEV_ONLY_EXTENSION_NAMES: readonly string[] = [
-  'c-sharp-provider-test',
-  'evil',
-  'helloSomeone',
-  'helloRock3',
-  'quickVerse',
-];
-
 /** Every localization key defined for `locale` anywhere the app loads strings from. */
 function allKeys(locale: 'en' | 'es'): Set<string> {
   const extensionsDir = path.resolve(__dirname, '../..');
@@ -383,22 +371,28 @@ function allKeys(locale: 'en' | 'es'): Set<string> {
   return keys;
 }
 
-function menuLabelKeys(): string[] {
+/**
+ * Every localize key the editor's top menu shows: column and item labels, plus item tooltips, which
+ * resolve through the same `%key%` mechanism as labels.
+ */
+function menuLocalizeKeys(): string[] {
   const { topMenu } = editorMenus.webViewMenus['platformScriptureEditor.react'];
-  const labels = [
+  const keys: unknown[] = [
     ...Object.values(topMenu.columns).map((column) => column.label),
-    ...topMenu.items.map((item) => item.label),
+    ...topMenu.items.flatMap((item) => [item.label, 'tooltip' in item ? item.tooltip : undefined]),
   ];
-  return [...new Set(labels)];
+  return [
+    ...new Set(keys.filter((key): key is string => typeof key === 'string' && /^%.*%$/.test(key))),
+  ];
 }
 
-// The editor's Project menu draws its column and item labels from keys that must be defined
-// somewhere the app loads strings from: this extension's own contribution, another shipped
-// extension's (e.g. the Comments item's label lives with legacyCommentManager), or the platform
-// shell's core locale assets. Driven off the menu document itself, so a label added to the menu
-// is covered here without anyone remembering to update this file.
+// The editor's Project menu draws its column and item labels and item tooltips from keys that must
+// be defined somewhere the app loads strings from: this extension's own contribution, another
+// shipped extension's (e.g. the Comments item's label lives with legacyCommentManager), or the
+// platform shell's core locale assets. Driven off the menu document itself, so a label or tooltip
+// added to the menu is covered here without anyone remembering to update this file.
 describe.each(['en', 'es'] as const)('editor Project menu labels in %s', (locale) => {
-  const keys = menuLabelKeys();
+  const keys = menuLocalizeKeys();
   it.each(keys)('%s is defined', (key) => {
     expect(allKeys(locale).has(key)).toBe(true);
   });
