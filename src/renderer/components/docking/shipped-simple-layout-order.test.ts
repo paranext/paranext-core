@@ -114,6 +114,16 @@ type MenuItemJson = {
   hiddenInterfaceModes?: string[];
 };
 
+/**
+ * Whether a group's items render under a column. Restates `isGroupUnderColumnOrSubMenu` in
+ * `lib/platform-bible-react/src/components/advanced/menus/menu.util.ts`, which the package does not
+ * export, so keep the two in sync: a group belongs to a column when it names that column, or when
+ * it is keyed the same as the column.
+ */
+function isGroupUnderColumn(groupKey: string, group: { column?: string }, columnKey: string) {
+  return group.column === columnKey || groupKey === columnKey;
+}
+
 /** The TOOLS section's commands, read straight off the raw menu JSON, in the order they are served. */
 function simpleToolsCommands(): string[] {
   const menus = JSON.parse(readFileSync(EDITOR_MENUS_PATH, 'utf8'));
@@ -126,7 +136,9 @@ function simpleToolsCommands(): string[] {
     items: MenuItemJson[];
   } = topMenu;
   return Object.entries(groups)
-    .filter(([, group]) => group.column === 'platformScriptureEditor.simpleTools')
+    .filter(([groupKey, group]) =>
+      isGroupUnderColumn(groupKey, group, 'platformScriptureEditor.simpleTools'),
+    )
     .sort(([, a], [, b]) => a.order - b.order)
     .flatMap(([groupKey]) =>
       items
