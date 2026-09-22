@@ -171,6 +171,76 @@ step, no automation. Just a record.
   OS focus, only serves callers with no window, such as the extension host.
 - **Source:** PT-4238; PR #2736.
 
+## adr-all-projects-routes-to-home: the title bar's "more projects" affordance routes to Home rather than making the project picker send/receive-aware
+
+_The affordance is labelled "More projects…" in the title bar today; the PRD calls it "All projects…"
+and the rename lands with the `ProjectSelector` migration (PT-4549). Both names mean this entry._
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** PRD IAN-NN-2.3 asks for a way to reach projects the title-bar picker's list does not
+  show, including projects that exist on the send/receive server but not yet on this machine. The
+  picker's list is built entirely from local metadata — `use-project-picker-data.hook.ts` never calls
+  `getSharedProjects` — so the affordance existed but could not reach the server. Making the picker
+  itself server-aware was constrained by two facts: `paratextBibleSendReceive.getSharedProjects` is
+  registered only through Paratext 10 Studio's patch layer, so calling it from core would throw in
+  plain Platform.Bible; and there is no app-wide offline signal (three identical
+  `// TODO: Hook into something that checks for whether the platform is in offline mode` sit in the
+  socket and XHR services). Meanwhile Home — `extensions/src/platform-get-resources/` — already
+  merges local and shared projects, de-duplicates them by `projectId`, gates its own server fetch on
+  the `platformGetResources.isSendReceiveAvailable` command (Home is an extension web view, so the
+  renderer-side `useSendReceiveAvailability` hook is not reachable from it), and offers Get rather
+  than Open for rows not on disk.
+- **Decision:** The affordance opens Home. Core does not call `getSharedProjects`, gains no
+  send/receive awareness in the picker, and needs no build-flavour gate on the affordance — Home
+  degrades to a local-only list where send/receive is absent. Home owns the honesty requirement
+  instead: it now distinguishes "the server could not be reached" from "the server has no projects"
+  with an explicit banner, because a silent fallback to the local half tells an offline user their
+  projects do not exist.
+- **Alternatives:** **Make the picker call `getSharedProjects` and render server rows inline** —
+  rejected: it throws in plain Platform.Bible, duplicates the merge and de-duplication Home already
+  does, and would need its own outage handling. **Gate the affordance on send/receive availability**
+  — rejected once the target became Home: the gate's only rationale was avoiding that throw, and
+  applying it anyway would hide a working "all projects on disk" surface from plain Platform.Bible.
+  **Route to the Send/Receive dialog** — rejected by the PRD itself, since send/receive is intended
+  to be replaced by Home. **Show the unfiltered Home, resources included** — how this first shipped,
+  and rejected on the demo feedback below: the resource rows are noise on a path that starts in a
+  project picker. **Cache the server's project list for offline use** — deferred: a cached list
+  cannot be acted on, because a user who is offline cannot sync the project the cache would show.
+- **Consequences:** Home is the single surface that reconciles local and server projects, so a defect
+  in that reconciliation is fixed once. The picker stays local-only by design, which is worth
+  restating on any future picker ticket that reads its list as incomplete. The
+  `platform.projectPicker` dialog now has no caller in core — it is kept rather than removed because
+  the dialog type is part of the public `DialogTypes` surface an extension can still open, so
+  retiring it is a breaking change that belongs to its own decision, not a side effect of this one.
+  Revisit if
+  `getSharedProjects` moves out of the Studio patch layer into core, or if an app-wide offline signal
+  lands — either would make an inline, server-aware picker cheap enough to reconsider. The affordance
+  needs no build-flavour gate, but it does inherit a data-driven one: the picker renders its dropdown
+  only when it has items (`hasProjectPickerItems`), so a user with no local project metadata — including
+  after `MAX_METADATA_FETCH_RETRIES` is exhausted in `use-project-picker-data.hook.ts` — cannot reach
+  Home through it. That is an awkward state rather than a dead end, because `menus.json` contributes
+  `%mainMenu_open%` → `platformGetResources.openHome` with no `hiddenInterfaceModes`, and
+  `dockHomeInThisWindow` auto-opens Home when the dock empties. Home's availability check is also a
+  second implementation of what `src/renderer/hooks/use-send-receive-availability.hook.ts` already
+  models — a shorter retry window that fails closed rather than open — and the two cannot be merged
+  without a module shared across the renderer/web-view boundary, so unifying them is deferred rather
+  than done here.
+- **Amended 2026-09-18 (PT-4552, demo feedback):** the affordance opens Home **scoped to editable
+  projects**, leaving out the published resources. The open question this entry recorded — whether
+  Home's resource rows are noise on this path or the other half of "get me to the project I mean" —
+  was decided against real use at the demo: noise. The scoping is a property of the launch, not of
+  the tab, so it is carried as an optional `shouldShowProjectsOnly` argument to
+  `platformGetResources.openHome`, written into the web view's `state` by unconditional assignment
+  (`buildHomeWebViewState`) so a restored layout or a later menu open clears it, and read back with
+  `useWebViewState`. Every other entry point to Home still lists both. Reusing an already-open Home
+  raises its tab without consulting the provider, so fresh options never reach it; the command
+  reloads that web view when — and only when — the scoping differs
+  (`shouldReloadHomeForProjectsOnly`), because the rebuild is the slowest thing on this path. The
+  cost this adds is a second Home configuration to keep working, which is what the entry warned
+  about; it is accepted because the alternative is a project picker whose "more" leads to a list of
+  things that are not projects.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014
@@ -635,6 +705,98 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-closed-source-command-doc-altitude: Command docs for closed-source-backed PAPI commands describe caller-visible guarantees, not the current implementer's mechanism
+
+- **Date:** 2026-09-05
+- **Status:** Accepted
+- **Context:** PR #2771 (PT-4483) fixed `paratextBibleSendReceive.syncProjects`'s doc comments (the
+  C# stub's XML doc and `src/@types/paratext-bible-send-receive/index.d.ts`'s TSDoc), which had
+  drifted from the real Paratext 10 Studio implementation — a closed-source patch
+  (`paratext-10-studio` `repo-patches/paranext-core.patch`, `SyncProjectsCore`). A first draft of the
+  fix encoded Studio's specific first-sync mechanism directly (an initial batch of 5 projects, then
+  one at a time, stopping once a non-Observer role is found), verified against the actual patch
+  source. Code review (Reviewable, `katherinejensen00`, with direct access to that patch) found the
+  new text itself over-generalized: for accounts with five or fewer shared projects, or accounts
+  where the user has no editable role on any of them, the described "stops early, rather than
+  syncing the whole account" claim doesn't hold — the whole account downloads regardless, just via a
+  different path through the same mechanism. Fixing that specific overgeneralization in place would
+  still have left the doc asserting Studio's tunable constants (batch size, the role check) as part
+  of the command's contract — constants this repo cannot verify, cannot test against (the stub
+  throws/no-ops; no core test exercises the real logic), and has no way to detect drifting the next
+  time Studio's patch is regenerated (`save-repo-patches`).
+- **Decision:** Doc comments for a command whose real implementation is closed-source or otherwise
+  swappable (today: anything backed by `paratext-bible-send-receive`, i.e. any command whose
+  `@throws` documents a `PlatformUnimplementedException` for builds that don't implement it, naming
+  the current implementer only as an example) describe caller-visible **guarantees** only — what a
+  caller may rely on and must not assume — never the current implementer's specific mechanism or
+  tuning constants. Concretely, `syncProjects`'s zero-local-projects case now reads "an
+  implementation is expected to try to make at least one project available for the current user to
+  work in, if the account has one — but may stop short of downloading every shared project in the
+  account, trading completeness for performance. Callers MUST NOT assume every shared project is
+  present locally once this resolves," replacing the batch/role-check description. Promoted to a
+  standing rule: `.claude/rules/architecture/closed-source-command-docs.md`.
+- **Alternatives:**
+  - **Encode the known implementation for convenience** (what the first draft did) — rejected:
+    useful once, but ties this repo's doc to a private repo's tunable constants with no verification
+    path and no drift signal; exactly what produced the overgeneralization this decision responds
+    to.
+  - **Keep it vague, point readers to the other repo** — rejected: readers of this repo (including a
+    future AI agent) might not have access to or knowledge of the actual implementation(s); a bare
+    pointer elsewhere is unactionable for them and doesn't tell a caller what it can safely assume.
+  - **Leave the pre-PR wording**, which understated the behavior — rejected: it was the original bug
+    this PR fixed (claimed the no-ID form only ever syncs already-local projects, when a true first
+    sync can and should also acquire the account's first project).
+- **Consequences:** This doc can no longer be invalidated by a Studio-side regeneration of
+  `repo-patches/paranext-core.patch` that changes a tuning constant, since it no longer asserts one.
+  The tradeoff is genuinely less specific information in-repo for someone who wants to reason
+  precisely about first-sync latency or batching — that detail now only exists in the Studio patch
+  itself, which the rule file points to. If a future need arises to expose implementation-specific
+  timing/behavior to core (e.g. for a startup-performance budget), it should be surfaced through an
+  explicit signal (a return value, an event) rather than encoded into a doc comment describing a
+  different implementation's internals. Upstreamed 2026-09-18 via
+  `paratext-bible-internal-extensions#200` (merged), closing the drift-on-re-sync risk this decision
+  flagged. That review round also surfaced a real (if narrow) bug in the underlying implementation —
+  `seenConnectedIds` not seeded before the connected-resource scan, causing a double-sync when a
+  primary project is also connected to another primary in the same call — tracked separately as
+  PT-4602 (open as of 2026-09-21), since it's a code fix in the Studio patch, not a doc fix.
+- **Source:** PT-4483, review of #2771.
+
+## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
+
+- **Date:** 2026-09-15
+- **Status:** Superseded by adr-comment-filter-presets-over-axes. This design (the `Filters` trigger,
+  its popover, and `buildFilterChips`) shipped briefly, then was replaced two days later by two
+  always-visible `Select`s once the filter model itself collapsed from four orthogonal axes to a
+  closed preset set — exactly the "axis count small enough to fit inline" case this entry's own
+  Revisit clause named. `buildFilterChips` no longer exists anywhere in `comment-list.component.tsx`
+  or the rest of the branch. Read this entry as the reasoning of 2026-09-15, not as the current
+  toolbar design.
+- **Context:** The comments panel filtered on five orthogonal axes, each a `Select` with a 128px
+  minimum width, in a wrapping toolbar row. In a 320px panel that already wrapped to three rows
+  (~112px of chrome). Adding two more axes (date, author) would have made it four rows (~148px) —
+  most of a comment card — in the same change whose goal was fitting more comments on screen. The
+  axis labels are long by necessity (`All resolved statuses`, `All read statuses`), so they cannot
+  be shortened into fitting.
+- **Decision:** Collapse every axis behind a single `Filters` trigger opening a popover that gives
+  each axis a labelled full-width row, and render a dismissible chip beside the trigger for each
+  axis not at its default. A fresh list therefore shows the trigger alone (~48px), below the
+  previous baseline rather than above it. Implemented in `CommentListPanel` in
+  `extensions/src/legacy-comment-manager/src/comment-list.component.tsx`, via a chip-building
+  helper that no longer exists there (see this entry's Status).
+- **Alternatives:**
+  - *Seven inline dropdowns.* Smallest diff, but spends most of a comment card on chrome.
+  - *Drop the `min-w-32` floor so triggers size to content.* Measured and rejected: the shipped
+    default labels already exceed 128px at `text-sm`, so removing the floor does not shrink the
+    default state — it only lets flex-shrink truncate harder, producing adjacent triggers both
+    reading `All r…`.
+- **Consequences:** Axis controls are no longer in the DOM until the popover opens, which any E2E
+  test locating them directly must account for. Visible axis names need their own localization keys
+  — reusing the `aria-label` keys yields row headings like "Filter by resolved status" and chip
+  dismiss labels like "Clear Filter by resolved status filter". Nested overlays inside the popover
+  (a `Select`, or the author axis's own `Popover`) must re-portal into the popover's own container
+  or they read as outside clicks; `PopoverPortalContainerProvider` is the existing mechanism, and
+  `scope-selector.component.tsx` is the reference consumer. **Revisit** if an axis count small
+  enough to fit inline returns, or if chips prove less discoverable than visible dropdowns in use.
 ## adr-column-3-panels-are-told-their-project: A Column 3 panel is told its project by the switch; it never infers one from the scroll group
 
 - **Date:** 2026-08-27
@@ -755,6 +917,129 @@ step, no automation. Just a record.
     so the held admin list can stay on the outgoing project while the per-user list and overlay
     resubscribe to the incoming one.
 - **Source:** PT-4423, which fixes PT-4238.
+
+## adr-comment-drafts-follow-filters: An uncommitted comment draft is filtered like any other thread, unlike Paratext 9
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** In Paratext 9, a thread with an uncommitted draft is exempt from every filter — it
+  always shows, regardless of what the user has filtered to. PT10's comment list is filtered
+  server-side: `buildCommentThreadSelector` (`comment-list-filters.model.ts`) turns the preset and
+  scope selection into a `LegacyCommentThreadSelector` sent to the data provider's
+  `getCommentThreads` query, and the web view only ever narrows that already-queried result further
+  (see the `visibleCommentThreads` memo in `comment-list.web-view.tsx`). `LegacyCommentThreadSelector`
+  (`types/legacy-comment-manager.d.ts`) has no way to ask for "the filtered results, plus these
+  specific extra thread ids regardless of the filter" — its `threadId` field is a single optional
+  `string`, not a set. A thread the query excluded never reaches the web view's result set, so
+  nothing client-side can add it back in.
+- **Decision:** Let drafts be filtered like any other thread. Only the `unsaved` preset narrows the
+  query result down to threads that have a draft (`visibleCommentThreads` in
+  `comment-list.web-view.tsx`); every other preset or scope hides a drafted thread exactly as it
+  would hide any other thread that doesn't match. The `unsaved` preset keeps Paratext 9's "Unsaved
+  comments" label (`localizedStrings.json`) as a deliberate parity choice, even though this
+  implementation auto-saves drafts to `localStorage` on every change — so what's literally true of a
+  draft here is that it's unsent, not unsaved. Naming parity with Paratext 9 was judged to outweigh
+  literal accuracy; this is a knowing tradeoff, not an oversight to "fix" later.
+  **Amended 2026-09-21:** the nine preset labels (`presetToLabelKey`, `comment-list-filters.model.ts`)
+  were also made grammatically parallel — each a noun phrase naming a set of comments (`unresolved`:
+  "Unresolved comments", `resolved`: "Resolved comments", `conflict`: "Conflicts", etc.) instead of
+  the prior mix of noun phrases and bare adjectives (`"Unresolved"`, `"Resolved"`, `"Conflict"`).
+  Paratext 9's own labels (`ThreadFilterSelectionAdapter.cs`) are themselves non-parallel — "All
+  notes", "Unread and unresolved", "Unsaved notes" — so this is the same kind of wording decision as
+  the "comments" (not PT9's "notes") and "Unsaved comments" choices already recorded above:
+  consistency of the label set as presented in one dropdown was judged to outweigh literal wording
+  parity with PT9. Both `en` and `es` were updated together, keeping Spanish masculine agreement with
+  *comentarios* (e.g. `conflict`: "Conflictos", `resolved`: "Comentarios resueltos").
+- **Alternatives:**
+  - Reproduce Paratext 9's always-show-drafted-threads behavior by merging drafted thread ids into
+    the query result on the client regardless of scope/preset. Rejected: it doesn't fit
+    `LegacyCommentThreadSelector`'s single-`threadId` shape, and even widening that field to a set
+    would still need the *provider's* own filtering to skip a listed thread's normal exclusion
+    criteria, which the query interface has no way to express. It would also surprise a user who
+    deliberately scoped the list to one book or chapter by showing a thread from outside that scope.
+- **Consequences:** A user with a draft on a thread the current scope or preset excludes will not see
+  that thread until they switch to `unsaved` (or to a scope/preset that includes it) — the draft
+  itself is not lost, just not visible. Revisit if this proves confusing enough in practice; the fix
+  would need either an "or match this specific thread" query clause or a client-side merge layered on
+  top of the query result, not just a wider `threadId` type.
+
+## adr-comment-filter-presets-over-axes: Four orthogonal comment-filter axes collapse into one closed preset set
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** The comment filters used to be four independent axes (`resolved`, `read`, `type`,
+  `assignment`), each a separate control, composing to many combinations. The axes were never
+  offered as separate controls to compose freely in the first place, and most combinations were
+  never reachable through the UI — so the composability was flexibility nobody could use, not
+  flexibility being removed. Separately, `adr-collapsed-multi-axis-filter-toolbar` had just collapsed
+  a five-axis toolbar behind a popover to fit a narrow panel; once the axis count itself shrank, that
+  popover's reason to exist went with it (see that entry's Status for detail).
+- **Decision:** Replace the four legacy axes with `CommentFilters = { preset: CommentPreset }`, a
+  closed set of nine named presets representing the combinations users actually work in (`all`,
+  `unresolved`, `unread`, `unread-and-unresolved`, `resolved`, `unresolved-assigned-to-me`,
+  `unread-assigned-to-me`, `unsaved`, `conflict` — see `presetToLabelKey` in
+  `comment-list-filters.model.ts`), plus a separate four-value `ScopeFilter` axis for the Scripture
+  range. Both render as always-visible inline `Select`s (`FilterDropdown` in
+  `comment-list.component.tsx`) rather than behind any popover or trigger. The deprecated four-axis
+  shape (`LegacyCommentFilters`) is still accepted at the filter boundaries (`openCommentList`,
+  `setFilters`) and mapped onto the closest preset via `LEGACY_AXES_TO_PRESET`/`presetFromLegacyAxes`
+  in `comment-list-filters.model.ts`.
+- **Alternatives:**
+  - Keep the four axes composable but render only the two visible controls, deriving a preset from
+    the underlying combination. Rejected for the same reason as keeping the axes at all: preserving
+    an internal cross-product representation buys nothing once the presented surface is a closed set.
+  - Keep `adr-collapsed-multi-axis-filter-toolbar`'s popover-and-chips toolbar and simply reduce the
+    axis count within it. Rejected once two axes fit inline on one row — the popover's own
+    justification (chrome cost of five-plus axes in a narrow panel) no longer applied.
+- **Consequences:** Two legacy axis values have no counterpart in the new preset set and are
+  unrepresentable: `assignment: 'team'` and `'unassigned'`, and `type: 'comments'` / `read: 'read'`
+  in combination with an otherwise-active axis. `presetFromLegacyAxes` falls back to `'all'` for any
+  legacy combination without an exact match rather than guessing which axis to drop — see
+  `LegacyCommentFilters`'s TSDoc in `types/legacy-comment-manager.d.ts` for the full mapping table and
+  the reasoning per row. A future need to compose two presets together (e.g. "unresolved AND assigned
+  to me AND unread") needs either a new named preset or a return to axis composition — revisit if the
+  preset list keeps growing to cover combinations rather than shrinking.
+
+## adr-comment-machine-local-storage: Per-machine comment state (drafts, filter selection) lives in `localStorage`, not per-user project settings
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** Comment drafts (an unsent reply, a pending assignee change, an unsaved edit) and the
+  user's filter/scope selection both need to survive a reload, but neither is data other project
+  members should see. Per-user project settings normally live under
+  `{projectDirectory}/Extensions/`, but that directory is not covered by PT9's ignore list —
+  `ParatextData/Repository/VersionedText.cs` excludes only `local/**`, `PA7/**`, and `InDesign/**` —
+  so anything written there travels to every other user on the next Send/Receive. A draft is a
+  half-written comment; transmitting it would leak a user's unsent thoughts to their team the moment
+  they sync. A filter selection is a personal view preference that should neither transmit to
+  teammates nor follow a user to a different machine.
+- **Decision:** Persist both comment drafts (`comment-draft-store.ts`) and the filter/scope selection
+  (`comment-filter-store.ts`) in `localStorage`, keyed `legacyCommentManager.<kind>.<projectId>`.
+- **Alternatives:** An earlier implementation on this same branch stored the filter selection through
+  a C# project-data type (`CommentFilterSelection`, exposed via
+  `ParatextProjectDataProvider.GetUserCommentFilters`/`SetUserCommentFilters`) backed by
+  `UserProjectSettings`, writing to `{projectDirectory}/Extensions/UserSettings-{userId}.xml`. It was
+  removed (`refactor(comments): drop the project-data path for filter selections`) once the
+  Send/Receive exposure above was identified: that store is scoped per user already, but per-user is
+  a broader guarantee than per-machine, and `Extensions/` is exactly the directory that travels in
+  sync. Comment drafts never went through an equivalent project-data path — they were `localStorage`
+  from their first commit on this branch — so this alternative applies specifically to the filter
+  selection, not to drafts.
+- **Consequences:** `localStorage` failures (storage unavailable, a sandboxed context) are swallowed
+  in both stores, so persistence degrades silently to "never persists" — a user sees no error, just a
+  selection or draft that doesn't survive a reload, rather than a visible failure. Neither drafts nor
+  the filter selection follow a user between machines or survive a profile reset; that is required
+  behavior for drafts (they must never travel) and an accepted tradeoff for the filter selection (a
+  view preference, not project data). This decision closes the Send/Receive leak, but `localStorage`
+  is private only from OTHER MACHINES and other project members, not from other code running on this
+  one: it is scoped per browser origin, not per web view, and every web view iframe in this renderer
+  shares the SAME origin and gets `allow-same-origin` by default (`src/renderer/services/web-view.
+  service-shard.ts`; see also `src/renderer/services/local-storage.service.ts`'s own doc, which states
+  this sharing directly). So any other extension's web view open in the same window can read (and
+  write) `legacyCommentManager.drafts.*`/`legacyCommentManager.filters.*` directly — this store adds
+  no isolation between extensions, only between machines and between project members. Accepted
+  because the threat this ADR is answering is Send/Receive leakage to teammates, not cross-extension
+  isolation within one user's own running app.
 
 ## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
 
@@ -1108,6 +1393,38 @@ step, no automation. Just a record.
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
+## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** `openCommentList` (`extensions/src/legacy-comment-manager/src/main.ts`) can be targeted at
+  a project other than the triggering web view's (e.g. the S/R results dialog opening a different
+  project's comment list). Such a cross-project open leaves `editorScrollGroupId` undefined, because
+  the triggering web view's scroll group belongs to the wrong project. An earlier version of this
+  code coerced a `current-chapter` scope filter to all-books (`UNFILTERED`) in that case, with a
+  `logger.warn`, on the reasoning that a cross-project open has no editor to derive "current chapter"
+  from. That coercion and its `current-chapter`-only reach were removed in ffc6e4dfad2 without a
+  decision record, and the scope set has since widened to include `current-verse` too, so the
+  question is now broader than the deleted code answered.
+- **Decision:** No coercion. A cross-project comment list's `current-*` scopes resolve against
+  `useWebViewScrollGroupScrRef`'s fallback — scroll group 0, the window's active-project position —
+  rather than being withheld or redirected to all-books. This keeps all four scopes always offered
+  (`adr-comment-filter-presets-over-axes`) instead of a project-dependent subset, and it is workable
+  because a scroll-group reference is a book/chapter/verse (BCV) triple, which is project-agnostic:
+  GEN 1 names the same location in either project.
+- **Alternatives:** Keep coercing `current-chapter` (and, by extension, `current-verse`) to
+  all-books for a cross-project target — rejected: it special-cased one scope, would need
+  duplicating for the newer `current-verse` scope, and traded a merely BCV-unmapped scope for one
+  that silently drops the user's chosen scope. Suppress the `current-*` scopes from the panel
+  entirely for a cross-project list — rejected: nothing distinguishes a cross-project list from any
+  other at the point the panel renders the scope picker, and the user can already reach the same
+  state by hand (opening a same-project list, then switching the toolbar's project picker), so
+  withholding the scopes only on the command's own open path would be inconsistent.
+- **Consequences:** A BCV is project-agnostic in reference, not in content — `useBcvSyncScroll` still
+  carries `TODO (PT-4031): Handle versification`, so a cross-project `current-*` scope can show a
+  mismatched result where the two projects' versifications diverge at that reference. That gap is
+  accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
+- **Source:** external code review, finding 16.
 ## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
 
 - **Date:** 2026-09-01
@@ -1302,10 +1619,11 @@ step, no automation. Just a record.
   stylesheet is also vendored three times (the extension's `_usj-nodes.scss`, the
   `platform-bible-react` demo `usj-nodes.css`, and the upstream `scripture-editors` source), each
   re-synced by hand.
-- **Decision:** The coverage test parses the stylesheet itself into flat `selector { declarations }`
-  blocks, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
-  cascade: a `[dir='ltr']` rule beats a direction-agnostic one, table rows excluded because they never
-  render as `.para`) and the expected `--verse-text-start` map from negative `text-indent`, then
+- **Decision:** The coverage test parses the stylesheet itself with `postcss`, reads its top-level
+  rules, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
+  cascade: a `[dir='ltr']` rule beats a direction-agnostic one; `\tr` excluded because a real table
+  row renders as `<tr>`, not `.para`, while the obsolete `\tr1`/`\tr2` still convert to paragraphs
+  and so are compensated) and the expected `--verse-text-start` map from negative `text-indent`, then
   asserts the gutter block matches in both directions: every derived marker present with the same
   value, and no gutter entry without a base rule calling for it. The parser's blind spots are
   themselves asserted away — a setter nested in an at-rule, a direction-qualified gutter rule, a
@@ -1321,8 +1639,21 @@ step, no automation. Just a record.
   five markers. **Assert the copies are byte-identical** — rejected: the copies legitimately diverge
   (SCSS versus CSS, host-specific rules), so a byte comparison would either fail permanently or need a
   hand-maintained exclusion list with the same staleness problem. **Parse with `postcss`** — declined
-  for now: the flat parser plus its blind-spot assertions is ~100 lines and reads without a dependency;
-  a real parser becomes worth it if the stylesheet grows nesting the assertions cannot exclude.
+  at first: the flat parser plus its blind-spot assertions was ~100 lines and read without a
+  dependency. **Amended 2026-09-17:** adopted. The upstream review of the same test demonstrated
+  that the flat regex could be fooled without any assertion firing — among them a selector list
+  mixing gutter and base selectors, a `margin` shorthand inside an at-rule, a value wrapped across
+  lines, `!important`, hyphenated marker classes — each provable only with a probe. Both twins now
+  parse with `postcss`, which core already depended on and the upstream package added as a dev
+  dependency; the SCSS copy has no SCSS syntax in the rules under test, so it parses as plain CSS.
+  Per-selector classification comes from the parser, and a tracked property set anywhere but
+  directly in a top-level marker rule (inside an at-rule, or an at-rule nested in the rule) fails
+  rather than being silently unread. The remaining semantic limits — selectors classified by class
+  token rather than resolved against the DOM, the cascade approximated as "direction-qualified beats
+  agnostic", `calc()` values reported rather than evaluated, direction read from `[dir=…]`/`:dir()`
+  only — are stated in the test header. The same review also showed that `\tr1` and `\tr2`, though
+  obsolete in `usfm.sty`, still convert to paragraphs, so they are compensated again and only `\tr`
+  is excluded; PR #2807 had removed them on the earlier round's advice.
 - **Consequences:** Adding an indented marker to the base rules without compensating it fails the
   build; so does adding a compensation nothing calls for. Re-syncing a copy from upstream is checked
   structurally for this block, so the cross-copy pin comments in the two `usj-nodes-styles.test.ts`
@@ -1336,7 +1667,8 @@ step, no automation. Just a record.
   `usj-nodes.css`. The pattern generalises to any "for every X in
   this file there must be a Y" invariant over a generated or vendored asset: derive X from the asset,
   assert the parser's blind spots, keep a small independent oracle.
-- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; upstream
+- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; the follow-up PR
+  #2827 (`pt-4313-coverage-test-review-followup`) and its review; upstream
   `paranext/scripture-editors` PR #10.
 
 ## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
@@ -2554,6 +2886,38 @@ step, no automation. Just a record.
   branch edits it, which is a standing source of merge conflicts; see
   `adr-decision-log-sorted-insertion` for how entry placement addresses that.
 
+## adr-list-selection-on-a-dedicated-visual-channel: List selection is encoded on a channel of its own, never on a background already carrying status
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Comment cards encoded three meanings on their background at once — unread
+  (`bg-accent`), resolved (`bg-muted`) and read — and selection was bolted onto the same channel.
+  It failed three ways: the "read" surface used `--primary-foreground`, a text-on-primary token
+  that renders near-white in the paratext-dark theme, so unselected cards appeared near-white on a
+  dark ground while the selected one went dark; in the default light theme selected-vs-unselected
+  differed by ΔL ≈ 1.6%; and selection was not encoded *at all* for resolved or unread threads,
+  because their status classes won regardless of selection.
+- **Decision:** Keep status on the background and give selection its own channel — a 4px leading
+  bar (`border-s-4`, a logical property so it follows RTL) plus elevation, with the bar's width
+  reserved by a transparent border on every card so selecting one does not shift its content. The
+  surface token is `--card`. See the `Card` className in
+  `lib/platform-bible-react/src/components/advanced/comment-list/comment-thread.component.tsx`.
+- **Alternatives:**
+  - *A filled accent background for the selected card.* Forces unread onto a dot or bolded sender,
+    which relocates content the requirement forbade.
+  - *A ring outline.* Collides with the card's real focus ring (`focus:ring-2 focus:ring-ring`), so
+    selection and keyboard focus would render identically.
+- **Consequences:** The bar token is `--foreground`, chosen by measurement rather than by name:
+  `--primary` scores 2.38:1 against the card in paratext-dark and `--ring` scores 2.32:1 in
+  paratext-light, each below the WCAG 3:1 non-text minimum and each failing in a *different* theme,
+  while `--foreground` clears it on both the `card` and `muted` surfaces in all four themes with a
+  13.79 worst case. `active-comment-bar-contrast.test.ts` enumerates the themes structurally from
+  `index.css` and asserts both the choice and the rejection, so a theme edit that changes either
+  fails loudly. Moving every card to `bg-card` also means `--card` equals `--background` in three of
+  the four themes, so an inter-thread gap stops reading as separation and a divider becomes
+  load-bearing. **Revisit** for any list row whose background already carries state — the same
+  overload is the general case, not a comments-specific one.
+
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11
@@ -2588,6 +2952,58 @@ step, no automation. Just a record.
   hardening if such layouts recur.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
+
+## adr-menu-close-focus-restores-without-the-ring: A pointer-closed menu returns focus to its trigger without showing the focus ring
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** Radix returns focus to the trigger whenever a menu closes. The tab menu's trigger is a
+  `Button`, which styles focus with `tw:focus-visible:border-ring` and `tw:focus-visible:ring-3`, so
+  after a pointer-driven close the ring sat on the trigger while the pointer was somewhere else —
+  measured as a near-black `border-color` plus a 3px ring. Declining the focus return removes the
+  ring but drops focus to `<body>`, so the next Tab restarts at the top of the document and a screen
+  reader loses its place; `stories/guidelines/dismissal-patterns.mdx` requires returning focus to the
+  opener, citing WCAG 2.4.3.
+- **Decision:** Let Radix restore focus exactly as it always has, and suppress only the ring.
+  `TabDropdownMenu` marks the trigger with `data-quiet-focus` when the close followed a pointer
+  interaction, and CSS hides the ring while that attribute is present; the next keydown or blur
+  clears it, which is what brings the ring back for keyboard users. Which device the user last used
+  comes from the document-wide tracker in `utils/focus.util.ts`. Focus is drawn through three
+  channels and all three must go: the ring and the border yield to the attribute's Tailwind classes,
+  but `outline` is cleared **inline** by `hideFocusRing`. That asymmetry is load-bearing — Tailwind
+  emits utilities inside `@layer utilities`, and an unlayered rule in the host document outranks
+  every layered rule whatever its specificity, so a web view that styles `:focus-visible` itself
+  (the scripture editor does, in `_editor-overrides.scss`) beats any class the component could add.
+  Because `Button` carries `tw:transition-all`, such an outline animates rather than switching, so
+  even a rule whose final colour is `transparent` paints a visible line on the way there.
+- **Alternatives:** (a) **Decline the focus return** — built first and rejected: it satisfies the ring
+  complaint but breaks the tab order and the dismissal guideline. (b) **Ask the browser for an
+  unindicated focus** via `focus({ focusVisible: false })` — also built, and it works in Chromium 145,
+  but the app ships Electron 39 (Chromium 142), where Blink ignores the option and the ring returns;
+  the Storybook run passes because Playwright bundles a newer Chromium than the product. (c) **Track
+  the input device with handlers on the menu itself** — misses the Escape that Radix consumes from its
+  own document listener, so a real keyboard dismissal is misread as a pointer close. (d) **Put the
+  behavior in `DropdownMenuContent`** so every menu gets it — deferred, not rejected; see consequences.
+- **Consequences:** Only the tab menus behave this way. The application menubar and the other menu
+  triggers keep Radix's default, so the app has two close-focus behaviors until someone unifies them.
+  Between a pointer close and the user's next keystroke, focus sits on the trigger with nothing to
+  show where it is — a brief, deliberate gap in WCAG 2.4.7. The keydown that ends it clears the mark
+  before it acts, so pressing Enter paints the ring on the trigger it is about to reopen. The same
+  gap applies to assistive input that emulates a pointer (switch access, head and eye pointers, some
+  touch-screen-reader modes): a `pointerdown` is all the tracker sees, so such a user is treated as a
+  pointer user, and the gap ends at their next keystroke or blur. The gap is not opened at all under
+  `forced-colors: active`: forced colors drops the ring (a box-shadow) and repaints the border in a
+  system color whether or not the trigger has focus, leaving `outline` as the only indicator, so
+  `hideFocusRing` does nothing there. Because
+  the suppression is ordinary CSS and an inline style rather than a browser capability, it
+  behaves the same in the shipped Electron as in a newer Chromium. Automated coverage stops at the
+  signal rather than the paint: the jsdom test pins that focus returns and that the attribute tracks
+  the closing input, and `tab-dropdown-menu-focus.stories.tsx` adds the `:focus-visible` half that
+  jsdom cannot judge. Neither can assert the ring itself — the Storybook harness does not paint the
+  trigger's ring at all, so an assertion on it would pass whatever the code did. That the attribute
+  removes a ring the user can see is confirmed by hand in the running app.
+- **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
+  found not to work in the shipped runtime.
 
 ## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
 
@@ -3285,6 +3701,38 @@ step, no automation. Just a record.
   on persisted slots.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
+
+## adr-opaque-menu-surfaces: Menu and select surfaces are opaque; shadcn's translucent menu color is not used
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** The shadcn preset applied on 2026-04-16 (`npx shadcn apply --preset b6rt8cvlC`, commit
+  `a61ca3b913c`) set `menuColor: "default-translucent"` in `lib/platform-bible-react/components.json`.
+  That gave `DropdownMenuContent`, `DropdownMenuSubContent`, `ContextMenuContent`,
+  `ContextMenuSubContent`, `MenubarContent`, `MenubarSubContent` and `SelectContent` a 70%
+  `bg-popover` plus a `::before` backdrop-blur layer. Over scripture text the menus were hard to read.
+  In a scrolling menu the blur layer scrolled away with the items, and it never covered the scrollbar
+  gutter, so the scrollbar always sat on the bare 70% background. The Simple PRD requires opaque,
+  readable menus and popovers.
+- **Decision:** Remove the translucent classes from those seven surfaces, each edit annotated
+  `// CUSTOM:`, and set `menuColor` to `"default"` so the shadcn CLI stops emitting the translucent
+  variant. Nothing in this repo reads `menuColor`; it is an input to the external CLI, and it does
+  not stop `shadcn add` from regenerating these files — only from regenerating them translucent.
+  The real backstop is `Shadcn/Overlay Surface Opacity`
+  (`lib/platform-bible-react/src/stories/shadcn-ui/overlay-surface-opacity.stories.tsx`), which opens
+  each surface in a real browser across every Storybook theme and also checks `opacity` on each
+  surface and its ancestors.
+- **Alternatives:** (a) **a higher alpha** (e.g. 95%) — still see-through over dense text, and keeps the
+  scrolling blur-layer defect. (b) **keep the blur but pin the layer** so it does not scroll — keeps a
+  see-through surface the PRD rejects, plus a compositing cost on every open menu. (c) **opaque
+  overrides at each consumer** — every present and future menu consumer would need one, and each one
+  that forgets regresses.
+- **Consequences:** Applies to Power as well as Simple, since these are shared components. A future
+  `/upgrade-shadcn` that re-applies a preset with a translucent menu color would reintroduce the
+  classes; the `// CUSTOM:` comments carry the intent through that upgrade, and the Storybook test
+  fails if the translucent background returns.
+- **Source:** PT-4535, which adopts PT-4101; the translucency arrived with the preset in commit
+  `a61ca3b913c`.
 
 ## adr-package-verifies-the-document-not-the-shipping-set: `npm run package` runs the check a patched clone can answer
 
@@ -4076,6 +4524,61 @@ step, no automation. Just a record.
   added without adding a prop — and it should carry the API-surface TSDoc and localized-key
   conventions the stable barrel expects, rather than bundling them into a capability change.
 
+## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** `projectDataProviders.get(projectInterface, projectId)` looks cheap at the call site
+  and is not. It runs `projectLookupService.getMetadataForProject`, which waits for a matching PDP
+  factory and then asks EVERY registered factory for `getAvailableProjects`
+  (`src/shared/models/project-lookup.service-model.ts`, `internalGetMetadata`); each layering
+  factory in the extension host answers that by asking every other factory again, so one renderer
+  lookup reaches the C# factories several times over. PT-4597 showed what that costs when a
+  consumer treats it as free: the Simple-mode toolbar's `useOpenProjectBookIds` tore down and
+  rebuilt every `booksPresent` subscription on any change to the set of open project ids, resolving
+  a provider per open project each time. A resource panel republishing its navigable project ids in
+  a loop (~15 writes/s) turned that into ~20,000 lookups and ~52,000 extension-host-to-C# requests
+  in three minutes; .NET stopped answering, the extension host's socket to main died, and the app
+  hung. The PT-4501 late-unsubscriber throttle (#2772) had already fixed one flapping input to the
+  same hook, which shows that fixing inputs one at a time does not close the class.
+- **Decision:** Two rules, one at each end. (1) A **reactive consumer** whose inputs can change
+  repeatedly — a hook or effect keyed on the set of open web views, a selection, a setting that
+  another surface writes — acts on the **diff** of that set: it acquires only what joined, releases
+  only what left, and keeps resolved providers (and failed lookups) for its own lifetime so a
+  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, or a
+  provider that could not be subscribed to, is kept for a bounded delay (30 seconds in the hook)
+  and then looked up afresh on the next join, whatever the failure was: the lookup service's
+  `No project found` is also what a late-registering factory or a mid-session resource install
+  produces, so no message text is treated as a permanent verdict. `useOpenProjectBookIds`
+  (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the reference implementation; the
+  scroll-group service's `ensureVersificationSubscribed` is the older in-tree instance and evicts
+  immediately on failure, which suits a module-level cache with few callers. (2)
+  The **lookup service stays a broadcast** with no cache of its own for now: which factories serve
+  which project changes as factories register, as resources install, and as layering factories
+  come and go, and a stale answer there is a correctness bug for every caller, not a performance
+  one. The cost of a lookup is therefore the consumer's to bound.
+- **Alternatives:** (a) **Cache or coalesce inside `projectLookupService`** — deferred, not
+  rejected: an in-flight de-duplication (identical concurrent queries share one fan-out) is safe
+  and would help every caller, but a value cache needs invalidation on factory register/unregister
+  and on project install, which the lookup service cannot observe completely today. Worth doing as
+  platform work under its own ticket; it does not remove rule (1), because a rebuild-everything
+  consumer still pays a subscription round trip per member per change. (b) **Debounce the
+  consumer's input** — hides a flap but keeps the per-member cost, and delays legitimate updates by
+  the debounce window; a diff costs nothing when the set is unchanged, so it needs no delay.
+  (c) **Read `booksPresent` through one aggregating service** instead of a provider per project —
+  a larger redesign that would still have to answer where that service gets its providers from.
+- **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
+  `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
+  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup failed is
+  retried the next time it joins after the delay, so a project the backend begins serving later in
+  the session is picked up within that delay plus one membership change, never sooner; a
+  consumer that needs it sooner would subscribe to project-list or factory-registration events and
+  evict on those instead. The flap sources that exposed this are tracked as
+  PT-4592 (a panel republishing its navigable project ids while its reference list resolves
+  transiently empty) and PT-4743 (one installed resource yielding two picker rows under two project
+  id spellings). Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is
+  restated for agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
+
 ## adr-pt9-interlinear-selected-reads: Publish the size limit and allow callers to select individual files or all at once
 
 - **Date:** 2026-09-17
@@ -4162,6 +4665,7 @@ step, no automation. Just a record.
 - **Source:** PR #2838. The over-cap project described in Context, imported against the
   projectInterface `adr-pt9-legacy-data-as-parsed-models` introduced in PR #2707; every byte figure
   here is a measurement taken against that project's files.
+
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
 - **Date:** 2026-08-25

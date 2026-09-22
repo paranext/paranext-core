@@ -10,13 +10,15 @@ import type {
 import type {
   CommentFilters,
   CommentListWebViewController,
+  LegacyCommentFilters,
+  LegacyScopeFilter,
   OpenCommentListWebViewOptions,
   ScopeFilter,
 } from 'legacy-comment-manager';
 import { serialize } from 'platform-bible-utils';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
-import { SCOPE_FILTER_CURRENT_CHAPTER, UNFILTERED } from './comment-list-filters.model';
+import { presetToLabelKey, scopeFilterToLabelKey } from './comment-list-filters.model';
 import {
   LEGACY_COMMENT_USJ_PDPF_ID,
   LegacyCommentManagerUsjProjectDataProviderEngineFactory,
@@ -43,9 +45,10 @@ interface CommentListWebViewOptions extends OpenWebViewOptions {
   // already-filtered instead of relying on a post-open setFilters message (which could race the
   // view's message listener). Passed by openCommentList on every open, but only takes effect when
   // creating a new view: a reuse hit returns before the provider (getWebViewDefinition) ever runs,
-  // so these are simply inert there.
-  initialFilters: Partial<CommentFilters> | undefined;
-  initialScopeFilter: ScopeFilter | undefined;
+  // so these are simply inert there. Also carries the deprecated legacy shapes straight through from
+  // OpenCommentListWebViewOptions — the web view maps them onto the current model on mount.
+  initialFilters: Partial<CommentFilters> | LegacyCommentFilters | undefined;
+  initialScopeFilter: ScopeFilter | LegacyScopeFilter | undefined;
 }
 
 /** WebView Factory for the Comment List web view with controller support */
@@ -244,22 +247,15 @@ async function openCommentList(
   // If the caller targeted a different project than the triggering web view, that web view's editor
   // context (scroll group + id) belongs to another project, so it must not wire this comment list to
   // the wrong editor. The trigger's tab id is still used purely for docking placement.
+  //
+  // A cross-project list is intentionally left to fall back to the window's scroll group (see
+  // useWebViewScrollGroupScrRef) rather than being coerced onto an all-books scope: all four scopes
+  // are always offered, and a scroll-group reference is a BCV, which is project-agnostic. See
+  // Architecture-Decisions.md ("Cross-project comment list follows the window's scroll group") for
+  // the known consequence (unmapped versification differences) before re-adding a guard here.
   const editorContextApplies = !options.projectId || options.projectId === triggerProjectId;
   const editorWebViewId = editorContextApplies ? webViewId : undefined;
   if (!editorContextApplies) editorScrollGroupId = undefined;
-
-  // A cross-project target has no editor to derive "current chapter" from, so a current-chapter
-  // scope would filter against a stale/blank ref. Fall back to all-books (UNFILTERED) in that case.
-  // UNFILTERED rather than undefined keeps the new-view and reused-view paths consistent: on a reused
-  // view it makes needsSetFilters true so an actual setFilters is sent (undefined would leave a
-  // reused view stale while a new view mounted at all-books — the same call diverging by view state).
-  let effectiveScopeFilterToSet = options.scopeFilterToSet;
-  if (!editorContextApplies && effectiveScopeFilterToSet === SCOPE_FILTER_CURRENT_CHAPTER) {
-    logger.warn(
-      'openCommentList: dropping current-chapter scope for a cross-project target (no editor context); using all-books',
-    );
-    effectiveScopeFilterToSet = UNFILTERED;
-  }
 
   if (!projectId) {
     logger.debug('No project!');
@@ -276,7 +272,7 @@ async function openCommentList(
     editorScrollGroupId,
     editorWebViewId,
     initialFilters: options.filtersToSet,
-    initialScopeFilter: effectiveScopeFilterToSet,
+    initialScopeFilter: options.scopeFilterToSet,
   };
   const commentListWebViewId = await papi.webViews.openWebView(
     commentListWebViewType,
@@ -297,7 +293,7 @@ async function openCommentList(
   // same-value re-send a no-op rather than churning React/query state. Only fetch the controller
   // when there is actually something to send — so a filters-only open skips it entirely and can't
   // fail on a transient controller-lookup miss.
-  const needsSetFilters = !!options.filtersToSet || effectiveScopeFilterToSet !== undefined;
+  const needsSetFilters = !!options.filtersToSet || options.scopeFilterToSet !== undefined;
   const needsSelectThread = !!options.threadIdToSelect;
   if (commentListWebViewId && (needsSetFilters || needsSelectThread)) {
     const commentListController = await papi.webViews.getWebViewController(
@@ -311,7 +307,7 @@ async function openCommentList(
         pendingActions.push(
           `apply filters ${serialize({
             filters: options.filtersToSet,
-            scopeFilter: effectiveScopeFilterToSet,
+            scopeFilter: options.scopeFilterToSet,
           })}`,
         );
       if (needsSelectThread) pendingActions.push(`select thread ${options.threadIdToSelect}`);
@@ -325,7 +321,7 @@ async function openCommentList(
     // setFilters BEFORE selectThread so the selection lands within the final filtered view rather
     // than being filtered out by a subsequent re-query.
     if (needsSetFilters)
-      await commentListController.setFilters(options.filtersToSet, effectiveScopeFilterToSet);
+      await commentListController.setFilters(options.filtersToSet, options.scopeFilterToSet);
 
     // Scroll to the specified thread in the comment list.
     if (options.threadIdToSelect)
@@ -444,25 +440,37 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
               },
               filtersToSet: {
                 type: 'object',
-                description: 'Comment-filter axes to pre-apply; unspecified axes reset to all',
-                // These enums duplicate the axis unions (ResolvedFilter / ReadFilter / TypeFilter /
-                // AssignmentFilter in legacy-comment-manager.d.ts). Keep them in sync by hand until a
-                // codegen step derives this schema from the types.
+                description:
+                  'Comment-filter preset to pre-apply; an unspecified preset resets to all. Also ' +
+                  'accepts the deprecated four-axis shape ({ resolved, read, type, assignment }) ' +
+                  'for backward compatibility, mapped onto the closest matching preset (see ' +
+                  'LegacyCommentFilters in the type declarations for the full mapping); a ' +
+                  'combination with no counterpart resolves to all.',
+                // The enum is derived from presetToLabelKey's keys, so it always matches the
+                // CommentPreset union exactly. The deprecated axis properties (resolved/read/type/
+                // assignment) are intentionally left undeclared here rather than hand-listed: this
+                // object schema has no `additionalProperties: false`, so they already validate, and
+                // documenting them in prose (above) avoids a second enum list to keep in sync.
                 properties: {
-                  resolved: { type: 'string', enum: ['all', 'unresolved', 'resolved'] },
-                  read: { type: 'string', enum: ['all', 'unread', 'read'] },
-                  type: { type: 'string', enum: ['all', 'conflicts', 'comments'] },
-                  assignment: {
+                  preset: {
                     type: 'string',
-                    enum: ['all', 'assigned-to-me', 'team', 'unassigned'],
+                    enum: Object.keys(presetToLabelKey),
                   },
                 },
               },
               scopeFilterToSet: {
                 type: 'string',
-                enum: ['unfiltered', 'current-chapter'],
+                // The current values are derived from scopeFilterToLabelKey's keys, so they always
+                // match the ScopeFilter union exactly. Unlike filtersToSet's object schema (which
+                // has no additionalProperties: false and so accepts undeclared properties without
+                // any schema change), a string enum has no such escape hatch — an unlisted value
+                // fails schema validation even though resolveScopeFilter still accepts it. So the
+                // deprecated 'unfiltered' value is appended explicitly to keep the published
+                // OpenRPC contract honest about what the shim actually accepts.
+                enum: [...Object.keys(scopeFilterToLabelKey), 'unfiltered'],
                 description:
-                  'Scope to pre-apply; omitting it resets scope to all-books (unfiltered)',
+                  'Scope to pre-apply; omitting it resets scope to all-books. Also accepts the ' +
+                  "deprecated 'unfiltered' value, which maps to all-books.",
               },
             },
           },

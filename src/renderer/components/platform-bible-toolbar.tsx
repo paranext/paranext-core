@@ -5,7 +5,6 @@ import { useBackendSyncActivity } from '@renderer/hooks/use-backend-sync-activit
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
   useData,
-  useDialogCallback,
   useLocalizedStrings,
   useScrollGroupScrRef,
   useRecentScriptureRefs,
@@ -17,7 +16,6 @@ import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-ava
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
-import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
@@ -67,7 +65,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { CSSProperties, ReactNode, useCallback, useMemo } from 'react';
+import { CSSProperties, ReactNode, useCallback, useMemo, useState } from 'react';
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
@@ -337,21 +335,13 @@ export function PlatformBibleToolbar() {
     await svc?.recordProjectOpened(projectId);
   }, []);
 
-  const showProjectPicker = useDialogCallback(
-    PROJECT_PICKER_DIALOG_TYPE,
-    { isModal: true },
-    async (projectId) => {
-      if (!projectId) return;
-      try {
-        await openProject(projectId);
-      } catch (e) {
-        logger.warn(`ProjectPicker: error opening project ${projectId}: ${getErrorMessage(e)}`);
-      }
-    },
-  );
-
   const projectPickerItems = recentProjects.length > 0 ? recentProjects : allProjects;
   const hasProjectPickerItems = projectPickerItems.length > 0;
+
+  // The dropdown's footer is a plain button rather than a `SelectItem`, so selecting it does not
+  // run the select's own close-on-select path, and opening Home leaves no modal behind to dismiss
+  // the dropdown by taking focus. Controlled here so the footer can close it explicitly.
+  const [isProjectPickerOpen, setIsProjectPickerOpen] = useState(false);
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -478,9 +468,9 @@ export function PlatformBibleToolbar() {
   // and no request here. See `useBackendSyncActivity`.
   const hasBackendSynced = useBackendSyncActivity();
 
-  const openHome = useCallback(async () => {
+  const openHome = useCallback(async (shouldShowProjectsOnly: boolean) => {
     try {
-      await sendCommand('platformGetResources.openHome');
+      await sendCommand('platformGetResources.openHome', shouldShowProjectsOnly);
     } catch (e) {
       logger.warn(`Toolbar caught an error while trying to open Home: ${getErrorMessage(e)}`);
     }
@@ -587,7 +577,7 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="tw:h-8"
-                  onClick={openHome}
+                  onClick={() => openHome(false)}
                 >
                   <HomeIcon />
                 </Button>
@@ -602,6 +592,12 @@ export function PlatformBibleToolbar() {
         )}
         {isSimpleMode && (
           <Select
+            // Gated on what actually renders the dropdown, not just the flag: the `Select` unmounts
+            // when the interface mode changes or the project list empties, and Radix fires no
+            // `onOpenChange(false)` on the way out — so a flag left `true` would spring the
+            // dropdown open unprompted the next time the picker mounts.
+            open={hasProjectPickerItems && isProjectPickerOpen}
+            onOpenChange={setIsProjectPickerOpen}
             value={currentSimpleProject?.id ?? ''}
             onValueChange={async (projectId: string) => {
               try {
@@ -640,7 +636,15 @@ export function PlatformBibleToolbar() {
                 <button
                   type="button"
                   className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-start tw:text-sm"
-                  onClick={() => showProjectPicker()}
+                  // Home lists local projects alongside the send/receive server's projects that
+                  // are not on this machine yet — the "rest of my projects" this picker cannot
+                  // reach, since its own list is built from local metadata only.
+                  onClick={() => {
+                    setIsProjectPickerOpen(false);
+                    // Projects only: this footer is the way out of a project picker, so the
+                    // read-only resources Home otherwise lists are never an answer to it.
+                    openHome(true);
+                  }}
                 >
                   {localizedStrings['%projectPicker_toolbar_more_projects%']}
                 </button>

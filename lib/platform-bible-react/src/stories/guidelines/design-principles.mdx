@@ -98,6 +98,8 @@ and patterns under consideration — see [Tooltips](./tooltips.mdx).
 
 All interactive UI must be keyboard navigable. Focus should be indicated by a focus ring by default, unless UX specifies otherwise for a specific component.
 
+One such exception: when a menu closes after pointer use, focus returns to its trigger without the ring. See "Restore focus on close" in [Dismissal Patterns](?path=/docs/guidelines-dismissal-patterns--docs#accessibility).
+
 Be aware that the focus ring sometimes goes on a **container** rather than the interactive element itself. For example, when a text input field contains buttons, the focus ring wraps the entire container — not each individual button.
 
 ### Keyboard shortcut catalog

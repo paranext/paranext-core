@@ -1,4 +1,5 @@
 import { Button } from '@/components/shadcn-ui/button';
+import { DisabledTooltipWrapper } from '@/components/basics/disabled-tooltip-wrapper.component';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
 import {
@@ -274,9 +275,17 @@ export function ConflictNoteCard({
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>
-                {/* span wrapper so the tooltip still receives pointer events when the button is
-                    disabled */}
-                <span className="tw:inline-flex tw:self-start">
+                {/* Disabled buttons are removed from the tab order and don't fire the
+                    pointer/focus events Tooltip listens for, so without this wrapper a keyboard
+                    or screen-reader user gets no explanation for why Save is disabled. Only
+                    treated as "disabled" here when there's an explanation to give — the
+                    isResolving-only case intentionally shows no tooltip to anyone (see
+                    `saveTooltip` above), so the wrapper stays inert then too, matching that. */}
+                <DisabledTooltipWrapper
+                  isDisabled={isSaveDisabled && saveTooltip !== undefined}
+                  disabledExplanation={saveTooltip}
+                  className="tw:inline-flex tw:self-start"
+                >
                   <Button
                     size="sm"
                     disabled={isSaveDisabled}
@@ -284,7 +293,7 @@ export function ConflictNoteCard({
                   >
                     {localizedStrings['%conflict_note_save_and_resolve%'] ?? 'Save and resolve'}
                   </Button>
-                </span>
+                </DisabledTooltipWrapper>
               </TooltipTrigger>
               {saveTooltip && <TooltipContent>{saveTooltip}</TooltipContent>}
             </Tooltip>

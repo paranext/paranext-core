@@ -1,6 +1,8 @@
 import {
+  Button,
   CommentList,
   Label,
+  localizeOrFallback,
   Select,
   SelectContent,
   SelectItem,
@@ -8,51 +10,39 @@ import {
   SelectValue,
   Skeleton,
 } from 'platform-bible-react';
-import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { ComponentProps, ReactNode } from 'react';
 import {
-  areCommentFiltersAtDefault,
-  assignmentFilterToLabelKey,
   CommentFilters,
-  isAssignmentFilter,
-  isReadFilter,
-  isResolvedFilter,
+  isCommentPreset,
   isScopeFilter,
-  isTypeFilter,
-  readFilterToLabelKey,
-  resolvedFilterToLabelKey,
+  isShowingAllThreads,
+  presetToFallbackLabel,
+  presetToLabelKey,
   ScopeFilter,
-  SCOPE_FILTER_CURRENT_CHAPTER,
+  scopeFilterToFallbackLabel,
   scopeFilterToLabelKey,
-  typeFilterToLabelKey,
-  UNFILTERED,
 } from './comment-list-filters.model';
 
-/** Extra localization keys this panel needs beyond `COMMENT_LIST_STRING_KEYS`. */
+/**
+ * Extra localization keys this panel needs beyond `COMMENT_LIST_STRING_KEYS`. The preset/scope
+ * portions are DERIVED from the compile-checked `presetToLabelKey`/`scopeFilterToLabelKey` maps
+ * (rather than hand-listed) so a preset or scope added to those maps can never be forgotten here —
+ * a hand-copied list stays green when a new value's string is simply never requested, which is
+ * exactly how a real key gap (the dropdown renders the option, but the panel never asks for its
+ * localized label, so it shows blank) would slip past `localized-strings.test.ts`, since that test
+ * filters this very array rather than the maps themselves.
+ */
 export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
-  '%comment_filter_aria_assignment%',
-  '%comment_filter_aria_read%',
-  '%comment_filter_aria_resolved%',
+  '%comment_filter_aria_preset%',
   '%comment_filter_aria_scope%',
-  '%comment_filter_aria_type%',
-  '%comment_filter_assignment_all%',
-  '%comment_filter_assignment_me%',
-  '%comment_filter_assignment_team%',
-  '%comment_filter_assignment_unassigned%',
-  '%comment_filter_read_all%',
-  '%comment_filter_read_read%',
-  '%comment_filter_read_unread%',
-  '%comment_filter_resolved_all%',
-  '%comment_filter_resolved_resolved%',
-  '%comment_filter_resolved_unresolved%',
-  '%comment_filter_scope_all_books%',
-  '%comment_filter_scope_current_chapter%',
-  '%comment_filter_type_all%',
-  '%comment_filter_type_comments%',
-  '%comment_filter_type_conflicts%',
+  ...Object.values(presetToLabelKey),
+  ...Object.values(scopeFilterToLabelKey),
   '%no_comments%',
   '%no_comments_match_filter%',
   '%webView_legacyCommentManager_syncEditBlocked_notice%',
+  '%comment_filter_current_user_unavailable%',
+  '%comment_filter_retry_current_user%',
 ] as const;
 
 /**
@@ -81,32 +71,37 @@ export type CommentListPanelProps = Pick<
   | 'selectedThreadId'
   | 'onSelectedThreadChange'
   | 'onVerseRefClick'
+  | 'drafts'
+  | 'onDraftChange'
 > & {
   /** Localized strings for the panel toolbar/empty states and the underlying comment list. */
   localizedStrings: LanguageStrings;
   /** Whether comment threads are still loading (renders skeletons). */
   isLoading: boolean;
-  /** Current comment-filter axis selections (controlled; the web view uses them to query threads). */
+  /** Current comment-filter preset selection (controlled; the web view uses it to query threads). */
   filters: CommentFilters;
-  /** Called when any comment-filter axis changes. */
+  /** Called when the preset filter changes. */
   onFiltersChange: (filters: CommentFilters) => void;
   /** Currently selected scope filter (controlled by the web view, which drives the query). */
   scopeFilter: ScopeFilter;
   /** Called when the scope filter changes. */
   onScopeFilterChange: (filter: ScopeFilter) => void;
   /**
-   * Whether this list can scope to the "current chapter". True when it follows a live Scripture
-   * reference — an editor-anchored list via its wired editor, or the Column 3 panel via the active
-   * project's scroll group. When false (e.g. a cross-project open with no matching reference), the
-   * "current chapter" scope option is hidden. Defaults to `true`.
-   */
-  canScopeToCurrentChapter?: boolean;
-  /**
    * Whether this project's automatic Send/Receive is currently blocking edits. When true, a slim
    * "editing paused" notice is shown above the list; the write affordances are disabled separately
    * by the web view via the capability callbacks. Defaults to `false`.
    */
   isSyncBlocked?: boolean;
+  /**
+   * True when the active preset needs the current user's name (see `presetRequiresCurrentUser`) and
+   * fetching it has failed — as opposed to `isLoading`, which covers the (recoverable)
+   * still-loading case. Shows an explanatory message with a retry action instead of the loading
+   * skeletons, so a failed fetch doesn't leave the panel loading forever with no way out but
+   * changing preset.
+   */
+  currentUserNameUnavailable?: boolean;
+  /** Retries the current user's registration-data fetch; wired to the message above's action. */
+  onRetryFetchCurrentUserName?: () => void;
 };
 
 /**
@@ -117,15 +112,22 @@ export type CommentListPanelProps = Pick<
 function FilterDropdown<T extends string>({
   value,
   labelKeys,
+  fallbackLabels,
   isValue,
   onChange,
   localizedStrings,
   ariaLabel,
-  hiddenValues,
   testId,
 }: {
   value: T;
   labelKeys: Readonly<Record<T, LocalizeKey>>;
+  /**
+   * English text shown in place of a `labelKeys` lookup that has not resolved to translated text
+   * yet -- `useLocalizedStrings` seeds every requested key to itself both before the subscription
+   * delivers and permanently on a `PlatformError`, so a bare `localizedStrings[key]` lookup would
+   * otherwise render that raw key.
+   */
+  fallbackLabels: Readonly<Record<T, string>>;
   isValue: (value: string) => value is T;
   onChange: (value: T) => void;
   localizedStrings: LanguageStrings;
@@ -135,8 +137,6 @@ function FilterDropdown<T extends string>({
    * axis it filters.
    */
   ariaLabel: string;
-  /** Option values to omit from the list (e.g. a scope that doesn't apply without editor context). */
-  hiddenValues?: readonly T[];
   /** Optional stable test hook placed on the trigger (e.g. for the scope dropdown in E2E tests). */
   testId?: string;
 }) {
@@ -150,17 +150,16 @@ function FilterDropdown<T extends string>({
       <SelectTrigger className="tw:w-auto tw:min-w-32" aria-label={ariaLabel} data-testid={testId}>
         <SelectValue>
           <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
-            {localizedStrings[labelKeys[value]]}
+            {localizeOrFallback(labelKeys[value], localizedStrings, fallbackLabels[value])}
           </div>
         </SelectValue>
       </SelectTrigger>
       <SelectContent className="tw:max-w-sm" align="start">
         {Object.keys(labelKeys)
           .filter(isValue)
-          .filter((option) => !hiddenValues?.includes(option))
           .map((option) => (
             <SelectItem key={option} value={option}>
-              {localizedStrings[labelKeys[option]]}
+              {localizeOrFallback(labelKeys[option], localizedStrings, fallbackLabels[option])}
             </SelectItem>
           ))}
       </SelectContent>
@@ -173,8 +172,8 @@ function FilterDropdown<T extends string>({
  * loading/empty state). All data and PAPI-backed callbacks are supplied by the web view via props;
  * the comment/scope filters are controlled because the web view uses them to query threads.
  *
- * The toolbar is a row of orthogonal filter dropdowns (resolved status, read status, note type,
- * assignment) plus a scope dropdown; each defaults to "all" and they AND together.
+ * The toolbar is two always-visible dropdowns — a comment preset and a Scripture scope — that AND
+ * together.
  */
 export function CommentListPanel({
   localizedStrings,
@@ -185,8 +184,9 @@ export function CommentListPanel({
   onFiltersChange,
   scopeFilter,
   onScopeFilterChange,
-  canScopeToCurrentChapter = true,
   isSyncBlocked = false,
+  currentUserNameUnavailable = false,
+  onRetryFetchCurrentUserName,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
@@ -200,13 +200,40 @@ export function CommentListPanel({
   selectedThreadId,
   onSelectedThreadChange,
   onVerseRefClick,
+  drafts,
+  onDraftChange,
 }: CommentListPanelProps) {
-  const noFiltersActive = areCommentFiltersAtDefault(filters) && scopeFilter === UNFILTERED;
+  const noFiltersActive = isShowingAllThreads({ filters, scopeFilter });
 
-  // The list area swaps between skeletons (loading), an empty-state message, and the list — but the
-  // toolbar below always renders, so isLoading only governs this region.
+  // The list area swaps between an explanatory "current user unavailable" message, skeletons
+  // (loading), an empty-state message, and the list — but the toolbar below always renders, so none
+  // of this governs anything but this region. `currentUserNameUnavailable` takes priority over
+  // `isLoading`: once the fetch has failed, `isAwaitingCurrentUserName` (the web view's `isLoading`
+  // input) stops forcing the loading state, so this branch is what the panel actually recovers into
+  // instead of skeletons with no escape.
   let listContent: ReactNode;
-  if (isLoading) {
+  if (currentUserNameUnavailable) {
+    listContent = (
+      <div className="tw:m-4 tw:flex tw:flex-col tw:items-center tw:gap-2">
+        <Label>
+          {localizeOrFallback(
+            '%comment_filter_current_user_unavailable%',
+            localizedStrings,
+            "Couldn't load your user name, so comments assigned to you can't be shown right now.",
+          )}
+        </Label>
+        {onRetryFetchCurrentUserName && (
+          <Button variant="outline" size="sm" onClick={onRetryFetchCurrentUserName}>
+            {localizeOrFallback(
+              '%comment_filter_retry_current_user%',
+              localizedStrings,
+              'Try again',
+            )}
+          </Button>
+        )}
+      </div>
+    );
+  } else if (isLoading) {
     listContent = (
       <div className="tw:p-2 tw:space-y-4">
         {[...Array(10)].map((_, index) => (
@@ -249,6 +276,8 @@ export function CommentListPanel({
         selectedThreadId={selectedThreadId}
         onSelectedThreadChange={onSelectedThreadChange}
         onVerseRefClick={onVerseRefClick}
+        drafts={drafts}
+        onDraftChange={onDraftChange}
       />
     );
   }
@@ -270,51 +299,37 @@ export function CommentListPanel({
             {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
           </div>
         )}
-        {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown. Rendered regardless
-            of the loading state: it must stay mounted across filter changes (each of which briefly
-            flips `isLoading` true while the query resubscribes), or the control the user is
-            interacting with would unmount from under them, causing a visible strobe. */}
+        {/* Filter toolbar — a preset dropdown and a scope dropdown, always visible. Rendered
+            regardless of the loading state: it must stay mounted across filter changes (each of
+            which briefly flips `isLoading` true while the query resubscribes), or the control the
+            user is interacting with would unmount from under them, causing a visible strobe. */}
         <div className="tw:border-b tw:bg-background tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
           <FilterDropdown
-            value={filters.resolved}
-            labelKeys={resolvedFilterToLabelKey}
-            isValue={isResolvedFilter}
-            onChange={(resolved) => onFiltersChange({ ...filters, resolved })}
+            value={filters.preset}
+            labelKeys={presetToLabelKey}
+            fallbackLabels={presetToFallbackLabel}
+            isValue={isCommentPreset}
+            onChange={(preset) => onFiltersChange({ preset })}
             localizedStrings={localizedStrings}
-            ariaLabel={localizedStrings['%comment_filter_aria_resolved%']}
-          />
-          <FilterDropdown
-            value={filters.read}
-            labelKeys={readFilterToLabelKey}
-            isValue={isReadFilter}
-            onChange={(read) => onFiltersChange({ ...filters, read })}
-            localizedStrings={localizedStrings}
-            ariaLabel={localizedStrings['%comment_filter_aria_read%']}
-          />
-          <FilterDropdown
-            value={filters.type}
-            labelKeys={typeFilterToLabelKey}
-            isValue={isTypeFilter}
-            onChange={(type) => onFiltersChange({ ...filters, type })}
-            localizedStrings={localizedStrings}
-            ariaLabel={localizedStrings['%comment_filter_aria_type%']}
-          />
-          <FilterDropdown
-            value={filters.assignment}
-            labelKeys={assignmentFilterToLabelKey}
-            isValue={isAssignmentFilter}
-            onChange={(assignment) => onFiltersChange({ ...filters, assignment })}
-            localizedStrings={localizedStrings}
-            ariaLabel={localizedStrings['%comment_filter_aria_assignment%']}
+            ariaLabel={localizeOrFallback(
+              '%comment_filter_aria_preset%',
+              localizedStrings,
+              'Filter comments by',
+            )}
+            testId="comment-preset-filter"
           />
           <FilterDropdown
             value={scopeFilter}
             labelKeys={scopeFilterToLabelKey}
+            fallbackLabels={scopeFilterToFallbackLabel}
             isValue={isScopeFilter}
             onChange={onScopeFilterChange}
             localizedStrings={localizedStrings}
-            ariaLabel={localizedStrings['%comment_filter_aria_scope%']}
-            hiddenValues={canScopeToCurrentChapter ? undefined : [SCOPE_FILTER_CURRENT_CHAPTER]}
+            ariaLabel={localizeOrFallback(
+              '%comment_filter_aria_scope%',
+              localizedStrings,
+              'Filter by scope',
+            )}
             testId="comment-scope-filter"
           />
         </div>
