@@ -106,19 +106,47 @@ test.describe('scripture editor settled positions', () => {
         .first()
         .evaluate((glyph) => glyph.nextSibling?.textContent ?? '');
 
+    /**
+     * The typed run is never saved — it differs from the project only in whitespace — so anything
+     * that reloads the editor drops it and puts the caret at the verse start. Every assertion after
+     * the run is typed addresses text AFTER the run, so each one reads exactly the same with the
+     * run gone: a reload part-way through would leave the spec green having exercised none of the
+     * space-run coordinate path. Checked at the end of every step, not once, so there is no window
+     * a reload can hide in.
+     */
+    const expectRunStillOnScreen = async () =>
+      expect(await spanDomText(), 'the typed run is gone: the editor reloaded').toContain(
+        `,${NBSP}${NBSP}`,
+      );
+
     await test.step('a second space typed after an existing one displays as a run', async () => {
       // Place the caret by position rather than by gesture — the collapsed-placement path the
       // annotation-positions spec already verifies — before any run exists to disturb it.
       const caret = chapterLocation(TARGET_VERSE_REF, jsonPath, RUN_AFTER.length);
       await sendToEditorController(editorId, 'selectRange', [{ start: caret, end: caret }]);
+      // Node identity as well as the offset: a bare offset is satisfied by any caret anywhere in
+      // the document that happens to sit there — including the one `navigateToolbarBcv` left —
+      // so the space would be typed somewhere else and the failure would surface below as a
+      // confusing display-run diff instead of here.
       await expect
         .poll(
           async () =>
-            editorInput.evaluate((root) => root.ownerDocument.getSelection()?.anchorOffset),
+            editorInput.evaluate((root) => {
+              const sel = root.ownerDocument.getSelection();
+              return {
+                anchorText: sel?.anchorNode?.textContent ?? undefined,
+                anchorOffset: sel?.anchorOffset ?? undefined,
+                isCollapsed: sel?.isCollapsed ?? undefined,
+              };
+            }),
           { timeout: 20_000 },
         )
         // One past the USJ offset: the separator NBSP precedes the span's text in the DOM.
-        .toBe(RUN_AFTER.length + 1);
+        .toEqual({
+          anchorText: NBSP + charText,
+          anchorOffset: RUN_AFTER.length + 1,
+          isCollapsed: true,
+        });
 
       // Typed through a locator inside the editor frame: the page's own keyboard targets the
       // parent document, where the editor's key handling never sees it.
@@ -130,12 +158,7 @@ test.describe('scripture editor settled positions', () => {
     });
 
     await test.step("a caret clicked to the span's end reports the span text's own last offset", async () => {
-      // The run is never saved — it differs from the project only in whitespace — so anything that
-      // reloads the editor drops it and puts the caret at the verse start. Say so here rather than
-      // as a wrong offset below.
-      expect(await spanDomText(), 'the typed run is gone: the editor reloaded').toContain(
-        `,${NBSP}${NBSP}`,
-      );
+      await expectRunStillOnScreen();
       // Just inside the left edge of the closing glyph is the insertion point immediately before
       // `\wj*`, the end of the span's text. Reaching it by gesture makes this the live → USJ
       // direction: nothing translated coordinates on the way in.
@@ -153,6 +176,7 @@ test.describe('scripture editor settled positions', () => {
         })
         // The span text's own length, not one more: the run's extra space is not in the USJ.
         .toEqual({ jsonPath, offset: charText.length });
+      await expectRunStillOnScreen();
     });
 
     await test.step("selecting the span's last two characters highlights exactly those characters", async () => {
@@ -172,6 +196,7 @@ test.describe('scripture editor settled positions', () => {
           { timeout: 20_000 },
         )
         .toBe(charText.slice(-2));
+      await expectRunStillOnScreen();
     });
 
     await test.step("an annotation over the span's last two characters marks exactly those characters", async () => {
@@ -190,6 +215,7 @@ test.describe('scripture editor settled positions', () => {
       // run's extra space yields `charText.slice(-3, -1)`, the two characters before the ones
       // addressed.
       expect(await annotatedMark.textContent()).toBe(charText.slice(-2));
+      await expectRunStillOnScreen();
     });
   });
 });
