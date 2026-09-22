@@ -3209,7 +3209,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
   Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
   it to a Simple column removes its only entry point: Simple now has no menu route at all to the
-  four Inventories, Markers Checklist, or Open Checks. Auto-show footnote pane
+  four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
+  no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
   (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
   manual footnotes pane: Show footnotes opens it and it stays open. The Edit flyout's ids are not
   registered commands, and `KeyboardShortcutEntry.command` is typed to registered commands, so
