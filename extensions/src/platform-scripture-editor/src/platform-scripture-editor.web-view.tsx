@@ -2871,12 +2871,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // chapter it was scheduled for against the chapter actually on screen now.
         currentChapterKey: chapterKeyRef.current,
         // The debounced save fires only once typing has paused this long, so a save seeing a newer
-        // edit is one that ran mid-typing. An open palette or note editor never stamps that edit
-        // time, so it is asked about directly, with the same staleness bound the PDP sync uses.
-        // Resolved here rather than through `isEditingSessionActive`, which also closes a stale
-        // note session: a save is no place to close the user's editor.
+        // edit is one that ran mid-typing — but only while the keys still come here. The save on
+        // leaving runs inside that window by definition, and a document left uncorrected there
+        // stays wrong on screen until the next edit, which then corrects it and takes the caret to
+        // the chapter line, far from wherever the user has started typing. `document.hasFocus()`
+        // rather than the editor's own `isFocused()`: this web view is an iframe, and the editor
+        // element stays its document's `activeElement` after the window it lives in has lost focus.
+        // An open palette or note editor never stamps that edit time, so it is asked about
+        // directly, with the same staleness bound the PDP sync uses — and unconditionally, since a
+        // focused palette is an overlay outside this iframe, so the window is blurred exactly when
+        // the session most needs protecting. Resolved here rather than through
+        // `isEditingSessionActive`, which also closes a stale note session: a save is no place to
+        // close the user's editor.
         isUserEditing:
-          (lastLocalEditTimestamp.current !== undefined &&
+          (document.hasFocus() &&
+            lastLocalEditTimestamp.current !== undefined &&
             Date.now() - lastLocalEditTimestamp.current < PDP_SAVE_DEBOUNCE_MS) ||
           resolveEditingSessionActivity({
             hasPaletteSession: paletteSession.current !== undefined,
@@ -2921,7 +2930,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // editor without DOM focus has no claim on the shared document selection (which is why it
       // skips selection reconciliation when it loads content unfocused), so placing a caret there
       // would pull it out of whatever the user is actually typing in — a footnote popover, say.
-      const caretToRestore = editorRef.current?.isFocused() ? caretTarget : undefined;
+      // The window is asked as well as the editor, because the restore calls `focus()`: inside this
+      // iframe the editor stays `activeElement` after the user has clicked another panel, and
+      // focusing it then would take them back out of whatever they moved to.
+      const caretToRestore =
+        document.hasFocus() && editorRef.current?.isFocused() ? caretTarget : undefined;
       try {
         setEditorUsj.current(repairedUsj);
       } catch (error) {
@@ -2938,6 +2951,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // `caretToRestore` addresses the repaired chapter's document, so it means nothing once the
         // user has navigated to another chapter.
         if (chapterKeyRef.current !== savedChapterKey) return;
+        // Asked again rather than trusted from before the wait: the user can leave this web view
+        // inside it, and `focus()` below would bring them back.
+        if (!document.hasFocus()) return;
         try {
           // Placed even when the editor already reports a selection: that is not the user's caret
           // but wherever the browser collapsed its own selection when the load replaced the text

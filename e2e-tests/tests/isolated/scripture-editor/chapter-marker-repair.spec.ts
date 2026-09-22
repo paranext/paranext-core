@@ -10,8 +10,10 @@
  * The unit suites pin the repair algorithm and the save-path plumbing. What only the running app
  * can show is the part those suites stub: that the gesture really does poison the document, that
  * the push-back reaches the editor, that the caret the push-back destroyed is put back at the
- * correction, that the chapter goes on saving afterwards, and that a repair carried by the
- * chapter-switch flush reports without overwriting the chapter the user moved to.
+ * correction, that the chapter goes on saving afterwards, that a repair carried by the
+ * chapter-switch flush reports without overwriting the chapter the user moved to, and that a repair
+ * carried by the save on leaving still reaches the screen — the one case the save runs in with the
+ * user's last keystroke still fresh.
  *
  * ONE test() per spec file on purpose (the isolated fixture is test-scoped and a second Electron
  * instance against the shared renderer dev server has a documented dock-tab failure mode — see
@@ -75,6 +77,11 @@ test.describe('scripture editor chapter-marker repair', () => {
     // the document currently claims.
     const chapterMarker = editorFrame.locator('p.chapter[data-marker="c"]').first();
     const chapterGlyph = chapterMarker.locator('span[data-lexical-text="true"]').first();
+    // The toolbar's book/chapter control, in the app around the editor: clicking it is how these
+    // steps leave the editor's web view.
+    const bookChapterTrigger = mainPage
+      .locator('button[aria-label="book-chapter-trigger"]')
+      .first();
 
     /**
      * Retype the chapter number the way a user would: put the caret just after it and type a digit,
@@ -214,6 +221,48 @@ test.describe('scripture editor chapter-marker repair', () => {
       await navigateToolbarBcv(mainPage, 'Jonah 1:1');
       await expect(editorInput).toContainText(FLUSH_TOKEN, { timeout: 60_000 });
       await expect(chapterMarker).toHaveAttribute('data-number', '1', { timeout: 30_000 });
+    });
+
+    await test.step("the save's read of whether the user is still typing follows the window", async () => {
+      // What the next step rests on, checked on its own so a failure there says which half broke:
+      // the window's focus is what tells the save that the keys have stopped coming here.
+      await editorInput.click();
+      expect(await editorEvalFrame.evaluate(() => document.hasFocus())).toBe(true);
+
+      await bookChapterTrigger.click();
+      await expect
+        .poll(() => editorEvalFrame.evaluate(() => document.hasFocus()), { timeout: 10_000 })
+        .toBe(false);
+      await mainPage.keyboard.press('Escape');
+    });
+
+    await test.step('a marker corrected by the save on leaving keeps the caret out of the editor', async () => {
+      // Leaving the editor within the debounce window flushes the pending save, so the repair runs
+      // with the last keystroke newer than the window the editor is otherwise left alone for. The
+      // correction has to reach the editor there and then — a chapter left with the wrong marker is
+      // corrected by the next edit instead, which takes the caret to the chapter line, away from
+      // wherever the user had started typing — and it has to reach it WITHOUT the caret restore,
+      // which focuses the editor and would pull the user out of the control they moved to. The
+      // editor stays its own document's `activeElement` after the window around it loses focus, so
+      // the editor's own `isFocused()` cannot tell those apart; the window's can.
+      await clearRecordedToasts(mainPage);
+      await retypeChapterNumber('7');
+      // Nothing between the last keystroke and the click: a probe here costs enough round trips to
+      // let the ordinary trailing save fire first, which would pass this step through the path it
+      // is meant to leave out.
+      await bookChapterTrigger.click();
+
+      // The toast is raised only when the repair CHANGED the document, so it is the proof that the
+      // gesture poisoned the chapter and the save repaired it — the glyph assertion below is then
+      // about where that repair landed, and cannot pass vacuously.
+      await expect
+        .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
+        .toEqual(expect.arrayContaining([expect.stringContaining(CORRECTION_MESSAGE)]));
+      await expect.poll(() => chapterGlyph.textContent(), { timeout: 20_000 }).toBe('\\c\u00A01 ');
+
+      // ...and the control the user moved to still has the caret.
+      await expect(mainPage.locator('[data-radix-popper-content-wrapper] input')).toBeFocused();
+      await mainPage.keyboard.press('Escape');
     });
   });
 });
