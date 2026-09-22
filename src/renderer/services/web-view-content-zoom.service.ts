@@ -11,7 +11,6 @@ import {
 import {
   ContentZoomAreaId,
   SavedWebViewDefinition,
-  WEB_VIEW_CONTENT_TYPE,
   WebViewId,
 } from '@shared/models/web-view.model';
 import { localizationService } from '@shared/services/localization.service';
@@ -42,13 +41,7 @@ type Levels = { [areaId: string]: number };
 
 type MemoryRecord = { [key: string]: number };
 
-/** Web view type → whether it is known to mark a zoom area. */
-type TypesWithAreasRecord = { [webViewType: string]: boolean };
-
-type SettingKey =
-  | 'platform.webViewContentZoom'
-  | 'platform.webViewContentZoomMemory'
-  | 'platform.webViewContentZoomTypesWithAreas';
+type SettingKey = 'platform.webViewContentZoom' | 'platform.webViewContentZoomMemory';
 
 type ContentZoomDeps = {
   getIframe: (webViewId: string) => HTMLIFrameElement | null;
@@ -124,8 +117,6 @@ const productionDeps: ContentZoomDeps = {
     get: (key) => settingsService.get(key),
     set: (key, value) => {
       if (key === 'platform.webViewContentZoom') return settingsService.set(key, asNumber(value));
-      if (key === 'platform.webViewContentZoomTypesWithAreas')
-        return settingsService.set(key, asTypesWithAreas(value));
       return settingsService.set(key, asMemory(value));
     },
     subscribe: (key, callback) => settingsService.subscribe(key, callback),
@@ -155,21 +146,6 @@ let cachedMemory: MemoryRecord = {};
 let memoryLoaded = false;
 
 /**
- * Which web view types are known to mark a zoom area. A type absent from the record is not known to
- * mark none — it simply has no evidence yet.
- */
-let cachedTypesWithAreas: TypesWithAreasRecord = {};
-let typesWithAreasLoaded = false;
-
-/**
- * Whether each open pane is expected to report a zoom area, resolved from the type record before
- * the pane's content loads. A pane with no entry was never resolved — a URL pane, a pane whose view
- * runs no scripts, or one opened before the record could be read — and is treated as marking none,
- * which is what lets an ordinary view be scaled correctly the very first time it is opened.
- */
-const expectAreasByWebViewId = new Map<WebViewId, boolean>();
-
-/**
  * The memory record the sibling sync last reconciled against, so it can tell an entry that was
  * deleted from an entry that was never there. Only the memory subscription advances it, and only
  * after a walk in which every pane took its update: the deletion half of a delta exists nowhere
@@ -194,12 +170,6 @@ let initialized: Promise<void> | undefined;
 
 /** The tail of the memory-setting transaction chain; a transaction is appended onto it next. */
 let memoryChain: Promise<void> = Promise.resolve();
-
-/**
- * The tail of the type-record transaction chain, kept separate from {@link memoryChain} so a type
- * write never waits behind a level write, or the reverse.
- */
-let typesChain: Promise<void> = Promise.resolve();
 
 /** How long a per-key memory edit waits for more edits to the same or another key before it flushes. */
 const MEMORY_WRITE_DEBOUNCE_MS = 250;
@@ -265,9 +235,8 @@ let beforeUnloadListener: (() => void) | undefined;
 
 /**
  * Zoom areas each pane's bootstrap has reported (`setContentZoomAreas`), in document order. A pane
- * that never reported — a URL web view, or one whose React tree has not mounted yet — has no entry
- * and counts as having no areas; whether that earns it the whole-iframe fallback is
- * {@link mayScaleWholeIframe}'s question, not this map's.
+ * that never reported (a URL web view, or one whose content has not mounted yet) has no entry and
+ * counts as having no areas.
  */
 const areasByWebViewId = new Map<WebViewId, string[]>();
 
@@ -287,16 +256,13 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   cachedDefault = undefined;
   cachedMemory = {};
   memoryLoaded = false;
-  cachedTypesWithAreas = {};
-  typesWithAreasLoaded = false;
   lastSyncedMemory = {};
   cachedDefaultLabel = undefined;
   initialized = undefined;
-  clearAllFallbackGraces();
+  clearAllStaleAreaGraces();
   areasByWebViewId.clear();
   activeAreaByWebViewId.clear();
   unknownAreasLoggedByWebViewId.clear();
-  expectAreasByWebViewId.clear();
   ownLevelWriteTimers.forEach((timer) => clearTimeout(timer));
   ownLevelWriteTimers.clear();
   pendingOwnLevelWrites.clear();
@@ -305,7 +271,6 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   memoryFlushFailures = 0;
   flushMemoryWritesDebounced.cancel();
   memoryChain = Promise.resolve();
-  typesChain = Promise.resolve();
   if (beforeUnloadListener !== undefined && typeof window !== 'undefined') {
     window.removeEventListener('beforeunload', beforeUnloadListener);
   }
@@ -325,16 +290,6 @@ function asMemory(value: unknown): MemoryRecord {
     // the whole record back. Nothing downstream needs them filtered: `collectMemoryLevelsFor`
     // ignores a key it cannot parse.
     if (isValidZoomFactor(level)) out[key] = level;
-  });
-  return out;
-}
-
-/** Keeps only the boolean entries of a raw type-record value; drops anything else the same way. */
-function asTypesWithAreas(value: unknown): TypesWithAreasRecord {
-  if (typeof value !== 'object' || !value) return {};
-  const out: TypesWithAreasRecord = {};
-  Object.entries(value).forEach(([key, marksAreas]) => {
-    if (typeof marksAreas === 'boolean') out[key] = marksAreas;
   });
   return out;
 }
@@ -481,41 +436,40 @@ export function canContentZoomActOnActiveTarget(): boolean {
 }
 
 /**
- * How long a pane's last-reported zoom areas survive content that may have replaced them: a reload
- * whose new content never runs the content-zoom bootstrap again keeps those areas until this wait
- * elapses, at which point the liveness probe ({@link isContentZoomBootstrapAlive}) tells content
- * that is truly gone from content that is merely slower to mount than this wait.
+ * How long a pane's last-reported zoom areas survive an iframe load that may have replaced the
+ * content that reported them. Once this wait elapses, the liveness probe
+ * ({@link isContentZoomBootstrapAlive}) tells content that is truly gone from content that is merely
+ * slower to mount than this wait.
  */
-const FALLBACK_GRACE_MS = 1000;
+const STALE_AREA_GRACE_MS = 1000;
 
-/** Running grace timers, one per pane, so a report, a reload, or an unmount can cancel one. */
-const fallbackGraceTimers = new Map<WebViewId, ReturnType<typeof setTimeout>>();
+/** Running stale-area timers, one per pane, so a report, a reload or an unmount can cancel one. */
+const staleAreaGraceTimers = new Map<WebViewId, ReturnType<typeof setTimeout>>();
 
 /**
- * Cancels a pane's pending grace timer, if one is running. Called on every NON-EMPTY area report
- * and on every iframe load ({@link applyContentZoomForWebView}): either way, whatever the timer was
- * waiting out belongs to content that is now gone, and a fresh grace has to run its course again
- * before its two jobs — dropping stale areas and recording the pane's type — apply.
+ * Cancels a pane's pending stale-area timer, if one is running. Called on every NON-EMPTY area
+ * report and on every iframe load ({@link applyContentZoomForWebView}): either way, the content the
+ * timer was checking up on is gone, and a fresh wait has to run its course again.
  */
-function clearFallbackGrace(webViewId: WebViewId): void {
-  const timer = fallbackGraceTimers.get(webViewId);
+function clearStaleAreaGrace(webViewId: WebViewId): void {
+  const timer = staleAreaGraceTimers.get(webViewId);
   if (timer !== undefined) {
     clearTimeout(timer);
-    fallbackGraceTimers.delete(webViewId);
+    staleAreaGraceTimers.delete(webViewId);
   }
 }
 
-/** Test seam only: drops every pending grace timer. */
-function clearAllFallbackGraces(): void {
-  fallbackGraceTimers.forEach((timer) => clearTimeout(timer));
-  fallbackGraceTimers.clear();
+/** Test seam only: drops every pending stale-area timer. */
+function clearAllStaleAreaGraces(): void {
+  staleAreaGraceTimers.forEach((timer) => clearTimeout(timer));
+  staleAreaGraceTimers.clear();
 }
 
 /**
  * Drops the three maps' entries for one pane: its reported areas, its active area, and the "already
  * warned about" set an unknown area id was logged into. Shared by every path that treats a pane's
- * areas as belonging to content that is gone — an expired grace that found the bootstrap dead, and
- * a genuine unmount.
+ * areas as belonging to content that is gone: an expired stale-area wait that found the bootstrap
+ * dead, and a genuine unmount.
  */
 function forgetAreaState(webViewId: WebViewId): void {
   areasByWebViewId.delete(webViewId);
@@ -524,95 +478,26 @@ function forgetAreaState(webViewId: WebViewId): void {
 }
 
 /**
- * Records that a pane's outcome marked at least one zoom area, so the next pane of that web view
- * TYPE is given the right treatment before its content loads. Only a pane the platform resolved an
- * expectation for is evidence: a pane that could never have reported (no scripts, no record read
- * yet) says nothing about its type.
- */
-function recordTypeMarksAreas(webViewId: WebViewId): void {
-  if (!expectAreasByWebViewId.has(webViewId)) return;
-  const webViewType = deps.getDefinition(webViewId)?.webViewType;
-  if (!webViewType) return;
-  // Compared against the record the transaction itself reads, not the outer `cachedTypesWithAreas`
-  // — that cache is only refreshed once a transaction resolves, so two panes of the same unrecorded
-  // type reporting within the same tick would otherwise both enqueue an identical write instead of
-  // the second one seeing the first's already-landed value and correctly doing nothing.
-  enqueueTypesWithAreasTransaction((record) =>
-    record[webViewType] === true ? undefined : { ...record, [webViewType]: true },
-  );
-}
-
-/**
- * Starts the wait that tells content merely slow to mount from content that is truly gone. Started
- * by a pane's first empty area report ({@link setContentZoomAreas}) and by every iframe load
- * ({@link applyContentZoomForWebView}, which clears any grace left over from the previous content
- * first, so this always waits out a fresh grace rather than reusing one inherited from that
- * content, and then cancels the grace again for a pane that must not wait one out — a URL pane,
- * which is scaled whole from the start, and a pane whose definition has gone, which has nothing to
- * scale); idempotent either way, since a grace already pending is left alone.
+ * Starts the wait after an iframe load ({@link applyContentZoomForWebView}) that tells content
+ * merely slow to mount from content that is truly gone. It is idempotent: a wait already pending is
+ * left alone.
  *
- * At expiry: a pane whose areas belong to content that no longer runs a content-zoom bootstrap
- * ({@link isContentZoomBootstrapAlive}) has them dropped, since nothing will ever report over them.
- * A pane the platform still expects to mark an area, whose bootstrap is alive, is left alone
- * entirely — it is simply slower to mount than this wait, not a pane whose type marks nothing.
- * Every other pane has its own expectation settled to "marks none", which only changes anything for
- * a pane whose bootstrap turned out to be dead, since an unresolved or already-settled pane already
- * reads that way. This never touches the type record ({@link recordTypeMarksAreas}): a grace expiry
- * is evidence about this one pane, not about its type, since a sibling pane of the same type may
- * already have reported an area.
+ * At expiry, a pane that still holds areas while its current document runs no content-zoom
+ * bootstrap ({@link isContentZoomBootstrapAlive}) has those areas dropped, since nothing will ever
+ * report over them. Nothing else happens: a pane without areas has nothing to drop, and a live
+ * bootstrap reports its own areas.
  */
-function startFallbackGrace(webViewId: WebViewId): void {
-  if (fallbackGraceTimers.has(webViewId)) return;
-  fallbackGraceTimers.set(
+function startStaleAreaGrace(webViewId: WebViewId): void {
+  if (staleAreaGraceTimers.has(webViewId)) return;
+  staleAreaGraceTimers.set(
     webViewId,
     setTimeout(() => {
-      fallbackGraceTimers.delete(webViewId);
-      const hasAreas = (areasByWebViewId.get(webViewId) ?? []).length > 0;
-      const alive = isContentZoomBootstrapAlive(webViewId);
-      if (hasAreas && alive) return;
-      if (alive && expectAreasByWebViewId.get(webViewId) === true) {
-        // The view is simply slower to mount than this wait. Reading that as "this type marks
-        // nothing" would both scale this pane wrongly a moment from now and mislead its next open.
-        return;
-      }
-      if (hasAreas) {
-        // The areas belong to content this pane no longer shows; nothing will ever report over
-        // them, so they are dropped rather than left to shadow the whole-iframe fallback below.
-        forgetAreaState(webViewId);
-      }
-      expectAreasByWebViewId.set(webViewId, false);
-      // A timer callback has no caller to catch it, and a pane can be torn down inside this second.
-      // The expectation was just settled to `false` above, so mayScaleWholeIframe short-circuits on
-      // that disjunct and never reads the pane's definition here; what can still throw is
-      // iframe.contentDocument, on a frame that has been detached from the document. A cross-origin
-      // frame does not throw here: contentDocument is simply null for one.
-      try {
-        pushContentZoom(webViewId);
-      } catch (e) {
-        logger.warn(
-          `Content zoom: could not apply the fallback to web view ${webViewId}. ${getErrorMessage(e)}`,
-        );
-      }
-    }, FALLBACK_GRACE_MS),
+      staleAreaGraceTimers.delete(webViewId);
+      if ((areasByWebViewId.get(webViewId) ?? []).length === 0) return;
+      if (isContentZoomBootstrapAlive(webViewId)) return;
+      forgetAreaState(webViewId);
+    }, STALE_AREA_GRACE_MS),
   );
-}
-
-/**
- * Whether a pane with no reported areas may be scaled as a whole through its iframe element. A pane
- * the platform expects to mark an area is left alone until it does: scaling it in the meantime
- * would scale the view's own toolbar with its content and undo it a moment later, which is the jump
- * on open this decision exists to avoid. A URL pane never marks one and is always allowed.
- */
-function mayScaleWholeIframe(webViewId: WebViewId): boolean {
-  const expectsAreas = expectAreasByWebViewId.get(webViewId);
-  // A pane whose expectation has been SETTLED to "marks none" is answered from that alone: the
-  // definition could only agree, and reading one that cannot be read — during teardown, or before
-  // the dock layout is registered — would deny the pane a fallback its grace has already decided
-  // it needs. An unsettled pane is still judged against its definition, which is where a read that
-  // fails must surface rather than be taken for an answer.
-  if (expectsAreas === false) return true;
-  if (deps.getDefinition(webViewId)?.contentType === WEB_VIEW_CONTENT_TYPE.URL) return true;
-  return expectsAreas !== true;
 }
 
 /**
@@ -827,27 +712,18 @@ function reseedIfIdentityChanged(webViewId: WebViewId): void {
 
 /**
  * Called by the bootstrap (through the parent-bound helper) whenever the set of areas changes. A
- * pane's bootstrap commonly reports no areas at all on its first scan — nothing zoom-marked has
- * rendered yet — and reports again once its content mounts; seeding runs on that first NON-EMPTY
- * report, not merely the first call, so the empty scan itself never counts as "the pane has
- * reported" for seeding purposes. A NON-EMPTY report also settles the pane's own expectation of
- * marking an area to `true` and, the first time this pane's type does that, records it
- * ({@link recordTypeMarksAreas}); an EMPTY report starts the grace instead, which settles the
- * expectation to `false` only for a pane that was not already expecting to mark one — a pane
- * already expecting `true` is left alone by that grace's expiry ({@link startFallbackGrace}).
+ * pane's bootstrap commonly reports no areas at all on its first scan, because nothing zoom-marked
+ * has rendered yet, and reports again once its content mounts. Seeding runs on that first NON-EMPTY
+ * report, not merely the first call, so the empty scan never counts as "the pane has reported" for
+ * seeding purposes. A NON-EMPTY report also cancels any stale-area wait, since a bootstrap that
+ * reports is alive.
  */
 export function setContentZoomAreas(webViewId: WebViewId, areaIds: ContentZoomAreaId[]): void {
   const valid = areaIds.filter((areaId) => isValidContentZoomAreaId(areaId));
   const previous = areasByWebViewId.get(webViewId);
   if (previous && previous.length === valid.length && previous.every((a, i) => a === valid[i]))
     return;
-  if (valid.length > 0) {
-    clearFallbackGrace(webViewId);
-    // Checked before this pane's own expectation is settled below, so a pane whose expectation was
-    // never resolved cannot satisfy its own evidence requirement by settling it right here.
-    recordTypeMarksAreas(webViewId);
-    expectAreasByWebViewId.set(webViewId, true);
-  } else startFallbackGrace(webViewId);
+  if (valid.length > 0) clearStaleAreaGrace(webViewId);
   if ((previous === undefined || previous.length === 0) && valid.length > 0)
     seedFromMemory(webViewId);
   areasByWebViewId.set(webViewId, valid);
@@ -881,23 +757,20 @@ export function forgetContentZoom(webViewId: WebViewId): void {
   }
   commitOwnLevels(webViewId);
   forgetAreaState(webViewId);
-  expectAreasByWebViewId.delete(webViewId);
-  clearFallbackGrace(webViewId);
+  clearStaleAreaGrace(webViewId);
 }
 
 /**
- * Writes the pane's effective levels into it. With areas: one CSS variable per area (own level,
- * else the default) plus the default variable, and the iframe's own zoom cleared. Without areas (a
- * URL view, or a view that marks none): CSS `zoom` on the iframe element, so the whole view shows
- * at the Settings default — but only once {@link mayScaleWholeIframe} says the pane really has no
- * areas rather than not having mounted its content yet. Areas that hold a level but are not
- * currently rendered still get their variable, so the level is in place when the area appears (a
- * panel the view renders only on demand).
+ * Writes the pane's effective levels into it: one CSS variable per area (its own level, else the
+ * default) plus the default variable. A pane without areas gets only the default variable, and
+ * nothing in it reads that variable unless it later marks an area. The iframe element itself is
+ * never scaled. Areas that hold a level but are not currently rendered still get their variable, so
+ * the level is in place when the area appears (a panel the view renders only on demand).
  *
  * Hidden panes are handled: rc-dock keeps an inactive tab mounted under `display: none`, and both
  * the variables and the rules that read them are data-driven, so they apply with no layout and are
  * already correct when the tab is shown. Only the indicator needs geometry, and it is passed only
- * for a direct user action, which needs a visible pane; the bootstrap's `cornerOf` still falls back
+ * for a direct user action, which needs a visible pane. The bootstrap's `cornerOf` still falls back
  * to a fixed corner when every rect it measures is zero.
  */
 export function pushContentZoom(
@@ -906,25 +779,15 @@ export function pushContentZoom(
 ): void {
   const iframe = deps.getIframe(webViewId);
   if (!iframe) return;
-  // Only a non-URL pane with scripting allowed bakes the real default into its head — a pane opened
-  // with `allowScripts: false` bakes nothing, same as it never runs the bootstrap — and that bake
+  // Only a non-URL pane with scripting allowed bakes the real default into its head (a pane opened
+  // with `allowScripts: false` bakes nothing, and never runs the bootstrap either). That bake
   // awaits the same read that fills `cachedDefault`, so this fallback can never outrank a value
   // that pane actually baked.
   const defaultZoom = cachedDefault ?? DEFAULT_ZOOM_FACTOR;
   const root = iframe.contentDocument?.documentElement;
   root?.style.setProperty(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE, String(defaultZoom));
   const areas = areasByWebViewId.get(webViewId) ?? [];
-  if (areas.length === 0 || !root) {
-    // `zoom` predates `setProperty` support for this non-standard property; the named accessor
-    // is the form every engine implements for it, including the empty-string clear.
-    // Assigning in both directions is what gives the host zoom a path back: a pane that may no
-    // longer be whole-scaled — one the platform now expects to mark an area, or whose definition
-    // cannot be found — is cleared here rather than keeping whatever the previous content left on
-    // the element.
-    iframe.style.zoom = mayScaleWholeIframe(webViewId) ? String(defaultZoom) : '';
-    return; // a view without areas has no per-area action to announce
-  }
-  iframe.style.zoom = '';
+  if (areas.length === 0 || !root) return; // a pane without areas has no per-area action to announce
   const own = effectiveOwnLevels(deps.getDefinition(webViewId));
   new Set([...areas, ...Object.keys(own)]).forEach((areaId) => {
     root.style.setProperty(getContentZoomCssVariable(areaId), String(own[areaId] ?? defaultZoom));
@@ -939,58 +802,34 @@ export function pushContentZoom(
 }
 
 /**
- * For the iframe load hook: treats every load as a fresh content session, including an in-place
+ * For the iframe load hook. Treats every load as a fresh content session, including an in-place
  * reload that replaces a pane's content without the component unmounting (`forgetContentZoom` only
- * runs on unmount, so the pane's id, and anything keyed by it, survives a reload). Clears any
- * fallback grace left over from whatever the pane showed before, then arms a fresh one exactly as
- * if the pane had just been opened and cancels it again for a pane that must not wait one out — a
- * URL pane, which is scaled whole from the start, and a pane whose definition has gone, which has
- * nothing to scale; a pane that goes on to report an area within the grace cancels it as usual. The
- * pane's own expectation of marking an area ({@link expectAreasByWebViewId}) is untouched by a load:
- * the entry is keyed by the pane's web view TYPE, which a reload does not change, and its value may
- * already have been settled by the pane's own earlier reports — exactly what should stick across a
- * reload of the same type of content — so {@link mayScaleWholeIframe} answers correctly for the new
- * content from the {@link pushContentZoom} below, at once — no wait for a fresh grace to elapse. The
- * whole-iframe `zoom` a reload does not reset on its own (it lives on the host `<iframe>` element,
- * not the content a reload replaces) is cleared and, if still warranted, reapplied by that same
- * push, which assigns the host zoom in both directions, so the new content never renders showing
- * the old content's answer for even a moment.
+ * runs on unmount, so the pane's id, and anything keyed by it, survives a reload). It pushes the
+ * pane's variables and starts a fresh stale-area wait.
  *
  * The pane's last-reported areas are deliberately kept across the load itself rather than dropped
  * here. A real load replaces the iframe's realm, so the fresh content's bootstrap reports its own
- * areas from scratch; dropping them at load time instead races that report — the child document's
- * `DOMContentLoaded`, which the bootstrap reports from, fires before the iframe element's `load` —
- * and a pane that reported first would be left with no areas that nothing ever re-reports, since
+ * areas from scratch. Dropping them at load time would race that report: the child document's
+ * `DOMContentLoaded`, which the bootstrap reports from, fires before the iframe element's `load`. A
+ * pane that reported first would then be left with no areas that anything ever re-reports, because
  * the bootstrap only calls the parent when its area LIST changes and keeps that list inside the
- * iframe. What decides whether those areas survive the replacement is the liveness probe the grace
- * timer runs at expiry ({@link isContentZoomBootstrapAlive}): the ordinary case is a fresh report
- * already having cancelled the grace, but content that never reports again — `allowScripts: false`
- * content, an in-place navigation the platform never injected into, `about:blank`, or a host that
- * tore its own bootstrap down — has its predecessor's areas dropped in favor of the whole-iframe
- * fallback instead of keeping them forever.
+ * iframe. Whether those areas survive the replacement is decided by the liveness probe at the end
+ * of the wait ({@link startStaleAreaGrace}). In the ordinary case a fresh report has already
+ * cancelled the wait. Content that never reports again (`allowScripts: false` content, an in-place
+ * navigation the platform never injected into, `about:blank`, or a host that tore its own bootstrap
+ * down) has its predecessor's areas dropped.
  *
- * A replacement that keeps the pane's realm — a view re-pointed at another resource or project, a
- * grid gaining or losing a panel, a pop-up mounting its own editor — needs no clearing here either:
- * the bootstrap's observer reports the new list the moment a marker is added or removed, and an
- * unchanged list is one the new content still owns. Only a replacement that swaps the realm can
- * leave areas nothing will report over, and that is what the grace's liveness probe settles.
+ * A replacement that keeps the pane's realm (a view re-pointed at another resource or project, a
+ * grid gaining or losing a panel, a pop-up mounting its own editor) needs no clearing here either.
+ * The bootstrap's observer reports the new list the moment a marker is added or removed, and an
+ * unchanged list is one the new content still owns.
  */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
-  // Armed before the definition is read, and outside the guard below, because a read that fails
-  // must still leave the pane a grace: for a view that never runs the bootstrap this hook is the
-  // only thing that ever arms one, so a pane whose read threw here would stay unscaled for as long
-  // as it lives. Neither of these two reads the pane or its definition, so neither can fail.
-  clearFallbackGrace(webViewId);
-  startFallbackGrace(webViewId);
-  // The React `onLoad` handler this runs from is a synthetic event handler, which no error boundary
-  // catches, and a late load during teardown reads a definition that is no longer there.
+  clearStaleAreaGrace(webViewId);
+  startStaleAreaGrace(webViewId);
+  // The React `onLoad` handler this runs from is a synthetic event handler, which no error
+  // boundary catches, and a late load during teardown reads a definition that is no longer there.
   try {
-    const definition = deps.getDefinition(webViewId);
-    // Neither of these waits a grace out: a URL pane is scaled whole from the start
-    // ({@link mayScaleWholeIframe} always allows one), and a pane with no definition left has
-    // nothing to scale.
-    if (!definition || definition.contentType === WEB_VIEW_CONTENT_TYPE.URL)
-      clearFallbackGrace(webViewId);
     pushContentZoom(webViewId);
   } catch (e) {
     logger.warn(
@@ -1023,21 +862,6 @@ async function readMemory(): Promise<MemoryRecord | undefined> {
     return memory;
   } catch (e) {
     logger.warn(`Content zoom: could not read memory. ${getErrorMessage(e)}`);
-    return undefined;
-  }
-}
-
-/** `undefined` marks a failed read, distinct from a genuinely empty record. */
-async function readTypesWithAreas(): Promise<TypesWithAreasRecord | undefined> {
-  try {
-    const record = asTypesWithAreas(
-      await deps.settings.get('platform.webViewContentZoomTypesWithAreas'),
-    );
-    cachedTypesWithAreas = record;
-    typesWithAreasLoaded = true;
-    return record;
-  } catch (e) {
-    logger.warn(`Content zoom: could not read the type record. ${getErrorMessage(e)}`);
     return undefined;
   }
 }
@@ -1142,36 +966,6 @@ function enqueueMemoryTransaction(
     }
   })();
   memoryChain = (async () => {
-    await transaction;
-  })();
-  return transaction;
-}
-
-/**
- * Serializes every change to the type record the same way {@link enqueueMemoryTransaction} does for
- * memory, and behind its own chain ({@link typesChain}) so the two kinds of write never wait on each
- * other.
- */
-function enqueueTypesWithAreasTransaction(
-  mutate: (record: TypesWithAreasRecord) => TypesWithAreasRecord | undefined,
-): Promise<MemoryTransactionOutcome> {
-  const previous = typesChain;
-  const transaction = (async (): Promise<MemoryTransactionOutcome> => {
-    await previous;
-    try {
-      const record = await readTypesWithAreas();
-      if (!record) return 'failed';
-      const next = mutate({ ...record });
-      if (!next) return 'unchanged';
-      await deps.settings.set('platform.webViewContentZoomTypesWithAreas', next);
-      cachedTypesWithAreas = next;
-      return 'written';
-    } catch (e) {
-      logger.warn(`Content zoom: could not write the type record. ${getErrorMessage(e)}`);
-      return 'failed';
-    }
-  })();
-  typesChain = (async () => {
     await transaction;
   })();
   return transaction;
@@ -1285,7 +1079,6 @@ export async function __flushContentZoomWritesForTesting(): Promise<void> {
   flushOwnLevelWrites();
   await flushMemoryWritesDebounced.flush();
   await memoryChain;
-  await typesChain;
 }
 
 /**
@@ -1470,9 +1263,7 @@ export async function resetContentZoom(
 /**
  * State → memory → default, per area. Used by the shard to bake a pane's initial variables into its
  * head. Memory contributes every area remembered for this pane's kind and identity that the state
- * does not already hold. Also resolves whether the pane is expected to mark a zoom area at all,
- * from the type record ({@link expectAreasByWebViewId}), before anything the pane renders can be
- * scaled.
+ * does not already hold.
  *
  * Honors the identity stamp the same way {@link seedFromMemory} does: a stored stamp naming another
  * identity means the pane's own levels belong to a project it no longer shows (a reused web view id
@@ -1498,12 +1289,6 @@ export async function getInitialContentZoomForWebView(
       if (levels[areaId] === undefined) levels[areaId] = level;
     });
   }
-  // Resolved here rather than at iframe load because this is already awaited before the pane's HTML
-  // is built, so the answer is in place before anything can paint. A pane whose view runs no scripts
-  // never reaches this function, and is treated as marking none, which is correct: it can never run
-  // the bootstrap and so can never report.
-  const record = typesWithAreasLoaded ? cachedTypesWithAreas : ((await readTypesWithAreas()) ?? {});
-  expectAreasByWebViewId.set(webView.id, record[webView.webViewType] === true);
   return { defaultZoom: await getDefaultZoom(), levels };
 }
 
@@ -1646,8 +1431,8 @@ export function initializeContentZoomService(
   initialized = (async () => {
     // Registration first: a slow settings or localization round trip must not leave this window
     // unable to hear a Settings change, bring a sibling pane in line, or flush a pending edit when
-    // it closes. All three reads are still awaited below, so initialization still resolves only
-    // once the default, the remembered levels and the type record are in hand.
+    // it closes. Both reads are still awaited below, so initialization still resolves only once
+    // the default and the remembered levels are in hand.
     //
     // This event carries every update to a web-view definition in this window: a pane adopted from
     // another window arriving with its state, every `useWebViewState` write an extension makes,
@@ -1740,28 +1525,11 @@ export function initializeContentZoomService(
           logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
         }
       })(),
-      (async () => {
-        try {
-          await deps.settings.subscribe('platform.webViewContentZoomTypesWithAreas', (value) => {
-            if (isPlatformError(value)) {
-              logger.warn(`Content zoom: error reading the type record: ${getErrorMessage(value)}`);
-              return;
-            }
-            cachedTypesWithAreas = asTypesWithAreas(value);
-            typesWithAreasLoaded = true;
-          });
-        } catch (e) {
-          logger.warn(
-            `Content zoom: could not subscribe to the type record. ${getErrorMessage(e)}`,
-          );
-        }
-      })(),
     ]);
-    // The first pane's head variables need all three, and none of the reads depends on another.
-    // Pre-warming memory and the type record here is also what keeps
-    // `getInitialContentZoomForWebView` off a settings round trip when a read fails: without it,
-    // every eligible pane retries it.
-    await Promise.all([getDefaultZoom(), readMemory(), readTypesWithAreas()]);
+    // The first pane's head variables need both, and neither read depends on the other.
+    // Pre-warming memory here is also what keeps `getInitialContentZoomForWebView` off a settings
+    // round trip when a read fails: without it, every eligible pane retries it.
+    await Promise.all([getDefaultZoom(), readMemory()]);
     try {
       cachedDefaultLabel = await deps.localize('%webView_contentZoom_indicator_default%');
     } catch (e) {
