@@ -1,6 +1,7 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsFocusedWindow } from '@renderer/hooks/use-is-focused-window.hook';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { useIsContentZoomable } from '@renderer/hooks/use-is-content-zoomable.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import {
@@ -36,7 +37,6 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { windowService } from '@shared/services/window.service';
-import { resolveContentZoomArea } from '@renderer/services/web-view-content-zoom.service';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -525,21 +525,27 @@ export function PlatformTabTitle({
   }>({ otherWindows: [], isOnlyTabInWindowThatWouldClose: false });
 
   /**
-   * Whether this tab's web view reports a zoom area to act on, read when the menu opens, and not
-   * re-read while it stays open — an area that arrives mid-open is picked up the next time the menu
-   * is opened. Zooming behaves identically in both modes, so this is read regardless of mode —
-   * unlike {@link menuTargets}, which only Power mode's window-target items need.
+   * Whether this tab's pane takes content zoom, kept current by the content-zoom service's change
+   * event. The zoom items exist only while it is `true`; in Simple mode, whose menu holds nothing
+   * else, a tab whose pane is not zoomable therefore has no menu at all.
    *
-   * Read synchronously rather than awaited: the resolver already knows every pane's reported areas
-   * the moment they arrive, so there is no round trip to wait out here, and the disabled state is
-   * correct for the open it belongs to rather than trailing it by one.
-   *
-   * Defaults to enabled rather than disabled: the menu's content is never on screen before the
-   * first open resolves this (Radix keeps it unmounted while closed), so the default itself is
-   * never seen — but assuming a working pane is the right guess if that ever stopped being true,
-   * matching how the rest of this menu treats an action it cannot yet prove is a no-op.
+   * Hidden case: nothing to catch up. Zoomability comes from the pane's area reports, which the
+   * bootstrap's MutationObserver sends with no layout, and from core's static declaration map, so
+   * the value is already current for an inactive tab when it is shown.
    */
-  const [hasZoomArea, setHasZoomArea] = useState(true);
+  const liveIsContentZoomable = useIsContentZoomable(webViewId);
+
+  /**
+   * The zoomability captured when the menu opened, held until it closes. An area that appears or
+   * disappears while the menu is up therefore never adds or removes items under the pointer, and a
+   * Simple-mode menu, whose only items are the zoom group, never unmounts itself while open.
+   * `undefined` while the menu is closed. Only zoomability is held: the window targets below still
+   * arrive after the menu opens.
+   */
+  const [zoomabilityForOpenMenu, setZoomabilityForOpenMenu] = useState<boolean | undefined>(
+    undefined,
+  );
+  const isContentZoomable = zoomabilityForOpenMenu ?? liveIsContentZoomable;
 
   /**
    * Identifies the most recent call to {@link handleMenuOpenChange}, so a round trip that resolves
@@ -550,9 +556,8 @@ export function PlatformTabTitle({
   const latestMenuOpenRequestRef = useRef<symbol | undefined>(undefined);
 
   const handleMenuOpenChange = async (isOpen: boolean) => {
+    setZoomabilityForOpenMenu(isOpen ? liveIsContentZoomable : undefined);
     if (!isOpen || !webViewId) return;
-
-    setHasZoomArea(resolveContentZoomArea(webViewId, undefined) !== undefined);
 
     // Simple mode's menu holds only the zoom items, and neither reader of the window-target lists
     // below is in it
@@ -991,8 +996,8 @@ export function PlatformTabTitle({
   );
 
   const menuContext: TabMenuContext = useMemo(
-    () => ({ webViewId, hasZoomArea, ...menuTargets }),
-    [webViewId, hasZoomArea, menuTargets],
+    () => ({ webViewId, isContentZoomable, ...menuTargets }),
+    [webViewId, isContentZoomable, menuTargets],
   );
 
   // Memoized, and above every return so it stays a hook: a single focus change re-renders every
