@@ -10,7 +10,7 @@ import {
   EXTENSIONS_DIR,
   getMenuDataEngineInMode,
   getRealCombinedMenus,
-} from './menu-data.service-host.test-helper';
+} from './menu-data.service-host.test-utils';
 
 const SCRIPTURE_EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
 const EDITOR_MENUS_PATH = resolve(
