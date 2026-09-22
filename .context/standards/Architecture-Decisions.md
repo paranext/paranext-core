@@ -1563,10 +1563,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   stylesheet is also vendored three times (the extension's `_usj-nodes.scss`, the
   `platform-bible-react` demo `usj-nodes.css`, and the upstream `scripture-editors` source), each
   re-synced by hand.
-- **Decision:** The coverage test parses the stylesheet itself into flat `selector { declarations }`
-  blocks, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
-  cascade: a `[dir='ltr']` rule beats a direction-agnostic one, table rows excluded because they never
-  render as `.para`) and the expected `--verse-text-start` map from negative `text-indent`, then
+- **Decision:** The coverage test parses the stylesheet itself with `postcss`, reads its top-level
+  rules, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
+  cascade: a `[dir='ltr']` rule beats a direction-agnostic one; `\tr` excluded because a real table
+  row renders as `<tr>`, not `.para`, while the obsolete `\tr1`/`\tr2` still convert to paragraphs
+  and so are compensated) and the expected `--verse-text-start` map from negative `text-indent`, then
   asserts the gutter block matches in both directions: every derived marker present with the same
   value, and no gutter entry without a base rule calling for it. The parser's blind spots are
   themselves asserted away — a setter nested in an at-rule, a direction-qualified gutter rule, a
@@ -1582,8 +1583,21 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   five markers. **Assert the copies are byte-identical** — rejected: the copies legitimately diverge
   (SCSS versus CSS, host-specific rules), so a byte comparison would either fail permanently or need a
   hand-maintained exclusion list with the same staleness problem. **Parse with `postcss`** — declined
-  for now: the flat parser plus its blind-spot assertions is ~100 lines and reads without a dependency;
-  a real parser becomes worth it if the stylesheet grows nesting the assertions cannot exclude.
+  at first: the flat parser plus its blind-spot assertions was ~100 lines and read without a
+  dependency. **Amended 2026-09-17:** adopted. The upstream review of the same test demonstrated
+  that the flat regex could be fooled without any assertion firing — among them a selector list
+  mixing gutter and base selectors, a `margin` shorthand inside an at-rule, a value wrapped across
+  lines, `!important`, hyphenated marker classes — each provable only with a probe. Both twins now
+  parse with `postcss`, which core already depended on and the upstream package added as a dev
+  dependency; the SCSS copy has no SCSS syntax in the rules under test, so it parses as plain CSS.
+  Per-selector classification comes from the parser, and a tracked property set anywhere but
+  directly in a top-level marker rule (inside an at-rule, or an at-rule nested in the rule) fails
+  rather than being silently unread. The remaining semantic limits — selectors classified by class
+  token rather than resolved against the DOM, the cascade approximated as "direction-qualified beats
+  agnostic", `calc()` values reported rather than evaluated, direction read from `[dir=…]`/`:dir()`
+  only — are stated in the test header. The same review also showed that `\tr1` and `\tr2`, though
+  obsolete in `usfm.sty`, still convert to paragraphs, so they are compensated again and only `\tr`
+  is excluded; PR #2807 had removed them on the earlier round's advice.
 - **Consequences:** Adding an indented marker to the base rules without compensating it fails the
   build; so does adding a compensation nothing calls for. Re-syncing a copy from upstream is checked
   structurally for this block, so the cross-copy pin comments in the two `usj-nodes-styles.test.ts`
@@ -1597,7 +1611,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `usj-nodes.css`. The pattern generalises to any "for every X in
   this file there must be a Y" invariant over a generated or vendored asset: derive X from the asset,
   assert the parser's blind spots, keep a small independent oracle.
-- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; upstream
+- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; the follow-up PR
+  #2827 (`pt-4313-coverage-test-review-followup`) and its review; upstream
   `paranext/scripture-editors` PR #10.
 
 ## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
