@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 
@@ -13,6 +13,7 @@ import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
+import editorMenus from '../contributions/menus.json';
 
 type LocalizedStringsFile = {
   metadata?: Record<string, { fallbackKey?: string }>;
@@ -338,3 +339,67 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
     });
   },
 );
+
+/**
+ * Extensions the extension host loads only when "noisy dev mode" is enabled, so their contributions
+ * never reach a production user. Mirrors `DEV_ONLY_EXTENSION_NAMES` in
+ * `src/node/utils/locale-assets.test-helper.ts` (not importable here — `extensions/` has its own
+ * tsconfig with no `@node/*` path alias), matched on the manifest `name` field.
+ */
+const DEV_ONLY_EXTENSION_NAMES: readonly string[] = [
+  'c-sharp-provider-test',
+  'evil',
+  'helloSomeone',
+  'helloRock3',
+  'quickVerse',
+];
+
+/** Every localization key defined for `locale` anywhere the app loads strings from. */
+function allKeys(locale: 'en' | 'es'): Set<string> {
+  const extensionsDir = path.resolve(__dirname, '../..');
+  const keys = new Set<string>();
+  readdirSync(extensionsDir, { withFileTypes: true }).forEach((entry) => {
+    if (!entry.isDirectory()) return;
+    const manifestPath = path.resolve(extensionsDir, entry.name, 'manifest.json');
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      // A key reachable only in noisy dev mode renders as its raw `%key%` for everyone else
+      if (manifest.name && DEV_ONLY_EXTENSION_NAMES.includes(manifest.name)) return;
+    }
+    const stringsFilePath = path.resolve(
+      extensionsDir,
+      entry.name,
+      'contributions/localizedStrings.json',
+    );
+    if (!existsSync(stringsFilePath)) return;
+    const strings =
+      JSON.parse(readFileSync(stringsFilePath, 'utf8')).localizedStrings?.[locale] ?? {};
+    Object.keys(strings).forEach((key) => keys.add(key));
+  });
+  const core = JSON.parse(
+    readFileSync(path.resolve(__dirname, `../../../../assets/localization/${locale}.json`), 'utf8'),
+  );
+  Object.keys(core).forEach((key) => keys.add(key));
+  return keys;
+}
+
+function menuLabelKeys(): string[] {
+  const { topMenu } = editorMenus.webViewMenus['platformScriptureEditor.react'];
+  const labels = [
+    ...Object.values(topMenu.columns).map((column) => column.label),
+    ...topMenu.items.map((item) => item.label),
+  ];
+  return [...new Set(labels)];
+}
+
+// The editor's Project menu draws its column and item labels from keys that must be defined
+// somewhere the app loads strings from: this extension's own contribution, another shipped
+// extension's (e.g. the Comments item's label lives with legacyCommentManager), or the platform
+// shell's core locale assets. Driven off the menu document itself, so a label added to the menu
+// is covered here without anyone remembering to update this file.
+describe.each(['en', 'es'] as const)('editor Project menu labels in %s', (locale) => {
+  const keys = menuLabelKeys();
+  it.each(keys)('%s is defined', (key) => {
+    expect(allKeys(locale).has(key)).toBe(true);
+  });
+});

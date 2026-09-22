@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { QUIET_FOCUS_ATTRIBUTE } from '@/utils/focus.util';
 import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
+import { persistDirection } from '@/utils/dir-helper.util';
 import TabDropdownMenu from './tab-dropdown-menu.component';
 
 // The hasPointerCapture / scrollIntoView shims this menu needs in jsdom are installed repo-wide by
@@ -17,6 +18,35 @@ beforeAll(() => {
 
 // userEvent-driven Radix menus can take seconds per click on a contended Windows CI worker
 vi.setConfig({ testTimeout: 20_000 });
+
+beforeEach(() => {
+  persistDirection('ltr');
+});
+
+/** Menu data with a single submenu, shaped like the Edit flyout's editSubmenu/editActions group. */
+const SUBMENU_MENU: Localized<MultiColumnMenu> = {
+  columns: { 'test.project': { label: 'Project', order: 1 } },
+  groups: {
+    'test.top': { column: 'test.project', order: 1 },
+    'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+  },
+  items: [
+    {
+      id: 'test.editSubmenu',
+      label: 'Edit',
+      localizeNotes: '',
+      group: 'test.top',
+      order: 1,
+    },
+    {
+      label: 'Undo',
+      localizeNotes: '',
+      group: 'test.editActions',
+      order: 1,
+      command: 'test.undo',
+    },
+  ],
+};
 
 /**
  * Shaped like the scripture editor's Project menu, including its empty Info column. Column keys are
@@ -171,6 +201,126 @@ describe('TabDropdownMenu', () => {
     const find = screen.getByRole('menuitem', { name: /^Find/ });
     // jsdom computes no bidi, so the class that isolates the hint is the checkable part
     expect(within(find).getByText('Ctrl+F')).toHaveClass('tw:[unicode-bidi:plaintext]');
+  });
+
+  it('opens a flyout and reaches its items by keyboard', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onSelectMenuItem = vi.fn();
+    render(
+      <TabDropdownMenu
+        menuData={{
+          columns: { 'test.project': { label: 'Project', order: 1 } },
+          groups: {
+            'test.top': { column: 'test.project', order: 1 },
+            'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+          },
+          items: [
+            {
+              id: 'test.editSubmenu',
+              label: 'Edit',
+              localizeNotes: '',
+              group: 'test.top',
+              order: 1,
+            },
+            {
+              label: 'Undo',
+              localizeNotes: '',
+              group: 'test.editActions',
+              order: 1,
+              command: 'test.undo',
+            },
+            {
+              label: 'Redo',
+              localizeNotes: '',
+              group: 'test.editActions',
+              order: 2,
+              command: 'test.redo',
+            },
+          ],
+        }}
+        onSelectMenuItem={onSelectMenuItem}
+        tabLabel="Project"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    editTrigger.focus();
+    await user.keyboard('{ArrowRight}');
+    const undo = await screen.findByRole('menuitem', { name: 'Undo' });
+    await waitFor(() => expect(undo).toHaveFocus());
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(onSelectMenuItem).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'test.redo' }),
+    );
+  });
+
+  it("shows a submenu item's tooltip on hover", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu
+        menuData={{
+          columns: { 'test.project': { label: 'Project', order: 1 } },
+          groups: {
+            'test.top': { column: 'test.project', order: 1 },
+            'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+          },
+          items: [
+            {
+              id: 'test.editSubmenu',
+              label: 'Edit',
+              localizeNotes: '',
+              group: 'test.top',
+              order: 1,
+              tooltip: 'Edit actions',
+            },
+            {
+              label: 'Undo',
+              localizeNotes: '',
+              group: 'test.editActions',
+              order: 1,
+              command: 'test.undo',
+            },
+          ],
+        }}
+        onSelectMenuItem={() => {}}
+        tabLabel="Project"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    await user.hover(editTrigger);
+
+    expect(await screen.findAllByText('Edit actions')).not.toHaveLength(0);
+  });
+
+  it('points the submenu trigger chevron right in LTR', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu menuData={SUBMENU_MENU} onSelectMenuItem={() => {}} tabLabel="Project" />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+
+    expect(editTrigger.querySelector('.tabler-icon-chevron-right')).not.toBeNull();
+    expect(editTrigger.querySelector('.tabler-icon-chevron-left')).toBeNull();
+  });
+
+  it('points the submenu trigger chevron left in RTL, toward the flyout it opens', async () => {
+    persistDirection('rtl');
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu menuData={SUBMENU_MENU} onSelectMenuItem={() => {}} tabLabel="Project" />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+
+    expect(editTrigger.querySelector('.tabler-icon-chevron-left')).not.toBeNull();
+    expect(editTrigger.querySelector('.tabler-icon-chevron-right')).toBeNull();
   });
 });
 
