@@ -148,7 +148,7 @@ describe('content zoom settings', () => {
     /* eslint-enable no-null/no-null */
   });
 
-  it('no longer declares or validates the per-type zoom-area record', () => {
+  it('does not declare or validate the per-type zoom-area record', () => {
     const all = groups.flatMap((group) => Object.keys(group.properties));
     // Positive control: the neighbouring content-zoom settings are still declared.
     expect(all).toContain('platform.webViewContentZoomMemory');

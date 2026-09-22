@@ -7630,6 +7630,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Home or an inventory, still ignores the chords, which remains an accurate example of the cost
   described above. And the forward reference to "the Text Collection grid in PT-4582, Enhanced
   Resources in PT-4583" is resolved: both landed together in this same work.
+- **Amended 2026-09-23 (`adr-content-zoom-applies-only-to-zoomable-panes`):** three statements above
+  no longer hold. The Consequences paragraph's "the platform scales such a view whole at the Settings
+  default instead" is superseded: an area-less, undeclared view is not scaled at all. Its "the
+  bootstrap does not even register its wheel listener while a pane has no areas" is superseded too: a
+  declared pane — including the inventories — takes the chords and registers the wheel listener even
+  before a marker renders, acting on the pane's declared default area. The 2026-09-19 amendment's "A
+  view that marks no area at all, such as Home or an inventory, still ignores the chords" now holds
+  only for Home: an inventory is declared zoomable, so it takes the chords; Home, which marks no area
+  and is not declared, stays inert.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
   chord ownership), epic PT-4575.
 
