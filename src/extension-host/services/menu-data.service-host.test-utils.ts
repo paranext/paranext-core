@@ -10,7 +10,7 @@ import { vi } from 'vitest';
 /*
  * Shared setup for tests that build the real combined menu document (the platform's own
  * `menu.data.json` plus every shipped extension's `menus.json`) and read it back per interface
- * mode. Named `.test-helper.ts` (not `.test.ts`) so vitest does not collect it as a suite.
+ * mode. Named `.test-utils.ts` (not `.test.ts`) so vitest does not collect it as a suite.
  *
  * `contribution.service`'s combiner only ever sees `menu.data.json` under test, because extension
  * contributions are added inside the extension-load path, which does not run here. So these tests
