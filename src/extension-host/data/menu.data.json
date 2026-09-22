@@ -112,7 +112,7 @@
     "items": [
       {
         "label": "%webView_openProjectSettings%",
-        "localizeNotes": "Web view main menu > Project > Open Project Settings...",
+        "localizeNotes": "Web view main menu > Project > Open Project Settings... Simple's design calls this 'Project settings', but every mode and web view shares this item, so it cannot be relabelled for Simple alone.",
         "group": "platform.projectTop",
         "order": 3,
         "command": "platform.openSettings"

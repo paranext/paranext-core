@@ -454,6 +454,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
+  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. ⌃T and ⌃⇧T below need a
+  // `command` that works in every view; the design's ⌃J, ⌃E and F7 have no editor handler or entry
+  // here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
   {
     id: 'scripture-insert-footnote',
     purpose: 'Insert a footnote at the selection (Standard view, editable)',

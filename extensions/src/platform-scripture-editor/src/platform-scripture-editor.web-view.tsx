@@ -144,7 +144,7 @@ import {
   scrollToAnnotation,
   scrollToVerse,
 } from './editor-dom.util';
-import { isEditMenuCommand, runEditMenuAction } from './edit-menu-actions.util';
+import { handleEditMenuCommand, isEditMenuCommand } from './edit-menu-actions.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
@@ -3603,32 +3603,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // The Edit flyout acts on this editor, and the clipboard needs the click's user activation,
       // so it runs here rather than as a PAPI command
       if (isEditMenuCommand(projectMenuCommand.command)) {
-        // Sync blocks editing for a named, transient reason; every other block is durable and
-        // unnamed to the user (permission, permission-loading, markers view, no editor yet).
-        const notifyBlocked = () =>
-          isSyncBlocked ? notifySyncEditBlocked() : notifyEditMenuActionBlocked(localizedStrings);
-        const editor = editorRef.current;
-        if (!editor) {
-          // The ref is unset while no project is selected, on the missing-book zero state, and
-          // while USJ is still loading — none of which a Send/Receive finishing resolves, so this
-          // path always uses the generic message even if a sync also happens to be in progress.
-          notifyEditMenuActionBlocked(localizedStrings);
-          return;
-        }
-        restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current);
-        try {
-          // A `false` return means the action was blocked (no permission, project not editable,
-          // permission still loading, sync in progress, markers view). Undo/Redo return `true`
-          // regardless of history, so an empty-history click stays silent here too, matching Ctrl+Z.
-          const ran = runEditMenuAction(projectMenuCommand.command, editor, {
-            isReadOnly: isReadOnlyEffective,
-          });
-          if (!ran) notifyBlocked();
-        } catch (e) {
-          logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`);
-        }
-        // The menu hands focus back to its trigger as it closes; return it to the text
-        requestAnimationFrame(() => editorRef.current?.focus());
+        handleEditMenuCommand(
+          projectMenuCommand.command,
+          editorRef.current ?? undefined,
+          { isReadOnly: isReadOnlyEffective, isDurablyReadOnly, isSyncBlocked },
+          {
+            notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
+            notifySyncEditBlocked,
+            restoreSelectionIfLost: (editor) =>
+              restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
+            onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
+            focusEditor: () => requestAnimationFrame(() => editorRef.current?.focus()),
+          },
+        );
         return;
       }
       // Find is the one menu command that needs more than the tab id: it carries this tab's current
@@ -3661,6 +3648,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     },
     [
       getMenuFindSelectionText,
+      isDurablyReadOnly,
       isReadOnlyEffective,
       isSyncBlocked,
       localizedStrings,

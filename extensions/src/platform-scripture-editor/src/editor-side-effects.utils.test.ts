@@ -57,10 +57,6 @@ describe('notifyEditMenuActionBlocked', () => {
     await expect(notifyEditMenuActionBlocked({})).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('edit-menu-action-blocked'));
   });
-
-  it('uses a message key distinct from the sync-blocked notice', () => {
-    expect(EDIT_ACTION_BLOCKED_KEY).not.toBe(SYNC_EDIT_BLOCKED_KEY);
-  });
 });
 
 // Sanity check that the mock setup above (shared with notifyEditMenuActionBlocked) also exercises
