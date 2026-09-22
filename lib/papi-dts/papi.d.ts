@@ -5012,7 +5012,8 @@ declare module 'shared/models/network-object-status.service-model' {
      *   indefinitely
      * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
      *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-     *   reached before the network object is registered
+     *   reached before the network object is registered, or if the current set of network objects
+     *   could not be read. Rejections carry a reason string, not an `Error`
      */
     waitForNetworkObject: (
       objectDetailsToMatch: Partial<NetworkObjectDetails>,
