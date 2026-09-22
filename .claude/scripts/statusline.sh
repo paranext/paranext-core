@@ -138,12 +138,26 @@ process.stdin.on("end", () => {
     fmtWin(merged.seven_day, cd7d, undefined),
   ].filter(Boolean).join(" | ");
 
+  // Prompt cache: whole minutes until the cached prefix of the main
+  // conversation goes cold ("Cached 60m" right after a 1h-TTL request,
+  // "Cached 5m" after a 5m one). Rounded up so a live cache never reads "0m".
+  // prompt_cache is absent before the first API response of a session and on
+  // Claude Code older than v2.1.251; the segment is omitted then rather than
+  // guessing. (No apostrophes in this block: it is single-quoted for bash.)
+  const pc = j?.prompt_cache;
+  let cache = "";
+  if (pc && typeof pc === "object") {
+    const warm = pc.warm !== false && typeof pc.expires_at === "number" && pc.expires_at > nowSec;
+    cache = warm ? `Cached ${Math.ceil((pc.expires_at - nowSec) / 60)}m` : "Not cached";
+  }
+
   console.log(model);
   console.log(pct);
   console.log(total);
   console.log(used);
   console.log(cwd);
   console.log(rate);
+  console.log(cache);
 });
 ' <<< "$input")
 
@@ -154,6 +168,7 @@ process.stdin.on("end", () => {
   IFS= read -r USED
   IFS= read -r CWD
   IFS= read -r RATE
+  IFS= read -r CACHE
 } <<< "$node_output"
 
 # Default values for robustness when node output is empty (node absent)
@@ -191,4 +206,10 @@ else
   RATE_SEG=""
 fi
 
-printf "%s | %s%% ctx | %s/%s tokens | %s%s%s" "$MODEL" "$PCT" "$(fmt_tokens "$USED")" "$(fmt_tokens "$TOTAL")" "$DIR" "$GIT" "$RATE_SEG"
+if [ -n "$CACHE" ]; then
+  CACHE_SEG=" | $CACHE"
+else
+  CACHE_SEG=""
+fi
+
+printf "%s | %s%% ctx | %s/%s tokens | %s%s%s%s" "$MODEL" "$PCT" "$(fmt_tokens "$USED")" "$(fmt_tokens "$TOTAL")" "$DIR" "$GIT" "$RATE_SEG" "$CACHE_SEG"
