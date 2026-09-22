@@ -726,8 +726,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   time Studio's patch is regenerated (`save-repo-patches`).
 - **Decision:** Doc comments for a command whose real implementation is closed-source or otherwise
   swappable (today: anything backed by `paratext-bible-send-receive`, i.e. any command whose
-  `@throws` names `PlatformUnimplementedException` "if not running in an application that implements
-  this command (e.g., Paratext 10 Studio)") describe caller-visible **guarantees** only — what a
+  `@throws` documents a `PlatformUnimplementedException` for builds that don't implement it, naming
+  the current implementer only as an example) describe caller-visible **guarantees** only — what a
   caller may rely on and must not assume — never the current implementer's specific mechanism or
   tuning constants. Concretely, `syncProjects`'s zero-local-projects case now reads "an
   implementation is expected to try to make at least one project available for the current user to

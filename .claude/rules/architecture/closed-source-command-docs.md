@@ -1,10 +1,17 @@
+---
+paths:
+  - "c-sharp/Projects/SendReceive/**"
+  - "src/@types/**"
+---
+
 # Doc Altitude for Closed-Source-Backed Commands
 
 Some PAPI commands are declared in this repo (a C# stub, a `.d.ts` augmentation) but only really
-implemented by a closed-source consumer — today, Paratext 10 Studio's private
-`repo-patches/paranext-core.patch`. The doc comment's `@throws PlatformUnimplementedException if
-not running in an application that implements this command (e.g., Paratext 10 Studio)` phrasing
-already says as much: Studio is named as an example implementer, not as the contract.
+implemented by a closed-source consumer — e.g., Paratext 10, via its private
+`repo-patches/paranext-core.patch`. A command in this position is identifiable by its own doc: its
+`@throws` documents a `PlatformUnimplementedException` for builds that don't implement it, naming
+the current implementer only as an example — not as the contract. Don't quote that example string
+verbatim elsewhere as a selector since it is not a stable identifier and can drift.
 
 ## The rule
 
@@ -14,7 +21,7 @@ mechanism, tuning constants, or internal heuristics.
 
 - **Write:** "callers must not assume every shared project is present locally once this resolves."
 - **Don't write:** "syncs an initial batch of 5, then tries the rest one at a time until it finds a
-  project with a non-Observer role" — that is Studio's current implementation, not the command's
+  project with a non-Observer role" — that documents a current implementation, not the command's
   contract.
 
 ## Why
@@ -22,8 +29,7 @@ mechanism, tuning constants, or internal heuristics.
 - **This repo can't verify it.** The real logic lives in a private patch this repo doesn't contain
   and can't run tests against (see `adr-closed-source-command-doc-altitude` in
   `Architecture-Decisions.md`). A doc that asserts specific constants is a claim this repo has no
-  way to keep honest — the next time Studio's patch is regenerated (`save-repo-patches`), the doc
-  here has no signal that it drifted.
+  way to keep honest — the next time that patch changes, the doc here has no signal that it drifted.
 - **It's the wrong altitude even before drift.** A command's public doc should describe the command,
   not one build of one implementer's current approach to satisfying it. If a second white-label app
   ever implements this contract differently, implementation-specific prose here becomes flatly wrong
