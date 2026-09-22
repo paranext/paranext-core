@@ -889,7 +889,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   would flash the Text Collection forward and then away; and the module-level pending slot adds
   hidden coupling with a forgot-to-clear failure mode. **Register a public command** like the other
   four — rejected as surface area for nobody: the Text Collection has no menu entry and no external
-  caller.
+  caller. *(Superseded by `adr-menu-per-mode-layout-via-mode-gated-columns`: PT-4534 registers
+  `platformScriptureEditor.showTextCollectionPanel` and gives it a Simple-mode menu entry, so this
+  alternative is what shipped.)*
 - **Consequences:** The scroll group's source project is now documented at its call site as *not* an
   active-editor signal, which is the trap that produced this bug; any future panel that reaches for
   it should be re-pointed explicitly instead. *(Amended 2026-09-18: that call site is gone — PT-4238
@@ -3238,6 +3240,42 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   removes a ring the user can see is confirmed by hand in the running app.
 - **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
   found not to work in the shipped runtime.
+
+## adr-menu-per-mode-layout-via-mode-gated-columns: A menu's per-mode layout is built from mode-gated items in mode-specific columns
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** Simple's scripture editor Project menu needed a different section structure from
+  Power's (Project / View / Insert / Tools vs Project / Edit / Options / Tools / Insert), with Power
+  unchanged. Both modes are served from one menu document, and `hiddenInterfaceModes` exists on
+  items only; columns and groups have no per-mode switch.
+- **Decision:** A mode that needs its own sections gets its own columns (e.g.
+  `platformScriptureEditor.simpleView`, `simpleTools`) holding items hidden in the other mode, and
+  items that belong only to the other mode's sections gain `hiddenInterfaceModes` for this one.
+  Items identical in both modes stay shared (the Insert column). Column orders interleave with
+  decimals (4.5, 5.5) because orders must be unique per menu. Empty-column suppression
+  (`adr-menu-section-headings-from-column-labels`) makes each mode's unused columns vanish.
+  Simple's Comments entry is a new item that fronts the third-column Comments tab; the Power item
+  (`legacyCommentManager.openCommentList`, which opens a separate Comment List web view) stays
+  hidden in Simple. The Edit flyout's Undo/Redo/Cut/Copy/Paste are menu command ids handled inside
+  the editor web view (`menuCommandHandler`) through `EditorRef`, not PAPI commands: they act on that
+  web view's own editor, and the clipboard needs the click's user activation, which a PAPI round
+  trip loses.
+- **Alternatives:** `hiddenInterfaceModes` on columns/groups — rejected for now: a schema and filter
+  change to a shared model for one consumer. Per-mode menu documents — rejected: duplicates every
+  shared item and splits the contribution surface. Reordering Power to match Simple — rejected:
+  Power must not change. Un-hiding the Power Comments item in Simple — rejected: it opens a
+  different web view from the tab Simple's Tools section points at.
+- **Consequences:** A few items are declared twice (once per mode), so a command change must touch
+  both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
+  and order, so a missed or reordered copy fails there — but it pins commands, not labels, so a
+  label edited in one copy and not the other passes silently. Simple's Tools order is pinned to the
+  third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
+  Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
+  it to a Simple column removes its only entry point: Simple now has no menu route at all to the
+  four Inventories, Markers Checklist, Open Checks, or Auto-show footnote pane
+  (`platformScriptureEditor.toggleFootnotesAutoShow`).
+- **Source:** PT-4534 (parent PT-4530); decisions recorded on the ticket 2026-09-18.
 
 ## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
 
