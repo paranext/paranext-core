@@ -26,7 +26,7 @@ const EXTENSIONS_DIR = resolve(__dirname, '../../../extensions/src');
  * `src/extension-host/services/extension.service.ts`, matched on the manifest `name` field. Keys
  * that exist only in one of these must NOT count as shipped.
  */
-const DEV_ONLY_EXTENSION_NAMES: readonly string[] = [
+export const DEV_ONLY_EXTENSION_NAMES: readonly string[] = [
   'c-sharp-provider-test',
   'evil',
   'helloSomeone',
