@@ -2108,20 +2108,28 @@ function finalizeProjectSwitch(projectId: string): void {
  * @param layout Information about where to put a new tab
  * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
  *   tabs. Defaults to `true`
+ * @param onDocked Run synchronously, in the same tick the tab is actually placed in the dock — not
+ *   after this function's returned promise resolves. A caller that needs to record "this tab is
+ *   really in the dock now" (e.g. so a concurrent whole-layout load's tab-drop sweep can tell a
+ *   docked request from one still in flight) must do it from here: crossing back into an `await`
+ *   continuation to do that recording is one tick too late, since a load's wipe-and-sweep runs
+ *   synchronously and can land in exactly that gap.
  * @returns If tab added, final layout used to display the new tab. If existing tab updated,
  *   `undefined`
  */
 export const addTab = async <TData = unknown>(
   savedTabInfo: SavedTabInfo & { data?: TData },
   layout: Layout,
-  shouldBringToFront = true,
+  shouldBringToFront?: boolean,
+  onDocked?: () => void,
 ): Promise<Layout | undefined> => {
   await admitContentToDock(`dock a ${savedTabInfo.tabType} tab`);
   const finalLayout = (await getDockLayout()).addTabToDock(
     savedTabInfo,
     layout,
-    shouldBringToFront,
+    shouldBringToFront ?? true,
   );
+  onDocked?.();
   // The dock took it. Noted here rather than at each caller because every one of them is a tab
   // landing in this dock, which is the whole of what this records. The refusals those same callers
   // make deliberately stay with them instead: those need an operation name and each caller's own

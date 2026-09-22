@@ -365,7 +365,16 @@ describe('dialog.service-shard', () => {
       const addTabPromise = new Promise<undefined>((resolve) => {
         resolveAddTab = () => resolve(undefined);
       });
-      vi.mocked(addTab).mockReturnValue(addTabPromise);
+      // The real `addTab` invokes its fourth argument synchronously, at the moment it places the tab
+      // in the dock, strictly before its own returned promise resolves — simulate that ordering here
+      // rather than marking the request docked as a side effect of the promise alone.
+      let onDocked: (() => void) | undefined;
+      vi.mocked(addTab).mockImplementation(
+        (_tabInfo, _layout, _shouldBringToFront, onDockedArg) => {
+          onDocked = onDockedArg;
+          return addTabPromise;
+        },
+      );
 
       const dialogPromise = capturedShowDialog('platform.selectProject', {});
 
@@ -373,8 +382,8 @@ describe('dialog.service-shard', () => {
         expect(hasDialogRequest('mock-guid')).toBe(true);
       });
 
-      // Let addTab resolve, then await the very promise showDialog itself is awaiting so the
-      // continuation that marks the request as docked has actually run before the sweep fires.
+      // Placed, then addTab resolves and showDialog's own continuation runs.
+      onDocked?.();
       resolveAddTab();
       await addTabPromise;
 
@@ -384,6 +393,54 @@ describe('dialog.service-shard', () => {
 
       expect(hasDialogRequest('mock-guid')).toBe(false);
       await expect(dialogPromise).resolves.toBeUndefined();
+    });
+  });
+
+  describe('a layout load that lands between tab placement and addTab resolving', () => {
+    it('still settles the request, even though addTab has not resolved yet', async () => {
+      const { hasDialogRequest } = await import('./dialog.service-shard');
+
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
+      let resolveAddTab: () => void = () => {};
+      const addTabPromise = new Promise<undefined>((resolve) => {
+        resolveAddTab = () => resolve(undefined);
+      });
+      // The real `addTab` places the tab in the dock and runs whatever it was given as its fourth
+      // argument synchronously, at that exact instant — strictly before its own promise resolves.
+      // Standing in for that split here lets the test trigger "placed" and "addTab resolved" as two
+      // independently-timed events, the same way production can have a competing layout load's wipe
+      // land in the gap between them.
+      let onDocked: (() => void) | undefined;
+      vi.mocked(addTab).mockImplementation(
+        (_tabInfo, _layout, _shouldBringToFront, onDockedArg) => {
+          onDocked = onDockedArg;
+          return addTabPromise;
+        },
+      );
+
+      const dialogPromise = capturedShowDialog('platform.selectProject', {});
+      // A wrongly-unsettled promise would otherwise report as a test timeout instead of failing the
+      // assertion below.
+      dialogPromise.catch(() => {});
+
+      await vi.waitFor(() => {
+        expect(hasDialogRequest('mock-guid')).toBe(true);
+      });
+
+      // The tab has been placed in the dock, but `addTab`'s own promise — and so `showDialog`'s
+      // continuation that used to do this marking — has not resolved yet.
+      onDocked?.();
+
+      expect(mockOnLayoutLoadTabIds).toHaveBeenCalledTimes(1);
+      const [layoutLoadHandler] = mockOnLayoutLoadTabIds.mock.calls[0];
+      // A layout load's wipe lands in exactly this gap.
+      layoutLoadHandler(new Set(['some-other-tab']));
+
+      expect(hasDialogRequest('mock-guid')).toBe(false);
+
+      // Clean up: let addTab resolve so showDialog's own continuation does not hang past this test.
+      resolveAddTab();
+      await addTabPromise;
     });
   });
 });
