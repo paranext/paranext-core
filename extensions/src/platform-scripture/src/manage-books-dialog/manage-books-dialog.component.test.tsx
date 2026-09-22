@@ -4,7 +4,11 @@ import '@testing-library/jest-dom';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProjectSelectorGrouping } from 'platform-bible-react/experimental';
+import {
+  makeBuiltInGroupings,
+  type ProjectSelectorGrouping,
+} from 'platform-bible-react/experimental';
+import { MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS } from '../manage-books.web-view';
 import {
   ManageBooksDialog,
   type ManageBooksDialogBookInfo,
@@ -149,25 +153,11 @@ describe('ManageBooksDialog launch parameters', () => {
 });
 
 describe('ManageBooksDialog project pickers', () => {
-  // The dialog's project rows carry no language or last-used data, so a picker offering those axes
-  // would file every row under a single "Unknown" heading. Asserting only the options a picker DOES
-  // offer would still pass if the restriction were deleted, so the absence of the unsupported axes
-  // is the load-bearing half of these tests.
-  const WIRING_GROUPINGS: ProjectSelectorGrouping[] = [
-    { id: 'openTabs', label: 'Open tabs' },
-    {
-      id: 'type',
-      label: 'Type',
-      getGroupKey: (project) =>
-        typeof project.customData?.type === 'string' ? project.customData.type : undefined,
-    },
-    {
-      id: 'lastUsed',
-      label: 'Last used',
-      getGroupKey: (project) =>
-        typeof project.customData?.lastUsedAt === 'number' ? 'recent' : undefined,
-    },
-  ];
+  // Built the way the web view builds it, so the order these tests pin is the order users see.
+  // Hand-listing the descriptors would pin an order the wiring layer never produces.
+  const WIRING_GROUPINGS: ProjectSelectorGrouping[] = makeBuiltInGroupings().filter((grouping) =>
+    MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+  );
 
   // `projectId` ('WEB') is the dialog's own project and is excluded from the "other projects" the
   // Based-on picker lists, so two MORE projects are needed to produce two versification buckets.
@@ -183,11 +173,16 @@ describe('ManageBooksDialog project pickers', () => {
   const groupingChoices = () =>
     screen.getAllByRole('menuitemradio').map((item) => item.textContent?.trim());
 
-  /** Opens a picker, then the group-by menu whose trigger lives inside that picker's popover. */
+  /**
+   * Opens a picker, then the group-by menu inside that picker's own popover.
+   *
+   * The dialog has a second "Group by" control — the book grid's toggle group — so the trigger is
+   * found within the popover rather than anywhere in the document.
+   */
   async function openGroupingMenu(user: ReturnType<typeof setupUser>, trigger: HTMLElement) {
     await user.click(trigger);
-    // `findBy` throws when two pickers are open, so this can never silently resolve to the wrong one.
-    await user.click(await screen.findByRole('button', { name: 'Group by' }));
+    const popover = await screen.findByRole('dialog');
+    await user.click(await within(popover).findByRole('button', { name: 'Group by' }));
   }
 
   it('offers the sidebar picker every grouping the wiring layer supplies', async () => {
@@ -200,7 +195,7 @@ describe('ManageBooksDialog project pickers', () => {
     await openGroupingMenu(user, within(rail).getByRole('combobox'));
 
     await waitFor(() =>
-      expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Type', 'Last used']),
+      expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Last used', 'Type']),
     );
   });
 
@@ -208,14 +203,14 @@ describe('ManageBooksDialog project pickers', () => {
     const user = setupUser();
     render(dialog({ initialSection: 'copy', projectSelectorGroupings: WIRING_GROUPINGS }));
 
-    await waitFor(() => expect(isSectionActive('copy')).toBe(true));
-    await openGroupingMenu(user, screen.getByRole('combobox', { name: 'Select project' }));
+    // The picker renders only after projects load, which is later than the section becoming
+    // active — waiting on the section flag alone would race the query below.
+    await openGroupingMenu(user, await screen.findByRole('combobox', { name: 'Select project' }));
 
-    // MANAGE_BOOKS_COPY_FROM_GROUPING_IDS is an allow-list: 'lastUsed' is deliberately absent
-    // because the dialog's rows carry no recency data, so offering it would bucket everything
-    // under one heading.
+    // MANAGE_BOOKS_COPY_FROM_GROUPING_IDS is an allow-list narrower than the list the wiring layer
+    // hands the dialog: the Copy "From" rows drop `lastUsedAt`, so offering "Last used" would
+    // bucket every row under one heading. The absence of 'Last used' is the load-bearing half.
     await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Type']));
-    expect(screen.queryByRole('menuitemradio', { name: 'Last used' })).not.toBeInTheDocument();
   });
 
   it('locks the create reference picker to versification with no way to regroup it', async () => {

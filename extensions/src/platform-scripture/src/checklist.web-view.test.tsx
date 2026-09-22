@@ -56,15 +56,18 @@ beforeAll(() => {
 // Hoisted mocks — must precede any import that touches the web view
 // ---------------------------------------------------------------------------
 
-type MockProject = { id: string; shortName: string; fullName: string };
+type MockProject = { id: string; shortName: string; fullName?: string };
 type MockOpenTab = { projectId: string; scrollGroupId: number; webViewType: string };
 
-const { mockRecentProjects, mockProjects, mockOpenTabs } = vi.hoisted(() => {
-  const projects: { value: { id: string; shortName: string; fullName: string }[] } = { value: [] };
+const { mockChecklistService, mockRecentProjects, mockProjects, mockOpenTabs } = vi.hoisted(() => {
+  const projects: { value: { id: string; shortName: string; fullName?: string }[] } = {
+    value: [],
+  };
   const openTabs: {
     value: { projectId: string; scrollGroupId: number; webViewType: string }[];
   } = { value: [] };
   return {
+    mockChecklistService: { value: undefined as unknown },
     mockRecentProjects: { value: undefined as unknown },
     mockProjects: projects,
     mockOpenTabs: openTabs,
@@ -72,12 +75,8 @@ const { mockRecentProjects, mockProjects, mockOpenTabs } = vi.hoisted(() => {
 });
 
 vi.mock('@papi/frontend', () => {
-  const makeProjectDataProvider = (projectId: string) => ({
+  const makeProjectDataProvider = () => ({
     getSetting: vi.fn(async (key: string) => {
-      const project = mockProjects.value.find((p) => p.id === projectId);
-      if (key === 'platform.name') return project?.shortName ?? 'P1';
-      if (key === 'platform.fullName') return project?.fullName ?? 'Project One';
-      if (key === 'platform.language') return 'en';
       if (key === 'platformScripture.booksPresent') return '';
       return undefined;
     }),
@@ -86,12 +85,27 @@ vi.mock('@papi/frontend', () => {
     default: {
       menuData: { dataProviderName: 'platform.menuData' },
       projectDataProviders: {
-        get: vi.fn(async (_providerType: string, projectId: string) =>
-          makeProjectDataProvider(projectId),
-        ),
+        get: vi.fn(async () => makeProjectDataProvider()),
       },
       projectLookup: {
-        getMetadataForAllProjects: vi.fn(async () => mockProjects.value.map(({ id }) => ({ id }))),
+        // The web view reads names and language off metadata, not off `pdp.getSetting` — the
+        // `platform.fullName` setting carries a localized `*Name Missing*` default that would
+        // render as a real full name. Mirror that contract: `name`/`fullName` are optional, and a
+        // fixture without a full name simply omits the field.
+        getMetadataForAllProjects: vi.fn(async () =>
+          mockProjects.value.map(({ id, shortName, fullName }) => ({
+            id,
+            name: shortName,
+            ...(fullName ? { fullName } : {}),
+            language: 'en',
+          })),
+        ),
+        getMetadataForProject: vi.fn(async (id: string) => {
+          const project = mockProjects.value.find((p) => p.id === id);
+          if (!project) throw new Error(`No metadata for ${id}`);
+          const { shortName, fullName } = project;
+          return { id, name: shortName, ...(fullName ? { fullName } : {}), language: 'en' };
+        }),
       },
       commands: { sendCommand: vi.fn(async () => undefined) },
       window: { setFocus: vi.fn(async () => undefined) },
@@ -103,9 +117,16 @@ vi.mock('@papi/frontend', () => {
 
 vi.mock('@papi/frontend/react', () => ({
   // Echo each requested key back as its own value, matching useLocalizedStrings' pre-resolution
-  // behavior — every entry is always a string.
+  // behavior — every entry is always a string. The one exception is the column header's aria
+  // template: echoing it back would drop its `{name}` placeholder, and with it the only place the
+  // composed project name is observable.
   useLocalizedStrings: (keys: string[]) => [
-    Object.fromEntries(keys.map((key) => [key, key])),
+    Object.fromEntries(
+      keys.map((key) => [
+        key,
+        key === '%markersChecklist_columnHeader_aria%' ? 'Project: {name}' : key,
+      ]),
+    ),
     false,
   ],
   useProjectDataProvider: vi.fn(() => undefined),
@@ -147,7 +168,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 });
 
 vi.mock('./hooks/use-checklist', () => ({
-  useChecklistService: vi.fn(() => ({ service: undefined })),
+  useChecklistService: vi.fn(() => ({ service: mockChecklistService.value })),
 }));
 
 vi.mock('./hooks/use-open-project-tabs', () => ({
@@ -202,6 +223,7 @@ function makeProps(onStateChange?: (key: string, value: unknown) => void): WebVi
 
 afterEach(() => {
   vi.clearAllMocks();
+  mockChecklistService.value = undefined;
 });
 
 describe('ChecklistWebView recently-opened-projects wiring', () => {
@@ -356,5 +378,50 @@ describe('ChecklistWebView comparative-texts picker', () => {
     await user.click((await screen.findAllByRole('option', { name: /P2/ }))[0]);
     expect(comparativeTextsWrites).toHaveLength(2);
     expect(comparativeTextsWrites[1]).toEqual([]);
+  });
+});
+
+describe('ChecklistWebView column full names', () => {
+  /** A minimal success response: the column identity fields the header reads, and nothing else. */
+  function serviceWithColumns(columnProjectIds: string[], columnHeaders: string[]) {
+    return {
+      buildChecklistData: vi.fn(async () => ({
+        success: true,
+        rows: [],
+        columnHeaders,
+        columnProjectIds,
+        excludedCount: 0,
+        helpText: undefined,
+        truncated: false,
+        emptyResultMessage: undefined,
+      })),
+    };
+  }
+
+  it('heads a column with its short name and announces the full name behind it', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = [
+      { id: 'project-1', shortName: 'P1', fullName: 'Project One' },
+      // No full name of its own — the header has only the short name to announce.
+      { id: 'project-2', shortName: 'P2' },
+    ];
+    mockOpenTabs.value = [];
+    mockChecklistService.value = serviceWithColumns(['project-1', 'project-2'], ['P1', 'P2']);
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    // The full name is resolved from metadata, so it arrives a tick after the columns render —
+    // re-query each time rather than holding the first render's nodes.
+    await waitFor(() => {
+      const [first] = screen.getAllByTestId('checklist-column-header');
+      expect(first.getAttribute('aria-label')).toContain('P1 - Project One');
+    });
+    const headers = screen.getAllByTestId('checklist-column-header');
+    // Visible text stays the short name in both cases; only the announced name differs.
+    expect(headers[0]).toHaveTextContent('P1');
+    expect(headers[1]).toHaveTextContent('P2');
+    expect(headers[1].getAttribute('aria-label')).toContain('P2');
+    expect(headers[1].getAttribute('aria-label')).not.toContain(' - ');
   });
 });

@@ -1733,6 +1733,21 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	 * `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathBefore?: string;
+	/**
+	 * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
+	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
+	 * it as a key binding.
+	 *
+	 * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
+	 * the unlocalized main menu never has it. Key names are not localized, and only the first
+	 * catalogued alternative is shown.
+	 *
+	 * A `menus.json` contribution cannot set it: the menus schema rejects it, which rejects the
+	 * extension's whole `menus.json`.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	shortcut?: string;
 };
 /**
  * Group of menu items that can be combined with other groups to form a single context menu/submenu.
@@ -4706,9 +4721,12 @@ export declare function hasDistinctFullName(names: ProjectNames): boolean;
  * Bidi caveat: the hyphen is direction-neutral. A caller that renders the two names in separate
  * elements gets the surrounding element's direction for free, but {@link formatProjectName} returns
  * one text node, so a right-to-left name inside a left-to-right container (or the reverse) can put
- * the separator on the visually wrong side. Callers that place that joined string where mixed
- * directions are likely — a tooltip, a subtitle, an `aria-label` — should set `dir="auto"` on the
- * element that carries it.
+ * the separator on the visually wrong side. A caller that renders the joined string as an element's
+ * whole text — a tooltip line, a trigger label — should set `dir="auto"` on that element. A caller
+ * that interpolates it into a longer sentence cannot: `dir="auto"` there reads the direction of the
+ * sentence's first strong character, not the name's, so isolating it needs a `<bdi>` around the
+ * name rather than an attribute on the sentence. An `aria-label` carries no direction at all, so
+ * the caveat does not reach it.
  */
 export declare const PROJECT_NAME_SEPARATOR = " - ";
 /**
@@ -4752,12 +4770,17 @@ export declare function compareProjectsByName(a: ProjectNames, b: ProjectNames):
  * project effectively has none.
  *
  * The setting is typed `string`, but a project data provider yields `null` or `undefined` for a
- * setting that was never written, and legacy projects carry `''`. This is the single place that
- * decides which of those counts as absent, so a reader can hand the raw value straight through
- * rather than writing its own guard.
+ * setting that was never written, and legacy projects carry `''` or a run of spaces. This is the
+ * single place that decides which of those counts as absent, so a reader can hand the raw value
+ * straight through rather than writing its own guard.
+ *
+ * Whitespace-only counts as absent: a name of spaces renders as a full name that is there but
+ * invisible, so {@link formatProjectName} would emit `'ABC - '` with a dangling separator. The
+ * returned name is not trimmed otherwise — leading or trailing space in a real name is the
+ * project's own data, and this function narrows rather than edits.
  *
  * @param fullName The raw setting value.
- * @returns The full name, or `undefined` when it is absent, empty, or not a string.
+ * @returns The full name, or `undefined` when it is absent, blank, or not a string.
  */
 export declare function normalizeFullName(fullName: unknown): string | undefined;
 /**

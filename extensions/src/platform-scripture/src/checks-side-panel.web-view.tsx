@@ -1,4 +1,4 @@
-import { ProjectMetadata, WebViewProps } from '@papi/core';
+import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
 import {
   useData,
@@ -16,7 +16,6 @@ import {
   isPlatformError,
   LAST_SCR_BOOK_NUM,
   Mutex,
-  normalizeFullName,
   normalizeProjectId,
 } from 'platform-bible-utils';
 import {
@@ -28,6 +27,7 @@ import {
   CheckRunResult,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { projectNamesFromMetadata } from './project-names.util';
 import { CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
@@ -39,24 +39,6 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
-
-/**
- * Reads the names and language the picker needs off a project's metadata.
- *
- * Metadata, not `pdp.getSetting`: `platform.fullName` has a contribution default — a localized
- * `*Name Missing*` placeholder — so an unset full name reads back as that placeholder and would
- * render as a real second name. Metadata omits the field, and costs no data provider per project.
- *
- * `language` is optional: a project that does not define it degrades to an unknown language bucket.
- */
-function projectNamesFromMetadata(metadata: ProjectMetadata): ProjectOption {
-  return {
-    // `name` is optional on the metadata contract; the id is the documented fallback.
-    shortName: metadata.name ?? metadata.id,
-    fullName: normalizeFullName(metadata.fullName),
-    language: metadata.language,
-  };
-}
 
 /**
  * Web-view types that should count as "open" project tabs for the picker's "Open Tabs" grouping.

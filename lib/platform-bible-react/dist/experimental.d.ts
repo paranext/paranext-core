@@ -178,14 +178,26 @@ export type ProjectSelectorGrouping = {
 		heading: string;
 	}) => number;
 	/**
-	 * Row order within each bucket. Omit to use the selector's canonical order (alphabetical by
-	 * `shortName`). Supply one when the grouping's meaning implies an order the selector cannot know
-	 * — a "most recently used" bucket is the motivating case, since alphabetical order defeats its
-	 * purpose.
+	 * Row order within each bucket, as a standard `Array.prototype.sort` comparator: return a
+	 * negative number to put `a` before `b`, positive to put `b` first, `0` for a tie.
 	 *
-	 * Rows for the same project in different scroll groups compare equal, so ties fall back to the
-	 * canonical order and keep a stable, predictable sequence. Ignored for `'openTabs'` and
-	 * `'selection'`, and for the unknown bucket, which stays canonically ordered.
+	 * Omit it to use the selector's canonical order (alphabetical by `shortName`, tie-broken by
+	 * scroll group). Supply one when the bucket's meaning implies an order the selector cannot know —
+	 * a leaderboard-style bucket ordered by a caller-side score, for example, where alphabetical
+	 * order carries no meaning. The built-in `lastUsed` grouping deliberately supplies none: it reads
+	 * `lastUsedAt` as a presence flag for bucketing only, and its rows stay alphabetical.
+	 *
+	 * Ties fall back to the canonical order, so rows for one project fanned across several scroll
+	 * groups — which a comparator reading only `ProjectSelectorProject` cannot tell apart — keep a
+	 * stable sequence.
+	 *
+	 * Ignored in three places, because those lists are not bucketed by this descriptor: the
+	 * `'openTabs'` and `'selection'` groupings, which build their sections themselves; any grouping
+	 * with no `getGroupKey`, which falls through to a single flat section; and the unknown bucket,
+	 * which stays canonically ordered because it collects the rows the grouping could NOT classify —
+	 * an order derived from the grouping's own axis would be meaningless for exactly those rows. Note
+	 * the resulting list can mix two orders, e.g. a score-ordered bucket above an alphabetical
+	 * "Other".
 	 */
 	compareProjects?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
 };
@@ -381,6 +393,22 @@ export type ProjectSelectorLocalizedStrings = {
 	clearAll?: string;
 };
 /**
+ * English text for every {@link ProjectSelectorLocalizedStrings} key, used for any key a consumer
+ * leaves unset.
+ *
+ * `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
+ * bare Storybook render), not production copy: every real consumer merges its own values for these
+ * two fields on top via `localizedStrings`. They exist so the trigger never renders with an empty
+ * accessible name or empty text before localized strings resolve.
+ *
+ * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
+ * a consumer typically localizes only the handful of keys its configuration can reach, and which
+ * keys those are is a property of the configuration rather than of the component. Looping over this
+ * map keeps such a guard honest when a key is renamed or added; a hand-copied list of strings
+ * silently stops asserting anything.
+ */
+export declare const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings>;
+/**
  * Convert the raw `%projectSelector_*%` resolved strings into a
  * {@link ProjectSelectorLocalizedStrings} bag ready to pass as the `localizedStrings` prop. Merge
  * consumer-specific strings (`ariaLabel`, `buttonPlaceholder`) on top afterwards.
@@ -446,19 +474,31 @@ type CommonProps = {
 	 */
 	defaultGrouping?: string | "none";
 	/**
-	 * Render an indicator for a row — typically a small icon distinguishing a project from a
-	 * resource, derived from the caller's own `customData.type` values.
+	 * Render an indicator for a row — typically a small icon distinguishing one kind of row from
+	 * another, derived from the caller's own `customData`.
 	 *
-	 * The selector ships no taxonomy and no default mapping: `customData.type` is a free-form string
-	 * whose meaning belongs to whoever produced the list (Paratext project types and DBL resource
-	 * types are two different vocabularies, neither owned by this library), so the caller decides
-	 * what a value looks like. Output is treated as decorative — give it an accessible name yourself,
-	 * or mark it `aria-hidden`, since the selector cannot know what the glyph means.
+	 * The selector ships no taxonomy and no default mapping: `customData` is a free-form bag whose
+	 * meaning belongs to whoever produced the list (Paratext project types and DBL resource types are
+	 * two different vocabularies, neither owned by this library), so the caller decides both what a
+	 * value means and what it looks like. Note that the conventional `customData.type` key carries a
+	 * project TYPE, not a project/resource discriminator — a caller who needs the latter has to pack
+	 * its own flag.
+	 *
+	 * **The returned node must carry its own accessible name** (an `aria-label`, or visually hidden
+	 * text) unless the row's own text already conveys the distinction. The selector renders it
+	 * verbatim and adds no `aria-hidden` and no description of its own, so an unlabeled icon is
+	 * information conveyed by sight alone (WCAG 1.1.1). Mark it `aria-hidden` only when the name
+	 * would be redundant.
+	 *
+	 * Runs during the selector's own render, once per filtered row, on every render, so it must be
+	 * pure, cheap, and free of hooks — the row count changes as the user filters, and a hook called
+	 * here would change the selector's hook count between renders and throw.
 	 */
 	renderProjectIndicator?: (project: ProjectSelectorProject) => React$1.ReactNode;
 	/**
-	 * An action row rendered below every section, separated from the list. Use it for an affordance
-	 * that opens a different surface — the sections partition rows, so they cannot express one.
+	 * An action row pinned below every section, with a separator above it whenever the list has rows
+	 * to divide it from. Use it for an affordance that opens a different surface — the sections
+	 * partition rows, so they cannot express one.
 	 *
 	 * The row stays available when the list is empty, which is when an escape hatch matters most, and
 	 * the "no projects" empty state still renders alongside it.
@@ -482,7 +522,13 @@ export type ProjectSelectorProps = (CommonProps & {
 	triggerLabelFormat?: "shortName" | "shortNameAndFullName";
 	/**
 	 * Render the trigger's label yourself, in place of the derived `shortName` / `shortName -
-	 * fullName` string. Receives the selected project, or `undefined` when nothing is selected.
+	 * fullName` string.
+	 *
+	 * Receives the entry of `projects` that `selection.projectId` names, or `undefined` — which
+	 * means either that nothing is selected OR that the selected id matches no entry of
+	 * `projects`. The second case is reachable whenever the selection and the list come from
+	 * different sources, so a caller that can name the selected project from its own state should
+	 * fall back to that rather than treating `undefined` as "nothing is open".
 	 *
 	 * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
 	 * deliberate rather than an omission: a caller reaching for this prop is rendering a label
@@ -502,15 +548,6 @@ export type ProjectSelectorProps = (CommonProps & {
 	 * itself). The caller is expected to open a tab via `papi.webViews.openWebView(...)`.
 	 */
 	onOpenProjectInGroup?: (projectId: string, scrollGroupId: ScrollGroupId) => void;
-	/**
-	 * Optional custom trigger label when at least one pair is selected. Receives the list of
-	 * selected `(project, scrollGroupId)` tuples. Defaults to `"N: short1 (A), short2 (B),
-	 * ..."`.
-	 */
-	getSelectedText?: (selected: ReadonlyArray<{
-		project: ProjectSelectorProject;
-		scrollGroupId?: ScrollGroupId;
-	}>) => string;
 }) | (CommonProps & {
 	mode: "projectScrollGroup";
 	selection: ProjectScrollGroupSelection;

@@ -1,4 +1,4 @@
-import { ProjectMetadata, WebViewProps } from '@papi/core';
+import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
 import {
   useData,
@@ -35,7 +35,6 @@ import {
   normalizeProjectId,
   ScrollGroupId,
   UnsubscriberAsync,
-  normalizeFullName,
 } from 'platform-bible-utils';
 import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 import {
@@ -46,6 +45,7 @@ import {
   WordRestriction,
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { projectNamesFromMetadata } from './project-names.util';
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
 import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
 import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
@@ -121,27 +121,6 @@ const DEFAULT_RECENT_SEARCHES: string[] = [];
 type ProjectNamesById = {
   [id: string]: Pick<FindProject, 'shortName' | 'fullName' | 'language'>;
 };
-
-/**
- * Reads the short name, full name, and language the picker needs off a project's metadata.
- *
- * Metadata, not `pdp.getSetting`: `platform.fullName` has a contribution default — a localized
- * `*Name Missing*` placeholder — so an unset full name reads back as that placeholder and would
- * render as a real second name. Metadata omits the field, and costs no data provider per project.
- *
- * `language` feeds the picker's Language grouping; a project without one degrades to the "unknown
- * language" bucket, since it is still perfectly searchable.
- */
-function projectNamesFromMetadata(
-  metadata: ProjectMetadata,
-): Pick<FindProject, 'shortName' | 'fullName' | 'language'> {
-  return {
-    // `name` is optional on the metadata contract; the id is the documented fallback.
-    shortName: metadata.name ?? metadata.id,
-    fullName: normalizeFullName(metadata.fullName),
-    language: metadata.language,
-  };
-}
 
 /**
  * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in

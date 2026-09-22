@@ -50,9 +50,12 @@ export function hasDistinctFullName(names: ProjectNames): boolean {
  * Bidi caveat: the hyphen is direction-neutral. A caller that renders the two names in separate
  * elements gets the surrounding element's direction for free, but {@link formatProjectName} returns
  * one text node, so a right-to-left name inside a left-to-right container (or the reverse) can put
- * the separator on the visually wrong side. Callers that place that joined string where mixed
- * directions are likely — a tooltip, a subtitle, an `aria-label` — should set `dir="auto"` on the
- * element that carries it.
+ * the separator on the visually wrong side. A caller that renders the joined string as an element's
+ * whole text — a tooltip line, a trigger label — should set `dir="auto"` on that element. A caller
+ * that interpolates it into a longer sentence cannot: `dir="auto"` there reads the direction of the
+ * sentence's first strong character, not the name's, so isolating it needs a `<bdi>` around the
+ * name rather than an attribute on the sentence. An `aria-label` carries no direction at all, so
+ * the caveat does not reach it.
  */
 export const PROJECT_NAME_SEPARATOR = ' - ';
 
@@ -108,13 +111,18 @@ export function compareProjectsByName(a: ProjectNames, b: ProjectNames): number 
  * project effectively has none.
  *
  * The setting is typed `string`, but a project data provider yields `null` or `undefined` for a
- * setting that was never written, and legacy projects carry `''`. This is the single place that
- * decides which of those counts as absent, so a reader can hand the raw value straight through
- * rather than writing its own guard.
+ * setting that was never written, and legacy projects carry `''` or a run of spaces. This is the
+ * single place that decides which of those counts as absent, so a reader can hand the raw value
+ * straight through rather than writing its own guard.
+ *
+ * Whitespace-only counts as absent: a name of spaces renders as a full name that is there but
+ * invisible, so {@link formatProjectName} would emit `'ABC - '` with a dangling separator. The
+ * returned name is not trimmed otherwise — leading or trailing space in a real name is the
+ * project's own data, and this function narrows rather than edits.
  *
  * @param fullName The raw setting value.
- * @returns The full name, or `undefined` when it is absent, empty, or not a string.
+ * @returns The full name, or `undefined` when it is absent, blank, or not a string.
  */
 export function normalizeFullName(fullName: unknown): string | undefined {
-  return typeof fullName === 'string' && fullName.length > 0 ? fullName : undefined;
+  return typeof fullName === 'string' && fullName.trim().length > 0 ? fullName : undefined;
 }

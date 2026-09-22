@@ -11,14 +11,20 @@ import {
   TooltipTrigger,
   useListbox,
 } from 'platform-bible-react';
+import { hasDistinctFullName } from 'platform-bible-utils';
 import { Z_INDEX_TOOLTIP } from 'platform-bible-react/experimental';
 import { CheckIcon } from 'lucide-react';
+import LabelledGlyph from '@renderer/components/projects/labelled-glyph.component';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { RefObject, useMemo, useState } from 'react';
 
 export type ProjectItem = {
   id: string;
-  fullName: string;
+  /**
+   * Long display name. Absent when the project has no full name of its own — never mirror the short
+   * name in, or every project reads as though it had a distinct full name.
+   */
+  fullName?: string;
   shortName: string;
   /** Short BCP-47 language tag displayed in the language column (e.g. "en", "en-US"). */
   language?: string;
@@ -77,7 +83,7 @@ function matchesSearch(project: ProjectItem, searchText: string): boolean {
   if (!searchText) return true;
   const lower = searchText.toLowerCase();
   return (
-    project.fullName.toLowerCase().includes(lower) ||
+    (project.fullName?.toLowerCase().includes(lower) ?? false) ||
     project.shortName.toLowerCase().includes(lower) ||
     (project.language?.toLowerCase().includes(lower) ?? false)
   );
@@ -133,21 +139,20 @@ function ProjectSection({
           {/* Column 1 — short name, right-aligned */}
           <div className="tw:flex tw:items-center tw:justify-end tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
             {p.id === currentProjectId && (
-              // Wrapped rather than labelled directly so it carries a hover label like the
-              // read-only padlock beside it — a Lucide icon takes no `title`, and without the
-              // wrapper one glyph in the row names itself on hover while its neighbour stays
-              // silent. `role="img"` hosts the accessible name, as it does there.
-              <span role="img" aria-label={currentProjectLabel} title={currentProjectLabel}>
-                <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
-              </span>
+              <LabelledGlyph label={currentProjectLabel} showNativeTitle>
+                <CheckIcon className="tw:h-3 tw:w-3" aria-hidden />
+              </LabelledGlyph>
             )}
             {/* Rows here are plain listbox options rather than tooltip triggers, so the native
                 hover label is safe to show and matches the check mark beside it. */}
             {p.isEditable === false && <ReadOnlyIndicator label={readOnlyLabel} showNativeTitle />}
             {p.shortName}
           </div>
-          {/* Column 2 — full name */}
-          <div className="tw:px-3 tw:text-sm">{p.fullName}</div>
+          {/* Column 2 — full name, empty for a project that has none. Only the full name, never a
+              repeat of the short name already in column 1. */}
+          <div className="tw:px-3 tw:text-sm">
+            {hasDistinctFullName(p) ? p.fullName : undefined}
+          </div>
           {/* Column 3 — language tag with tooltip */}
           <div className="tw:text-right tw:text-sm tw:text-muted-foreground">
             {p.language &&

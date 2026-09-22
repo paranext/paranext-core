@@ -286,22 +286,31 @@ describe('useProjectPickerData', () => {
     });
   });
 
-  it('falls back to the project id for fullName/shortName when metadata name/fullName are missing', async () => {
-    const { projectLookupService } = await importMocks();
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
-      metadataList([{ id: 'proj-no-names', isEditable: true }]) as never,
-    );
+  it.each([
+    ['missing', {}],
+    // A blank name is as unusable as an absent one — it is the field that identifies the row.
+    ['blank', { name: '   ' }],
+  ])(
+    'falls back to the project id for the short name when the metadata name is %s, and leaves the full name absent',
+    async (_label, nameFields) => {
+      const { projectLookupService } = await importMocks();
+      vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+        metadataList([{ id: 'proj-no-names', isEditable: true, ...nameFields }]) as never,
+      );
 
-    const { result } = renderHook(() => useProjectPickerData());
+      const { result } = renderHook(() => useProjectPickerData());
 
-    await settle(result);
-    expect(result.current.allProjects).toHaveLength(1);
-    expect(result.current.allProjects[0]).toMatchObject({
-      id: 'proj-no-names',
-      fullName: 'proj-no-names',
-      shortName: 'proj-no-names',
-    });
-  });
+      await settle(result);
+      expect(result.current.allProjects).toHaveLength(1);
+      // The full name stays absent rather than mirroring the id: a mirrored value would make every
+      // nameless project render as though it had a full name distinct from its short name.
+      expect(result.current.allProjects[0]).toMatchObject({
+        id: 'proj-no-names',
+        shortName: 'proj-no-names',
+      });
+      expect(result.current.allProjects[0].fullName).toBeUndefined();
+    },
+  );
 
   it('recentProjects reflects recent project IDs from data provider, without opening any project data provider', async () => {
     const { projectLookupService, useData } = await importMocks();
@@ -312,8 +321,9 @@ describe('useProjectPickerData', () => {
       metadataList([
         { id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1', isEditable: true },
         // Read-only, and deliberately still in the recent-ids list: a project the user can open but
-        // not edit is still a project they can reach, and this recent row must keep marking it
-        // rather than dropping it from the recents section.
+        // not edit is still a project they can reach, so the hook must keep it in the recents
+        // section and carry its `isEditable` through for the surface to mark. The hook itself
+        // marks nothing — that is the picker's job.
         { id: 'proj-r2', fullName: 'Full proj-r2', name: 'Short proj-r2', isEditable: false },
       ]) as never,
     );

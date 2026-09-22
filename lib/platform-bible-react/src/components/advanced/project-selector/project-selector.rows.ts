@@ -154,14 +154,26 @@ export type ProjectSelectorGrouping = {
     b: { key: string; heading: string },
   ) => number;
   /**
-   * Row order within each bucket. Omit to use the selector's canonical order (alphabetical by
-   * `shortName`). Supply one when the grouping's meaning implies an order the selector cannot know
-   * — a "most recently used" bucket is the motivating case, since alphabetical order defeats its
-   * purpose.
+   * Row order within each bucket, as a standard `Array.prototype.sort` comparator: return a
+   * negative number to put `a` before `b`, positive to put `b` first, `0` for a tie.
    *
-   * Rows for the same project in different scroll groups compare equal, so ties fall back to the
-   * canonical order and keep a stable, predictable sequence. Ignored for `'openTabs'` and
-   * `'selection'`, and for the unknown bucket, which stays canonically ordered.
+   * Omit it to use the selector's canonical order (alphabetical by `shortName`, tie-broken by
+   * scroll group). Supply one when the bucket's meaning implies an order the selector cannot know —
+   * a leaderboard-style bucket ordered by a caller-side score, for example, where alphabetical
+   * order carries no meaning. The built-in `lastUsed` grouping deliberately supplies none: it reads
+   * `lastUsedAt` as a presence flag for bucketing only, and its rows stay alphabetical.
+   *
+   * Ties fall back to the canonical order, so rows for one project fanned across several scroll
+   * groups — which a comparator reading only `ProjectSelectorProject` cannot tell apart — keep a
+   * stable sequence.
+   *
+   * Ignored in three places, because those lists are not bucketed by this descriptor: the
+   * `'openTabs'` and `'selection'` groupings, which build their sections themselves; any grouping
+   * with no `getGroupKey`, which falls through to a single flat section; and the unknown bucket,
+   * which stays canonically ordered because it collects the rows the grouping could NOT classify —
+   * an order derived from the grouping's own axis would be meaningless for exactly those rows. Note
+   * the resulting list can mix two orders, e.g. a score-ordered bucket above an alphabetical
+   * "Other".
    */
   compareProjects?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
 };
@@ -270,7 +282,10 @@ function pairIsSelected(
   projectId: string,
   scrollGroupId: ScrollGroupId | undefined,
 ): boolean {
-  return pairs.some((p) => p.projectId === projectId && p.scrollGroupId === scrollGroupId);
+  const normalizedId = normalizeProjectId(projectId);
+  return pairs.some(
+    (p) => normalizeProjectId(p.projectId) === normalizedId && p.scrollGroupId === scrollGroupId,
+  );
 }
 
 // #endregion
@@ -373,12 +388,17 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   // selected "not-open project" pair is already represented by the not-open row rendered above.
   selectedPairs.forEach((pair) => {
     if (pair.scrollGroupId === undefined) return;
+    const normalizedPairId = normalizeProjectId(pair.projectId);
     if (
-      rows.some((r) => r.projectId === pair.projectId && r.scrollGroupId === pair.scrollGroupId)
+      rows.some(
+        (r) =>
+          normalizeProjectId(r.projectId) === normalizedPairId &&
+          r.scrollGroupId === pair.scrollGroupId,
+      )
     ) {
       return;
     }
-    const project = args.projects.find((p) => p.id === pair.projectId);
+    const project = args.projects.find((p) => normalizeProjectId(p.id) === normalizedPairId);
     if (!project) return;
     rows.push({
       rowKey: `closed:${project.id}:${pair.scrollGroupId}`,
@@ -555,13 +575,6 @@ export function partitionByGrouping(
   if (!grouping.getGroupKey) return partitionFlat(rows);
   const buckets = new Map<string, ProjectRow[]>();
   const unknownRows: ProjectRow[] = [];
-  const { compareProjects } = grouping;
-  // Ties fall back to the canonical order so rows for one project in several scroll groups, which
-  // a caller's comparator sees as equal, keep a stable sequence.
-  const sortBucket = (bucketRows: readonly ProjectRow[]): ProjectRow[] =>
-    compareProjects
-      ? [...bucketRows].sort((a, b) => compareProjects(a.project, b.project) || compareRows(a, b))
-      : [...bucketRows].sort(compareRows);
   const { getGroupKey } = grouping;
   rows.forEach((row) => {
     const key = getGroupKey(row.project);
@@ -574,7 +587,11 @@ export function partitionByGrouping(
     else buckets.set(key, [row]);
   });
   const entries = [...buckets.entries()].map(([key, groupRows]) => {
-    const sortedRows = sortBucket(groupRows);
+    // Ties fall back to the canonical order so rows for one project in several scroll groups,
+    // which a caller's comparator sees as equal, keep a stable sequence.
+    const sortedRows = [...groupRows].sort(
+      (a, b) => grouping.compareProjects?.(a.project, b.project) || compareRows(a, b),
+    );
     const heading =
       grouping.getSectionHeading?.(
         key,

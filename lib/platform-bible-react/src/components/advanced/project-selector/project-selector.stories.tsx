@@ -257,9 +257,9 @@ export const CompoundTriggerLabelWithFooterAction: Story = {
           selection={{ projectId }}
           onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
           localizedStrings={{ ariaLabel: 'Project' }}
-          // A two-part label — short name leading, full name trailing in muted text — the shape a
-          // titlebar compound label takes when it owns the trigger's whole rendering, `undefined`
-          // included: see the prop's TSDoc for why the selector renders no tooltip of its own here.
+          // A two-part label: short name leading, full name trailing in muted text. The callback
+          // owns the WHOLE trigger, including the nothing-selected case, which is why it has to
+          // answer `undefined` itself rather than falling back to `buttonPlaceholder`.
           renderTriggerLabel={(selected) =>
             selected ? (
               <span className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-1">
@@ -451,36 +451,6 @@ export const SimpleFlatList: Story = {
       description: {
         story:
           'Single-select with `mode="project"` and `openTabs={[]}`. No `availableGroupings` prop → no filter menu at all. No scroll-group chips render on any row. `partitionFlat` returns one unheaded list. Sample data mixes projects (HPUX, TP1, SCHL1951) and resources (NA28, BHS, LXX) — the component itself does not visually distinguish the two; they render identically.',
-      },
-    },
-  },
-};
-
-export const SimpleFlatMultiSelect: Story = {
-  render: () => {
-    const [pairs, setPairs] = useState<ProjectSelectorProjectPair[]>([
-      { projectId: 'esvus16' },
-      { projectId: 'bhs' },
-    ]);
-    return (
-      <ProjectSelector
-        mode="project-multi"
-        projects={sampleProjectsAndResources}
-        openTabs={[]}
-        selection={{ pairs }}
-        onChangeSelection={({ pairs: next }) => setPairs(next)}
-        localizedStrings={{
-          buttonPlaceholder: 'Select projects and resources',
-          ariaLabel: 'Projects and resources',
-        }}
-      />
-    );
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Multi-select without scroll groups: `mode="project-multi"` with `openTabs={[]}`. Every row corresponds to a single `{ projectId }` pair (no `scrollGroupId`), so no chips, no "Open" buttons, and no bound-but-closed synthetic rows appear. The trigger label reads "N: short1, short2, ..." driven by the default `getSelectedText`.',
       },
     },
   },
@@ -900,10 +870,11 @@ export const ProjectAndResourceIndicators: Story = {
           ariaLabel: 'Project or resource',
         }}
         renderProjectIndicator={(project) =>
-          project.customData?.type === 'ScriptureResource' ? (
-            <BookOpen className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+          typeof project.customData?.type === 'string' &&
+          project.customData.type.endsWith('Resource') ? (
+            <BookOpen className="tw:h-3 tw:w-3 tw:opacity-60" aria-label="Resource" role="img" />
           ) : (
-            <FileText className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+            <FileText className="tw:h-3 tw:w-3 tw:opacity-60" aria-label="Project" role="img" />
           )
         }
       />
@@ -913,7 +884,7 @@ export const ProjectAndResourceIndicators: Story = {
     docs: {
       description: {
         story:
-          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `customData.type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon for resources, a document icon for everything else. The selector renders whatever node the caller returns and treats it as decorative — the icons here are `aria-hidden` because the row text already names the project.",
+          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `customData.type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories): a book icon for the two resource types, a document icon for everything else.\n\nThe selector renders whatever node the caller returns, verbatim. It adds no accessible name of its own, because only the caller knows what its glyph means.\n\nSo the icons here are labelled: nothing else in the row says whether it is a project or a resource, and an unlabelled icon would put that distinction out of reach of a screen reader. Use `aria-hidden` instead only where the row text already carries the same information.",
       },
     },
   },

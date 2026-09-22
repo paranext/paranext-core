@@ -266,8 +266,13 @@ async function invokeFindFromHamburger(mainPage: Page): Promise<void> {
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
 
-  // Anchored to the exact label "Find" (%webView_platformScriptureEditor_openFind%).
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
+  // The item's accessible name is its label "Find" (%webView_platformScriptureEditor_openFind%)
+  // followed by a keyboard shortcut hint, so the match cannot be anchored to the end of the name.
+  // The trailing `(\s|$)` rules out only a longer single word, e.g. "Finder"; a sibling item whose
+  // label begins "Find " — "Find and replace…" — matches too, and the click then fails with a
+  // strict-mode violation rather than opening the wrong panel. That failure is the signal to narrow
+  // this locator to the label element instead of the whole accessible name.
+  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find(\s|$)/i });
   await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
   await findMenuItem.click();
 }

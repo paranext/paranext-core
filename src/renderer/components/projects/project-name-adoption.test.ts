@@ -48,7 +48,7 @@ const FULL_NAME_FIELD = /\b\w*[Ff]ullName\b/;
  * over-matching costs one triage entry in `EXEMPT`, whereas a shape the pattern cannot express is
  * silent.
  */
-const COMPOSING_OPERATOR = /(===?|!==?|\?\?|\|\||\$\{|\.join\(| \+ | \? )/;
+const COMPOSING_OPERATOR = /(===?|!==?|\?\?|\|\||&&|\$\{|\.join\(|\.concat\(| \+ | \? )/;
 
 /**
  * Sites that match the pattern without being a re-inlined project-name label. Per-site, not
@@ -61,10 +61,16 @@ const COMPOSING_OPERATOR = /(===?|!==?|\?\?|\|\||\$\{|\.join\(| \+ | \? )/;
  * than hiding it.
  */
 const EXEMPT: { file: string; contains: string; reason: string }[] = [
+  // ---- Fields named `*fullName` that are not a project's name ----
+  {
+    file: 'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.utils.ts',
+    contains: 'matchingBookIdForFullName && availableBooks.includes',
+    reason: "a BOOK's full English name resolved to a book id — no project name is involved",
+  },
   // ---- Search haystacks: fields concatenated or scanned for matching, never rendered ----
   {
     file: 'src/renderer/components/projects/project-picker.component.tsx',
-    contains: 'project.fullName.toLowerCase().includes(lower)',
+    contains: 'project.fullName?.toLowerCase().includes(lower)',
     reason: 'search predicate — matches on either name, renders neither',
   },
   {
@@ -99,18 +105,6 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
   },
 
   // ---- Data shaping: choosing which field populates a slot, not composing a label ----
-  {
-    file: 'src/renderer/components/platform-bible-toolbar.tsx',
-    contains: 'beginOpenProject(item ??',
-    reason:
-      'placeholder project for an id with no list row — no full name to compose, and the `??` selects the placeholder rather than a name',
-  },
-  {
-    file: 'src/renderer/hooks/use-project-picker-data.hook.ts',
-    contains: 'fullName: m.fullName ?? m.name ?? m.id',
-    reason:
-      'metadata adapter — fills the full-name slot, composing no label. The toolbar selector that consumes it de-dups through `formatProjectName`; the "More projects" dialog renders the slot raw in its own column (`project-picker.component.tsx`), so a project with no metadata full name shows its short name twice there. Pre-existing and out of this rule\'s scope — the duplicate is a rendering decision in that dialog, not a name composed here',
-  },
   {
     file: 'src/shared/models/project-lookup.service-model.ts',
     contains: 'enrichedMd.fullName ??= md.fullName',
@@ -183,7 +177,7 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
   // ---- Not a name composition ----
   {
     file: 'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx',
-    contains: "props.triggerLabelFormat === 'shortNameAndFullName'",
+    contains: "triggerLabelFormat === 'shortNameAndFullName'",
     reason: 'compares a prop value whose name happens to end in `FullName`',
   },
 ];

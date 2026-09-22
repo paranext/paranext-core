@@ -198,7 +198,7 @@ rule lives in `platform-bible-utils` (`lib/platform-bible-utils/src/project-util
 | "Is the full name worth its own slot?" (two names in separate elements) | `hasDistinctFullName({ shortName, fullName })` |
 | The separator, when you render the two names as separate nodes | `PROJECT_NAME_SEPARATOR` |
 | Ordering a project list | `compareProjectsByName` (objects) / `compareProjectShortNames` (bare strings) |
-| Reading a raw `platform.fullName` value | `normalizeFullName(raw)` — `undefined` for absent/empty |
+| Reading a raw `platform.fullName` value | `normalizeFullName(raw)` — `undefined` for absent, empty, or blank |
 
 Two further rules the helpers cannot enforce:
 
@@ -209,6 +209,12 @@ Two further rules the helpers cannot enforce:
   setting has a contribution default — a localized `*Name Missing*` placeholder — so a data-provider
   read cannot distinguish "no full name" from "never set one", and the placeholder renders as a real
   name. `ProjectMetadata.fullName` is absent-when-unset by design.
+
+One exception, by design: a surface whose label is already a localized sentence composes the pair
+from a format string with `{shortName}`/`{fullName}` placeholders instead of calling
+`formatProjectName`, so a locale can reorder or re-punctuate it. The Simple-mode toolbar
+(`%projectPicker_toolbar_label_shortNameAndName%`) is the one such site today. Keep the English
+string in the helper's order, and exempt the site in the sweep if its wording trips the pattern.
 
 `src/renderer/components/projects/project-name-adoption.test.ts` sweeps the repo and fails the build
 on a re-inlined format or de-dup. A site that matches the pattern without being a project-name label

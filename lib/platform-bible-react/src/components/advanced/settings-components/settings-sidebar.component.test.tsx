@@ -82,13 +82,11 @@ describe('SettingsSidebar project picker', () => {
 
     await user.click(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL }));
 
-    // The sidebar has no open-tab data, so every grouping the menu could offer yields the same flat
-    // list. Asserting that the picker's rows render would pass just as happily with the restriction
-    // deleted, so the absence of the group-by affordance is the load-bearing assertion: it is
-    // the only control that opens the grouping menu.
+    // The sidebar supplies no `availableGroupings` and no open tabs, which leaves the picker too
+    // few groupings to be worth a menu. The absence of the "Group by" button is the load-bearing
+    // assertion: it is the only control that opens the grouping menu.
     expect(await screen.findByText('World English Bible')).toBeInTheDocument();
     expect(screen.queryByLabelText('Group by')).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
   });
 
   it('leaves the popover on its English defaults when no strings are supplied', async () => {

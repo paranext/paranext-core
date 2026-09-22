@@ -28,7 +28,6 @@ import {
   getErrorMessage,
   isPlatformError,
   makeProjectSelectorCustomData,
-  normalizeFullName,
   normalizeProjectId,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
@@ -39,6 +38,7 @@ import type {
   ScriptureRange,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { projectNamesFromMetadata } from './project-names.util';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
 import type {
   ChecklistCell,
@@ -433,15 +433,13 @@ global.webViewComponent = function ChecklistWebView({
     }
     let cancelled = false;
     (async () => {
-      // Metadata rather than `pdp.getSetting('platform.fullName')`: that setting has a contribution
-      // default — a localized `*Name Missing*` placeholder — so a project that never set one reads
-      // back as the placeholder, which the header would then announce and show as a real full name.
-      // Metadata omits the field instead, which is what "this project has no full name" means here.
+      // Metadata rather than `pdp.getSetting('platform.fullName')` — see
+      // `projectNamesFromMetadata` for why that setting cannot answer "has no full name".
       const entries = await Promise.all(
         ids.map(async (id): Promise<[string, string | undefined]> => {
           try {
             const metadata = await papi.projectLookup.getMetadataForProject(id);
-            return [id, normalizeFullName(metadata.fullName)];
+            return [id, projectNamesFromMetadata(metadata).fullName];
           } catch (err) {
             logger.warn(
               `ChecklistWebView: failed to resolve full name for ${id}: ${getErrorMessage(err)}`,
@@ -649,21 +647,14 @@ global.webViewComponent = function ChecklistWebView({
         // up the same project set that the scripture editor shows.
         includeProjectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.USFM_Book'],
       });
-      // Names and language come off the metadata above rather than a `pdp.getSetting` fan-out.
-      // `platform.fullName` has a contribution default — a localized `*Name Missing*` placeholder —
-      // so an unset full name reads back from a data provider as that placeholder and would render
-      // as the second half of a `{short} - {full}` row; metadata omits the field instead. `language`
-      // lets the built-in `language` grouping partition rows into real per-language buckets rather
-      // than everything under "Unknown language".
-      return allMetadata.map(
-        (metadata): ChecklistRawProject => ({
-          id: metadata.id,
-          // `name` is optional on the metadata contract; the id is the documented fallback.
-          shortName: metadata.name ?? metadata.id,
-          fullName: normalizeFullName(metadata.fullName),
-          rawLanguage: metadata.language,
-        }),
-      );
+      // Names and language come off the metadata above rather than a `pdp.getSetting` fan-out —
+      // see `projectNamesFromMetadata` for why. `language` lets the built-in `language` grouping
+      // partition rows into real per-language buckets rather than everything under "Unknown
+      // language".
+      return allMetadata.map((metadata): ChecklistRawProject => {
+        const { language, ...names } = projectNamesFromMetadata(metadata);
+        return { id: metadata.id, ...names, rawLanguage: language };
+      });
     }, []),
     useMemo<ChecklistRawProject[]>(() => [], []),
   );

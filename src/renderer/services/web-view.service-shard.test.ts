@@ -1056,6 +1056,43 @@ describe('handleSwitchToSimpleMode', () => {
     expect(getLastOpenedProject()).toBeUndefined();
   });
 
+  it('slow path: checks every recent candidate concurrently, so a run of published resources ahead of an editable project cannot exhaust the cold-start bound', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    // Eight resources ahead of the one usable project. Read-only projects reach the recents list
+    // now that the titlebar picker offers them, so a head like this is reachable in practice.
+    const resourceIds = Array.from({ length: 8 }, (_unused, index) => `proj-resource-${index}`);
+    const getRecentProjects = vi.fn(async () => [...resourceIds, 'proj-editable']);
+    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
+      dataProviderId === 'platformScripture.recentlyOpenedProjects'
+        ? { getRecentProjects }
+        : undefined,
+    );
+    // Concurrency is asserted directly rather than inferred from wall-clock time: every lookup
+    // parks on one gate, so all nine can only be in flight at once if the walk fans them out.
+    // A sequential walk reaches exactly one and this never gets past `waitFor`.
+    const inFlight: string[] = [];
+    let releaseLookups = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseLookups = resolve;
+    });
+    getMetadataForProjectMock.mockImplementation(async (projectId: string) => {
+      inFlight.push(projectId);
+      await gate;
+      return projectId === 'proj-editable' ? {} : { isPublished: true };
+    });
+
+    const switching = host.handleSwitchToSimpleMode();
+    await vi.waitFor(() => expect(inFlight).toHaveLength(resourceIds.length + 1));
+    releaseLookups();
+    await switching;
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-editable');
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('Timed out'));
+  });
+
   it('slow path: falls back to the bare layout and warns if resolving whether the project is published hangs past the cold-start bound', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();

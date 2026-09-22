@@ -98,10 +98,19 @@ describe('normalizeFullName', () => {
     // eslint-disable-next-line no-null/no-null
     ['null', null],
     ['an empty string', ''],
+    // A name of spaces is present but invisible, so passing it through would join a full name the
+    // user cannot see and leave `formatProjectName` emitting a dangling separator.
+    ['a whitespace-only string', '   '],
   ])('treats %s as absent', (_label, value) => {
     // The three shapes a project data provider actually yields for a setting that was never
     // written, plus the empty string legacy projects carry.
     expect(normalizeFullName(value)).toBeUndefined();
+  });
+
+  it('keeps a real name that merely carries surrounding space', () => {
+    // Blank is absent, but space around a real name is the project's own data — this narrows what
+    // counts as a name, it does not edit the name it returns.
+    expect(normalizeFullName(' World English Bible ')).toBe(' World English Bible ');
   });
 
   it('treats a non-string setting value as absent rather than passing it through', () => {
