@@ -410,7 +410,11 @@ export function isContentZoomable(webViewId: WebViewId): boolean {
   }
 }
 
-/** Payload of {@link onDidChangeContentZoomable}. */
+/**
+ * Payload of {@link onDidChangeContentZoomable}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
 export type ContentZoomableChangeEvent = { webViewId: WebViewId; isContentZoomable: boolean };
 
 /**
@@ -433,11 +437,22 @@ const onDidChangeContentZoomableEmitter = new PlatformEventEmitter<ContentZoomab
 export const onDidChangeContentZoomable: PlatformEvent<ContentZoomableChangeEvent> =
   onDidChangeContentZoomableEmitter.event;
 
-/** Emits {@link onDidChangeContentZoomable} when the pane's answer differs from `wasZoomable`. */
+/**
+ * Emits {@link onDidChangeContentZoomable} when the pane's answer differs from `wasZoomable`.
+ * Isolated so a throwing subscriber cannot skip work a caller runs after this call — such as
+ * {@link setContentZoomAreas}'s CSS push — or stop later subscribers from hearing the change.
+ */
 function emitIfZoomabilityChanged(webViewId: WebViewId, wasZoomable: boolean): void {
   const nowZoomable = isContentZoomable(webViewId);
   if (nowZoomable !== wasZoomable)
-    onDidChangeContentZoomableEmitter.emit({ webViewId, isContentZoomable: nowZoomable });
+    onDidChangeContentZoomableEmitter.emitIsolated(
+      { webViewId, isContentZoomable: nowZoomable },
+      (error) => {
+        logger.warn(
+          `A subscriber threw while being told pane ${webViewId}'s zoomability changed to ${nowZoomable}; the rest were still told: ${getErrorMessage(error)}`,
+        );
+      },
+    );
 }
 
 /**
@@ -520,8 +535,9 @@ const staleAreaGraceTimers = new Map<WebViewId, ReturnType<typeof setTimeout>>()
 
 /**
  * Cancels a pane's pending stale-area timer, if one is running. Called on every NON-EMPTY area
- * report and on every iframe load ({@link applyContentZoomForWebView}): either way, the content the
- * timer was checking up on is gone, and a fresh wait has to run its course again.
+ * report, which proves the bootstrap that wait was checking up on is alive; on every iframe load
+ * ({@link applyContentZoomForWebView}), which starts a fresh wait of its own; and on unmount
+ * ({@link forgetContentZoom}), where the pane the wait was about is gone and no wait replaces it.
  */
 function clearStaleAreaGrace(webViewId: WebViewId): void {
   const timer = staleAreaGraceTimers.get(webViewId);

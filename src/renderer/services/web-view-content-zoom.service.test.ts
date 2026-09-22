@@ -6,7 +6,8 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 vi.mock('@shared/services/settings.service', () => ({ settingsService: {} }));
 vi.mock('@shared/services/localization.service', () => ({ localizationService: {} }));
-// The real parseIframeZoom is kept, since getContentZoomScaleForWebView calls it directly (not through the mocked getWebViewIframe).
+// The real parseIframeZoom is kept, since getContentZoomScaleForWebView calls it directly (not
+// through the mocked getWebViewIframe).
 vi.mock('@renderer/services/overlays/overlay-coordinates', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@renderer/services/overlays/overlay-coordinates')>();
@@ -2388,17 +2389,20 @@ describe('web-view-content-zoom.service', () => {
   });
 
   it('a report inside the grace still cancels it', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    // Undeclared: a declared pane's resolution falls back to its declared default area even after
+    // its areas are dropped, which would make this assertion pass whether or not the cancel ran.
+    const pane = openUndeclaredPane('ext-1');
+    setContentZoomAreas('ext-1', ['main', 'footnotes']);
     vi.useFakeTimers();
     try {
-      applyContentZoomForWebView('editor-1');
+      applyContentZoomForWebView('ext-1');
       vi.advanceTimersByTime(500);
-      setContentZoomAreas('editor-1', ['main']); // the reloaded content's own report, mid-grace
+      setContentZoomAreas('ext-1', ['main']); // the reloaded content's own report, mid-grace
+      // Simulates that content going dead right after its report: without the cancel, the wait due
+      // at 1000ms would find no bootstrap and drop the areas.
+      Reflect.deleteProperty(pane.contentWindow ?? {}, '__platformContentZoom');
       vi.advanceTimersByTime(600);
-      expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
+      expect(resolveContentZoomArea('ext-1', undefined)).toBe('main');
     } finally {
       vi.useRealTimers();
     }
@@ -2513,7 +2517,8 @@ describe('web-view-content-zoom.service', () => {
     defaultCallbacks.length = 0;
     await initializeContentZoomService();
     // editor-1 reports its areas while its definition still reads, so its re-push below reaches the
-    // definition read (only a pane with areas reads one) and throws there.
+    // definition read (an area-less pane reads one too, to resolve its declared default) and throws
+    // there.
     setContentZoomAreas('editor-1', ['main']);
     setContentZoomAreas('editor-2', ['main']);
     editor1Detached = true;

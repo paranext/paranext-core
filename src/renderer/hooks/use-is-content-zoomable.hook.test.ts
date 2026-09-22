@@ -65,6 +65,7 @@ describe('useIsContentZoomable', () => {
   it('is false for a tab hosting no web view, and subscribes to nothing for it', () => {
     const { result } = renderHook(() => useIsContentZoomable(undefined));
     expect(result.current).toBe(false);
+    expect(listeners.size).toBe(0);
   });
 
   it('unsubscribes when unmounted', () => {
