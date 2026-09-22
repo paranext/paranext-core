@@ -12,8 +12,8 @@ vi.mock('@/components/advanced/editor/editor', () => ({
   Editor: vi.fn(() => <div data-testid="mock-editor" />),
 }));
 
-// jsdom lacks ResizeObserver/hasPointerCapture/scrollIntoView, which the card's Radix RadioGroup and
-// Tooltip use.
+// jsdom lacks ResizeObserver, which the card's Radix RadioGroup and Tooltip use. The
+// hasPointerCapture / scrollIntoView shims they also need are installed repo-wide by vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -33,8 +33,6 @@ class NoopResizeObserver implements ResizeObserver {
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined')
     globalThis.ResizeObserver = NoopResizeObserver;
-  if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false;
-  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 });
 
 const localizedStrings = {

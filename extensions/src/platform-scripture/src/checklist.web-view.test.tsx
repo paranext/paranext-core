@@ -35,9 +35,6 @@ beforeAll(() => {
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
   }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
   // jsdom does no layout, so getBoundingClientRect reports a 0-width rect. ProjectSelector's
   // auto-narrow observer treats that as a narrow trigger; give the combobox a production-like
   // width so the default (wide) rendering is what these tests exercise.
