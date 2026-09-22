@@ -799,8 +799,10 @@ export function pushContentZoom(
 ): void {
   const iframe = deps.getIframe(webViewId);
   if (!iframe) return;
-  // Only a non-URL pane bakes the real default into its head, and that bake awaits the same read
-  // that fills `cachedDefault`, so this fallback can never outrank a baked value.
+  // Only a non-URL pane with scripting allowed bakes the real default into its head — a pane opened
+  // with `allowScripts: false` bakes nothing, same as it never runs the bootstrap — and that bake
+  // awaits the same read that fills `cachedDefault`, so this fallback can never outrank a value
+  // that pane actually baked.
   const defaultZoom = cachedDefault ?? DEFAULT_ZOOM_FACTOR;
   const root = iframe.contentDocument?.documentElement;
   root?.style.setProperty(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE, String(defaultZoom));
@@ -1311,12 +1313,22 @@ export async function resetContentZoom(
  * State → memory → default, per area. Used by the shard to bake a pane's initial variables into its
  * head. Memory contributes every area remembered for this pane's kind and identity that the state
  * does not already hold.
+ *
+ * Honors the identity stamp the same way {@link seedFromMemory} does: a stored stamp naming another
+ * identity means the pane's own levels belong to a project it no longer shows (a reused web view id
+ * re-pointed before this bake runs, ahead of the dock update that would re-seed it) — they are
+ * skipped entirely rather than baked, and memory for the identity shown now fills every area
+ * instead. No stamp at all is the ordinary not-yet-stamped case and leaves the own levels standing,
+ * merged with memory exactly as usual.
  */
 export async function getInitialContentZoomForWebView(
   webView: Pick<SavedWebViewDefinition, 'id' | 'webViewType' | 'projectId' | 'state'>,
 ): Promise<{ defaultZoom: number; levels: Levels }> {
-  const levels: Levels = { ...effectiveOwnLevels(webView) };
   const id = memoryIdentityFor(webView);
+  const storedStamp = storedIdentityStamp(webView);
+  const ownLevelsStale =
+    storedStamp !== undefined && storedStamp !== (id ? identityStampFor(id) : undefined);
+  const levels: Levels = ownLevelsStale ? {} : { ...effectiveOwnLevels(webView) };
   if (id) {
     // Initialization pre-warms the cache and the memory subscription keeps it current, so opening
     // a pane does not wait on a settings round trip — except a pane opened before that first read

@@ -831,6 +831,27 @@ describe('web-view-content-zoom.service', () => {
     ).resolves.toEqual({ defaultZoom: 1, levels: { main: 2, footnotes: 0.9 } });
   });
 
+  it('bakes the new project’s levels, not a re-pointed pane’s stale own levels', async () => {
+    settings[MEMORY] = {
+      'editor:PROJ-A:main': 1.3,
+      'editor:PROJ-B:main': 2,
+    };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    // The pane's state still carries PROJ-A's levels and stamp — a reused web view id spreads its
+    // previous saved state onto the new definition before the dock update lands — but the
+    // definition passed to the bake already names PROJ-B. The stamp mismatch means PROJ-A's level
+    // must not be baked; PROJ-B's own remembered level takes its place.
+    await expect(
+      getInitialContentZoomForWebView({
+        id: 'w',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj-B',
+        state: zoomState({ main: 1.3 }, 'editor:PROJ-A'),
+      }),
+    ).resolves.toEqual({ defaultZoom: 1, levels: { main: 2 } });
+  });
+
   it("seeds a newly opened pane's state from memory on its first area report", async () => {
     settings[MEMORY] = {
       'editor:PROJ-A:main': 1.3,
