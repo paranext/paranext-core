@@ -1328,4 +1328,27 @@ describe('createPendingCommentAnchorSource', () => {
     // fraction = (90 - 40) / 200 = 0.25; x = 40 + 0.25 * 200 = 90 (the caret's original x).
     expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 40 });
   });
+
+  it('a wrapped selection measured before its second fragment renders is not frozen against the partial width', () => {
+    const { container, range } = addParagraph('In the beginning');
+    // The caret sat at x=90 when the popover opened, before the mark existed.
+    stubClientRects(range, [new DOMRect(90, 105, 30, 20)]);
+
+    const source = createPendingCommentAnchorSource(range, 'abc', container);
+
+    // The mark's first measurable frame renders only the first fragment of the wrapped selection —
+    // the second line has not painted yet.
+    addAnnotationFragment(container, 'abc', [new DOMRect(40, 100, 80, 20)]);
+    source.measure();
+
+    // The second fragment paints on a later frame, completing the union used by the earlier
+    // "follows the union ... at the fraction from where the caret was" test: left=40, top=100,
+    // width=200, height=40.
+    addAnnotationFragment(container, 'abc', [new DOMRect(120, 120, 120, 20)]);
+
+    // fraction = (90 - 40) / 200 = 0.25; x = 40 + 0.25 * 200 = 90 (the caret's original x). A
+    // fraction taken against the first fragment alone (width 80) and then reused against the full
+    // union would instead land at x = 165.
+    expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 40 });
+  });
 });

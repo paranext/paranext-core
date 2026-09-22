@@ -120,38 +120,12 @@ vi.mock('@papi/frontend/react', () => ({
 
 // Only what the web view module reads at load or render time; the pieces these tests exercise
 // (message handling, filter state) live in the web view itself and its local utils, which are real.
-// useRunWhenVisible is the one exception: it's real React-hook logic with no dependency of its own
-// on the rest of the platform-bible-react bundle, so it's reproduced here (via a dynamic `react`
-// import — a `vi.mock` factory is hoisted above this file's own top-level imports, so a static one
-// would hit a temporal-dead-zone reference) rather than pulling in the whole library just for it.
-vi.mock('platform-bible-react', async () => {
-  const {
-    useCallback: useCallbackReact,
-    useEffect: useEffectReact,
-    useRef: useRefReact,
-    useState: useStateReact,
-  } = await import('react');
-
-  function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void {
-    const [isRunPending, setIsRunPending] = useStateReact(false);
-    const runRef = useRefReact(run);
-    runRef.current = run;
-    const isViewVisibleRef = useRefReact(isViewVisible);
-    isViewVisibleRef.current = isViewVisible;
-
-    const requestRun = useCallbackReact(() => {
-      if (isViewVisibleRef.current) runRef.current();
-      else setIsRunPending(true);
-    }, []);
-
-    useEffectReact(() => {
-      if (!isViewVisible || !isRunPending) return;
-      setIsRunPending(false);
-      runRef.current();
-    }, [isViewVisible, isRunPending]);
-
-    return requestRun;
-  }
+// useRunWhenVisible is the one exception: the hidden-view tests below assert against ITS behavior
+// (the deferred-scroll catch-up), so it comes through from the real module via `importOriginal`
+// rather than being replaced — a hand-written stand-in would test the wiring against a copy of the
+// hook instead of the hook itself.
+vi.mock('platform-bible-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('platform-bible-react')>();
 
   return {
     COMMENT_LIST_ELEMENT_ID: 'comment-list',
@@ -161,7 +135,7 @@ vi.mock('platform-bible-react', async () => {
     Sonner: () => undefined,
     sonner: { error: vi.fn(), warning: vi.fn(), info: vi.fn() },
     usePromise: vi.fn((_factory: unknown, defaultValue: unknown) => [defaultValue, false]),
-    useRunWhenVisible,
+    useRunWhenVisible: actual.useRunWhenVisible,
     useTabIconSelection: vi.fn(() => undefined),
     useViewVisibility: vi.fn(() => true),
   };
