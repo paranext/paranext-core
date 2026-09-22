@@ -56,6 +56,13 @@ type DialogRequest<DialogTabType extends DialogTabTypes> = {
       | PromiseLike<DialogTypes[DialogTabType]['responseType'] | undefined>,
   ) => void;
   reject: (reason?: unknown) => void;
+  /**
+   * Whether this request's tab has actually been placed in the dock. False from registration until
+   * `addTab` places it — marked from `addTab`'s own synchronous callback rather than after its
+   * returned promise resolves, since a layout load can land in that window before the tab exists
+   * for it to drop, or in the gap between placement and this request's continuation resuming.
+   */
+  isTabDocked: boolean;
 };
 
 /** Map of all live dialog requests */
@@ -311,6 +318,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
         id: dialogId,
         resolve,
         reject,
+        isTabDocked: false,
       };
       dialogRequests.set(dialogId, dialogRequest);
     },
@@ -327,6 +335,19 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
       {
         type: 'float',
         position: 'center',
+      },
+      true,
+      () => {
+        // Marked from `addTab`'s own synchronous callback, in the same tick the tab is actually
+        // placed in the dock, rather than after `addTab`'s promise resolves: the sweep below runs
+        // synchronously inside a whole-layout load, so a load landing in the one-tick gap between
+        // placement and this request's continuation resuming would otherwise find the tab already
+        // gone but this request still reading as undocked, and never settle it. Fresh map lookup
+        // rather than the `dialogRequest` closure variable: the id may already have been removed by
+        // the time this runs (e.g. the window closed while addTab was in flight), and a fresh lookup
+        // naturally skips marking a request that is no longer there.
+        const dockedRequest = dialogRequests.get(dialogId);
+        if (dockedRequest) dockedRequest.isTabDocked = true;
       },
     );
 
@@ -377,6 +398,21 @@ export async function startDialogServiceShard(): Promise<void> {
   await initialize();
   if (globalThis.windowId === undefined)
     throw new Error('Cannot start DialogService: windowId is not set');
+
+  // A whole-layout load (e.g. a Simple/Power mode switch) replaces the dock without running
+  // rc-dock's per-tab remove callback, so a docked dialog's tab can vanish with nothing telling this
+  // shard its request is now unanswerable — the requestor would then await a promise that never
+  // settles. Settle it as though the user canceled; `false` because the tab this would try to close
+  // is already gone. Only a request whose tab actually reached the dock qualifies: a request can be
+  // registered here before `addTab` places its tab, and a load landing in that window has no tab of
+  // this request's to have dropped, so settling it would be indistinguishable from a user
+  // cancellation the user never made.
+  webViewService.onLayoutLoadTabIds((survivingTabIds) => {
+    dialogRequests.forEach((dialogRequest, id) => {
+      if (dialogRequest.isTabDocked && !survivingTabIds.has(id))
+        resolveDialogRequest(id, undefined, false);
+    });
+  });
 
   // Registered under this window's scoped name (e.g.
   // `DialogService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) so every window can own its own dialogs.
