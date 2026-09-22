@@ -634,14 +634,29 @@ internal class DblResourcesDataProvider(
             out var installableResource
         );
 
+        // Already installed and up to date is what the caller asked for, so succeed without doing
+        // anything. Throwing strands a caller whose catalog says the resource is missing: every
+        // retry it offers gets the same error, however many times the user asks.
+        //
+        // `Installed` is the catalog's flag rather than a look at the disk, and the uninstall path
+        // below carries its own error for the two disagreeing, so confirm the files are really
+        // there before reporting success — and fall through to installing when they are not,
+        // because a success reported over an empty disk is one no retry can clear.
         if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
-            throw new Exception(
-                LocalizationService.GetLocalizedString(
-                    PapiClient,
-                    "%getResources_errorInstallResource_resourceAlreadyInstalled%",
-                    $"Resource is already installed and up to date. Installation skipped."
-                )
-            );
+        {
+            ScrTextCollection.RefreshScrTexts();
+            if (installableResource.ExistingScrText != null)
+            {
+                Console.WriteLine(
+                    $"DBL resource {DBLEntryUid} is already installed and up to date. Installation skipped."
+                );
+                // Nothing changed on disk, but the caller's view of it disagrees; the notifications
+                // the install path sends are what let that view catch up.
+                SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
+                paratextProjects.NotifyProjectsChanged();
+                return;
+            }
+        }
 
         // Install()'s bool is not a verdict on the install. Its only `true` assignment is inside
         // InternalInstall's loop over the bundle's `*.font` entries, so a bundle carrying no font
