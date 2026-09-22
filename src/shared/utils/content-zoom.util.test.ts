@@ -77,6 +77,14 @@ describe('content-zoom.util', () => {
     expect(parseContentZoomMemoryKey('other:abc123:main')).toBeUndefined();
     expect(parseContentZoomMemoryKey('editor:abc123:Main')).toBeUndefined();
     expect(parseContentZoomMemoryKey('editor::main')).toBeUndefined();
+    // Every declared kind parses, including the hyphenated ones; a kind no declaration uses does not.
+    expect(parseContentZoomMemoryKey('word-list:PROJ:main')).toEqual({
+      kind: 'word-list',
+      identity: 'PROJ',
+      areaId: 'main',
+    });
+    expect(parseContentZoomMemoryKey('compare-versions:PROJ:main')?.kind).toBe('compare-versions');
+    expect(parseContentZoomMemoryKey('inventory:PROJ:main')?.kind).toBe('inventory');
   });
 
   it('rejects an identity or area id that parseContentZoomMemoryKey could not round-trip', () => {
