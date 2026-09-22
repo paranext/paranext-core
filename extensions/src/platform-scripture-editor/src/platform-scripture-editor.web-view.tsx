@@ -137,7 +137,9 @@ import {
   removeDecorations,
 } from './decorations.util';
 import {
+  createNoteAnchorSource,
   createPendingCommentAnchorSource,
+  createPendingCommentCenterAnchorSource,
   getVerseElement,
   runOnFirstLoad,
   scrollToAnnotation,
@@ -1069,16 +1071,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const setNoteAnchorSource = useCallback(
     (element: Element, noteKey: string) => {
-      notePopoverAnchor.setSource({
-        measure: () => {
-          const target = element.isConnected
-            ? element
-            : editorRef.current?.getElementByKey(noteKey);
-          if (!target) return undefined;
-          return leftEdgeRect(target.getBoundingClientRect());
-        },
-        contextElement: element.closest('.editor-input') ?? element,
-      });
+      notePopoverAnchor.setSource(
+        createNoteAnchorSource(element, noteKey, (key) => editorRef.current?.getElementByKey(key)),
+      );
     },
     [notePopoverAnchor],
   );
@@ -1556,13 +1551,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
     } else {
       // Fallback to center of editor viewport
-      commentPopoverAnchor.setSource({
-        measure: () => {
-          const rect = editorContainer.getBoundingClientRect();
-          return new DOMRect(rect.left + rect.width / 2, rect.top + rect.height / 2, 0, 0);
-        },
-        contextElement: editorContainer,
-      });
+      commentPopoverAnchor.setSource(createPendingCommentCenterAnchorSource(editorContainer));
     }
 
     setShowCommentEditor(true);

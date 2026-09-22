@@ -4242,6 +4242,16 @@ export declare function measureRange(range: Range): DOMRect | undefined;
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function leftEdgeRect(rect: DOMRect): DOMRect;
+/**
+ * The current viewport rect of an element, or `undefined` when the element has no layout at all —
+ * the case when it, or an ancestor, is `display: none`, as inside an inactive rc-dock tab pane.
+ * Matches {@link measureRange}'s rule: an element that IS laid out still returns its box even at
+ * zero width or height (a real, positioned point, such as a collapsed caret's element), because
+ * `getClientRects()` is empty only when nothing was painted, never merely because a box is small.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function measureElement(element: Element): DOMRect | undefined;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */
