@@ -562,13 +562,15 @@ step, no automation. Just a record.
   `[TestCase]` table (in PT9 `ParatextBase.Tests/ScriptureEditor/UsfmEditorTextLoaderTests.cs:573`):
   the C# port keeps all 16 rows, the USJ port keeps the 10 distinct behaviours (the other 6 rows
   differ only in LF-vs-CRLF line endings, which USJ does not represent). Anything that changes one
-  port must change the other or explain why not. The C# port departs from Paratext 9 in one
-  deliberate respect, approved in the PT-4608 review: a correctly numbered marker whose line carries
-  more than the marker (`\c 2 \ca 3\ca*`) is left as it is. Paratext 9 rewrites it onto a line of
-  its own — a whitespace-only change it counted as a correction, logged and wrote to disk — although
-  `ValidateChapterNumber` reads the number only up to the first non-word character and accepts the
-  line as it was. The USJ port has no such case to match: there `\ca` is the chapter's `altnumber`
-  attribute, not text on its line. For editor traffic the C# half is expected to find
+  port must change the other or explain why not. The C# port writes exactly what Paratext 9 writes,
+  including its layout of a correctly numbered marker whose line carries more than the marker:
+  `\c 2 \ca 3\ca*` is written as `\c 2` with ` \ca 3\ca*` on the next line, so a file keeps the
+  shape Paratext 9 gives it and does not flip between the two in its revision history. It differs
+  only in what it reports (decided in the PT-4608 review): Paratext 9 counts that layout as a fix and
+  reloads its editor, but `ValidateChapterNumber` reads the number only up to the first non-word
+  character, so the marker was never wrong and the C# port does not report it as a correction. The
+  USJ port has no such case to match: there `\ca` is the chapter's `altnumber` attribute, not text on
+  its line. For editor traffic the C# half is expected to find
   nothing to correct, so a log line from it is a signal that the renderer repair has a gap.
   The repair also removes a protection the refusal used to provide by accident: a save carrying one
   chapter's content into another chapter was refused as a wrong chapter number, and once the marker

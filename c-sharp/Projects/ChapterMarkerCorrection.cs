@@ -23,10 +23,9 @@ namespace Paranext.DataProvider.Projects;
 /// <para>
 /// Ported from Paratext 9's <c>UsfmEditorTextLoader.FixChapterNumbers</c>, keeping its behavior —
 /// including the two shapes chapter 1 alone allows: an introduction ahead of the chapter marker,
-/// and a chapter that is introduction only and so carries no chapter marker at all. It differs in
-/// one respect: a correctly numbered marker whose line carries more than the marker, such as its
-/// alternate number, is left as it is rather than rewritten onto a line of its own (see
-/// <see cref="IsMarkerForChapter"/>).
+/// and a chapter that is introduction only and so carries no chapter marker at all. It writes what
+/// Paratext 9 writes, and differs only in what it reports as a correction (see
+/// <see cref="IsOnlyTheRightMarker"/>).
 /// </para>
 /// </remarks>
 internal static partial class ChapterMarkerCorrection
@@ -47,7 +46,9 @@ internal static partial class ChapterMarkerCorrection
     /// <param name="usfm">USFM for a single chapter.</param>
     /// <param name="chapterNum">The chapter <paramref name="usfm"/> is being written to.</param>
     /// <param name="wasCorrected">
-    /// Whether the returned USFM differs from what was passed in.
+    /// Whether a chapter marker was wrong and was corrected. A correct marker that was only laid out
+    /// onto a line of its own does not count, although the returned USFM differs from what was
+    /// passed in (see <see cref="IsOnlyTheRightMarker"/>).
     /// </param>
     /// <remarks>
     /// Correcting also normalizes line endings to CRLF, as Paratext's own USFM does; USFM that
@@ -70,7 +71,9 @@ internal static partial class ChapterMarkerCorrection
                 ? CorrectFirstChapter(normalizedUsfm, chapterMarkers)
                 : CorrectLaterChapter(normalizedUsfm, chapterMarkers, chapterNum);
 
-        wasCorrected = correctedUsfm != null;
+        wasCorrected =
+            correctedUsfm != null
+            && !IsOnlyTheRightMarker(normalizedUsfm, chapterMarkers, chapterNum);
         return correctedUsfm ?? usfm;
     }
 
@@ -91,7 +94,7 @@ internal static partial class ChapterMarkerCorrection
         // marker; the walk below moves that choice earlier when an earlier one starts Scripture.
         var keepIndex = chapterMarkers[^1].Index;
 
-        if (chapterMarkers.Count == 1 && IsMarkerForChapter(usfm, keepIndex, 1))
+        if (chapterMarkers.Count == 1 && StartsWithAt(usfm, keepIndex, expectedMarker))
             return null;
 
         // Working back from the last marker, every earlier marker that does NOT open more
@@ -135,7 +138,7 @@ internal static partial class ChapterMarkerCorrection
     )
     {
         var expectedMarker = $"\\c {chapterNum}{StringUtils.Crlf}";
-        if (chapterMarkers.Count == 1 && IsMarkerForChapter(usfm, 0, chapterNum))
+        if (chapterMarkers.Count == 1 && usfm.StartsWith(expectedMarker, StringComparison.Ordinal))
             return null;
 
         // Take every marker out — working backwards so the remaining matches keep their indexes.
@@ -147,20 +150,30 @@ internal static partial class ChapterMarkerCorrection
     }
 
     /// <summary>
-    /// Whether <paramref name="usfm"/> holds the chapter marker for <paramref name="chapterNum"/> at
-    /// <paramref name="index"/>: <c>\c N</c> with its number ended by whitespace or the end of the
-    /// text.
+    /// Whether <paramref name="chapterMarkers"/> is the one marker the chapter is allowed, correctly
+    /// numbered and in its place, so that correcting it only lays it out onto a line of its own.
     /// </summary>
     /// <remarks>
-    /// Paratext 9 accepts only the marker on a line of its own (<c>\c N</c> and a line break), and
-    /// otherwise rewrites the marker onto its own line. That moves anything the marker's line
-    /// legitimately carries — its alternate number, <c>\c 2 \ca 3\ca*</c> — onto the next line:
-    /// a whitespace-only change, reported as a correction and written to disk. Paratext itself reads
-    /// the number from the marker's line up to the first non-word character, so a marker followed
-    /// on its line by other content is already one Paratext takes, and there is nothing to correct.
+    /// Paratext 9 takes a marker as it stands only when it is on a line of its own (<c>\c N</c> and
+    /// a line break), and otherwise rewrites it onto one. That moves anything the marker's line
+    /// legitimately carries onto the next line: <c>\c 2 \ca 3\ca*</c> is written as <c>\c 2</c>
+    /// and then <c> \ca 3\ca*</c>. The layout is kept, so a file keeps the shape Paratext 9 writes
+    /// and does not flip between the two in its revision history. It is not reported as a
+    /// correction, though: Paratext reads the number only up to the first non-word character, so the
+    /// marker was never wrong.
     /// </remarks>
-    private static bool IsMarkerForChapter(string usfm, int index, int chapterNum)
+    private static bool IsOnlyTheRightMarker(
+        string usfm,
+        MatchCollection chapterMarkers,
+        int chapterNum
+    )
     {
+        if (chapterMarkers.Count != 1)
+            return false;
+        // Chapter 1's marker may follow an introduction; any later chapter's must open it.
+        var index = chapterMarkers[0].Index;
+        if (chapterNum != 1 && index != 0)
+            return false;
         var marker = $"\\c {chapterNum}";
         if (!StartsWithAt(usfm, index, marker))
             return false;

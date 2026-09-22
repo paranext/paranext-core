@@ -139,20 +139,6 @@ internal class ChapterMarkerCorrectionTests
         2,
         TestName = "Alternate and published chapter numbering survives a correction"
     )]
-    // Paratext 9 would move the alternate number off the marker's line and call that a correction;
-    // the marker is right, so there is nothing to correct (see IsMarkerForChapter).
-    [TestCase(
-        "\\c 2 \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
-        "\\c 2 \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
-        2,
-        TestName = "An alternate number on the marker's line needs no correction"
-    )]
-    [TestCase(
-        "\\ip intro\r\n\\c 1 \\ca 2\\ca*\r\n\\p\r\n\\v 1 text\r\n",
-        "\\ip intro\r\n\\c 1 \\ca 2\\ca*\r\n\\p\r\n\\v 1 text\r\n",
-        1,
-        TestName = "An alternate number on chapter 1's marker line needs no correction"
-    )]
     [TestCase(
         "\\c 2\r\n \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
         "\\c 23 \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
@@ -175,6 +161,43 @@ internal class ChapterMarkerCorrectionTests
         {
             Assert.That(result, Is.EqualTo(expected));
             Assert.That(wasCorrected, Is.EqualTo(result != usfm));
+        });
+    }
+
+    /// <summary>
+    /// A correctly numbered marker whose line carries more than the marker, such as its alternate
+    /// number, is laid out onto a line of its own exactly as Paratext 9 does, so the file keeps the
+    /// shape Paratext 9 writes — but nothing about the marker was wrong, so it is not reported as a
+    /// correction.
+    /// </summary>
+    [TestCase(
+        "\\c 2\r\n \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        "\\c 2 \\ca 3\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        2,
+        TestName = "An alternate number on the marker's line is moved but not reported"
+    )]
+    [TestCase(
+        "\\ip intro\r\n\\c 1\r\n \\ca 2\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        "\\ip intro\r\n\\c 1 \\ca 2\\ca*\r\n\\p\r\n\\v 1 text\r\n",
+        1,
+        TestName = "An alternate number on chapter 1's marker line is moved but not reported"
+    )]
+    public void FixChapterMarkers_LaysOutACorrectMarkerLineWithoutReportingACorrection(
+        string expected,
+        string usfm,
+        int chapterNum
+    )
+    {
+        var result = ChapterMarkerCorrection.FixChapterMarkers(
+            usfm,
+            chapterNum,
+            out var wasCorrected
+        );
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(expected));
+            Assert.That(wasCorrected, Is.False);
         });
     }
 
