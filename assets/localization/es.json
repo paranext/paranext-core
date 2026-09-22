@@ -587,6 +587,7 @@
   "%settings_errorMessages_invalidJSON%": "JSON inválido",
   "%settings_errorMessages_invalidNumber%": "Número inválido",
   "%settings_errorMessages_invalidValue%": "Valor inválido",
+  "%settings_errorMessages_notWritableYet%": "Esta configuración aún no se puede cambiar. Vuelva a intentarlo en unos instantes.",
   "%settings_errorMessages_viewError%": "Ver error",
   "%settings_platform_comments_enabled_description%": "Indica si la función experimental de ver y editar los comentarios en proyectos está habilitada.",
   "%settings_platform_comments_enabled_label%": "Comentarios habilitados (experimental)",
