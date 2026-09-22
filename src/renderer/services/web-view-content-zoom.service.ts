@@ -785,12 +785,28 @@ function reseedIfIdentityChanged(webViewId: WebViewId): void {
 }
 
 /**
+ * Seeds ({@link seedFromMemory}) a pane core declares zoomable while it renders no area. Such a pane
+ * already acts on its declared area, so it has to act from the level memory remembers for it: its
+ * head bake shows that level, and stepping or writing from the Settings default instead would both
+ * contradict what it shows and overwrite the shared memory every sibling pane follows. Idempotent:
+ * a pane already stamped for its identity, or one memory remembers nothing for, is not written.
+ * Called on an empty area report, on load, and before an adjust or reset, so the level is in place
+ * whichever of them comes first.
+ */
+function seedDeclaredPaneWithoutAreas(webViewId: WebViewId): void {
+  if ((areasByWebViewId.get(webViewId) ?? []).length > 0) return;
+  if (getDeclarationForWebView(webViewId) === undefined) return;
+  seedFromMemory(webViewId);
+}
+
+/**
  * Called by the bootstrap (through the parent-bound helper) whenever the set of areas changes. A
  * pane's bootstrap commonly reports no areas at all on its first scan, because nothing zoom-marked
- * has rendered yet, and reports again once its content mounts. Seeding runs on that first NON-EMPTY
- * report, not merely the first call, so the empty scan never counts as "the pane has reported" for
- * seeding purposes. A NON-EMPTY report also cancels any stale-area wait, since a bootstrap that
- * reports is alive.
+ * has rendered yet, and reports again once its content mounts. For an undeclared pane, seeding runs
+ * on that first NON-EMPTY report, not merely the first call, so the empty scan never counts as "the
+ * pane has reported" for seeding purposes; a pane core declares is seeded on an empty report too
+ * ({@link seedDeclaredPaneWithoutAreas}), since it acts on its declared area meanwhile. A NON-EMPTY
+ * report also cancels any stale-area wait, since a bootstrap that reports is alive.
  */
 export function setContentZoomAreas(webViewId: WebViewId, areaIds: ContentZoomAreaId[]): void {
   const valid = areaIds.filter((areaId) => isValidContentZoomAreaId(areaId));
@@ -802,6 +818,7 @@ export function setContentZoomAreas(webViewId: WebViewId, areaIds: ContentZoomAr
   if ((previous === undefined || previous.length === 0) && valid.length > 0)
     seedFromMemory(webViewId);
   areasByWebViewId.set(webViewId, valid);
+  if (valid.length === 0) seedDeclaredPaneWithoutAreas(webViewId);
   emitIfZoomabilityChanged(webViewId, wasZoomable);
   pushContentZoom(webViewId);
 }
@@ -913,6 +930,7 @@ export function applyContentZoomForWebView(webViewId: WebViewId): void {
   // The React `onLoad` handler this runs from is a synthetic event handler, which no error
   // boundary catches, and a late load during teardown reads a definition that is no longer there.
   try {
+    seedDeclaredPaneWithoutAreas(webViewId);
     pushContentZoom(webViewId);
   } catch (e) {
     logger.warn(
@@ -1302,8 +1320,10 @@ export async function adjustContentZoom(
   const area = resolveContentZoomArea(target, areaId);
   if (!area) return;
   const defaultZoom = await getDefaultZoom();
-  // Read the definition after the await: the pane may have been closed, moved or updated while the
-  // default was being fetched, and the write below must start from what it holds now.
+  seedDeclaredPaneWithoutAreas(target);
+  // Read the definition after the await (and the seed): the pane may have been closed, moved or
+  // updated while the default was being fetched, and the write below must start from what it holds
+  // now.
   const definition = deps.getDefinition(target);
   if (!definition) return;
   const current = effectiveOwnLevels(definition)[area] ?? defaultZoom;
@@ -1327,6 +1347,7 @@ export async function resetContentZoom(
   const area = resolveContentZoomArea(target, areaId);
   if (!area) return;
   const defaultZoom = await getDefaultZoom();
+  seedDeclaredPaneWithoutAreas(target);
   // Read the definition after the await, for the reason given in `adjustContentZoom`.
   const definition = deps.getDefinition(target);
   if (!definition) return;
