@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.2
+version: 1.1.3
 status: active
 created: 2026-03-04
-last_updated: 2026-09-21
+last_updated: 2026-09-23
 ---
 
 # Extension Development Guide

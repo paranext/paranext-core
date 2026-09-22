@@ -1,10 +1,10 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.7.2
+version: 1.7.3
 status: active
 created: 2026-03-04
-last_updated: 2026-09-21
+last_updated: 2026-09-23
 toc: true
 ---
 
