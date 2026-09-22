@@ -3,9 +3,11 @@ import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_IDENTITY_STATE_KEY,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
+  ContentZoomDeclaration,
   ContentZoomKind,
   DEFAULT_ZOOM_FACTOR,
   getContentZoomCssVariable,
+  getContentZoomDeclaration,
   getContentZoomKind,
 } from '@shared/models/content-zoom.model';
 import {
@@ -30,6 +32,8 @@ import {
   isPlatformError,
   normalizeProjectId,
   PlatformError,
+  PlatformEvent,
+  PlatformEventEmitter,
   Unsubscriber,
 } from 'platform-bible-utils';
 
@@ -365,29 +369,98 @@ export function resolveContentZoomTarget(
   return deps.getLastFocusedTabId();
 }
 
+/** Logs, once per pane and area, a request for an area this pane cannot act on. */
+function logUnknownArea(webViewId: WebViewId, areaId: ContentZoomAreaId): void {
+  let logged = unknownAreasLoggedByWebViewId.get(webViewId);
+  if (!logged) {
+    logged = new Set();
+    unknownAreasLoggedByWebViewId.set(webViewId, logged);
+  }
+  if (logged.has(areaId)) return;
+  logged.add(areaId);
+  logger.debug(`Content zoom: web view ${webViewId} has no zoom area "${areaId}"; ignoring`);
+}
+
 /**
- * Explicit area (must be one the pane reported) → the pane's active area → its first area →
- * `undefined` for a pane without areas. Exported for tests.
+ * The declaration core's map holds for the pane's web view type, or `undefined` for an undeclared
+ * type or an unknown pane. Throws when the definition read throws (during dock teardown); callers
+ * on a path that must not throw use {@link isContentZoomable}, which catches.
+ */
+function getDeclarationForWebView(webViewId: WebViewId): ContentZoomDeclaration | undefined {
+  const webViewType = deps.getDefinition(webViewId)?.webViewType;
+  return webViewType === undefined ? undefined : getContentZoomDeclaration(webViewType);
+}
+
+/**
+ * Whether a pane takes content zoom: it currently reports at least one zoom area, or core declares
+ * its web view type zoomable (`CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE`). A pane that is not
+ * zoomable is never scaled, offers no zoom items in its tab menu, and ignores the chords and the
+ * wheel. A declared pane is zoomable even while it renders no marker, and it then acts on its
+ * declared default area. Never throws: a definition that cannot be read is answered from the
+ * reported areas alone.
+ *
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export function isContentZoomable(webViewId: WebViewId): boolean {
+  if ((areasByWebViewId.get(webViewId) ?? []).length > 0) return true;
+  try {
+    return getDeclarationForWebView(webViewId) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/** Payload of {@link onDidChangeContentZoomable}. */
+export type ContentZoomableChangeEvent = { webViewId: WebViewId; isContentZoomable: boolean };
+
+/**
+ * Renderer-local: fires only when {@link isContentZoomable} flips for a pane, which happens when an
+ * undeclared pane reports its first area or loses its last one. A declared pane never flips.
+ *
+ * Hidden case: nothing to catch up. Area reports come from the bootstrap's MutationObserver, which
+ * needs no layout, so an inactive tab's zoomability is current while it is hidden, and the
+ * declaration is static.
+ */
+const onDidChangeContentZoomableEmitter = new PlatformEventEmitter<ContentZoomableChangeEvent>();
+
+/**
+ * Fires when a pane's {@link isContentZoomable} answer changes. The tab title subscribes (through
+ * `useIsContentZoomable`); synchronous readers (the chrome chord listener and the command handlers)
+ * call {@link isContentZoomable} when they need it instead.
+ *
+ * @experimental This event is unstable and may change or disappear without notice
+ */
+export const onDidChangeContentZoomable: PlatformEvent<ContentZoomableChangeEvent> =
+  onDidChangeContentZoomableEmitter.event;
+
+/** Emits {@link onDidChangeContentZoomable} when the pane's answer differs from `wasZoomable`. */
+function emitIfZoomabilityChanged(webViewId: WebViewId, wasZoomable: boolean): void {
+  const nowZoomable = isContentZoomable(webViewId);
+  if (nowZoomable !== wasZoomable)
+    onDidChangeContentZoomableEmitter.emit({ webViewId, isContentZoomable: nowZoomable });
+}
+
+/**
+ * Resolves which area of a pane an action applies to, in this order: an explicit area (which must
+ * be one the pane reported), then the pane's active area, then its first area. A pane that reports
+ * no area resolves to its declared default area, if core declares it (an explicit area is then
+ * accepted only when it IS that area), and otherwise to `undefined`. Exported for tests.
  */
 export function resolveContentZoomArea(
   webViewId: WebViewId,
   explicitAreaId: ContentZoomAreaId | undefined,
 ): ContentZoomAreaId | undefined {
   const areas = areasByWebViewId.get(webViewId) ?? [];
-  if (areas.length === 0) return undefined;
+  if (areas.length === 0) {
+    const declaredArea = getDeclarationForWebView(webViewId)?.defaultArea;
+    if (declaredArea === undefined) return undefined;
+    if (explicitAreaId === undefined || explicitAreaId === declaredArea) return declaredArea;
+    logUnknownArea(webViewId, explicitAreaId);
+    return undefined;
+  }
   if (explicitAreaId !== undefined) {
     if (areas.includes(explicitAreaId)) return explicitAreaId;
-    let logged = unknownAreasLoggedByWebViewId.get(webViewId);
-    if (!logged) {
-      logged = new Set();
-      unknownAreasLoggedByWebViewId.set(webViewId, logged);
-    }
-    if (!logged.has(explicitAreaId)) {
-      logged.add(explicitAreaId);
-      logger.debug(
-        `Content zoom: web view ${webViewId} has no zoom area "${explicitAreaId}"; ignoring`,
-      );
-    }
+    logUnknownArea(webViewId, explicitAreaId);
     return undefined;
   }
   const active = activeAreaByWebViewId.get(webViewId);
@@ -425,14 +498,13 @@ export function getContentZoomScaleForWebView(webViewId: WebViewId): number {
 
 /**
  * Whether a zoom request carrying neither a web view id nor an area id would find something to act
- * on: the window's active pane, and an area in it. Answers the question the window-chrome chord
- * listener has to ask before it consumes a keystroke, and it is synchronous because both halves
- * read state this module already holds.
+ * on: the window's active pane, and that pane being zoomable ({@link isContentZoomable}). This is
+ * the question the window-chrome chord listener has to ask before it consumes a keystroke. It is
+ * synchronous because it reads only state this module already holds.
  */
 export function canContentZoomActOnActiveTarget(): boolean {
   const target = resolveContentZoomTarget(undefined);
-  if (!target) return false;
-  return resolveContentZoomArea(target, undefined) !== undefined;
+  return target !== undefined && isContentZoomable(target);
 }
 
 /**
@@ -472,9 +544,11 @@ function clearAllStaleAreaGraces(): void {
  * dead, and a genuine unmount.
  */
 function forgetAreaState(webViewId: WebViewId): void {
+  const wasZoomable = isContentZoomable(webViewId);
   areasByWebViewId.delete(webViewId);
   activeAreaByWebViewId.delete(webViewId);
   unknownAreasLoggedByWebViewId.delete(webViewId);
+  emitIfZoomabilityChanged(webViewId, wasZoomable);
 }
 
 /**
@@ -723,10 +797,12 @@ export function setContentZoomAreas(webViewId: WebViewId, areaIds: ContentZoomAr
   const previous = areasByWebViewId.get(webViewId);
   if (previous && previous.length === valid.length && previous.every((a, i) => a === valid[i]))
     return;
+  const wasZoomable = isContentZoomable(webViewId);
   if (valid.length > 0) clearStaleAreaGrace(webViewId);
   if ((previous === undefined || previous.length === 0) && valid.length > 0)
     seedFromMemory(webViewId);
   areasByWebViewId.set(webViewId, valid);
+  emitIfZoomabilityChanged(webViewId, wasZoomable);
   pushContentZoom(webViewId);
 }
 
@@ -762,10 +838,12 @@ export function forgetContentZoom(webViewId: WebViewId): void {
 
 /**
  * Writes the pane's effective levels into it: one CSS variable per area (its own level, else the
- * default) plus the default variable. A pane without areas gets only the default variable, and
- * nothing in it reads that variable unless it later marks an area. The iframe element itself is
- * never scaled. Areas that hold a level but are not currently rendered still get their variable, so
- * the level is in place when the area appears (a panel the view renders only on demand).
+ * default) plus the default variable. A declared pane with no area rendered is written its declared
+ * default area, so a level chosen before its first marker renders is already in place and the
+ * indicator can show. A pane that is not zoomable gets only the default variable, which nothing in
+ * it reads. The iframe element itself is never scaled. Areas that hold a level but are not
+ * currently rendered still get their variable, so the level is in place when the area appears (a
+ * panel the view renders only on demand).
  *
  * Hidden panes are handled: rc-dock keeps an inactive tab mounted under `display: none`, and both
  * the variables and the rules that read them are data-driven, so they apply with no layout and are
@@ -787,9 +865,14 @@ export function pushContentZoom(
   const root = iframe.contentDocument?.documentElement;
   root?.style.setProperty(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE, String(defaultZoom));
   const areas = areasByWebViewId.get(webViewId) ?? [];
-  if (areas.length === 0 || !root) return; // a pane without areas has no per-area action to announce
+  let areasToWrite = areas;
+  if (areas.length === 0) {
+    const declaredArea = getDeclarationForWebView(webViewId)?.defaultArea;
+    areasToWrite = declaredArea === undefined ? [] : [declaredArea];
+  }
+  if (areasToWrite.length === 0 || !root) return; // not zoomable: no per-area action to announce
   const own = effectiveOwnLevels(deps.getDefinition(webViewId));
-  new Set([...areas, ...Object.keys(own)]).forEach((areaId) => {
+  new Set([...areasToWrite, ...Object.keys(own)]).forEach((areaId) => {
     root.style.setProperty(getContentZoomCssVariable(areaId), String(own[areaId] ?? defaultZoom));
   });
   if (!indicator) return;
@@ -1201,11 +1284,12 @@ function writeOwnLevel(
 /**
  * Ctrl+`+` / Ctrl+`-` (and wheel): give one area of the target pane its own level, one step from
  * what it shows. The bootstrap already targets an area for keyboard and wheel; without an area id
- * (tab menu, macOS menu, extensions) the pane's active area is used. A pane that reported no areas
- * ignores the request, which is the gate the macOS and tab-menu paths need. A non-finite
- * `deltaSteps` is ignored outright: `adjustZoomFactor` would otherwise clamp it into a spurious
- * in-range level (`NaN` and `Infinity` both survive `clampZoom`'s comparisons unchanged or clamped
- * to an edge) and write that level as if the user had actually asked for it.
+ * (tab menu, macOS menu, extensions) the pane's active area is used. A pane that is not zoomable
+ * ignores the request, which is the gate the macOS and tab-menu paths need; a declared pane with no
+ * area rendered acts on its declared area. A non-finite `deltaSteps` is ignored outright:
+ * `adjustZoomFactor` would otherwise clamp it into a spurious in-range level (`NaN` and `Infinity`
+ * both survive `clampZoom`'s comparisons unchanged or clamped to an edge) and write that level as
+ * if the user had actually asked for it.
  */
 export async function adjustContentZoom(
   webViewId: WebViewId | undefined,
