@@ -2007,10 +2007,10 @@ function waitForNextPaint(): Promise<void> {
 }
 
 /**
- * Resolves the most-recently-opened project id that's usable as a Simple-mode switch target, trying
- * each entry in `recentlyOpenedProjects` (most-recent first, already capped at
- * `MAX_RECENT_PROJECTS` by the provider) in order until one isn't a published resource, or the list
- * is exhausted. Mirrors `tryOpenFromRecentlyOpened`'s same try-next-candidate pattern in
+ * Resolves the most-recently-opened project id that's usable as a Simple-mode switch target: the
+ * first entry in `recentlyOpenedProjects` (most-recent first, already capped at
+ * `MAX_RECENT_PROJECTS` by the provider) that isn't a published resource, or `undefined` if the
+ * list holds none. Mirrors `tryOpenFromRecentlyOpened`'s same try-next-candidate pattern in
  * `platform-scripture-editor.utils.ts` (the default project picker's own recents fallback) - but
  * scoped to what this fast-path switch needs: a project id, not an opened editor. A published
  * resource is never a valid target here, matching `cacheLastOpenedSimpleProject`'s exclusion on the
@@ -2020,6 +2020,7 @@ function waitForNextPaint(): Promise<void> {
  * The whole walk (recents fetch + every candidate's metadata lookup) shares one bound from the
  * caller ({@link COLD_START_LOOKUP_TIMEOUT_MS}, via `withTimeout`), not a bound per candidate -
  * otherwise a full walk of a slow list could take several times the intended "fast path" budget.
+ * That shared bound is also why the candidates are checked concurrently rather than one at a time.
  */
 async function getMostRecentUsableProjectId(): Promise<string | undefined> {
   try {
@@ -2029,17 +2030,16 @@ async function getMostRecentUsableProjectId(): Promise<string | undefined> {
     if (!recentsProvider) return undefined;
     const recents = await recentsProvider.getRecentProjects(undefined);
     if (!Array.isArray(recents)) return undefined;
-    // `reduce` with a Promise accumulator (rather than a `for` loop) tries each candidate
-    // sequentially: each callback awaits the previous result before deciding whether to check the
-    // next candidate, so this doesn't check every candidate in parallel - it stops at the first
-    // usable one. Mirrors `tryOpenFromRecentlyOpened`'s identical accumulator in
-    // `platform-scripture-editor.utils.ts`.
-    return await recents.reduce(async (prev: Promise<string | undefined>, candidateId: string) => {
-      const usableId = await prev;
-      if (usableId !== undefined) return usableId;
-      const isPublished = await resolveProjectIsPublished(candidateId);
-      return isPublished ? undefined : candidateId;
-    }, Promise.resolve<string | undefined>(undefined));
+    // Checked CONCURRENTLY, then picked in recents order. Checking them one at a time would stop
+    // at the first usable candidate and so issue fewer lookups, but every published resource ahead
+    // of that candidate adds a full round trip - `getMetadataForProject` waits on a PDP factory and
+    // then retries - and the whole walk shares one {@link COLD_START_LOOKUP_TIMEOUT_MS} budget. A
+    // run of resources at the head of the list could therefore exhaust the budget and leave Simple
+    // mode with no project at all, which became reachable once the titlebar picker started
+    // offering read-only projects. The list is already capped at `MAX_RECENT_PROJECTS`, so the
+    // extra lookups are bounded, and concurrently they cost about what one costs.
+    const publishedFlags = await Promise.all(recents.map(resolveProjectIsPublished));
+    return recents.find((_candidateId, index) => !publishedFlags[index]);
   } catch (err) {
     // Distinct from a timeout (logged separately by the caller, which races this whole function
     // against COLD_START_LOOKUP_TIMEOUT_MS via withTimeout): this is a genuine failure of the

@@ -240,6 +240,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   cost this adds is a second Home configuration to keep working, which is what the entry warned
   about; it is accepted because the alternative is a project picker whose "more" leads to a list of
   things that are not projects.
+- **Amended 2026-09-21 (PT-4549, `ProjectSelector` migration):** the data-driven gate this entry
+  described is gone. The picker is now a `ProjectSelector` whose trigger stays reachable with an
+  empty list, and the affordance is its `footerAction` row rather than a bare `<button>` inside a
+  `SelectContent` that only mounted alongside items — so a user with no local project metadata can
+  reach Home through it after all. The controlled-`open` state that closed the dropdown by hand is
+  gone with it: `ProjectSelector` closes its own popover when the footer row is activated.
 
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
@@ -4456,6 +4462,29 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   out-of-repo consumer (e.g. Paratext 10 Studio) must absorb at once.
 - **Source:** PR #2673 (project-selector groupings).
 
+## adr-project-selector-footer-action-is-data: `footerAction` is a data prop, not a render prop
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** The titlebar picker needs a "More projects…" affordance below the list.
+  `customSections` partitions rows and cannot express an action that opens a different surface.
+  cmdk 1.1.1 constrains how such a row can be built: navigation runs through `getValidItems()`,
+  which queries only inside `CommandList`, so a row rendered outside it is mouse-only — the
+  accessibility gap the bare `<button>` this work replaced.
+- **Decision:** `footerAction` is a **data** prop — `{ label, onSelect }` — not a render prop. The
+  selector owns the markup: a `forceMount` `CommandItem` inside `CommandList`, with an explicit
+  stable `value` and an `alwaysRender` separator.
+- **Alternatives considered:**
+  - **A render prop returning a `ReactNode`.** Rejected: it lets a consumer hand back a bare
+    `<button>`, reproducing the exact defect the prop exists to remove, and it cannot be enforced
+    by review at every future call site.
+  - **Rendering the action outside `CommandList`.** Rejected as mouse-only, for the same
+    `getValidItems()` reason the context describes.
+- **Consequences:** Callers cannot style the row or put arbitrary content in it; a future need for
+  that is a reason to widen the data shape, not to switch to a render prop. `forceMount` keeps the
+  row out of cmdk's registered-item set, so `CommandEmpty` still renders on an empty list — the two
+  behaviors are coupled and must be asserted together.
+
 ## adr-project-selector-per-bucket-row-order: A grouping descriptor owns its bucket's row order, via an optional comparator
 
 - **Date:** 2026-09-19
@@ -4523,6 +4552,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   promotion. Promotion becomes its own work item, whose entry criterion is that a consumer can be
   added without adding a prop — and it should carry the API-surface TSDoc and localized-key
   conventions the stable barrel expects, rather than bundling them into a capability change.
+
+  Two known sharp edges are deliberately being carried on `experimental` rather than fixed at the
+  point they were found, on the strength of that freedom, and should be settled before promotion:
+  `ariaLabel` REPLACES the trigger's visible label in the accessible-name computation (so every
+  consumer passing a control-only name, as its TSDoc instructs, hides the selected project from
+  screen readers — the titlebar composes the whole name at its own call site instead); and
+  read-only is consumer-derived through `renderProjectIndicator`, which leaves the row tooltip
+  unable to explain the padlock to sighted pointer users. Both are written up in
+  [`.context/designs/PT-4549-followup-projectselector-accessible-name.md`](../designs/PT-4549-followup-projectselector-accessible-name.md).
 
 ## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
 

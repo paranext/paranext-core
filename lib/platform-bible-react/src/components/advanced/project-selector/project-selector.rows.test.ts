@@ -85,6 +85,7 @@ describe('computeRows — case-insensitive open-tab join', () => {
     expect(rowA).toBeDefined();
     expect(rowA!.isSelected).toBe(true);
     expect(rows.find((r) => r.projectId === 'DEF456')!.isSelected).toBe(false);
+    expect(rows.filter((r) => r.isSelected)).toHaveLength(1);
   });
 
   it('marks no row selected when nothing is selected (project mode)', () => {

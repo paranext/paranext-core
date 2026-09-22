@@ -320,6 +320,17 @@ export declare function buildBuiltInGroupingStrings(strings: ProjectSelectorStri
  */
 export declare function buildSelectionGroupingStrings(strings: ProjectSelectorStringLookup): SelectionGroupingStrings;
 /**
+ * An action row pinned below the project list — "More projects…", "Browse the server…". Expressed
+ * as data rather than a render prop on purpose: the selector owns the markup so the row stays
+ * keyboard-reachable, which a caller-rendered `<button>` would not be.
+ */
+export type ProjectSelectorFooterAction = {
+	/** Localized row label. */
+	label: string;
+	/** Run when the row is activated. The popover closes afterwards. */
+	onSelect: () => void;
+};
+/**
  * Every user-facing string the selector can render. All keys are optional; unset values fall back
  * to English defaults. Consumers wire this from a shared platform-level localization block (see
  * `%projectSelector_*%` keys in the platform's localizedStrings JSON) so every ProjectSelector in
@@ -372,6 +383,22 @@ export type ProjectSelectorLocalizedStrings = {
 	/** Multi-select: "Clear all" button (shown only when at least one pair is selected). */
 	clearAll?: string;
 };
+/**
+ * English text for every {@link ProjectSelectorLocalizedStrings} key, used for any key a consumer
+ * leaves unset.
+ *
+ * `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
+ * bare Storybook render), not production copy: every real consumer merges its own values for these
+ * two fields on top via `localizedStrings`. They exist so the trigger never renders with an empty
+ * accessible name or empty text before localized strings resolve.
+ *
+ * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
+ * a consumer typically localizes only the handful of keys its configuration can reach, and which
+ * keys those are is a property of the configuration rather than of the component. Looping over this
+ * map keeps such a guard honest when a key is renamed or added; a hand-copied list of strings
+ * silently stops asserting anything.
+ */
+export declare const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings>;
 /**
  * Convert the raw `%projectSelector_*%` resolved strings into a
  * {@link ProjectSelectorLocalizedStrings} bag ready to pass as the `localizedStrings` prop. Merge
@@ -459,8 +486,17 @@ type CommonProps = {
 	 * here would change the selector's hook count between renders and throw.
 	 */
 	renderProjectIndicator?: (project: ProjectSelectorProject) => React$1.ReactNode;
+	/**
+	 * An action row pinned below every section, with a separator above it whenever the list has rows
+	 * to divide it from. Use it for an affordance that opens a different surface — the sections
+	 * partition rows, so they cannot express one.
+	 *
+	 * The row stays available when the list is empty, which is when an escape hatch matters most, and
+	 * the "no projects" empty state still renders alongside it.
+	 */
+	footerAction?: ProjectSelectorFooterAction;
 };
-type ProjectSelectorProps = (CommonProps & {
+export type ProjectSelectorProps = (CommonProps & {
 	mode: "project";
 	selection: ProjectSelection;
 	onChangeSelection: (selection: {
@@ -475,6 +511,23 @@ type ProjectSelectorProps = (CommonProps & {
 	 * native hover.
 	 */
 	triggerLabelFormat?: "shortName" | "shortNameAndFullName";
+	/**
+	 * Render the trigger's label yourself, in place of the derived `shortName` / `shortName -
+	 * fullName` string.
+	 *
+	 * Receives the entry of `projects` that `selection.projectId` names, or `undefined` — which
+	 * means either that nothing is selected OR that the selected id matches no entry of
+	 * `projects`. The second case is reachable whenever the selection and the list come from
+	 * different sources, so a caller that can name the selected project from its own state should
+	 * fall back to that rather than treating `undefined` as "nothing is open".
+	 *
+	 * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
+	 * deliberate rather than an omission: a caller reaching for this prop is rendering a label
+	 * with its own hover affordance (`ToolbarCompoundLabel` carries a truncation tooltip), and
+	 * two tooltips over one control is worse than none. Surface the full text from inside your
+	 * own node.
+	 */
+	renderTriggerLabel?: (selected: ProjectSelectorProject | undefined) => React$1.ReactNode;
 }) | (CommonProps & {
 	mode: "project-multi";
 	selection: ProjectMultiSelection;

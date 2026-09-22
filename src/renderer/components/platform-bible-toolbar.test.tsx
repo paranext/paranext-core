@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -22,7 +22,9 @@ import {
   useSendReceiveAvailability,
 } from '@renderer/hooks/use-send-receive-availability.hook';
 import { SHRINK_STEP, ShrinkStepContext } from 'platform-bible-react';
-import { PlatformBibleToolbar } from './platform-bible-toolbar';
+import type { ProjectSelectorProps } from 'platform-bible-react/experimental';
+import type { ProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
+import { PlatformBibleToolbar, PROJECT_TRIGGER_MIN_WIDTH_CLASS } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -40,11 +42,22 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_status_syncing%': 'Test Syncing',
       '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
       '%mainMenu_openHome%': 'Home',
-      '%projectPicker_toolbar_more_projects%': 'More projects…',
+      '%projectPicker_no_results%': 'Test no projects found',
+      '%projectPicker_readOnly_label%': 'Test read-only',
+      '%projectPicker_search_placeholder%': 'Test search projects',
+      '%projectPicker_section_projects_localOnly%': 'Test your projects on this computer',
+      '%projectPicker_section_recent%': 'Test recent',
+      '%projectPicker_toolbar_more_projects%': 'Test more projects',
+      '%projectPicker_toolbar_no_projects%': 'Test no projects',
+      '%projectPicker_toolbar_select_project%': 'Test select a project',
+      '%projectPicker_toolbar_trigger_label%': 'Test select a project, {fullName} ({shortName})',
+      '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [
-    { book: 1, chapter: 1, verse: 1 },
+    // `SerializedVerseRef`: a book ID string plus `chapterNum`/`verseNum`. The same mock in
+    // `platform-bible-toolbar-integration.test.tsx` has to agree with this one.
+    { book: 'GEN', chapterNum: 1, verseNum: 1 },
     vi.fn(),
     0,
     vi.fn(),
@@ -157,15 +170,10 @@ vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
     currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
     recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
     allProjects: [],
+    currentSimpleProjectError: undefined,
     isLoading: false,
   })),
 }));
-
-/**
- * Carries the stubbed `Select`'s open state down to the stubbed `SelectContent`, which is what
- * Radix's own context does — the real `SelectContent` is mounted only while the dropdown is open.
- */
-const SelectOpenContext = React.createContext(false);
 
 vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
@@ -220,66 +228,103 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       />
     ),
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
-    // `open` is reflected onto the wrapper because the toolbar drives it: the dropdown's footer is
-    // a plain button rather than a `SelectItem`, so nothing else would close the dropdown when it
-    // opens Home. Without this the stub would swallow the only observable signal of that.
-    Select: ({
-      children,
-      disabled,
-      open,
-      onOpenChange,
-    }: {
-      children?: React.ReactNode;
-      disabled?: boolean;
-      open?: boolean;
-      onOpenChange?: (open: boolean) => void;
-    }) => (
-      <div data-testid="project-picker-select" aria-disabled={disabled} data-open={String(open)}>
-        {/* Stands in for Radix's trigger, which this stub replaces: the open state is the
-            toolbar's to drive, so a test needs some way to raise it. */}
-        <button
-          type="button"
-          aria-label="Open project picker"
-          data-testid="project-picker-open"
-          onClick={() => onOpenChange?.(true)}
-        />
-        <SelectOpenContext.Provider value={!!open}>{children}</SelectOpenContext.Provider>
-      </div>
-    ),
-    SelectTrigger: ({
-      children,
-      className,
-    }: {
-      children?: React.ReactNode;
-      className?: string;
-    }) => <div data-select-trigger-classname={className}>{children}</div>,
-    // Radix mounts a `Select`'s content only while it is open. Rendering it unconditionally would
-    // let a test drive the dropdown's footer in a dropdown the user could not have opened, so a
-    // case about that footer would pass against a component where it is unreachable.
-    SelectContent: ({ children }: { children?: React.ReactNode }) => {
-      const isOpen = React.useContext(SelectOpenContext);
-      return isOpen ? <div>{children}</div> : undefined;
+  };
+});
+
+/**
+ * Props from the most recent `ProjectSelector` render, so wiring assertions can inspect exactly
+ * what the toolbar handed the selector. The list behavior those props drive is asserted against the
+ * real component in
+ * `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.test.tsx`
+ * and its partitioning in `project-selector.rows.test.ts`; here the section descriptors' own
+ * `match`/`compare` functions are called directly, so the sectioning assertion still exercises the
+ * toolbar's production logic rather than this stub.
+ */
+const capturedProjectSelectorProps: { current: ProjectSelectorProps | undefined } = {
+  current: undefined,
+};
+
+/** The captured props, or a stated failure when the selector never rendered. */
+function requireCapturedProjectSelectorProps(): ProjectSelectorProps {
+  const props = capturedProjectSelectorProps.current;
+  if (!props) throw new Error('ProjectSelector was never rendered');
+  return props;
+}
+
+/**
+ * `renderTriggerLabel` exists only on the `project` mode of the props union, so reading it needs a
+ * narrowing step — kept out of the stub component below, where destructuring is the house style.
+ */
+function getRenderTriggerLabel(props: ProjectSelectorProps) {
+  return props.mode === 'project' ? props.renderTriggerLabel : undefined;
+}
+
+/** `selection` and `onChangeSelection` likewise live only on the `project` mode of the props union. */
+function getSelection(props: ProjectSelectorProps) {
+  return props.mode === 'project' ? props.selection : undefined;
+}
+
+function getOnChangeSelection(props: ProjectSelectorProps) {
+  return props.mode === 'project' ? props.onChangeSelection : undefined;
+}
+
+/** The project the stub considers selected, matched the way the real trigger matches it. */
+function getSelectedProject(props: ProjectSelectorProps) {
+  if (props.mode !== 'project') return undefined;
+  const { projectId } = props.selection;
+  return props.projects.find((project) => project.id === projectId);
+}
+
+// `ProjectSelector` comes from a separate module specifier, which the `platform-bible-react` mock
+// above does not intercept.
+vi.mock('platform-bible-react/experimental', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('platform-bible-react/experimental')>();
+  return {
+    ...actual,
+    ProjectSelector: (props: ProjectSelectorProps) => {
+      capturedProjectSelectorProps.current = props;
+      const { buttonClassName, isDisabled, localizedStrings } = props;
+      const buttonPlaceholder = localizedStrings?.buttonPlaceholder;
+      const selected = getSelectedProject(props);
+      const renderTriggerLabel = getRenderTriggerLabel(props);
+      // Mirrors the real trigger: a caller-supplied `renderTriggerLabel` owns the whole label,
+      // including the nothing-selected case, and the derived short name/placeholder is only used
+      // when there is none. Dropping that distinction would make every label assertion vacuous.
+      const label = renderTriggerLabel
+        ? renderTriggerLabel(selected)
+        : (selected?.shortName ?? buttonPlaceholder);
+      return (
+        <div
+          data-testid="project-selector-stub"
+          data-trigger-classname={buttonClassName}
+          aria-disabled={isDisabled}
+        >
+          <span data-testid="project-picker-value">{label}</span>
+        </div>
+      );
     },
-    SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
-      <div data-value={value}>{children}</div>
-    ),
-    SelectSeparator: () => <hr />,
-    // Renders children when there are any, mirroring Radix: the real `SelectValue` shows the
-    // placeholder only while nothing is selected. Dropping them would hide the project label
-    // entirely and make every assertion about it vacuous.
-    SelectValue: ({
-      placeholder,
-      children,
-    }: {
-      placeholder?: string;
-      children?: React.ReactNode;
-    }) => <span data-testid="project-picker-value">{children ?? placeholder}</span>,
+  };
+});
+
+/** Shared no-op body for the ResizeObserver stub's methods, none of which observe anything. */
+const doNothing = () => {};
+
+// Radix Tooltip uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
+// implementation.
+beforeAll(() => {
+  global.ResizeObserver = class {
+    observe = doNothing;
+
+    unobserve = doNothing;
+
+    disconnect = doNothing;
   };
 });
 
 // `clearAllMocks()` does not reset `mockReturnValue`, so without a file-wide default the value the
 // Sync-button block last set would leak into every describe that follows.
 beforeEach(() => {
+  capturedProjectSelectorProps.current = undefined;
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
   // vitest has no URL search params for the renderer to read this from, so without a file-wide
   // default it is `undefined` (a secondary window) in every describe that doesn't say otherwise —
@@ -685,42 +730,42 @@ describe('PlatformBibleToolbar — Scroll group selector visibility by interface
   });
 });
 
-describe('PlatformBibleToolbar — project picker Select visibility by interface mode', () => {
+describe('PlatformBibleToolbar — project selector visibility by interface mode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     mockSendCommand(true);
   });
 
-  it('renders project picker Select when platform.interfaceMode is "simple"', async () => {
+  it('renders the project selector when platform.interfaceMode is "simple"', async () => {
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('project-picker-select')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
   });
 
-  it('hides project picker Select when platform.interfaceMode is "power"', async () => {
+  it('hides the project selector when platform.interfaceMode is "power"', async () => {
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.queryByTestId('project-picker-select')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('project-selector-stub')).not.toBeInTheDocument();
     });
   });
 
-  it('hides project picker Select while the interface mode is not yet known', async () => {
+  it('hides the project selector while the interface mode is not yet known', async () => {
     // Same startup window the Sync button waits out: with no cached mode the setting reports its
     // 'simple' default, and a picker that power mode replaces with the Home button must not render
     // on that placeholder.
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), true]);
     const { rerender } = render(<PlatformBibleToolbar />);
     await screen.findByText('1.0.0');
-    expect(screen.queryByTestId('project-picker-select')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('project-selector-stub')).not.toBeInTheDocument();
 
     // Positive control: the same render shows the picker as soon as the mode settles.
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     rerender(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('project-picker-select')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
   });
 });
@@ -728,9 +773,9 @@ describe('PlatformBibleToolbar — project picker Select visibility by interface
 /*
  * The picker's own list is built from local metadata only, so the projects a user can reach on the
  * send/receive server but has not downloaded are not in it. The footer is the way out to Home,
- * which does merge both — and because that footer is a plain button rather than a `SelectItem`,
- * closing the dropdown is the toolbar's job. The two are asserted together: opening Home while
- * leaving the dropdown on top of it is the failure this pair exists to catch.
+ * which does merge both. Closing the popover on the way is `ProjectSelector`'s own job, asserted
+ * against the real component in
+ * `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.test.tsx`.
  */
 describe('PlatformBibleToolbar — project picker footer reaches the rest of the projects', () => {
   beforeEach(() => {
@@ -739,33 +784,28 @@ describe('PlatformBibleToolbar — project picker footer reaches the rest of the
     mockSendCommand(true);
   });
 
-  const getMoreProjects = () => screen.getByRole('button', { name: 'More projects…' });
-
-  /**
-   * Renders the toolbar and opens the dropdown. The footer only exists while the dropdown is open,
-   * the way Radix renders a `Select`'s content, so every case here has to travel the same route a
-   * user does.
-   */
-  async function renderAndOpenDropdown() {
+  /** Activates the footer the way `ProjectSelector` does when a user picks it. */
+  async function activateFooter() {
     render(<PlatformBibleToolbar />);
-    const select = await screen.findByTestId('project-picker-select');
-
+    await screen.findByTestId('project-selector-stub');
+    const { footerAction } = requireCapturedProjectSelectorProps();
+    // Asserted rather than optional-chained: a missing footer means the escape hatch was never
+    // wired up, and a silent no-op would leave the assertions below holding for the pre-act state.
+    expect(footerAction).toBeDefined();
     act(() => {
-      screen.getByTestId('project-picker-open').click();
+      footerAction?.onSelect();
     });
-    await waitFor(() => {
-      expect(select).toHaveAttribute('data-open', 'true');
-    });
-
-    return select;
   }
 
-  it('opens Home', async () => {
-    await renderAndOpenDropdown();
+  it('is labelled so a user can tell it leads out of the short list', async () => {
+    render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-selector-stub');
 
-    act(() => {
-      getMoreProjects().click();
-    });
+    expect(requireCapturedProjectSelectorProps().footerAction?.label).toBe('Test more projects');
+  });
+
+  it('opens Home', async () => {
+    await activateFooter();
 
     await waitFor(() => {
       expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
@@ -776,29 +816,10 @@ describe('PlatformBibleToolbar — project picker footer reaches the rest of the
   });
 
   it('asks Home for projects only, since a read-only resource is never an answer here', async () => {
-    await renderAndOpenDropdown();
-
-    act(() => {
-      getMoreProjects().click();
-    });
+    await activateFooter();
 
     await waitFor(() => {
       expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('platformGetResources.openHome', true);
-    });
-  });
-
-  it('closes the dropdown so it does not sit on top of the Home tab it just opened', async () => {
-    // The open assertion inside the helper doubles as this case's positive control: without it the
-    // dropdown is already closed and the assertion below would pass against a toolbar that never
-    // closes anything.
-    const select = await renderAndOpenDropdown();
-
-    act(() => {
-      getMoreProjects().click();
-    });
-
-    await waitFor(() => {
-      expect(select).toHaveAttribute('data-open', 'false');
     });
   });
 });
@@ -1028,16 +1049,14 @@ describe('PlatformBibleToolbar — top BCV and project selector styling by inter
     expect(control.getAttribute('data-classname')).toContain('tw:w-96');
   });
 
-  it('applies ghost styling to the project picker Select in simple mode', async () => {
+  it('applies ghost styling to the project selector in simple mode', async () => {
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('project-picker-select')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
     expect(
-      document
-        .querySelector('[data-select-trigger-classname]')
-        ?.getAttribute('data-select-trigger-classname'),
+      document.querySelector('[data-trigger-classname]')?.getAttribute('data-trigger-classname'),
     ).toContain('tw:border-0');
   });
 });
@@ -1312,6 +1331,20 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
 });
 
 describe('PlatformBibleToolbar project selector label', () => {
+  // `clearAllMocks()` clears call history but does not reset `mockReturnValue`, so restore the
+  // module factory's default picker data explicitly to prevent a per-test `mockReturnValue` from
+  // leaking. A per-test `mockReturnValueOnce` still takes priority over this.
+  beforeEach(async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+  });
+
   /** Renders the toolbar with the project selector's shrink step forced, since jsdom cannot measure. */
   function renderAtStep(shrinkStep: number) {
     return render(
@@ -1361,41 +1394,73 @@ describe('PlatformBibleToolbar project selector label', () => {
     expect(trigger).not.toHaveTextContent('Test Project');
   });
 
+  /** Matches one whole class token in a `class` attribute, rather than a substring of a longer one. */
+  function classMatcher(className: string) {
+    return new RegExp(`(?:^|\\s)${className.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}(?:\\s|$)`);
+  }
+
   it('lowers the trigger width floor at the narrowest step, so dropping the full name actually frees space', () => {
     // Without this the label just gets shorter inside a box still reserving 192px, and the room the
     // abbreviation was supposed to buy comes out of the reference control instead.
     const { unmount } = renderAtStep(SHRINK_STEP.WIDE);
     const wideTrigger = document
-      .querySelector('[data-select-trigger-classname]')
-      ?.getAttribute('data-select-trigger-classname');
+      .querySelector('[data-trigger-classname]')
+      ?.getAttribute('data-trigger-classname');
     unmount();
 
     renderAtStep(SHRINK_STEP.MINIMUM);
     const narrowTrigger = document
-      .querySelector('[data-select-trigger-classname]')
-      ?.getAttribute('data-select-trigger-classname');
+      .querySelector('[data-trigger-classname]')
+      ?.getAttribute('data-trigger-classname');
 
-    expect(wideTrigger).toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
-    expect(narrowTrigger).toMatch(/(?:^|\s)tw:min-w-24(?:\s|$)/);
-    expect(narrowTrigger).not.toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
+    // Compared against the exported constants rather than literal spellings, so renaming a floor
+    // moves both sides together instead of quietly leaving the test asserting a dead class.
+    const wide = classMatcher(PROJECT_TRIGGER_MIN_WIDTH_CLASS.WIDE);
+    const narrow = classMatcher(PROJECT_TRIGGER_MIN_WIDTH_CLASS.NARROW);
+    expect(wideTrigger).toMatch(wide);
+    expect(narrowTrigger).toMatch(narrow);
+    expect(narrowTrigger).not.toMatch(wide);
   });
 
-  it('re-enables pointer events on the label, which Radix SelectValue switches off for its whole subtree', async () => {
-    // Verified against the real Radix component: `SelectValue` renders
-    // `<span data-slot="select-value" style="pointer-events: none;">` and discards any className or
-    // style handed to it. Everything inside is then invisible to the pointer — no hover, so the
-    // abbreviated label's tooltip never opens and the error's native `title` never shows. The fix
-    // has to sit on the descendant, which is the one thing Radix does not control.
-    // (The mock above renders a plain span, so only the class can be checked here.)
-    renderAtStep(SHRINK_STEP.MINIMUM);
-
-    const label = screen.getByTestId('project-picker-value').firstElementChild;
-    expect(label?.className).toMatch(/(?:^|\s)tw:pointer-events-auto(?:\s|$)/);
-  });
-
-  it('re-enables pointer events on the error label too, so its title can be read', async () => {
+  it('shows the placeholder when nothing is selected, rather than an empty trigger', async () => {
     const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
-    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: undefined,
+      recentProjects: [],
+      allProjects: [{ id: 'p1', fullName: 'Project One', shortName: 'P1' }],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Test select a project');
+  });
+
+  it('names the open project even when it is missing from both picker lists', async () => {
+    // `useProjectPickerData` resolves the active editor's project by a direct metadata lookup when
+    // the shared snapshot does not carry it, so the current project can legitimately be absent from
+    // `recentProjects` and `allProjects`. Falling through to the placeholder there would tell the
+    // user nothing is open while their project is on screen.
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('Test Project (TP)');
+    expect(trigger).not.toHaveTextContent('Test select a project');
+  });
+
+  it('offers the whole error message on hover once the visible text is clipped', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
       currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
       recentProjects: [],
       allProjects: [],
@@ -1405,15 +1470,22 @@ describe('PlatformBibleToolbar project selector label', () => {
 
     renderAtStep(SHRINK_STEP.WIDE);
 
-    const errorLabel = screen.getByTitle('Project failed to load');
-    expect(errorLabel.className).toMatch(/(?:^|\s)tw:pointer-events-auto(?:\s|$)/);
+    const errorLabel = screen.getByText('Project failed to load');
+    // jsdom lays nothing out, so the clipped state the truncation tooltip keys off has to be stated.
+    Object.defineProperty(errorLabel, 'scrollWidth', { configurable: true, value: 400 });
+    Object.defineProperty(errorLabel, 'clientWidth', { configurable: true, value: 100 });
+    fireEvent.pointerEnter(errorLabel);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Project failed to load').length).toBeGreaterThan(1);
+    });
   });
 
   it('keeps an error visible at the narrowest step, where the project name would be dropped', async () => {
     // Routing the error through the label's droppable field would leave the user with a red short
     // name and no statement of what went wrong.
     const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
-    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+    vi.mocked(useProjectPickerData).mockReturnValue({
       currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
       recentProjects: [],
       allProjects: [],
@@ -1424,5 +1496,282 @@ describe('PlatformBibleToolbar project selector label', () => {
     renderAtStep(SHRINK_STEP.MINIMUM);
 
     expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Project failed to load');
+  });
+});
+
+// The simple-mode setup the project-selector describe blocks use (see 'project selector
+// visibility by interface mode'), plus the picker data each block varies.
+async function renderSimpleToolbarWith(data: Partial<ProjectPickerData>) {
+  const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+  vi.mocked(useProjectPickerData).mockReturnValue({
+    currentSimpleProject: undefined,
+    recentProjects: [],
+    allProjects: [],
+    currentSimpleProjectError: undefined,
+    isLoading: false,
+    ...data,
+  });
+  const renderResult = render(<PlatformBibleToolbar />);
+  await waitFor(() => {
+    expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
+  });
+  return renderResult;
+}
+
+describe('PlatformBibleToolbar — project selector wiring', () => {
+  const NINE_PROJECTS = Array.from({ length: 9 }, (_, i) => ({
+    id: `p${(i + 1).toString()}`,
+    shortName: `P${(i + 1).toString()}`,
+    fullName: `Project ${(i + 1).toString()}`,
+    isEditable: i < 5,
+  }));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  it('accounts for every project across the two sections, recent first', async () => {
+    await renderSimpleToolbarWith({
+      recentProjects: [NINE_PROJECTS[2], NINE_PROJECTS[0]],
+      allProjects: NINE_PROJECTS.filter((p) => p.id !== 'p3' && p.id !== 'p1'),
+    });
+
+    const { projects, availableGroupings } = requireCapturedProjectSelectorProps();
+    const grouping = (availableGroupings ?? [])[0];
+
+    // One grouping, which locks the selector into it and suppresses the group-by menu.
+    expect(availableGroupings).toHaveLength(1);
+    expect(projects).toHaveLength(9);
+
+    const bucketed = (key: string) => projects.filter((p) => grouping.getGroupKey?.(p) === key);
+
+    expect(
+      bucketed('recent')
+        .map((p) => p.id)
+        .sort(),
+    ).toEqual(['p1', 'p3']);
+    // The two buckets must PARTITION the list: every project lands in exactly one, so none can go
+    // missing. Asserting only that each key is defined proves nothing — this grouping's
+    // `getGroupKey` returns one of two constants and can never yield `undefined`.
+    expect(
+      bucketed('yours')
+        .map((p) => p.id)
+        .sort(),
+    ).toEqual(['p2', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9']);
+    // Recent sits above local projects.
+    expect(grouping.priorityKey).toBe('recent');
+    // ...and `compareProjects` orders that bucket by recency, not alphabetically.
+    expect(
+      bucketed('recent')
+        .sort(grouping.compareProjects)
+        .map((p) => p.id),
+    ).toEqual(['p3', 'p1']);
+    // The two buckets are headed by the two localized section labels.
+    expect(grouping.getSectionHeading?.('recent', [])).not.toEqual(
+      grouping.getSectionHeading?.('yours', []),
+    );
+  });
+
+  it('offers the footer action and disables nothing with zero local projects', async () => {
+    await renderSimpleToolbarWith({ recentProjects: [], allProjects: [] });
+
+    const { footerAction, isDisabled, isLoading } = requireCapturedProjectSelectorProps();
+    expect(footerAction).toBeDefined();
+    // An empty list must not disable the trigger: "More projects…" is the only way out of one, so
+    // disabling here would take the escape hatch away exactly when it is the only thing left.
+    // `ProjectSelector` disables on `isDisabled || isLoading`, so both levers are checked —
+    // asserting `isDisabled` alone would pass against a prop the toolbar never passes. That the
+    // rendered trigger really is enabled is asserted in the integration test.
+    expect(isDisabled ?? false).toBe(false);
+    expect(isLoading).toBe(false);
+  });
+
+  it("raises the selector's loading state only for a load with nothing to show yet", async () => {
+    // Nothing loaded yet: the spinner-and-disable state is warranted.
+    await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: true });
+    expect(requireCapturedProjectSelectorProps().isLoading).toBe(true);
+
+    // A background refresh while a list is already on screen must NOT reach the selector, because
+    // `ProjectSelector` disables the trigger on `isDisabled || isLoading`. `useProjectPickerData`
+    // raises `isLoading` for every project-list change, retry and recents update, so passing it
+    // through greys the control out during ordinary use — and disables it exactly as Radix
+    // refocuses it after a keyboard pick, dropping the tab position to the document body.
+    cleanup();
+    await renderSimpleToolbarWith({
+      recentProjects: [],
+      allProjects: [NINE_PROJECTS[0]],
+      isLoading: true,
+    });
+    expect(requireCapturedProjectSelectorProps().isLoading).toBe(false);
+
+    // A settled, genuinely empty list is not a loading state: the trigger stays reachable so
+    // "More projects…" is still available.
+    cleanup();
+    await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: false });
+    const settled = requireCapturedProjectSelectorProps();
+    expect(settled.isLoading).toBe(false);
+    expect(settled.isDisabled ?? false).toBe(false);
+    expect(settled.footerAction).toBeDefined();
+  });
+
+  it('marks a read-only project and leaves an editable one unmarked', async () => {
+    await renderSimpleToolbarWith({
+      allProjects: [
+        { id: 'ed', shortName: 'ED', fullName: 'Editable', isEditable: true },
+        { id: 'ro', shortName: 'RO', fullName: 'Readonly', isEditable: false },
+      ],
+    });
+
+    const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
+    expect(renderProjectIndicator).toBeDefined();
+    expect(
+      renderProjectIndicator?.({ id: 'ro', shortName: 'RO', fullName: 'Readonly' }),
+    ).not.toBeUndefined();
+    expect(
+      renderProjectIndicator?.({ id: 'ed', shortName: 'ED', fullName: 'Editable' }),
+    ).toBeUndefined();
+  });
+
+  it('leaves a project whose editability is unstated unmarked', async () => {
+    // Absent metadata means editable — the registered default for `platform.isEditable` is true —
+    // so a falsy check here would put a lock on every project a factory left unstated.
+    await renderSimpleToolbarWith({
+      allProjects: [{ id: 'un', shortName: 'UN', fullName: 'Unstated' }],
+    });
+
+    const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
+    expect(renderProjectIndicator).toBeDefined();
+    expect(
+      renderProjectIndicator?.({ id: 'un', shortName: 'UN', fullName: 'Unstated' }),
+    ).toBeUndefined();
+  });
+
+  it('marks a read-only project reached through the recent section', async () => {
+    // The two sections are separate hook outputs that the toolbar unions before deriving
+    // `readOnlyIds`. Asserting only against `allProjects` would leave a recent-only regression
+    // green, so the recent path is pinned on its own.
+    await renderSimpleToolbarWith({
+      recentProjects: [{ id: 'roRecent', shortName: 'RR', fullName: 'Readonly Recent' }],
+      allProjects: [],
+    });
+
+    const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
+    expect(
+      renderProjectIndicator?.({ id: 'roRecent', shortName: 'RR', fullName: 'Readonly Recent' }),
+    ).toBeUndefined();
+
+    cleanup();
+    await renderSimpleToolbarWith({
+      recentProjects: [
+        { id: 'roRecent', shortName: 'RR', fullName: 'Readonly Recent', isEditable: false },
+      ],
+      allProjects: [],
+    });
+
+    expect(
+      requireCapturedProjectSelectorProps().renderProjectIndicator?.({
+        id: 'roRecent',
+        shortName: 'RR',
+        fullName: 'Readonly Recent',
+      }),
+    ).not.toBeUndefined();
+  });
+
+  it('marks a read-only project with the read-only indicator, not merely with something', async () => {
+    // The assertions above only separate "a node" from `undefined`, which any placeholder would
+    // satisfy. Render what the toolbar actually returns and check it carries the localized
+    // read-only accessible name — the padlock's only carrier of meaning for a screen reader.
+    await renderSimpleToolbarWith({
+      allProjects: [{ id: 'ro', shortName: 'RO', fullName: 'Readonly', isEditable: false }],
+    });
+
+    const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
+    const indicator = renderProjectIndicator?.({
+      id: 'ro',
+      shortName: 'RO',
+      fullName: 'Readonly',
+    });
+
+    // Scoped to this container rather than `screen`: the toolbar rendered above is still mounted
+    // and carries icons of its own.
+    const { container } = render(<div>{indicator}</div>);
+    expect(within(container).getByRole('img', { name: 'Test read-only' })).toBeInTheDocument();
+  });
+
+  it('passes a localized search placeholder rather than falling back to English defaults', async () => {
+    await renderSimpleToolbarWith({ allProjects: [] });
+
+    const { localizedStrings } = requireCapturedProjectSelectorProps();
+    expect(localizedStrings?.searchPlaceholder).toBe('Test search projects');
+  });
+});
+
+describe('PlatformBibleToolbar — pending project display', () => {
+  const NEW_PROJECT = { id: 'new', shortName: 'NEW', fullName: 'New Project', isEditable: true };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  /** Picks a project from the popover, the way the real selector reports a selection. */
+  function selectProjectFromPopover(projectId: string) {
+    const onChangeSelection = getOnChangeSelection(requireCapturedProjectSelectorProps());
+    act(() => {
+      onChangeSelection?.({ projectId });
+    });
+  }
+
+  it('opens a project it has no row for without naming it, and without adding a row for it', async () => {
+    await renderSimpleToolbarWith({ allProjects: [] });
+
+    // A selection whose id the visible list does not carry — so there are no display fields to
+    // name it with.
+    selectProjectFromPopover('far');
+
+    // The positive consequence: the id really did reach the open path. Without this the rest of
+    // the assertions below all hold in the pre-act state (no projects, no selection, placeholder
+    // trigger) and the test would survive the selection wiring being deleted outright.
+    await waitFor(() =>
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'platformScriptureEditor.openScriptureEditor',
+        'far',
+      ),
+    );
+
+    const props = requireCapturedProjectSelectorProps();
+    // No phantom row is injected into the visible list, and nothing is marked as selected — a
+    // selection naming a project with no row would leave the list with no visible check.
+    expect(props.projects.some((project) => project.id === 'far')).toBe(false);
+    expect(getSelection(props)?.projectId).toBeUndefined();
+    // And the trigger does not fall back to the raw id. Standing `far (far)` in for a name would
+    // sit in the titlebar and in the trigger's accessible name for the whole pending bound, and
+    // reads as a bug rather than as a project. The placeholder is the graceful degradation here;
+    // the editor supplies the real name when it reports the project.
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).not.toHaveTextContent('far');
+    expect(trigger).toHaveTextContent('Test no projects');
+  });
+
+  it('names the newly picked project instead of a stale error for the project that failed to resolve', async () => {
+    // The current project failed to resolve (currentSimpleProjectError is set), and the user then
+    // picks a different one from the popover. The trigger must name their new pick at once rather
+    // than continuing to show the error, which would otherwise persist until the hook's promise
+    // re-runs on the editor opening.
+    await renderSimpleToolbarWith({
+      currentSimpleProject: undefined,
+      currentSimpleProjectError: 'Project failed to load',
+      allProjects: [NEW_PROJECT],
+    });
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Project failed to load');
+
+    selectProjectFromPopover('new');
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('NEW');
+    expect(trigger).not.toHaveTextContent('Project failed to load');
   });
 });
