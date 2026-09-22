@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +15,22 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   })),
   useLocalizedStrings: vi.fn(() => [{}]),
 }));
+
+// The real ErrorPopover only renders `errorDetails` inside a Radix popover that opens on click;
+// the tests below only need to assert which message the component chose to show, so the detail
+// text is rendered inline instead of behind that interaction.
+vi.mock('platform-bible-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('platform-bible-react')>();
+  return {
+    ...actual,
+    ErrorPopover: ({ errorDetails, children }: { errorDetails: string; children?: ReactNode }) => (
+      <>
+        {children}
+        <div data-testid="error-details">{errorDetails}</div>
+      </>
+    ),
+  };
+});
 
 // Stubbed so a failed write's log entry can be asserted; `Setting` is the only thing logging here.
 vi.mock('@shared/services/logger.service', () => ({
@@ -34,6 +51,7 @@ const ERROR_STRINGS = {
   '%settings_errorMessages_errorOccurred%': 'An error occurred',
   '%settings_errorMessages_viewError%': 'View error',
   '%settings_errorMessages_invalidValue%': 'Invalid value',
+  '%settings_errorMessages_notWritableYet%': 'Setting not writable yet',
 };
 
 // Props shared by every case below; only settingKey/setting/label (and `disabled`) differ per test,
@@ -298,6 +316,27 @@ describe('a setting with no writer', () => {
     fireEvent.change(input, { target: { value: 'Spanish' } });
     await act(() => vi.advanceTimersByTimeAsync(500));
     expect(screen.getByText('An error occurred')).toBeInTheDocument();
+  });
+
+  it('shows the localized "not writable yet" message instead of the raw English sentence', async () => {
+    vi.useFakeTimers();
+    vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
+    render(
+      <Setting
+        setSetting={undefined}
+        isLoading={false}
+        validateProjectSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Spanish' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    const errorDetails = screen.getByTestId('error-details');
+    expect(errorDetails).toHaveTextContent('Setting not writable yet');
+    expect(errorDetails).not.toHaveTextContent(/no writer is available/i);
+    expect(errorDetails).not.toHaveTextContent(/Error changing setting/i);
   });
 
   it('does not move the zoom readout when there is nothing to write the factor', () => {
