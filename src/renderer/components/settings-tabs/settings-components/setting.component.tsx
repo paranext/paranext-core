@@ -142,6 +142,13 @@ const SETTING_WRITE_DEBOUNCE_MS = 500;
  */
 const STEPPER_WRITE_DEBOUNCE_MS = 150;
 
+/**
+ * Marks a validated change that has no writer to send it to, so the catch below can show the
+ * localized `%settings_errorMessages_notWritableYet%` message instead of the English sentence it
+ * builds around `getErrorMessage` for a genuinely unexpected write failure.
+ */
+class SettingWriterUnavailableError extends Error {}
+
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
@@ -154,6 +161,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_errorMessages_invalidNumber%',
   '%settings_errorMessages_invalidJSON%',
   '%settings_errorMessages_invalidValue%',
+  '%settings_errorMessages_notWritableYet%',
   '%settings_errorMessages_errorOccurred%',
   '%settings_errorMessages_viewError%',
   '%settings_uiLanguageSelector_fallbackLanguages%',
@@ -270,7 +278,7 @@ export function Setting({
           // A setting whose data provider has not handed back a writer cannot be changed. That is a
           // failure, not a silent no-op: reporting it is what keeps an error on screen and stops a
           // control announcing a value it was never able to write.
-          if (!setSetting) throw new Error('no writer is available for it yet');
+          if (!setSetting) throw new SettingWriterUnavailableError();
           // Await so a rejected write (e.g. the Send/Receive write-gate) reaches the catch below
           // and surfaces as an error message instead of vanishing as an unhandled rejection.
           await setSetting(newValue);
@@ -280,6 +288,13 @@ export function Setting({
           setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
         }
       } catch (error) {
+        if (error instanceof SettingWriterUnavailableError) {
+          // The user-facing message stays localized and setting-key-free; the setting key still
+          // reaches the log for whoever debugs it.
+          logger.warn(`Setting ${settingKey} changed before a writer was available for it`);
+          setErrorMessage(localizedStrings['%settings_errorMessages_notWritableYet%']);
+          return;
+        }
         const message = `Error changing setting ${settingKey}: ${getErrorMessage(error)}`;
         // The error message below only reaches a mounted component, so a failure landing after the
         // settings tab is closed — a rejected write is at least a debounce plus a round trip behind
