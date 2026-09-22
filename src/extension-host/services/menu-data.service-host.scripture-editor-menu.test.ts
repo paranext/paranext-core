@@ -233,14 +233,13 @@ describe("The scripture editor's Project menu, per mode", () => {
    * has to sign off on.
    */
   const POWER_ONLY_COMMANDS = new Set([
-    // The four inventories: Simple has no inventory entry point.
+    // The four inventories, Markers Checklist and Open Checks: following the v0 Simple design, which
+    // has no quality tools in the Project menu.
     'platformScripture.openCharactersInventory',
     'platformScripture.openRepeatedWordsInventory',
     'platformScripture.openMarkersInventory',
     'platformScripture.openPunctuationInventory',
-    // Markers Checklist: Simple has no entry point for it.
     'platformScripture.openMarkersChecklist',
-    // Open Checks: Simple has no entry point for it.
     'platformScripture.openChecksSidePanel',
     // The auto-show footnote pane toggle: Simple keeps PT9's manual footnotes pane, which Show
     // footnotes opens and which then stays open, so Simple has no automatic behavior to turn on.
