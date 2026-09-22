@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Web;
 using System.Xml.Linq;
 using Paranext.DataProvider;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
@@ -192,6 +193,19 @@ namespace TestParanextDataProvider
                 ParatextProjects
             );
         }
+
+        /// <summary>
+        /// The options the PAPI JSON-RPC formatter actually serializes with — what a wire-shape
+        /// assertion has to use. Not interchangeable with
+        /// <see cref="SerializationOptions.CreateSerializationOptions"/>: the formatter copies only
+        /// some of those options onto its own, so an assertion made against the shared options alone
+        /// can pass while the wire differs.
+        /// </summary>
+        protected static JsonSerializerOptions WireSerializerOptions() =>
+            (
+                (StreamJsonRpc.SystemTextJsonFormatter)
+                    SerializationOptions.CreateJsonRpcMessageFormatter()
+            ).JsonSerializerOptions;
 
         /// <summary>
         /// Creates a JSON string node with the specified data

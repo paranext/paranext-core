@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { StepLoading } from './step-loading.component';
 
 const meta: Meta<typeof StepLoading> = {
-  title: 'First Run/StepLoading',
+  title: 'First run/StepLoading',
   component: StepLoading,
   tags: ['autodocs'],
 };

@@ -4,10 +4,7 @@ import { FirstRunGate } from './first-run-overlay.component';
 // Deep relative (not aliased) so the story drives the webpack-aliased renderer-hooks mock: the gate
 // renders real English chrome, and the WizardActive story's embedded LanguageStep shows a realistic
 // multi-language picker instead of the raw-key / English-only Storybook fallback.
-import {
-  resetFirstRunLanguageMock,
-  setFirstRunLanguageMock,
-} from '../../../../.storybook/mocks/first-run-language-mock-channel';
+import { withFirstRunLanguage } from '../../../../.storybook/mocks/first-run-language-mock-channel';
 
 const SETUP_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
@@ -19,14 +16,13 @@ const meta: Meta<typeof FirstRunGate> = {
   title: 'First run/FirstRunGate',
   component: FirstRunGate,
   tags: ['autodocs'],
-  beforeEach: () => {
-    setFirstRunLanguageMock({
+  decorators: [
+    withFirstRunLanguage({
       interfaceLanguage: ['en'],
       setupLanguages: SETUP_LANGUAGES,
       availableLanguages: SETUP_LANGUAGES,
-    });
-    return resetFirstRunLanguageMock;
-  },
+    }),
+  ],
 };
 export default meta;
 

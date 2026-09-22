@@ -1,12 +1,12 @@
 /**
- * Store holding the backend's view of whether a Send/Receive run is in progress, and for which
- * projects.
+ * Store holding the backend's view of whether a Send/Receive run is in progress, for which
+ * projects, and how the last one ended.
  *
  * Backend-authoritative snapshot model, the same shape as {@link ./auto-sync-blocking-store}: the
- * dotnet run bracket is the single source of truth, emits a full `{ isSyncing, projectIds }`
- * snapshot on every transition, and the producer applies it wholesale via {@link setSyncActivity}.
- * There is deliberately no local ref-counting and no timer-driven opinion about whether a sync is
- * running.
+ * dotnet run bracket is the single source of truth, emits a full snapshot — `isSyncing`,
+ * `projectIds`, `outcome` and `completedAt` — on every transition, and the producer applies it via
+ * {@link setSyncActivity}. There is deliberately no local ref-counting and no timer-driven opinion
+ * about whether a sync is running.
  *
  * One store rather than a subscription per consumer, because two consumers need the same answer at
  * different altitudes: the toolbar needs it to decide whether to MOUNT the sync indicator at all,
@@ -21,6 +21,7 @@
  */
 
 import { deepEqual, normalizeProjectId } from 'platform-bible-utils';
+import type { SyncOutcome } from 'paratext-bible-send-receive';
 
 const NO_PROJECT_IDS: readonly string[] = Object.freeze([]);
 
@@ -37,6 +38,23 @@ export type SyncActivityStoreState = {
    */
   readonly projectIds: readonly string[];
   /**
+   * How the most recently completed run turned out, when the backend says. `undefined` means
+   * "cannot say" — nothing has answered, the build does not report it, no run has completed, or a
+   * run is in progress — and is NEVER a verdict in either direction.
+   *
+   * Always `undefined` while {@link isSyncing} is true: an outcome describes a COMPLETED run, so one
+   * beside a running sync could only be the previous run's.
+   */
+  readonly outcome: SyncOutcome | undefined;
+  /**
+   * When the run {@link outcome} describes finished, as the ISO 8601 string the backend sent.
+   * Present exactly when {@link outcome} is.
+   *
+   * What it is for: a consumer reading both sync signals holds two verdicts, and this is what tells
+   * an outcome for the run that just finished apart from one left over from an earlier sync.
+   */
+  readonly completedAt: string | undefined;
+  /**
    * Whether a sync run has been observed at any point in this renderer's life. STICKY — it never
    * goes back to false.
    *
@@ -52,6 +70,8 @@ export type SyncActivityStoreState = {
 const INITIAL_STATE: SyncActivityStoreState = Object.freeze({
   isSyncing: undefined,
   projectIds: NO_PROJECT_IDS,
+  outcome: undefined,
+  completedAt: undefined,
   hasObservedSyncRun: false,
 });
 
@@ -82,6 +102,8 @@ function setState(next: SyncActivityStoreState): void {
 export function setSyncActivity(snapshot: {
   isSyncing: boolean;
   projectIds?: readonly string[];
+  outcome?: SyncOutcome;
+  completedAt?: string;
 }): void {
   // Canonicalize to upper once at ingestion, as `auto-sync-blocking-store` does and for the same
   // reason: a project id's casing is not stable across the sources that report it, the backend
@@ -95,6 +117,13 @@ export function setSyncActivity(snapshot: {
   setState({
     isSyncing: snapshot.isSyncing,
     projectIds,
+    // Dropped while syncing, as the ids are dropped when not: the contract already says an outcome
+    // is absent during a run, so this keeps a producer that breaks that from handing consumers the
+    // previous run's verdict as the running one's.
+    outcome: snapshot.isSyncing ? undefined : snapshot.outcome,
+    // Travels with the outcome, which it exists to date: a time with no verdict against it says
+    // nothing, and would order a verdict this store does not have.
+    completedAt: snapshot.isSyncing || !snapshot.outcome ? undefined : snapshot.completedAt,
     hasObservedSyncRun: state.hasObservedSyncRun || snapshot.isSyncing,
   });
 }
@@ -106,7 +135,7 @@ export function setSyncActivity(snapshot: {
  * Distinct from `setSyncActivity({ isSyncing: false })`: that asserts nothing is syncing, this
  * asserts nothing is known. Without it, a signal that disappears mid-run would pin the union at
  * `syncing` — a spinner and a live Cancel over a sync nothing can still see — for the life of the
- * renderer.
+ * renderer. "Nothing is known" covers how the last run went, too, so the outcome is cleared.
  *
  * `hasObservedSyncRun` is deliberately NOT cleared: a sync that was observed and can no longer be
  * accounted for is exactly the case whose outcome the indicator still has to report.
@@ -115,6 +144,8 @@ export function setSyncActivityUnknown(): void {
   setState({
     isSyncing: undefined,
     projectIds: NO_PROJECT_IDS,
+    outcome: undefined,
+    completedAt: undefined,
     hasObservedSyncRun: state.hasObservedSyncRun,
   });
 }

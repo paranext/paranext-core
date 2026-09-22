@@ -95,12 +95,13 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
  * "Unsynced changes" — are not implemented, because none is derivable from what Send/Receive
  * currently emits; each needs a new event from that extension, so showing them now would mean
  * guessing at state, which is precisely the untruthfulness this control exists to fix. Sync FAILURE
- * is derivable (from the last sync's per-project results) and is reported. See
- * `adr-toolbar-sync-status-is-local` in `.context/standards/Architecture-Decisions.md`.
+ * is derivable — from the last sync's per-project results, or from the backend's own sync outcome
+ * for a sync send/receive never saw — and is reported. See `adr-toolbar-sync-status-is-local` in
+ * `.context/standards/Architecture-Decisions.md`.
  */
 export function SyncStatusButton() {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
-  const { status, syncingProjects, syncProgress } = useSyncStatus();
+  const { status, syncingProjects, syncProgress, isVerdictFromBackendOnly } = useSyncStatus();
   const [isOpen, setIsOpen] = useState(false);
   const [isCancelEnabled, setIsCancelEnabled] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -762,16 +763,22 @@ export function SyncStatusButton() {
              * surface deliberately reports only whether a sync is running and whether it succeeded;
              * the sync status web view is the only place the detail behind a failure exists, so
              * without this link a failed sync would be reported with nowhere to go.
+             *
+             * Withheld when the verdict came from the backend's own signal, because that view shows
+             * send/receive's last results — a DIFFERENT sync — so the link would answer "what
+             * happened?" with an unrelated sync's detail.
              */}
-            <Button
-              data-testid="toolbar-sync-view-details-button"
-              variant="link"
-              size="sm"
-              className="tw:h-6 tw:self-start tw:px-0"
-              onClick={handleViewDetails}
-            >
-              {localizedStrings['%toolbar_sync_view_details%']}
-            </Button>
+            {!isVerdictFromBackendOnly && (
+              <Button
+                data-testid="toolbar-sync-view-details-button"
+                variant="link"
+                size="sm"
+                className="tw:h-6 tw:self-start tw:px-0"
+                onClick={handleViewDetails}
+              >
+                {localizedStrings['%toolbar_sync_view_details%']}
+              </Button>
+            )}
           </div>
         </PopoverContent>
       </Popover>

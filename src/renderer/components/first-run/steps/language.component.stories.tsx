@@ -1,14 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { fn } from 'storybook/test';
-import { type ComponentType } from 'react';
 import type { LanguageInfo } from 'platform-bible-react';
 import { LanguageStep } from './language.component';
 // Deep relative (not aliased) so the story controls the webpack-aliased renderer-hooks mock without
 // pulling it into tsc typecheck. Mirrors how extension stories reach `.storybook/*` helpers.
-import {
-  type FirstRunLanguageMock,
-  FirstRunLanguageMockContext,
-} from '../../../../../.storybook/mocks/first-run-language-mock-channel';
+import { withFirstRunLanguage } from '../../../../../.storybook/mocks/first-run-language-mock-channel';
 
 // English plus four non-English scripts, each with the setup-dialog localization keys, so all five
 // qualify for the picker. Autonyms are shown in-script (the picker never renders the English names).
@@ -21,27 +17,6 @@ const MULTIPLE_LANGUAGES: Record<string, LanguageInfo> = {
 };
 
 const ENGLISH_ONLY: Record<string, LanguageInfo> = { en: { autonym: 'English' } };
-
-// Each story wraps its component in a FirstRunLanguageMockContext.Provider so stories rendered
-// simultaneously on the autodocs page each read their own mock rather than a shared global.
-// The resolved mock is created once (outside the render function) to keep the Provider value
-// reference stable — avoids unnecessary re-renders of all context consumers.
-function withFirstRunMock(mock: Partial<FirstRunLanguageMock>) {
-  const resolvedMock: FirstRunLanguageMock = {
-    interfaceLanguage: ['en'],
-    setupLanguages: { en: { autonym: 'English' } },
-    availableLanguages: { en: { autonym: 'English' } },
-    isLoading: false,
-    ...mock,
-  };
-  return function StoryDecorator(Story: ComponentType) {
-    return (
-      <FirstRunLanguageMockContext.Provider value={resolvedMock}>
-        <Story />
-      </FirstRunLanguageMockContext.Provider>
-    );
-  };
-}
 
 const meta: Meta<typeof LanguageStep> = {
   title: 'First run/LanguageStep',
@@ -57,7 +32,7 @@ type Story = StoryObj<typeof LanguageStep>;
 /** Language list with English pre-selected (the first-run default). */
 export const Default: Story = {
   decorators: [
-    withFirstRunMock({
+    withFirstRunLanguage({
       interfaceLanguage: ['en'],
       setupLanguages: { en: { autonym: 'English' }, es: { autonym: 'Español' } },
     }),
@@ -67,7 +42,7 @@ export const Default: Story = {
 /** English plus four other qualifying languages, each shown by its in-script autonym. */
 export const MultipleLanguages: Story = {
   decorators: [
-    withFirstRunMock({
+    withFirstRunLanguage({
       interfaceLanguage: ['en'],
       setupLanguages: MULTIPLE_LANGUAGES,
       availableLanguages: MULTIPLE_LANGUAGES,
@@ -78,7 +53,7 @@ export const MultipleLanguages: Story = {
 /** Only English qualifies, so the picker collapses to a single option and hides its search box. */
 export const EnglishOnly: Story = {
   decorators: [
-    withFirstRunMock({
+    withFirstRunLanguage({
       interfaceLanguage: ['en'],
       setupLanguages: ENGLISH_ONLY,
       availableLanguages: ENGLISH_ONLY,

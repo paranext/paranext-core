@@ -134,7 +134,10 @@ function mockProjectName(projectId: string, name: string) {
  * A snapshot of a session whose last sync has finished, carrying `resultsInfo` verbatim so a test
  * can hand the hook the malformed shapes it has to survive as well as well-formed ones.
  */
-function completedStateWithResults(resultsInfo: unknown): Partial<SyncState> {
+function completedStateWithResults(
+  resultsInfo: unknown,
+  sendReceiveDate = '2026-08-24T00:00:00Z',
+): Partial<SyncState> {
   return {
     isSyncing: false,
     lastRequestedProjectIds: [],
@@ -142,14 +145,20 @@ function completedStateWithResults(resultsInfo: unknown): Partial<SyncState> {
     // wire data that does NOT match the declared shape, which is unexpressible through `ResultsData`.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     lastResults: {
-      sendReceiveDate: '2026-08-24T00:00:00Z',
+      sendReceiveDate,
       resultsInfo,
     } as SyncState['lastResults'],
   };
 }
 
-/** A completed sync in which each project reported the given `resultStatus`. */
-function completedStateFor(statusByProjectId: Record<string, string>): Partial<SyncState> {
+/**
+ * A completed sync in which each project reported the given `resultStatus`. `sendReceiveDate` dates
+ * the verdict, which is what orders it against the backend's own outcome time.
+ */
+function completedStateFor(
+  statusByProjectId: Record<string, string>,
+  sendReceiveDate?: string,
+): Partial<SyncState> {
   return completedStateWithResults(
     Object.fromEntries(
       Object.entries(statusByProjectId).map(([projectId, resultStatus]) => [
@@ -157,6 +166,7 @@ function completedStateFor(statusByProjectId: Record<string, string>): Partial<S
         { id: projectId, resultStatus },
       ]),
     ),
+    sendReceiveDate,
   );
 }
 
@@ -169,12 +179,12 @@ function completedStateFor(statusByProjectId: Record<string, string>): Partial<S
  * directly, and the seeding/retry/validation behaviour is covered in
  * `src/renderer/services/sync-activity-service.test.ts`.
  */
-function seedActivity(snapshot: { isSyncing: boolean; projectIds?: readonly string[] }) {
+function seedActivity(snapshot: Parameters<typeof setSyncActivity>[0]) {
   setSyncActivity(snapshot);
 }
 
 /** Pushes a later activity snapshot while the hook is mounted. */
-function pushActivity(snapshot: { isSyncing: boolean; projectIds?: readonly string[] }) {
+function pushActivity(snapshot: Parameters<typeof setSyncActivity>[0]) {
   act(() => setSyncActivity(snapshot));
 }
 
@@ -574,8 +584,8 @@ describe('useSyncStatus', () => {
   it('does not present the claim’s earlier verdict as the outcome of an activity-only sync', async () => {
     // The Simple-mode startup sync is invisible to the claim, so when it ends the claim's `synced`
     // describes an earlier, unrelated sync. Inheriting it would decorate this sync with a green
-    // check — and would do so even if this sync had failed. The activity signal reports only that a
-    // sync is running, never how one finished, so `unknown` is the whole of what is knowable.
+    // check — and would do so even if this sync had failed. With no outcome from the activity signal
+    // either — a build that cannot say — `unknown` is the whole of what is knowable.
     commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }));
     seedActivity({ isSyncing: false, projectIds: [] });
     captureEventCallbacks();
@@ -600,9 +610,44 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('unknown');
   });
 
-  it('keeps the claim’s verdict for a sync the claim saw as well', async () => {
-    // The other half: when the claim saw the sync too, its verdict describes THAT sync, so the
-    // suppression above must not reach it — otherwise every ordinary sync would end in `unknown`.
+  it.each([
+    { outcome: 'succeeded', earlierClaimResult: 'failed', expected: 'synced' },
+    { outcome: 'failed', earlierClaimResult: 'succeeded', expected: 'failed' },
+  ] as const)(
+    'reports an activity-only sync as $expected when the backend says it $outcome',
+    async ({ outcome, earlierClaimResult, expected }) => {
+      // The activity signal's outcome is the one verdict that describes a sync the claim never saw.
+      // The claim's own verdict is deliberately the OPPOSITE here, so a derivation that fell back to
+      // that earlier, unrelated sync cannot pass by agreeing with it.
+      commands.mockGetSyncState(completedStateFor({ PROJ1: earlierClaimResult }));
+      seedActivity({ isSyncing: false, projectIds: [] });
+      captureEventCallbacks();
+
+      const { result } = renderHook(() => useSyncStatus());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      pushActivity({ isSyncing: true, projectIds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.status).toBe('syncing');
+
+      pushActivity({ isSyncing: false, projectIds: [], outcome });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(result.current.status).toBe(expected);
+    },
+  );
+
+  it('keeps the claim’s verdict for a sync it saw, even when the outcome disagrees', async () => {
+    // When the claim saw the sync too, its verdict describes THAT sync, so the suppression above
+    // must not reach it — otherwise every ordinary sync would end in `unknown`. Its per-project
+    // results are also the richer account of that same run, so they win over a coarse outcome that
+    // contradicts them rather than both being consulted.
     commands.mockGetSyncState(
       { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
       completedStateFor({ PROJ1: 'succeeded' }),
@@ -617,12 +662,123 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('syncing');
 
     emitSyncStateChanged({ isSyncing: false });
-    pushActivity({ isSyncing: false, projectIds: [] });
+    pushActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
     expect(result.current.status).toBe('synced');
+  });
+
+  it('reports the backend outcome when it describes a later run than the claim’s verdict', async () => {
+    // Two verdicts describing different syncs. The backend signal sees every sync path, so when its
+    // run finished later it is the one that just happened, and the claim's belongs to an older sync
+    // it saw and the backend's outcome has since superseded.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }, '2026-09-18T10:00:00Z'));
+    seedActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'failed',
+      completedAt: '2026-09-18T10:05:00Z',
+    });
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+  });
+
+  it('keeps the claim’s verdict when it describes a later run than the backend outcome', async () => {
+    // The other direction: an outcome left over from an earlier run must not replace the verdict for
+    // the sync that finished after it.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }, '2026-09-18T10:05:00Z'));
+    seedActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'failed',
+      completedAt: '2026-09-18T10:00:00Z',
+    });
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('synced');
+  });
+
+  it('keeps the claim’s verdict when the backend does not date its outcome', async () => {
+    // A build reporting an outcome but no time leaves the two unorderable, and the claim's
+    // per-project verdict is the richer of the two.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }));
+    seedActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('synced');
+  });
+
+  it('reports the outcome when the claim only answers after the sync has ended', async () => {
+    // The Simple-mode startup case: send/receive activates while the sync is already running, so the
+    // claim's first answer lands after it finished. That answer carries no verdict of its own — the
+    // claim never saw this sync — and must not bury the one verdict that describes it.
+    commands.mockGetSyncState(new Error('not registered yet'), new Error('not registered yet'), {
+      isSyncing: false,
+      lastRequestedProjectIds: [],
+    });
+    seedActivity({ isSyncing: true, projectIds: [] });
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    pushActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('failed');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 3);
+    });
+
+    expect(result.current.status).toBe('failed');
+  });
+
+  it('still reports the outcome after a remount, as a Simple/Power toggle causes', async () => {
+    // The stale-verdict flag is this hook's own state, so a remount starts it over. The store
+    // outlives the hook, so the outcome is still there to be reported.
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    seedActivity({ isSyncing: true, projectIds: [] });
+    captureEventCallbacks();
+
+    const first = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: false, projectIds: [], outcome: 'failed' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(first.result.current.status).toBe('failed');
+    first.unmount();
+
+    const second = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(second.result.current.status).toBe('failed');
   });
 
   // --- Recovering from a read that could not answer ---

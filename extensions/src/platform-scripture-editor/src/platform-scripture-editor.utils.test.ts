@@ -2354,7 +2354,10 @@ describe('syncOnProjectSwitch', () => {
     ]);
   });
 
-  it('calls syncProjects before sendReceiveProjects', async () => {
+  it('syncs the incoming project last, so its result is the one reported', async () => {
+    // These are two separate backend runs and the sync indicator reports the most recent one, so
+    // whichever runs last decides the verdict the user sees. That has to be the project they
+    // switched to rather than the one they left.
     const { papi, mockSendCommand } = createSyncMockPapi();
     const callOrder: string[] = [];
     mockSendCommand.mockImplementation(async (commandName: string) => {
@@ -2364,8 +2367,8 @@ describe('syncOnProjectSwitch', () => {
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
 
     expect(callOrder).toEqual([
-      'paratextBibleSendReceive.syncProjects',
       'paratextBibleSendReceive.sendReceiveProjects',
+      'paratextBibleSendReceive.syncProjects',
     ]);
   });
 
@@ -2379,16 +2382,17 @@ describe('syncOnProjectSwitch', () => {
     );
   });
 
-  it('still calls sendReceiveProjects when syncProjects throws', async () => {
+  it('still syncs the incoming project when the outgoing flush throws', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
     mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
+      if (commandName === 'paratextBibleSendReceive.sendReceiveProjects')
+        throw new Error('S/R failed');
     });
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
-      'proj-outgoing',
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-incoming',
     ]);
   });
 

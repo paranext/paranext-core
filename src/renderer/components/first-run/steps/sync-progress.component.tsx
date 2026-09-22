@@ -92,9 +92,10 @@ function IndeterminateProgress({ label }: { label: string }) {
  * Finish is always reachable. A timeout rather than a snapshot read, of either signal
  * `use-sync-status.hook.ts` seeds from for the same "mounted after it started" problem:
  * `paratextBibleSendReceive.getSyncState` cannot see a sync that never reached the Send/Receive
- * extension's wrappers, which is the sync this step is usually waiting on, and while
- * `paratextBibleSendReceive.getSyncActivity` DOES see every path, it answers only whether a sync is
- * running — never whether one has finished. Both leave "the sync ended before this step mounted"
+ * extension's wrappers, which is the sync this step is usually waiting on.
+ * `paratextBibleSendReceive.getSyncActivity` DOES see every path, and its optional `outcome` says
+ * that A run has finished — but not that it was the run this step is waiting on, and only on a
+ * build that reports it. Everywhere else "the sync ended before this step mounted" stays
  * indistinguishable from "no sync ever started", and it is exactly that case the fallback exists
  * for. Adopting the activity signal here would still need the timeout underneath it, so this step
  * keeps the timeout alone.

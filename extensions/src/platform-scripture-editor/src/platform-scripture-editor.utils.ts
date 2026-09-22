@@ -1106,28 +1106,26 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 // #region Project-Switch Sync
 
 /**
- * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
- * independently error-isolated so a failure in one doesn't block the other. Only called in simple
- * mode after a replace-tab project switch.
+ * Fire-and-forget helper that flushes the outgoing project, then syncs the incoming one. Each sync
+ * is independently error-isolated so a failure in one doesn't block the other. Only called in
+ * simple mode after a replace-tab project switch.
  *
  * Uses `paratextBibleSendReceive.syncProjects` for the incoming project because it also pulls
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * The incoming project syncs LAST because these are two separate backend runs and the sync
+ * indicator reports the most recent one. Whichever runs last is the verdict the user is shown, and
+ * the project they just switched to — the one on screen — is what that verdict should describe. A
+ * failure flushing the outgoing project is logged rather than shown; see
+ * `adr-sync-activity-outcome-is-coarse` in `.context/standards/Architecture-Decisions.md`.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
   incomingProjectId: string,
   outgoingProjectId: string | undefined,
 ): Promise<void> {
-  try {
-    await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
-  } catch (e) {
-    papi.logger.warn(
-      `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
-    );
-  }
-
   if (outgoingProjectId) {
     try {
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
@@ -1138,6 +1136,14 @@ export async function syncOnProjectSwitch(
         `Project-switch sync: outgoing sync for ${outgoingProjectId} failed: ${getErrorMessage(e)}`,
       );
     }
+  }
+
+  try {
+    await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
+  } catch (e) {
+    papi.logger.warn(
+      `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
+    );
   }
 }
 

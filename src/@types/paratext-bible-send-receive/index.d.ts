@@ -16,10 +16,11 @@
 // consumer's `?? fallback` into a lint-flagged unnecessary coalesce, and removing that coalesce
 // crashes an older Studio build on the missing value:
 //   * `SyncState.syncingProjectIds` — required in the upstream file above.
-//   * `SyncActivitySnapshot.projectIds` — no upstream declaration to diverge from yet; this whole
-//     type, `getSyncActivity` and `onSyncActivityChanged` are declared here ahead of the Paratext 10
-//     Studio patch that raises the signal, the same way the write-gate seam
-//     (`getAutoSyncBlocking` / `onSyncWriteLockChanged`) is.
+//   * `SyncActivitySnapshot.projectIds` and `SyncActivitySnapshot.outcome` — no upstream declaration
+//     to diverge from yet; this whole type, `SyncOutcome`, `getSyncActivity` and
+//     `onSyncActivityChanged` are declared here ahead of the Paratext 10 Studio patch that raises
+//     the signal, the same way the write-gate seam (`getAutoSyncBlocking` /
+//     `onSyncWriteLockChanged`) is.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -385,7 +386,48 @@ declare module 'paratext-bible-send-receive' {
      * an array. See the DELIBERATE DIVERGENCE note at the top of this file.
      */
     projectIds?: string[];
+    /**
+     * How the most recently completed run in this backend process turned out.
+     *
+     * ABSENT means "cannot say" and must never be read as either verdict. Three situations produce
+     * it, and a consumer handles them identically: a run is in progress (it is always absent while
+     * `isSyncing` is `true`), no run has completed since the backend started, or the build predates
+     * this field. PRESENT on the snapshot that closes a run and on every later one — events and
+     * `getSyncActivity` reads alike — until the next run opens, so a consumer that seeds after a
+     * run ended still learns how it went.
+     *
+     * Optional for the same reason as {@link SyncActivitySnapshot.projectIds}; see the DELIBERATE
+     * DIVERGENCE note at the top of this file.
+     */
+    outcome?: SyncOutcome;
+    /**
+     * When the run {@link SyncActivitySnapshot.outcome} describes finished, as an ISO 8601 string.
+     * Present exactly when `outcome` is.
+     *
+     * A consumer that also reads {@link SyncState.lastResults} holds two verdicts from different
+     * sources, and this is what orders them against that snapshot's `sendReceiveDate`: the newer
+     * one describes the sync that just finished, and the older one belongs to a sync it never saw.
+     * Without it a consumer can only guess, so treat its absence as "these cannot be ordered" and
+     * fall back on something other than a guess.
+     */
+    completedAt?: string;
   };
+
+  /**
+   * How a completed Send/Receive run turned out, as carried by {@link SyncActivitySnapshot.outcome}.
+   *
+   * - `succeeded` = the run succeeded for every project it covered
+   * - `failed` = the run did not succeed for at least one project it covered. A run the user
+   *   cancelled reports this too, matching how {@link ResultInfo.resultStatus} reports a cancelled
+   *   sync as a non-success rather than as a status of its own
+   *
+   * Deliberately coarse: which projects did not succeed, and why, is in
+   * {@link SyncState.lastResults} and the sync status web view. See
+   * `adr-sync-activity-outcome-is-coarse` in `.context/standards/Architecture-Decisions.md`.
+   *
+   * @experimental The set of values in this type may change
+   */
+  export type SyncOutcome = 'succeeded' | 'failed';
 
   /**
    * Backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits on
@@ -504,7 +546,11 @@ declare module 'papi-shared-types' {
      * on failure rather than reading a rejection as "no sync is running", and should retry rather
      * than treat one rejection as the final answer.
      *
-     * @returns The current {@link SyncActivitySnapshot}
+     * @returns The current {@link SyncActivitySnapshot}. Its `outcome`, when present, describes the
+     *   most recently completed run even though that run ended before this call — which is what
+     *   lets a consumer that seeds late still report how it went. ABSENT is never a verdict; see
+     *   {@link SyncActivitySnapshot.outcome}. Core's own implementation runs no syncs, so it always
+     *   answers without one.
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
@@ -672,6 +718,12 @@ declare module 'papi-shared-types' {
      * no replay: a subscriber that starts mid-sync has already missed it, and the next thing it
      * hears is the CLOSING snapshot. A consumer that needs to be correct from the moment it starts
      * must seed from `paratextBibleSendReceive.getSyncActivity` rather than subscribing alone.
+     *
+     * The snapshot that closes a run carries that run's `outcome` on a build that reports one. The
+     * next event is the one opening the following run, which carries none — so a consumer wanting
+     * to know how the last run went reads it from the closing event or a later `getSyncActivity`
+     * call, and never reads the absence on an opening event as a verdict. See
+     * {@link SyncActivitySnapshot.outcome}.
      *
      * @experimental This event is unstable and may change or disappear without notice
      */

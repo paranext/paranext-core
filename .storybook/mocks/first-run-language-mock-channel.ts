@@ -1,16 +1,16 @@
 /**
  * Opt-in channel for the first-run language-step Storybook mock.
  *
- * Kept as its own module (only a `type` import of LanguageInfo) so story files under `src/` can
- * import from here without pulling the webpack-only `renderer-papi-hooks.tsx` mock (and its
- * `require.context` localization util) into `tsc` typecheck. The webpack-aliased mock reads this
- * same module instance at hook-call time. See `.storybook/mocks/renderer-papi-hooks.tsx`.
+ * Kept as its own module (a `type` import of LanguageInfo, plus React's `createElement` for the
+ * decorator) so story files under `src/` can import from here without pulling the webpack-only
+ * `renderer-papi-hooks.tsx` mock — and its `require.context` localization util — into `tsc`
+ * typecheck. That mock reads this same context at hook-call time. See
+ * `.storybook/mocks/renderer-papi-hooks.tsx`.
  *
- * Prefer {@link FirstRunLanguageMockContext} over {@link setFirstRunLanguageMock} for new stories —
- * the context approach is safe on the autodocs page (multiple stories rendered simultaneously),
- * whereas the global singleton causes stories to clobber each other's mock data on re-renders.
+ * Stories opt in through {@link withFirstRunLanguage}, a decorator, so that stories rendered
+ * together on the autodocs page each read their own data rather than a shared global.
  */
-import { createContext } from 'react';
+import { createContext, createElement, type ComponentType, type ReactElement } from 'react';
 import type { LanguageInfo } from 'platform-bible-react';
 
 /** Story-controlled data for the first-run language step. */
@@ -26,38 +26,28 @@ export type FirstRunLanguageMock = {
 };
 
 /**
- * React context for per-story mock isolation. Each story wraps its component in a
- * `FirstRunLanguageMockContext.Provider` so stories rendered simultaneously on the autodocs page
- * each read their own mock rather than a shared global. Consumed by the hooks in
- * `renderer-papi-hooks.tsx` via `useContext`.
+ * React context the replaced hooks read. Provided per story by {@link withFirstRunLanguage}, which
+ * is how a story's data reaches them — a hook cannot be spied on here, because the barrel is an ES
+ * module whose exports are not configurable.
  */
 export const FirstRunLanguageMockContext = createContext<FirstRunLanguageMock | undefined>(
   undefined,
 );
 
-let activeMock: FirstRunLanguageMock | undefined;
-
 /**
- * Opt the renderer hooks into first-run language-step mock data (typically from a story
- * `beforeEach`, paired with {@link resetFirstRunLanguageMock} cleanup). Unspecified fields fall back
- * to an English-only default.
+ * Story decorator pointing the first-run language hooks at `mock`; unspecified fields fall back to
+ * an English-only default. Resolved once per decorator so the provider's value keeps one identity
+ * across re-renders, rather than re-rendering every consumer.
  */
-export function setFirstRunLanguageMock(mock: Partial<FirstRunLanguageMock> = {}): void {
-  activeMock = {
+export function withFirstRunLanguage(mock: Partial<FirstRunLanguageMock> = {}) {
+  const value: FirstRunLanguageMock = {
     interfaceLanguage: ['en'],
     setupLanguages: { en: { autonym: 'English' } },
     availableLanguages: { en: { autonym: 'English' } },
     isLoading: false,
     ...mock,
   };
-}
-
-/** Restore straight passthrough to the real renderer hooks. */
-export function resetFirstRunLanguageMock(): void {
-  activeMock = undefined;
-}
-
-/** Current opt-in mock data, or `undefined` when the real hooks should be used. */
-export function getFirstRunLanguageMock(): FirstRunLanguageMock | undefined {
-  return activeMock;
+  return function StoryDecorator(Story: ComponentType): ReactElement {
+    return createElement(FirstRunLanguageMockContext.Provider, { value }, createElement(Story));
+  };
 }

@@ -4052,6 +4052,86 @@ step, no automation. Just a record.
   which matters because project CSS is layered over a base sheet.
 - **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
 
+## adr-sync-activity-outcome-is-coarse: The all-paths sync-activity signal reports a coarse outcome, not per-project results
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** Two sync signals exist and, before this decision, neither answered "how did the last
+  sync go" for every sync path. `getSyncState` / `onSyncStateChanged` carries a per-project
+  `resultStatus` but sees only syncs that claim through the Send/Receive extension's wrappers.
+  `getSyncActivity` / `onSyncActivityChanged` (`SyncActivityState`, `SyncActivityNotifierService`),
+  derived from the C# sync run marker, sees every path — including the Simple-mode startup sync
+  (`main/startup-tasks.ts`) and the picker's `syncOnProjectSwitch`, which call the dotnet commands
+  directly — but carried only `{ isSyncing, projectIds }`. Those paths therefore completed with no
+  observable outcome, and `useSyncStatus` could only report `unknown` when one ended.
+  `adr-toolbar-sync-status-is-local` names this gap and calls a semaphore-derived signal "the proper
+  general fix"; that signal exists, and PT-4569 adds the missing verdict to it (the companion
+  Paratext 10 Studio sub-task, PT-4570, populates it).
+- **Decision:** Add an optional coarse `outcome` — `'succeeded' | 'failed'` — to the activity
+  snapshot (C# `SyncOutcome?` on `SyncActivityState`; TS `SyncActivitySnapshot.outcome`). It
+  describes the most recently completed run in the backend process: absent while a run is in
+  progress, set on the snapshot that closes a run, and kept on every later snapshot and
+  `getSyncActivity` read until the next run opens. A cancelled run reports `failed`. Absent means
+  "this build cannot say" — a build predating the field, no run completed yet, or a run in flight —
+  and no consumer may read it as either verdict. The field is optional in core's seam declaration,
+  as `SyncState.syncingProjectIds` was, so core merges ahead of the Studio build that populates it.
+  In the renderer, `readSyncActivitySnapshot` (`sync-activity-service.ts`) reads it field by field —
+  an unrecognized value is logged and dropped while `isSyncing` and `projectIds` still apply — the
+  store drops it whenever `isSyncing` is true, and `useSyncStatus` consults it in two cases: when a
+  sync the claim never saw ends (`isClaimVerdictStale`), where `succeeded`/`failed` replace the
+  `unknown` that branch reported; and when the claim has reached no verdict of its own
+  (`idle`/`unknown`), where nothing else can answer. Where the claim saw the sync, its per-project
+  verdict stands and the outcome is ignored, so one run never gets two verdicts. A run ending is
+  detected during render rather than in an effect, so the ending and its verdict land in one commit —
+  the commit between them would otherwise render and announce the claim's earlier verdict, and report
+  a cancelled sync as a failure. Where both signals carry a verdict, the two are ORDERED rather than
+  guessed between: the snapshot carries `completedAt` (C# `DateTimeOffset?`) beside the outcome, and
+  `useSyncStatus` compares it against the claim's own `lastResults.sendReceiveDate`, showing whichever
+  describes the run that finished later. A build that dates neither leaves them unordered, and the
+  claim's richer per-project verdict stands. A verdict that came from the backend has no per-project
+  detail behind it — the details web view describes the last CLAIMED sync — so the popover withholds
+  its "View sync details" link for one. And the picker syncs the project being switched TO last
+  (`syncOnProjectSwitch`), because these are two backend runs and the indicator reports the most
+  recent, so the verdict the user is shown describes the project now on screen.
+- **Alternatives:** **A per-project result map** — rejected: the detail already has a home in
+  `SyncState.lastResults` and the sync status web view, and this signal's job is coverage, not
+  detail; a second copy of the results is a second place for them to drift. **A three-valued verdict
+  with `cancelled`** — rejected: the claim path reports cancellation as a non-success
+  `resultStatus`, so a distinct value here would have the two signals describe the same run
+  differently. **A boolean `succeeded`** — rejected: `false` would blur "failed" into "cannot say",
+  the one distinction this field exists to keep. **An outcome on the closing event only** —
+  rejected: a consumer that seeds after the run ended (a renderer reload) would never learn it.
+  **Keeping the outcome across later runs** — rejected: it would sit beside `isSyncing: true`
+  describing a different run. **A third positional record parameter** — rejected: it changes the
+  constructor and generated `Deconstruct` that the out-of-repo Studio patch compiles against, where
+  an `init` property does not. **Rejecting a snapshot whose outcome is unrecognized** — rejected: it
+  would discard a live `isSyncing` with it, the all-or-nothing defect
+  `adr-toolbar-sync-status-is-local` follow-up 5 records against `isValidSyncState`. **Latching
+  `hasObservedSyncRun` on a present outcome** — not done: the toolbar already mounts the indicator
+  whenever send/receive is available, and in the one case the latch would change (the extension
+  missing) the indicator would mount showing `unknown`, not the verdict. **Keeping a failure sticky
+  until a later sync of the same projects succeeds** — rejected: it would make the indicator report
+  something other than the last sync, which is a product decision about what the control means rather
+  than an accuracy fix. **Syncing both projects of a switch in one call** — not taken: one run would
+  report one verdict covering both, at the cost of a deep sync on the project being left.
+- **Consequences:** An activity-only sync now ends in `synced` or `failed` on a build that reports
+  the outcome, and still in `unknown` on one that does not. Ordering the two verdicts depends on the
+  Studio build populating `completedAt` as well as `outcome`; a build reporting neither behaves as it
+  did before, with the claim's verdict standing. This does not close
+  `adr-toolbar-sync-status-is-local` follow-up 1 (those paths still raise no claim) or the
+  overlapping sync notifications recorded there, which still fall short of reporting sync status
+  once and truthfully. Open items, none filed as of this entry:
+  1. *A watchdog re-query in flight when the closing snapshot arrives* re-applies the older "still
+     syncing" answer and drops the outcome until the next tick. Pre-existing, and `completedAt` does
+     not help: the stale answer is a live read of whether a sync is running, not a verdict to order.
+  2. *A project switch still runs two backend runs*, so a failure flushing the project being left is
+     logged rather than shown. Reporting both would take one run covering both projects, at the cost
+     of a deep sync on the way out.
+  3. *`first-run/steps/sync-progress.component.tsx`* could read the outcome rather than rely on its
+     recovery timeout alone, but still needs the timeout for a build that cannot say.
+  4. *"Has this user ever synced"* (PT-4327) — the outcome lasts one backend process, so answering
+     that across restarts still needs persistence.
+
 ## adr-tab-menu-channel-and-window-naming: The tab context menu is a contribution channel, and a window is named by its content
 
 - **Date:** 2026-08-25

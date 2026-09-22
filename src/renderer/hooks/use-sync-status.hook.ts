@@ -16,6 +16,7 @@ import { getErrorMessage } from 'platform-bible-utils';
 import { useEvent, usePromise } from 'platform-bible-react';
 import type {
   ResultStatus,
+  SyncOutcome,
   SyncProgressDetail,
   SyncProgressEvent,
 } from 'paratext-bible-send-receive';
@@ -80,6 +81,14 @@ export type SyncStatusInfo = {
    * render the sync perfectly well without this.
    */
   syncProgress?: SyncProgress;
+  /**
+   * Whether the reported verdict came from the backend's sync-activity signal rather than from
+   * Send/Receive's own results. There is no per-project detail behind such a verdict, and the sync
+   * details view describes a different sync, so a caller offering a way into that detail has
+   * nothing to offer for this one. `false` whenever there is no verdict to speak of (`idle`,
+   * `syncing`, `unknown`).
+   */
+  isVerdictFromBackendOnly: boolean;
 };
 
 /**
@@ -129,6 +138,16 @@ const FAILED_RESULT_STATUSES: ReadonlySet<string> = new Set<ResultStatus>([
   'notUpgraded',
   'projectVersionUpgraded',
 ]);
+
+/**
+ * What a completed run's backend outcome means for this status. A map rather than a chain of
+ * comparisons so that a new `SyncOutcome` fails to compile until it is given a status here, instead
+ * of silently degrading to `unknown`.
+ */
+const STATUS_BY_OUTCOME: Record<SyncOutcome, SyncStatus> = {
+  succeeded: 'synced',
+  failed: 'failed',
+};
 
 /**
  * Whether a value is a per-project result carrying a `resultStatus` this build recognizes. An
@@ -188,8 +207,22 @@ type ReadableSyncState = {
   isSyncing: boolean;
   lastRequestedProjectIds: string[];
   syncingProjectIds?: string[];
-  lastResults?: { resultsInfo?: unknown };
+  lastResults?: { resultsInfo?: unknown; sendReceiveDate?: unknown };
 };
+
+/**
+ * A wire timestamp as milliseconds, or `undefined` when it is not a time that can be ordered.
+ *
+ * Both signals date the verdict they carry — the claim's `lastResults.sendReceiveDate` and the
+ * activity snapshot's `completedAt` — and comparing the two is the only way to tell which verdict
+ * describes the sync that just finished. An unreadable value answers `undefined` rather than `NaN`,
+ * which compares false against everything and would quietly settle every comparison one way.
+ */
+function readTimestamp(value: unknown): number | undefined {
+  if (typeof value !== 'string') return undefined;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? undefined : time;
+}
 
 /**
  * Maps a snapshot to the status to show. Unlike an event — where `isSyncing: false` always means a
@@ -289,24 +322,36 @@ export function useSyncStatus(): SyncStatusInfo {
   // seed is still in flight — from "No sync is running" to "The sync status isn't available right
   // now," which is what is true during a cold start with a scheduled sync already under way.
   const [claimStatus, setClaimStatus] = useState<SyncStatus>('unknown');
+  /**
+   * When the sync {@link claimStatus}'s verdict describes finished, in milliseconds, or `undefined`
+   * when there is no dated verdict to compare — the claim has reached none, or the snapshot
+   * carrying it did not date it. Ordered against the activity signal's own outcome time to tell
+   * which of the two verdicts describes the sync that just finished.
+   */
+  const [claimVerdictAt, setClaimVerdictAt] = useState<number | undefined>(undefined);
   const [syncingProjectIds, setSyncingProjectIds] = useState<readonly string[]>(NO_PROJECT_IDS);
   /**
-   * The backend's view of whether a sync is running, and for which projects, read from the shared
-   * sync-activity store (`initSyncActivityService` owns the one subscription and the seed).
+   * The backend's view of whether a sync is running, for which projects, and how the last one
+   * ended, read from the shared sync-activity store (`initSyncActivityService` owns the one
+   * subscription and the seed).
    *
    * Independent of the claim because it covers paths the claim cannot see (see
    * `SyncActivitySnapshot`). `isSyncing` is `undefined` when no snapshot has answered — a cold
    * start still in flight, or permanently on a build predating this signal — which the derivation
    * below treats as "no input from this signal" rather than as a claim in either direction.
+   * `outcome` is likewise `undefined` whenever the backend cannot say, and is never read as a
+   * verdict.
    *
    * Read through the store rather than subscribed here so both this hook and the toolbar's mount
    * gate see one validated snapshot, and so the seed survives this hook unmounting (a Simple/Power
    * toggle) instead of restarting.
    */
-  const { isSyncing: activitySyncing, projectIds: activityProjectIds } = useSyncExternalStore(
-    subscribeToSyncActivity,
-    getSyncActivityState,
-  );
+  const {
+    isSyncing: activitySyncing,
+    projectIds: activityProjectIds,
+    outcome: activityOutcome,
+    completedAt: activityCompletedAt,
+  } = useSyncExternalStore(subscribeToSyncActivity, getSyncActivityState);
   /**
    * Whether the claim's follow-up read of {@link syncingProjectIds} is in flight. Held in state
    * rather than a ref because {@link effectiveProjectIds} is derived during render and has to see
@@ -320,10 +365,11 @@ export function useSyncStatus(): SyncStatusInfo {
    * Whether {@link claimStatus}'s settled verdict describes a sync OLDER than the last one the
    * activity signal reported. Set when a sync only the activity signal could see ends: the claim
    * never saw that sync, so its `synced`/`failed` belongs to some earlier, unrelated sync and
-   * presenting it as this one's outcome would put a green check on a sync whose result is unknown —
-   * and, if that sync failed, on one that failed. Cleared as soon as the claim reports anything of
-   * its own again — from an event, or from the seed's own read, which is the only one of the two
-   * that ever happens on a Simple-mode launch.
+   * presenting it as this one's outcome would put a green check on a sync the claim knows nothing
+   * about — and, if that sync failed, on one that failed. The activity signal's own `outcome` is
+   * what fills the gap when it has one. Cleared as soon as the claim reports anything of its own
+   * again — from an event, or from the seed's own read, which is the only one of the two that ever
+   * happens on a Simple-mode launch.
    */
   const [isClaimVerdictStale, setIsClaimVerdictStale] = useState(false);
   /**
@@ -376,6 +422,26 @@ export function useSyncStatus(): SyncStatusInfo {
     setSyncingProjectIds((prevIds) => (isSameProjectIdSet(prevIds, nextIds) ? prevIds : nextIds));
   }, []);
 
+  /**
+   * Applies everything a `getSyncState` snapshot says: the claim's status, the projects it names,
+   * when the verdict it carries was reached, and that the claim has now reported something of its
+   * own.
+   *
+   * That last part is why every path applying a snapshot goes through here. The stale flag is
+   * otherwise only ever cleared by an EVENT, and the paths that set it are precisely the ones the
+   * claim raises no event for — so a Simple-mode launch would set it once, find nothing to clear
+   * it, and report `unknown` for the rest of the session.
+   */
+  const applyClaimSnapshot = useCallback(
+    (state: ReadableSyncState) => {
+      setClaimStatus(deriveStatusFromSnapshot(state));
+      applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
+      setClaimVerdictAt(readTimestamp(state.lastResults?.sendReceiveDate));
+      setIsClaimVerdictStale(false);
+    },
+    [applySyncingProjectIds],
+  );
+
   const readSyncState = useCallback(async (): Promise<ReadableSyncState | undefined> => {
     try {
       const state = await sendCommand('paratextBibleSendReceive.getSyncState');
@@ -397,16 +463,7 @@ export function useSyncStatus(): SyncStatusInfo {
     () =>
       seedWithRetry({
         read: readSyncState,
-        apply: (state) => {
-          setClaimStatus(deriveStatusFromSnapshot(state));
-          applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
-          // The claim has now reported something of its own, so whatever verdict it carries
-          // describes what it just read rather than a sync it never saw. Without this the flag is
-          // only ever cleared by an EVENT, and the paths that set it are precisely the ones the
-          // claim raises no event for — so a Simple-mode launch would set it once, find nothing to
-          // clear it, and report `unknown` for the rest of the session.
-          setIsClaimVerdictStale(false);
-        },
+        apply: applyClaimSnapshot,
         // Out of budget with no answer. Set explicitly rather than relying on the initial
         // `unknown` still standing: an event may have moved the claim on and then been superseded,
         // and "we could not find out" is the only claim this path has earned.
@@ -416,7 +473,7 @@ export function useSyncStatus(): SyncStatusInfo {
         logLabel: 'sync status',
       }),
     // `seedGeneration` is a dependency so that bumping it restarts this loop; see its declaration.
-    [readSyncState, applySyncingProjectIds, seedGeneration],
+    [readSyncState, applyClaimSnapshot, seedGeneration],
   );
 
   /**
@@ -432,12 +489,7 @@ export function useSyncStatus(): SyncStatusInfo {
       stopEventReadRetryRef.current?.();
       stopEventReadRetryRef.current = seedWithRetry({
         read: readSyncState,
-        apply: (state) => {
-          setClaimStatus(deriveStatusFromSnapshot(state));
-          applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
-          // The claim has reported something of its own again; see `isClaimVerdictStale`.
-          setIsClaimVerdictStale(false);
-        },
+        apply: applyClaimSnapshot,
         // Nothing to say: the `unknown` this loop was started to improve on is already showing, and
         // it remains the honest answer.
         hasEventApplied: () => sequence !== eventSequenceRef.current,
@@ -445,7 +497,7 @@ export function useSyncStatus(): SyncStatusInfo {
         logLabel: 'sync status after an unreadable event',
       });
     },
-    [readSyncState, applySyncingProjectIds],
+    [readSyncState, applyClaimSnapshot],
   );
 
   // Stops the event path's retry loop when this hook goes away, so a read resolving afterwards
@@ -521,8 +573,7 @@ export function useSyncStatus(): SyncStatusInfo {
             }
             return undefined;
           }
-          setClaimStatus(deriveStatusFromSnapshot(state));
-          applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
+          applyClaimSnapshot(state);
           return undefined;
         })
         .catch((e: unknown) => {
@@ -534,7 +585,7 @@ export function useSyncStatus(): SyncStatusInfo {
             setIsClaimRereadInFlight(false);
         });
     },
-    [readSyncState, applySyncingProjectIds, startEventReadRetry],
+    [readSyncState, applySyncingProjectIds, applyClaimSnapshot, startEventReadRetry],
   );
 
   const onSyncStateChanged = useMemo(
@@ -590,30 +641,29 @@ export function useSyncStatus(): SyncStatusInfo {
   useEvent(onDidReloadExtensions, handleExtensionsReloaded);
 
   /**
-   * Tracks whether the claim also saw the sync the activity signal is reporting, so that when that
-   * sync ends {@link isClaimVerdictStale} can say whether the claim's verdict describes it or some
-   * earlier sync. The claim seeing it is recorded while the sync is still running, because once it
-   * has ended `claimStatus` no longer distinguishes the two cases.
+   * The run the activity signal is reporting, and whether the claim saw it too. When that run ends,
+   * {@link isClaimVerdictStale} uses this to say whether the claim's verdict describes it or an
+   * earlier sync. The claim seeing it has to be recorded while the run is still going, because
+   * afterwards `claimStatus` no longer separates the two cases.
+   *
+   * Tracked DURING RENDER rather than in an effect, which would settle the flag one commit late —
+   * and that commit renders, and announces, the claim's earlier verdict as this run's. The toolbar
+   * reads the settling status to decide whether a non-success outcome is the cancel the user asked
+   * for, so the late commit also reports a cancelled sync as a failure. Setting state during render
+   * re-renders before anything is shown, which keeps the run ending and its verdict in one commit.
    */
-  const isActivitySyncingRef = useRef(false);
-  const didClaimSeeActivitySyncRef = useRef(false);
-  useEffect(() => {
-    if (activitySyncing) {
-      isActivitySyncingRef.current = true;
-      if (claimStatus === 'syncing') didClaimSeeActivitySyncRef.current = true;
-      return;
-    }
-    // `undefined` (the signal cannot tell) lands here too. It is not read as a sync ENDING — no
-    // status is settled from it — but a `true → undefined` transition, reachable when a
-    // `seedGeneration` restart exhausts its retries with send/receive gone, does fall through to
-    // mark the claim's verdict stale. That is deliberate: a sync the activity signal reported and
-    // can no longer account for has an unknowable outcome, and `unknown` is the honest answer. Only
-    // the never-was-syncing case returns early, because there is no sync to have lost track of.
-    if (!isActivitySyncingRef.current) return;
-    isActivitySyncingRef.current = false;
-    if (!didClaimSeeActivitySyncRef.current) setIsClaimVerdictStale(true);
-    didClaimSeeActivitySyncRef.current = false;
-  }, [activitySyncing, claimStatus]);
+  const [activityRun, setActivityRun] = useState({ isSyncing: false, didClaimSee: false });
+  if (activitySyncing) {
+    const didClaimSee = activityRun.didClaimSee || claimStatus === 'syncing';
+    if (!activityRun.isSyncing || didClaimSee !== activityRun.didClaimSee)
+      setActivityRun({ isSyncing: true, didClaimSee });
+  } else if (activityRun.isSyncing) {
+    // `undefined` (the signal cannot tell) lands here too, and deliberately: a run it reported and
+    // can no longer account for has an unknowable outcome, which is what `unknown` says. Only the
+    // never-was-syncing case falls through, because there is no run to have lost track of.
+    setActivityRun({ isSyncing: false, didClaimSee: false });
+    if (!activityRun.didClaimSee) setIsClaimVerdictStale(true);
+  }
 
   /**
    * The single derived status. The OR is deliberate and monotone: either input claiming a sync is
@@ -624,12 +674,15 @@ export function useSyncStatus(): SyncStatusInfo {
    * showing idle mid-sync is precisely the bug this hook exists to fix. Do not add a third
    * authority here; add an input.
    *
-   * What the activity signal cannot supply is an OUTCOME: it reports that a sync is running, never
-   * how one finished. So for a sync only it could see — the Simple-mode startup sync, the picker's
-   * per-project sync — there is no verdict to be had, and the claim's own last verdict describes a
-   * different sync entirely. Reporting `unknown` there is the whole point of that state: it says a
-   * sync happened and how it went is not knowable, instead of decorating it with an unrelated
-   * sync's green check.
+   * Which verdict a finished sync ends with depends on what can be established about the two. When
+   * this hook watched a run end that the claim never saw — the Simple-mode startup sync, the
+   * picker's per-project sync — the claim's verdict belongs to a different sync, so the backend's
+   * `outcome` answers, or `unknown` when there is none. When the claim has reached no verdict at
+   * all (`idle`/`unknown`), the outcome is the only one on offer. When both carry a verdict, the
+   * one describing the run that finished LATER wins, which is what their timestamps settle; where a
+   * build dates neither, the claim's richer per-project verdict stands. Reporting `unknown` rather
+   * than guessing is the point of that state: a sync happened and how it went is not knowable,
+   * which beats decorating it with an unrelated sync's green check.
    *
    * The reverse direction is deliberately NOT wired: the activity signal reporting `isSyncing:
    * false` does not clear a claim that says `syncing`. The two disagree that way for an ordinary
@@ -638,11 +691,38 @@ export function useSyncStatus(): SyncStatusInfo {
    * start. A genuinely stranded claim would need a signal that distinguishes the two, which neither
    * input carries today.
    */
-  const status: SyncStatus = (() => {
-    if (activitySyncing) return 'syncing';
+  const { status, isVerdictFromBackendOnly } = ((): {
+    status: SyncStatus;
+    isVerdictFromBackendOnly: boolean;
+  } => {
+    /** A verdict Send/Receive reached itself — or none at all — so its detail view fits. */
+    const claimVerdict = (value: SyncStatus) => ({
+      status: value,
+      isVerdictFromBackendOnly: false,
+    });
+    /** A verdict from the backend signal, which carries no per-project detail behind it. */
+    const backendVerdict = (value: SyncStatus) => ({
+      status: value,
+      isVerdictFromBackendOnly: true,
+    });
+    if (activitySyncing) return claimVerdict('syncing');
     // A claim that is itself reporting a sync is describing the current one, not an earlier one.
-    if (isClaimVerdictStale && claimStatus !== 'syncing') return 'unknown';
-    return claimStatus;
+    if (claimStatus === 'syncing') return claimVerdict('syncing');
+    const outcomeStatus = activityOutcome ? STATUS_BY_OUTCOME[activityOutcome] : undefined;
+    // A run ended here that the claim never saw, so whatever verdict it holds is not this run's.
+    if (isClaimVerdictStale)
+      return outcomeStatus ? backendVerdict(outcomeStatus) : claimVerdict('unknown');
+    if (!outcomeStatus) return claimVerdict(claimStatus);
+    // The claim reached no verdict of its own, so the backend's outcome is the only one on offer.
+    if (claimStatus === 'idle' || claimStatus === 'unknown') return backendVerdict(outcomeStatus);
+    // Two verdicts from two signals. The one describing the run that finished later is this sync's;
+    // the other belongs to a sync its own signal never saw.
+    const outcomeAt = readTimestamp(activityCompletedAt);
+    if (outcomeAt !== undefined && claimVerdictAt !== undefined)
+      return outcomeAt > claimVerdictAt ? backendVerdict(outcomeStatus) : claimVerdict(claimStatus);
+    // Nothing dates them, so nothing orders them, and the claim's per-project verdict is the
+    // richer of the two. A build that does not report an outcome time lands here.
+    return claimVerdict(claimStatus);
   })();
 
   // Progress describes a RUNNING sync, so it is dropped the moment one is not. Without this the last
@@ -715,8 +795,8 @@ export function useSyncStatus(): SyncStatusInfo {
   );
 
   return useMemo(
-    () => ({ status, syncingProjects, syncProgress }),
-    [status, syncingProjects, syncProgress],
+    () => ({ status, syncingProjects, syncProgress, isVerdictFromBackendOnly }),
+    [status, syncingProjects, syncProgress, isVerdictFromBackendOnly],
   );
 }
 

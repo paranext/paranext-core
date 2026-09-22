@@ -30,11 +30,20 @@ const LONG_NAME_PROJECT = [
 ];
 
 /**
+ * What a story names. `isVerdictFromBackendOnly` defaults to false — the ordinary case, where
+ * send/receive reported the verdict itself and the details behind it exist — so only the story
+ * about a verdict the backend reported has to say otherwise.
+ */
+type StoryStatus = Omit<SyncStatusMock, 'isVerdictFromBackendOnly'> &
+  Partial<Pick<SyncStatusMock, 'isVerdictFromBackendOnly'>>;
+
+/**
  * Each story wraps the button in its own provider so stories rendered together on the autodocs page
  * each read their own status. The value is built outside the render function to keep its identity
  * stable across re-renders.
  */
-function withSyncStatus(mock: SyncStatusMock) {
+function withSyncStatus(status: StoryStatus) {
+  const mock: SyncStatusMock = { isVerdictFromBackendOnly: false, ...status };
   return function StoryDecorator(Story: ComponentType) {
     return (
       <SyncStatusMockContext.Provider value={mock}>
@@ -63,8 +72,8 @@ function withSyncEndingAfterCancel(syncingProjects: SyncStatusMock['syncingProje
     const mock = useMemo<SyncStatusMock>(
       () =>
         hasEnded
-          ? { status: 'failed', syncingProjects: [] }
-          : { status: 'syncing', syncingProjects },
+          ? { status: 'failed', syncingProjects: [], isVerdictFromBackendOnly: false }
+          : { status: 'syncing', syncingProjects, isVerdictFromBackendOnly: false },
       // `syncingProjects` is the decorator factory's own argument, fixed for the story's lifetime.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [hasEnded],
@@ -235,6 +244,19 @@ export const PopoverSynced: Story = {
 /** Popover after a sync that did not succeed — the case "View sync details" exists for. */
 export const PopoverFailed: Story = {
   decorators: [withSyncStatus({ status: 'failed', syncingProjects: [] })],
+  play: openPopover,
+};
+
+/**
+ * A sync send/receive never saw — the Simple-mode startup sync — which the backend itself reported
+ * as failed. The popover states the outcome and stops there: "View sync details" opens
+ * send/receive's own last results, which describe a DIFFERENT sync, so there is no detail to offer
+ * for this one.
+ */
+export const PopoverFailedFromBackend: Story = {
+  decorators: [
+    withSyncStatus({ status: 'failed', syncingProjects: [], isVerdictFromBackendOnly: true }),
+  ],
   play: openPopover,
 };
 
