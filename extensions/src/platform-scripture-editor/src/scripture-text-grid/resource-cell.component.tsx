@@ -3,7 +3,13 @@ import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import { useExtraValidMarkers } from 'platform-bible-react';
-import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+} from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
@@ -12,7 +18,7 @@ import {
   ResourceCellView,
   type ZoomMenuLabels,
 } from './resource-cell-view.component';
-import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
+import { DEFAULT_ZOOM_FACTOR } from './resource-zoom.utils';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';

@@ -228,11 +228,11 @@ import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { adjustZoomFactor } from '@shared/utils/content-zoom.util';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
 import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
+  adjustZoomFactor,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,

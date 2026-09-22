@@ -1,7 +1,6 @@
 import type React from 'react';
 import { useEffect } from 'react';
-import { createContentZoomWheelReader } from 'platform-bible-utils';
-import { ZOOM_STEP } from './resource-zoom.utils';
+import { createContentZoomWheelReader, ZOOM_STEP } from 'platform-bible-utils';
 
 export type ResourceZoomInputOptions = {
   /** The grid container the listeners attach to. */
@@ -47,8 +46,8 @@ export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomI
     const container = containerRef.current;
     if (!container) return undefined;
 
-    // Explicit rather than relying on the util's own default: the grid's real step lives in
-    // `resource-zoom.utils.ts`, and the two only agree today because both happen to be 0.1.
+    // Explicit rather than relying on the reader's own default, so the grid's step stays pinned to
+    // ZOOM_STEP even if the reader's default computation changes for a different reason.
     const reader = createContentZoomWheelReader({ zoomStep: ZOOM_STEP });
 
     const onWheel = (event: WheelEvent) => {

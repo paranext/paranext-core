@@ -54,6 +54,7 @@ export {
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
 export { usfmMarkers, isBlockMarker, isCharacterMarker } from './markers/usfm-markers';
+export { MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR, ZOOM_STEP } from './content-zoom.util';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -147,6 +148,7 @@ export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
 export { computeEffectiveStructureProtection } from './structure-protection.util';
 export { createContentZoomWheelReader } from './content-zoom-wheel.util';
+export { clampZoom, roundZoom, adjustZoomFactor } from './content-zoom.util';
 
 // Types
 export type { EffectiveStructureProtectionInputs } from './structure-protection.util';

@@ -1,6 +1,7 @@
 import type { WebViewProps } from '@papi/core';
+import { adjustZoomFactor, clampZoom, roundZoom } from 'platform-bible-utils';
 import { useCallback, useMemo, useRef } from 'react';
-import { DEFAULT_ZOOM_FACTOR, adjustZoomFactor, clampZoom, roundZoom } from './resource-zoom.utils';
+import { DEFAULT_ZOOM_FACTOR } from './resource-zoom.utils';
 
 /** Per-resource zoom factors keyed by the stable resourceId. */
 export type ZoomByResourceId = Record<string, number>;

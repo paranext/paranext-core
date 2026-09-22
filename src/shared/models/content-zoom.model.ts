@@ -1,5 +1,10 @@
 import type { LocalizeKey, ReferencedItem } from 'platform-bible-utils';
-import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
+import {
+  DEFAULT_ZOOM_FACTOR,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+  ZOOM_STEP,
+} from '@shared/data/platform.data';
 import {
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
@@ -25,14 +30,11 @@ export {
 export type { ContentZoomAreaId } from '@shared/models/web-view.model';
 
 /**
- * The allowed range and step for a content zoom factor, defined once alongside the rest of the
- * platform's zoom constants; core code reaches them from here rather than from `platform.data`
- * directly.
+ * The allowed range and step for a content zoom factor, defined once in `platform-bible-utils`
+ * (re-exported through `platform.data`); core code reaches them from here rather than from
+ * `platform.data` directly.
  */
-export { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR };
-
-/** Amount one zoom-in / zoom-out step changes a content zoom factor. */
-export const ZOOM_STEP = 0.1;
+export { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP };
 
 /**
  * Web-view definition `state` key holding the kind and identity — `kind:identity`, the first two
