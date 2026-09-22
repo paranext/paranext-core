@@ -4,7 +4,7 @@ import {
   getMenuContributingExtensions,
   getMenuDataEngineInMode,
   getRealCombinedMenus,
-} from './menu-data.service-host.test-helper';
+} from './menu-data.service-host.test-utils';
 
 /** How many application main menu items a shipped `menus.json` contributes. */
 function countMainMenuItems(menus: JsonDocumentLike): number {
