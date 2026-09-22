@@ -634,7 +634,24 @@ global.webViewComponent = function CommentListWebView({
           verseRef: verseRef.toJSON(),
           offset: Math.max(0, (thread.comments[0]?.startPosition ?? 0) - 1),
         };
-        editorWebViewController.selectRange({ start: location, end: location });
+        // Wrapped rather than left floating: `selectRange` rejects when the editor cannot resolve
+        // the location, and the tab can close between this callback being handed to the list and
+        // the user clicking, leaving a revoked proxy whose property read throws synchronously. Fall
+        // back to the verse the way the branch below does when there is no editor to ask, so the
+        // click still moves the editor instead of doing nothing.
+        try {
+          editorWebViewController.selectRange({ start: location, end: location })?.catch((e) => {
+            logger.warn(
+              `Comment list: failed to select the comment's range in the editor: ${getErrorMessage(e)}`,
+            );
+            setScrRef(verseRef.toJSON());
+          });
+        } catch (e) {
+          logger.warn(
+            `Comment list: could not ask the editor to select the comment's range: ${getErrorMessage(e)}`,
+          );
+          setScrRef(verseRef.toJSON());
+        }
       } else {
         setScrRef(verseRef.toJSON());
       }
