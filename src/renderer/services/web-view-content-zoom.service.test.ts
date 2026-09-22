@@ -1,3 +1,4 @@
+import { adjustZoomFactor } from 'platform-bible-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -19,10 +20,10 @@ import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 // The mocked logger, so a test can assert on a warning it produced.
 // eslint-disable-next-line import/first
 import { logger } from '@shared/services/logger.service';
-// The percent formatter and zoom-step arithmetic, so an assertion spells the number exactly as the
-// code does rather than hard-coding a rounding of its own.
+// The percent formatter, so an assertion spells the number exactly as the code does rather than
+// hard-coding a rounding of its own.
 // eslint-disable-next-line import/first
-import { adjustZoomFactor, formatZoomPercent } from '@shared/utils/content-zoom.util';
+import { formatZoomPercent } from '@shared/utils/content-zoom.util';
 // The service itself, for the same reason as the type import above.
 // eslint-disable-next-line import/first
 import {

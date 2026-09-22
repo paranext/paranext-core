@@ -1,3 +1,5 @@
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP } from './content-zoom.util';
+
 /**
  * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
  * a trackpad pinch. Both the platform's per-pane zoom and the Text Collection grid's per-resource
@@ -70,16 +72,16 @@ export type ContentZoomWheelReaderOptions = {
 type LegacyWheelEvent = WheelEvent & { wheelDeltaY?: number };
 
 /**
- * Width of the platform's zoom range in factor units, and its default step. Mirrors
- * `MIN_ZOOM_FACTOR`/`MAX_ZOOM_FACTOR`/`ZOOM_STEP` in `@shared/models/content-zoom.model` by value,
- * not by import: this package has no dependency on the app, and the bootstrap script that owns
- * those constants cannot import from here either, since it runs as injected source text inside the
- * web view.
+ * Width of the platform's zoom range in factor units, sourced from {@link MIN_ZOOM_FACTOR} and
+ * {@link MAX_ZOOM_FACTOR} — the one definition the platform's own content-zoom model re-exports. The
+ * bootstrap script that scales a whole pane cannot reach this import, since it runs as injected
+ * source text inside the web view rather than as a module, so it restates the same values there
+ * instead.
  */
-const ZOOM_RANGE_WIDTH = 3.0 - 0.5;
+const ZOOM_RANGE_WIDTH = MAX_ZOOM_FACTOR - MIN_ZOOM_FACTOR;
 
-/** Matches the platform's own default content-zoom step. */
-const DEFAULT_ZOOM_STEP = 0.1;
+/** Matches the platform's own default content-zoom step, {@link ZOOM_STEP}. */
+const DEFAULT_ZOOM_STEP = ZOOM_STEP;
 
 /**
  * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
