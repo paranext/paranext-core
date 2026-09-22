@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+// No mocks needed: unlike the module under test below, this one has no module-level code that
+// touches the mocked services, so it can be imported normally rather than after the mocks.
+import { platformProjectSettings } from './core-project-settings-info.data';
 
 vi.mock('@extension-host/services/papi-backend.service', () => ({
   localization: {
@@ -241,5 +244,34 @@ describe('settings layout', () => {
     const all = groups.flatMap((group) => Object.keys(group.properties));
     expect(new Set(all).size).toBe(all.length);
     expect(all.sort()).toEqual(expectedKeys.sort());
+  });
+});
+
+describe('content zoom settings are core (user) settings, never project settings', () => {
+  // ProjectSettingsContribution is a single group OR a group array (same shape `platformSettings`
+  // itself takes above); `platformProjectSettings` happens to be one group today, but this reads it
+  // the same normalized way rather than assuming so.
+  const projectSettingGroups = Array.isArray(platformProjectSettings)
+    ? platformProjectSettings
+    : [platformProjectSettings];
+
+  it('is registered only under platformSettings, with no matching key in platformProjectSettings', () => {
+    // Send/Receive's project sync reaches settings registered as ProjectSettingsContribution
+    // (`platformProjectSettings`, `core-project-settings-info.data.ts`) — the ScrText-backed keys
+    // like `platform.isEditable` and `platform.language`. The content-zoom keys are per-window UI
+    // state, registered instead under `platformSettings` (SettingsContribution), a separate
+    // registration surface with no project-sync marker of its own. This pins that split by
+    // construction: a future edit that moved either key onto `platformProjectSettings` would put
+    // per-window zoom state on the one registration surface a project sync can reach.
+    expect(groups.some((group) => 'platform.webViewContentZoom' in group.properties)).toBe(true);
+    expect(groups.some((group) => 'platform.webViewContentZoomMemory' in group.properties)).toBe(
+      true,
+    );
+    expect(
+      projectSettingGroups.some((group) => 'platform.webViewContentZoom' in group.properties),
+    ).toBe(false);
+    expect(
+      projectSettingGroups.some((group) => 'platform.webViewContentZoomMemory' in group.properties),
+    ).toBe(false);
   });
 });
