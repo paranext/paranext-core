@@ -5,7 +5,7 @@
  *   default.
  * - Its tab menu has no zoom items, and the zoom chord inside it changes nothing.
  * - In Simple mode such a tab has no tab menu at all, by mouse or by Shift+F10.
- * - Each mode has a declared pane as its positive control: the Comments panel in Power mode, and Find
+ * - Each mode has a declared pane as its positive control: a Scripture editor in Power mode, and Find
  *   in Simple mode's Column 3.
  *
  * Home is the non-zoomable tab in both modes. Every fixed Simple Column-3 tab is declared zoomable,
@@ -17,26 +17,16 @@ import { type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady, waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
 import {
-  type CommentTestProject,
-  cleanupCommentTestProject,
-  createCommentTestProject,
-  createCommentThreads,
-  openCommentListPanel,
-} from '../../../fixtures/comment-test-helpers';
-import {
   getEditorFrame,
+  openScriptureEditorForProject,
   readFactor,
+  SAMPLE_WEB_PROJECT_ID,
   sendPapiCommandWhenRegistered,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
 
 /** `webViewType` of Home (`extensions/src/platform-get-resources/src/main.ts`). */
 const HOME_WEBVIEW_TYPE = 'platformGetResources.home';
-/**
- * `webViewType` of the Comment List Panel
- * (`src/renderer/components/docking/simple-layout.data.ts`).
- */
-const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
 /** `webViewType` of Find (`FIND_WEBVIEW_TYPE` in `src/shared/models/web-view.model.ts`). */
 const FIND_WEBVIEW_TYPE = 'platformScripture.find';
 /** The Settings default seeded before launch: far enough from 100 % that a scaled Home is obvious. */
@@ -66,50 +56,41 @@ test.describe('Power mode', () => {
   test.use({
     interfaceMode: 'power',
     seedSettings: { 'platform.webViewContentZoom': SEEDED_DEFAULT },
-    electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
+    electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
   });
   test.setTimeout(300_000);
 
-  let project: CommentTestProject;
-
-  test.beforeAll(async () => {
-    project = await createCommentTestProject([], '_zoom_items_presence');
-  });
-
-  test.afterAll(() => {
-    cleanupCommentTestProject(project);
-  });
-
-  test('Home is never scaled and offers no zoom; the Comments panel offers it', async ({
+  test('Home is never scaled and offers no zoom; a Scripture editor offers it', async ({
     mainPage,
   }) => {
     test.slow();
     await waitForHomeTab(mainPage);
     const homeId = await waitForOpenWebViewIdByType(mainPage, HOME_WEBVIEW_TYPE);
+    const homeTab = mainPage.locator(`.platform-tab-title[data-web-view-id="${homeId}"]`);
     const homeFrame = await getEditorFrame(mainPage, homeId);
     const homeInput = homeFrame.locator('input').first();
     await homeInput.waitFor();
 
-    await createCommentThreads(project, ['GEN 1:1'], ['Zoom items presence marker']);
-    await openCommentListPanel(project.projectId);
-    const panelId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_PANEL_WEBVIEW_TYPE);
-    const panelFrame = await getEditorFrame(mainPage, panelId);
-    await expect(panelFrame.locator('body')).toContainText('Zoom items presence marker', {
-      timeout: 90_000,
-    });
+    const editorId = await openScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+    const editorFrame = await getEditorFrame(mainPage, editorId);
+    await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+    // The editor may open over Home in the same tab stack; Home's geometry reads need it shown.
+    await homeTab.click();
+    await homeInput.waitFor();
 
     await test.step('the seeded default reached the declared pane (control)', async () => {
-      await expect.poll(() => readFactor(panelFrame, '')).toBe(SEEDED_DEFAULT);
+      await expect.poll(() => readFactor(editorFrame, '')).toBe(SEEDED_DEFAULT);
     });
 
     await test.step('Home renders at 100 % content zoom although the default is 150 %', async () => {
-      // Home loaded at launch, long before the Comments panel above, so any delayed whole-view
-      // scale (the one-second stale-area wait) would have landed by now.
+      // Home loaded at launch, long before the editor above, so any delayed whole-view scale (the
+      // one-second stale-area wait) would have landed by now.
       expect(await hostZoomOf(mainPage, homeId)).toBe('');
       const before = await homeInput.boundingBox();
+      expect(before).not.toBeNull();
       await setDefaultZoomSetting(mainPage, 1);
       // Control: the change reached a zoomable pane, so an unchanged Home below is the rule at work.
-      await expect.poll(() => readFactor(panelFrame, '')).toBe(1);
+      await expect.poll(() => readFactor(editorFrame, '')).toBe(1);
       expect((await homeInput.boundingBox())?.height).toBe(before?.height);
       expect(await hostZoomOf(mainPage, homeId)).toBe('');
     });
@@ -117,14 +98,15 @@ test.describe('Power mode', () => {
     await test.step('Ctrl+= inside Home changes nothing', async () => {
       await homeInput.click();
       const before = await homeInput.boundingBox();
+      expect(before).not.toBeNull();
       await mainPage.keyboard.press('Control+Equal');
       expect(await hostZoomOf(mainPage, homeId)).toBe('');
       expect((await homeInput.boundingBox())?.height).toBe(before?.height);
     });
 
-    await test.step("the Comments panel's tab menu offers the zoom items (control)", async () => {
+    await test.step("the Scripture editor's tab menu offers the zoom items (control)", async () => {
       await mainPage
-        .locator(`.platform-tab-title[data-web-view-id="${panelId}"]`)
+        .locator(`.platform-tab-title[data-web-view-id="${editorId}"]`)
         .click({ button: 'right' });
       await expect(mainPage.getByRole('menuitem', { name: 'Zoom in' })).toBeVisible();
       await mainPage.keyboard.press('Escape');
@@ -132,9 +114,7 @@ test.describe('Power mode', () => {
     });
 
     await test.step("Home's tab menu has no zoom items and still offers Float tab", async () => {
-      await mainPage
-        .locator(`.platform-tab-title[data-web-view-id="${homeId}"]`)
-        .click({ button: 'right' });
+      await homeTab.click({ button: 'right' });
       await expect(mainPage.getByRole('menuitem', { name: 'Float tab' })).toBeVisible();
       await expect(mainPage.getByRole('menuitem', { name: 'Zoom in' })).toHaveCount(0);
       await expect(mainPage.getByRole('menuitem', { name: 'Zoom out' })).toHaveCount(0);
