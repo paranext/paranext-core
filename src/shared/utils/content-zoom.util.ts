@@ -1,5 +1,6 @@
 import {
   CONTENT_ZOOM_AREA_ID_PATTERN,
+  CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE,
   ContentZoomKind,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
@@ -37,8 +38,16 @@ export function isValidContentZoomAreaId(value: unknown): value is string {
   );
 }
 
+/**
+ * Every kind some declared web view type uses, read from the declaration map so the set of kinds a
+ * memory key may carry cannot drift from the map.
+ */
+const DECLARED_CONTENT_ZOOM_KINDS: ReadonlySet<string> = new Set(
+  [...CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.values()].map((declaration) => declaration.kind),
+);
+
 function isContentZoomKind(value: string): value is ContentZoomKind {
-  return value === 'editor' || value === 'resource' || value === 'notes';
+  return DECLARED_CONTENT_ZOOM_KINDS.has(value);
 }
 
 /**
