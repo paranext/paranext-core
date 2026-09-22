@@ -92,6 +92,10 @@ jobs:
 
       - name: Install snap tools on Linux
         if: ${{ matrix.os == env.OS_LINUX }}
+        # snapd downloads from the Snap Store, which can stall for tens of minutes during a store
+        # outage (https://status.snapcraft.io). A healthy run finishes this step in about a minute, so
+        # fail here rather than hold the runner until the 6-hour job default.
+        timeout-minutes: 15
         run: |
           sudo apt update
           sudo apt install -y snapd
@@ -325,6 +329,11 @@ jobs:
         run: npm run lint
 
       - name: check packaging
+        # Linux only: that leg builds the snap, and snapcraft downloads its build snaps from the Snap
+        # Store inside the LXD instance, which a store outage (https://status.snapcraft.io) stalls
+        # for as long as the job allows. A healthy Linux run takes well under half this budget;
+        # Windows and macOS keep GitHub's 6-hour maximum.
+        timeout-minutes: ${{ matrix.os == env.OS_LINUX && 30 || 360 }}
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
