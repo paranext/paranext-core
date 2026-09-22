@@ -134,7 +134,9 @@ export function isEditorContentForChapter(
  * which is re-pointed to the new chapter's setter from a `useEffect` BODY, not during render. A
  * cross-chapter flush (itself running in an effect CLEANUP) still relies on React's
  * cleanup-before-body ordering to observe the OLD chapter's setter there before that `useEffect`
- * body reassigns it.
+ * body reassigns it. Were that ordering to change, the flush would be dropped rather than written
+ * to the wrong chapter: the ref carries the chapter its setter writes to, and a save bound to
+ * another chapter refuses it.
  */
 export function performDebouncedPdpSave({
   usj,

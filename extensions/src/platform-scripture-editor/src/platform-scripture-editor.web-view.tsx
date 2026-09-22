@@ -2640,10 +2640,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // entire layout phase of each render. If a useLayoutEffect fires during a chapter-change render
   // (e.g. footnote-editor closing), this ref still holds the OLD chapter's setter — preventing
   // footnote changes from being saved to the wrong chapter.
-  const saveUsjToPdpRawStableRef = useRef<typeof saveUsjToPdpRaw>(saveUsjToPdpRaw);
+  //
+  // Paired with the key of the chapter the setter writes to, so a save can refuse a setter that has
+  // moved on to another chapter: a write that settles after navigation can go on to save again
+  // through the chapter it was typed in, and by then this ref holds the NEW chapter's setter.
+  // Nothing downstream refuses that write — the backend renumbers the chapter marker to the chapter
+  // being written, so one chapter's text would silently replace another's.
+  const saveUsjToPdpRawStableRef = useRef({
+    save: saveUsjToPdpRaw,
+    chapterKey: getChapterKey(
+      chapterUsjSelector.book,
+      chapterUsjSelector.chapterNum,
+      chapterUsjSelector.versificationStr,
+    ),
+  });
   useEffect(() => {
-    saveUsjToPdpRawStableRef.current = saveUsjToPdpRaw;
-  }, [saveUsjToPdpRaw]);
+    saveUsjToPdpRawStableRef.current = {
+      save: saveUsjToPdpRaw,
+      chapterKey: getChapterKey(
+        chapterUsjSelector.book,
+        chapterUsjSelector.chapterNum,
+        chapterUsjSelector.versificationStr,
+      ),
+    };
+  }, [saveUsjToPdpRaw, chapterUsjSelector]);
 
   // `useProjectData`'s underlying `useData` hook doesn't reset its value back to the default when
   // the selector (here, `scrRef`) changes — it keeps the previous chapter's USJ until the new
@@ -2988,8 +3008,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     async function saveUsjToPdpInternal(newUsj: Usj): Promise<boolean> {
-      const rawSave = saveUsjToPdpRawStableRef.current;
+      const { save: rawSave, chapterKey: rawSaveChapterKey } = saveUsjToPdpRawStableRef.current;
       if (!rawSave) return false;
+      if (rawSaveChapterKey !== savedChapterKey) {
+        logger.warn(
+          `Not saving the editor's content for ${savedChapterKey}: the save now writes to ${rawSaveChapterKey}, the chapter selected since`,
+        );
+        return false;
+      }
 
       const deliveriesAtWriteStart = pdpDeliveryCount.current;
       try {
