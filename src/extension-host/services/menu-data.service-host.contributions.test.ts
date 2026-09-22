@@ -278,3 +278,60 @@ describe('Pruning empties menu groups but never a whole column', () => {
     expect(emptyColumns).toEqual([]);
   });
 });
+
+describe("The Scripture editor's hamburger offers zoom in Simple mode only", () => {
+  const ZOOM_COMMANDS = [
+    'platform.webViewContentZoomIn',
+    'platform.webViewContentZoomOut',
+    'platform.webViewContentZoomReset',
+  ];
+
+  /**
+   * The editor's top menu as the menu data service serves it in `mode`. The editor contributes no
+   * main-menu item, so `getMenuContributingExtensions` skips it and its document is combined here
+   * explicitly.
+   */
+  async function getEditorTopMenuInMode(mode: 'simple' | 'power') {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue(mode);
+    const combiner = new MenuDocumentCombiner(menuDataObject);
+    const editorMenus: JsonDocumentLike = JSON.parse(
+      readFileSync(
+        resolve(EXTENSIONS_DIR, 'platform-scripture-editor/contributions/menus.json'),
+        'utf8',
+      ),
+    );
+    combiner.addOrUpdateContribution(readManifestName('platform-scripture-editor'), editorMenus);
+    const combined = combiner.rawOutput;
+    if (!combined)
+      throw new Error('Platform menu document failed to combine with the editor menus');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(combined);
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+    return (await engine.getWebViewMenu('platformScriptureEditor.react')).topMenu;
+  }
+
+  function zoomCommandsIn(topMenu: Awaited<ReturnType<typeof getEditorTopMenuInMode>>): string[] {
+    return (topMenu?.items ?? []).flatMap((item) =>
+      'command' in item && ZOOM_COMMANDS.includes(item.command) ? [item.command] : [],
+    );
+  }
+
+  test('Power mode: no zoom item in the hamburger', async () => {
+    const topMenu = await getEditorTopMenuInMode('power');
+    // Positive control: the editor's own menu was served, so the absence below is the mode filter.
+    expect(
+      topMenu?.items.some(
+        (item) => 'command' in item && item.command === 'platformScriptureEditor.toggleFootnotes',
+      ),
+    ).toBe(true);
+    expect(zoomCommandsIn(topMenu)).toEqual([]);
+  });
+
+  test('Simple mode: all three zoom items in the hamburger', async () => {
+    expect(zoomCommandsIn(await getEditorTopMenuInMode('simple')).sort()).toEqual(
+      [...ZOOM_COMMANDS].sort(),
+    );
+  });
+});
