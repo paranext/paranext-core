@@ -71,8 +71,11 @@ export type ContentZoomRootProps = HTMLAttributes<HTMLDivElement> & {
  * up the `--platform-content-zoom-<areaId>` custom property (`--platform-content-zoom-main` for the
  * unnamed area, `--platform-content-zoom-default` as a fallback) on the view's `documentElement`.
  *
- * A view that marks no area at all is scaled as a whole at the Settings default zoom level and gets
- * no per-pane zoom control.
+ * A view that marks no area gets no content zoom unless the platform declares its web view type
+ * zoomable. Your view is zoomable only while at least one element carrying
+ * `data-platform-content-zoom-root` is rendered: the tab menu's zoom items, Ctrl/⌘ + `+`/`-`/`0`
+ * and Ctrl/⌘+wheel appear and act only then. If your view shows nothing to zoom for a while (before
+ * a search, while loading), render an empty marked element so the controls stay available.
  *
  * @example
  *
