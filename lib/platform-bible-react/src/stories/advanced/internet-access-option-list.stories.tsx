@@ -16,14 +16,15 @@ const localizedStrings = {
     'Block internet when in sensitive locations',
   '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
     'Paratext checks the location your internet connection appears to come from. Where that location is flagged as sensitive — or cannot be confirmed — access to the Registry, Send/Receive, and the Digital Bible Library is blocked. Elsewhere they work normally.',
-  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL internet access',
+  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable all Internet access',
   '%paratextRegistration_description_internetUse_option_Disabled_details%':
     'Blocks all internet access within the Paratext app. Other applications on your computer are not affected.',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Configure proxy',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%':
     'Routes Paratext internet traffic through a configured proxy server.',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_footer%': 'Disabled options are planned for future updates.',
+  '%paratextRegistration_internetUse_footer_2%':
+    'Options marked “Coming soon” are planned for future updates.',
 };
 
 function Controlled(
@@ -47,20 +48,20 @@ export default meta;
 
 type Story = StoryObj<typeof InternetAccessOptionList>;
 
-/** Option 1 (Unrestricted) selected — active row, description text visible. */
+/** "Unrestricted" selected — active row, description text visible. */
 export const Unrestricted: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
 };
 
 /**
- * Option 2 selected — "Block internet when in sensitive locations", which blocks only where the
- * location is flagged as sensitive or cannot be confirmed.
+ * "Block internet when in sensitive locations" selected — blocks only where the location cannot be
+ * confirmed safe.
  */
 export const SensitiveLocations: Story = {
   render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
 };
 
-/** Option 3 selected — "Disable ALL internet access". */
+/** "Disable all Internet access" selected — the only option that blocks unconditionally. */
 export const AllInternetDisabled: Story = {
   render: (args) => <Controlled {...args} initialValue="Disabled" />,
 };

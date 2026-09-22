@@ -185,29 +185,30 @@ public class InternetSettingsLogicTests
         Assert.That(result, Is.Null);
     }
 
+    // "Disable all Internet access" is only as good as this write. SetProxy happens to force
+    // Disabled today, but nothing in Paratext 10 Studio guarantees it will keep doing so, and the
+    // user's choice must not depend on that.
     [Test]
-    public void ReassertedRawStatus_EnabledCurrentAndDisabledRequested_ReturnsNull()
+    public void ReassertedRawStatus_EnabledCurrentAndDisabledRequested_ReturnsDisabled()
     {
         var result = InternetSettingsLogic.ReassertedRawStatus(
             InternetUse.Enabled,
             InternetUse.Disabled
         );
-        Assert.That(result, Is.Null);
+        Assert.That(result, Is.EqualTo(InternetUse.Disabled));
     }
 
-    // ----- VpnDisconnectedException -----
+    // ----- ParatextData contract, guarding the TypeScript detector -----
 
     [Test]
     public void VpnDisconnectedException_Message_NamesTheExceptionType()
     {
-        // ParatextData throws this when the sensitive-locations setting blocks a request. It declares
-        // no message of its own, so .NET's default — which names the type — is the only text that
-        // reaches TypeScript, and platform-bible-utils
-        // `isErrorMessageAboutParatextSensitiveLocationBlock` matches on that type name. If a
-        // ParatextData update gives the exception a real message, update that detector to match.
+        // The exception declares no message, so .NET's default — which names the type — is all that
+        // reaches TypeScript, where `isErrorMessageAboutParatextSensitiveLocationBlock` matches on
+        // that name. If ParatextData gives it a real message, update that detector.
         Assert.That(
             new VpnDisconnectedException().Message,
-            Does.Contain("VpnDisconnectedException")
+            Does.Contain("Paratext.Data.VpnDisconnectedException")
         );
     }
 }

@@ -168,13 +168,10 @@ globalThis.webViewComponent = function HomeWebView() {
         setIsSendReceiveInProgress(false);
       }
 
-      // The failures we can recognize get their own notification with a link to the setting that
-      // fixes them, the same way the shared-projects fetch reports them — their raw messages are
-      // ParatextData internals and say nothing a user can act on.
-      const internetBlockedNotification = getInternetBlockedNotification(
-        errorMessage,
-        sharedProjectErrorNotificationId,
-      );
+      // The failures we can recognize report through a notification instead of Home's "Sync failed"
+      // alert: their raw messages are ParatextData internals, and only the notification carries the
+      // link to the setting that fixes them.
+      const internetBlockedNotification = getInternetBlockedNotification(errorMessage);
       if (internetBlockedNotification) {
         papi.notifications.send(internetBlockedNotification);
         return;
@@ -223,10 +220,9 @@ globalThis.webViewComponent = function HomeWebView() {
         }
       } catch (e) {
         const errorMessage = getErrorMessage(e);
-        const internetBlockedNotification = getInternetBlockedNotification(
-          errorMessage,
-          sharedProjectErrorNotificationId,
-        );
+        // An internet block does not retry: ParatextData caches the location lookup that produced
+        // it, so the answer cannot change within this ladder's few seconds.
+        const internetBlockedNotification = getInternetBlockedNotification(errorMessage);
         if (internetBlockedNotification) {
           papi.notifications.send(internetBlockedNotification);
         } else if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {

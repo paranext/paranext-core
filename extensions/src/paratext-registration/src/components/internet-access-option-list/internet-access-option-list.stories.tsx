@@ -32,20 +32,20 @@ function createDecorator(initialValue: InternetUse) {
   };
 }
 
-/** Option 1 (Unrestricted) selected — active row, description text visible. */
+/** "Unrestricted" selected — active row, description text visible. */
 export const Unrestricted: Story = {
   decorators: [createDecorator('Enabled')],
 };
 
 /**
- * Option 2 selected — "Block internet when in sensitive locations", which blocks only where the
- * location is flagged as sensitive or cannot be confirmed.
+ * "Block internet when in sensitive locations" selected — blocks only where the location cannot be
+ * confirmed safe.
  */
 export const SensitiveLocations: Story = {
   decorators: [createDecorator('VpnRequired')],
 };
 
-/** Option 3 selected — "Disable all Internet access". */
+/** "Disable all Internet access" selected — the only option that blocks unconditionally. */
 export const AllInternetDisabled: Story = {
   decorators: [createDecorator('Disabled')],
 };

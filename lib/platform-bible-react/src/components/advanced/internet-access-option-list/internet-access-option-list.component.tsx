@@ -62,7 +62,7 @@ function isInternetUse(value: string): value is InternetUse {
 export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
   ...OPTION_ROWS.flatMap((row) => [row.labelKey, row.descriptionKey]),
   '%paratextRegistration_internetUse_comingSoon%',
-  '%paratextRegistration_internetUse_footer%',
+  '%paratextRegistration_internetUse_footer_2%',
 ];
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -112,6 +112,9 @@ export function InternetAccessOptionList({
             <RadioGroupItem
               value={row.value}
               id={`internet-option-${row.value}`}
+              // Each option's description qualifies what it does — most of all the sensitive-locations
+              // one — so it has to reach assistive tech, which announces the label alone by default.
+              aria-describedby={`internet-option-${row.value}-description`}
               disabled={disabled || !row.isEnabled}
               className="tw:mt-0.5"
             />
@@ -135,7 +138,10 @@ export function InternetAccessOptionList({
                   </Badge>
                 )}
               </div>
-              <p className="tw:text-xs tw:text-muted-foreground">
+              <p
+                id={`internet-option-${row.value}-description`}
+                className="tw:text-xs tw:text-muted-foreground"
+              >
                 {localizedStrings[row.descriptionKey]}
               </p>
             </div>
@@ -144,7 +150,7 @@ export function InternetAccessOptionList({
       </RadioGroup>
       {showFooter && (
         <p className="tw:px-2 tw:text-xs tw:text-muted-foreground">
-          {localizedStrings['%paratextRegistration_internetUse_footer%']}
+          {localizedStrings['%paratextRegistration_internetUse_footer_2%']}
         </p>
       )}
     </div>

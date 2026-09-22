@@ -111,6 +111,17 @@ function hasKnown(providerName: string): boolean {
   return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
 }
 
+/**
+ * One id for both internet-block messages: a single block fails every subscription that reaches
+ * ParatextData, and without a shared id each one would raise its own identical notification.
+ */
+const INTERNET_BLOCKED_NOTIFICATION_ID = 'platform.internetBlocked';
+
+const SHOW_INTERNET_SETTINGS_COMMAND =
+  // TS doesn't realize this is a valid command handler key since it is defined in an extension
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  'paratextRegistration.showInternetSettings' as keyof CommandHandlers;
+
 function constructErrorNotification(exception: unknown): PlatformNotification | undefined {
   const retVal: PlatformNotification = {
     severity: 'error',
@@ -123,14 +134,12 @@ function constructErrorNotification(exception: unknown): PlatformNotification | 
 
   if (isErrorMessageAboutParatextBlockingInternetAccess(exception)) {
     retVal.message = '%data_loading_error_internetAccess_disabled_2%';
-    // TS doesn't realize this is a valid command handler key since it is defined in an extension
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    retVal.clickCommand = 'paratextRegistration.showInternetSettings' as keyof CommandHandlers;
+    retVal.clickCommand = SHOW_INTERNET_SETTINGS_COMMAND;
+    retVal.notificationId = INTERNET_BLOCKED_NOTIFICATION_ID;
   } else if (isErrorMessageAboutParatextSensitiveLocationBlock(exception)) {
     retVal.message = '%data_loading_error_internetAccess_sensitiveLocation%';
-    // TS doesn't realize this is a valid command handler key since it is defined in an extension
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    retVal.clickCommand = 'paratextRegistration.showInternetSettings' as keyof CommandHandlers;
+    retVal.clickCommand = SHOW_INTERNET_SETTINGS_COMMAND;
+    retVal.notificationId = INTERNET_BLOCKED_NOTIFICATION_ID;
   } else if (isErrorMessageAboutRegistryAuthFailure(exception)) {
     retVal.message = '%data_loading_error_paratextData_auth_failure%';
   } else {

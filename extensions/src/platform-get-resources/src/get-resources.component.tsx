@@ -43,12 +43,11 @@ import type { DblResourceData, LocalizedStringValue, PlatformError } from 'platf
 import {
   FAILED_PRECONDITION,
   getErrorMessage,
-  isErrorMessageAboutParatextBlockingInternetAccess,
-  isErrorMessageAboutParatextSensitiveLocationBlock,
   isPlatformError,
   newPlatformError,
 } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
+import { getInternetBlockedMessage } from './internet-block-notification.utils';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -328,12 +327,6 @@ export function GetResources({
   const getLocalizedString = (key: GetResourcesLocalizedStringKey): string =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
-  const internetDisabledText: string = getLocalizedString(
-    '%data_loading_error_internetAccess_disabled_2%',
-  );
-  const locationBlockedText: string = getLocalizedString(
-    '%data_loading_error_internetAccess_sensitiveLocation%',
-  );
   const errorTitleText: string = getLocalizedString('%general_error_title%');
   const actionText: string = getLocalizedString('%resources_action%');
   const anyLanguage: string = getLocalizedString('%resources_any_language%');
@@ -371,17 +364,18 @@ export function GetResources({
   // action callback rejects, so failures are visible rather than only logged by the webview.
   const [actionError, setActionError] = useState<string | undefined>(undefined);
 
-  // Callers signal "the backing provider has not resolved yet" with a sentinel rather than a
-  // message, because the text the user reads has to be localized and this component is the half
-  // that holds the localized strings. ParatextData's two internet blocks are recognized too: their
-  // raw messages describe ParatextData internals, not the setting that caused them. Any other
-  // rejection carries a message worth showing — minus the cross-process prefix, which tells the user
-  // nothing.
+  // This component holds the localized strings, so callers signal the not-ready case with a
+  // sentinel rather than text, and ParatextData's internet blocks are swapped for our own wording —
+  // their raw messages describe ParatextData internals. Anything else shows its own message, minus
+  // the cross-process prefix. An unresolved key falls back to the raw message: strings load
+  // asynchronously, and `%data_loading_error_...%` reads worse than the failure itself.
   const getActionErrorText = (error: unknown): string => {
     if (isResourceActionProviderNotReadyError(error)) return providerNotReadyText;
-    if (isErrorMessageAboutParatextBlockingInternetAccess(error)) return internetDisabledText;
-    if (isErrorMessageAboutParatextSensitiveLocationBlock(error)) return locationBlockedText;
-    return stripCrossProcessPrefix(getErrorMessage(error));
+    const blockedMessageKey = getInternetBlockedMessage(error);
+    const blockedText = blockedMessageKey
+      ? localizedStringsWithLoadingState[0][blockedMessageKey]
+      : undefined;
+    return blockedText ?? stripCrossProcessPrefix(getErrorMessage(error));
   };
 
   const handleInstallOrRemoveResource = async (dblEntryUid: string, action: ResourceAction) => {

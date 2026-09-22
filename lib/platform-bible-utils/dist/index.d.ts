@@ -1587,6 +1587,9 @@ export declare function isErrorMessageAboutParatextBlockingInternetAccess(errorM
  * locations" setting. ParatextData raises this both where the current location is flagged as
  * sensitive and where it cannot determine the location at all.
  *
+ * Matches the exception's type name within the message, so text that merely quotes that type — a
+ * forwarded stack trace, a logged inner exception — matches too.
+ *
  * @param errorMessage Error message or exception to check
  * @returns `true` if the message indicates Paratext blocked internet access because it could not
  *   confirm the current location is safe, `false` otherwise

@@ -57,17 +57,22 @@ export function internetSettingsFrame(mainPage: Page): FrameLocator {
   return mainPage.frameLocator('iframe[title*="Internet" i]');
 }
 
-/**
- * The two connectivity options tests toggle between.
- *
- * "Disable all Internet access" is selectable too, but deliberately not offered here. These
- * settings are machine-wide and shared with any co-installed Paratext 9, so a test that selected it
- * and then saved would cut ParatextData off from the internet on the developer's machine until
- * someone noticed and changed it back.
- */
-export function selectableConnectivityOptions(frame: FrameLocator): {
+/** The panel's heading, which is also what says the web view has finished loading. */
+export function internetSettingsHeading(frame: FrameLocator): Locator {
+  return frame.locator('h2');
+}
+
+/** Waits for the panel to finish loading. Every test needs this before touching the form. */
+export async function waitForInternetSettingsPanel(frame: FrameLocator): Promise<void> {
+  await expect(internetSettingsHeading(frame)).toBeVisible({ timeout: 15_000 });
+}
+
+/** Every connectivity option, in the order the panel lists them. */
+export function connectivityOptions(frame: FrameLocator): {
   unrestricted: Locator;
   sensitiveLocations: Locator;
+  allInternetDisabled: Locator;
+  configureProxy: Locator;
 } {
   return {
     // %paratextRegistration_description_internetUse_option_Enabled_2%
@@ -76,26 +81,54 @@ export function selectableConnectivityOptions(frame: FrameLocator): {
     sensitiveLocations: frame.getByRole('radio', {
       name: 'Block internet when in sensitive locations',
     }),
+    // %paratextRegistration_description_internetUse_option_Disabled_2%
+    allInternetDisabled: frame.getByRole('radio', { name: 'Disable all Internet access' }),
+    // %paratextRegistration_description_internetUse_option_ProxyOnly_2%
+    configureProxy: frame.getByRole('radio', { name: /Configure proxy/ }),
+  };
+}
+
+/** The panel's form buttons. */
+export function internetSettingsButtons(frame: FrameLocator): {
+  saveAndRestart: Locator;
+  discardChanges: Locator;
+} {
+  return {
+    saveAndRestart: frame.getByRole('button', { name: 'Save and restart' }),
+    discardChanges: frame.getByRole('button', { name: 'Discard changes' }),
   };
 }
 
 /**
- * Select whichever of the two options from {@link selectableConnectivityOptions} is not the current
- * one, so the form genuinely holds an unsaved change.
+ * The option the panel loaded with. Any of the four can be it: these settings live in
+ * ParatextData's own machine-wide storage, shared with a co-installed Paratext 9, so a developer
+ * box can start on a value no test would ever select.
+ */
+async function checkedConnectivityOption(frame: FrameLocator): Promise<Locator> {
+  const options = Object.values(connectivityOptions(frame));
+  const checkedStates = await Promise.all(options.map((option) => option.isChecked()));
+  const checkedIndex = checkedStates.findIndex(Boolean);
+  if (checkedIndex === -1)
+    throw new Error('No connectivity option is selected; the panel may not have loaded.');
+  return options[checkedIndex];
+}
+
+/**
+ * Select a connectivity option other than the current one, so the form genuinely holds an unsaved
+ * change. Clicking a fixed option would be a no-op wherever that option was already selected.
  *
- * Which one that is depends on the machine: these settings live in ParatextData's own storage and
- * are shared with any co-installed Paratext 9, so a developer box can legitimately start on either.
- * Clicking a fixed option would be a no-op wherever that option was already selected. Nothing here
- * is persisted — only "Save and restart" writes.
+ * Only toggles between "Unrestricted" and "Block internet when in sensitive locations". Selecting
+ * "Disable all Internet access" would be one accidental save away from cutting ParatextData — and a
+ * co-installed Paratext 9 — off the internet on the developer's machine. Nothing here is persisted;
+ * only "Save and restart" writes.
  *
  * @returns The radio that was selected before the click, so a test can assert a reset restores it
  */
 export async function selectTheOtherConnectivityOption(frame: FrameLocator): Promise<Locator> {
-  const { unrestricted, sensitiveLocations } = selectableConnectivityOptions(frame);
+  const { unrestricted, sensitiveLocations } = connectivityOptions(frame);
   await expect(unrestricted).toBeEnabled({ timeout: 10_000 });
-  const startedUnrestricted = await unrestricted.isChecked();
-  const original = startedUnrestricted ? unrestricted : sensitiveLocations;
-  const target = startedUnrestricted ? sensitiveLocations : unrestricted;
+  const original = await checkedConnectivityOption(frame);
+  const target = (await unrestricted.isChecked()) ? sensitiveLocations : unrestricted;
   await target.click();
   await expect(target).toBeChecked();
   return original;

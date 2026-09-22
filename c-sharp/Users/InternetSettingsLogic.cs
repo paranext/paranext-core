@@ -36,17 +36,14 @@ internal static class InternetSettingsLogic
         requested != InternetUse.ProxyOnly;
 
     /// <summary>
-    /// Compute the RawStatus to apply after InternetAccess.SetProxy (which forces Disabled). Returns
-    /// the requested status to re-assert it only when SetProxy disabled it and the user asked for
-    /// something that is neither Disabled nor ProxyOnly; otherwise null (leave as-is).
+    /// Compute the RawStatus to apply after InternetAccess.SetProxy, which forces Disabled. Returns
+    /// the requested status whenever it differs from what SetProxy left behind, so every selection —
+    /// including Disabled — is written explicitly rather than relying on that side effect. Returns
+    /// null when the status already matches, and for ProxyOnly, which keeps SetProxy's Disabled so a
+    /// proxy selected without a host does not silently allow internet access.
     /// </summary>
     public static InternetUse? ReassertedRawStatus(
         InternetUse currentRawStatus,
         InternetUse requested
-    ) =>
-        currentRawStatus == InternetUse.Disabled
-        && requested != InternetUse.Disabled
-        && requested != InternetUse.ProxyOnly
-            ? requested
-            : null;
+    ) => requested != InternetUse.ProxyOnly && currentRawStatus != requested ? requested : null;
 }

@@ -2,8 +2,8 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { useRetryablePromise } from 'platform-bible-react';
-import { getErrorMessage, newGuid } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getErrorMessage } from 'platform-bible-utils';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { shouldReportCatalogFailure } from './dbl-catalog.utils';
 import {
   GetResources,
@@ -27,19 +27,17 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
-  // One id for every internet-block notification this web view sends, so a repeated failure
-  // replaces the earlier notification rather than stacking a new one per attempt.
-  const internetBlockedNotificationId = useMemo(() => newGuid(), []);
+  // The dialog's own error states say that something failed; this notification is what names the
+  // Internet & connectivity setting that caused it and offers to open it.
+  const notifyIfInternetBlocked = useCallback((error: unknown) => {
+    const notification = getInternetBlockedNotification(error);
+    if (notification) papi.notifications.send(notification);
+  }, []);
 
-  // The component's own error states say that something failed; this notification is what names
-  // the Internet & connectivity setting that caused it and offers to open it.
-  const notifyIfInternetBlocked = useCallback(
-    (error: unknown) => {
-      const notification = getInternetBlockedNotification(error, internetBlockedNotificationId);
-      if (notification) papi.notifications.send(notification);
-    },
-    [internetBlockedNotificationId],
-  );
+  // Held for the effect below rather than reported from inside the fetch: a fetch that a retry has
+  // superseded still runs its own `catch`, so notifying there would leave a stale block notification
+  // over a list that has since loaded.
+  const catalogErrorRef = useRef<unknown>(undefined);
 
   const {
     data: catalog,
@@ -52,11 +50,17 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       try {
         return await papi.commands.sendCommand('platformGetResources.getCachedResources');
       } catch (e) {
-        notifyIfInternetBlocked(e);
+        catalogErrorRef.current = e;
         throw e;
       }
-    }, [notifyIfInternetBlocked]),
+    }, []),
   );
+
+  // `hasError` tracks only the fetch the hook is still waiting on, so this reports the failure the
+  // user is actually looking at.
+  useEffect(() => {
+    if (isResourcesError) notifyIfInternetBlocked(catalogErrorRef.current);
+  }, [isResourcesError, notifyIfInternetBlocked]);
 
   // `!hasSettled` counts as loading, not just `isLoading`. A retry clears the error synchronously
   // while `usePromise` only raises its loading flag in an effect, so the render in between would

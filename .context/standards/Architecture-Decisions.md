@@ -1553,7 +1553,9 @@ step, no automation. Just a record.
   takes as its fallback), and delete the duplicate placeholder row. Recognize both exceptions in
   TypeScript — `isErrorMessageAboutParatextBlockingInternetAccess` by ParatextData's fixed message,
   `isErrorMessageAboutParatextSensitiveLocationBlock` by the type name in .NET's default message —
-  and give each its own user-facing string.
+  and give each its own user-facing string. Write the chosen value to `InternetAccess.RawStatus`
+  explicitly (`InternetSettingsLogic.ReassertedRawStatus`) rather than leaning on `SetProxy` forcing
+  `Disabled` as a side effect: enforcement is delegated, but persisting the user's choice is ours.
 - **Alternatives:** **Make `VpnRequired` block unconditionally, as the old copy promised** — rejected:
   it needs a Platform.Bible-side gate, and a co-installed Paratext 9 reading the same saved value
   would go on behaving geo-conditionally, so the two apps would disagree about one setting. **Add a
@@ -1565,10 +1567,17 @@ step, no automation. Just a record.
   says the location could not be confirmed rather than that it is flagged.
 - **Consequences:** The sensitive-location detector depends on `VpnDisconnectedException` keeping
   .NET's default message; `InternetSettingsLogicTests` fails if a ParatextData update changes that.
-  "Disable all Internet access" gates ParatextData's REST layer only — Platform.Bible's own network use
-  (extension installs, for one) is not covered. Get Resources persists its catalog, so after internet
-  is disabled it still lists resources; installs and fresh fetches are what fail.
-- **Source:** PT-4590 implementation.
+  Classification lives in three places that cannot import one another — the detectors in
+  `platform-bible-utils`, `constructErrorNotification` for data-provider subscriptions, and
+  `internet-block-notification.utils.ts` for the Get Resources extension — so a third kind of block
+  means editing all three. "Disable all Internet access" gates ParatextData's REST layer only —
+  Platform.Bible's own network use (extension installs, for one) is not covered. Get Resources
+  persists its catalog, so after internet is disabled it still lists resources; installs and fresh
+  fetches are what fail.
+- **Source:** PT-4590 implementation. ParatextData's internals above (`RESTClient.VerifyUri`,
+  `InternetAccess.VerifySafety`, the `CountryStatuses.xml` lookup, and the two exception types) were
+  read from decompiled ParatextData 9.5.0.24, which this repo consumes as a binary package — only
+  the exception's message is pinned by a test.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 

@@ -442,15 +442,19 @@ export function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: 
  * locations" setting. ParatextData raises this both where the current location is flagged as
  * sensitive and where it cannot determine the location at all.
  *
+ * Matches the exception's type name within the message, so text that merely quotes that type — a
+ * forwarded stack trace, a logged inner exception — matches too.
+ *
  * @param errorMessage Error message or exception to check
  * @returns `true` if the message indicates Paratext blocked internet access because it could not
  *   confirm the current location is safe, `false` otherwise
  */
 export function isErrorMessageAboutParatextSensitiveLocationBlock(errorMessage: unknown): boolean {
-  // ParatextData's `VpnDisconnectedException` declares no message, so what arrives is .NET's default
-  // "Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown." The type name is the
-  // only stable part; `InternetSettingsLogicTests` in c-sharp-tests fails if that default changes.
-  const paratextExceptionTypeName = 'VpnDisconnectedException';
+  // `VpnDisconnectedException` declares no message, so .NET's default — which names the type — is
+  // all that crosses to TypeScript. `InternetSettingsLogicTests` fails if that stops being true.
+  // Matched with its namespace: the surrounding sentence is a .NET resource string that a localized
+  // runtime may translate, while the type name survives.
+  const paratextExceptionTypeName = 'Paratext.Data.VpnDisconnectedException';
 
   const errorString = isString(errorMessage) ? errorMessage : getErrorMessage(errorMessage);
   return errorString.includes(paratextExceptionTypeName);

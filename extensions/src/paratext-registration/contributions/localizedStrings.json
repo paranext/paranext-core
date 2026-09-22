@@ -10,6 +10,15 @@
         "date": "2026-07-26"
       }
     },
+    "%paratextRegistration_description_internetUse_option_Disabled_2%": {
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%"
+    },
+    "%paratextRegistration_internetUse_footer%": {
+      "deprecationInfo": {
+        "message": "Reworded for a list with a single unavailable option, and to name the badge rather than say \"disabled options\", which read as the options that disable things. The new key is %paratextRegistration_internetUse_footer_2%.",
+        "date": "2026-09-22"
+      }
+    },
     "%paratextRegistration_description_internetUse_option_Disabled%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%",
       "deprecationInfo": {
@@ -201,6 +210,7 @@
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "You must provide a valid Paratext registration before opening resources from the Digital Bible Library.",
       "%paratextRegistration_internetUse_comingSoon%": "Coming soon",
       "%paratextRegistration_internetUse_footer%": "Disabled options are planned for future updates.",
+      "%paratextRegistration_internetUse_footer_2%": "Options marked “Coming soon” are planned for future updates.",
       "%paratextRegistration_label_emailAddress%": "Email address",
       "%paratextRegistration_label_proxyHost%": "Host",
       "%paratextRegistration_label_proxyMode%": "Mode",
@@ -275,12 +285,13 @@
       "%paratextRegistration_description_internetUse_option_VpnRequired_2%": "Deshabilitar acceso a algunos servicios de traducción bíblica",
       "%paratextRegistration_description_internetUse_option_VpnRequired_3%": "Bloquear internet en lugares sensibles",
       "%paratextRegistration_description_internetUse_option_VpnRequired_details%": "Deshabilita el acceso al Registro, Enviar/Recibir y la Biblioteca Bíblica Digital dentro de la aplicación Paratext. Otras funciones de internet y otras aplicaciones no se ven afectadas.",
-      "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": "Paratext comprueba la ubicación de la que parece provenir tu conexión a internet. Donde esa ubicación está marcada como sensible —o no se puede confirmar— se bloquea el acceso al Registro, Enviar/Recibir y la Biblioteca Bíblica Digital. En los demás lugares funcionan con normalidad.",
+      "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": "Paratext comprueba la ubicación de la que parece provenir su conexión a internet. Donde esa ubicación está marcada como sensible —o no se puede confirmar— se bloquea el acceso al Registro, Enviar/Recibir y la Biblioteca Bíblica Digital. En los demás lugares funcionan con normalidad.",
       "%paratextRegistration_description_shared_with_paratext_9%": "Estas configuraciones se aplican también a Paratext 9.",
       "%paratextRegistration_developer_section_label%": "Solo para desarrolladores",
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "Debe proporcionar credenciales de Registro de Paratext válidas antes de abrir recursos de la Biblioteca Bíblica Digital.",
       "%paratextRegistration_internetUse_comingSoon%": "Próximamente",
       "%paratextRegistration_internetUse_footer%": "Las opciones deshabilitadas están previstas para futuras actualizaciones.",
+      "%paratextRegistration_internetUse_footer_2%": "Las opciones marcadas como “Próximamente” están previstas para futuras actualizaciones.",
       "%paratextRegistration_label_emailAddress%": "Dirección de correo electrónico",
       "%paratextRegistration_label_proxyHost%": "Servidor",
       "%paratextRegistration_label_proxyMode%": "Modo",

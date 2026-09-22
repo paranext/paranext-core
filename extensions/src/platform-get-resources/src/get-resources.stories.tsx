@@ -331,3 +331,18 @@ export const RemoveError: Story = {
     }),
   ],
 };
+
+/**
+ * An install refused by the "Block internet when in sensitive locations" setting. ParatextData's
+ * own text is a message-less .NET exception, so the component shows its own wording instead; the
+ * web view additionally raises a notification that opens the setting.
+ */
+export const BlockedByInternetSettings: Story = {
+  decorators: [
+    createDecorator({
+      onInstallOrRemoveResource: rejectingMock(
+        "Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown.",
+      ),
+    }),
+  ],
+};

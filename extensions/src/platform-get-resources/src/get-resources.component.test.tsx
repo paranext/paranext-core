@@ -274,7 +274,53 @@ describe('GetResources', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Get' }));
 
       expect(await screen.findByText(expectedText)).toBeInTheDocument();
-      expect(screen.queryByText(/Paratext/)).not.toBeInTheDocument();
+      // The raw markers, not the word "Paratext" — the shipped replacement text starts with it.
+      expect(
+        screen.queryByText(/VpnDisconnectedException|Bug in Paratext/),
+      ).not.toBeInTheDocument();
     },
   );
+
+  // Localized strings arrive asynchronously. Before this fallback the alert rendered the raw
+  // `%data_loading_error_...%` key whenever a block landed first.
+  it('shows the failure message rather than a localize key when strings have not loaded', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[{}, true]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() =>
+          Promise.reject(
+            new Error(
+              'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+            ),
+          )
+        }
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '%resources_get%' }));
+
+    expect(
+      await screen.findByText(
+        'Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('%data_loading_error_internetAccess_disabled_2%'),
+    ).not.toBeInTheDocument();
+  });
 });
