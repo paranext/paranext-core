@@ -1392,13 +1392,14 @@ export function resolveGridProviderProjectId(
  * - Never follows a published resource (see `isProjectPublished`): a resource has no collection of
  *   its own, so following it would cost a reload, and the in-memory state it drops, for an empty
  *   panel. The rule lives here rather than in a caller so every re-point path applies it.
- * - Never creates a panel when none is open. The Text Collection has no open command and no menu
- *   entry: its only open path is the default-layout supplement, which puts it in Column 3 from
- *   startup. So "not open" means the tab was closed in Power mode or the
- *   `platformScriptureEditor.enableScriptureTextGrid` setting is off, and neither is a state a
- *   project switch should reverse. (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels`
- *   for an editor-column switch and `finalizeProjectSwitch` for a Power→Simple one — so this guard
- *   is a contract, not a hot path.)
+ * - Never creates a panel when none is open, unlike the Text Collection's menu command
+ *   (`platformScriptureEditor.showTextCollectionPanel`), which does create one on demand. A project
+ *   switch closing a tab the user deliberately closed in Power mode, or one the
+ *   `platformScriptureEditor.enableScriptureTextGrid` setting has kept from ever existing, is not
+ *   something a re-point should reverse — only a direct request to show the panel should create it.
+ *   (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels` for an editor-column switch
+ *   and `finalizeProjectSwitch` for a Power→Simple one — so this guard is a contract, not a hot
+ *   path.)
  * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
  *   the grid's in-memory React state for no gain. State held through `useWebViewState` —
  *   `viewMode`, per-cell zoom — survives, since a reload reuses the same web view id.

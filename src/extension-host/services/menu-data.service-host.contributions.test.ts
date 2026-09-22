@@ -1,22 +1,11 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import menuDataObject from '@extension-host/data/menu.data.json';
-import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
 import { USERSNAP_SPACE_API_KEY } from '@shared/data/platform.data';
-import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
-import { JsonDocumentLike, PlatformMenus } from 'platform-bible-utils';
-import { describe, expect, test, vi } from 'vitest';
-
-vi.mock('@shared/services/settings.service', () => ({
-  settingsService: {
-    get: vi.fn(async () => 'power'),
-    subscribe: vi.fn(async () => async () => true),
-  },
-}));
-
-// Note: using resolve(__dirname, ...) instead of fileURLToPath(new URL(..., import.meta.url))
-// because this test runs under jsdom where import.meta.url does not have a file: scheme.
-const EXTENSIONS_DIR = resolve(__dirname, '../../../extensions/src');
+import { JsonDocumentLike } from 'platform-bible-utils';
+import { describe, expect, test } from 'vitest';
+import {
+  getMenuContributingExtensions,
+  getMenuDataEngineInMode,
+  getRealCombinedMenus,
+} from './menu-data.service-host.test-helper';
 
 /** How many application main menu items a shipped `menus.json` contributes. */
 function countMainMenuItems(menus: JsonDocumentLike): number {
@@ -28,69 +17,19 @@ function countMainMenuItems(menus: JsonDocumentLike): number {
   return Array.isArray(items) ? items.length : 0;
 }
 
-/** An extension's manifest `name`, which is how `contribution.service` keys its contributions. */
-function readManifestName(directory: string): string {
-  const manifest: unknown = JSON.parse(
-    readFileSync(resolve(EXTENSIONS_DIR, directory, 'manifest.json'), 'utf8'),
-  );
-  if (manifest && typeof manifest === 'object' && 'name' in manifest) {
-    const { name } = manifest;
-    if (typeof name === 'string') return name;
-  }
-  throw new Error(`Extension ${directory} contributes main menu items but has no manifest name`);
-}
-
 /**
- * Every shipped extension contributing application main menu items, as `[manifest name, menu
- * document]` pairs.
- *
- * Discovered by scanning `extensions/src` rather than listed by hand, so an extension that starts
- * contributing main menu items is covered without anyone having to remember this file — which
- * matters because the empty-group expectations below are only true of the menu as a whole.
- *
- * `contribution.service`'s combiner only ever sees `menu.data.json` under test, because extension
- * contributions are added inside the extension-load path, which does not run here. So these tests
- * read the shipped files off disk and combine them explicitly. Reading the real files (rather than
- * inlining fixtures) is what makes this track the shipped menus, and it borrows the combiner's
- * schema validation for free: a mistyped flag rejects the whole document.
+ * Extensions contributing at least one application main menu item — the empty-group expectations
+ * below are only true of the menu as a whole, so this file narrows to just those extensions.
  */
-function getMenuContributingExtensions(): [string, JsonDocumentLike][] {
-  return readdirSync(EXTENSIONS_DIR, { withFileTypes: true }).flatMap(
-    (entry): [string, JsonDocumentLike][] => {
-      if (!entry.isDirectory()) return [];
-      const menusPath = resolve(EXTENSIONS_DIR, entry.name, 'contributions/menus.json');
-      if (!existsSync(menusPath)) return [];
-      const menus: JsonDocumentLike = JSON.parse(readFileSync(menusPath, 'utf8'));
-      if (countMainMenuItems(menus) === 0) return [];
-      return [[readManifestName(entry.name), menus]];
-    },
-  );
-}
-
-/**
- * The shipped platform menu document combined with every shipped extension menu contribution — i.e.
- * the main menu as a running app actually assembles it.
- *
- * Builds a fresh combiner rather than reusing `contribution.service`'s exported singleton, which
- * other suites in this process read.
- */
-function getRealCombinedMenus(): PlatformMenus {
-  const combiner = new MenuDocumentCombiner(menuDataObject);
-  getMenuContributingExtensions().forEach(([extensionName, menus]) => {
-    combiner.addOrUpdateContribution(extensionName, menus);
-  });
-  const combined = combiner.rawOutput;
-  if (!combined) throw new Error('Platform menu document failed to combine with contributions');
-  return combined;
+function hasMainMenuItems(menus: JsonDocumentLike): boolean {
+  return countMainMenuItems(menus) > 0;
 }
 
 async function getMainMenuInMode(mode: 'simple' | 'power') {
-  const { settingsService } = await import('@shared/services/settings.service');
-  vi.mocked(settingsService.get).mockResolvedValue(mode);
-  const engine = testingMenuDataService.implementMenuDataDataProviderEngine(getRealCombinedMenus());
-  // Let the fire-and-forget settings read in the constructor resolve
-  await Promise.resolve();
-  await Promise.resolve();
+  const engine = await getMenuDataEngineInMode(
+    getRealCombinedMenus({ filter: hasMainMenuItems }),
+    mode,
+  );
   return engine.getMainMenu();
 }
 
@@ -182,7 +121,9 @@ describe('Shipped menu contributions are discovered', () => {
     'platformEnhancedResources',
     'paratextRegistration',
   ])('%s is picked up from the shipped extensions', (extensionName) => {
-    expect(getMenuContributingExtensions().map(([name]) => name)).toContain(extensionName);
+    expect(
+      getMenuContributingExtensions({ filter: hasMainMenuItems }).map(([name]) => name),
+    ).toContain(extensionName);
   });
 });
 

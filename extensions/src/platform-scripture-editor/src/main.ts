@@ -54,6 +54,7 @@ import {
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
+import { showOrCreateTab, showTextCollectionTab } from './show-panel.util';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -1124,6 +1125,27 @@ async function openResourceText(
   return papi.webViews.openWebView(webViewType, { type: 'tab' }, openOptions);
 }
 
+/**
+ * Resolves the project a web view is showing, for a "show/bring to front" command whose only
+ * parameter is the triggering editor's web view id.
+ *
+ * @param webViewId The web view whose project to resolve
+ * @returns The web view's project id, or `undefined` if `webViewId` is missing, names no open web
+ *   view, or `getOpenWebViewDefinition` could not be answered
+ */
+async function getProjectIdOfWebView(webViewId: string | undefined): Promise<string | undefined> {
+  if (!webViewId) return undefined;
+  // getOpenWebViewDefinition throws if no window claimed the web view and some window could not be
+  // asked. That is not this command's problem to fail over — degrade to "no project id" so a newly
+  // opened tab still opens, unlabeled, rather than rejecting the whole show/bring-to-front request.
+  try {
+    return (await papi.webViews.getOpenWebViewDefinition(webViewId))?.projectId;
+  } catch (e) {
+    logger.warn(`Could not resolve the project for web view ${webViewId}: ${getErrorMessage(e)}`);
+    return undefined;
+  }
+}
+
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.debug('Scripture editor is activating!');
 
@@ -1155,6 +1177,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
   );
+  // TODO(PT-3666): The Project menu's Insert items (footnote, cross-reference, comment — the three
+  // commands registered below) show enabled even where editing isn't allowed. Gate them on project
+  // editability the way the Edit flyout already is.
   const insertCrossReferencePromise = papi.commands.registerCommand(
     'platformScriptureEditor.insertCrossReferenceAtSelection',
     insertCrossReferenceAtSelection,
@@ -1406,6 +1431,80 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const showBibleTextsPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showBibleTextsPanel',
+    (editorWebViewId) =>
+      showOrCreateTab(BIBLE_TEXTS_PANEL_WEBVIEW_TYPE, () => getProjectIdOfWebView(editorWebViewId)),
+    {
+      method: {
+        summary: 'Bring the Bible texts tab to the front, opening it if it is not open',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor whose project a newly opened tab shows',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Bible texts web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const showCommentariesPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showCommentariesPanel',
+    (editorWebViewId) =>
+      showOrCreateTab(COMMENTARIES_PANEL_WEBVIEW_TYPE, () =>
+        getProjectIdOfWebView(editorWebViewId),
+      ),
+    {
+      method: {
+        summary: 'Bring the Commentaries tab to the front, opening it if it is not open',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor whose project a newly opened tab shows',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Commentaries web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const showTextCollectionPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showTextCollectionPanel',
+    () => showTextCollectionTab(),
+    {
+      method: {
+        summary:
+          'Bring the Text collection tab to the front, opening it if it is not open and the feature is available',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor the request came from (unused)',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Text collection web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   const openModelTextPanelPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openModelText',
     async (projectId?: string) => {
@@ -1540,6 +1639,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await commentariesPanelWebViewProviderPromise,
     ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
+    await showBibleTextsPanelPromise,
+    await showCommentariesPanelPromise,
+    await showTextCollectionPanelPromise,
     selectionChangedEventEmitter,
     {
       dispose: async () => {
