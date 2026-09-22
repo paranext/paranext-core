@@ -624,7 +624,16 @@ export function createPendingCommentAnchorSource(
     range.endContainer === endContainer &&
     range.endOffset === endOffset;
 
+  const computeFraction = (annotationRect: DOMRect): number =>
+    rangeRectAtOpen && annotationRect.width > 0
+      ? Math.min(
+          Math.max((rangeRectAtOpen.left - annotationRect.left) / annotationRect.width, 0),
+          1,
+        )
+      : 0;
+
   let fractionInAnnotation: number | undefined;
+  let previousAnnotationRect: DOMRect | undefined;
   return {
     measure: () => {
       const annotationRect = measureAnnotation(annotationId);
@@ -635,16 +644,24 @@ export function createPendingCommentAnchorSource(
         const rangeRect = measureRange(range);
         return rangeRect && leftEdgeRect(rangeRect);
       }
-      if (fractionInAnnotation === undefined)
-        fractionInAnnotation =
-          rangeRectAtOpen && annotationRect.width > 0
-            ? Math.min(
-                Math.max((rangeRectAtOpen.left - annotationRect.left) / annotationRect.width, 0),
-                1,
-              )
-            : 0;
+      if (fractionInAnnotation === undefined) {
+        // A selection that wraps can render only its first fragment on the frame the mark first
+        // becomes measurable — the rest of the union paints on a later frame. Freezing the fraction
+        // against that partial width would misplace the popover for as long as it stays open, so
+        // wait for two consecutive frames to report the same rect (the same stability check
+        // `isSameScrollGeometry` uses for scroll geometry) before trusting it enough to freeze.
+        // Until then, recompute the fraction from the current (possibly still-growing) rect on
+        // every frame instead of caching a partial one.
+        const isSettled =
+          previousAnnotationRect !== undefined &&
+          isSameScrollGeometry(previousAnnotationRect.left, annotationRect.left) &&
+          isSameScrollGeometry(previousAnnotationRect.width, annotationRect.width);
+        if (isSettled) fractionInAnnotation = computeFraction(annotationRect);
+        else previousAnnotationRect = annotationRect;
+      }
+      const fraction = fractionInAnnotation ?? computeFraction(annotationRect);
       return new DOMRect(
-        annotationRect.left + fractionInAnnotation * annotationRect.width,
+        annotationRect.left + fraction * annotationRect.width,
         annotationRect.top,
         0,
         annotationRect.height,
