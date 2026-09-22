@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
-import { seedResourceList, seedScalar, splitResourcesByTab } from './share-layout.utils';
+import { seedResourceList, seedScalar, splitResourcesByTab } from './team-layout.utils';
 
 function makeDblResource(overrides: Partial<DblResourceData>): DblResourceData {
   return {

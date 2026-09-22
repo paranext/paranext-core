@@ -123,10 +123,13 @@
       "%webView_platformScriptureEditor_structureProtection_lockStructureForProject%": "Lock structure for project",
       "%webView_platformScriptureEditor_structureProtection_lockedByAdmin%": "Structure locked by Project Administrator",
       "%webView_platformScriptureEditor_structureProtection_projectAriaLabel%": "Toggle structure lock for project",
+      "%webView_platformScriptureEditor_structureProtection_stateEditable%": "USFM structure editable",
+      "%webView_platformScriptureEditor_structureProtection_stateProtected%": "USFM structure protected",
       "%webView_platformScriptureEditor_structureProtection_unlockStructure%": "Unlock structure",
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Unlock structure for project",
       "%webView_platformScriptureEditor_switchScriptureView%": "Switch Scripture view",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Editing paused — Send/Receive in progress",
+      "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Edit team layout",
       "%webView_platformScriptureEditor_textColor%": "Text Color",
       "%webView_platformScriptureEditor_thickBorders%": "Thick Borders",
       "%webView_platformScriptureEditor_title_editable_indicator%": "(Editable)",
@@ -321,10 +324,13 @@
       "%webView_platformScriptureEditor_structureProtection_lockStructureForProject%": "Bloquear estructura para el proyecto",
       "%webView_platformScriptureEditor_structureProtection_lockedByAdmin%": "Estructura bloqueada por el administrador",
       "%webView_platformScriptureEditor_structureProtection_projectAriaLabel%": "Alternar bloqueo de estructura para el proyecto",
+      "%webView_platformScriptureEditor_structureProtection_stateEditable%": "Estructura USFM editable",
+      "%webView_platformScriptureEditor_structureProtection_stateProtected%": "Estructura USFM protegida",
       "%webView_platformScriptureEditor_structureProtection_unlockStructure%": "Desbloquear estructura",
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Desbloquear estructura para el proyecto",
       "%webView_platformScriptureEditor_switchScriptureView%": "Cambiar vista de escrituras",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Edición pausada — Enviar/Recibir en curso",
+      "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Editar el diseño del equipo",
       "%webView_platformScriptureEditor_textColor%": "Color del texto",
       "%webView_platformScriptureEditor_thickBorders%": "Bordes gruesos",
       "%webView_platformScriptureEditor_title_editable_indicator%": "(editable)",
@@ -412,6 +418,42 @@
     },
     "%webView_platformScriptureEditor_openChecks%": {
       "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%"
+    },
+    "%webView_platformScriptureEditor_shareLayout_ariaLabel%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The toolbar button that opens this dialog was renamed from \"Share layout with team\" to \"Team layout\". The new key is %webView_platformScriptureEditor_teamLayout_ariaLabel%."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_lockStructure%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The tooltip now reports the current state rather than naming the click's action. The new key is %webView_platformScriptureEditor_structureProtection_stateEditable%."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_lockStructureForProject%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The team-wide structure lock moved out of the editor toolbar and into the Team layout dialog, so the toolbar had no project-wide toggle left to label. Retired with no replacement key."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_projectAriaLabel%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The team-wide structure lock moved out of the editor toolbar and into the Team layout dialog, so the toolbar had no project-wide toggle left to label. Retired with no replacement key."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_unlockStructure%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The tooltip now reports the current state rather than naming the click's action. The new key is %webView_platformScriptureEditor_structureProtection_stateProtected%."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The team-wide structure lock moved out of the editor toolbar and into the Team layout dialog, so the toolbar had no project-wide toggle left to label. Retired with no replacement key."
+      }
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
