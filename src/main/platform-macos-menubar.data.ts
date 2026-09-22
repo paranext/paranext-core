@@ -118,15 +118,12 @@ export const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
       { role: 'toggleDevTools', id: 'toggleDevTools', order: 3 },
       { type: 'separator', id: 'viewSeparatorAfterDevTools', order: 4 },
       ...contentZoomMenuItems,
+      // No hand-added `togglefullscreen` item here: `role: 'viewMenu'` makes AppKit insert its own
+      // "Toggle Full Screen" below this separator, and an explicit one of our own duplicated it.
       {
         type: 'separator',
         id: 'viewSeparatorBeforeFullScreen',
         order: FIRST_CONTENT_ZOOM_ORDER + contentZoomMenuItems.length,
-      },
-      {
-        role: 'togglefullscreen',
-        id: 'togglefullscreen',
-        order: FIRST_CONTENT_ZOOM_ORDER + contentZoomMenuItems.length + 1,
       },
     ],
   },
