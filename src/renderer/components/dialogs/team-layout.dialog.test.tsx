@@ -436,6 +436,87 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     });
   });
 
+  // Without a catalog `splitResourcesByTab` cannot tell a Bible text from a commentary, so every
+  // saved `dblResource` lands in `otherResources` and both tab lists mount EMPTY. The body
+  // snapshots those empty lists and never re-syncs — so a successful retry has to remount it, or
+  // the dialog goes on showing nothing for a project that has several resources, and the button
+  // the admin clicked cannot do what they clicked it for.
+  it('re-seeds the body when a retry finally delivers the catalog and nothing has been edited', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = {
+      dataVersion: '2.0.0',
+      items: [{ type: 'dblResource', name: 'ESV', id: 'esv-uid' }],
+    };
+    vi.mocked(sendCommand)
+      .mockResolvedValueOnce({ status: 'unavailable', reason: 'notReady' })
+      .mockResolvedValue({
+        status: 'available',
+        resources: [makeDblResource({ dblEntryUid: 'esv-uid', displayName: 'ESV' })],
+      });
+
+    renderWrapper();
+
+    const retry = await screen.findByText('%shareLayoutDialog_retry%');
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    // Nothing classifiable, so no rows — the state the hint is there to explain.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    expect(screen.getByText('%shareLayoutDialog_hiddenResources_loadError%')).toBeInTheDocument();
+
+    await act(async () => {
+      retry.click();
+      await Promise.resolve();
+    });
+
+    // The saved reference is classifiable now, so it belongs in the list the admin is reviewing.
+    await waitFor(() => {
+      expect(screen.queryAllByRole('checkbox')).toHaveLength(1);
+    });
+    expect(
+      screen.queryByText('%shareLayoutDialog_hiddenResources_loadError%'),
+    ).not.toBeInTheDocument();
+  });
+
+  // The other side of that: a dirty body must NOT be remounted, because its edits live in
+  // `useState`. The hint then has to keep reporting what the lists are not showing — computed live
+  // it would drop to zero the moment the catalog landed, leaving an empty review pane reading as
+  // the truth with no caveat at all.
+  it('keeps the hidden-resource caveat after a retry when the admin has already edited something', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = {
+      dataVersion: '2.0.0',
+      items: [{ type: 'dblResource', name: 'ESV', id: 'esv-uid' }],
+    };
+    vi.mocked(sendCommand)
+      .mockResolvedValueOnce({ status: 'unavailable', reason: 'notReady' })
+      .mockResolvedValue({
+        status: 'available',
+        resources: [makeDblResource({ dblEntryUid: 'esv-uid', displayName: 'ESV' })],
+      });
+
+    renderWrapper();
+
+    const retry = await screen.findByText('%shareLayoutDialog_retry%');
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+
+    // An edit the remount would discard. The lists are empty here, so the lock is the only control
+    // there is to touch — which is exactly the state this case is about.
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+
+    await act(async () => {
+      retry.click();
+      await Promise.resolve();
+    });
+
+    // The edit survives, and the caveat still describes the lists actually on screen.
+    expect(
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }),
+    ).toBeChecked();
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    expect(screen.getByText('%shareLayoutDialog_hiddenResources_loadError%')).toBeInTheDocument();
+  });
+
   it('keeps the mounted body through a retry, so edits made in the dialog survive it', async () => {
     mockState.canWritePromise = Promise.resolve(true);
     mockState.referencedProjectsAndResources = {
@@ -851,6 +932,78 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
   // is deliberately latched open across exactly that window — so the body can be live with a
   // missing setter. Skipping it silently would close the dialog reporting a save that never
   // reached the project.
+  // The default tab is compared like every other field — against the seed the body mounted with,
+  // not against the live subscription. Read live, another admin's write or an S/R delivery landing
+  // while this dialog is open makes the untouched tab fail its comparison, and Save pushes this
+  // admin's stale value over the newer one.
+  it('does not write the default tab when it changed under an open dialog and the admin never touched it', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.sharedLayoutDefaultTab = 'ScriptureResource';
+
+    const { rerender } = renderWrapper();
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+
+    // A concurrent change to the same setting, delivered by the subscription the wrapper reads.
+    mockState.sharedLayoutDefaultTab = 'Comments';
+    await act(async () => {
+      rerender();
+      await Promise.resolve();
+    });
+
+    // The admin changes something else entirely and saves.
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+    await confirmDialog();
+
+    expect(mockState.setStructureProtected).toHaveBeenCalledWith(true);
+    expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
+  });
+
+  // Skipping the write of an unreadable setting is right; reporting success is not. The admin's
+  // resource edits are discarded, and they are told the team layout was saved.
+  it('reports failure rather than success when the admin edited a resource list that cannot be written', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = newPlatformError('could not read the resources');
+    mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockImplementation(
+      async () => ({
+        dataVersion: '2.0.0',
+        items: [{ type: 'project', name: 'HNF' } satisfies ResourceReference],
+      }),
+    );
+    vi.mocked(sendCommand).mockResolvedValue({ status: 'available', resources: [] });
+
+    const { submitDialog } = renderWrapper();
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+
+    editResourceList();
+    await confirmDialog();
+
+    expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
+    expect(submitDialog).not.toHaveBeenCalled();
+    expect(screen.getByText('%shareLayoutDialog_saveFailed%')).toBeInTheDocument();
+  });
+
+  // The other half of that rule: an unreadable resource list must not block a save that never
+  // touched it, or an admin could not use the lock at all while the read is failing.
+  it('still saves the team lock when a resource list cannot be read but was never edited', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = newPlatformError('could not read the resources');
+    vi.mocked(sendCommand).mockResolvedValue({ status: 'available', resources: [] });
+
+    const { submitDialog } = renderWrapper();
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+    await confirmDialog();
+
+    expect(mockState.setStructureProtected).toHaveBeenCalledWith(true);
+    expect(submitDialog).toHaveBeenCalledWith(true);
+    expect(screen.queryByText('%shareLayoutDialog_saveFailed%')).not.toBeInTheDocument();
+  });
+
   it('reports failure rather than success when a setter it intends to call is unavailable', async () => {
     mockState.canWritePromise = Promise.resolve(true);
     mockState.structureProtected = false;

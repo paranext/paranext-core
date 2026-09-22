@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   useLocalizedStrings,
   useProjectDataProvider,
@@ -17,6 +17,7 @@ import {
   SHARE_LAYOUT_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
 import {
+  TeamLayoutActiveTab,
   TeamLayoutDialogContent,
   TeamLayoutDialogSkeleton,
   TeamLayoutResult,
@@ -30,6 +31,39 @@ import {
 } from '@renderer/components/dialogs/team-layout.utils';
 
 const EMPTY_RESOURCE_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items: [] };
+
+/**
+ * Everything `TeamLayoutDialogContent` is mounted with, captured in one commit.
+ *
+ * Every field here is either snapshotted into the body's `useState` at mount or reference-compared
+ * against the body's result on Confirm, so they must all come from the same `seededItems` — the
+ * partitions and the elements of one classification of one resource list. Reading any of them live
+ * at Confirm time re-identities it on a catalog retry (reachable from inside the open dialog, via
+ * the retry button and both embedded pickers), which makes a field nobody touched fail its `!==`
+ * test and write a list the admin never saw.
+ */
+type TeamLayoutSeed = {
+  scriptureResources: ResourceReference[];
+  commentaryResources: ResourceReference[];
+  /** References the dialog cannot classify. Never shown; concatenated back on Confirm. */
+  otherResources: ResourceReference[];
+  modelText: ResourceReference | undefined;
+  activeTab: TeamLayoutActiveTab | undefined;
+  isStructureProtectedForTeam: boolean;
+  /**
+   * Pinned to this seed's partition rather than recomputed live, so the "N resources can't be
+   * shown" caveat keeps describing the lists the body actually mounted with. Live, a successful
+   * catalog retry drops it to 0 while the lists are still the empty mount-time snapshot — the
+   * caveat vanishes and the empty review pane reads as the truth.
+   */
+  hiddenResourceCount: number;
+  /** Same pinning, for the text-collection half of that count. */
+  hiddenInTextCollectionCount: number;
+  /** Whether a catalog was in hand when this was captured. Only a `false` here may be re-seeded. */
+  hadCatalog: boolean;
+  /** Bumped on each re-seed and used as the body's key, so a re-seed remounts it. */
+  generation: number;
+};
 
 // Module scope so the "no catalog" case is one stable reference rather than a fresh array each
 // render — `TeamLayoutDialogContent` memoizes an index of this by identity.
@@ -257,78 +291,91 @@ function TeamLayoutDialogWrapper({
     !isPersonalResourcesLoading &&
     !isPersonalModelTextsLoading;
 
-  // Latches on the first render where they are ALL ready at once, and never re-closes.
+  // Everything the mounted body is handed, captured together at the commit the gate first opens.
   //
-  // Latched because `useProjectSetting` flips its `isLoading` back to `true` whenever its data
-  // provider's identity changes, and installing, updating or removing ANY extension reloads them all
-  // and churns those network objects — an ordinary operation, not a host restart. Without the latch
-  // that reopens the gate, unmounts the body, and destroys every `useState` snapshot the admin has
-  // edited. A retry driven from inside the mounted dialog is the same story.
+  // One object in STATE rather than a ref plus a separate "gate is open" flag, because the body is
+  // rendered from this object and Confirm compares against it: holding both in one value makes the
+  // props the body mounted with and the seed Confirm tests against the same objects BY
+  // CONSTRUCTION. Read live at render time they would only agree by timing — React happens to flush
+  // the latching effect and the render it triggers in one turn, so a delivery landing in that window
+  // would mount the body with arrays that are `!==` the seed, and every untouched field would fail
+  // its reference test and write.
   //
-  // Latched on the inputs TOGETHER rather than one latch each: a per-input latch opens the gate once
-  // each input has settled at some point, which is satisfiable even when an earlier one has since
-  // gone back to loading and is reporting its `defaultValue` again — exactly the erasure this gate
-  // exists to prevent.
+  // Captured together rather than one latch per value, for the same reason the gate latches its
+  // inputs together: separate latches can mix values from different `seededItems`.
+  //
+  // Latched at all because `useProjectSetting` flips its `isLoading` back to `true` whenever its
+  // data provider's identity changes, and installing, updating or removing ANY extension reloads
+  // them all and churns those network objects — an ordinary operation, not a host restart. Without
+  // the latch that reopens the gate, unmounts the body, and destroys every `useState` snapshot the
+  // admin has edited. A retry driven from inside the mounted dialog is the same story.
   //
   // Written in an effect, not during render: a render React starts and throws away (a StrictMode
   // double-invoke, an interrupted concurrent render) must not be able to latch the gate open from
   // state the committed tree never saw. Same discipline as `use-deferred-dock-layout-read.hook.ts`,
   // and as `useRetryablePromise` documents for itself.
-  const [haveGateInputsEverBeenReady, setHaveGateInputsEverBeenReady] = useState(false);
-  useEffect(() => {
-    if (areAllGateInputsReady) setHaveGateInputsEverBeenReady(true);
-  }, [areAllGateInputsReady]);
+  const [seed, setSeed] = useState<TeamLayoutSeed | undefined>(undefined);
 
-  // The seed the mounted body was handed, captured at the same commit the gate first opens.
-  //
-  // All four are partitions or elements of ONE `seededItems`, and Confirm both concatenates them
-  // and reference-compares the body's result against them, so they must come from the same
-  // `seededItems` the body was mounted with. They cannot be read live at Confirm time: their memos
-  // take `allResources` as a dep, and a catalog retry driven from inside the open dialog
-  // (`onRetryResources`, reachable from the retry button and from both embedded pickers) hands
-  // every one of them a fresh identity. Live, that would re-partition `otherResources` underneath
-  // the mounted body AND make every untouched field fail its `!==` test, writing lists the admin
-  // never saw — including, on a project that has never shared a layout, the admin's own personal
-  // selections.
-  //
-  // Captured together in one effect, for the same reason the gate latches its inputs together: a
-  // per-value latch could mix values from different `seededItems`.
-  const mountedSeedRef = useRef<
-    | {
-        scriptureResources: ResourceReference[];
-        commentaryResources: ResourceReference[];
-        otherResources: ResourceReference[];
-        modelText: ResourceReference | undefined;
-      }
-    | undefined
-  >(undefined);
+  // Whether the admin has changed anything in the mounted body. Only consumed to decide whether a
+  // late catalog may re-seed (see below); a dirty body is never re-seeded, because that would throw
+  // away their edits.
+  const [isBodyDirty, setIsBodyDirty] = useState(false);
+
   useEffect(() => {
-    if (areAllGateInputsReady && mountedSeedRef.current === undefined)
-      mountedSeedRef.current = {
-        scriptureResources,
-        commentaryResources,
-        otherResources,
-        modelText: seededModelText,
-      };
+    if (!areAllGateInputsReady) return;
+    const captureSeed = (generation: number): TeamLayoutSeed => ({
+      scriptureResources,
+      commentaryResources,
+      otherResources,
+      modelText: seededModelText,
+      activeTab: seededActiveTab,
+      isStructureProtectedForTeam,
+      hiddenResourceCount,
+      hiddenInTextCollectionCount,
+      hadCatalog: !!allResources,
+      generation,
+    });
+    setSeed((current) => {
+      // The first capture is what opens the gate: the body is not rendered until a seed exists.
+      if (!current) return captureSeed(0);
+      // A catalog arriving after the body mounted is the one case worth re-seeding for. Without a
+      // catalog `splitResourcesByTab` cannot tell a Bible text from a commentary, so every saved
+      // `dblResource` lands in `otherResources` and both tab lists mount EMPTY. A dialog whose job
+      // is "review what you are about to share" then shows nothing for a project that has several,
+      // and the retry the admin clicked cannot fix it. Re-seeding remounts the body against the
+      // classified partition, which is what they asked for.
+      //
+      // Never while the body is dirty: their edits live in its `useState` and a remount discards
+      // them. That case keeps the mount-time partition, and the pinned `hiddenResourceCount` below
+      // keeps saying what the lists are not showing.
+      if (current.hadCatalog || !allResources || isBodyDirty) return current;
+      return captureSeed(current.generation + 1);
+    });
   }, [
     areAllGateInputsReady,
+    allResources,
+    isBodyDirty,
     scriptureResources,
     commentaryResources,
     otherResources,
     seededModelText,
+    seededActiveTab,
+    isStructureProtectedForTeam,
+    hiddenResourceCount,
+    hiddenInTextCollectionCount,
   ]);
 
   const handleConfirm = useCallback(
     async (result: TeamLayoutResult) => {
-      // The seed the body was mounted with. Absent only if Confirm somehow ran before the gate
-      // opened, which cannot happen — the body is not rendered until then — but treat it as a
-      // failure rather than silently comparing against nothing.
+      // `seed` is the object the body was mounted FROM, so an untouched field comes back as the
+      // identical array it holds. Absent only if Confirm somehow ran before the gate opened, which
+      // cannot happen — the body is not rendered until a seed exists — but treat it as a failure
+      // rather than silently comparing against nothing.
       // Cleared at the start of every attempt, so the destructive alert always describes the
       // attempt the admin is looking at rather than staying pinned over a screen they have since
       // edited.
       setHasSaveError(false);
 
-      const seed = mountedSeedRef.current;
       if (!seed) {
         setHasSaveError(true);
         return;
@@ -341,11 +388,11 @@ function TeamLayoutDialogWrapper({
       // would publish one person's resource list to the whole team as a side effect of an action
       // that has nothing to do with resources.
       //
-      // Reference equality is the right test, and it is compared against `mountedSeedRef` rather
-      // than the live memos: the body snapshots its `initial*` props at mount and never mutates
-      // them, so an untouched field comes back as the identical array the seed holds — while the
-      // live memos take a fresh identity on any catalog retry, which would fail the test for a
-      // field nobody touched.
+      // Reference equality is the right test, and it is compared against the seed the body was
+      // rendered from rather than the live memos: the body snapshots its `initial*` props at mount
+      // and never mutates them, so an untouched field comes back as the identical array the seed
+      // holds — while the live memos take a fresh identity on any catalog retry, which would fail
+      // the test for a field nobody touched.
       const writes: Promise<unknown>[] = [];
       // A field this Confirm intends to write whose setter is `undefined`. `useProjectSetting`
       // returns no setter for as long as its data provider is unresolved, and the gate is
@@ -353,6 +400,13 @@ function TeamLayoutDialogWrapper({
       // body can be live and interactive while a setter is missing. Skipping it silently would
       // close the dialog reporting a save that never reached the project.
       let hasUnavailableSetter = false;
+      // A field the admin EDITED whose current value could not be read, so this Confirm refuses to
+      // write it (see `isProjectResourcesUnknown`). Skipping the write is right — the seed is the
+      // admin's personal list, not the team's, so writing it would publish one person's selections
+      // — but closing as though it saved is not: they are told the team layout was saved while
+      // every resource edit they just made was discarded. Reported as a failed save, for the same
+      // reason an unavailable setter is.
+      let hasUnwritableEdit = false;
       const queueWrite = (setter: unknown, run: () => Promise<unknown> | undefined) => {
         // Only the setter's ABSENCE counts as unavailable. A setter that returns something other
         // than a promise is still a setter that ran; there is just nothing to await.
@@ -364,11 +418,12 @@ function TeamLayoutDialogWrapper({
         if (promise) writes.push(promise);
       };
 
-      if (
-        !isProjectResourcesUnknown &&
-        (result.scriptureResources !== seed.scriptureResources ||
-          result.commentaryResources !== seed.commentaryResources)
-      ) {
+      const haveResourcesChanged =
+        result.scriptureResources !== seed.scriptureResources ||
+        result.commentaryResources !== seed.commentaryResources;
+      if (isProjectResourcesUnknown) {
+        if (haveResourcesChanged) hasUnwritableEdit = true;
+      } else if (haveResourcesChanged) {
         queueWrite(setProjectResources, () =>
           setProjectResources?.({
             dataVersion: projectResources?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
@@ -380,7 +435,10 @@ function TeamLayoutDialogWrapper({
           }),
         );
       }
-      if (!isProjectModelTextsUnknown && result.modelText !== seed.modelText) {
+      const hasModelTextChanged = result.modelText !== seed.modelText;
+      if (isProjectModelTextsUnknown) {
+        if (hasModelTextChanged) hasUnwritableEdit = true;
+      } else if (hasModelTextChanged) {
         queueWrite(setProjectModelTexts, () =>
           setProjectModelTexts?.({
             dataVersion: projectModelTexts?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
@@ -388,7 +446,7 @@ function TeamLayoutDialogWrapper({
           }),
         );
       }
-      if (result.activeTab !== seededActiveTab)
+      if (result.activeTab !== seed.activeTab)
         queueWrite(setProjectActiveTab, () => setProjectActiveTab?.(result.activeTab ?? ''));
       // Written unconditionally when its value is known, rather than compared against the seed like
       // the settings above: this dialog is the lock's only control, so "Save writes the state you
@@ -415,16 +473,20 @@ function TeamLayoutDialogWrapper({
       // PARTIAL state — the message says so, and says the dialog's values are the intended end
       // state, because a retry from here is idempotent.
       const outcomes = await Promise.allSettled(writes);
-      if (hasUnavailableSetter || outcomes.some((outcome) => outcome.status === 'rejected')) {
+      if (
+        hasUnavailableSetter ||
+        hasUnwritableEdit ||
+        outcomes.some((outcome) => outcome.status === 'rejected')
+      ) {
         setHasSaveError(true);
         return;
       }
       submitDialog(true);
     },
     [
+      seed,
       projectResources,
       projectModelTexts,
-      seededActiveTab,
       isTeamLockUnknown,
       isProjectResourcesUnknown,
       isProjectModelTextsUnknown,
@@ -485,7 +547,11 @@ function TeamLayoutDialogWrapper({
   // The window is the normal case rather than a narrow race: mounting needs only `canWrite` (one
   // method round-trip), while a project setting needs a second PDP plus a subscribe plus its first
   // delivery.
-  if (!haveGateInputsEverBeenReady) {
+  //
+  // The gate IS the seed: `seed` exists only once every input above has been delivered, and the
+  // body is rendered from it, so the values it mounts with are the values Confirm compares against
+  // by construction rather than by render timing.
+  if (!seed) {
     return (
       <TeamLayoutDialogSkeleton
         localizedStrings={localizedStrings}
@@ -496,12 +562,17 @@ function TeamLayoutDialogWrapper({
 
   return (
     <TeamLayoutDialogContent
-      initialModelText={seededModelText}
-      initialActiveTab={seededActiveTab}
-      initialScriptureResources={scriptureResources}
-      initialCommentaryResources={commentaryResources}
-      initialIsStructureProtectedForTeam={isStructureProtectedForTeam}
+      // Remounts when a late catalog re-seeds a body the admin has not edited, so the tab lists
+      // are rebuilt from the classified partition instead of staying at the unclassifiable-
+      // everything snapshot they opened with.
+      key={seed.generation}
+      initialModelText={seed.modelText}
+      initialActiveTab={seed.activeTab}
+      initialScriptureResources={seed.scriptureResources}
+      initialCommentaryResources={seed.commentaryResources}
+      initialIsStructureProtectedForTeam={seed.isStructureProtectedForTeam}
       isTeamLockUnknown={isTeamLockUnknown}
+      onDirtyChange={setIsBodyDirty}
       hasSaveError={hasSaveError}
       projectName={projectName}
       allResources={allResources ?? NO_RESOURCES}
@@ -513,8 +584,8 @@ function TeamLayoutDialogWrapper({
       hasResourcesError={hasRetryableCatalogError}
       onRetryResources={onRetryResources}
       areDownloadsUnavailable={areDownloadsUnavailable}
-      hiddenResourceCount={hiddenResourceCount}
-      hiddenInTextCollectionCount={hiddenInTextCollectionCount}
+      hiddenResourceCount={seed.hiddenResourceCount}
+      hiddenInTextCollectionCount={seed.hiddenInTextCollectionCount}
       resourcePickerLocalizedStrings={resourcePickerLocalizedStrings}
       localizedStrings={localizedStrings}
       onConfirm={handleConfirm}

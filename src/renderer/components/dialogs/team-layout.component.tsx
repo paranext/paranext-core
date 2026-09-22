@@ -181,6 +181,12 @@ export type TeamLayoutDialogContentProps = {
   hiddenInTextCollectionCount: number;
   resourcePickerLocalizedStrings: ResourcePickerDialogLocalizedStrings;
   localizedStrings: TeamLayoutDialogLocalizedStrings;
+  /**
+   * Reports whether the admin has changed anything since mount. The host uses it to decide whether
+   * a late-arriving resource catalog may re-seed this body — a remount discards the `useState`
+   * snapshots every control here edits, so it is only safe while nothing has been edited.
+   */
+  onDirtyChange?: (isDirty: boolean) => void;
   onConfirm: (result: TeamLayoutResult) => Promise<void> | void;
   onCancel: () => void;
 };
@@ -440,6 +446,7 @@ export function TeamLayoutDialogContent({
   hiddenInTextCollectionCount,
   resourcePickerLocalizedStrings,
   localizedStrings: strings,
+  onDirtyChange,
   onConfirm,
   onCancel,
 }: TeamLayoutDialogContentProps) {
@@ -450,6 +457,20 @@ export function TeamLayoutDialogContent({
   const [isStructureProtectedForTeam, setIsStructureProtectedForTeam] = useState(
     initialIsStructureProtectedForTeam,
   );
+  // Reference equality against the props this body mounted with, which is the same test Confirm
+  // applies: the controls here replace these values rather than mutating them, so an untouched
+  // field is still the identical object. Reported so the host knows when a remount would cost the
+  // admin work — see `onDirtyChange`.
+  const isDirty =
+    modelText !== initialModelText ||
+    activeTab !== initialActiveTab ||
+    scriptureResources !== initialScriptureResources ||
+    commentaryResources !== initialCommentaryResources ||
+    isStructureProtectedForTeam !== initialIsStructureProtectedForTeam;
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
   const [isModelTextPickerOpen, setIsModelTextPickerOpen] = useState(false);
   const [openAddPickerTab, setOpenAddPickerTab] = useState<TabKey | undefined>(undefined);
   // Which resource tab the admin is looking at right now. Deliberately NOT the same thing as

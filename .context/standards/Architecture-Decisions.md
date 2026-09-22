@@ -5369,15 +5369,35 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   notice above the tabs, carrying a retry only when the reason is recoverable. The settle gate
   latches on the FIRST settle, so a retry driven from inside the mounted dialog cannot unmount the
   body and discard the admin's in-progress edits.
+
+  The gate **is** the snapshot: the latch captures every value the body mounts from into one state
+  object, and the body is rendered from that object rather than from the live memos beside it. So
+  the props the body mounted with and the values Confirm reference-compares its result against are
+  the same objects by construction. Read live at render time they would agree only by timing — the
+  latching effect and the render it triggers happen to flush in one turn — and a delivery landing in
+  that window would make every untouched field fail its comparison and write.
+
+  One exception re-opens the snapshot: a catalog arriving after the body mounted, while the admin
+  has edited nothing. Without a catalog both tab lists mount EMPTY (every saved `dblResource` is
+  unclassifiable), so a dialog that promises a review of what is about to be shared shows nothing at
+  all, and the retry cannot fix it. That case re-captures the seed and remounts the body. A body
+  with edits in it is never re-seeded — a remount discards them — so it keeps the mount-time
+  partition, and the hidden-resource count is pinned to that partition rather than recomputed live,
+  or the caveat would vanish the moment the catalog landed and leave the empty lists reading as the
+  truth.
 - **Alternatives:** **Keep blocking on a failed catalog** — rejected: it makes a transient provider
   registration (~10s of background retries) hide unrelated settings, and a retry landing after the
   body mounted cannot fix a snapshot anyway, which is what the delivery gate already handles.
   **Render with no catalog and say nothing** — rejected: that is the dead end this epic exists to
   remove, under a heading that promises a review of what is about to be shared.
-- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate, or it
-  reintroduces the erasure. A surface that cannot show part of its own subject should say how much
-  it is hiding rather than rendering a short list silently.
-- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13).
+- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate AND
+  to the latched seed, or it reintroduces the erasure — a field compared against a live value
+  instead of the seed writes whenever that value moves under an open dialog, which is reachable
+  from a catalog retry, another admin's write, or an S/R delivery. A surface that cannot show part
+  of its own subject should say how much it is hiding rather than rendering a short list silently,
+  and a caveat about what a snapshot omits has to be pinned to that snapshot, not recomputed from
+  data the snapshot is no longer following.
+- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13); PT-4557 review round 4 (A-1 to A-4).
 
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 
