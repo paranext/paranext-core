@@ -138,6 +138,11 @@ import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { isEditorContentForChapter, performDebouncedPdpSave } from './debounced-pdp-save.util';
 import {
+  PLATFORM_CARET_RESTORE_TIMERS,
+  scheduleCaretRestore,
+  ScheduledCaretRestore,
+} from './caret-restore.util';
+import {
   applyChapterSavePreparation,
   CARET_AT_DOCUMENT_END,
   ChapterMarkerCaretTarget,
@@ -2809,10 +2814,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `putRepairedUsjInEditor`). Held so a second repair replaces the wait rather than stacking a
   // second one behind it, and so an editor that goes away inside the wait takes the wait with it
   // rather than leaving it to reach for an editor that is no longer there.
-  const pendingCaretRestoreTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pendingCaretRestore = useRef<ScheduledCaretRestore | undefined>(undefined);
   useEffect(
     () => () => {
-      clearTimeout(pendingCaretRestoreTimeout.current);
+      pendingCaretRestore.current?.cancel();
     },
     [],
   );
@@ -2919,8 +2924,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
      * The push-back replaces the whole document, so the editor regenerates every node key and the
      * caret the user was typing with does not survive it — the correction is made under a caret
      * that then vanishes. `caretTarget` addresses the repaired document, so it can only be applied
-     * once the editor has loaded it, and the editor reports no load signal; this waits the same
-     * span the scroll-into-view paths below do.
+     * once the editor is holding that document, which the editor reports no signal for; see
+     * `caret-restore.util.ts` for how that is waited out.
      */
     function putRepairedUsjInEditor(
       repairedUsj: Usj,
@@ -2945,32 +2950,58 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
 
       if (!caretToRestore) return;
-      clearTimeout(pendingCaretRestoreTimeout.current);
-      pendingCaretRestoreTimeout.current = setTimeout(() => {
-        pendingCaretRestoreTimeout.current = undefined;
-        // `caretToRestore` addresses the repaired chapter's document, so it means nothing once the
-        // user has navigated to another chapter.
-        if (chapterKeyRef.current !== savedChapterKey) return;
-        // Asked again rather than trusted from before the wait: the user can leave this web view
-        // inside it, and `focus()` below would bring them back.
-        if (!document.hasFocus()) return;
-        try {
-          // Placed even when the editor already reports a selection: that is not the user's caret
-          // but wherever the browser collapsed its own selection when the load replaced the text
-          // under it — inside verse 1's number, say, where the next Backspace would delete it.
-          // Focus first: the load leaves the editor with no selection to reconcile, and a caret
-          // placed in an editor the load has dropped focus from would not show. Focusing an editor
-          // with no selection is also what puts the caret at the end of the document (Lexical
-          // selects the root's end by default), so that target needs nothing further.
-          editorRef.current?.focus();
-          if (caretToRestore !== CARET_AT_DOCUMENT_END)
-            editorRef.current?.setSelection(caretToRestore);
-        } catch (error) {
+      pendingCaretRestore.current?.cancel();
+
+      // Asked before every attempt rather than once: the user can navigate, or leave this web view
+      // for another part of the app, while the load this is waiting on is still running — and the
+      // focus the restore ends with would bring them back out of wherever they went.
+      const isStillWanted = () =>
+        chapterKeyRef.current === savedChapterKey && document.hasFocus() && !!editorRef.current;
+
+      // The end of the document is where an editor focused with no selection puts the caret, so
+      // that target is the focus and nothing more.
+      if (caretToRestore === CARET_AT_DOCUMENT_END) {
+        pendingCaretRestore.current = undefined;
+        setTimeout(() => {
+          if (!isStillWanted()) return;
+          try {
+            editorRef.current?.focus();
+          } catch (error) {
+            logger.warn(
+              `Error focusing the editor after a chapter marker correction: ${getErrorMessage(error)}`,
+            );
+          }
+        }, EDITOR_LOAD_DELAY_TIME);
+        return;
+      }
+
+      pendingCaretRestore.current = scheduleCaretRestore({
+        target: caretToRestore,
+        editor: {
+          // The push-back is what the caret addresses, so it is only placeable once the editor is
+          // holding that document and not the one it replaced.
+          hasLoadedDocument: () => {
+            const editorUsj = editorRef.current?.getUsj();
+            return (
+              !!editorUsj && deepEqualAcrossIframes(correctEditorUsjVersion(editorUsj), repairedUsj)
+            );
+          },
+          setSelection: (selection) => editorRef.current?.setSelection(selection),
+          getSelection: () => editorRef.current?.getSelection(),
+          focus: () => editorRef.current?.focus(),
+        },
+        isStillWanted,
+        timers: PLATFORM_CARET_RESTORE_TIMERS,
+        onSettled: ({ outcome, error }) => {
+          pendingCaretRestore.current = undefined;
+          if (outcome !== 'abandoned') return;
           logger.warn(
-            `Error restoring the caret after a chapter marker correction: ${getErrorMessage(error)}`,
+            error === undefined
+              ? 'The caret was not put back after a chapter marker correction: the editor did not load the corrected chapter in time'
+              : `Error restoring the caret after a chapter marker correction: ${getErrorMessage(error)}`,
           );
-        }
-      }, EDITOR_LOAD_DELAY_TIME);
+        },
+      });
     }
 
     // Not wired directly to the editor's `onUsjChanged`: the editor fires `onUsjChanged` even
