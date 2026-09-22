@@ -254,17 +254,31 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // childList mutation; a zoom step would otherwise pay for a second full-document scan.
     const isIndicatorRecord = (record) =>
       (badge && badge.contains(record.target)) || (liveRegion && liveRegion.contains(record.target));
-    const carriesMarker = (node) =>
-      node.nodeType === 1 && (node.matches('[' + ATTR + ']') || !!node.querySelector('[' + ATTR + ']'));
+    // A pop-up's root carries ATTR alongside POPUP_ATTR (see the pop-up comment above), and
+    // closest() matches an element against itself before its ancestors, so this is true both for
+    // the pop-up root and for a marker nested inside its subtree — exactly the two shapes
+    // collectAreas already rejects (isPopup for the root, "ignoring nested zoom area" for anything
+    // nested under it, since the root carries ATTR too).
+    const isPopupOrWithinPopup = (element) => !!element.closest('[' + POPUP_ATTR + ']');
+    const carriesMarker = (node) => {
+      if (node.nodeType !== 1) return false;
+      if (node.matches('[' + ATTR + ']')) return !isPopupOrWithinPopup(node);
+      return Array.prototype.some.call(
+        node.querySelectorAll('[' + ATTR + ']'),
+        (marker) => !isPopupOrWithinPopup(marker),
+      );
+    };
     const someCarriesMarker = (nodes) => Array.prototype.some.call(nodes, carriesMarker);
     // Only a record that carries a marker can change the area list: an added or removed node that is
     // one or contains one, or a change to the marker attribute itself, which is the only attribute
     // this observer is given. Typing in a view moves text nodes and unmarked elements, so without
-    // this the editor would pay for a whole-document scan per keystroke. A removed node's subtree is
-    // intact and queryable while the record holds it, so a marker removed inside a larger subtree is
-    // seen too; nesting needs no case of its own, because any change to a marker's marked ancestry
-    // is itself the addition, removal or retitling of a marker. A marker inside a shadow root is
-    // still invisible here, as it was before, since the observer does not traverse shadow trees.
+    // this the editor would pay for a whole-document scan per keystroke. A pop-up opening or closing
+    // is filtered out the same way, so a tooltip or menu popping in and out under the pointer does
+    // not pay for one either. A removed node's subtree is intact and queryable while the record
+    // holds it, so a marker removed inside a larger subtree is seen too; nesting needs no case of
+    // its own, because any change to a marker's marked ancestry is itself the addition, removal or
+    // retitling of a marker. A marker inside a shadow root is still invisible here, as it was
+    // before, since the observer does not traverse shadow trees.
     const isAreaRecord = (record) => {
       if (isIndicatorRecord(record)) return false;
       // Until the parent has taken a report, every mutation is worth another try: that retry is the

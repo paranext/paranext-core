@@ -1634,6 +1634,28 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.reportContentZoomAreasById.mock.calls.length).toBe(reportsBefore);
   });
 
+  it('does not rescan the document when a pop-up opens or closes', async () => {
+    install('wv-popup-no-rescan', TWO_AREAS);
+    await nextFrame();
+    const spy = vi.spyOn(document, 'querySelectorAll');
+    const markerScanCount = () =>
+      spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
+        .length;
+    try {
+      const popup = document.createElement('div');
+      popup.setAttribute('data-platform-content-zoom-root', 'menu');
+      popup.setAttribute('data-platform-content-zoom-popup', '');
+      const before = markerScanCount();
+      document.body.appendChild(popup);
+      await nextFrame();
+      popup.remove();
+      await nextFrame();
+      expect(markerScanCount() - before).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('keeps the indicator on the pane while a pop-up of the same area is open', async () => {
     install('wv-popup-corner', TWO_AREAS);
     const popup = document.createElement('div');
