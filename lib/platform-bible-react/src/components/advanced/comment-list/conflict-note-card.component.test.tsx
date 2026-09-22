@@ -10,9 +10,9 @@ import {
   verseTextConflictReplacementSample,
 } from './comment-sample.data';
 
-// jsdom doesn't implement ResizeObserver, hasPointerCapture, or scrollIntoView.
-// Radix components (Tooltip/RadioGroup) may reference them. No-op stubs are sufficient because the
-// tests don't assert layout or scroll behaviour.
+// jsdom doesn't implement ResizeObserver, which Radix components (Tooltip/RadioGroup) may reference.
+// A no-op stub is sufficient because the tests don't assert layout behaviour. The hasPointerCapture /
+// scrollIntoView shims they also need are installed repo-wide by vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -32,12 +32,6 @@ class NoopResizeObserver implements ResizeObserver {
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (!Element.prototype.hasPointerCapture) {
-    Element.prototype.hasPointerCapture = () => false;
-  }
-  if (!Element.prototype.scrollIntoView) {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 

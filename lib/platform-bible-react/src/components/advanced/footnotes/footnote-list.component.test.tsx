@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import { afterEach, beforeAll, expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { FootnoteList } from './footnote-list.component';
 
 const footnotes: MarkerObject[] = [
@@ -34,13 +34,8 @@ const footnotes: MarkerObject[] = [
   },
 ];
 
-beforeAll(() => {
-  // jsdom does not implement scrollIntoView, and the list calls it whenever the selection changes.
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
-});
-
+// The list calls scrollIntoView whenever the selection changes; jsdom lacks it, but vitest.setup.ts
+// shims it repo-wide, which is what lets these tests spy on it.
 afterEach(() => {
   vi.restoreAllMocks();
 });

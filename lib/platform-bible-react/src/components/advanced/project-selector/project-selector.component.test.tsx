@@ -37,11 +37,6 @@ beforeAll(() => {
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
   }
-  // The ProjectSelector's "scroll selected row into view on open" useEffect
-  // calls scrollIntoView, which jsdom does not implement.
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
   // jsdom returns a 0-width rect from getBoundingClientRect since it does no layout, which would
   // trip ProjectSelector's auto-narrow observer (threshold 100px) and drop the chevron on every
   // trigger. Stub the trigger button's rect so the default behavior matches production layout;
