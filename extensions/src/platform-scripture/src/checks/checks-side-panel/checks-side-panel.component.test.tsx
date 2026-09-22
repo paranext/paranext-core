@@ -15,10 +15,10 @@ import {
   CHECKS_SIDE_PANEL_STRING_KEYS,
 } from './checks-side-panel.component';
 
-// jsdom implements none of ResizeObserver, IntersectionObserver, matchMedia, or scrollIntoView, and
-// the render path touches all four: platform-bible-react's Popover/Select wire ResizeObservers and
-// the shared components query media features. No-op stubs keep rendering from throwing so these
-// tests can assert on what is rendered.
+// jsdom implements none of ResizeObserver, IntersectionObserver, or matchMedia, and the render path
+// touches all three: platform-bible-react's Popover/Select wire ResizeObservers and the shared
+// components query media features. No-op stubs keep rendering from throwing so these tests can
+// assert on what is rendered. scrollIntoView is shimmed repo-wide in vitest.setup.ts.
 beforeAll(() => {
   // `vi.stubGlobal` accepts `unknown`, so these no-op stubs need no type assertion to stand in for
   // the real constructors — only `observe`/`disconnect` are ever reached from this render path.
@@ -45,7 +45,6 @@ beforeAll(() => {
     })),
   );
 
-  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = vi.fn();
   // Radix's PopoverContent calls scrollTo when it focuses children, which these tests reach by
   // opening the project picker.
   if (!Element.prototype.scrollTo) Element.prototype.scrollTo = vi.fn();
