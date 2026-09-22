@@ -1,4 +1,5 @@
 import type { LocalizedStringValue } from 'platform-bible-utils';
+import type { InstallFailureMessageKeys } from './install-failure-message.utils';
 
 /**
  * Object containing all keys used for localization in the model text panel. Pass these keys into
@@ -20,6 +21,7 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_unknownResource%',
   '%webView_modelTextPanel_installFailed%',
   '%webView_modelTextPanel_installFailedOffline%',
+  '%webView_modelTextPanel_installedButUnavailable%',
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
   // The empty state's "More info" disclosure, which explains what a model text is and that the
@@ -47,3 +49,11 @@ export type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_K
 export type ModelTextPanelLocalizedStrings = {
   [key in ModelTextPanelLocalizedStringKey]?: LocalizedStringValue;
 };
+
+/** The Model Text panel's install-failed messages, for `getInstallFailureMessageKey`. */
+export const MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS: InstallFailureMessageKeys<ModelTextPanelLocalizedStringKey> =
+  {
+    failed: '%webView_modelTextPanel_installFailed%',
+    failedOffline: '%webView_modelTextPanel_installFailedOffline%',
+    installedButUnavailable: '%webView_modelTextPanel_installedButUnavailable%',
+  };

@@ -76,6 +76,18 @@ export function useDblResourceCatalog(): DblResourceCatalogState {
 
       const generation = fetchGenerationRef.current;
 
+      // A panel acts on `installed` — it downloads the resource a row reports as missing — and
+      // `getCachedResources` answers one refresh behind, so a row cached before the resource was
+      // installed would send it to download something already on disk. Bring the flags up to date
+      // first; a failure here is not fatal, since the read below still returns the catalog.
+      try {
+        await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
+      } catch (error) {
+        logger.warn(
+          `Could not refresh DBL resource flags before reading: ${getErrorMessage(error)}`,
+        );
+      }
+
       // The local non-DBL list is supplementary: settled separately so that losing it degrades the
       // panel to DBL-only resources rather than reporting the whole catalog as failed.
       const [dblResult, localResult] = await Promise.allSettled([
