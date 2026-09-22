@@ -98,7 +98,6 @@ describe('translatePlatformMenuItemsAndCombine', () => {
       'contentZoomReset',
       'contentZoomResetNumpad',
       'viewSeparatorBeforeFullScreen',
-      'togglefullscreen',
     ]);
   });
 
