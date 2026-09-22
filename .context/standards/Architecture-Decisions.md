@@ -4694,6 +4694,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-09-22
 - **Status:** Accepted
+- **Amended 2026-09-23:** the retry after a failed lookup is timer-driven and in place (it was
+  rejoin-driven when first recorded), a later successful subscribe clears the failure stamp, a
+  member that cannot report contributes nothing, and alternative (d) was added. Wording below
+  reflects the amended decision.
 - **Context:** `projectDataProviders.get(projectInterface, projectId)` looks cheap at the call site
   and is not. It runs `projectLookupService.getMetadataForProject`, which waits for a matching PDP
   factory and then asks EVERY registered factory for `getAvailableProjects`
@@ -4713,12 +4717,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   only what left, and keeps resolved providers (and failed lookups) for its own lifetime so a
   member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, or a
   provider that could not be subscribed to, is kept for a bounded delay (30 seconds in the hook)
-  and then looked up afresh on the next join, whatever the failure was: the lookup service's
-  `No project found` is also what a late-registering factory or a mid-session resource install
-  produces, so no message text is treated as a permanent verdict. `useOpenProjectBookIds`
-  (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the reference implementation; the
-  scroll-group service's `ensureVersificationSubscribed` is the older in-tree instance and evicts
-  immediately on failure, which suits a module-level cache with few callers. (2)
+  and then looked up afresh by a timer the failed subscription arms for itself, whether or not the
+  project leaves the set, whatever the failure was: the lookup service's `No project found` is
+  also what a late-registering factory or a mid-session resource install produces, so no message
+  text is treated as a permanent verdict. A later successful subscribe clears the stamp, and a
+  member that cannot report contributes no books rather than its previous list.
+  `useOpenProjectBookIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the
+  reference implementation; the scroll-group service's `ensureVersificationSubscribed` is the
+  older in-tree instance and evicts immediately on failure, which suits a pull-driven module-level
+  cache that is re-read on every use. (2)
   The **lookup service stays a broadcast** with no cache of its own for now: which factories serve
   which project changes as factories register, as resources install, and as layering factories
   come and go, and a stale answer there is a correctness bug for every caller, not a performance
@@ -4733,17 +4740,26 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the debounce window; a diff costs nothing when the set is unchanged, so it needs no delay.
   (c) **Read `booksPresent` through one aggregating service** instead of a provider per project —
   a larger redesign that would still have to answer where that service gets its providers from.
+  (d) **One process-level provider cache shared by the toolbar hook and the scroll-group service**
+  — open, not rejected: the two caches key on the same project ids in the same renderer, so a
+  project both consumers hold costs two fan-outs. They differ in shape (the scroll-group cache is
+  pull-driven and re-read on every conversion; the hook's is push-driven and consulted on join or
+  by its retry timer), so a shared cache would have to carry the retry policy of the push-driven
+  consumer. Worth doing when a third consumer appears.
 - **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
   `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
-  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup failed is
-  retried the next time it joins after the delay, so a project the backend begins serving later in
-  the session is picked up within that delay plus one membership change, never sooner; a
+  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup or
+  subscribe failed is retried by a timer after the delay, in place, so a project the backend begins
+  serving later in the session is picked up within one delay of its failure, never sooner; a
   consumer that needs it sooner would subscribe to project-list or factory-registration events and
-  evict on those instead. The flap sources that exposed this are tracked as
-  PT-4592 (a panel republishing its navigable project ids while its reference list resolves
-  transiently empty) and PT-4743 (one installed resource yielding two picker rows under two project
-  id spellings). Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is
-  restated for agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
+  evict on those instead. A subscription that dies without reporting a failure (a provider whose
+  network object is disposed by an extension host restart while the subscription stays registered
+  locally) is not covered by the timer; as of 2026-09-23 it is recorded as deferred on PT-4597.
+  The flap sources that exposed this are tracked as PT-4592 (a panel republishing its navigable
+  project ids while its reference list resolves transiently empty) and PT-4743 (one installed
+  resource yielding two picker rows under two project id spellings). Revisit rule (2) if a
+  platform-level in-flight de-duplication lands. Rule (1) is restated for agents in
+  `.claude/rules/architecture/provider-lookups-fan-out.md`.
 
 ## adr-pt9-interlinear-selected-reads: Publish the size limit and allow callers to select individual files or all at once
 
