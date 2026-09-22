@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { leftEdgeRect, measureRange, useLivePopoverAnchor } from './use-live-popover-anchor.hook';
+import {
+  leftEdgeRect,
+  measureElement,
+  measureRange,
+  useLivePopoverAnchor,
+} from './use-live-popover-anchor.hook';
 
 /** A rect the assertions can tell apart, in the shape `measure` returns. */
 function rect(x: number, y: number): DOMRect {
@@ -126,6 +131,38 @@ describe('measureRange', () => {
       y: 60,
       width: 120,
       height: 18,
+    });
+  });
+});
+
+/** Gives `target` the client rects jsdom cannot lay out, in the shape `measureElement` reads them. */
+function stubElementClientRects(target: Element, rects: DOMRect[]) {
+  Object.defineProperty(target, 'getClientRects', { value: () => rects, configurable: true });
+  Object.defineProperty(target, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => rects[0] ?? new DOMRect(),
+  });
+}
+
+describe('measureElement', () => {
+  it('has no rect once the element has no layout, as inside a display:none rc-dock tab pane', () => {
+    const element = document.createElement('div');
+    stubElementClientRects(element, []);
+
+    expect(measureElement(element)).toBeUndefined();
+  });
+
+  it('is the element box while it is laid out, even at zero width or height', () => {
+    // A collapsed caret's element still occupies a real position; only "no box at all" (an empty
+    // getClientRects()) counts as unmeasurable, matching measureRange's rule.
+    const element = document.createElement('div');
+    stubElementClientRects(element, [new DOMRect(40, 100, 0, 40)]);
+
+    expect(rectNumbers(measureElement(element))).toEqual({
+      x: 40,
+      y: 100,
+      width: 0,
+      height: 40,
     });
   });
 });
