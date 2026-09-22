@@ -1056,7 +1056,7 @@ describe('handleSwitchToSimpleMode', () => {
     expect(getLastOpenedProject()).toBeUndefined();
   });
 
-  it('slow path: a run of published resources ahead of an editable project still resolves inside the cold-start bound', async () => {
+  it('slow path: checks every recent candidate concurrently, so a run of published resources ahead of an editable project cannot exhaust the cold-start bound', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
@@ -1069,22 +1069,29 @@ describe('handleSwitchToSimpleMode', () => {
         ? { getRecentProjects }
         : undefined,
     );
-    // Each lookup is slow enough that checking the nine candidates one after another (~4.5s) would
-    // blow COLD_START_LOOKUP_TIMEOUT_MS, while checking them together costs about one lookup.
-    const LOOKUP_DELAY_MS = 500;
+    // Concurrency is asserted directly rather than inferred from wall-clock time: every lookup
+    // parks on one gate, so all nine can only be in flight at once if the walk fans them out.
+    // A sequential walk reaches exactly one and this never gets past `waitFor`.
+    const inFlight: string[] = [];
+    let releaseLookups = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseLookups = resolve;
+    });
     getMetadataForProjectMock.mockImplementation(async (projectId: string) => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, LOOKUP_DELAY_MS);
-      });
+      inFlight.push(projectId);
+      await gate;
       return projectId === 'proj-editable' ? {} : { isPublished: true };
     });
 
-    await host.handleSwitchToSimpleMode();
+    const switching = host.handleSwitchToSimpleMode();
+    await vi.waitFor(() => expect(inFlight).toHaveLength(resourceIds.length + 1));
+    releaseLookups();
+    await switching;
 
     expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-editable');
     const { logger } = await import('@shared/services/logger.service');
     expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('Timed out'));
-  }, 10000);
+  });
 
   it('slow path: falls back to the bare layout and warns if resolving whether the project is published hangs past the cold-start bound', async () => {
     const host = await importHost();

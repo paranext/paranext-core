@@ -204,13 +204,14 @@ export type ProjectSelectorLocalizedStrings = {
   clearAll?: string;
 };
 
-// `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
-// bare Storybook render), not production copy: every real consumer merges its own values for
-// these two fields on top via `localizedStrings`. They exist so the trigger never renders with an
-// empty accessible name or empty text before localized strings resolve.
 /**
  * English text for every {@link ProjectSelectorLocalizedStrings} key, used for any key a consumer
  * leaves unset.
+ *
+ * `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
+ * bare Storybook render), not production copy: every real consumer merges its own values for these
+ * two fields on top via `localizedStrings`. They exist so the trigger never renders with an empty
+ * accessible name or empty text before localized strings resolve.
  *
  * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
  * a consumer typically localizes only the handful of keys its configuration can reach, and which
@@ -316,6 +317,10 @@ function scrollGroupLetterFromMap(id: ScrollGroupId): string {
  * Cmdk derives an item's value from its rendered text unless one is given. The footer's text is a
  * caller-supplied localized label, which could collide with a project name, so the row carries this
  * fixed value instead. It must stay stable and must not look like a project id.
+ *
+ * Project rows already carry composite values (`rowKey shortName fullName`), so a collision is
+ * unreachable in practice and no test can pin one. Keep this sentinel anyway: it is what makes that
+ * true independently of how row values are composed later.
  */
 const FOOTER_ACTION_VALUE = 'platform.footerAction';
 
@@ -403,8 +408,9 @@ type CommonProps = {
     project: ProjectSelectorProject,
   ) => ProjectSelectorIndicator | undefined;
   /**
-   * An action row rendered below every section, separated from the list. Use it for an affordance
-   * that opens a different surface — the sections partition rows, so they cannot express one.
+   * An action row pinned below every section, with a separator above it whenever the list has rows
+   * to divide it from. Use it for an affordance that opens a different surface — the sections
+   * partition rows, so they cannot express one.
    *
    * The row stays available when the list is empty, which is when an escape hatch matters most, and
    * the "no projects" empty state still renders alongside it.
@@ -629,7 +635,6 @@ function ProjectRowView({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
-      data-selected={row.isSelected}
     >
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
@@ -1101,22 +1106,23 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     props.onChangeSelection({ pairs: [] });
   };
 
-  // Computed on every render rather than memoized. `props` is the only workable dependency — the
-  // switch reads a different union arm's fields in each branch, so the set of props it touches is
-  // not statically knowable — and a new props object arrives on every render, so a memo keyed on it
-  // could never hit while still costing a comparison. Nothing consumes the result's identity; the
-  // body is a map lookup and a join.
-  const triggerContent: { node: ReactNode; title: string } = (() => {
+  // Narrowed out of the union here rather than read inside the memo below: `props` itself is a
+  // fresh object on every render, so naming it in the dep list would make the memo never hit, and
+  // these two members exist only on the `'project'` variant so a dep list cannot name them
+  // directly.
+  const renderTriggerLabel = props.mode === 'project' ? props.renderTriggerLabel : undefined;
+  const triggerLabelFormat = props.mode === 'project' ? props.triggerLabelFormat : undefined;
+
+  const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
     switch (props.mode) {
       case 'project': {
         const selected = lookUpProject(props.selection.projectId);
         // An empty title suppresses the tooltip wrapper below — see `renderTriggerLabel`'s TSDoc.
-        if (props.renderTriggerLabel)
-          return { node: props.renderTriggerLabel(selected), title: '' };
+        if (renderTriggerLabel) return { node: renderTriggerLabel(selected), title: '' };
         let text = selected ? selected.shortName : strings.buttonPlaceholder;
         if (
           selected &&
-          props.triggerLabelFormat === 'shortNameAndFullName' &&
+          triggerLabelFormat === 'shortNameAndFullName' &&
           selected.fullName &&
           selected.fullName !== selected.shortName
         )
@@ -1177,7 +1183,14 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       default:
         return { node: '', title: '' };
     }
-  })();
+  }, [
+    props.mode,
+    lookUpProject,
+    props.selection,
+    renderTriggerLabel,
+    triggerLabelFormat,
+    strings.buttonPlaceholder,
+  ]);
 
   // Auto-narrow: measure the trigger button's rendered width and hide the chevron below the
   // threshold at which the label would otherwise truncate to nothing. Consumers control the
@@ -1364,10 +1377,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                       />
                     ))}
                   </CommandGroup>
-                  {/* `alwaysRender` for the same reason the footer's separator below carries it:
-                      a plain CommandSeparator returns null as soon as cmdk's `state.search` is
-                      non-empty, so one keystroke would drop the rule between two sections that
-                      are both still on screen. */}
+                  {/* `alwaysRender`: a plain CommandSeparator returns null as soon as cmdk's
+                      `state.search` is non-empty, so one keystroke would drop the rule between
+                      two sections that are both still on screen. */}
                   {index < sections.length - 1 && <CommandSeparator alwaysRender />}
                 </Fragment>
               ))}
@@ -1379,9 +1391,12 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                 // INSIDE `CommandList` because that is the subtree cmdk's `getValidItems()` walks
                 // for arrow-key, Home/End and Enter navigation; moving it out would make it
                 // pointer-only. Opaque background so rows scroll behind it rather than through it.
-                <div className="tw:sticky tw:bottom-0 tw:z-10 tw:bg-popover">
-                  {/* `alwaysRender`: a plain CommandSeparator returns null as soon as cmdk's
-                      `state.search` is non-empty, so the footer would lose its rule mid-search.
+                // `role="presentation"` because this wrapper exists only to position the row:
+                // without it the div breaks `CommandList`'s `role="listbox"` ownership of the
+                // footer's `role="option"`, and some assistive tech stops counting the footer in
+                // "1 of N".
+                <div role="presentation" className="tw:sticky tw:bottom-0 tw:z-10 tw:bg-popover">
+                  {/* `alwaysRender` for the reason given on the inter-section separator above.
                       Only rendered when a section above it actually has rows — with none, the
                       empty message is the only thing above the footer, and a rule under it with
                       nothing to divide reads as a stray line rather than a separator. */}

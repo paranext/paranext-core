@@ -396,8 +396,10 @@ export function ModelTextPanel({
       // Opt-in: omit `nodes` entirely when there are no extra markers (no behavior change), matching
       // resource-text-panel.
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
-      // Narrow the resource's (string) text-direction setting to the editor's union without a cast.
-      textDirection: textDirection === 'rtl' || textDirection === 'auto' ? textDirection : 'ltr',
+      // Narrow the resource's (string) text-direction setting to ltr or rtl. A project always
+      // declares one of the two (direction cannot be guessed for a minority language), so the
+      // editor's `auto` is not a mode core passes; anything else falls back to ltr.
+      textDirection: textDirection === 'rtl' ? 'rtl' : 'ltr',
       view: VIEW_OPTIONS,
     }),
     [textDirection, extraValidMarkers],

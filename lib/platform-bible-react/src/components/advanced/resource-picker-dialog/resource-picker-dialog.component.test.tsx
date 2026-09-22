@@ -27,8 +27,7 @@ afterAll(() => {
   vi.unstubAllGlobals();
   // `vi.unstubAllGlobals` does not reach a prototype assignment, so restore it by hand rather than
   // leaving a stub on `Element` for every test file that runs after this one in the same worker.
-  // jsdom ships no `scrollIntoView`, so the captured value is usually `undefined` — putting that
-  // back is what restores the original absence.
+  // The captured value is the repo-wide no-op shim from vitest.setup.ts, which later files rely on.
   Element.prototype.scrollIntoView = originalScrollIntoView;
 });
 

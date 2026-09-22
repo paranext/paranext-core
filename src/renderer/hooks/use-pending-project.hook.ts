@@ -138,6 +138,10 @@ export function usePendingProject(
         // would otherwise keep its name up until the bound expired.
         setPendingProject(undefined);
       }
+      // Deliberate: the open runs even when this project is already current. Re-picking the open
+      // row is how a user reveals or refocuses its existing editor, so skipping the call would
+      // make that row inert. The cost is that recency is re-stamped and the Recent section can
+      // reorder, which happens after the popover has closed.
       openProject(projectId).catch((e: unknown) => {
         logger.warn(`Could not open project ${projectId}: ${getErrorMessage(e)}`);
         // Latest-wins, keyed on the attempt rather than the project: a slow failure for an earlier

@@ -24,7 +24,7 @@ import {
 import { SHRINK_STEP, ShrinkStepContext } from 'platform-bible-react';
 import type { ProjectSelectorProps } from 'platform-bible-react/experimental';
 import type { ProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
-import { PlatformBibleToolbar } from './platform-bible-toolbar';
+import { PlatformBibleToolbar, PROJECT_TRIGGER_MIN_WIDTH_CLASS } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -32,13 +32,6 @@ vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
 vi.mock('@renderer/components/user-profile-popover/user-profile-popover.component', () => ({
   UserProfilePopover: () => <div data-testid="user-profile-popover-stub" />,
 }));
-
-/**
- * The resolution callbacks `useDialogCallback` has been handed, newest last. The toolbar hands it a
- * fresh callback on every render, so this is a per-render log rather than a count of dialogs
- * opened; a test that resolves the project-picker dialog reaches for the most recent entry.
- */
-const capturedDialogResolvers: ((response: string | undefined) => void)[] = [];
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
@@ -82,16 +75,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     MainMenu: vi.fn(() => [{ columns: {}, groups: {}, items: [] }, vi.fn(), false]),
   })),
   useDataProvider: vi.fn(() => undefined),
-  useDialogCallback: vi.fn(
-    (
-      _dialogType: unknown,
-      _options: unknown,
-      resolveCallback: (response: string | undefined) => void,
-    ) => {
-      capturedDialogResolvers.push(resolveCallback);
-      return vi.fn();
-    },
-  ),
   useSetting: vi.fn(() => ['simple', vi.fn(), vi.fn(), false]),
   useProjectSetting: vi.fn(() => ['', vi.fn(), vi.fn(), false]),
 }));
@@ -187,6 +170,7 @@ vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
     currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
     recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
     allProjects: [],
+    currentSimpleProjectError: undefined,
     isLoading: false,
   })),
 }));
@@ -341,7 +325,6 @@ beforeAll(() => {
 // Sync-button block last set would leak into every describe that follows.
 beforeEach(() => {
   capturedProjectSelectorProps.current = undefined;
-  capturedDialogResolvers.length = 0;
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
   // vitest has no URL search params for the renderer to read this from, so without a file-wide
   // default it is `undefined` (a secondary window) in every describe that doesn't say otherwise —
@@ -783,6 +766,60 @@ describe('PlatformBibleToolbar — project selector visibility by interface mode
     rerender(<PlatformBibleToolbar />);
     await waitFor(() => {
       expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
+    });
+  });
+});
+
+/*
+ * The picker's own list is built from local metadata only, so the projects a user can reach on the
+ * send/receive server but has not downloaded are not in it. The footer is the way out to Home,
+ * which does merge both. Closing the popover on the way is `ProjectSelector`'s own job, asserted
+ * against the real component in
+ * `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.test.tsx`.
+ */
+describe('PlatformBibleToolbar — project picker footer reaches the rest of the projects', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  /** Activates the footer the way `ProjectSelector` does when a user picks it. */
+  async function activateFooter() {
+    render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-selector-stub');
+    const { footerAction } = requireCapturedProjectSelectorProps();
+    // Asserted rather than optional-chained: a missing footer means the escape hatch was never
+    // wired up, and a silent no-op would leave the assertions below holding for the pre-act state.
+    expect(footerAction).toBeDefined();
+    act(() => {
+      footerAction?.onSelect();
+    });
+  }
+
+  it('is labelled so a user can tell it leads out of the short list', async () => {
+    render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-selector-stub');
+
+    expect(requireCapturedProjectSelectorProps().footerAction?.label).toBe('Test more projects');
+  });
+
+  it('opens Home', async () => {
+    await activateFooter();
+
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'platformGetResources.openHome',
+        expect.anything(),
+      );
+    });
+  });
+
+  it('asks Home for projects only, since a read-only resource is never an answer here', async () => {
+    await activateFooter();
+
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('platformGetResources.openHome', true);
     });
   });
 });
@@ -1357,6 +1394,11 @@ describe('PlatformBibleToolbar project selector label', () => {
     expect(trigger).not.toHaveTextContent('Test Project');
   });
 
+  /** Matches one whole class token in a `class` attribute, rather than a substring of a longer one. */
+  function classMatcher(className: string) {
+    return new RegExp(`(?:^|\\s)${className.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}(?:\\s|$)`);
+  }
+
   it('lowers the trigger width floor at the narrowest step, so dropping the full name actually frees space', () => {
     // Without this the label just gets shorter inside a box still reserving 192px, and the room the
     // abbreviation was supposed to buy comes out of the reference control instead.
@@ -1371,9 +1413,13 @@ describe('PlatformBibleToolbar project selector label', () => {
       .querySelector('[data-trigger-classname]')
       ?.getAttribute('data-trigger-classname');
 
-    expect(wideTrigger).toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
-    expect(narrowTrigger).toMatch(/(?:^|\s)tw:min-w-24(?:\s|$)/);
-    expect(narrowTrigger).not.toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
+    // Compared against the exported constants rather than literal spellings, so renaming a floor
+    // moves both sides together instead of quietly leaving the test asserting a dead class.
+    const wide = classMatcher(PROJECT_TRIGGER_MIN_WIDTH_CLASS.WIDE);
+    const narrow = classMatcher(PROJECT_TRIGGER_MIN_WIDTH_CLASS.NARROW);
+    expect(wideTrigger).toMatch(wide);
+    expect(narrowTrigger).toMatch(narrow);
+    expect(narrowTrigger).not.toMatch(wide);
   });
 
   it('shows the placeholder when nothing is selected, rather than an empty trigger', async () => {
@@ -1684,24 +1730,22 @@ describe('PlatformBibleToolbar — pending project display', () => {
     });
   }
 
-  /** Resolves the "More projects…" dialog with the id a real dialog response carries. */
-  function resolveProjectPickerDialogWith(projectId: string | undefined) {
-    const resolveDialog = capturedDialogResolvers.at(-1);
-    act(() => {
-      resolveDialog?.(projectId);
-    });
-  }
-
-  it('opens a dialog-only project without naming it, and without adding a row for it', async () => {
+  it('opens a project it has no row for without naming it, and without adding a row for it', async () => {
     await renderSimpleToolbarWith({ allProjects: [] });
 
-    const { footerAction } = requireCapturedProjectSelectorProps();
-    act(() => {
-      footerAction?.onSelect();
-    });
-    // The dialog is the slower of the two paths, and it can return a project the short list never
-    // contained — so there are no display fields to name it with.
-    resolveProjectPickerDialogWith('far');
+    // A selection whose id the visible list does not carry — so there are no display fields to
+    // name it with.
+    selectProjectFromPopover('far');
+
+    // The positive consequence: the id really did reach the open path. Without this the rest of
+    // the assertions below all hold in the pre-act state (no projects, no selection, placeholder
+    // trigger) and the test would survive the selection wiring being deleted outright.
+    await waitFor(() =>
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'platformScriptureEditor.openScriptureEditor',
+        'far',
+      ),
+    );
 
     const props = requireCapturedProjectSelectorProps();
     // No phantom row is injected into the visible list, and nothing is marked as selected — a

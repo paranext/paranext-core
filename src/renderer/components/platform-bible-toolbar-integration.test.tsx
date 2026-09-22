@@ -44,7 +44,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%projectPicker_toolbar_no_projects%': 'Test no projects',
       '%projectPicker_toolbar_select_project%': 'Test select a project',
       '%projectPicker_toolbar_trigger_label%': 'Test select a project, {fullName} ({shortName})',
+      '%projectPicker_toolbar_trigger_label_empty%': 'Test select a project, no projects here',
       '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
+      '%projectPicker_toolbar_label_nameAndShortName%': '{fullName} ({shortName})',
+      '%projectPicker_toolbar_label_shortNameOnly%': '({shortName})',
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [
@@ -262,10 +265,18 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     ).toBeInTheDocument();
   });
 
-  it('falls back to the placeholder in the accessible name when no project is open', async () => {
+  it('names the control as a picker in the accessible name when there is nothing to list', async () => {
     await renderSimpleToolbarWith({ currentSimpleProject: undefined });
 
-    expect(await screen.findByRole('combobox', { name: 'Test no projects' })).toBeInTheDocument();
+    // The bare placeholder would make the whole accessible name "No projects", which says nothing
+    // about the control still opening a picker — and an empty list is exactly when a user needs to
+    // reach the "More projects…" escape hatch behind it.
+    const trigger = await screen.findByRole('combobox', {
+      name: 'Test select a project, no projects here',
+    });
+    // The VISIBLE text is still the short placeholder; only the accessible name is expanded, so
+    // the toolbar does not grow a sentence where a two-word label belongs.
+    expect(trigger).toHaveTextContent('Test no projects');
   });
 
   it('names the error in the accessible name when the current project cannot be resolved', async () => {
@@ -318,7 +329,9 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: false });
 
     // An empty list must not disable the trigger: "More projects…" is the only way out of it.
-    expect(await screen.findByRole('combobox', { name: 'Test no projects' })).toBeEnabled();
+    expect(
+      await screen.findByRole('combobox', { name: 'Test select a project, no projects here' }),
+    ).toBeEnabled();
   });
 
   it('shows the toolbar-supplied sections and the more-projects footer when opened', async () => {
@@ -406,7 +419,9 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
 
     // The trigger stays enabled with nothing to list: "More projects…" is the only way out of an
     // empty list, so this is the state the escape hatch matters most in.
-    const trigger = await screen.findByRole('combobox', { name: 'Test no projects' });
+    const trigger = await screen.findByRole('combobox', {
+      name: 'Test select a project, no projects here',
+    });
     expect(trigger).toBeEnabled();
     await user.click(trigger);
 

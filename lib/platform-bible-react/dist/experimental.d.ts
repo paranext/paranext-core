@@ -414,6 +414,11 @@ export type ProjectSelectorLocalizedStrings = {
  * English text for every {@link ProjectSelectorLocalizedStrings} key, used for any key a consumer
  * leaves unset.
  *
+ * `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
+ * bare Storybook render), not production copy: every real consumer merges its own values for these
+ * two fields on top via `localizedStrings`. They exist so the trigger never renders with an empty
+ * accessible name or empty text before localized strings resolve.
+ *
  * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
  * a consumer typically localizes only the handful of keys its configuration can reach, and which
  * keys those are is a property of the configuration rather than of the component. Looping over this
@@ -509,8 +514,9 @@ type CommonProps = {
 	 */
 	renderProjectIndicator?: (project: ProjectSelectorProject) => ProjectSelectorIndicator | undefined;
 	/**
-	 * An action row rendered below every section, separated from the list. Use it for an affordance
-	 * that opens a different surface — the sections partition rows, so they cannot express one.
+	 * An action row pinned below every section, with a separator above it whenever the list has rows
+	 * to divide it from. Use it for an affordance that opens a different surface — the sections
+	 * partition rows, so they cannot express one.
 	 *
 	 * The row stays available when the list is empty, which is when an escape hatch matters most, and
 	 * the "no projects" empty state still renders alongside it.

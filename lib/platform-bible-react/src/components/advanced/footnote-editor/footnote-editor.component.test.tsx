@@ -22,8 +22,8 @@ import {
 } from './footnote-editor.types';
 
 // cmdk (Command/CommandInput, used by the inline MarkerMenu popover) instantiates a
-// ResizeObserver on mount and schedules scrollTo/scrollIntoView; jsdom ships none of these.
-// No-op stubs are sufficient since these tests never open that popover.
+// ResizeObserver on mount and schedules scrollTo; jsdom ships neither. No-op stubs are sufficient
+// since these tests never open that popover. scrollIntoView is shimmed repo-wide in vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -46,9 +46,6 @@ beforeAll(() => {
   }
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 

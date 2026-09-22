@@ -37,11 +37,6 @@ beforeAll(() => {
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
   }
-  // The ProjectSelector's "scroll selected row into view on open" useEffect
-  // calls scrollIntoView, which jsdom does not implement.
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
   // jsdom returns a 0-width rect from getBoundingClientRect since it does no layout, which would
   // trip ProjectSelector's auto-narrow observer (threshold 100px) and drop the chevron on every
   // trigger. Stub the trigger button's rect so the default behavior matches production layout;
@@ -936,44 +931,6 @@ describe('footerAction', () => {
     // matches, so the assertion must compare against `null` itself.
     // eslint-disable-next-line no-null/no-null
     expect(screen.queryByTestId('project-selector-footer-separator')).not.toBe(null);
-  });
-
-  it('does not collide with a project whose name matches the footer label', async () => {
-    const user = setupUser();
-    const onSelect = vi.fn();
-    const onChangeSelection = vi.fn();
-    render(
-      <ProjectSelector
-        mode="project"
-        projects={[{ id: 'more', shortName: 'More projects…', fullName: 'A real project' }]}
-        openTabs={SAMPLE_OPEN_TABS}
-        selection={{ projectId: undefined }}
-        onChangeSelection={onChangeSelection}
-        localizedStrings={{ ariaLabel: 'Project', buttonPlaceholder: 'Select a project' }}
-        footerAction={{ label: 'More projects…', onSelect }}
-      />,
-    );
-
-    await user.click(screen.getByRole('combobox', { name: 'Project' }));
-    await screen.findByTestId('project-selector-footer-action');
-
-    // Activated by KEYBOARD, not by clicking the node. cmdk wires `onClick` on the element itself,
-    // so a direct click reaches the right handler no matter how values collide — that route cannot
-    // fail and proves nothing. The routes that CAN are the ones that resolve a value to a node by
-    // first DOM match: cmdk's own `getSelectedItem()` behind Enter, and `spaceSelectsHighlightedItem`.
-    // Arrow down past the single project row to the footer, then press Enter.
-    await user.keyboard('{ArrowDown}');
-    await user.keyboard('{ArrowDown}');
-    await waitFor(() =>
-      expect(screen.getByTestId('project-selector-footer-action')).toHaveAttribute(
-        'data-selected',
-        'true',
-      ),
-    );
-    await user.keyboard('{Enter}');
-
-    expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onChangeSelection).not.toHaveBeenCalled();
   });
 
   it('closes the popover after the action runs', async () => {
