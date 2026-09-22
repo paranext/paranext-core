@@ -711,6 +711,62 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-closed-source-command-doc-altitude: Command docs for closed-source-backed PAPI commands describe caller-visible guarantees, not the current implementer's mechanism
+
+- **Date:** 2026-09-05
+- **Status:** Accepted
+- **Context:** PR #2771 (PT-4483) fixed `paratextBibleSendReceive.syncProjects`'s doc comments (the
+  C# stub's XML doc and `src/@types/paratext-bible-send-receive/index.d.ts`'s TSDoc), which had
+  drifted from the real Paratext 10 Studio implementation — a closed-source patch
+  (`paratext-10-studio` `repo-patches/paranext-core.patch`, `SyncProjectsCore`). A first draft of the
+  fix encoded Studio's specific first-sync mechanism directly (an initial batch of 5 projects, then
+  one at a time, stopping once a non-Observer role is found), verified against the actual patch
+  source. Code review (Reviewable, `katherinejensen00`, with direct access to that patch) found the
+  new text itself over-generalized: for accounts with five or fewer shared projects, or accounts
+  where the user has no editable role on any of them, the described "stops early, rather than
+  syncing the whole account" claim doesn't hold — the whole account downloads regardless, just via a
+  different path through the same mechanism. Fixing that specific overgeneralization in place would
+  still have left the doc asserting Studio's tunable constants (batch size, the role check) as part
+  of the command's contract — constants this repo cannot verify, cannot test against (the stub
+  throws/no-ops; no core test exercises the real logic), and has no way to detect drifting the next
+  time Studio's patch is regenerated (`save-repo-patches`).
+- **Decision:** Doc comments for a command whose real implementation is closed-source or otherwise
+  swappable (today: anything backed by `paratext-bible-send-receive`, i.e. any command whose
+  `@throws` documents a `PlatformUnimplementedException` for builds that don't implement it, naming
+  the current implementer only as an example) describe caller-visible **guarantees** only — what a
+  caller may rely on and must not assume — never the current implementer's specific mechanism or
+  tuning constants. Concretely, `syncProjects`'s zero-local-projects case now reads "an
+  implementation is expected to try to make at least one project available for the current user to
+  work in, if the account has one — but may stop short of downloading every shared project in the
+  account, trading completeness for performance. Callers MUST NOT assume every shared project is
+  present locally once this resolves," replacing the batch/role-check description. Promoted to a
+  standing rule: `.claude/rules/architecture/closed-source-command-docs.md`.
+- **Alternatives:**
+  - **Encode the known implementation for convenience** (what the first draft did) — rejected:
+    useful once, but ties this repo's doc to a private repo's tunable constants with no verification
+    path and no drift signal; exactly what produced the overgeneralization this decision responds
+    to.
+  - **Keep it vague, point readers to the other repo** — rejected: readers of this repo (including a
+    future AI agent) might not have access to or knowledge of the actual implementation(s); a bare
+    pointer elsewhere is unactionable for them and doesn't tell a caller what it can safely assume.
+  - **Leave the pre-PR wording**, which understated the behavior — rejected: it was the original bug
+    this PR fixed (claimed the no-ID form only ever syncs already-local projects, when a true first
+    sync can and should also acquire the account's first project).
+- **Consequences:** This doc can no longer be invalidated by a Studio-side regeneration of
+  `repo-patches/paranext-core.patch` that changes a tuning constant, since it no longer asserts one.
+  The tradeoff is genuinely less specific information in-repo for someone who wants to reason
+  precisely about first-sync latency or batching — that detail now only exists in the Studio patch
+  itself, which the rule file points to. If a future need arises to expose implementation-specific
+  timing/behavior to core (e.g. for a startup-performance budget), it should be surfaced through an
+  explicit signal (a return value, an event) rather than encoded into a doc comment describing a
+  different implementation's internals. Upstreamed 2026-09-18 via
+  `paratext-bible-internal-extensions#200` (merged), closing the drift-on-re-sync risk this decision
+  flagged. That review round also surfaced a real (if narrow) bug in the underlying implementation —
+  `seenConnectedIds` not seeded before the connected-resource scan, causing a double-sync when a
+  primary project is also connected to another primary in the same call — tracked separately as
+  PT-4602 (open as of 2026-09-21), since it's a code fix in the Studio patch, not a doc fix.
+- **Source:** PT-4483, review of #2771.
+
 ## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
 
 - **Date:** 2026-09-15
@@ -4505,6 +4561,61 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   read-only is consumer-derived through `renderProjectIndicator`, which leaves the row tooltip
   unable to explain the padlock to sighted pointer users. Both are written up in
   [`.context/designs/PT-4549-followup-projectselector-accessible-name.md`](../designs/PT-4549-followup-projectselector-accessible-name.md).
+
+## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** `projectDataProviders.get(projectInterface, projectId)` looks cheap at the call site
+  and is not. It runs `projectLookupService.getMetadataForProject`, which waits for a matching PDP
+  factory and then asks EVERY registered factory for `getAvailableProjects`
+  (`src/shared/models/project-lookup.service-model.ts`, `internalGetMetadata`); each layering
+  factory in the extension host answers that by asking every other factory again, so one renderer
+  lookup reaches the C# factories several times over. PT-4597 showed what that costs when a
+  consumer treats it as free: the Simple-mode toolbar's `useOpenProjectBookIds` tore down and
+  rebuilt every `booksPresent` subscription on any change to the set of open project ids, resolving
+  a provider per open project each time. A resource panel republishing its navigable project ids in
+  a loop (~15 writes/s) turned that into ~20,000 lookups and ~52,000 extension-host-to-C# requests
+  in three minutes; .NET stopped answering, the extension host's socket to main died, and the app
+  hung. The PT-4501 late-unsubscriber throttle (#2772) had already fixed one flapping input to the
+  same hook, which shows that fixing inputs one at a time does not close the class.
+- **Decision:** Two rules, one at each end. (1) A **reactive consumer** whose inputs can change
+  repeatedly — a hook or effect keyed on the set of open web views, a selection, a setting that
+  another surface writes — acts on the **diff** of that set: it acquires only what joined, releases
+  only what left, and keeps resolved providers (and failed lookups) for its own lifetime so a
+  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, or a
+  provider that could not be subscribed to, is kept for a bounded delay (30 seconds in the hook)
+  and then looked up afresh on the next join, whatever the failure was: the lookup service's
+  `No project found` is also what a late-registering factory or a mid-session resource install
+  produces, so no message text is treated as a permanent verdict. `useOpenProjectBookIds`
+  (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the reference implementation; the
+  scroll-group service's `ensureVersificationSubscribed` is the older in-tree instance and evicts
+  immediately on failure, which suits a module-level cache with few callers. (2)
+  The **lookup service stays a broadcast** with no cache of its own for now: which factories serve
+  which project changes as factories register, as resources install, and as layering factories
+  come and go, and a stale answer there is a correctness bug for every caller, not a performance
+  one. The cost of a lookup is therefore the consumer's to bound.
+- **Alternatives:** (a) **Cache or coalesce inside `projectLookupService`** — deferred, not
+  rejected: an in-flight de-duplication (identical concurrent queries share one fan-out) is safe
+  and would help every caller, but a value cache needs invalidation on factory register/unregister
+  and on project install, which the lookup service cannot observe completely today. Worth doing as
+  platform work under its own ticket; it does not remove rule (1), because a rebuild-everything
+  consumer still pays a subscription round trip per member per change. (b) **Debounce the
+  consumer's input** — hides a flap but keeps the per-member cost, and delays legitimate updates by
+  the debounce window; a diff costs nothing when the set is unchanged, so it needs no delay.
+  (c) **Read `booksPresent` through one aggregating service** instead of a provider per project —
+  a larger redesign that would still have to answer where that service gets its providers from.
+- **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
+  `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
+  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup failed is
+  retried the next time it joins after the delay, so a project the backend begins serving later in
+  the session is picked up within that delay plus one membership change, never sooner; a
+  consumer that needs it sooner would subscribe to project-list or factory-registration events and
+  evict on those instead. The flap sources that exposed this are tracked as
+  PT-4592 (a panel republishing its navigable project ids while its reference list resolves
+  transiently empty) and PT-4743 (one installed resource yielding two picker rows under two project
+  id spellings). Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is
+  restated for agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
 
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
