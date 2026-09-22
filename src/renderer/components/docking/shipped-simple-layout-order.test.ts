@@ -89,6 +89,53 @@ const supplementEntries: DefaultLayoutSupplementEntry[] =
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   defaultLayoutSupplement.tabs as unknown as DefaultLayoutSupplementEntry[];
 
+const EDITOR_MENUS_PATH = resolve(
+  __dirname,
+  '../../../../extensions/src/platform-scripture-editor/contributions/menus.json',
+);
+
+/**
+ * The tab each Simple TOOLS item brings to the front. Kept by hand because the menu names a command
+ * and the layout names a web view type. A new third-column tab fails this test until it gets a
+ * TOOLS item and an entry here.
+ */
+const TAB_FOR_COMMAND: Record<string, string> = {
+  'platformScriptureEditor.showBibleTextsPanel': 'platformScriptureEditor.bibleTexts',
+  'platformScriptureEditor.showCommentariesPanel': 'platformScriptureEditor.commentaries',
+  'legacyCommentManager.showCommentListPanel': 'legacyCommentManager.commentListPanel',
+  'platformScriptureEditor.showTextCollectionPanel': 'platformScriptureEditor.scriptureTextGrid',
+  'platformScripture.openFind': 'platformScripture.find',
+};
+
+type MenuItemJson = {
+  group: string;
+  order: number;
+  command?: string;
+  hiddenInterfaceModes?: string[];
+};
+
+/** The TOOLS section's commands, read straight off the raw menu JSON, in the order they are served. */
+function simpleToolsCommands(): string[] {
+  const menus = JSON.parse(readFileSync(EDITOR_MENUS_PATH, 'utf8'));
+  const { topMenu } = menus.webViewMenus['platformScriptureEditor.react'];
+  const {
+    groups,
+    items,
+  }: {
+    groups: Record<string, { column?: string; order: number }>;
+    items: MenuItemJson[];
+  } = topMenu;
+  return Object.entries(groups)
+    .filter(([, group]) => group.column === 'platformScriptureEditor.simpleTools')
+    .sort(([, a], [, b]) => a.order - b.order)
+    .flatMap(([groupKey]) =>
+      items
+        .filter((item) => item.group === groupKey && !item.hiddenInterfaceModes?.includes('simple'))
+        .sort((a, b) => a.order - b.order)
+        .flatMap((item) => (item.command ? [item.command] : [])),
+    );
+}
+
 describe('shipped Simple-mode Column 3 order', () => {
   it('the static layout lists Column 3 in the shipped order', () => {
     // Order-sensitive on purpose: `toHaveLength` and `toContain` both pass under any permutation,
@@ -218,6 +265,16 @@ describe('shipped Simple-mode Column 3 order', () => {
       'platformScriptureEditor.scriptureTextGrid',
       'platformScripture.find',
     ]);
+  });
+
+  it("lists the Simple Project menu's TOOLS section in the same order as the third column", () => {
+    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
+    const mappedTabs = simpleToolsCommands().map((command) => TAB_FOR_COMMAND[command]);
+    // TAB_FOR_COMMAND[command] is undefined for an unmapped command, and a missing layout slot is
+    // also undefined, so the two could compare equal below for the wrong reason. Guard each mapped
+    // entry first so an unmapped command fails here instead.
+    mappedTabs.forEach((tab) => expect(tab).toBeDefined());
+    expect(mappedTabs).toEqual(columnWebViewTypes(merged, 2));
   });
 
   it('the real supplement leaves nothing Simple-mode-only behind in a power-mode merge', () => {

@@ -991,6 +991,7 @@
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Configuración",
       "%markersChecklist_errorInvalidMarkerPair%": "Marcadores equivalentes deben ser entrados en la forma: p/q",
       "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos tienen marcadores idénticos.",
+      "%markersChecklist_menu_openTool%": "Lista de verificación de marcadores…",
       "%manageBooks_openMenuItem%": "Administrar libros",
       "%manageBooks_view_disabledStub_notYetAvailable%": "Aún no disponible — próximamente",
       "%manageBooks_grid_canonGroup_DC%": "Deuterocanónicos",

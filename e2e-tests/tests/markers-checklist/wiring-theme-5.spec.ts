@@ -38,6 +38,10 @@ import type { FrameLocator, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 
+// Markers Checklist and Open Checks are opened from the scripture editor's hamburger menu, which
+// hides both items in Simple mode.
+test.use({ requiredInterfaceMode: 'power' });
+
 // ---------------------------------------------------------------------------
 // Test constants
 // ---------------------------------------------------------------------------
