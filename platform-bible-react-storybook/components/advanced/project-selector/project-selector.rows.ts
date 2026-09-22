@@ -293,7 +293,13 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   const tabsByProject = collectOpenTabsByProject(args.openTabs);
 
   if (args.mode === 'project') {
-    const selectedId = args.selection.projectId;
+    // Normalized once, and compared normalized below, for the same reason open tabs are: a project
+    // id is canonical only up to case, so a caller whose selection came from a different source
+    // than its project list would otherwise leave the selected row unmarked.
+    const selectedKey =
+      args.selection.projectId === undefined
+        ? undefined
+        : normalizeProjectId(args.selection.projectId);
     return args.projects.map((project) => {
       const tabs = tabsByProject.get(normalizeProjectId(project.id)) ?? [];
       return {
@@ -304,9 +310,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         scrollGroupId: undefined,
         scrollGroupScrRefLabel: undefined,
         openGroups: tabs.map((t) => t.scrollGroupId),
-        isSelected:
-          selectedId !== undefined &&
-          normalizeProjectId(selectedId) === normalizeProjectId(project.id),
+        isSelected: selectedKey !== undefined && selectedKey === normalizeProjectId(project.id),
         isMuted: tabs.length === 0,
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,

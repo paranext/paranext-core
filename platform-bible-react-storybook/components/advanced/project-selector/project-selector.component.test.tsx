@@ -672,3 +672,274 @@ describe('case-insensitive selection', () => {
     expect(onChangeSelection).toHaveBeenCalledWith({ pairs: [] });
   });
 });
+
+describe('renderTriggerLabel', () => {
+  it('renders the caller node as the trigger label instead of the derived string', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        renderTriggerLabel={(selected) => (
+          <span data-testid="custom-trigger-label">custom:{selected?.shortName ?? 'none'}</span>
+        )}
+      />,
+    );
+
+    expect(screen.getByTestId('custom-trigger-label')).toHaveTextContent('custom:WEB');
+  });
+
+  it('passes undefined to the callback when nothing is selected', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        renderTriggerLabel={(selected) => (
+          <span data-testid="custom-trigger-label">custom:{selected?.shortName ?? 'none'}</span>
+        )}
+      />,
+    );
+
+    expect(screen.getByTestId('custom-trigger-label')).toHaveTextContent('custom:none');
+  });
+
+  it('renders no tooltip of its own, so a caller label carrying one cannot double up', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        // Load-bearing: it is what makes the suppressed tooltip's text the full name. Under the
+        // default `'shortName'` format the derived title is just `'WEB'`, so the assertion below
+        // would pass whether or not the tooltip were suppressed.
+        triggerLabelFormat="shortNameAndFullName"
+        renderTriggerLabel={() => <span data-testid="custom-trigger-label">WEB</span>}
+      />,
+    );
+
+    // Asserted on the rendered structure rather than by hovering: Radix opens its tooltip from a
+    // pointer sequence jsdom does not produce, so a hover-then-expect-nothing test passes whether
+    // the tooltip is suppressed or not. The selector wraps its trigger in a `TooltipTrigger` only
+    // when it has a title to show, so the wrapper's absence IS the suppression.
+    expect(screen.getByRole('combobox', { name: 'Project' })).not.toHaveAttribute(
+      'data-slot',
+      'tooltip-trigger',
+    );
+  });
+
+  it('does wrap the trigger in its own tooltip when the caller supplies no label', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        triggerLabelFormat="shortNameAndFullName"
+      />,
+    );
+
+    // The control case for the assertion above: without `renderTriggerLabel` the wrapper is
+    // present, so its absence there is a real difference and not just how this trigger renders.
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveAttribute(
+      'data-slot',
+      'tooltip-trigger',
+    );
+  });
+
+  it('still uses the derived string when the prop is absent', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+      />,
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveTextContent('WEB');
+  });
+
+  it('lets buttonClassName override the trigger button width', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        buttonClassName="tw:w-auto tw:max-w-64"
+      />,
+    );
+
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveClass('tw:w-auto');
+    expect(trigger).not.toHaveClass('tw:w-[180px]');
+  });
+});
+
+describe('footerAction', () => {
+  function renderWithFooter({
+    projects = SAMPLE_PROJECTS,
+    onSelect = () => {},
+  }: {
+    projects?: ProjectSelectorProject[];
+    onSelect?: () => void;
+  }) {
+    return render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={() => {}}
+        localizedStrings={{
+          ariaLabel: 'Project',
+          buttonPlaceholder: 'Select a project',
+          commandEmptyMessage: 'No projects found',
+        }}
+        footerAction={{ label: 'More projects…', onSelect }}
+      />,
+    );
+  }
+
+  it('is reachable and activatable by keyboard, not only by pointer', async () => {
+    const user = setupUser();
+    const onSelect = vi.fn();
+    renderWithFooter({ onSelect });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // Walk down past every project row to the footer, then activate with Enter. cmdk drives
+    // navigation from `getValidItems()`, which only sees nodes inside CommandList — an item
+    // rendered outside it would be skipped here and this test would time out.
+    for (let i = 0; i < SAMPLE_PROJECTS.length + 1; i++) {
+      // Each keypress must land before the next is sent, so the highlight advances one row at a
+      // time; parallelizing would fire every ArrowDown before cmdk processes any of them.
+      // eslint-disable-next-line no-await-in-loop
+      await user.keyboard('{ArrowDown}');
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('project-selector-footer-action')).toHaveAttribute(
+        'data-selected',
+        'true',
+      ),
+    );
+    await user.keyboard('{Enter}');
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('is activatable by Space, which clicks the highlighted row directly', async () => {
+    const user = setupUser();
+    const onSelect = vi.fn();
+    renderWithFooter({ onSelect });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    for (let i = 0; i < SAMPLE_PROJECTS.length + 1; i++) {
+      // Each keypress must land before the next is sent, so the highlight advances one row at a
+      // time; parallelizing would fire every ArrowDown before cmdk processes any of them.
+      // eslint-disable-next-line no-await-in-loop
+      await user.keyboard('{ArrowDown}');
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('project-selector-footer-action')).toHaveAttribute(
+        'data-selected',
+        'true',
+      ),
+    );
+
+    // Space takes a different path from Enter: `spaceSelectsHighlightedItem` finds the
+    // `data-selected` node and calls `.click()` on it. The footer row is `forceMount`ed and so is
+    // absent from cmdk's registered-item set, which is exactly the state that path has to survive.
+    await user.keyboard(' ');
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('is present AND the empty message still renders when there are no projects', async () => {
+    const user = setupUser();
+    renderWithFooter({ projects: [] });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+    // Both, in one test: `forceMount` skips cmdk registration so `filtered.count` stays 0 and
+    // CommandEmpty renders. An ordinarily-registered footer item would satisfy the first
+    // assertion and silently break the second.
+    expect(await screen.findByTestId('project-selector-footer-action')).toBeInTheDocument();
+    expect(screen.getByText('No projects found')).toBeInTheDocument();
+  });
+
+  it('activates on Enter with no projects, without arrowing to it first', async () => {
+    const user = setupUser();
+    const onSelect = vi.fn();
+    renderWithFooter({ projects: [], onSelect });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // With an empty list the footer is the ONLY thing a user can act on, so Enter straight off the
+    // search box has to reach it. cmdk picks its Enter target from the highlighted item, and a
+    // `forceMount`ed row never enters the registered-item set that cmdk highlights from — so
+    // nothing highlights it unless the component seeds the highlight itself. Arrowing first (as
+    // the keyboard test above does) walks the DOM instead and hides this.
+    await user.keyboard('{Enter}');
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the separator when there are no projects, so no rule floats under the empty message', async () => {
+    const user = setupUser();
+    renderWithFooter({ projects: [] });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // `queryByTestId` returns `null` (Testing Library's own DOM query contract) when nothing
+    // matches, so the assertion must compare against `null` itself.
+    // eslint-disable-next-line no-null/no-null
+    expect(screen.queryByTestId('project-selector-footer-separator')).toBe(null);
+  });
+
+  it('keeps its separator visible while a search query is active', async () => {
+    const user = setupUser();
+    renderWithFooter({});
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.type(screen.getByPlaceholderText(/search/i), 'ESV');
+
+    // The popover content renders through a portal, so the separator lives outside the render
+    // root — query the full document rather than the render container.
+    // `queryByTestId` returns `null` (Testing Library's own DOM query contract) when nothing
+    // matches, so the assertion must compare against `null` itself.
+    // eslint-disable-next-line no-null/no-null
+    expect(screen.queryByTestId('project-selector-footer-separator')).not.toBe(null);
+  });
+
+  it('closes the popover after the action runs', async () => {
+    const user = setupUser();
+    renderWithFooter({});
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.click(await screen.findByTestId('project-selector-footer-action'));
+
+    await waitFor(() => expect(screen.queryByTestId('project-selector-footer-action')).toBeNull());
+  });
+});
