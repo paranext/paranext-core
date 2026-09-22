@@ -685,8 +685,10 @@ declare module 'shared/models/web-view.model' {
    * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
    * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
    * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
-   * never compounds one area's zoom into another's. Web views without this attribute ignore per-area
-   * zoom input and are scaled whole at the Settings default.
+   * never compounds one area's zoom into another's. A web view that renders no element with this
+   * attribute is not zoomed at all, unless core declares its web view type zoomable: it renders at
+   * 100 % content zoom, its tab menu has no zoom items, and the zoom chords and Ctrl/⌘+wheel do
+   * nothing there. Interface scaling still applies to it.
    *
    * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
    * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
@@ -6046,27 +6048,6 @@ declare module 'papi-shared-types' {
      */
     'platform.webViewContentZoomMemory': {
       [key: string]: number;
-    };
-    /**
-     * Which web view types mark at least one content-zoom area, keyed by web view type. An absent
-     * key means the platform has no evidence yet that the type marks any area. Written by the
-     * platform the first time a pane of a type reports an area (the record only ever gains `true`
-     * entries; a type recorded `true` is never downgraded); read when a pane opens, before its
-     * content loads, so the platform knows whether to scale the whole view at the Settings default
-     * or to wait for the areas the view is about to mark. Without it every newly opened pane would
-     * show at the wrong scale for a moment. Local to this machine, and self-correcting in the
-     * `false`→`true` direction: a type that starts marking an area is re-recorded on its next
-     * open.
-     *
-     * A hidden setting rather than a main-process store, for the same reason as
-     * `platform.webViewContentZoomMemory`. Deliberately separate from that key, which holds the
-     * user's remembered levels: this one is a capability cache, and clearing the user's levels must
-     * not clear it.
-     *
-     * @experimental This setting is unstable and may change or disappear without notice
-     */
-    'platform.webViewContentZoomTypesWithAreas': {
-      [webViewType: string]: boolean;
     };
     /**
      * The zoom factor that applies to the entire application, including menus and toolbars (shown

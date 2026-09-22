@@ -367,8 +367,10 @@ export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
  * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
  * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
  * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
- * never compounds one area's zoom into another's. Web views without this attribute ignore per-area
- * zoom input and are scaled whole at the Settings default.
+ * never compounds one area's zoom into another's. A web view that renders no element with this
+ * attribute is not zoomed at all, unless core declares its web view type zoomable: it renders at
+ * 100 % content zoom, its tab menu has no zoom items, and the zoom chords and Ctrl/⌘+wheel do
+ * nothing there. Interface scaling still applies to it.
  *
  * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
  * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this

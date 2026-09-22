@@ -170,6 +170,12 @@
   "%settings_platform_group1_label_alternative%": {
     "fallbackKey": "%settings_platform_group1_label%"
   },
+  "%settings_platform_webViewContentZoomTypesWithAreas_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-22",
+      "message": "The hidden per-type content-zoom record this labelled was removed: a pane now takes content zoom only if core declares it zoomable or it marks a zoom area, so nothing needs to remember which types mark areas."
+    }
+  },
   "%settings_platform_zoomFactor_label%": {
     "deprecationInfo": {
       "date": "2026-09-15",
