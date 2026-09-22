@@ -93,14 +93,20 @@ const getGroupContent = (
           );
         }
 
+        // Only wrap the trigger when there is a tooltip: `TooltipTrigger asChild` clones its own
+        // `data-state` and `data-slot` onto the trigger, hiding the submenu's open state from
+        // `data-open:` styles
+        const subTrigger = <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>;
         return (
           <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
-              </TooltipTrigger>
-              {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
-            </Tooltip>
+            {item.tooltip ? (
+              <Tooltip>
+                <TooltipTrigger asChild>{subTrigger}</TooltipTrigger>
+                <TooltipContent>{item.tooltip}</TooltipContent>
+              </Tooltip>
+            ) : (
+              subTrigger
+            )}
 
             <DropdownMenuPortal>
               <DropdownMenuSubContent>

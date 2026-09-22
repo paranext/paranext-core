@@ -2978,13 +2978,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   different web view from the tab Simple's Tools section points at.
 - **Consequences:** A few items are declared twice (once per mode), so a command change must touch
   both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
-  and order, so a missed or reordered copy fails there — but it pins commands, not labels, so a
-  label edited in one copy and not the other passes silently. Simple's Tools order is pinned to the
+  and order, and checks that a command served in both modes carries the same label in each, so a
+  missed, reordered or relabelled copy fails there. Simple's Tools order is pinned to the
   third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
   Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
   it to a Simple column removes its only entry point: Simple now has no menu route at all to the
-  four Inventories, Markers Checklist, Open Checks, or Auto-show footnote pane
-  (`platformScriptureEditor.toggleFootnotesAutoShow`).
+  four Inventories, Markers Checklist, or Open Checks. Auto-show footnote pane
+  (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
+  manual footnotes pane: Show footnotes opens it and it stays open. The Edit flyout's ids are not
+  registered commands, and `KeyboardShortcutEntry.command` is typed to registered commands, so
+  those items cannot show a shortcut hint even though Ctrl+Z, Ctrl+Y and the clipboard chords work
+  in the editor.
 - **Source:** PT-4534 (parent PT-4530); decisions recorded on the ticket 2026-09-18.
 
 ## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
