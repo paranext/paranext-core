@@ -931,7 +931,7 @@ describe('web-view-content-zoom.service', () => {
     expect(cssVar(iframeFor('editor-4'), '--platform-content-zoom-footnotes')).toBe('0.9');
   });
 
-  it('seeds on the first non-empty report even when an earlier report for the same pane was empty', async () => {
+  it('seeds a declared pane on an empty first report, and its first non-empty report keeps that seed without rewriting it', async () => {
     settings[MEMORY] = { 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
@@ -941,13 +941,16 @@ describe('web-view-content-zoom.service', () => {
       projectId: 'proj-A',
       state: {},
     });
-    // The bootstrap's first scan reports no areas yet (e.g. a spinner while the pane loads).
+    // The bootstrap's first scan reports no areas yet (e.g. a spinner while the pane loads). The
+    // pane already acts on its declared area, so it is seeded now.
     setContentZoomAreas('editor-6', []);
-    expect(definitions.get('editor-6')?.state).toEqual({});
+    expect(definitions.get('editor-6')?.state).toEqual(zoomState({ main: 1.3, footnotes: 0.9 }));
     showIndicator.mockClear();
     settingsSet.mockClear();
+    updateDefinition.mockClear();
     setContentZoomAreas('editor-6', ['main', 'footnotes']);
     await __flushContentZoomWritesForTesting();
+    expect(updateDefinition).not.toHaveBeenCalled();
     expect(definitions.get('editor-6')?.state).toEqual(zoomState({ main: 1.3, footnotes: 0.9 }));
     const pane = iframeFor('editor-6');
     expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.3');
@@ -2237,6 +2240,48 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-1')?.state).toEqual({});
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
     expect(showIndicator).toHaveBeenLastCalledWith('main', `Default · ${formatZoomPercent(1)}`);
+  });
+
+  describe('a declared pane with no area rendered, while memory remembers a level for its identity', () => {
+    let pane: HTMLIFrameElement;
+
+    beforeEach(async () => {
+      settings[MEMORY] = { 'editor:PROJ-A:main': 1.5 };
+      __setContentZoomDepsForTesting({});
+      await initializeContentZoomService();
+      pane = iframeFor('editor-2');
+      definitions.set('editor-2', {
+        id: 'editor-2',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj-A',
+        state: {},
+      });
+      showIndicator.mockClear();
+    });
+
+    it('steps from the remembered level, not the default, and does not lower the memory', async () => {
+      await adjustContentZoom('editor-2', 1);
+      await __flushContentZoomWritesForTesting();
+      expect(definitions.get('editor-2')?.state?.[LEVELS]).toEqual({ main: 1.6 });
+      expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.6 });
+      expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.6');
+      expect(showIndicator).toHaveBeenLastCalledWith('main', formatZoomPercent(1.6));
+    });
+
+    it('resets from the remembered level: the shared level goes too, as for a pane holding it', async () => {
+      await resetContentZoom('editor-2');
+      await __flushContentZoomWritesForTesting();
+      expect(settings[MEMORY]).toEqual({});
+      expect(definitions.get('editor-2')?.state).toEqual({});
+      expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1');
+    });
+
+    it('writes the remembered level on load and on an empty report, not the default', () => {
+      applyContentZoomForWebView('editor-2');
+      expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.5');
+      setContentZoomAreas('editor-2', []);
+      expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.5');
+    });
   });
 
   it('an explicit area on a declared empty pane is accepted only when it is the declared area', async () => {
