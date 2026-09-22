@@ -1569,10 +1569,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   stylesheet is also vendored three times (the extension's `_usj-nodes.scss`, the
   `platform-bible-react` demo `usj-nodes.css`, and the upstream `scripture-editors` source), each
   re-synced by hand.
-- **Decision:** The coverage test parses the stylesheet itself into flat `selector { declarations }`
-  blocks, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
-  cascade: a `[dir='ltr']` rule beats a direction-agnostic one, table rows excluded because they never
-  render as `.para`) and the expected `--verse-text-start` map from negative `text-indent`, then
+- **Decision:** The coverage test parses the stylesheet itself with `postcss`, reads its top-level
+  rules, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
+  cascade: a `[dir='ltr']` rule beats a direction-agnostic one; `\tr` excluded because a real table
+  row renders as `<tr>`, not `.para`, while the obsolete `\tr1`/`\tr2` still convert to paragraphs
+  and so are compensated) and the expected `--verse-text-start` map from negative `text-indent`, then
   asserts the gutter block matches in both directions: every derived marker present with the same
   value, and no gutter entry without a base rule calling for it. The parser's blind spots are
   themselves asserted away — a setter nested in an at-rule, a direction-qualified gutter rule, a
@@ -1588,8 +1589,21 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   five markers. **Assert the copies are byte-identical** — rejected: the copies legitimately diverge
   (SCSS versus CSS, host-specific rules), so a byte comparison would either fail permanently or need a
   hand-maintained exclusion list with the same staleness problem. **Parse with `postcss`** — declined
-  for now: the flat parser plus its blind-spot assertions is ~100 lines and reads without a dependency;
-  a real parser becomes worth it if the stylesheet grows nesting the assertions cannot exclude.
+  at first: the flat parser plus its blind-spot assertions was ~100 lines and read without a
+  dependency. **Amended 2026-09-17:** adopted. The upstream review of the same test demonstrated
+  that the flat regex could be fooled without any assertion firing — among them a selector list
+  mixing gutter and base selectors, a `margin` shorthand inside an at-rule, a value wrapped across
+  lines, `!important`, hyphenated marker classes — each provable only with a probe. Both twins now
+  parse with `postcss`, which core already depended on and the upstream package added as a dev
+  dependency; the SCSS copy has no SCSS syntax in the rules under test, so it parses as plain CSS.
+  Per-selector classification comes from the parser, and a tracked property set anywhere but
+  directly in a top-level marker rule (inside an at-rule, or an at-rule nested in the rule) fails
+  rather than being silently unread. The remaining semantic limits — selectors classified by class
+  token rather than resolved against the DOM, the cascade approximated as "direction-qualified beats
+  agnostic", `calc()` values reported rather than evaluated, direction read from `[dir=…]`/`:dir()`
+  only — are stated in the test header. The same review also showed that `\tr1` and `\tr2`, though
+  obsolete in `usfm.sty`, still convert to paragraphs, so they are compensated again and only `\tr`
+  is excluded; PR #2807 had removed them on the earlier round's advice.
 - **Consequences:** Adding an indented marker to the base rules without compensating it fails the
   build; so does adding a compensation nothing calls for. Re-syncing a copy from upstream is checked
   structurally for this block, so the cross-copy pin comments in the two `usj-nodes-styles.test.ts`
@@ -1603,7 +1617,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `usj-nodes.css`. The pattern generalises to any "for every X in
   this file there must be a Y" invariant over a generated or vendored asset: derive X from the asset,
   assert the parser's blind spots, keep a small independent oracle.
-- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; upstream
+- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; the follow-up PR
+  #2827 (`pt-4313-coverage-test-review-followup`) and its review; upstream
   `paranext/scripture-editors` PR #10.
 
 ## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
@@ -2888,6 +2903,58 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
 
+## adr-menu-close-focus-restores-without-the-ring: A pointer-closed menu returns focus to its trigger without showing the focus ring
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** Radix returns focus to the trigger whenever a menu closes. The tab menu's trigger is a
+  `Button`, which styles focus with `tw:focus-visible:border-ring` and `tw:focus-visible:ring-3`, so
+  after a pointer-driven close the ring sat on the trigger while the pointer was somewhere else —
+  measured as a near-black `border-color` plus a 3px ring. Declining the focus return removes the
+  ring but drops focus to `<body>`, so the next Tab restarts at the top of the document and a screen
+  reader loses its place; `stories/guidelines/dismissal-patterns.mdx` requires returning focus to the
+  opener, citing WCAG 2.4.3.
+- **Decision:** Let Radix restore focus exactly as it always has, and suppress only the ring.
+  `TabDropdownMenu` marks the trigger with `data-quiet-focus` when the close followed a pointer
+  interaction, and CSS hides the ring while that attribute is present; the next keydown or blur
+  clears it, which is what brings the ring back for keyboard users. Which device the user last used
+  comes from the document-wide tracker in `utils/focus.util.ts`. Focus is drawn through three
+  channels and all three must go: the ring and the border yield to the attribute's Tailwind classes,
+  but `outline` is cleared **inline** by `hideFocusRing`. That asymmetry is load-bearing — Tailwind
+  emits utilities inside `@layer utilities`, and an unlayered rule in the host document outranks
+  every layered rule whatever its specificity, so a web view that styles `:focus-visible` itself
+  (the scripture editor does, in `_editor-overrides.scss`) beats any class the component could add.
+  Because `Button` carries `tw:transition-all`, such an outline animates rather than switching, so
+  even a rule whose final colour is `transparent` paints a visible line on the way there.
+- **Alternatives:** (a) **Decline the focus return** — built first and rejected: it satisfies the ring
+  complaint but breaks the tab order and the dismissal guideline. (b) **Ask the browser for an
+  unindicated focus** via `focus({ focusVisible: false })` — also built, and it works in Chromium 145,
+  but the app ships Electron 39 (Chromium 142), where Blink ignores the option and the ring returns;
+  the Storybook run passes because Playwright bundles a newer Chromium than the product. (c) **Track
+  the input device with handlers on the menu itself** — misses the Escape that Radix consumes from its
+  own document listener, so a real keyboard dismissal is misread as a pointer close. (d) **Put the
+  behavior in `DropdownMenuContent`** so every menu gets it — deferred, not rejected; see consequences.
+- **Consequences:** Only the tab menus behave this way. The application menubar and the other menu
+  triggers keep Radix's default, so the app has two close-focus behaviors until someone unifies them.
+  Between a pointer close and the user's next keystroke, focus sits on the trigger with nothing to
+  show where it is — a brief, deliberate gap in WCAG 2.4.7. The keydown that ends it clears the mark
+  before it acts, so pressing Enter paints the ring on the trigger it is about to reopen. The same
+  gap applies to assistive input that emulates a pointer (switch access, head and eye pointers, some
+  touch-screen-reader modes): a `pointerdown` is all the tracker sees, so such a user is treated as a
+  pointer user, and the gap ends at their next keystroke or blur. The gap is not opened at all under
+  `forced-colors: active`: forced colors drops the ring (a box-shadow) and repaints the border in a
+  system color whether or not the trigger has focus, leaving `outline` as the only indicator, so
+  `hideFocusRing` does nothing there. Because
+  the suppression is ordinary CSS and an inline style rather than a browser capability, it
+  behaves the same in the shipped Electron as in a newer Chromium. Automated coverage stops at the
+  signal rather than the paint: the jsdom test pins that focus returns and that the attribute tracks
+  the closing input, and `tab-dropdown-menu-focus.stories.tsx` adds the `:focus-visible` half that
+  jsdom cannot judge. Neither can assert the ring itself — the Storybook harness does not paint the
+  trigger's ring at all, so an assertion on it would pass whatever the code did. That the attribute
+  removes a ring the user can see is confirmed by hand in the running app.
+- **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
+  found not to work in the shipped runtime.
+
 ## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
 
 - **Date:** 2026-09-11
@@ -3584,6 +3651,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   on persisted slots.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
+
+## adr-opaque-menu-surfaces: Menu and select surfaces are opaque; shadcn's translucent menu color is not used
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** The shadcn preset applied on 2026-04-16 (`npx shadcn apply --preset b6rt8cvlC`, commit
+  `a61ca3b913c`) set `menuColor: "default-translucent"` in `lib/platform-bible-react/components.json`.
+  That gave `DropdownMenuContent`, `DropdownMenuSubContent`, `ContextMenuContent`,
+  `ContextMenuSubContent`, `MenubarContent`, `MenubarSubContent` and `SelectContent` a 70%
+  `bg-popover` plus a `::before` backdrop-blur layer. Over scripture text the menus were hard to read.
+  In a scrolling menu the blur layer scrolled away with the items, and it never covered the scrollbar
+  gutter, so the scrollbar always sat on the bare 70% background. The Simple PRD requires opaque,
+  readable menus and popovers.
+- **Decision:** Remove the translucent classes from those seven surfaces, each edit annotated
+  `// CUSTOM:`, and set `menuColor` to `"default"` so the shadcn CLI stops emitting the translucent
+  variant. Nothing in this repo reads `menuColor`; it is an input to the external CLI, and it does
+  not stop `shadcn add` from regenerating these files — only from regenerating them translucent.
+  The real backstop is `Shadcn/Overlay Surface Opacity`
+  (`lib/platform-bible-react/src/stories/shadcn-ui/overlay-surface-opacity.stories.tsx`), which opens
+  each surface in a real browser across every Storybook theme and also checks `opacity` on each
+  surface and its ancestors.
+- **Alternatives:** (a) **a higher alpha** (e.g. 95%) — still see-through over dense text, and keeps the
+  scrolling blur-layer defect. (b) **keep the blur but pin the layer** so it does not scroll — keeps a
+  see-through surface the PRD rejects, plus a compositing cost on every open menu. (c) **opaque
+  overrides at each consumer** — every present and future menu consumer would need one, and each one
+  that forgets regresses.
+- **Consequences:** Applies to Power as well as Simple, since these are shared components. A future
+  `/upgrade-shadcn` that re-applies a preset with a translucent menu color would reintroduce the
+  classes; the `// CUSTOM:` comments carry the intent through that upgrade, and the Storybook test
+  fails if the translucent background returns.
+- **Source:** PT-4535, which adopts PT-4101; the translucency arrived with the preset in commit
+  `a61ca3b913c`.
 
 ## adr-package-verifies-the-document-not-the-shipping-set: `npm run package` runs the check a patched clone can answer
 

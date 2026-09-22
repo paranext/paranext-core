@@ -86,9 +86,9 @@ vi.mock('@/components/advanced/editor/editor', () => ({
   ),
 }));
 
-// jsdom doesn't implement ResizeObserver, hasPointerCapture, or scrollIntoView, all of which the
-// ConflictNoteCard's Radix RadioGroup and Tooltip (the clickable option cards) use. No-op stubs are
-// enough for the conflict-branch tests below.
+// jsdom doesn't implement ResizeObserver, which the ConflictNoteCard's Radix RadioGroup and Tooltip
+// (the clickable option cards) use. A no-op stub is enough for the conflict-branch tests below. The
+// hasPointerCapture / scrollIntoView shims they also need are installed repo-wide by vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -108,12 +108,6 @@ class NoopResizeObserver implements ResizeObserver {
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (!Element.prototype.hasPointerCapture) {
-    Element.prototype.hasPointerCapture = () => false;
-  }
-  if (!Element.prototype.scrollIntoView) {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 

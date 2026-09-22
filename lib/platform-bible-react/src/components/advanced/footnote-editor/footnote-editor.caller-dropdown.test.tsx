@@ -14,8 +14,8 @@ import { screen } from '@testing-library/react';
 import type { DeltaOpInsertNoteEmbed } from '@eten-tech-foundation/platform-editor';
 import { renderPopoverAndWaitForInit } from './footnote-editor.test-harness';
 
-// cmdk and Radix instantiate a ResizeObserver and schedule scrollTo/scrollIntoView on mount;
-// jsdom ships none of these.
+// cmdk and Radix instantiate a ResizeObserver and schedule scrollTo on mount; jsdom ships neither.
+// scrollIntoView is shimmed repo-wide in vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -36,8 +36,6 @@ beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined')
     globalThis.ResizeObserver = NoopResizeObserver;
   if (typeof Element.prototype.scrollTo !== 'function') Element.prototype.scrollTo = () => {};
-  if (typeof Element.prototype.scrollIntoView !== 'function')
-    Element.prototype.scrollIntoView = () => {};
 });
 
 const editableView = { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } as const;

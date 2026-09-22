@@ -19,8 +19,9 @@ import {
   COPY_KEY,
 } from './resource-cell-view.component';
 
-// jsdom doesn't ship a ResizeObserver (needed by Radix portal content), or PointerCapture APIs.
-// Stubs are sufficient since the tests don't inspect layout behavior.
+// jsdom doesn't ship a ResizeObserver (needed by Radix portal content). A stub is sufficient since
+// the tests don't inspect layout behavior. The hasPointerCapture / scrollIntoView shims Radix also
+// needs are installed repo-wide by vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -40,12 +41,6 @@ class NoopResizeObserver implements ResizeObserver {
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (typeof Element.prototype.hasPointerCapture !== 'function') {
-    Element.prototype.hasPointerCapture = () => false;
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 
