@@ -10,8 +10,15 @@
  * the new default — with no `indicator` argument, so `pushContentZoom` never calls the bootstrap's
  * `showIndicator`.
  *
- * Runs against an isolated project root (the bundled sample WEB is installed into the empty root)
- * plus one disposable comment-test project for the follower pane: `npm run test:e2e:isolated
+ * Both panes belong to the same disposable comment-test project — the "own-level"/"follower"
+ * distinction this spec is about comes from the pane's AREA key (`editor:<id>:main` vs.
+ * `notes:<id>:main`), never from which project it belongs to, so one project is enough. This also
+ * sidesteps a real conflict: `createCommentTestProject` writes its project into the real Paratext 9
+ * Projects folder, which is scanned once at app startup and which an `isolatedProjectRoot` launch
+ * never sees (that option redirects the app at an empty temp root instead) — the sample WEB project
+ * and a `createCommentTestProject` copy cannot both be reachable from the same launch.
+ *
+ * Runs against the real (non-isolated) project root: `npm run test:e2e:isolated
  * content-zoom-default-change`.
  */
 import { type Page } from '@playwright/test';
@@ -27,10 +34,8 @@ import { INDICATOR_SELECTOR, zoomAreaTo } from '../../../fixtures/content-zoom-h
 import { waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
 import {
   getEditorFrame,
-  makeSampleProjectEditable,
   openEditableScriptureEditorForProject,
   readFactor,
-  SAMPLE_WEB_PROJECT_ID,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
 
@@ -39,7 +44,7 @@ const COMMENT_LIST_WEBVIEW_TYPE = 'legacyCommentManager.commentList';
 
 test.use({
   interfaceMode: 'power',
-  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
 });
 
 /**
@@ -77,9 +82,10 @@ test.describe('a live Settings-default change moves only follower panes', () => 
     test.slow();
 
     await waitForHomeTab(mainPage);
-    await makeSampleProjectEditable();
 
-    const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+    // The comment-test project is already editable (`createCommentTestProject` flips the flag on
+    // its copy), so no separate "make it editable" step is needed here.
+    const editorId = await openEditableScriptureEditorForProject(mainPage, project.projectId);
     const editorFrame = await getEditorFrame(mainPage, editorId);
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
 
