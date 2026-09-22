@@ -31,11 +31,6 @@ export const platformSettings: SettingsContribution = [
         default: {},
         isHidden: true,
       },
-      'platform.webViewContentZoomTypesWithAreas': {
-        label: '%settings_platform_webViewContentZoomTypesWithAreas_label%',
-        default: {},
-        isHidden: true,
-      },
       'platform.ptxUtilsMementoData': {
         label: '%settings_platform_ptxUtilsMementoData_label%',
         default: {},
@@ -170,13 +165,6 @@ const webViewContentZoomMemoryValidator: SettingValidator<
   return Object.values(newValue).every((value) => isValidZoomFactor(value));
 };
 
-const webViewContentZoomTypesWithAreasValidator: SettingValidator<
-  'platform.webViewContentZoomTypesWithAreas'
-> = async (newValue): Promise<boolean> => {
-  if (typeof newValue !== 'object' || !newValue || Array.isArray(newValue)) return false;
-  return Object.values(newValue).every((value) => typeof value === 'boolean');
-};
-
 const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async (
   newValue: string,
 ): Promise<boolean> => {
@@ -193,7 +181,6 @@ const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.webViewContentZoom': webViewContentZoomValidator,
   'platform.webViewContentZoomMemory': webViewContentZoomMemoryValidator,
-  'platform.webViewContentZoomTypesWithAreas': webViewContentZoomTypesWithAreasValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
