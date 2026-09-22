@@ -5,7 +5,6 @@ import { useBackendSyncActivity } from '@renderer/hooks/use-backend-sync-activit
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
   useData,
-  useDialogCallback,
   useLocalizedStrings,
   useScrollGroupScrRef,
   useRecentScriptureRefs,
@@ -18,7 +17,6 @@ import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.ho
 import { usePendingProject } from '@renderer/hooks/use-pending-project.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
-import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
@@ -711,25 +709,14 @@ export function PlatformBibleToolbar() {
       const item = pickerProjects.find(
         (project) => normalizeProjectId(project.id) === normalizeProjectId(projectId),
       );
-      // A project reachable only through the dialog has no list row to take display fields from.
-      // Open it unnamed rather than standing its raw id in for them: an id in the titlebar (and in
-      // the trigger's accessible name) for as long as the bound lasts reads as a bug, and a
+      // Every selectable row is built from `pickerProjects`, so the lookup finds its item. Should
+      // one ever miss, open the project unnamed rather than standing its raw id in for display
+      // fields: an id in the titlebar (and in the trigger's accessible name) reads as a bug, and a
       // fabricated item carries no `isEditable`, so the row would also lose its read-only mark.
       // Unnamed, the trigger simply keeps naming what is open until the editor reports the change.
-      // TODO(PT-4552): Carry the chosen project's name in the dialog response. PT-4552 adds
-      // server-reachable projects, which make this the common case rather than the exception.
       beginOpenProject(projectId, item);
     },
     [pickerProjects, beginOpenProject],
-  );
-
-  const showProjectPicker = useDialogCallback(
-    PROJECT_PICKER_DIALOG_TYPE,
-    { isModal: true },
-    (projectId) => {
-      if (!projectId) return;
-      handleSelectProject(projectId);
-    },
   );
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
@@ -857,13 +844,21 @@ export function PlatformBibleToolbar() {
   // and no request here. See `useBackendSyncActivity`.
   const hasBackendSynced = useBackendSyncActivity();
 
-  const openHome = useCallback(async () => {
+  const openHome = useCallback(async (shouldShowProjectsOnly: boolean) => {
     try {
-      await sendCommand('platformGetResources.openHome');
+      await sendCommand('platformGetResources.openHome', shouldShowProjectsOnly);
     } catch (e) {
       logger.warn(`Toolbar caught an error while trying to open Home: ${getErrorMessage(e)}`);
     }
   }, []);
+
+  // Home lists local projects alongside the send/receive server's projects that are not on this
+  // machine yet — the "rest of my projects" this picker cannot reach, since its own list is built
+  // from local metadata only. Projects only: this footer is the way out of a project picker, so the
+  // read-only resources Home otherwise lists are never an answer to it.
+  const showMoreProjects = useCallback(() => {
+    openHome(true);
+  }, [openHome]);
 
   return (
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
@@ -966,7 +961,7 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="tw:h-8"
-                  onClick={openHome}
+                  onClick={() => openHome(false)}
                 >
                   <HomeIcon />
                 </Button>
@@ -989,7 +984,7 @@ export function PlatformBibleToolbar() {
             isLoading={isProjectPickerLoading}
             localizedStrings={localizedStrings}
             onSelectProject={handleSelectProject}
-            onShowMoreProjects={showProjectPicker}
+            onShowMoreProjects={showMoreProjects}
           />
         )}
         {typeof scrollGroupId === 'number' && (

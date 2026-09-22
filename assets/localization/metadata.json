@@ -164,6 +164,42 @@
   "%settings_title_projectSettings%": {
     "fallbackKey": "%Paratext.Terms.Internal.BiblicalTermsForm.settingsToolStripMenuItem.Text%"
   },
+  "%shareLayoutDialog_commentaryResources_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The Team layout dialog lists commentaries under a tab rather than a standalone labelled section. Retired with no replacement key; the tab is labelled by %shareLayoutDialog_tab_commentaryResources%."
+    }
+  },
+  "%shareLayoutDialog_confirm_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The confirm button now names its outcome instead of reading \"OK\". The new key is %shareLayoutDialog_saveForTeam_label%."
+    }
+  },
+  "%shareLayoutDialog_description%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The description now also states when saved changes reach the team. The new key is %shareLayoutDialog_reviewAndSyncNotice%."
+    }
+  },
+  "%shareLayoutDialog_scriptureResources_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The Team layout dialog lists Bible texts under a tab rather than a standalone labelled section. Retired with no replacement key; the tab is labelled by %shareLayoutDialog_tab_scriptureResources%."
+    }
+  },
+  "%shareLayoutDialog_textCollectionResources_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The text collection is now expressed as a per-resource checkbox plus a count rather than as its own labelled list. Retired with no replacement key; the count is %shareLayoutDialog_textCollection_hint%."
+    }
+  },
+  "%shareLayoutDialog_title%": {
+    "deprecationInfo": {
+      "date": "2026-09-21",
+      "message": "The dialog was renamed from \"Share layout with team\" to \"Team layout\". The new key is %shareLayoutDialog_teamLayout_title%."
+    }
+  },
   "%submit%": {
     "fallbackKey": "%yes%"
   },

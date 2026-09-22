@@ -245,8 +245,8 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // Assert on rendered panel UI, not just the iframe body: the body is "attached" as soon as
     // the frame element exists, which would pass even for an empty or errored WebView. The panel
     // renders skeleton placeholders while loading (this test opens no project, so it stays in the
-    // loading state) and the filter toolbar dropdowns once loaded — either proves the
-    // CommentListPanel component actually rendered.
+    // loading state) and the preset filter dropdown once loaded (it renders regardless of loading
+    // state) — either proves the CommentListPanel component actually rendered.
     //
     // Click and assert inside ONE retry loop: a workspace rebuild ("Updating project view"
     // overlay) can still fire after waitForSimpleLayout. It recreates the Column 3 tabs and resets
@@ -255,12 +255,13 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // pointer events, so clicking during one always fails), then clicks and asserts with short
     // timeouts so the loop can retry promptly if another rebuild lands mid-attempt.
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
+    const skeletonOrPresetFilter = commentsFrame
+      .locator('[data-slot="skeleton"]')
+      .or(commentsFrame.locator('[data-testid="comment-preset-filter"]'));
     await expect(async () => {
       await waitForOverlayGone(mainPage, 60_000);
       await clickCommentsTab(mainPage, commentListPanelId, 5_000);
-      await expect(
-        commentsFrame.locator('[data-slot="skeleton"], [data-slot="select-trigger"]').first(),
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(skeletonOrPresetFilter.first()).toBeVisible({ timeout: 10_000 });
     }).toPass({ timeout: 180_000 });
   });
 
@@ -331,14 +332,14 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await clickCommentsTab(mainPage, commentListPanelId);
 
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
-    // The filter dropdowns are the toolbar; the first one is the resolved-status filter. Its
-    // visibility is a faithful proxy for "the filtering bar is visible" (PT-4070 DoD).
-    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
+    // The preset filter dropdown is always mounted in the toolbar (never gated behind a popover),
+    // so its visibility is a faithful proxy for "the filtering bar is visible" (PT-4070 DoD).
+    const presetFilter = commentsFrame.locator('[data-testid="comment-preset-filter"]');
     const threads = commentsFrame.locator('#comment-list [role="option"]');
 
     // Wait for the seeded threads to render, then confirm the toolbar starts out visible.
     await expect(threads.first()).toBeVisible({ timeout: 90_000 });
-    await expect(firstFilter).toBeInViewport();
+    await expect(presetFilter).toBeInViewport();
 
     // Scroll the iframe DOCUMENT explicitly, not "whichever container happens to scroll". In the
     // real web view nothing bounds html/body/#root, so the document is the scroll container and
@@ -357,7 +358,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await expect(threads.first()).not.toBeInViewport();
 
     // The point of PT-4070: the sticky filter row must remain on-screen after scrolling to bottom.
-    await expect(firstFilter).toBeInViewport();
+    await expect(presetFilter).toBeInViewport();
   });
 
   // NOTE: The keyboard and scope-filter tests below MUST stay ahead of the PT-4069 test. That test
@@ -395,15 +396,33 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await clickCommentsTab(mainPage, commentListPanelId);
 
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
-    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
+    const presetFilter = commentsFrame.locator('[data-testid="comment-preset-filter"]');
 
-    // Wait for the loaded toolbar, then drive the first filter entirely by keyboard.
-    await expect(firstFilter).toBeVisible({ timeout: 90_000 });
-    await firstFilter.focus();
-    await expect(firstFilter).toBeFocused();
+    // The filter selection persists per project in localStorage (comment-filter-store.ts), so a
+    // prior test in this file — or a prior local run sharing this worker's user-data dir — can
+    // leave a non-default preset saved for projectScroll. Clear it and reopen the panel so the
+    // component remounts against a known default rather than whatever was last saved, then assert
+    // the reset actually landed before relying on "starts on All comments" below.
+    await expect(presetFilter).toBeVisible({ timeout: 90_000 });
+    await commentsFrame.locator(':root').evaluate((root, storageKey) => {
+      root.ownerDocument.defaultView?.localStorage.removeItem(storageKey);
+    }, `legacyCommentManager.filters.${projectScroll.projectId}`);
+    await sendPapiRequestOnce(
+      'command:legacyCommentManager.openCommentListPanel',
+      [projectScroll.projectId],
+      DEFAULT_WEBSOCKET_PORT,
+      OPEN_EDITOR_TIMEOUT_MS,
+    );
+    await expect(presetFilter).toBeVisible({ timeout: 90_000 });
+    await expect(presetFilter).toContainText('All comments');
+
+    // The preset dropdown sits directly in the toolbar, so reach it by keyboard with no popover
+    // step in between.
+    await presetFilter.focus();
+    await expect(presetFilter).toBeFocused();
 
     // Open with the keyboard.
-    await firstFilter.press('Enter');
+    await presetFilter.press('Enter');
     const dropdown = commentsFrame.locator('[data-slot="select-content"]');
     await expect(dropdown).toBeVisible({ timeout: 10_000 });
 
@@ -412,15 +431,15 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await mainPage.keyboard.press('Enter');
     await expect(dropdown).toBeHidden({ timeout: 10_000 });
 
-    // Assert the OUTCOME, not merely that the popover closed. The first filter is the resolved-status
-    // axis, whose options are All / Unresolved / Resolved; ArrowDown from the selected "All resolved
-    // statuses" lands on "Unresolved", so the trigger must now display it. This fails if Enter closed
-    // the popover without committing a value, or re-selected the same value — cases a bare
-    // toBeHidden() (satisfied even by the toolbar re-rendering) would pass.
-    await expect(firstFilter).toContainText('Unresolved');
+    // Assert the OUTCOME, not merely that the dropdown closed. The preset options list "All
+    // comments" first; ArrowDown from the selected "All comments" lands on "Unresolved comments
+    // assigned to me", so the trigger must now display it. This fails if Enter closed the dropdown
+    // without committing a value, or re-selected the same value — cases a bare toBeHidden()
+    // (satisfied even by the toolbar re-rendering) would pass.
+    await expect(presetFilter).toContainText('Unresolved comments assigned to me');
   });
 
-  test('Comments tab scope filter offers "Current chapter" in Simple mode (PT-4070)', async ({
+  test('Comments tab scope filter offers all four scopes in Simple mode (PT-4070)', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
@@ -443,34 +462,32 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
     // Find the scope dropdown by its stable data-testid rather than by trigger index — the index
     // holds only while the scope trigger stays the 5th of exactly five and no comment card renders a
-    // Select, which is a coincidence rather than a contract. Click the tab inside a retry loop: a
-    // "workspace updating" overlay can intercept pointer events during dock rebuilds, so wait it out
-    // and retry (same pattern as the panel-display test).
+    // Select, which is a coincidence rather than a contract.
     const scopeTrigger = commentsFrame.locator('[data-testid="comment-scope-filter"]');
+    // Retry the tab click: a "workspace updating" overlay can intercept pointer events during dock
+    // rebuilds, so wait it out and retry (same pattern as the panel-display test).
     await expect(async () => {
       await waitForOverlayGone(mainPage, 60_000);
       await clickCommentsTab(mainPage, commentListPanelId, 5_000);
       await expect(scopeTrigger).toBeVisible({ timeout: 15_000 });
     }).toPass({ timeout: 180_000 });
 
-    // With the overlay cleared, open the scope dropdown and confirm the Column 3 panel actually
-    // offers the "Current chapter" option — the exact capability this fix adds. Before the fix the
-    // option was gated on a wired editor (which the panel lacks even though it follows the active
-    // project's scroll group), so only "All books" appeared. Assert on the localized labels rather
-    // than the option count, so a future change that swapped in a different second scope value while
-    // dropping current-chapter could not keep this test green.
-    //
     // This overlay wait is NOT redundant with the one inside the retry loop above: the loop only
     // guarantees the overlay is gone at the moment the trigger becomes visible, but a fresh dock
     // rebuild can raise it again before the click below — which is a new pointer action. Keep it.
     await waitForOverlayGone(mainPage, 30_000);
     await scopeTrigger.click();
+
+    // Confirm the Column 3 panel offers all four scopes. Assert on the localized labels rather than
+    // just the option count, so a future change that swapped one scope value for another while
+    // keeping the count at four could not keep this test green.
     const scopeOptions = commentsFrame.locator(
       '[data-slot="select-content"] [data-slot="select-item"]',
     );
-    await expect(scopeOptions.filter({ hasText: 'Current chapter' })).toHaveCount(1, {
-      timeout: 10_000,
-    });
+    await expect(scopeOptions).toHaveCount(4, { timeout: 10_000 });
+    await expect(scopeOptions.filter({ hasText: 'Current book' })).toHaveCount(1);
+    await expect(scopeOptions.filter({ hasText: 'Current chapter' })).toHaveCount(1);
+    await expect(scopeOptions.filter({ hasText: 'Current verse' })).toHaveCount(1);
     await expect(scopeOptions.filter({ hasText: 'All books' })).toHaveCount(1);
   });
 

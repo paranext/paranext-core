@@ -20,10 +20,11 @@ import { LocalizedBookData } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS } from './replace-preview-types';
 
-// jsdom implements none of ResizeObserver, IntersectionObserver, matchMedia, or scrollIntoView, and
-// the render path touches all four: platform-bible-react's Tooltip/Popover wire ResizeObservers, the
-// results container calls scrollIntoView, and the shared components query media features. No-op stubs
-// keep rendering from throwing so these tests can assert on what is rendered.
+// jsdom implements none of ResizeObserver, IntersectionObserver, or matchMedia, and the render path
+// touches all three: platform-bible-react's Tooltip/Popover wire ResizeObservers and the shared
+// components query media features. No-op stubs keep rendering from throwing so these tests can
+// assert on what is rendered. The results container also calls scrollIntoView, which is shimmed
+// repo-wide in vitest.setup.ts.
 beforeAll(() => {
   // `vi.stubGlobal` accepts `unknown`, so these no-op stubs need no type assertion to stand in for
   // the real constructors — only `observe`/`disconnect` are ever reached from this render path.
@@ -50,7 +51,6 @@ beforeAll(() => {
     })),
   );
 
-  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = vi.fn();
   // Radix's PopoverContent calls scrollTo when it focuses children, which the project
   // selector tests below reach by opening the picker.
   if (!Element.prototype.scrollTo) Element.prototype.scrollTo = vi.fn();

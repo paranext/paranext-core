@@ -131,12 +131,25 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
     reason:
       'transient loading message already leads with the short name; the full name is a defensive fallback for a project with an empty short name, not a composed label',
   },
+  {
+    file: 'src/renderer/components/dialogs/team-layout.dialog.tsx',
+    contains:
+      "const fullName = isPlatformError(projectFullNameSetting) ? '' : projectFullNameSetting",
+    reason:
+      'narrows a setting that failed to load to an empty name before `formatProjectName` joins it — composes no label',
+  },
+  {
+    file: 'src/renderer/components/dialogs/team-layout.dialog.tsx',
+    contains: 'if (!shortName) return fullName || undefined',
+    reason:
+      'the label is `formatProjectName` on the next line; the full name is a defensive fallback for a project with an empty short name, not a composed label',
+  },
 
   // ---- DBL resource names: a `name`/`displayName`/`fullName` triple, not a project short name ----
   // These carry resource metadata rather than the `platform.name`/`platform.fullName` project
   // settings the helper is typed for. Resource labels a user reads nonetheless lead with the short
   // name like every other label: the two sites that composed one — `getRefLabel` (the Model Text
-  // tab and the third-column resource tabs) and Share Layout's `formatResourceDisplayName` — call
+  // tab and the third-column resource tabs) and Team Layout's `formatResourceDisplayName` — call
   // `formatProjectName` with `displayName` in the `shortName` slot, so they are adopted rather than
   // exempt. The entry left below fills a long-name slot the UI renders after the short name, so it
   // composes no label and has no order to get wrong.
@@ -159,7 +172,7 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
     reason: 'design-ideas prototype fixture, not shipped UI',
   },
   {
-    file: 'src/renderer/components/dialogs/share-layout.stories.tsx',
+    file: 'src/renderer/components/dialogs/team-layout.stories.tsx',
     contains: 'fullName: `Scroll Test Version',
     reason: 'story fixture — generates sample data, composes no label',
   },

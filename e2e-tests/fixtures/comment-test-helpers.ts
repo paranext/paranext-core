@@ -35,6 +35,7 @@ import os from 'os';
 import { expect, type FrameLocator, type Page } from '@playwright/test';
 import {
   addUsersToProject,
+  escapeXml,
   PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
@@ -302,9 +303,89 @@ export function removeRevelationFromProject(project: CommentTestProject): void {
     );
 
   const withoutRevelation = `${booksPresent.slice(0, REVELATION_BOOKS_PRESENT_INDEX)}0${booksPresent.slice(REVELATION_BOOKS_PRESENT_INDEX + 1)}`;
+  // A replacer FUNCTION, not a replacement string — see setReferencedProjectsAndResources's own
+  // comment on the same idiom for why a plain string is unsafe here in general, even though this
+  // particular replacement text is a fixed-width bit string that cannot itself contain one of the
+  // special `$`-patterns.
   fs.writeFileSync(
     settingsPath,
-    settingsXml.replace(booksPresentMatch[0], `<BooksPresent>${withoutRevelation}</BooksPresent>`),
+    settingsXml.replace(
+      booksPresentMatch[0],
+      () => `<BooksPresent>${withoutRevelation}</BooksPresent>`,
+    ),
+    'utf8',
+  );
+}
+
+/**
+ * Data-schema version written into a seeded `ReferencedProjectsAndResources` JSON body. Mirrors
+ * `CURRENT_DATA_VERSION` in
+ * `extensions/src/platform-scripture-editor/src/resource-reference-list.const.ts` and
+ * `ResourceReferenceList.CurrentFormatVersion` in `c-sharp/Projects/ResourceReferenceList.cs` —
+ * keep in sync (neither source can be imported into the Playwright Node context).
+ */
+export const REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION = '1.1.0';
+
+/**
+ * Seeds a project's own `platformScripture.referencedProjectsAndResources` admin setting by writing
+ * a `<ReferencedProjectsAndResources>` element directly into its `Settings.xml`
+ * (`c-sharp/Projects/ParatextProjectDataProvider.cs`'s `GetProjectSetting` reads this element's
+ * text as `"<dataVersion> <json>"`, e.g. `1.1.0 {"dataVersion":"1.1.0","items":[...]}`, matching
+ * `ResourceReferenceList.CurrentFormatVersion`'s on-disk shape). Each id in `referencedProjectIds`
+ * is written as a `ProjectReference` naming `project` itself — the only shape current callers need
+ * — so pass `[project.projectId]` for a self-reference.
+ *
+ * The Bible-texts panel (`resource-text-panel.web-view.tsx`) falls back to the first row of this
+ * project's own list unioned with every locally-installed read-only project
+ * (`resolveResourceSelection`'s `rows[0]` fallback in `resource-selection.utils.ts`) whenever the
+ * project's own list is empty. On a machine with a downloaded read-only resource (e.g. WEB), that
+ * fallback silently selects it instead of showing nothing — so a test that reasons about which
+ * books the toolbar's book/chapter/verse control can reach through this project must pin its own
+ * list rather than leave it empty, or the assertion only holds on machines with none installed.
+ *
+ * Must run before the app launches, like {@link removeRevelationFromProject} — ParatextData loads
+ * `Settings.xml` during the app's startup scan and keeps the loaded copy for the session.
+ *
+ * @param project The test project copy whose own reference list to set
+ * @param referencedProjectIds Project ids to reference, each written as a self-naming
+ *   `ProjectReference` for `project`
+ */
+export function setReferencedProjectsAndResources(
+  project: CommentTestProject,
+  referencedProjectIds: string[],
+): void {
+  const settingsPath = path.join(project.projectDir, 'Settings.xml');
+  const settingsXml = fs.readFileSync(settingsPath, 'utf8');
+  if (settingsXml.includes('<ReferencedProjectsAndResources>'))
+    throw new Error(
+      `${settingsPath} already has a <ReferencedProjectsAndResources> element; ` +
+        'setReferencedProjectsAndResources does not support overwriting an existing one',
+    );
+
+  const items = referencedProjectIds.map((id) => ({
+    type: 'project' as const,
+    name: id === project.projectId ? project.shortName : id,
+    id,
+  }));
+  const jsonBody = JSON.stringify({
+    dataVersion: REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION,
+    items,
+  });
+  // Escape the whole text node (not just `name` before stringifying) so a literal `&`/`<`/`>`
+  // inside the JSON — e.g. from a name — round-trips through the XML text node correctly instead
+  // of corrupting the embedded JSON with a premature XML entity.
+  const elementText = escapeXml(`${REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION} ${jsonBody}`);
+  const element = `<ReferencedProjectsAndResources>${elementText}</ReferencedProjectsAndResources>`;
+
+  if (!settingsXml.includes('</ScriptureText>'))
+    throw new Error(`Expected </ScriptureText> closing tag in ${settingsPath}`);
+  // A replacer FUNCTION, not a replacement string: `element` embeds free text (e.g. a project
+  // name), and `String.prototype.replace` gives a STRING replacement its own substitution syntax —
+  // `$&`, `` $` ``, `$'`, `$$` — so a name containing one of those would expand instead of landing
+  // verbatim. A function's return value is always used literally.
+  fs.writeFileSync(
+    settingsPath,
+    settingsXml.replace('</ScriptureText>', () => `  ${element}\n</ScriptureText>`),
     'utf8',
   );
 }

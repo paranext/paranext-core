@@ -6,8 +6,9 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
+import { SerializedEditorState } from 'lexical';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
@@ -486,6 +487,24 @@ interface ConflictResolutionCallbacks {
 	 */
 	getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
 }
+/**
+ * A comment the user has typed but not committed — an unsent reply, an unsaved edit to an existing
+ * comment, or both at once (the reply compose box stays visible while editing an existing comment
+ * whenever it already has content). Held by the consumer rather than by the thread component, so it
+ * survives the component unmounting (a filter change does that routinely).
+ */
+export type CommentDraft = {
+	/** Serialized contents of the unsent reply, or `undefined` when nothing has been typed. */
+	editorState?: SerializedEditorState;
+	/** Pending assignee, or `undefined` when none has been chosen. */
+	assignedUser?: string;
+	/**
+	 * Unsaved edits to existing comments in this thread, keyed by comment id. A thread can hold an
+	 * unsent reply and an in-progress edit at the same time, so these are tracked separately rather
+	 * than sharing one editor state.
+	 */
+	commentEdits?: Readonly<Record<string, SerializedEditorState>>;
+};
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */
@@ -522,7 +541,9 @@ export declare const COMMENT_LIST_STRING_KEYS: readonly [
 	"%comment_aria_submit_comment%",
 	"%comment_aria_mark_as_read%",
 	"%comment_aria_mark_as_unread%",
-	"%comment_aria_resolve_thread%"
+	"%comment_aria_resolve_thread%",
+	"%comment_aria_cancel_edit%",
+	"%comment_aria_save_edit%"
 ];
 /**
  * Type definition for the localized strings used in the CommentList component. Handy for typing the
@@ -624,13 +645,46 @@ export interface CommentListProps {
 	 * when this is not provided.
 	 */
 	conflictResolution?: ConflictResolutionCallbacks;
+	/**
+	 * Uncommitted drafts by thread id. A thread with no entry has no draft.
+	 *
+	 * Pass this together with `onDraftChange`, or omit both — `CommentThreadProps.draft` documents
+	 * what goes wrong with only one of the pair.
+	 */
+	drafts?: Readonly<Record<string, CommentDraft>>;
+	/**
+	 * Called when a thread's draft changes. `draft` is `undefined` when the draft becomes empty, so a
+	 * consumer can drop the entry rather than keep an empty one that would read as a draft.
+	 */
+	onDraftChange?: (threadId: string, draft: CommentDraft | undefined) => void;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, conflictResolution, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, conflictResolution, drafts, onDraftChange, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * A draft is empty only when none of its three parts carry anything: no unsent reply, no pending
+ * assignee, and no in-progress edit to an existing comment. Centralized so every writer reports
+ * emptiness the same way — get it wrong in one direction and a real draft is lost, in the other an
+ * empty entry reads as a draft forever.
+ */
+export declare function isCommentDraftEmpty(draft: CommentDraft): boolean;
+/**
+ * Resolves a localize key against `localizedStrings`, falling back when the key has not actually
+ * resolved to translated text. `useLocalizedStrings` seeds every requested key to itself and
+ * returns that seed both before the subscription delivers and permanently on a `PlatformError`, so
+ * `localizedStrings[key] ?? fallback` can never catch that case — the value is a truthy string
+ * equal to the key, not `undefined`. Centralized so every visible (non-aria-label) localized string
+ * in this component tree resolves the same way.
+ *
+ * @param key The localize key to look up.
+ * @param localizedStrings The localized strings to resolve `key` against.
+ * @param fallback English text to show while `key` has not resolved to anything else.
+ * @returns The resolved string, or `fallback` when `key` is missing or still unresolved.
+ */
+export declare function localizeOrFallback(key: LocalizeKey, localizedStrings: LanguageStrings, fallback: string): string;
 /**
  * Presentational card body for a verseText merge conflict. Presents the resolution as a set of
  * clickable option cards — "Keep the current text" (accept, preselected), "Use the other change"

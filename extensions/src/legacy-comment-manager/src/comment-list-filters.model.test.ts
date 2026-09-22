@@ -1,177 +1,233 @@
-import { describe, expect, it } from 'vitest';
-import type { CommentFilters, ScopeFilter } from './comment-list-filters.model';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from '@papi/frontend';
+import type { CommentFilters, CommentPreset, ScopeFilter } from './comment-list-filters.model';
 import {
-  areCommentFiltersAtDefault,
   applyFilterOverrides,
   buildCommentThreadSelector,
   DEFAULT_COMMENT_FILTERS,
-  isAssignmentFilter,
-  isReadFilter,
-  isResolvedFilter,
+  DEFAULT_SCOPE_FILTER,
+  isCommentPreset,
   isScopeFilter,
-  isTypeFilter,
-  resolveEffectiveScopeFilter,
-  SCOPE_FILTER_CURRENT_CHAPTER,
-  UNFILTERED,
+  isShowingAllThreads,
+  presetNeedsFrozenReadMembership,
+  presetRequiresCurrentUser,
+  presetToLabelKey,
+  scopeFilterToLabelKey,
 } from './comment-list-filters.model';
 
-const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+vi.mock('@papi/frontend', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
-function build(overrides: Partial<CommentFilters>, scopeFilter: ScopeFilter = UNFILTERED) {
+const scrRef = { book: 'GEN', chapterNum: 3, verseNum: 5 };
+
+function build(preset: CommentPreset, scopeFilter: ScopeFilter = DEFAULT_SCOPE_FILTER) {
   return buildCommentThreadSelector({
-    filters: { ...DEFAULT_COMMENT_FILTERS, ...overrides },
+    filters: { preset },
     scopeFilter,
     scrRef,
     currentUserName: 'Donna',
   });
 }
 
-describe('buildCommentThreadSelector', () => {
-  it('returns an empty selector when every axis is "all" and scope is unfiltered', () => {
-    expect(build({})).toEqual({});
+describe('presets', () => {
+  it('contributes nothing at its default', () => {
+    expect(DEFAULT_COMMENT_FILTERS).toEqual({ preset: 'all' });
+    expect(build('all')).toEqual({});
   });
 
-  it('maps each axis to its own selector clause', () => {
-    expect(build({ resolved: 'unresolved' })).toEqual({ isResolved: false });
-    expect(build({ resolved: 'resolved' })).toEqual({ isResolved: true });
-    expect(build({ read: 'unread' })).toEqual({ isRead: false });
-    expect(build({ read: 'read' })).toEqual({ isRead: true });
-    expect(build({ type: 'conflicts' })).toEqual({ type: 'Conflict' });
-    expect(build({ type: 'comments' })).toEqual({ type: 'Normal' });
-    expect(build({ assignment: 'assigned-to-me' })).toEqual({ assignedTo: 'Donna' });
-    expect(build({ assignment: 'team' })).toEqual({ assignedTo: 'Team' });
-    expect(build({ assignment: 'unassigned' })).toEqual({ assignedTo: '' });
+  describe.each<[CommentPreset, ReturnType<typeof build>]>([
+    ['unresolved', { isResolved: false }],
+    ['resolved', { isResolved: true }],
+    ['unread-and-unresolved', { isResolved: false }],
+    ['conflict', { type: 'Conflict' }],
+    ['unresolved-assigned-to-me', { isResolved: false, assignedTo: 'Donna' }],
+    ['unread-assigned-to-me', { assignedTo: 'Donna' }],
+  ])('%s', (preset, expected) => {
+    it(`maps to ${JSON.stringify(expected)}`, () => {
+      expect(build(preset)).toEqual(expected);
+    });
   });
 
-  it('holds the assigned-to-me filter until the current user name has loaded', () => {
-    // While the name is still empty we must not emit assignedTo:'' — that now means UNASSIGNED_USER
-    // ("unassigned"), so we'd query the wrong threads. The web view shows a loading state instead.
+  it('contributes no selector clause for the unsaved preset', () => {
+    // A draft is client-side state; the provider cannot filter on it. The query must therefore be
+    // unnarrowed by the preset, leaving the caller to apply the draft rule itself.
+    expect(build('unsaved')).toEqual({});
+  });
+
+  it('never sends isRead to the provider, for any preset', () => {
+    // A thread marked read (the auto-read timer, ~5 seconds after selection) must not leave the
+    // query result mid-visit -- every unread-family preset narrows by read state client-side
+    // instead (see presetNeedsFrozenReadMembership), so isRead must never reach the selector.
+    Object.keys(presetToLabelKey)
+      .filter(isCommentPreset)
+      .forEach((preset) => {
+        expect(build(preset)).not.toHaveProperty('isRead');
+      });
+  });
+
+  it('maps every preset in the label map, with only all, unread and unsaved unnarrowed', () => {
+    // Iterates the union rather than a hand-listed set, so a preset added later is exercised here
+    // without anyone remembering to add a case.
+    const unnarrowed = Object.keys(presetToLabelKey)
+      .filter(isCommentPreset)
+      .filter((preset) => Object.keys(build(preset)).length === 0);
+
+    expect(unnarrowed.sort()).toEqual(['all', 'unread', 'unsaved']);
+  });
+
+  it('omits assignedTo until the current user name has loaded', () => {
+    // An empty assignedTo means "unassigned" to the provider, so filtering on a blank name would
+    // silently show the wrong threads rather than none.
     const selector = buildCommentThreadSelector({
-      filters: { ...DEFAULT_COMMENT_FILTERS, assignment: 'assigned-to-me' },
-      scopeFilter: UNFILTERED,
+      filters: { preset: 'unresolved-assigned-to-me' },
+      scopeFilter: DEFAULT_SCOPE_FILTER,
       scrRef,
       currentUserName: '',
     });
-    expect(selector).toEqual({});
+    expect(selector).toEqual({ isResolved: false });
   });
 
-  it('ANDs axes together — the PT-4027 unresolved-conflicts view', () => {
-    expect(build({ type: 'conflicts', resolved: 'unresolved' })).toEqual({
-      type: 'Conflict',
-      isResolved: false,
+  it('has a label key for every preset and rejects anything else', () => {
+    expect(Object.keys(presetToLabelKey).every(isCommentPreset)).toBe(true);
+    expect(isCommentPreset('unread')).toBe(true);
+    expect(isCommentPreset('assigned-to-team')).toBe(false);
+  });
+});
+
+describe('applyFilterOverrides — legacy axis mapping', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('narrows type: conflicts + another active axis onto conflict, not all', () => {
+    // The Send/Receive "unresolved conflicts" view: falling back to 'all' would drop the conflict
+    // constraint entirely and show the complete unfiltered list, the opposite of what was asked.
+    expect(applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' })).toEqual({
+      preset: 'conflict',
     });
   });
 
-  it('reaches the old "unresolved assigned to me" preset by composition', () => {
-    expect(build({ resolved: 'unresolved', assignment: 'assigned-to-me' })).toEqual({
-      isResolved: false,
-      assignedTo: 'Donna',
-    });
+  it('logs a warning naming the combination when narrowing an unmatched conflicts combination', () => {
+    applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('unresolved|all|conflicts|all'),
+    );
   });
 
-  it('composes filters with the current-chapter scope', () => {
-    const selector = build({ resolved: 'unresolved' }, SCOPE_FILTER_CURRENT_CHAPTER);
-    expect(selector.isResolved).toBe(false);
-    expect(selector.scriptureRanges).toEqual([
-      {
-        granularity: 'chapter',
-        start: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-        end: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-      },
-    ]);
+  it('still maps the exact all|all|conflicts|all row onto conflict without logging', () => {
+    expect(applyFilterOverrides({ type: 'conflicts' })).toEqual({ preset: 'conflict' });
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('logs a warning naming the combination when a legacy combination widens to all', () => {
+    // 'team' assignment has no counterpart in the new preset model at all.
+    applyFilterOverrides({ assignment: 'team' });
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('all|all|all|team'));
+  });
+
+  it('does not log for an exactly-matched legacy combination', () => {
+    applyFilterOverrides({ resolved: 'unresolved' });
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });
 
-describe('resolveEffectiveScopeFilter', () => {
-  it('passes the scope through unchanged when the list can scope to the current chapter', () => {
-    expect(resolveEffectiveScopeFilter(SCOPE_FILTER_CURRENT_CHAPTER, true)).toBe(
-      SCOPE_FILTER_CURRENT_CHAPTER,
-    );
-    expect(resolveEffectiveScopeFilter(UNFILTERED, true)).toBe(UNFILTERED);
-  });
-
-  it('coerces current-chapter to unfiltered when the list cannot scope to the current chapter', () => {
-    expect(resolveEffectiveScopeFilter(SCOPE_FILTER_CURRENT_CHAPTER, false)).toBe(UNFILTERED);
-  });
-
-  it('leaves an already-unfiltered scope alone when it cannot scope to the current chapter', () => {
-    expect(resolveEffectiveScopeFilter(UNFILTERED, false)).toBe(UNFILTERED);
+describe('presetRequiresCurrentUser', () => {
+  it('has an entry for every preset, and flags only the two assigned-to-me presets', () => {
+    const flagged = Object.entries(presetRequiresCurrentUser)
+      .filter(([, requiresUser]) => requiresUser)
+      .map(([preset]) => preset)
+      .sort();
+    expect(flagged).toEqual(['unread-assigned-to-me', 'unresolved-assigned-to-me']);
   });
 });
 
-// Each axis type-guard should accept exactly its own label-key values and reject anything else. A
-// typo in one of the `*ToLabelKey` maps would surface as a guard no longer accepting a known value.
-const guardCases: [string, (value: string) => boolean, string[]][] = [
-  ['isScopeFilter', isScopeFilter, ['current-chapter', 'unfiltered']],
-  ['isResolvedFilter', isResolvedFilter, ['all', 'unresolved', 'resolved']],
-  ['isReadFilter', isReadFilter, ['all', 'unread', 'read']],
-  ['isTypeFilter', isTypeFilter, ['all', 'conflicts', 'comments']],
-  ['isAssignmentFilter', isAssignmentFilter, ['all', 'assigned-to-me', 'team', 'unassigned']],
-];
-
-describe.each(guardCases)('%s', (_name, guard, validValues) => {
-  it('accepts its known values', () => {
-    validValues.forEach((value) => expect(guard(value)).toBe(true));
-  });
-
-  it('rejects unknown values', () => {
-    expect(guard('bogus')).toBe(false);
-    expect(guard('')).toBe(false);
-  });
-});
-
-describe('areCommentFiltersAtDefault', () => {
-  it('is true when every axis is at its "all" default', () => {
-    expect(areCommentFiltersAtDefault(DEFAULT_COMMENT_FILTERS)).toBe(true);
-  });
-
-  it('is false when any axis is not "all"', () => {
-    expect(areCommentFiltersAtDefault({ ...DEFAULT_COMMENT_FILTERS, resolved: 'unresolved' })).toBe(
-      false,
-    );
-    expect(areCommentFiltersAtDefault({ ...DEFAULT_COMMENT_FILTERS, assignment: 'team' })).toBe(
-      false,
-    );
+describe('presetNeedsFrozenReadMembership', () => {
+  it('has an entry for every preset, and flags exactly the three unread presets', () => {
+    const flagged = Object.entries(presetNeedsFrozenReadMembership)
+      .filter(([, needsFrozenMembership]) => needsFrozenMembership)
+      .map(([preset]) => preset)
+      .sort();
+    expect(flagged).toEqual(['unread', 'unread-and-unresolved', 'unread-assigned-to-me']);
   });
 });
 
 describe('applyFilterOverrides', () => {
-  it('returns the defaults when given no overrides', () => {
-    expect(applyFilterOverrides()).toEqual(DEFAULT_COMMENT_FILTERS);
-    expect(applyFilterOverrides(undefined)).toEqual(DEFAULT_COMMENT_FILTERS);
-    expect(applyFilterOverrides({})).toEqual(DEFAULT_COMMENT_FILTERS);
+  it.each<[string, unknown]>([
+    ['a string', 'unresolved'],
+    ['a number', 5],
+  ])(
+    'falls back to the default instead of throwing when overrides is a truthy non-object primitive (%s)',
+    (_description, malformed) => {
+      // Malformed input can cross the command/message bus as any truthy primitive, not just an
+      // object shape. `'preset' in overrides` throws a TypeError on a string or number operand, so
+      // this is exactly the input the function exists to absorb.
+      // JSON.parse-derived bus input is typed `any`; asserting it onto the parameter's declared
+      // shape here so the reproduction case can be expressed at all.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const overrides = malformed as Partial<CommentFilters>;
+      expect(() => applyFilterOverrides(overrides)).not.toThrow();
+      expect(applyFilterOverrides(overrides)).toEqual(DEFAULT_COMMENT_FILTERS);
+    },
+  );
+});
+
+describe('scope', () => {
+  it('contributes nothing at its default', () => {
+    expect(DEFAULT_SCOPE_FILTER).toBe('all-books');
+    expect(build('all', 'all-books')).toEqual({});
   });
 
-  it('applies the given axes over the defaults', () => {
-    expect(applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' })).toEqual({
-      resolved: 'unresolved',
-      read: 'all',
-      type: 'conflicts',
-      assignment: 'all',
+  it('maps each scope to a range at the matching granularity', () => {
+    const at = (scope: ScopeFilter) => build('all', scope).scriptureRanges?.[0];
+    expect(at('current-book')).toEqual({
+      granularity: 'book',
+      start: scrRef,
+      end: scrRef,
+    });
+    expect(at('current-chapter')?.granularity).toBe('chapter');
+    expect(at('current-verse')?.granularity).toBe('verse');
+  });
+
+  it('combines independently with a preset', () => {
+    expect(build('unresolved', 'current-verse')).toEqual({
+      isResolved: false,
+      scriptureRanges: [{ granularity: 'verse', start: scrRef, end: scrRef }],
     });
   });
 
-  it('resets unspecified axes to "all" rather than merging with a prior selection', () => {
-    // The whole point: overrides are applied onto DEFAULT, not onto the caller's current filters,
-    // so a programmatic open shows exactly the requested view.
-    expect(applyFilterOverrides({ read: 'unread' })).toEqual({
-      resolved: 'all',
-      read: 'unread',
-      type: 'all',
-      assignment: 'all',
-    });
+  it('has a label key for every scope and rejects anything else', () => {
+    expect(Object.keys(scopeFilterToLabelKey).every(isScopeFilter)).toBe(true);
+    expect(isScopeFilter('current-verse')).toBe(true);
+    expect(isScopeFilter('unfiltered')).toBe(false);
+  });
+});
+
+describe('isShowingAllThreads', () => {
+  it('is true only when both the preset and the scope are at their defaults', () => {
+    expect(
+      isShowingAllThreads({ filters: DEFAULT_COMMENT_FILTERS, scopeFilter: DEFAULT_SCOPE_FILTER }),
+    ).toBe(true);
   });
 
-  it('does not mutate DEFAULT_COMMENT_FILTERS', () => {
-    applyFilterOverrides({ type: 'conflicts' });
-    expect(DEFAULT_COMMENT_FILTERS.type).toBe('all');
+  it('is false when the preset narrows the view, even at the default scope', () => {
+    expect(
+      isShowingAllThreads({
+        filters: { preset: 'unresolved' },
+        scopeFilter: DEFAULT_SCOPE_FILTER,
+      }),
+    ).toBe(false);
   });
 
-  it('resets a present-but-null axis to its default (null survives the JSON command bus)', () => {
-    // `undefined` is stripped over the command bus, but `null` survives. A null axis must reset to
-    // its default — leaking it would blank the dropdown while the query still behaves as 'all'. The
-    // web view's setFilters handler applies exactly these semantics via applyFilterOverrides.
-    const overridesWithNull: Partial<CommentFilters> = JSON.parse('{ "type": null }');
-    expect(applyFilterOverrides(overridesWithNull)).toEqual(DEFAULT_COMMENT_FILTERS);
+  it('is false when the scope narrows the view, even at the default preset', () => {
+    expect(
+      isShowingAllThreads({ filters: DEFAULT_COMMENT_FILTERS, scopeFilter: 'current-chapter' }),
+    ).toBe(false);
+  });
+
+  it('is false when both axes narrow the view', () => {
+    expect(
+      isShowingAllThreads({ filters: { preset: 'resolved' }, scopeFilter: 'current-verse' }),
+    ).toBe(false);
   });
 });

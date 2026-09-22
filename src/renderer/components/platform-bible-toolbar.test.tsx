@@ -34,13 +34,6 @@ vi.mock('@renderer/components/user-profile-popover/user-profile-popover.componen
   UserProfilePopover: () => <div data-testid="user-profile-popover-stub" />,
 }));
 
-/**
- * The resolution callbacks `useDialogCallback` has been handed, newest last. The toolbar hands it a
- * fresh callback on every render, so this is a per-render log rather than a count of dialogs
- * opened; a test that resolves the project-picker dialog reaches for the most recent entry.
- */
-const capturedDialogResolvers: ((response: string | undefined) => void)[] = [];
-
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
@@ -85,16 +78,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     MainMenu: vi.fn(() => [{ columns: {}, groups: {}, items: [] }, vi.fn(), false]),
   })),
   useDataProvider: vi.fn(() => undefined),
-  useDialogCallback: vi.fn(
-    (
-      _dialogType: unknown,
-      _options: unknown,
-      resolveCallback: (response: string | undefined) => void,
-    ) => {
-      capturedDialogResolvers.push(resolveCallback);
-      return vi.fn();
-    },
-  ),
   useSetting: vi.fn(() => ['simple', vi.fn(), vi.fn(), false]),
   useProjectSetting: vi.fn(() => ['', vi.fn(), vi.fn(), false]),
 }));
@@ -345,7 +328,6 @@ beforeAll(() => {
 // Sync-button block last set would leak into every describe that follows.
 beforeEach(() => {
   capturedProjectSelectorProps.current = undefined;
-  capturedDialogResolvers.length = 0;
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
   // vitest has no URL search params for the renderer to read this from, so without a file-wide
   // default it is `undefined` (a secondary window) in every describe that doesn't say otherwise —
@@ -787,6 +769,60 @@ describe('PlatformBibleToolbar — project selector visibility by interface mode
     rerender(<PlatformBibleToolbar />);
     await waitFor(() => {
       expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
+    });
+  });
+});
+
+/*
+ * The picker's own list is built from local metadata only, so the projects a user can reach on the
+ * send/receive server but has not downloaded are not in it. The footer is the way out to Home,
+ * which does merge both. Closing the popover on the way is `ProjectSelector`'s own job, asserted
+ * against the real component in
+ * `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.test.tsx`.
+ */
+describe('PlatformBibleToolbar — project picker footer reaches the rest of the projects', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  /** Activates the footer the way `ProjectSelector` does when a user picks it. */
+  async function activateFooter() {
+    render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-selector-stub');
+    const { footerAction } = requireCapturedProjectSelectorProps();
+    // Asserted rather than optional-chained: a missing footer means the escape hatch was never
+    // wired up, and a silent no-op would leave the assertions below holding for the pre-act state.
+    expect(footerAction).toBeDefined();
+    act(() => {
+      footerAction?.onSelect();
+    });
+  }
+
+  it('is labelled so a user can tell it leads out of the short list', async () => {
+    render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-selector-stub');
+
+    expect(requireCapturedProjectSelectorProps().footerAction?.label).toBe('Test more projects');
+  });
+
+  it('opens Home', async () => {
+    await activateFooter();
+
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'platformGetResources.openHome',
+        expect.anything(),
+      );
+    });
+  });
+
+  it('asks Home for projects only, since a read-only resource is never an answer here', async () => {
+    await activateFooter();
+
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('platformGetResources.openHome', true);
     });
   });
 });
@@ -1732,31 +1768,16 @@ describe('PlatformBibleToolbar — pending project display', () => {
     });
   }
 
-  /** Resolves the "More projects…" dialog with the id a real dialog response carries. */
-  function resolveProjectPickerDialogWith(projectId: string | undefined) {
-    // Asserted rather than optional-chained: a missing resolver means the dialog was never wired
-    // up, and a silent no-op here would leave every assertion below holding for the pre-act state.
-    expect(capturedDialogResolvers.length).toBeGreaterThan(0);
-    const resolveDialog = capturedDialogResolvers[capturedDialogResolvers.length - 1];
-    act(() => {
-      resolveDialog(projectId);
-    });
-  }
-
-  it('opens a dialog-only project without naming it, and without adding a row for it', async () => {
+  it('opens a project it has no row for without naming it, and without adding a row for it', async () => {
     await renderSimpleToolbarWith({ allProjects: [] });
 
-    const { footerAction } = requireCapturedProjectSelectorProps();
-    act(() => {
-      footerAction?.onSelect();
-    });
-    // The dialog is the slower of the two paths, and it can return a project the short list never
-    // contained — so there are no display fields to name it with.
-    resolveProjectPickerDialogWith('far');
+    // A selection whose id the visible list does not carry — so there are no display fields to
+    // name it with.
+    selectProjectFromPopover('far');
 
-    // The positive consequence: the dialog's id really did reach the open path. Without this the
-    // rest of the assertions below all hold in the pre-act state (no projects, no selection,
-    // placeholder trigger) and the test would survive the dialog wiring being deleted outright.
+    // The positive consequence: the id really did reach the open path. Without this the rest of
+    // the assertions below all hold in the pre-act state (no projects, no selection, placeholder
+    // trigger) and the test would survive the selection wiring being deleted outright.
     await waitFor(() =>
       expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
         'platformScriptureEditor.openScriptureEditor',

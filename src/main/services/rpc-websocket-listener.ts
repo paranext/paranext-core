@@ -12,6 +12,7 @@ import {
   requestWithRetry,
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
+  MAX_WEBSOCKET_PAYLOAD_BYTES,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import {
@@ -165,7 +166,11 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       // through a computer network" in play. Making this address configurable would change what
       // downstream licensees are exposed to, so treat that as a licensing decision, not just a
       // networking one.
-      const webSocketServer = new WebSocketServer({ host: 'localhost', port: this.port });
+      const webSocketServer = new WebSocketServer({
+        host: 'localhost',
+        port: this.port,
+        maxPayload: MAX_WEBSOCKET_PAYLOAD_BYTES,
+      });
       this.webSocketServer = webSocketServer;
       webSocketServer.addListener('connection', this.onClientConnect);
       webSocketServer.addListener('close', this.disconnect);

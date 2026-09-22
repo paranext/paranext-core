@@ -14,6 +14,7 @@ vi.mock('@renderer/services/overlays/overlay-store', () => ({
 
 // Mock web-view service (needed by dialog service initialize)
 const mockCloseTab = vi.fn();
+const mockOnLayoutLoadTabIds = vi.fn();
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   initialize: vi.fn().mockResolvedValue(undefined),
   addTab: vi.fn(),
@@ -23,6 +24,10 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   // covered against the real module in `dialog.service-shard.layout-load.test.ts`.
   throwIfWindowIsClosing: vi.fn(),
   waitForLayoutLoadToSettle: vi.fn(async () => {}),
+  // Captured so a test can invoke the shard's own subscriber directly with a chosen surviving-tab
+  // set, the same way the real event would deliver one. Real end-to-end coverage (a live layout
+  // load actually dropping a docked dialog's tab) lives in `dialog.service-shard.layout-load.test.ts`.
+  onLayoutLoadTabIds: mockOnLayoutLoadTabIds,
 }));
 
 // Mock localization service
@@ -286,6 +291,156 @@ describe('dialog.service-shard', () => {
       rejectDialogRequest('mock-guid', 'something went wrong');
 
       await expect(dialogPromise).rejects.toBe('something went wrong');
+    });
+  });
+
+  describe('a layout load that keeps the dialog tab', () => {
+    it('leaves the dialog request alone', async () => {
+      const { hasDialogRequest } = await import('./dialog.service-shard');
+
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
+      vi.mocked(addTab).mockResolvedValue(undefined);
+
+      const dialogPromise = capturedShowDialog('platform.selectProject', {});
+      // Never resolved by this test; a wrongly-settled promise would otherwise report as an
+      // unhandled rejection instead of failing the assertion below.
+      dialogPromise.catch(() => {});
+
+      await vi.waitFor(() => {
+        expect(hasDialogRequest('mock-guid')).toBe(true);
+      });
+
+      expect(mockOnLayoutLoadTabIds).toHaveBeenCalledTimes(1);
+      const [layoutLoadHandler] = mockOnLayoutLoadTabIds.mock.calls[0];
+      // The loaded layout still contains this dialog's tab id, so its request must survive.
+      layoutLoadHandler(new Set(['mock-guid', 'some-other-tab']));
+
+      expect(hasDialogRequest('mock-guid')).toBe(true);
+
+      // Clean up: resolve the dialog request so it doesn't leak into subsequent tests
+      const { resolveDialogRequest } = await import('./dialog.service-shard');
+      resolveDialogRequest('mock-guid', undefined);
+      await dialogPromise;
+    });
+  });
+
+  describe('a layout load that arrives before the dialog tab is placed', () => {
+    it('leaves an unplaced dialog request alone', async () => {
+      const { hasDialogRequest, resolveDialogRequest } = await import('./dialog.service-shard');
+
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
+      // Never resolves during this test: standing in for a request registered synchronously at
+      // showDialog's start whose tab has not yet reached the dock when a layout load's sweep runs.
+      vi.mocked(addTab).mockReturnValue(new Promise(() => {}));
+
+      const dialogPromise = capturedShowDialog('platform.selectProject', {});
+      // A wrongly-settled promise would otherwise report as an unhandled rejection instead of
+      // failing the assertion below.
+      dialogPromise.catch(() => {});
+
+      await vi.waitFor(() => {
+        expect(hasDialogRequest('mock-guid')).toBe(true);
+      });
+
+      expect(mockOnLayoutLoadTabIds).toHaveBeenCalledTimes(1);
+      const [layoutLoadHandler] = mockOnLayoutLoadTabIds.mock.calls[0];
+      // The loaded layout does not report this id, but the request's tab was never placed in the
+      // dock for this load to have dropped, so the sweep must leave it alone.
+      layoutLoadHandler(new Set(['some-other-tab']));
+
+      expect(hasDialogRequest('mock-guid')).toBe(true);
+
+      // Clean up: resolve the request directly so it doesn't leak into subsequent tests (addTab
+      // never resolves in this test, so showDialog's own request/tab setup never completes).
+      resolveDialogRequest('mock-guid', undefined, false);
+    });
+  });
+
+  describe('a layout load that drops a docked dialog tab', () => {
+    it('settles the request once its tab has been placed in the dock', async () => {
+      const { hasDialogRequest } = await import('./dialog.service-shard');
+
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
+      let resolveAddTab: () => void = () => {};
+      const addTabPromise = new Promise<undefined>((resolve) => {
+        resolveAddTab = () => resolve(undefined);
+      });
+      // The real `addTab` invokes its fourth argument synchronously, at the moment it places the tab
+      // in the dock, strictly before its own returned promise resolves — simulate that ordering here
+      // rather than marking the request docked as a side effect of the promise alone.
+      let onDocked: (() => void) | undefined;
+      vi.mocked(addTab).mockImplementation(
+        (_tabInfo, _layout, _shouldBringToFront, onDockedArg) => {
+          onDocked = onDockedArg;
+          return addTabPromise;
+        },
+      );
+
+      const dialogPromise = capturedShowDialog('platform.selectProject', {});
+
+      await vi.waitFor(() => {
+        expect(hasDialogRequest('mock-guid')).toBe(true);
+      });
+
+      // Placed, then addTab resolves and showDialog's own continuation runs.
+      onDocked?.();
+      resolveAddTab();
+      await addTabPromise;
+
+      expect(mockOnLayoutLoadTabIds).toHaveBeenCalledTimes(1);
+      const [layoutLoadHandler] = mockOnLayoutLoadTabIds.mock.calls[0];
+      layoutLoadHandler(new Set(['some-other-tab']));
+
+      expect(hasDialogRequest('mock-guid')).toBe(false);
+      await expect(dialogPromise).resolves.toBeUndefined();
+    });
+  });
+
+  describe('a layout load that lands between tab placement and addTab resolving', () => {
+    it('still settles the request, even though addTab has not resolved yet', async () => {
+      const { hasDialogRequest } = await import('./dialog.service-shard');
+
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
+      let resolveAddTab: () => void = () => {};
+      const addTabPromise = new Promise<undefined>((resolve) => {
+        resolveAddTab = () => resolve(undefined);
+      });
+      // The real `addTab` places the tab in the dock and runs whatever it was given as its fourth
+      // argument synchronously, at that exact instant — strictly before its own promise resolves.
+      // Standing in for that split here lets the test trigger "placed" and "addTab resolved" as two
+      // independently-timed events, the same way production can have a competing layout load's wipe
+      // land in the gap between them.
+      let onDocked: (() => void) | undefined;
+      vi.mocked(addTab).mockImplementation(
+        (_tabInfo, _layout, _shouldBringToFront, onDockedArg) => {
+          onDocked = onDockedArg;
+          return addTabPromise;
+        },
+      );
+
+      const dialogPromise = capturedShowDialog('platform.selectProject', {});
+      // A wrongly-unsettled promise would otherwise report as a test timeout instead of failing the
+      // assertion below.
+      dialogPromise.catch(() => {});
+
+      await vi.waitFor(() => {
+        expect(hasDialogRequest('mock-guid')).toBe(true);
+      });
+
+      // The tab has been placed in the dock, but `addTab`'s own promise — and so `showDialog`'s
+      // continuation that used to do this marking — has not resolved yet.
+      onDocked?.();
+
+      expect(mockOnLayoutLoadTabIds).toHaveBeenCalledTimes(1);
+      const [layoutLoadHandler] = mockOnLayoutLoadTabIds.mock.calls[0];
+      // A layout load's wipe lands in exactly this gap.
+      layoutLoadHandler(new Set(['some-other-tab']));
+
+      expect(hasDialogRequest('mock-guid')).toBe(false);
+
+      // Clean up: let addTab resolve so showDialog's own continuation does not hang past this test.
+      resolveAddTab();
+      await addTabPromise;
     });
   });
 });
