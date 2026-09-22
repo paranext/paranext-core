@@ -968,6 +968,12 @@ export function pushContentZoom(
  * content, an in-place navigation the platform never injected into, `about:blank`, or a host that
  * tore its own bootstrap down — has its predecessor's areas dropped in favor of the whole-iframe
  * fallback instead of keeping them forever.
+ *
+ * A replacement that keeps the pane's realm — a view re-pointed at another resource or project, a
+ * grid gaining or losing a panel, a pop-up mounting its own editor — needs no clearing here either:
+ * the bootstrap's observer reports the new list the moment a marker is added or removed, and an
+ * unchanged list is one the new content still owns. Only a replacement that swaps the realm can
+ * leave areas nothing will report over, and that is what the grace's liveness probe settles.
  */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
   // Armed before the definition is read, and outside the guard below, because a read that fails
