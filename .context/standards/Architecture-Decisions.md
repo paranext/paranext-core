@@ -171,6 +171,76 @@ step, no automation. Just a record.
   OS focus, only serves callers with no window, such as the extension host.
 - **Source:** PT-4238; PR #2736.
 
+## adr-all-projects-routes-to-home: the title bar's "more projects" affordance routes to Home rather than making the project picker send/receive-aware
+
+_The affordance is labelled "More projects…" in the title bar today; the PRD calls it "All projects…"
+and the rename lands with the `ProjectSelector` migration (PT-4549). Both names mean this entry._
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** PRD IAN-NN-2.3 asks for a way to reach projects the title-bar picker's list does not
+  show, including projects that exist on the send/receive server but not yet on this machine. The
+  picker's list is built entirely from local metadata — `use-project-picker-data.hook.ts` never calls
+  `getSharedProjects` — so the affordance existed but could not reach the server. Making the picker
+  itself server-aware was constrained by two facts: `paratextBibleSendReceive.getSharedProjects` is
+  registered only through Paratext 10 Studio's patch layer, so calling it from core would throw in
+  plain Platform.Bible; and there is no app-wide offline signal (three identical
+  `// TODO: Hook into something that checks for whether the platform is in offline mode` sit in the
+  socket and XHR services). Meanwhile Home — `extensions/src/platform-get-resources/` — already
+  merges local and shared projects, de-duplicates them by `projectId`, gates its own server fetch on
+  the `platformGetResources.isSendReceiveAvailable` command (Home is an extension web view, so the
+  renderer-side `useSendReceiveAvailability` hook is not reachable from it), and offers Get rather
+  than Open for rows not on disk.
+- **Decision:** The affordance opens Home. Core does not call `getSharedProjects`, gains no
+  send/receive awareness in the picker, and needs no build-flavour gate on the affordance — Home
+  degrades to a local-only list where send/receive is absent. Home owns the honesty requirement
+  instead: it now distinguishes "the server could not be reached" from "the server has no projects"
+  with an explicit banner, because a silent fallback to the local half tells an offline user their
+  projects do not exist.
+- **Alternatives:** **Make the picker call `getSharedProjects` and render server rows inline** —
+  rejected: it throws in plain Platform.Bible, duplicates the merge and de-duplication Home already
+  does, and would need its own outage handling. **Gate the affordance on send/receive availability**
+  — rejected once the target became Home: the gate's only rationale was avoiding that throw, and
+  applying it anyway would hide a working "all projects on disk" surface from plain Platform.Bible.
+  **Route to the Send/Receive dialog** — rejected by the PRD itself, since send/receive is intended
+  to be replaced by Home. **Show the unfiltered Home, resources included** — how this first shipped,
+  and rejected on the demo feedback below: the resource rows are noise on a path that starts in a
+  project picker. **Cache the server's project list for offline use** — deferred: a cached list
+  cannot be acted on, because a user who is offline cannot sync the project the cache would show.
+- **Consequences:** Home is the single surface that reconciles local and server projects, so a defect
+  in that reconciliation is fixed once. The picker stays local-only by design, which is worth
+  restating on any future picker ticket that reads its list as incomplete. The
+  `platform.projectPicker` dialog now has no caller in core — it is kept rather than removed because
+  the dialog type is part of the public `DialogTypes` surface an extension can still open, so
+  retiring it is a breaking change that belongs to its own decision, not a side effect of this one.
+  Revisit if
+  `getSharedProjects` moves out of the Studio patch layer into core, or if an app-wide offline signal
+  lands — either would make an inline, server-aware picker cheap enough to reconsider. The affordance
+  needs no build-flavour gate, but it does inherit a data-driven one: the picker renders its dropdown
+  only when it has items (`hasProjectPickerItems`), so a user with no local project metadata — including
+  after `MAX_METADATA_FETCH_RETRIES` is exhausted in `use-project-picker-data.hook.ts` — cannot reach
+  Home through it. That is an awkward state rather than a dead end, because `menus.json` contributes
+  `%mainMenu_open%` → `platformGetResources.openHome` with no `hiddenInterfaceModes`, and
+  `dockHomeInThisWindow` auto-opens Home when the dock empties. Home's availability check is also a
+  second implementation of what `src/renderer/hooks/use-send-receive-availability.hook.ts` already
+  models — a shorter retry window that fails closed rather than open — and the two cannot be merged
+  without a module shared across the renderer/web-view boundary, so unifying them is deferred rather
+  than done here.
+- **Amended 2026-09-18 (PT-4552, demo feedback):** the affordance opens Home **scoped to editable
+  projects**, leaving out the published resources. The open question this entry recorded — whether
+  Home's resource rows are noise on this path or the other half of "get me to the project I mean" —
+  was decided against real use at the demo: noise. The scoping is a property of the launch, not of
+  the tab, so it is carried as an optional `shouldShowProjectsOnly` argument to
+  `platformGetResources.openHome`, written into the web view's `state` by unconditional assignment
+  (`buildHomeWebViewState`) so a restored layout or a later menu open clears it, and read back with
+  `useWebViewState`. Every other entry point to Home still lists both. Reusing an already-open Home
+  raises its tab without consulting the provider, so fresh options never reach it; the command
+  reloads that web view when — and only when — the scoping differs
+  (`shouldReloadHomeForProjectsOnly`), because the rebuild is the slowest thing on this path. The
+  cost this adds is a second Home configuration to keep working, which is what the entry warned
+  about; it is accepted because the alternative is a project picker whose "more" leads to a list of
+  things that are not projects.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014
@@ -635,6 +705,42 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
+
+- **Date:** 2026-09-15
+- **Status:** Superseded by adr-comment-filter-presets-over-axes. This design (the `Filters` trigger,
+  its popover, and `buildFilterChips`) shipped briefly, then was replaced two days later by two
+  always-visible `Select`s once the filter model itself collapsed from four orthogonal axes to a
+  closed preset set — exactly the "axis count small enough to fit inline" case this entry's own
+  Revisit clause named. `buildFilterChips` no longer exists anywhere in `comment-list.component.tsx`
+  or the rest of the branch. Read this entry as the reasoning of 2026-09-15, not as the current
+  toolbar design.
+- **Context:** The comments panel filtered on five orthogonal axes, each a `Select` with a 128px
+  minimum width, in a wrapping toolbar row. In a 320px panel that already wrapped to three rows
+  (~112px of chrome). Adding two more axes (date, author) would have made it four rows (~148px) —
+  most of a comment card — in the same change whose goal was fitting more comments on screen. The
+  axis labels are long by necessity (`All resolved statuses`, `All read statuses`), so they cannot
+  be shortened into fitting.
+- **Decision:** Collapse every axis behind a single `Filters` trigger opening a popover that gives
+  each axis a labelled full-width row, and render a dismissible chip beside the trigger for each
+  axis not at its default. A fresh list therefore shows the trigger alone (~48px), below the
+  previous baseline rather than above it. Implemented in `CommentListPanel` in
+  `extensions/src/legacy-comment-manager/src/comment-list.component.tsx`, via a chip-building
+  helper that no longer exists there (see this entry's Status).
+- **Alternatives:**
+  - *Seven inline dropdowns.* Smallest diff, but spends most of a comment card on chrome.
+  - *Drop the `min-w-32` floor so triggers size to content.* Measured and rejected: the shipped
+    default labels already exceed 128px at `text-sm`, so removing the floor does not shrink the
+    default state — it only lets flex-shrink truncate harder, producing adjacent triggers both
+    reading `All r…`.
+- **Consequences:** Axis controls are no longer in the DOM until the popover opens, which any E2E
+  test locating them directly must account for. Visible axis names need their own localization keys
+  — reusing the `aria-label` keys yields row headings like "Filter by resolved status" and chip
+  dismiss labels like "Clear Filter by resolved status filter". Nested overlays inside the popover
+  (a `Select`, or the author axis's own `Popover`) must re-portal into the popover's own container
+  or they read as outside clicks; `PopoverPortalContainerProvider` is the existing mechanism, and
+  `scope-selector.component.tsx` is the reference consumer. **Revisit** if an axis count small
+  enough to fit inline returns, or if chips prove less discoverable than visible dropdowns in use.
 ## adr-column-3-panels-are-told-their-project: A Column 3 panel is told its project by the switch; it never infers one from the scroll group
 
 - **Date:** 2026-08-27
@@ -755,6 +861,129 @@ step, no automation. Just a record.
     so the held admin list can stay on the outgoing project while the per-user list and overlay
     resubscribe to the incoming one.
 - **Source:** PT-4423, which fixes PT-4238.
+
+## adr-comment-drafts-follow-filters: An uncommitted comment draft is filtered like any other thread, unlike Paratext 9
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** In Paratext 9, a thread with an uncommitted draft is exempt from every filter — it
+  always shows, regardless of what the user has filtered to. PT10's comment list is filtered
+  server-side: `buildCommentThreadSelector` (`comment-list-filters.model.ts`) turns the preset and
+  scope selection into a `LegacyCommentThreadSelector` sent to the data provider's
+  `getCommentThreads` query, and the web view only ever narrows that already-queried result further
+  (see the `visibleCommentThreads` memo in `comment-list.web-view.tsx`). `LegacyCommentThreadSelector`
+  (`types/legacy-comment-manager.d.ts`) has no way to ask for "the filtered results, plus these
+  specific extra thread ids regardless of the filter" — its `threadId` field is a single optional
+  `string`, not a set. A thread the query excluded never reaches the web view's result set, so
+  nothing client-side can add it back in.
+- **Decision:** Let drafts be filtered like any other thread. Only the `unsaved` preset narrows the
+  query result down to threads that have a draft (`visibleCommentThreads` in
+  `comment-list.web-view.tsx`); every other preset or scope hides a drafted thread exactly as it
+  would hide any other thread that doesn't match. The `unsaved` preset keeps Paratext 9's "Unsaved
+  comments" label (`localizedStrings.json`) as a deliberate parity choice, even though this
+  implementation auto-saves drafts to `localStorage` on every change — so what's literally true of a
+  draft here is that it's unsent, not unsaved. Naming parity with Paratext 9 was judged to outweigh
+  literal accuracy; this is a knowing tradeoff, not an oversight to "fix" later.
+  **Amended 2026-09-21:** the nine preset labels (`presetToLabelKey`, `comment-list-filters.model.ts`)
+  were also made grammatically parallel — each a noun phrase naming a set of comments (`unresolved`:
+  "Unresolved comments", `resolved`: "Resolved comments", `conflict`: "Conflicts", etc.) instead of
+  the prior mix of noun phrases and bare adjectives (`"Unresolved"`, `"Resolved"`, `"Conflict"`).
+  Paratext 9's own labels (`ThreadFilterSelectionAdapter.cs`) are themselves non-parallel — "All
+  notes", "Unread and unresolved", "Unsaved notes" — so this is the same kind of wording decision as
+  the "comments" (not PT9's "notes") and "Unsaved comments" choices already recorded above:
+  consistency of the label set as presented in one dropdown was judged to outweigh literal wording
+  parity with PT9. Both `en` and `es` were updated together, keeping Spanish masculine agreement with
+  *comentarios* (e.g. `conflict`: "Conflictos", `resolved`: "Comentarios resueltos").
+- **Alternatives:**
+  - Reproduce Paratext 9's always-show-drafted-threads behavior by merging drafted thread ids into
+    the query result on the client regardless of scope/preset. Rejected: it doesn't fit
+    `LegacyCommentThreadSelector`'s single-`threadId` shape, and even widening that field to a set
+    would still need the *provider's* own filtering to skip a listed thread's normal exclusion
+    criteria, which the query interface has no way to express. It would also surprise a user who
+    deliberately scoped the list to one book or chapter by showing a thread from outside that scope.
+- **Consequences:** A user with a draft on a thread the current scope or preset excludes will not see
+  that thread until they switch to `unsaved` (or to a scope/preset that includes it) — the draft
+  itself is not lost, just not visible. Revisit if this proves confusing enough in practice; the fix
+  would need either an "or match this specific thread" query clause or a client-side merge layered on
+  top of the query result, not just a wider `threadId` type.
+
+## adr-comment-filter-presets-over-axes: Four orthogonal comment-filter axes collapse into one closed preset set
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** The comment filters used to be four independent axes (`resolved`, `read`, `type`,
+  `assignment`), each a separate control, composing to many combinations. The axes were never
+  offered as separate controls to compose freely in the first place, and most combinations were
+  never reachable through the UI — so the composability was flexibility nobody could use, not
+  flexibility being removed. Separately, `adr-collapsed-multi-axis-filter-toolbar` had just collapsed
+  a five-axis toolbar behind a popover to fit a narrow panel; once the axis count itself shrank, that
+  popover's reason to exist went with it (see that entry's Status for detail).
+- **Decision:** Replace the four legacy axes with `CommentFilters = { preset: CommentPreset }`, a
+  closed set of nine named presets representing the combinations users actually work in (`all`,
+  `unresolved`, `unread`, `unread-and-unresolved`, `resolved`, `unresolved-assigned-to-me`,
+  `unread-assigned-to-me`, `unsaved`, `conflict` — see `presetToLabelKey` in
+  `comment-list-filters.model.ts`), plus a separate four-value `ScopeFilter` axis for the Scripture
+  range. Both render as always-visible inline `Select`s (`FilterDropdown` in
+  `comment-list.component.tsx`) rather than behind any popover or trigger. The deprecated four-axis
+  shape (`LegacyCommentFilters`) is still accepted at the filter boundaries (`openCommentList`,
+  `setFilters`) and mapped onto the closest preset via `LEGACY_AXES_TO_PRESET`/`presetFromLegacyAxes`
+  in `comment-list-filters.model.ts`.
+- **Alternatives:**
+  - Keep the four axes composable but render only the two visible controls, deriving a preset from
+    the underlying combination. Rejected for the same reason as keeping the axes at all: preserving
+    an internal cross-product representation buys nothing once the presented surface is a closed set.
+  - Keep `adr-collapsed-multi-axis-filter-toolbar`'s popover-and-chips toolbar and simply reduce the
+    axis count within it. Rejected once two axes fit inline on one row — the popover's own
+    justification (chrome cost of five-plus axes in a narrow panel) no longer applied.
+- **Consequences:** Two legacy axis values have no counterpart in the new preset set and are
+  unrepresentable: `assignment: 'team'` and `'unassigned'`, and `type: 'comments'` / `read: 'read'`
+  in combination with an otherwise-active axis. `presetFromLegacyAxes` falls back to `'all'` for any
+  legacy combination without an exact match rather than guessing which axis to drop — see
+  `LegacyCommentFilters`'s TSDoc in `types/legacy-comment-manager.d.ts` for the full mapping table and
+  the reasoning per row. A future need to compose two presets together (e.g. "unresolved AND assigned
+  to me AND unread") needs either a new named preset or a return to axis composition — revisit if the
+  preset list keeps growing to cover combinations rather than shrinking.
+
+## adr-comment-machine-local-storage: Per-machine comment state (drafts, filter selection) lives in `localStorage`, not per-user project settings
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** Comment drafts (an unsent reply, a pending assignee change, an unsaved edit) and the
+  user's filter/scope selection both need to survive a reload, but neither is data other project
+  members should see. Per-user project settings normally live under
+  `{projectDirectory}/Extensions/`, but that directory is not covered by PT9's ignore list —
+  `ParatextData/Repository/VersionedText.cs` excludes only `local/**`, `PA7/**`, and `InDesign/**` —
+  so anything written there travels to every other user on the next Send/Receive. A draft is a
+  half-written comment; transmitting it would leak a user's unsent thoughts to their team the moment
+  they sync. A filter selection is a personal view preference that should neither transmit to
+  teammates nor follow a user to a different machine.
+- **Decision:** Persist both comment drafts (`comment-draft-store.ts`) and the filter/scope selection
+  (`comment-filter-store.ts`) in `localStorage`, keyed `legacyCommentManager.<kind>.<projectId>`.
+- **Alternatives:** An earlier implementation on this same branch stored the filter selection through
+  a C# project-data type (`CommentFilterSelection`, exposed via
+  `ParatextProjectDataProvider.GetUserCommentFilters`/`SetUserCommentFilters`) backed by
+  `UserProjectSettings`, writing to `{projectDirectory}/Extensions/UserSettings-{userId}.xml`. It was
+  removed (`refactor(comments): drop the project-data path for filter selections`) once the
+  Send/Receive exposure above was identified: that store is scoped per user already, but per-user is
+  a broader guarantee than per-machine, and `Extensions/` is exactly the directory that travels in
+  sync. Comment drafts never went through an equivalent project-data path — they were `localStorage`
+  from their first commit on this branch — so this alternative applies specifically to the filter
+  selection, not to drafts.
+- **Consequences:** `localStorage` failures (storage unavailable, a sandboxed context) are swallowed
+  in both stores, so persistence degrades silently to "never persists" — a user sees no error, just a
+  selection or draft that doesn't survive a reload, rather than a visible failure. Neither drafts nor
+  the filter selection follow a user between machines or survive a profile reset; that is required
+  behavior for drafts (they must never travel) and an accepted tradeoff for the filter selection (a
+  view preference, not project data). This decision closes the Send/Receive leak, but `localStorage`
+  is private only from OTHER MACHINES and other project members, not from other code running on this
+  one: it is scoped per browser origin, not per web view, and every web view iframe in this renderer
+  shares the SAME origin and gets `allow-same-origin` by default (`src/renderer/services/web-view.
+  service-shard.ts`; see also `src/renderer/services/local-storage.service.ts`'s own doc, which states
+  this sharing directly). So any other extension's web view open in the same window can read (and
+  write) `legacyCommentManager.drafts.*`/`legacyCommentManager.filters.*` directly — this store adds
+  no isolation between extensions, only between machines and between project members. Accepted
+  because the threat this ADR is answering is Send/Receive leakage to teammates, not cross-extension
+  isolation within one user's own running app.
 
 ## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
 
@@ -1108,6 +1337,38 @@ step, no automation. Just a record.
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
+## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** `openCommentList` (`extensions/src/legacy-comment-manager/src/main.ts`) can be targeted at
+  a project other than the triggering web view's (e.g. the S/R results dialog opening a different
+  project's comment list). Such a cross-project open leaves `editorScrollGroupId` undefined, because
+  the triggering web view's scroll group belongs to the wrong project. An earlier version of this
+  code coerced a `current-chapter` scope filter to all-books (`UNFILTERED`) in that case, with a
+  `logger.warn`, on the reasoning that a cross-project open has no editor to derive "current chapter"
+  from. That coercion and its `current-chapter`-only reach were removed in ffc6e4dfad2 without a
+  decision record, and the scope set has since widened to include `current-verse` too, so the
+  question is now broader than the deleted code answered.
+- **Decision:** No coercion. A cross-project comment list's `current-*` scopes resolve against
+  `useWebViewScrollGroupScrRef`'s fallback — scroll group 0, the window's active-project position —
+  rather than being withheld or redirected to all-books. This keeps all four scopes always offered
+  (`adr-comment-filter-presets-over-axes`) instead of a project-dependent subset, and it is workable
+  because a scroll-group reference is a book/chapter/verse (BCV) triple, which is project-agnostic:
+  GEN 1 names the same location in either project.
+- **Alternatives:** Keep coercing `current-chapter` (and, by extension, `current-verse`) to
+  all-books for a cross-project target — rejected: it special-cased one scope, would need
+  duplicating for the newer `current-verse` scope, and traded a merely BCV-unmapped scope for one
+  that silently drops the user's chosen scope. Suppress the `current-*` scopes from the panel
+  entirely for a cross-project list — rejected: nothing distinguishes a cross-project list from any
+  other at the point the panel renders the scope picker, and the user can already reach the same
+  state by hand (opening a same-project list, then switching the toolbar's project picker), so
+  withholding the scopes only on the command's own open path would be inconsistent.
+- **Consequences:** A BCV is project-agnostic in reference, not in content — `useBcvSyncScroll` still
+  carries `TODO (PT-4031): Handle versification`, so a cross-project `current-*` scope can show a
+  mismatched result where the two projects' versifications diverge at that reference. That gap is
+  accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
+- **Source:** external code review, finding 16.
 ## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
 
 - **Date:** 2026-09-01
@@ -2553,6 +2814,38 @@ step, no automation. Just a record.
   a standing instruction rather than an optional nicety. One file for every decision also means every
   branch edits it, which is a standing source of merge conflicts; see
   `adr-decision-log-sorted-insertion` for how entry placement addresses that.
+
+## adr-list-selection-on-a-dedicated-visual-channel: List selection is encoded on a channel of its own, never on a background already carrying status
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Comment cards encoded three meanings on their background at once — unread
+  (`bg-accent`), resolved (`bg-muted`) and read — and selection was bolted onto the same channel.
+  It failed three ways: the "read" surface used `--primary-foreground`, a text-on-primary token
+  that renders near-white in the paratext-dark theme, so unselected cards appeared near-white on a
+  dark ground while the selected one went dark; in the default light theme selected-vs-unselected
+  differed by ΔL ≈ 1.6%; and selection was not encoded *at all* for resolved or unread threads,
+  because their status classes won regardless of selection.
+- **Decision:** Keep status on the background and give selection its own channel — a 4px leading
+  bar (`border-s-4`, a logical property so it follows RTL) plus elevation, with the bar's width
+  reserved by a transparent border on every card so selecting one does not shift its content. The
+  surface token is `--card`. See the `Card` className in
+  `lib/platform-bible-react/src/components/advanced/comment-list/comment-thread.component.tsx`.
+- **Alternatives:**
+  - *A filled accent background for the selected card.* Forces unread onto a dot or bolded sender,
+    which relocates content the requirement forbade.
+  - *A ring outline.* Collides with the card's real focus ring (`focus:ring-2 focus:ring-ring`), so
+    selection and keyboard focus would render identically.
+- **Consequences:** The bar token is `--foreground`, chosen by measurement rather than by name:
+  `--primary` scores 2.38:1 against the card in paratext-dark and `--ring` scores 2.32:1 in
+  paratext-light, each below the WCAG 3:1 non-text minimum and each failing in a *different* theme,
+  while `--foreground` clears it on both the `card` and `muted` surfaces in all four themes with a
+  13.79 worst case. `active-comment-bar-contrast.test.ts` enumerates the themes structurally from
+  `index.css` and asserts both the choice and the rejection, so a theme edit that changes either
+  fails loudly. Moving every card to `bg-card` also means `--card` equals `--background` in three of
+  the four themes, so an inter-thread gap stops reading as separation and a divider becomes
+  load-bearing. **Revisit** for any list row whose background already carries state — the same
+  overload is the general case, not a comments-specific one.
 
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
