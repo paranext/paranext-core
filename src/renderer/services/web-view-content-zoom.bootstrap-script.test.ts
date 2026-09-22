@@ -558,6 +558,34 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
   });
 
+  it('with a declared area and no marker rendered, takes the chords and the wheel for the declared area', async () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    try {
+      const { bound } = install(
+        'wv-declared',
+        '<div id="toolbar">bar</div>',
+        undefined,
+        {},
+        'main',
+      );
+      await nextFrame();
+      expect(bound.reportContentZoomAreasById).toHaveBeenCalledWith('wv-declared', []);
+      expect(added.mock.calls.some(([type]) => type === 'wheel')).toBe(true);
+      expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-declared', 1, 'main');
+      expect(wheel({ deltaY: -100, ctrlKey: true }).defaultPrevented).toBe(true);
+    } finally {
+      added.mockRestore();
+    }
+  });
+
+  it('a malformed declared area is ignored, as if the view were undeclared', async () => {
+    const { bound } = install('wv-bad-declared', '<div>text</div>', undefined, {}, 'Not An Id');
+    await nextFrame();
+    expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+  });
+
   it('maps Ctrl+wheel to the area under the pointer (up = in, down = out), consuming the gesture; plain wheel passes; outside every area → active area', async () => {
     const { bound } = install('wv-5', TWO_AREAS);
     // A notch per frame, so each one is its own write: notches inside one frame are coalesced.

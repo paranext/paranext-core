@@ -3289,6 +3289,22 @@ describe('content zoom wiring', () => {
     );
   });
 
+  test('tells the bootstrap the declared default area of a declared type, and none for an undeclared one', async () => {
+    respondToLayoutRequestsWithoutOpeningHome();
+    const module = await primeWebViewOpenPath();
+    const { dockLayout, addWebViewToDockCalls } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+
+    await module.openWebView('test.type', { type: 'tab' });
+    await module.openWebView('platformScriptureEditor.modelText', { type: 'tab' });
+
+    expect(addWebViewToDockCalls).toHaveLength(2);
+    expect(String(addWebViewToDockCalls[0].content)).toContain('const DECLARED_AREA = undefined;');
+    expect(String(addWebViewToDockCalls[1].content)).toContain(
+      'const DECLARED_AREA = "model-text";',
+    );
+  });
+
   test('gives a URL web view no injected content-zoom script or style', async () => {
     respondToLayoutRequestsWithoutOpeningHome();
     const module = await primeWebViewOpenPath();
