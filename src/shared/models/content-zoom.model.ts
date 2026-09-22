@@ -142,13 +142,13 @@ export const CONTENT_ZOOM_STYLE_ELEMENT_ID = 'platform-content-zoom-styles';
 /** What core knows about one first-party web view type that takes content zoom. */
 export type ContentZoomDeclaration = {
   /** The memory kind the type's levels are remembered under. */
-  kind: ContentZoomKind;
+  readonly kind: ContentZoomKind;
   /**
    * The area the chords, the wheel and the tab menu act on while the view renders no marked
    * element, for example before a search, while loading, or when the list is empty. A view that
    * marks its text with no `area` of its own uses this area.
    */
-  defaultArea: ContentZoomAreaId;
+  readonly defaultArea: ContentZoomAreaId;
 };
 
 /**

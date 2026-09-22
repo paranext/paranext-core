@@ -160,7 +160,9 @@ test.describe('Simple mode', () => {
     await test.step('Home renders at 100 % content zoom although the default is 150 %', async () => {
       const homeFrame = await getEditorFrame(mainPage, homeId);
       await homeFrame.locator('input').first().waitFor();
-      // Wait out the one-second stale-area wait from Home's load before judging it.
+      // Home marks no area and is not declared, so no whole-iframe zoom is ever applied to it —
+      // this poll's first sample already shows that; the timeout only bounds how long we wait for
+      // the frame to render at all.
       await expect
         .poll(async () => hostZoomOf(mainPage, homeId), { intervals: [1_500], timeout: 5_000 })
         .toBe('');
