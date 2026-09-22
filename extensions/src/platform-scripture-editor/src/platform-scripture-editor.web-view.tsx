@@ -2894,8 +2894,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     /**
-     * Puts a repaired chapter document back into the editor, moving the sent-to-PDP baseline with
-     * it so the two cannot drift apart, and puts the caret back at the correction.
+     * Puts a repaired chapter document back into the editor, and puts the caret back at the
+     * correction.
+     *
+     * Leaves the sent-to-PDP baseline to the write that follows, which moves it when the write
+     * actually starts. A write can still be dropped (another is in flight, or the save now belongs
+     * to another chapter), and a baseline moved here would then name a document that never left:
+     * the in-flight write's own echo would no longer match it and would replace the editor,
+     * repaired edits and all, whenever the editor is not being typed in.
      *
      * Swallows a refusal by the editor (after logging it) because the caller must go on to write:
      * it is the write that un-poisons the chapter, and skipping it would leave the PDP holding the
@@ -2917,7 +2923,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // would pull it out of whatever the user is actually typing in — a footnote popover, say.
       const caretToRestore = editorRef.current?.isFocused() ? caretTarget : undefined;
       try {
-        usjSentToPdp.current = repairedUsj;
         setEditorUsj.current(repairedUsj);
       } catch (error) {
         logger.error(

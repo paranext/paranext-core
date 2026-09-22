@@ -341,14 +341,10 @@ describe('applyChapterSavePreparation', () => {
   const REPAIRED = usjOf(chapter('3'), para('p', 'body'));
   const TO_SAVE = usjOf(chapter('3'), para('p', 'body edited'));
 
-  /**
-   * Stands in for the editor side of the call site, where one callback moves the sent-to-PDP
-   * baseline and the editor's own document, so the two cannot be moved apart.
-   */
+  /** Stands in for the editor side of the call site, recording the document it is handed. */
   function editorStandIn() {
-    const state: { usjSentToPdp?: Usj; editorUsj?: Usj } = {};
+    const state: { editorUsj?: Usj } = {};
     const applyRepairToEditor = vi.fn((usj: Usj) => {
-      state.usjSentToPdp = usj;
       state.editorUsj = usj;
     });
     return { state, applyRepairToEditor };
@@ -369,7 +365,6 @@ describe('applyChapterSavePreparation', () => {
 
     expect(applyRepairToEditor).toHaveBeenCalledTimes(1);
     expect(applyRepairToEditor).toHaveBeenCalledWith(REPAIRED, undefined);
-    expect(state.usjSentToPdp).toBe(REPAIRED);
     expect(state.editorUsj).toBe(REPAIRED);
     expect(usjToSave).toBe(TO_SAVE);
   });
@@ -388,7 +383,6 @@ describe('applyChapterSavePreparation', () => {
     });
 
     expect(applyRepairToEditor).not.toHaveBeenCalled();
-    expect(state.usjSentToPdp).toBeUndefined();
     expect(state.editorUsj).toBeUndefined();
     expect(usjToSave).toBe(TO_SAVE);
   });
