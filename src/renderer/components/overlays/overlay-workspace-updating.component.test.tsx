@@ -20,6 +20,23 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
   useIsPowerMode: vi.fn(() => true),
 }));
 
+// The window/web-view service shards pull in the renderer's whole service graph at module load;
+// mock just the two functions the close-focus fallback reads, matching the precedent in
+// `platform-bible-toolbar.test.tsx` (mocks the hook built on the same getter) and
+// `window.service-shard.test.ts` (mocks `web-view.service-shard` the same way).
+const { getNavigationTargetWebViewMock, focusTabMock } = vi.hoisted(() => ({
+  getNavigationTargetWebViewMock: vi.fn(),
+  focusTabMock: vi.fn(),
+}));
+
+vi.mock('@renderer/services/window.service-shard', () => ({
+  getNavigationTargetWebView: getNavigationTargetWebViewMock,
+}));
+
+vi.mock('@renderer/services/web-view.service-shard', () => ({
+  getDockLayoutSync: vi.fn(() => ({ focusTab: focusTabMock })),
+}));
+
 // Only the spinner is stubbed, so an assertion on it stays about this component rather than about
 // the icon library. Everything else — the dialog primitive that supplies the focus trap, and the
 // z-index scale — is the real thing, since the trap is what these tests are about.
@@ -28,26 +45,72 @@ vi.mock('platform-bible-react', async (importOriginal) => ({
   Spinner: () => <div data-testid="spinner" />,
 }));
 
-/** Everything {@link focusSomethingBehindTheCover} put in the document, cleared after each test. */
+/**
+ * Everything {@link focusSomethingBehindTheCover}, {@link focusAChromeControl}, and
+ * {@link stubActiveWebView} put in the document, cleared after each test.
+ */
 let elementsBehindTheCover: HTMLElement[] = [];
 
 /**
- * Stands in for a web view's iframe: the element the keyboard is in when a project switch starts.
- * Returned focused, and removed after the test.
+ * Stands in for a web view's iframe inside its pane: the element the keyboard is in when a project
+ * switch starts. Wrapped in the same `data-tab-id` container every tab's content gets from
+ * `PlatformPanel`, so it satisfies `isInsideDockPane` the way a real pane does. Returned focused,
+ * and removed (pane and all) after the test.
  */
 function focusSomethingBehindTheCover() {
+  const pane = document.createElement('div');
+  pane.dataset.tabId = 'pane-1';
   const webView = document.createElement('iframe');
   webView.title = 'Web view';
-  document.body.appendChild(webView);
-  elementsBehindTheCover.push(webView);
+  pane.appendChild(webView);
+  document.body.appendChild(pane);
+  elementsBehindTheCover.push(pane);
   webView.focus();
   return webView;
+}
+
+/**
+ * Stands in for a window-chrome control — e.g. the toolbar's project-selector button, which the
+ * "More projects…" search dialog returns focus to on close: a plain element with no `data-tab-id`
+ * ancestor, the way `isInsideDockPane` tells chrome apart from a pane's content. Returned focused,
+ * and removed after the test.
+ */
+function focusAChromeControl() {
+  const button = document.createElement('button');
+  button.type = 'button';
+  document.body.appendChild(button);
+  elementsBehindTheCover.push(button);
+  button.focus();
+  return button;
+}
+
+/**
+ * Stands in for the dock's active tab: `getNavigationTargetWebView` resolves to it, and
+ * `getDockLayoutSync().focusTab` moves DOM focus onto it when asked for that id — mirroring what
+ * the real dock does when it focuses a tab.
+ */
+function stubActiveWebView(id = 'active-web-view') {
+  const activeWebView = document.createElement('iframe');
+  activeWebView.title = 'Active web view';
+  document.body.appendChild(activeWebView);
+  elementsBehindTheCover.push(activeWebView);
+  getNavigationTargetWebViewMock.mockReturnValue({
+    id,
+    definition: { id, webViewType: 'testWebViewType' },
+  });
+  focusTabMock.mockImplementation((tabId: string) => {
+    if (tabId === id) activeWebView.focus();
+    return true;
+  });
+  return activeWebView;
 }
 
 describe('WorkspaceUpdatingOverlay', () => {
   beforeEach(() => {
     resetWorkspaceUpdating();
     vi.mocked(useIsPowerMode).mockReturnValue(true);
+    getNavigationTargetWebViewMock.mockReset();
+    focusTabMock.mockReset();
   });
 
   // Both stores are module-level singletons, so a registration left behind would block the window
@@ -171,6 +234,71 @@ describe('WorkspaceUpdatingOverlay', () => {
     });
 
     await waitFor(() => expect(webView).toHaveFocus());
+  });
+
+  // The restore above is conditional on the captured element having been inside a pane. Confirm
+  // the other half: the fallback to the active web view stays UNUSED for a pane element, so the
+  // two branches are actually distinguished rather than one masking the other.
+  it('does not fall back to the active web view when the captured element was inside a pane', async () => {
+    const webView = focusSomethingBehindTheCover();
+    const activeWebView = stubActiveWebView();
+    render(<WorkspaceUpdatingOverlay />);
+    let release: (() => void) | undefined;
+    act(() => {
+      release = startWorkspaceUpdate();
+    });
+    await waitFor(() => expect(webView).not.toHaveFocus());
+
+    act(() => {
+      release?.();
+    });
+
+    await waitFor(() => expect(webView).toHaveFocus());
+    expect(activeWebView).not.toHaveFocus();
+    expect(focusTabMock).not.toHaveBeenCalled();
+  });
+
+  // The live bug this closes: the "More projects…" search dialog returns focus to its own trigger
+  // (the toolbar's project-selector button) before the cover ever captures, and that button is
+  // still connected once the switch ends — so restoring to it unconditionally left the first
+  // keystroke landing on the toolbar instead of the new editor.
+  it('focuses the active web view instead of a chrome control the switch left connected', async () => {
+    const chromeButton = focusAChromeControl();
+    const activeWebView = stubActiveWebView();
+    render(<WorkspaceUpdatingOverlay />);
+    let release: (() => void) | undefined;
+    act(() => {
+      release = startWorkspaceUpdate();
+    });
+    await waitFor(() => expect(chromeButton).not.toHaveFocus());
+
+    act(() => {
+      release?.();
+    });
+
+    await waitFor(() => expect(activeWebView).toHaveFocus());
+    expect(chromeButton).not.toHaveFocus();
+  });
+
+  // A "replace-tab" switch can tear down the pane the captured element belonged to outright, so it
+  // is disconnected by the time the switch ends. There is nothing to restore then, so the keyboard
+  // must still land somewhere useful — the new active editor, not the document.
+  it('focuses the active web view when the captured element is gone', async () => {
+    const webView = focusSomethingBehindTheCover();
+    const activeWebView = stubActiveWebView();
+    render(<WorkspaceUpdatingOverlay />);
+    let release: (() => void) | undefined;
+    act(() => {
+      release = startWorkspaceUpdate();
+    });
+    await waitFor(() => expect(webView).not.toHaveFocus());
+    webView.parentElement?.remove();
+
+    act(() => {
+      release?.();
+    });
+
+    await waitFor(() => expect(activeWebView).toHaveFocus());
   });
 
   // Asserted through `aria-hidden` rather than by driving Tab, for the reason

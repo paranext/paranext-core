@@ -3,12 +3,15 @@ import { useWindowBlockingOverlay } from '@renderer/hooks/use-window-blocking-ov
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
 import { CANCEL_ENTER_ZOOM_STYLE } from '@renderer/components/overlays/full-screen-dialog.util';
+import { getDockLayoutSync } from '@renderer/services/web-view.service-shard';
+import { getNavigationTargetWebView } from '@renderer/services/window.service-shard';
 import {
   getWorkspaceUpdating,
   subscribeToWorkspaceUpdating,
 } from '@renderer/services/workspace-updating-store';
+import { logger } from '@shared/services/logger.service';
 import { Dialog, DialogContent, DialogTitle, Spinner, Z_INDEX_MODAL } from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { VisuallyHidden } from 'radix-ui';
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -40,6 +43,16 @@ const COVER_CONTENT =
 const NEUTRALIZED_BACKDROP = 'tw:bg-transparent tw:supports-backdrop-filter:backdrop-blur-none';
 
 type Props = { label: string; isPowerMode: boolean };
+
+/**
+ * Whether an element sits inside the dock's tab-content area — a pane's own DOM, including a web
+ * view's iframe — rather than window chrome (the toolbar, a dialog's trigger button, a menu). Every
+ * tab's rendered content is wrapped in a `data-tab-id` element (`PlatformPanel`); tab headers and
+ * anything outside the dock carry no such ancestor.
+ */
+function isInsideDockPane(element: Element): boolean {
+  return !!element.closest('[data-tab-id]');
+}
 
 /**
  * The cover shown while the active project is switching: a spinner and a line of text over the dock
@@ -94,14 +107,36 @@ export function WorkspaceUpdatingOverlayPresentational({ label, isPowerMode }: P
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
-        // `DialogContent`'s modal path answers close-autofocus by focusing the dialog's trigger,
-        // and this cover has none: it opens on a project switch, not on a click. Handing focus back
-        // is therefore this component's job. For a web view that is its iframe, so the view decides
-        // where inside itself the keyboard lands. A pane the switch closed leaves nothing to return
-        // to, so focus falls to the document, which is where a closed pane would have left it.
+        // `DialogContent`'s modal path answers close-autofocus by focusing the dialog's trigger, and
+        // this cover has none: it opens on a project switch, not on a click. Handing focus back is
+        // therefore this component's job.
+        //
+        // The captured element is only worth restoring when the switch left the user inside a pane:
+        // window chrome (the toolbar, a dialog's own trigger button) is often still connected after
+        // the switch — the toolbar survives it, unlike the pane the switch was for — but it is never
+        // where the keyboard belongs once a project switch ends. So a chrome element, and an element
+        // the switch's own tab replacement disconnected, both hand focus to the active editor's web
+        // view instead (see `isInsideDockPane`). For a web view that is its iframe, so the view
+        // decides where inside itself the keyboard lands, and its own focus() call still wins
+        // whenever it runs after this one.
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          if (elementFocusedBeforeCover?.isConnected) elementFocusedBeforeCover.focus();
+          if (
+            elementFocusedBeforeCover?.isConnected &&
+            isInsideDockPane(elementFocusedBeforeCover)
+          ) {
+            elementFocusedBeforeCover.focus();
+            return;
+          }
+          const activeWebView = getNavigationTargetWebView();
+          if (!activeWebView) return;
+          try {
+            getDockLayoutSync().focusTab(activeWebView.id);
+          } catch (e) {
+            logger.warn(
+              `WorkspaceUpdatingOverlay could not focus the active web view ${activeWebView.id} after the cover closed: ${getErrorMessage(e)}`,
+            );
+          }
         }}
       >
         {/* The dialog needs an accessible name, and the message is the only text there is. Hidden
