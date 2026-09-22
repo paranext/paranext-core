@@ -831,8 +831,11 @@ export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLDivElement> & {
  * up the `--platform-content-zoom-<areaId>` custom property (`--platform-content-zoom-main` for the
  * unnamed area, `--platform-content-zoom-default` as a fallback) on the view's `documentElement`.
  *
- * A view that marks no area at all is scaled as a whole at the Settings default zoom level and gets
- * no per-pane zoom control.
+ * A view that marks no area gets no content zoom unless the platform declares its web view type
+ * zoomable. Your view is zoomable only while at least one element carrying
+ * `data-platform-content-zoom-root` is rendered: the tab menu's zoom items, Ctrl/⌘ + `+`/`-`/`0`
+ * and Ctrl/⌘+wheel appear and act only then. If your view shows nothing to zoom for a while (before
+ * a search, while loading), render an empty marked element so the controls stay available.
  *
  * @example
  *
@@ -1260,7 +1263,11 @@ export interface FootnoteEditorProps {
 	scrRef: SerializedVerseRef;
 	/** The unique note key to identify the note being edited used to apply changes to the note */
 	noteKey: string | undefined;
-	/** View options of the parent editor */
+	/**
+	 * View options of the parent editor. The component overrides `contextMenuContainer` (the menu is
+	 * drawn inside the popover, so it takes the popover's zoom and stays within its bounds) and drops
+	 * any inherited context-menu extras, so a `contextMenuContainer` supplied here has no effect.
+	 */
 	editorOptions: EditorOptions;
 	/** Trigger key to open the footnote editor marker menu */
 	defaultMarkerMenuTrigger: string;
@@ -4290,12 +4297,8 @@ export type LivePopoverAnchor = {
  * is open) re-reads the rect on scroll of the text's scroll container, on resize, and when the text
  * reflows under a zoom change, so the popover stays beside its caller or selection.
  *
- * Hidden case: handled by holding the last usable rect. A popover can be open while its pane is
- * hidden — the Scripture editor's footnote popover survives Escape and an outside click — and a
- * hidden pane has no layout, so a source measures nothing there. The anchor keeps the last rect it
- * had rather than collapsing to the pane's corner, and the next frame after the tab is shown
- * measures again and catches up. Sources report "no measurement" by returning `undefined`; see
- * {@link measureRange} and {@link measureElement}.
+ * Hidden-tab case: needs no catch-up. A popover is only open while its pane is visible, and every
+ * listener belongs to the open popover.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
