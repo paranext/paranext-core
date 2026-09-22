@@ -9969,6 +9969,7 @@ declare module 'shared/services/reference-history.util' {
   ): ReferenceHistoryEntry | undefined;
 }
 declare module 'shared/data/platform.data' {
+  import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP } from 'platform-bible-utils';
   /**
    * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
    * Platform.Bible core
@@ -10094,39 +10095,14 @@ declare module 'shared/data/platform.data' {
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */
   export const DEFAULT_THEME_TYPE = 'light';
-  /**
-   * Usersnap client key of the space that holds the in-app feedback forms (Usersnap projects). Like
-   * the project keys below, it is write-only: it can only SUBMIT reports to a Usersnap project, not
-   * RETRIEVE any information from it.
-   *
-   * The Usersnap keys are intentionally empty in Platform.Bible. A product built on top of core
-   * (Paratext 10 Studio) sets them at build time through its repository patch, together with the Help
-   * menu items that open the forms. While this key is empty, Usersnap is never initialized and makes
-   * no network request.
-   *
-   * Typed as `string` rather than the literal `''` so a build that sets it still type-checks.
-   *
-   * @experimental
-   */
-  export const USERSNAP_SPACE_API_KEY: string;
-  /**
-   * Usersnap client key of the "report a bug / send feedback" form. Write-only, and empty in
-   * Platform.Bible; see {@link USERSNAP_SPACE_API_KEY}.
-   *
-   * @experimental
-   */
-  export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string;
-  /**
-   * Usersnap client key of the "submit an idea" form. Write-only, and empty in Platform.Bible; see
-   * {@link USERSNAP_SPACE_API_KEY}.
-   *
-   * @experimental
-   */
-  export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string;
-  /** Constants related to zoom factor of entire application */
+  /** Zoom factor where 1 = the application's default, unscaled size. */
   export const DEFAULT_ZOOM_FACTOR = 1;
-  export const MIN_ZOOM_FACTOR = 0.5;
-  export const MAX_ZOOM_FACTOR = 3;
+  /**
+   * Range and step for the application's zoom factor, defined once in `platform-bible-utils`;
+   * re-exported here alongside {@link DEFAULT_ZOOM_FACTOR} so app code has one place to reach all four
+   * zoom constants.
+   */
+  export { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP };
   /**
    * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
    * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
