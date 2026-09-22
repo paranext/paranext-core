@@ -6,8 +6,7 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 vi.mock('@shared/services/settings.service', () => ({ settingsService: {} }));
 vi.mock('@shared/services/localization.service', () => ({ localizationService: {} }));
-// The real parseIframeZoom is kept, since the service under test calls it directly (not through the
-// mocked getWebViewIframe) for its whole-iframe fallback.
+// The real parseIframeZoom is kept, since getContentZoomScaleForWebView calls it directly (not through the mocked getWebViewIframe).
 vi.mock('@renderer/services/overlays/overlay-coordinates', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@renderer/services/overlays/overlay-coordinates')>();
@@ -47,7 +46,6 @@ import {
 const LEVELS = 'platform.contentZoomLevels';
 const IDENTITY = 'platform.contentZoomIdentity';
 const MEMORY = 'platform.webViewContentZoomMemory';
-const TYPES = 'platform.webViewContentZoomTypesWithAreas';
 
 /**
  * The state a pane holds when its own levels are `levels`: the levels themselves plus the stamp
@@ -77,6 +75,15 @@ function cssVar(iframe: HTMLIFrameElement, name: string): string {
   return iframe.contentDocument?.documentElement.style.getPropertyValue(name) ?? '';
 }
 
+/**
+ * The CSS `zoom` on the iframe element itself, `''` when none is set. jsdom does not implement
+ * `zoom`, so the property reads `undefined` until something assigns it, where a browser reads
+ * `''`.
+ */
+function frameZoom(iframe: HTMLIFrameElement): string {
+  return Reflect.get(iframe.style, 'zoom') ?? '';
+}
+
 describe('web-view-content-zoom.service', () => {
   const definitions = new Map<string, SavedWebViewDefinition>();
   /** Reads a definition set up earlier in the same test, failing loudly if the setup is missing. */
@@ -88,7 +95,6 @@ describe('web-view-content-zoom.service', () => {
   const settings: Record<string, unknown> = { 'platform.webViewContentZoom': 1, [MEMORY]: {} };
   const memoryCallbacks: Array<(value: unknown) => void> = [];
   const defaultCallbacks: Array<(value: unknown) => void> = [];
-  const typesCallbacks: Array<(value: unknown) => void> = [];
   let onDidUpdateWebViewCallback:
     | ((event: { webView: SavedWebViewDefinition }) => void)
     | undefined;
@@ -119,14 +125,21 @@ describe('web-view-content-zoom.service', () => {
     return created;
   }
 
+  /**
+   * Opens a pane of a web view type core's declaration map does not list, so it is zoomable only
+   * while it reports an area, and returns its iframe.
+   */
+  function openUndeclaredPane(id: string): HTMLIFrameElement {
+    definitions.set(id, { id, webViewType: 'thirdParty.view', projectId: 'proj-A', state: {} });
+    return iframeFor(id);
+  }
+
   beforeEach(async () => {
     definitions.clear();
     settings['platform.webViewContentZoom'] = 1;
     settings[MEMORY] = {};
-    settings[TYPES] = {};
     memoryCallbacks.length = 0;
     defaultCallbacks.length = 0;
-    typesCallbacks.length = 0;
     onDidUpdateWebViewCallback = undefined;
     settingsSet.mockClear();
     updateDefinition.mockClear();
@@ -161,7 +174,6 @@ describe('web-view-content-zoom.service', () => {
         subscribe: async (key: string, callback: (value: unknown) => void) => {
           if (key === MEMORY) memoryCallbacks.push(callback);
           else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
-          else if (key === TYPES) typesCallbacks.push(callback);
           // Mirrors the production subscription's immediate delivery of the current value
           // (`retrieveDataImmediately` defaults to true), which is what primes the module's caches
           // on initialization rather than leaving them to wait for the first live change.
@@ -2156,12 +2168,30 @@ describe('web-view-content-zoom.service', () => {
       releaseReads();
       await initializing;
       // ...and once they do come back, the default one of them carries is in hand.
-      expect(order).toHaveLength(4);
-      expect(order[3]).toBe('initialized');
+      expect(order).toHaveLength(3);
+      expect(order[2]).toBe('initialized');
       setContentZoomAreas('editor-1', ['main']);
       expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
     } finally {
       addListener.mockRestore();
+    }
+  });
+
+  it('never scales an area-less pane of an undeclared type, at its load or after the grace', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    const pane = openUndeclaredPane('ext-1');
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('ext-1');
+      expect(frameZoom(pane)).toBe('');
+      vi.advanceTimersByTime(1000);
+      expect(frameZoom(pane)).toBe('');
+      // Positive control: the push did reach this pane, because it carries the Settings default.
+      expect(cssVar(pane, '--platform-content-zoom-default')).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
     }
   });
 
@@ -2171,105 +2201,6 @@ describe('web-view-content-zoom.service', () => {
     await resetContentZoom('editor-1');
     expect(updateDefinition).not.toHaveBeenCalled();
     expect(settingsSet).not.toHaveBeenCalled();
-  });
-
-  it('does not throw out of the fallback grace timer when the pane is being torn down', async () => {
-    // A pane detached while the grace is running: reading `contentDocument` on its iframe throws,
-    // and the timer's push is the one call site with no caller to catch it.
-    const detached = document.createElement('iframe');
-    Object.defineProperty(detached, 'contentDocument', {
-      get() {
-        throw new Error('the iframe is detached');
-      },
-    });
-    let paneIsDetached = false;
-    __setContentZoomDepsForTesting({
-      getIframe: (id: string) => (paneIsDetached ? detached : iframeFor(id)),
-    });
-    await initializeContentZoomService();
-    vi.useFakeTimers();
-    try {
-      setContentZoomAreas('editor-1', []); // arms the grace
-      paneIsDetached = true;
-      expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('fallback'));
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('scales a pane without areas whole at the default at once, and switches to per-area variables once areas are reported', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', []);
-    pushContentZoom('editor-1');
-    expect(iframe.style.zoom).toBe('1.3');
-    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
-    setContentZoomAreas('editor-1', ['main']);
-    expect(iframe.style.zoom).toBe('');
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-  });
-
-  it('re-arms the fallback grace after a later report clears an earlier one, applying the fallback at once once the pane is forgotten and reopens unresolved', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', []);
-    expect(iframe.style.zoom).toBe('1.3'); // unresolved, so the fallback applies at once
-    setContentZoomAreas('editor-1', ['main']);
-    expect(iframe.style.zoom).toBe(''); // an area exists now, so the fallback is cleared
-
-    // A pane the platform now expects to mark an area — this one, having just reported one — is
-    // left alone on a later empty report rather than falling back instantly, and its grace's expiry
-    // does not fall back or record the type either, since the bootstrap is still alive: only
-    // forgetting the pane (a genuine unmount, not a mere re-render) drops that expectation.
-    vi.useFakeTimers();
-    try {
-      setContentZoomAreas('editor-1', []);
-      expect(iframe.style.zoom).toBe('');
-      vi.advanceTimersByTime(1000);
-      expect(iframe.style.zoom).toBe('');
-    } finally {
-      vi.useRealTimers();
-    }
-    await __flushContentZoomWritesForTesting();
-    expect(settings[TYPES]).toEqual({});
-
-    forgetContentZoom('editor-1');
-    setContentZoomAreas('editor-1', []);
-    expect(iframe.style.zoom).toBe('1.3'); // unresolved again, so this applies at once too
-  });
-
-  it('still arms the fallback grace when the definition read fails at the iframe load hook', async () => {
-    // The pane this matters for — an HTML view opened with `allowScripts: false` — never runs the
-    // bootstrap, so this hook is the only thing that ever arms a grace for it: a read that threw
-    // before the arming would leave it unscaled for as long as it lives.
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({
-      getDefinition: () => {
-        throw new Error('dock layout is not registered');
-      },
-    });
-    await initializeContentZoomService();
-    vi.useFakeTimers();
-    try {
-      applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe('');
-      vi.advanceTimersByTime(1000);
-      expect(iframe.style.zoom).toBe('1.3');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('arms the fallback grace from the iframe load hook too, so a pane nothing expects to mark gets the whole-view fallback at once', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    forgetContentZoom('editor-1'); // no area report at all, as for a bootstrap that never runs
-    applyContentZoomForWebView('editor-1');
-    expect(iframe.style.zoom).toBe('1.3');
   });
 
   it('reports the content scale a pane draws at: its resolved area level, else its frame zoom', async () => {
@@ -2284,80 +2215,28 @@ describe('web-view-content-zoom.service', () => {
     expect(getContentZoomScaleForWebView('editor-1')).toBeCloseTo(adjustZoomFactor(1.3, 1), 5);
   });
 
-  it('reports the frame zoom for a pane that marks no area, and 1 for an iframe with no zoom applied (the harness fabricates one for any id, known or not)', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    forgetContentZoom('editor-1');
-    applyContentZoomForWebView('editor-1');
-    expect(iframe.style.zoom).toBe('1.3');
-    expect(getContentZoomScaleForWebView('editor-1')).toBe(1.3);
-    expect(getContentZoomScaleForWebView('no-such-pane')).toBe(1);
-  });
-
-  it('cancels the grace armed by the iframe load hook once the pane reports an area within it', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    forgetContentZoom('editor-1');
-    applyContentZoomForWebView('editor-1');
-    expect(iframe.style.zoom).toBe('1.3'); // the load hook's own immediate whole-iframe fallback
-    setContentZoomAreas('editor-1', ['main']);
-    expect(iframe.style.zoom).toBe(''); // the report clears it
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-  });
-
-  it('clears a stale whole-iframe zoom left by the old content at reload, then immediately re-applies it, so the new content is never left unscaled', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', []);
-    expect(iframe.style.zoom).toBe('1.3'); // the fallback applied for the old content
-    iframe.style.zoom = '2'; // dirtied to a different value, so the re-application is observable
-
-    // The reload's new content hasn't rendered anything yet, and an in-place reload does not itself
-    // touch the iframe element's own style — the stale zoom stays on it until the load hook clears
-    // it and, since the new content is expected to mark none either, re-applies it at once.
-    applyContentZoomForWebView('editor-1');
-    expect(iframe.style.zoom).toBe('1.3');
-  });
-
-  it('resolves a whole-iframe zoom for a pane whose definition cannot be found, rather than leaving a stale value on it', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', []);
-    expect(iframe.style.zoom).toBe('1.3');
-    definitions.delete('editor-1');
-    iframe.style.zoom = '2'; // dirtied, so the resolve below is observable rather than assumed
-    applyContentZoomForWebView('editor-1'); // does not throw despite the missing definition
-    expect(iframe.style.zoom).toBe('1.3');
-  });
-
-  it("a content replacement whose bootstrap never runs loses the previous content's areas", async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', ['main', 'footnotes']);
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('1.3');
+  it('drops the areas of content whose bootstrap never runs again, once the wait after its load runs out', async () => {
+    const pane = openUndeclaredPane('ext-1');
+    setContentZoomAreas('ext-1', ['main']);
     vi.useFakeTimers();
     try {
       // Simulates a document whose bootstrap never ran (or tore itself down): the string-keyed form
       // avoids both a type assertion and the member-access underscore the bootstrap contract owns.
-      Reflect.deleteProperty(iframe.contentWindow ?? {}, '__platformContentZoom');
-      applyContentZoomForWebView('editor-1');
+      Reflect.deleteProperty(pane.contentWindow ?? {}, '__platformContentZoom');
+      applyContentZoomForWebView('ext-1');
+      // Positive control: until the wait runs out, the areas stand.
+      expect(resolveContentZoomArea('ext-1', undefined)).toBe('main');
       vi.advanceTimersByTime(1000);
-      expect(resolveContentZoomArea('editor-1', undefined)).toBeUndefined();
-      expect(iframe.style.zoom).toBe('1.3');
-      updateDefinition.mockClear();
-      settingsSet.mockClear();
-      await adjustContentZoom('editor-1', 1); // content-root gate: no area, so this is a no-op
-      expect(updateDefinition).not.toHaveBeenCalled();
-      expect(settingsSet).not.toHaveBeenCalled();
+      expect(resolveContentZoomArea('ext-1', undefined)).toBeUndefined();
+      expect(frameZoom(pane)).toBe('');
     } finally {
       vi.useRealTimers();
     }
+    updateDefinition.mockClear();
+    settingsSet.mockClear();
+    await adjustContentZoom('ext-1', 1); // an undeclared pane with no area has nothing to act on
+    expect(updateDefinition).not.toHaveBeenCalled();
+    expect(settingsSet).not.toHaveBeenCalled();
   });
 
   it("a reload whose bootstrap runs keeps the pane's areas", async () => {
@@ -2370,7 +2249,6 @@ describe('web-view-content-zoom.service', () => {
       applyContentZoomForWebView('editor-1'); // __platformContentZoom stays in place, as for a real reload
       vi.advanceTimersByTime(1000);
       expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
-      expect(iframe.style.zoom).toBe('');
       expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
     } finally {
       vi.useRealTimers();
@@ -2388,200 +2266,13 @@ describe('web-view-content-zoom.service', () => {
       vi.advanceTimersByTime(500);
       setContentZoomAreas('editor-1', ['main']); // the reloaded content's own report, mid-grace
       vi.advanceTimersByTime(600);
-      expect(iframe.style.zoom).toBe('');
       expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
     } finally {
       vi.useRealTimers();
     }
   });
 
-  describe('the per-type zoom-area expectation', () => {
-    it('scales a pane of an unrecorded type at once instead of showing it unscaled first', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe('1.3');
-    });
-
-    it('never scales a pane of a type recorded as marking areas, however slowly it mounts', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      settings[TYPES] = { 'platformScriptureEditor.react': true };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      vi.useFakeTimers();
-      try {
-        applyContentZoomForWebView('editor-1');
-        expect(iframe.style.zoom).toBe('');
-        setContentZoomAreas('editor-1', []); // the bootstrap's first scan, before the view mounts
-        vi.advanceTimersByTime(5_000); // slower to mount than the grace
-        expect(iframe.style.zoom).toBe('');
-        // Checked here, before the pane's own report below could overwrite a wrong write with a
-        // right one and hide it: the grace's expiry must not have let the type record be touched
-        // either, or a narrower bug could leave the pane correctly unscaled while still wrongly
-        // recording its type as marking none.
-        await __flushContentZoomWritesForTesting();
-        expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-        setContentZoomAreas('editor-1', ['main']);
-        expect(iframe.style.zoom).toBe('');
-        expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it('scales a pane of a type recorded as marking none at once', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      settings[TYPES] = { 'platformScriptureEditor.react': false };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe('1.3');
-    });
-
-    it('records a type as marking areas the first time one of its panes reports one', async () => {
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      setContentZoomAreas('editor-1', ['main']);
-      await __flushContentZoomWritesForTesting();
-      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-    });
-
-    it('does not write a "marks none" record when a pane of it has reported no area', async () => {
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      vi.useFakeTimers();
-      try {
-        applyContentZoomForWebView('editor-1');
-        setContentZoomAreas('editor-1', []);
-        vi.advanceTimersByTime(1000);
-      } finally {
-        vi.useRealTimers();
-      }
-      await __flushContentZoomWritesForTesting();
-      // Nothing reads a stored `false` any differently from an absent key (both resolve the next
-      // pane's expectation to "marks none"), so the write is pure risk: a sibling pane of the same
-      // type that already recorded `true` while this grace was pending would be clobbered by it.
-      expect(settings[TYPES]).toEqual({});
-    });
-
-    it('does not let an expiring grace clobber a type another pane already recorded as marking areas', async () => {
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      definitions.set('editor-2', {
-        id: 'editor-2',
-        webViewType: 'platformScriptureEditor.react',
-        projectId: 'proj-A',
-        state: {},
-      });
-      // Pane B opens first, while the type is still unrecorded, and resolves its own expectation to
-      // `false`. Pane A opens too, so its own report below is evidence the service accepts.
-      await getInitialContentZoomForWebView(requireDefinition('editor-2'));
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      vi.useFakeTimers();
-      try {
-        setContentZoomAreas('editor-2', []); // B starts its grace holding that resolved `false`
-        // Pane A of the same type reports an area and records the type `true` before B's grace
-        // expires.
-        setContentZoomAreas('editor-1', ['main']);
-        await __flushContentZoomWritesForTesting();
-        expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-        vi.advanceTimersByTime(1000); // B's grace expires; B's own expectation is still `false`
-      } finally {
-        vi.useRealTimers();
-      }
-      await __flushContentZoomWritesForTesting();
-      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-    });
-
-    it('corrects a record that says a marking type marks none', async () => {
-      settings[TYPES] = { 'platformScriptureEditor.react': false };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      setContentZoomAreas('editor-1', ['main']);
-      await __flushContentZoomWritesForTesting();
-      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-    });
-
-    it('writes no record for a pane the platform never resolved an expectation for', async () => {
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      settingsSet.mockClear();
-      setContentZoomAreas('editor-1', ['main']);
-      await __flushContentZoomWritesForTesting();
-      expect(settingsSet).not.toHaveBeenCalledWith(TYPES, expect.anything());
-      // Checked against the setting's own final value, not just this test's own call history: a
-      // guard that only looks unbroken because an earlier, differently-guarded write already landed
-      // the same value must still be caught.
-      expect(settings[TYPES]).toEqual({});
-    });
-
-    it('falls back for a pane of a marking type whose bootstrap is gone and can never report', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      settings[TYPES] = { 'platformScriptureEditor.react': true };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      vi.useFakeTimers();
-      try {
-        // The string-keyed form avoids both a type assertion and the member-access underscore the
-        // bootstrap contract owns.
-        Reflect.deleteProperty(iframe.contentWindow ?? {}, '__platformContentZoom');
-        applyContentZoomForWebView('editor-1');
-        expect(iframe.style.zoom).toBe('');
-        vi.advanceTimersByTime(1000);
-        expect(iframe.style.zoom).toBe('1.3');
-      } finally {
-        vi.useRealTimers();
-      }
-      await __flushContentZoomWritesForTesting();
-      // A broken pane is evidence about that pane, not about its type.
-      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-    });
-
-    it('drops the pane expectation on unmount', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      settings[TYPES] = { 'platformScriptureEditor.react': true };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      forgetContentZoom('editor-1');
-      applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe('1.3');
-    });
-
-    it('resolves a freshly opened pane from a type record pushed by another window', async () => {
-      definitions.set('editor-mv', {
-        id: 'editor-mv',
-        webViewType: 'x.y',
-        state: {},
-      });
-      const pane = iframeFor('editor-mv');
-      typesCallbacks.forEach((cb) => cb({ 'x.y': true }));
-      await getInitialContentZoomForWebView(requireDefinition('editor-mv'));
-      applyContentZoomForWebView('editor-mv');
-      // Type x.y is now known to mark areas, so the fresh pane must not receive the whole-iframe
-      // fallback while it waits for its own report.
-      expect(pane.style.zoom).toBe('');
-    });
-  });
-
-  it('scales a URL web view whole straight away, since it never runs the bootstrap and never reports areas', () => {
+  it('leaves a URL web view unscaled; it carries only the default variable', () => {
     definitions.set('url-1', {
       id: 'url-1',
       webViewType: 'someExtension.urlView',
@@ -2589,31 +2280,8 @@ describe('web-view-content-zoom.service', () => {
     });
     applyContentZoomForWebView('url-1');
     const pane = iframeFor('url-1');
-    expect(pane.style.zoom).toBe('1');
+    expect(frameZoom(pane)).toBe('');
     expect(cssVar(pane, '--platform-content-zoom-default')).toBe('1');
-  });
-
-  it('replaces a dirtied whole-iframe zoom at the iframe load hook at once, for a pane that has not reported yet', () => {
-    definitions.set('editor-7', {
-      id: 'editor-7',
-      webViewType: 'platformScriptureEditor.react',
-      projectId: 'proj-A',
-      state: {},
-    });
-    const pane = iframeFor('editor-7');
-    // A call for a known non-URL pane arms a fallback grace timer (for its other job, dropping stale
-    // areas), so fake timers keep that timer from leaking into later tests as a real pending
-    // setTimeout.
-    vi.useFakeTimers();
-    try {
-      pane.style.zoom = '2'; // dirtied, so the replacement is observable rather than assumed
-      applyContentZoomForWebView('editor-7');
-      expect(pane.style.zoom).toBe('1'); // the default, applied at once -- not left at the stale value
-      expect(cssVar(pane, '--platform-content-zoom-default')).toBe('1');
-      expect(cssVar(pane, '--platform-content-zoom-main')).toBe(''); // nothing reported, no area
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it('keeps a pane zoomable after the iframe load hook when it reported its areas before it', async () => {
@@ -2623,7 +2291,6 @@ describe('web-view-content-zoom.service', () => {
       applyContentZoomForWebView('editor-1');
       expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
       vi.advanceTimersByTime(2000);
-      expect(iframe.style.zoom).toBe(''); // not whole-scaled by the grace either
     } finally {
       vi.useRealTimers();
     }
@@ -2681,7 +2348,7 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).toHaveBeenLastCalledWith('main', `Default · ${formatZoomPercent(1)}`);
   });
 
-  it('repushes every open pane, including one whole-scaled by the fallback, when the default setting changes', () => {
+  it('re-pushes every open pane when the default changes, scaling none of them whole', () => {
     definitions.set('url-1', {
       id: 'url-1',
       webViewType: 'someExtension.urlView',
@@ -2691,8 +2358,9 @@ describe('web-view-content-zoom.service', () => {
     expect(defaultCallbacks).toHaveLength(1);
     defaultCallbacks[0](1.5); // no re-init: this is the live subscription callback, fired directly
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.5');
-    expect(iframe.style.zoom).toBe('');
-    expect(urlPane.style.zoom).toBe('1.5');
+    expect(frameZoom(iframe)).toBe('');
+    expect(cssVar(urlPane, '--platform-content-zoom-default')).toBe('1.5');
+    expect(frameZoom(urlPane)).toBe('');
     expect(cssVar(urlPane, '--platform-content-zoom-main')).toBe('');
   });
 
@@ -2703,15 +2371,20 @@ describe('web-view-content-zoom.service', () => {
       projectId: 'proj-B',
       state: {},
     });
+    let editor1Detached = false;
     __setContentZoomDepsForTesting({
       getDefinition: (id: string) => {
-        if (id === 'editor-1') throw new Error('detached from the dock layout');
+        if (id === 'editor-1' && editor1Detached) throw new Error('detached from the dock layout');
         return definitions.get(id);
       },
     });
     defaultCallbacks.length = 0;
     await initializeContentZoomService();
+    // editor-1 reports its areas while its definition still reads, so its re-push below reaches the
+    // definition read (only a pane with areas reads one) and throws there.
+    setContentZoomAreas('editor-1', ['main']);
     setContentZoomAreas('editor-2', ['main']);
+    editor1Detached = true;
     const editor2Iframe = iframeFor('editor-2');
     vi.mocked(logger.warn).mockClear();
     expect(defaultCallbacks).toHaveLength(1);
