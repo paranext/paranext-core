@@ -163,6 +163,8 @@ describe('dialog.service-shard float layout', () => {
     expect(mockAddTab).toHaveBeenCalledWith(
       expect.objectContaining({ tabType: 'platform.alert' }),
       { type: 'float', position: 'center' },
+      true,
+      expect.any(Function),
     );
 
     resolveDialogRequest('mock-guid', undefined);
