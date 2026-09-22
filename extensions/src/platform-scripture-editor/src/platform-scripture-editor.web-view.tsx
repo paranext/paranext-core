@@ -1400,17 +1400,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         UsjReaderWriter.isUsjDocumentLocationForTextContent(endTextDocumentLocation) &&
         startTextDocumentLocation.jsonPath === endTextDocumentLocation.jsonPath &&
         startTextDocumentLocation.offset === endTextDocumentLocation.offset;
-      // The offset is expected to always fit within `startNode`, since both come from the same
-      // settled document by contract. An offset past the end of `startNode` means that contract
-      // was violated by a bug or a race, not an expected state — proceeding would walk off the end
-      // of `startNode` below, so bail out the same way an unresolvable path already does.
-      if (
-        isCollapsed &&
-        'offset' in startTextDocumentLocation &&
-        startTextDocumentLocation.offset > startNode.length
-      ) {
+      // Both offsets are expected to always fit within `startNode` (the check above put both ends
+      // in it), since they come from the same settled document by contract. An offset past its end
+      // means that contract was violated by a bug or a race, not an expected state — proceeding
+      // would anchor the comment past the text (or, collapsed, walk off the end of `startNode`
+      // below), so bail out the same way an unresolvable path already does.
+      const startNodeLength = startNode.length;
+      const offsetPastEnd = [startTextDocumentLocation, endTextDocumentLocation]
+        .map((location) => ('offset' in location ? location.offset : 0))
+        .find((offset) => offset > startNodeLength);
+      if (offsetPastEnd !== undefined) {
         logger.warn(
-          `Comment insertion: selection offset ${startTextDocumentLocation.offset} at ${startTextDocumentLocation.jsonPath} is past the end of the settled node (length ${startNode.length})!`,
+          `Comment insertion: selection offset ${offsetPastEnd} at ${startTextDocumentLocation.jsonPath} is past the end of the settled node (length ${startNodeLength})!`,
         );
         papi.notifications.send({
           message: '%webView_platformScriptureEditor_error_selectionNotResolved%',
