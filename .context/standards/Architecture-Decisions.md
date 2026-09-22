@@ -4147,10 +4147,13 @@ step, no automation. Just a record.
   would not pay for a cache whose invalidation had to track Send/Receive.
 
   The ceiling is arithmetic over the transport's message limit, so that limit is declared as
-  `MAX_WEBSOCKET_PAYLOAD_BYTES` in `src/shared/data/rpc.model.ts` and passed to the WebSocket server
-  rather than left to the `ws` package's default. At 80 MiB a response may inflate 1.25x its on-disk
-  size before crossing it, where the 50 MiB cap allowed 2.0x, so the margin is thinner than it was
-  and neither number can be changed without re-checking the other.
+  `MAX_WEBSOCKET_PAYLOAD_BYTES` in `src/shared/data/rpc.model.ts` and passed as `maxPayload` to the
+  WebSocket server. That pins the server's receive path, which is the hop a C# data provider
+  response crosses and the one this ceiling is measured against; the extension host's own client
+  still takes the `ws` package default on its receive, so the other half remains on a library value.
+  At 80 MiB a response may inflate 1.25x its on-disk size before crossing the limit, where the 50
+  MiB cap allowed 2.0x, so the margin is thinner than it was and neither number can be changed
+  without re-checking the other.
 
   The selector addresses files by manifest path, so it assumes a book and gloss language keep that
   path between the manifest poll and the read that follows it. PT9's own writer always nests a book
