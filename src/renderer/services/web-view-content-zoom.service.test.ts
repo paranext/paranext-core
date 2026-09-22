@@ -35,6 +35,8 @@ import {
   getContentZoomScaleForWebView,
   getInitialContentZoomForWebView,
   initializeContentZoomService,
+  isContentZoomable,
+  onDidChangeContentZoomable,
   pushContentZoom,
   resetContentZoom,
   resolveContentZoomArea,
@@ -203,23 +205,30 @@ describe('web-view-content-zoom.service', () => {
     expect(resolveContentZoomTarget(undefined)).toBeUndefined();
   });
 
-  it('resolves the area: explicit and known → itself; unknown → nothing; none given → active, else first', () => {
+  it('resolves the area: explicit and known → itself; unknown → nothing; none given → active, else first; a declared pane with none reported → its declared area', () => {
     expect(resolveContentZoomArea('editor-1', 'footnotes')).toBe('footnotes');
     expect(resolveContentZoomArea('editor-1', 'sidebar')).toBeUndefined();
     expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
     setContentZoomActiveArea('editor-1', 'footnotes');
     expect(resolveContentZoomArea('editor-1', undefined)).toBe('footnotes');
     setContentZoomAreas('editor-1', []);
-    expect(resolveContentZoomArea('editor-1', undefined)).toBeUndefined();
+    expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
+    openUndeclaredPane('ext-1');
+    expect(resolveContentZoomArea('ext-1', undefined)).toBeUndefined();
   });
 
-  it('answers whether a request carrying no ids has both a pane and an area to act on', () => {
+  it('answers whether a request carrying no ids has a zoomable pane to act on', () => {
     expect(canContentZoomActOnActiveTarget()).toBe(false);
     lastFocused = 'editor-1';
     expect(canContentZoomActOnActiveTarget()).toBe(true);
     setContentZoomAreas('editor-1', []);
+    // Declared: the window-chrome chord still acts, on the declared area.
+    expect(canContentZoomActOnActiveTarget()).toBe(true);
+    openUndeclaredPane('ext-1');
+    lastFocused = 'ext-1';
     expect(canContentZoomActOnActiveTarget()).toBe(false);
-    setContentZoomAreas('editor-1', ['main']);
+    setContentZoomAreas('ext-1', ['main']);
+    expect(canContentZoomActOnActiveTarget()).toBe(true);
     windowInputBlocked = true;
     expect(canContentZoomActOnActiveTarget()).toBe(false);
   });
@@ -2195,12 +2204,90 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
-  it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
-    setContentZoomAreas('editor-1', []);
-    await adjustContentZoom('editor-1', 1);
-    await resetContentZoom('editor-1');
+  it('does nothing for an undeclared pane that reported no areas (menu and macOS paths)', async () => {
+    openUndeclaredPane('ext-1');
+    setContentZoomAreas('ext-1', []);
+    await adjustContentZoom('ext-1', 1);
+    await resetContentZoom('ext-1');
     expect(updateDefinition).not.toHaveBeenCalled();
     expect(settingsSet).not.toHaveBeenCalled();
+  });
+
+  it('tells a zoomable pane from one that is not: declared, or reporting an area', () => {
+    openUndeclaredPane('ext-1');
+    setContentZoomAreas('editor-1', []);
+    expect(isContentZoomable('editor-1')).toBe(true); // declared, nothing reported
+    expect(isContentZoomable('ext-1')).toBe(false); // undeclared, nothing reported
+    setContentZoomAreas('ext-1', ['main']);
+    expect(isContentZoomable('ext-1')).toBe(true); // undeclared, reporting
+    expect(isContentZoomable('no-such-pane')).toBe(false);
+  });
+
+  it('zooms and resets a declared pane with no area rendered on its declared area, showing the indicator', async () => {
+    setContentZoomAreas('editor-1', []);
+    showIndicator.mockClear();
+    await adjustContentZoom('editor-1', 1);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
+    expect(showIndicator).toHaveBeenLastCalledWith('main', formatZoomPercent(1.1));
+    await resetContentZoom('editor-1');
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+    expect(showIndicator).toHaveBeenLastCalledWith('main', `Default · ${formatZoomPercent(1)}`);
+  });
+
+  it('an explicit area on a declared empty pane is accepted only when it is the declared area', async () => {
+    setContentZoomAreas('editor-1', []);
+    vi.mocked(logger.debug).mockClear();
+    expect(resolveContentZoomArea('editor-1', 'main')).toBe('main');
+    expect(resolveContentZoomArea('editor-1', 'footnotes')).toBeUndefined();
+    expect(resolveContentZoomArea('editor-1', 'footnotes')).toBeUndefined();
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledTimes(1);
+    await adjustContentZoom('editor-1', 1, 'footnotes');
+    expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
+  it('announces zoomability only when it flips: 0→n and n→0 for an undeclared pane, never for a declared one', () => {
+    openUndeclaredPane('ext-1');
+    const events: Array<{ webViewId: string; isContentZoomable: boolean }> = [];
+    const unsubscribe = onDidChangeContentZoomable((event) => events.push(event));
+    try {
+      setContentZoomAreas('ext-1', ['main']);
+      setContentZoomAreas('ext-1', ['main', 'footnotes']); // still zoomable: no event
+      setContentZoomAreas('ext-1', []);
+      setContentZoomAreas('ext-1', ['main']);
+      forgetContentZoom('ext-1');
+      setContentZoomAreas('editor-1', []); // declared: stays zoomable
+      setContentZoomAreas('editor-1', ['main']);
+      forgetContentZoom('editor-1');
+      expect(events).toEqual([
+        { webViewId: 'ext-1', isContentZoomable: true },
+        { webViewId: 'ext-1', isContentZoomable: false },
+        { webViewId: 'ext-1', isContentZoomable: true },
+        { webViewId: 'ext-1', isContentZoomable: false },
+      ]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('answers from the reported areas alone when the definition read throws, rather than throwing', async () => {
+    let definitionReadThrows = false;
+    __setContentZoomDepsForTesting({
+      getDefinition: (id: string) => {
+        if (definitionReadThrows) throw new Error('the dock layout is gone');
+        return definitions.get(id);
+      },
+    });
+    await initializeContentZoomService();
+    openUndeclaredPane('ext-1');
+    setContentZoomAreas('ext-1', ['main']);
+    definitionReadThrows = true;
+    expect(isContentZoomable('ext-1')).toBe(true);
+    expect(isContentZoomable('editor-1')).toBe(false); // declared, but its type cannot be read now
   });
 
   it('reports the content scale a pane draws at: its resolved area level, else its frame zoom', async () => {
