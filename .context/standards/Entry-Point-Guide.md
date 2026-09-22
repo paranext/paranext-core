@@ -128,6 +128,9 @@ visibility/enable rules inline in the command/backend so the rationale isn't los
 See `adr-menus-always-available-gate-at-submission` in `Architecture-Decisions.md` for the
 rationale and history.
 
+When a mode needs a different *section* structure, not just fewer items, give that mode its own
+columns and gate items into them — see `adr-menu-per-mode-layout-via-mode-gated-columns`.
+
 ### Section Headings and Shortcut Hints
 
 - **Headings come from columns.** In a tab's top menu each column is a section. When two or more

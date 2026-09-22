@@ -32,6 +32,10 @@ import type { FrameLocator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 
+// Markers Checklist is opened from the scripture editor's hamburger menu, which hides that item
+// in Simple mode.
+test.use({ requiredInterfaceMode: 'power' });
+
 // -----------------------------------------------------------------------------
 // Helpers — Platform.Bible bootstrap
 // -----------------------------------------------------------------------------

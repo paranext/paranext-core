@@ -61,10 +61,15 @@ const getGroupContent = (
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
-        return (
-          <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
-            <TooltipTrigger asChild>
-              {'command' in item ? (
+        // `DropdownMenuSub` is a Radix context provider that renders no DOM node of its own, so a
+        // `TooltipTrigger asChild` wrapped around it drops every cloned prop (including
+        // `aria-describedby`) instead of reaching the trigger that actually renders. The submenu
+        // branch attaches the tooltip to `DropdownMenuSubTrigger` itself instead, which is the
+        // element the tooltip needs to describe anyway.
+        if ('command' in item) {
+          return (
+            <Tooltip key={`tooltip-${item.label}-${item.command}`}>
+              <TooltipTrigger asChild>
                 <DropdownMenuItem
                   key={`dropdown-menu-item-${item.label}-${item.command}`}
                   onClick={() => {
@@ -82,25 +87,32 @@ const getGroupContent = (
                   )}
                   {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
                 </DropdownMenuItem>
-              ) : (
-                <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
-                  <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
+              </TooltipTrigger>
+              {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
+            </Tooltip>
+          );
+        }
 
-                  <DropdownMenuPortal>
-                    <DropdownMenuSubContent>
-                      {getGroupContent(
-                        groups,
-                        items,
-                        getSubMenuGroupKeyForMenuItemId(groups, item.id),
-                        onSelectMenuItem,
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuPortal>
-                </DropdownMenuSub>
-              )}
-            </TooltipTrigger>
-            {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
-          </Tooltip>
+        return (
+          <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
+              </TooltipTrigger>
+              {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
+            </Tooltip>
+
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent>
+                {getGroupContent(
+                  groups,
+                  items,
+                  getSubMenuGroupKeyForMenuItemId(groups, item.id),
+                  onSelectMenuItem,
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
         );
       });
 
