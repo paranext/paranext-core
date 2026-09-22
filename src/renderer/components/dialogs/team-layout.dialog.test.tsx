@@ -192,6 +192,21 @@ function renderWrapper(
   return { submitDialog, cancelDialog, rejectDialog, rerender: () => rerender(buildElement()) };
 }
 
+/**
+ * Answers successive `getCachedResources` calls with `responses` in turn, the last one repeating.
+ * Keyed on the command name rather than call order: the dialog refreshes the resource flags before
+ * reading the catalog, so an order-based mock hands the catalog's answer to that refresh instead.
+ */
+function mockCatalogResponses(...responses: unknown[]) {
+  let catalogCallCount = 0;
+  vi.mocked(sendCommand).mockImplementation(async (commandName: unknown) => {
+    if (commandName !== 'platformGetResources.getCachedResources') return undefined;
+    const response = responses[Math.min(catalogCallCount, responses.length - 1)];
+    catalogCallCount += 1;
+    return response;
+  });
+}
+
 beforeEach(() => {
   mockState.referencedProjectsAndResources = EMPTY_RESOURCE_LIST;
   mockState.setReferencedProjectsAndResources = vi.fn();
@@ -447,12 +462,13 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
       dataVersion: '2.0.0',
       items: [{ type: 'dblResource', name: 'ESV', id: 'esv-uid' }],
     };
-    vi.mocked(sendCommand)
-      .mockResolvedValueOnce({ status: 'unavailable', reason: 'notReady' })
-      .mockResolvedValue({
+    mockCatalogResponses(
+      { status: 'unavailable', reason: 'notReady' },
+      {
         status: 'available',
         resources: [makeDblResource({ dblEntryUid: 'esv-uid', displayName: 'ESV' })],
-      });
+      },
+    );
 
     renderWrapper();
 
@@ -486,12 +502,13 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
       dataVersion: '2.0.0',
       items: [{ type: 'dblResource', name: 'ESV', id: 'esv-uid' }],
     };
-    vi.mocked(sendCommand)
-      .mockResolvedValueOnce({ status: 'unavailable', reason: 'notReady' })
-      .mockResolvedValue({
+    mockCatalogResponses(
+      { status: 'unavailable', reason: 'notReady' },
+      {
         status: 'available',
         resources: [makeDblResource({ dblEntryUid: 'esv-uid', displayName: 'ESV' })],
-      });
+      },
+    );
 
     renderWrapper();
 
@@ -525,9 +542,13 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     };
     // The retry's fetch stays IN FLIGHT, which is the state the gate would react to: a retry that
     // resolves before the assertion would let a gate reading the live settled flag look correct.
-    vi.mocked(sendCommand)
-      .mockResolvedValueOnce({ status: 'unavailable', reason: 'notReady' })
-      .mockImplementation(async () => new Promise(() => {}));
+    let catalogCallCount = 0;
+    vi.mocked(sendCommand).mockImplementation(async (commandName: unknown) => {
+      if (commandName !== 'platformGetResources.getCachedResources') return undefined;
+      catalogCallCount += 1;
+      if (catalogCallCount === 1) return { status: 'unavailable', reason: 'notReady' };
+      return new Promise(() => {});
+    });
 
     renderWrapper();
 
@@ -877,14 +898,15 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     );
     // The catalog is unavailable at mount — the state that puts the Retry button on screen — and
     // the retry then succeeds.
-    vi.mocked(sendCommand)
-      .mockResolvedValueOnce({ status: 'unavailable', reason: 'notReady' })
-      .mockResolvedValue({
+    mockCatalogResponses(
+      { status: 'unavailable', reason: 'notReady' },
+      {
         status: 'available',
         resources: [
           makeDblResource({ dblEntryUid: 'personal-esv-uid', displayName: 'Personal ESV' }),
         ],
-      });
+      },
+    );
 
     renderWrapper();
     const retry = await screen.findByText('%shareLayoutDialog_retry%');

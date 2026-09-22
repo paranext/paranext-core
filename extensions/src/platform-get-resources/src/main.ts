@@ -276,13 +276,20 @@ function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promis
  * nothing else about the row changes and no data-update event exists to announce the correction. A
  * caller that has just changed local state awaits this first, then re-reads.
  */
-async function refreshResourceFlags(): Promise<void> {
-  // Joining a sync that is already running is not enough, for two reasons: it may have asked the
-  // backend before the change this caller just made, and a background sync does not refresh
-  // `updateAvailable` at all. Let any running sync finish, then start one that is guaranteed to
-  // observe the change and to ask again.
+/**
+ * Runs a flag sync that starts after this call rather than joining one already in flight, which may
+ * have asked the backend before whatever prompted this call. Never rejects.
+ *
+ * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable`
+ */
+async function syncAfterInFlight(shouldRecomputeUpdateStatus: boolean): Promise<void> {
   if (syncInFlight) await syncInFlight;
-  await ensureInstalledFlagsSynced(true);
+  await ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus);
+}
+
+async function refreshResourceFlags(): Promise<void> {
+  // Also refreshes `updateAvailable`, which a background sync never does.
+  await syncAfterInFlight(true);
 }
 
 async function getCachedResources(): Promise<DblResourceCatalog> {
@@ -593,6 +600,27 @@ export async function activate(context: ExecutionActivationContext) {
   // Need to start async floating promise that continues after activation
   // eslint-disable-next-line @typescript-eslint/no-floating-promises
   startBackgroundFetchResources();
+
+  // The derived flags are a reading of local project state, so a change to that state is the one
+  // moment they can be known to be stale. Nothing else re-reads them on its own: an install or a
+  // removal from another window, a Send/Receive, or a resource copied in by hand would otherwise
+  // leave this catalog wrong until someone next opened the dialog. C# debounces the event and
+  // raises it from a directory watcher too, so out-of-process changes arrive here as well.
+  const unsubscribeFromProjectsChanged = papi.network.getNetworkEvent(
+    'platform.onDidChangeProjects',
+  )(() => {
+    // Never `updateAvailable`: only the Get Resources list renders it and that list refreshes it
+    // itself, so recomputing it here would put a second backend round trip on every project change
+    // for a value nothing reads.
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    syncAfterInFlight(false);
+  });
+  context.registrations.add({
+    dispose: async () => {
+      unsubscribeFromProjectsChanged();
+      return true;
+    },
+  });
 
   const refreshIntervalId = setInterval(() => {
     // The mutex returns a floating promise here; we want fire-and-forget interval behavior
