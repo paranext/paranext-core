@@ -1366,6 +1366,30 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 
+## adr-content-zoom-applies-only-to-zoomable-panes: A pane takes content zoom only if it is declared zoomable or marks a zoom area; nothing else is scaled, and only zoomable panes offer zoom
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** UX (2026-09-22) ruled that content zoom exists to make project text readable. Scaling views that show no project data (Home, New Tab), and offering greyed zoom items on them, is wrong.
+- **Decision:**
+  - A pane is *zoomable* when its web-view type is declared in core's content-zoom declaration map (`CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE`), or when it currently reports at least one zoom area.
+  - A pane that is not zoomable is never scaled: no iframe `zoom`, no default, no memory. Its tab menu has no zoom items (removed, not disabled), and its chords and wheel do nothing.
+  - A declared pane with no marker rendered right now is still zoomable. Its chords, wheel and menu act on its declared default area.
+  - Zoomability is published as a renderer-local change event (`onDidChangeContentZoomable`). The tab menu reads it reactively and holds it steady for one open.
+  - Simple mode's tab menu, which holds only the zoom group, therefore does not exist on a non-zoomable tab.
+- **Alternatives:**
+  - **Keep the whole-iframe fallback.** Rejected by UX: it scales chrome.
+  - **Reported areas only.** Rejected: views that mark per text element report no area while empty, so their items and chords would flicker.
+  - **Declared only.** Rejected: third-party views that mark areas would lose zoom.
+  - **Declared AND reported.** Rejected for both reasons.
+- **Consequences:**
+  - URL and area-less views render at 100 % content zoom.
+  - The per-type "marks areas" record and its hidden setting are removed.
+  - Third-party views are zoomable only while a marker is rendered (documented in `Extension-Development-Guide.md` and the `ContentZoomRoot` TSDoc).
+  - The macOS View-menu items stay always enabled and do nothing on a non-zoomable pane.
+  - Only the zoomability is held per open menu, not the whole item list, because Power mode's window targets arrive after the menu opens.
+- **Source:** UX feedback 2026-09-22; epic PT-4575.
+
 ## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
 
 - **Date:** 2026-09-04
@@ -6296,6 +6320,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   moments, and it is why the items are greyed rather than hidden — the shape of the menu does not
   change under the pointer.
 - **Source:** PT-4578 (PR #2821), epic PT-4575.
+- **Amended 2026-09-23 (`adr-content-zoom-applies-only-to-zoomable-panes`):** the zoom items are no
+  longer shown disabled on a tab whose web view marks no zoom area. They are removed on any pane
+  that is not zoomable, and the menu reads zoomability live rather than as a snapshot at open, holding
+  it steady only while one menu is open. The "shown disabled", "snapshot at open" and "greyed rather
+  than hidden" parts above are superseded by that entry, so in Simple mode a non-zoomable tab has no
+  tab menu at all. The zoom-only Simple menu and the hamburger as the Simple-mode editor's entry
+  point still stand; the hamburger's zoom items now sit in a column of their own and are hidden in
+  Power mode, where the tab menu carries them.
 
 ## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
@@ -7862,3 +7894,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
   recorded here by PT-4580; the chord-targeting exception added by PT-4711; the immediate fallback
   and the per-type expectation added by PT-4714.
+- **Amended 2026-09-23 (`adr-content-zoom-applies-only-to-zoomable-panes`):** alternative (c)'s
+  "it is kept only as the fallback for a view that marks no area, and for URL views" and the whole
+  consequence paragraph beginning "The whole-iframe fallback applies as soon as a pane loads…" are
+  superseded by that entry. No view is scaled whole any more, and the per-type record is gone. The
+  rest of this decision (the composition, CSS `zoom` on marked areas, zoom areas as a platform
+  capability) stands.
