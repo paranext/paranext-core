@@ -1,7 +1,7 @@
 /**
  * The editor right-click menu offers the same inserts as the Insert top-menu (footnote,
- * cross-reference, end note, comment — in that order), and inserting an end note creates a real
- * `\fe` note (caller `+`, PT9 shape) that survives the PDP save/USFM echo round-trip.
+ * cross-reference, endnote, comment — in that order), and inserting an endnote creates a real `\fe`
+ * note (caller `+`, PT9 shape) that survives the PDP save/USFM echo round-trip.
  *
  * The context menu is the Lexical ContextMenuPlugin portal INSIDE the editor iframe (the
  * `.typeahead-popover.auto-embed-menu` portal, with `li[role="option"]` items), not the app's Radix
@@ -15,17 +15,18 @@
  * what decides the open menu's other keyboard claims — Enter with nothing highlighted, and the
  * marker palette's backslash — which is why those are asserted here rather than in a unit test.
  *
- * Selecting the item by MOUSE is deliberately not asserted: the editor re-renders while the menu is
- * open, re-creating that portal, so the item detaches mid-click and any such assertion is flaky by
- * construction — a pre-existing trait of this menu that affects the shipped footnote and
- * cross-reference items identically. The keyboard path is unaffected by that churn (the highlight
- * is plugin state, and an auto-retrying locator re-queries the re-created item), so it is asserted
- * here. The insert is additionally driven through the registered `insertEndnoteAtSelection`
- * command, the same web-view callback the menu item invokes.
+ * Selecting the item by MOUSE is deliberately not asserted: `ContextMenuOption`'s constructor mints
+ * a fresh React key on every rebuild of the item list, so any prop the insert callbacks close over
+ * (e.g. the live `scrRef`) remounts every `<li>` — the item itself detaches mid-click, not the
+ * portal around it, and any such assertion would be flaky by construction. The keyboard path is
+ * unaffected by that per-item churn (the highlight is the plugin's own state, and an auto-retrying
+ * locator re-queries the re-created item), so it is asserted here. The final insert is additionally
+ * driven from the visible Insert top menu, exercising the `menus.json` wiring a unit test cannot
+ * reach.
  *
  * Two constraints shape the step order below.
  *
- * 1. Every insert has to put the caret in a VERSE paragraph, because that is what an end note is for:
+ * 1. Every insert has to put the caret in a VERSE paragraph, because that is what an endnote is for:
  *    `\fe` anchors at the caret's reference, and the paragraphs above `\c 1` — the `\id` line,
  *    `\h`, `\toc*`, `\mt*` — are not verses. The chapter's FIRST paragraph is the `\id` line, so
  *    reaching a verse takes a locator that says so.
@@ -58,6 +59,7 @@
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { setWindowHeight } from '../../../fixtures/helpers';
 import {
+  EDITOR_HAMBURGER_SELECTOR,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
@@ -98,7 +100,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     // locator counts one inserted note twice.
     const mainEditor = editorInput.first();
     const endnotes = mainEditor.locator('span.note.usfm_fe');
-    /** The endnotes that landed where an end note belongs — inside a body paragraph. */
+    /** The endnotes that landed where an endnote belongs — inside a body paragraph. */
     const endnotesInVerseParas = mainEditor.locator('p.usfm_p span.note.usfm_fe');
 
     /**
@@ -196,7 +198,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       await expect(contextMenu).toBeAttached({ timeout: 15_000 });
     };
     // Every option's text, in menu order — the built-in Cut/Copy/Paste entries first, then the
-    // host's insert items. Captured once and used by both steps below.
+    // host's insert items. Captured once and used by the steps below.
     let optionTexts: string[] = [];
     // Endnote count the chapter must hold once the insert has landed, set by the insert step and
     // re-checked after the save/echo round-trip.
@@ -212,7 +214,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       expect(insertOptions).toEqual([
         'Insert footnote',
         'Insert cross-reference',
-        'Insert end note',
+        'Insert endnote',
         'Insert comment',
       ]);
     });
@@ -272,6 +274,19 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       const versePara = nextClearVersePara();
       const paraCountBefore = await mainEditor.locator('p').count();
       const textBefore = await versePara.innerText();
+
+      // The plugin opens the menu with its own top-left corner AT the click point, then clamps it
+      // into the viewport if it would overflow — which can leave the (stationary) pointer over an
+      // item under the clamped box, pre-highlighting it via the browser's post-layout hover
+      // recompute with no real pointer motion. Confirming the click leaves room for the menu's full
+      // natural height below it is what makes the `li.selected` assertion below meaningful rather
+      // than incidentally true because this click happened to land away from the clamp zone.
+      const targetBox = await versePara.boundingBox();
+      if (!targetBox) throw new Error('versePara has no bounding box to check clamp room against');
+      const clickY = targetBox.y + targetBox.height / 2;
+      const iframeInnerHeight = await editorContainer.evaluate(() => window.innerHeight);
+      expect(clickY + menuNaturalScrollHeightPx).toBeLessThan(iframeInnerHeight);
+
       await openContextMenu(versePara);
       await expect(contextMenu.locator('li.selected')).toHaveCount(0);
 
@@ -298,7 +313,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     });
 
     await test.step('arrow keys then Enter invoke the highlighted item, not the Enter palette', async () => {
-      const endNoteIndex = optionTexts.indexOf('Insert end note');
+      const endNoteIndex = optionTexts.indexOf('Insert endnote');
       expect(endNoteIndex).toBeGreaterThanOrEqual(0);
       const endnotesBefore = await endnotes.count();
 
@@ -323,7 +338,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       }
       // Proves the shortcuts above did not steal the highlight or close the menu out from under
       // this loop.
-      await expect(contextMenu.locator('li.selected')).toHaveText('Insert end note');
+      await expect(contextMenu.locator('li.selected')).toHaveText('Insert endnote');
 
       const checkNoStrayPalette = await watchForStrayCommandPalette();
       await mainPage.keyboard.press('Enter');
@@ -333,13 +348,13 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       // insert's own focus change would already have shown up in the observer above.
       await expect(endnotes).toHaveCount(endnotesBefore + 1, { timeout: 15_000 });
       await checkNoStrayPalette();
-      // The note has to have landed where an end note belongs. One anchored outside a verse still
+      // The note has to have landed where an endnote belongs. One anchored outside a verse still
       // saves, so a count on its own never notices a caret that never reached the text.
       await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
       endnotesExpected = endnotesBefore + 1;
 
       // None of the insert shortcuts pressed while the menu was open produced anything: only the
-      // end note above landed.
+      // endnote above landed.
       await expect(mainEditor.locator('span.note.usfm_f')).toHaveCount(
         footnoteCountBeforeGuardedShortcuts,
       );
@@ -386,8 +401,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       await expect(editorInput).toHaveCount(1);
     });
 
-    await test.step('inserting an end note creates a \\fe note with the + caller', async () => {
-      expect(optionTexts).toContain('Insert end note');
+    await test.step('inserting an endnote from the visible Insert top menu creates a \\fe note with the + caller', async () => {
       await nextClearVersePara().click();
 
       // Counted here, immediately before the insert, NOT at spec start: the chapter's content is
@@ -395,10 +409,19 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       // attempt may already have written an endnote into. Both make an early baseline read low.
       const endnotesBefore = await endnotes.count();
 
-      await sendPapiCommandWhenRegistered(
-        'platformScriptureEditor.insertEndnoteAtSelection',
-        editorId,
-      );
+      // Driven through the visible UI rather than `sendPapiCommandWhenRegistered`: this is the one
+      // step that exercises the Insert top menu's own `menus.json` wiring — a typo in its
+      // `command` string would break the feature for every user with the unit parity test (which
+      // compares labels and order, not the command name) still green.
+      const hamburger = editorFrame.locator(EDITOR_HAMBURGER_SELECTOR);
+      await expect(hamburger).toBeVisible({ timeout: 15_000 });
+      await hamburger.click();
+      const insertEndnoteMenuItem = editorFrame.getByRole('menuitem', {
+        name: 'Insert endnote',
+        exact: true,
+      });
+      await expect(insertEndnoteMenuItem).toBeVisible({ timeout: 5_000 });
+      await insertEndnoteMenuItem.click();
 
       // Count-based: the chapter may already contain endnotes, so assert this insert added one
       // rather than that any `\fe` exists.
