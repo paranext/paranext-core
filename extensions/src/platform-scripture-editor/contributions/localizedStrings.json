@@ -465,6 +465,30 @@
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
+    },
+    "%webView_scriptureTextGrid_cell_resetZoom%": {
+      "deprecationInfo": {
+        "date": "2026-09-23",
+        "message": "The Text Collection's per-column zoom was removed; the pane's content zoom alone sizes its text, through the tab menu, the zoom shortcuts and Ctrl/⌘+wheel. Retired with no replacement key."
+      }
+    },
+    "%webView_scriptureTextGrid_cell_zoomIn%": {
+      "deprecationInfo": {
+        "date": "2026-09-23",
+        "message": "The Text Collection's per-column zoom was removed; the pane's content zoom alone sizes its text, through the tab menu, the zoom shortcuts and Ctrl/⌘+wheel. Retired with no replacement key."
+      }
+    },
+    "%webView_scriptureTextGrid_cell_zoomOptions%": {
+      "deprecationInfo": {
+        "date": "2026-09-23",
+        "message": "The Text Collection's per-column zoom was removed; the pane's content zoom alone sizes its text, through the tab menu, the zoom shortcuts and Ctrl/⌘+wheel. Retired with no replacement key."
+      }
+    },
+    "%webView_scriptureTextGrid_cell_zoomOut%": {
+      "deprecationInfo": {
+        "date": "2026-09-23",
+        "message": "The Text Collection's per-column zoom was removed; the pane's content zoom alone sizes its text, through the tab menu, the zoom shortcuts and Ctrl/⌘+wheel. Retired with no replacement key."
+      }
     }
   }
 }

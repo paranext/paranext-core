@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import type React from 'react';
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   BOOK_NOT_AVAILABLE_KEY,
@@ -12,10 +12,6 @@ import {
   NOT_INSTALLED_KEY,
   UNAVAILABLE_KEY,
   ResourceCellView,
-  ZOOM_IN_KEY,
-  ZOOM_OUT_KEY,
-  RESET_ZOOM_KEY,
-  ZOOM_OPTIONS_KEY,
   COPY_KEY,
 } from './resource-cell-view.component';
 
@@ -310,8 +306,8 @@ describe('ResourceCellView name display', () => {
     const cell = container.firstElementChild?.firstElementChild;
     const name = screen.getByText('WEB');
     const verse = screen.getByText('Blessed');
-    // Header mode: the name sits in a header band (which also hosts the zoom kebab) that is a direct
-    // child of the cell root; unlike inline mode, the band does not wrap the content — the content
+    // Header mode: the name sits in a header band (which also hosts the reorder grip) that is a
+    // direct child of the cell root; unlike inline mode, the band does not wrap the content — the content
     // is a sibling.
     const band = name.parentElement;
     expect(band?.parentElement).toBe(cell);
@@ -321,256 +317,81 @@ describe('ResourceCellView name display', () => {
   });
 });
 
-const zoomLabels = {
+const menuStrings = {
   [UNAVAILABLE_KEY]: 'Resource unavailable',
   [LOADING_KEY]: 'Resource is loading…',
   [FAILED_KEY]: 'Download failed',
-  [ZOOM_IN_KEY]: 'Zoom In',
-  [ZOOM_OUT_KEY]: 'Zoom Out',
-  [RESET_ZOOM_KEY]: 'Reset Zoom',
-  [ZOOM_OPTIONS_KEY]: 'Zoom options',
   [COPY_KEY]: 'Copy',
 };
 
-describe('ResourceCellView zoom UI', () => {
-  const menuLabels = {
-    zoomIn: 'Zoom In',
-    zoomOut: 'Zoom Out',
-    reset: 'Reset Zoom',
-    options: 'Zoom options',
-  };
+/** Every element from `element` up to and including `root`, innermost first. */
+function ancestorsUpTo(element: HTMLElement, root: Element): HTMLElement[] {
+  const chain: HTMLElement[] = [];
+  for (let current = element.parentElement; current; current = current.parentElement) {
+    chain.push(current);
+    if (current === root) break;
+  }
+  return chain;
+}
 
-  it('applies the zoom factor to the content wrapper', () => {
-    renderCells(
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={zoomLabels}
-        editor={<span>verse</span>}
-        zoomFactor={1.4}
-        zoomMenuLabels={menuLabels}
-      />,
-    );
-    // jsdom doesn't serialize `zoom` into the style attribute string, so we walk up to the
-    // per-resource zoom element and read its CSSOM style.zoom directly.
-    // Structure: span → div.p-2 (inner padding wrapper) → div (per-resource zoom applied here);
-    // the pane's `text-collection` marker one level further out carries the layout classes.
-    const content = screen.getByText('verse').parentElement?.parentElement;
-    expect(content).not.toBeNull();
-    expect(content instanceof HTMLElement && content.style.zoom).toBe('1.4');
-  });
-
-  it('has no zoom style on the content wrapper when zoomFactor is 1', () => {
-    renderCells(
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={zoomLabels}
-        editor={<span>verse-reset</span>}
-        zoomFactor={1}
-        zoomMenuLabels={menuLabels}
-      />,
-    );
-    // contentStyle is undefined when zoomFactor === 1, so React removes the style attribute.
-    // jsdom does not serialize `zoom` into the attribute string; read the CSSOM property directly.
-    // An unset CSSOM property is falsy (empty string or undefined depending on jsdom version).
-    const content = screen.getByText('verse-reset').parentElement;
-    expect(content).not.toBeNull();
-    expect(content?.style.zoom).toBeFalsy();
-  });
-
-  it('has no zoom style on the content wrapper when zoomFactor is undefined', () => {
-    renderCells(
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={zoomLabels}
-        editor={<span>verse-no-zoom</span>}
-        zoomMenuLabels={menuLabels}
-      />,
-    );
-    // No zoomFactor prop → contentStyle is undefined → React omits the style attribute entirely.
-    // An unset CSSOM property is falsy (empty string or undefined depending on jsdom version).
-    const content = screen.getByText('verse-no-zoom').parentElement;
-    expect(content).not.toBeNull();
-    expect(content?.style.zoom).toBeFalsy();
-  });
-
-  it('opens the kebab menu and fires zoom callbacks', async () => {
-    // Radix DropdownMenu relies on PointerEvent sequences that fireEvent.click() does not
-    // synthesize. userEvent v14 with pointerEventsCheck: 0 works reliably in jsdom.
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const onZoomIn = vi.fn();
-    renderCells(
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={zoomLabels}
-        editor={<span>verse</span>}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        onZoomIn={onZoomIn}
-        zoomMenuLabels={menuLabels}
-      />,
-    );
-    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom In' }));
-    expect(onZoomIn).toHaveBeenCalledTimes(1);
-  });
-
-  it('clicking the kebab button does NOT bubble a click to the parent (stopPropagation)', async () => {
-    // Activation now lives on the parent verse `listitem`, which opens the chapter-context split on
-    // click. The kebab Button stops click propagation so opening the zoom menu never also activates
-    // the parent — the dropdown still opens via Radix's pointerdown handler.
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const onParentClick = vi.fn();
-    render(
-      // The wrapper div is a test-only click sink used to assert propagation; it is not a real
-      // interactive control, so the a11y interactivity rules do not apply here.
-      // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
-      <div onClick={onParentClick}>
+describe('ResourceCellView right-click menu', () => {
+  it.each(['inline', 'header'] as const)(
+    '%s layout: offers Copy and no zoom items',
+    (nameDisplay) => {
+      renderCells(
         <ResourceCellView
           state="ready"
           label="WEB"
           textDirection="ltr"
-          localizedStrings={zoomLabels}
+          localizedStrings={menuStrings}
           editor={<span>verse</span>}
-          zoomFactor={1}
-          canZoomIn
-          canZoomOut
-          zoomMenuLabels={menuLabels}
-        />
-      </div>,
-    );
-    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
-    // The parent's click handler must NOT have fired — the kebab stops click propagation.
-    expect(onParentClick).not.toHaveBeenCalled();
-    // The dropdown menu should have opened (the menu is rendered by Radix).
-    expect(screen.getByRole('menu')).toBeInTheDocument();
-  });
+          nameDisplay={nameDisplay}
+        />,
+      );
 
-  it('disables Zoom In at max and Zoom Out at min', async () => {
-    // Radix DropdownMenu relies on PointerEvent sequences that fireEvent.click() does not
-    // synthesize. userEvent v14 with pointerEventsCheck: 0 works reliably in jsdom.
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+      fireEvent.contextMenu(screen.getByText('verse'));
+
+      expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
+      expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+      expect(screen.queryByRole('menuitem', { name: /zoom/i })).not.toBeInTheDocument();
+    },
+  );
+
+  it('offers no zoom kebab in the header', () => {
     renderCells(
       <ResourceCellView
         state="ready"
         label="WEB"
         textDirection="ltr"
-        localizedStrings={zoomLabels}
+        localizedStrings={menuStrings}
         editor={<span>verse</span>}
-        zoomFactor={3}
-        canZoomIn={false}
-        canZoomOut
-        zoomMenuLabels={menuLabels}
+        nameDisplay="header"
+        showDragHandle
+        reorderHandleLabel="Reorder WEB"
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
-    expect(screen.getByRole('menuitem', { name: 'Zoom In' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    // Positive control: the header renders its one button, the reorder grip.
+    expect(screen.getByRole('button', { name: 'Reorder WEB' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('disables Reset Zoom when canReset is false', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+  it('leaves the browser menu alone on a cell whose resource is not installed', () => {
     renderCells(
       <ResourceCellView
-        state="ready"
+        state="unavailable"
         label="WEB"
         textDirection="ltr"
-        localizedStrings={zoomLabels}
-        editor={<span>verse</span>}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        canReset={false}
-        zoomMenuLabels={menuLabels}
+        localizedStrings={{ ...menuStrings, [NOT_INSTALLED_KEY]: 'Resource not installed' }}
+        editor={undefined}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
-    expect(screen.getByRole('menuitem', { name: 'Reset Zoom' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    const event = createEvent.contextMenu(screen.getByText('Resource not installed'));
+    fireEvent(screen.getByText('Resource not installed'), event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
-  it('enables Reset Zoom when canReset is true (default)', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    renderCells(
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={zoomLabels}
-        editor={<span>verse</span>}
-        zoomFactor={1.4}
-        canZoomIn
-        canZoomOut
-        zoomMenuLabels={menuLabels}
-      />,
-    );
-    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
-    expect(screen.getByRole('menuitem', { name: 'Reset Zoom' })).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-  });
-
-  it('uses a resource-specific aria-label for the kebab button when options label contains a template', () => {
-    const templateMenuLabels = {
-      zoomIn: 'Zoom In',
-      zoomOut: 'Zoom Out',
-      reset: 'Reset Zoom',
-      options: 'Zoom options for {resourceName}',
-    };
-    renderCells(
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={zoomLabels}
-        editor={<span>verse</span>}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        zoomMenuLabels={templateMenuLabels}
-      />,
-    );
-    expect(screen.getByRole('button', { name: 'Zoom options for WEB' })).toBeInTheDocument();
-  });
-
-  it('right-click opens the zoom menu at the cursor', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    renderCells(
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={zoomLabels}
-        editor={<span>verse</span>}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        zoomMenuLabels={menuLabels}
-      />,
-    );
-
-    // Fire a contextmenu event inside the cell to trigger the capture-phase handler on the root.
-    fireEvent.contextMenu(screen.getByText('verse'));
-
-    // The right-click zoom menu should open (Zoom In menuitem is visible and actionable).
-    expect(await screen.findByRole('menuitem', { name: 'Zoom In' })).toBeInTheDocument();
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom In' }));
-  });
-
-  it('right-click shows an enabled Copy item when text is selected', () => {
+  it('shows an enabled Copy item when text is selected', () => {
     // Spy on window.getSelection to simulate selected text at the time of right-click.
     // The component only calls toString() on the Selection; implementing the full ~30-member
     // Selection interface in a test fixture would be far worse than this single cast.
@@ -584,12 +405,8 @@ describe('ResourceCellView zoom UI', () => {
         state="ready"
         label="WEB"
         textDirection="ltr"
-        localizedStrings={zoomLabels}
+        localizedStrings={menuStrings}
         editor={<span>verse</span>}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        zoomMenuLabels={menuLabels}
       />,
     );
 
@@ -602,7 +419,7 @@ describe('ResourceCellView zoom UI', () => {
     getSelectionSpy.mockRestore();
   });
 
-  it('right-click shows a disabled Copy item when no text is selected', () => {
+  it('shows a disabled Copy item when no text is selected', () => {
     // Spy on window.getSelection to simulate no selection.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
@@ -614,12 +431,8 @@ describe('ResourceCellView zoom UI', () => {
         state="ready"
         label="WEB"
         textDirection="ltr"
-        localizedStrings={zoomLabels}
+        localizedStrings={menuStrings}
         editor={<span>verse</span>}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        zoomMenuLabels={menuLabels}
       />,
     );
 
@@ -654,12 +467,8 @@ describe('ResourceCellView zoom UI', () => {
         state="ready"
         label="WEB"
         textDirection="ltr"
-        localizedStrings={zoomLabels}
+        localizedStrings={menuStrings}
         editor={<span>verse</span>}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        zoomMenuLabels={menuLabels}
       />,
     );
 
@@ -670,35 +479,6 @@ describe('ResourceCellView zoom UI', () => {
     expect(writeText).toHaveBeenCalledWith('selected text');
 
     getSelectionSpy.mockRestore();
-  });
-
-  it('right-click menu shows Copy above zoom items (not in kebab)', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    renderCells(
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={zoomLabels}
-        editor={<span>verse</span>}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        zoomMenuLabels={menuLabels}
-      />,
-    );
-
-    // Right-click menu has both Copy and zoom items.
-    fireEvent.contextMenu(screen.getByText('verse'));
-    expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Zoom In' })).toBeInTheDocument();
-
-    // Close the right-click menu and open the kebab — Copy must NOT appear there.
-    const menu = screen.getByRole('menu');
-    fireEvent.keyDown(menu, { key: 'Escape' });
-
-    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
-    expect(screen.queryByRole('menuitem', { name: 'Copy' })).not.toBeInTheDocument();
   });
 });
 
@@ -770,23 +550,14 @@ describe('ResourceCellView reorder grip', () => {
 });
 
 describe('ResourceCellView content zoom marker', () => {
-  const menuLabels = {
-    zoomIn: 'Zoom In',
-    zoomOut: 'Zoom Out',
-    reset: 'Reset Zoom',
-    options: 'Zoom options',
-  };
-
   function renderMarkedCell(nameDisplay: 'inline' | 'header') {
     return renderCells(
       <ResourceCellView
         state="ready"
         label="WEB"
         textDirection="ltr"
-        localizedStrings={zoomLabels}
+        localizedStrings={menuStrings}
         editor={<span>marked verse</span>}
-        zoomFactor={1.4}
-        zoomMenuLabels={menuLabels}
         nameDisplay={nameDisplay}
         showDragHandle
         reorderHandleLabel="Reorder WEB"
@@ -794,16 +565,8 @@ describe('ResourceCellView content zoom marker', () => {
     );
   }
 
-  /** The verse's nearest ancestor carrying the per-resource inline zoom. */
-  function perResourceZoomElement(verse: HTMLElement): HTMLElement | undefined {
-    const ancestors: HTMLElement[] = [];
-    for (let element = verse.parentElement; element; element = element.parentElement)
-      ancestors.push(element);
-    return ancestors.find((element) => element.style.zoom === '1.4');
-  }
-
   it.each(['inline', 'header'] as const)(
-    '%s layout: marks one wrapper, with the text-collection area, around the element carrying the per-resource zoom',
+    '%s layout: marks one wrapper, with the text-collection area, around the cell text, and nothing zooms that text but the marker',
     (nameDisplay) => {
       const { container } = renderMarkedCell(nameDisplay);
       const markers = container.querySelectorAll('[data-platform-content-zoom-root]');
@@ -812,12 +575,15 @@ describe('ResourceCellView content zoom marker', () => {
       expect(marker.getAttribute('data-platform-content-zoom-root')).toBe('text-collection');
 
       const verse = screen.getByText('marked verse');
-      const zoomed = perResourceZoomElement(verse);
-      expect(zoomed).toBeDefined();
-      // An inline `zoom` on the marker itself would replace the pane's zoom instead of multiplying.
-      expect(zoomed).not.toBe(marker);
-      expect(marker instanceof HTMLElement && marker.style.zoom).toBeFalsy();
-      expect(zoomed !== undefined && marker.contains(zoomed)).toBe(true);
+      const chain = ancestorsUpTo(verse, marker);
+      // Positive control: the walk reached the marker, so it covered every element in between.
+      expect(chain.at(-1)).toBe(marker);
+      // CSS `zoom` on any of these would multiply with the area's level (or, on the marker itself,
+      // replace it), so the cell text would no longer be sized by the content zoom alone.
+      [verse, ...chain].forEach((element) => {
+        expect(element.style.zoom).toBeFalsy();
+        expect(element.getAttribute('style') ?? '').not.toMatch(/zoom/i);
+      });
     },
   );
 
@@ -830,10 +596,9 @@ describe('ResourceCellView content zoom marker', () => {
     },
   );
 
-  it('header layout: leaves the reorder grip and the zoom kebab outside the marker', () => {
+  it('header layout: leaves the reorder grip outside the marker', () => {
     const { container } = renderMarkedCell('header');
     const marker = container.querySelector('[data-platform-content-zoom-root]');
     expect(marker?.contains(screen.getByRole('button', { name: 'Reorder WEB' }))).toBe(false);
-    expect(marker?.contains(screen.getByRole('button', { name: 'Zoom options' }))).toBe(false);
   });
 });

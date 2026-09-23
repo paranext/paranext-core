@@ -58,24 +58,57 @@ const ALLOWED_CONTENT_ZOOM_ROOT_COUNTS: Readonly<Record<string, number>> = {
 };
 
 describe('content zoom markers (Text Collection grid)', () => {
+  const GRID_DIR = path.join(SRC_DIR, 'scripture-text-grid');
   const grid = source('scripture-text-grid.web-view.tsx');
   const cell = source(path.join('scripture-text-grid', 'resource-cell-view.component.tsx'));
+  /** The grid web view and every source file of the grid it renders. */
+  const gridSources = [
+    path.join(SRC_DIR, 'scripture-text-grid.web-view.tsx'),
+    ...listSourceFiles(GRID_DIR),
+  ].map((filePath) => ({
+    filePath: path.relative(SRC_DIR, filePath),
+    text: readFileSync(filePath, 'utf-8'),
+  }));
 
-  it('leaves the grid body unmarked, so the headers, grips and kebabs inside it keep their size', () => {
+  it('leaves the grid body unmarked, so the headers and grips inside it keep their size', () => {
     expect(grid).toContain(
       '<div className="tw:flex-1 tw:overflow-hidden"> {gridBodyState === \'catalogError\'',
     );
     expect(grid).not.toContain('<ContentZoomRoot');
   });
 
-  it('marks each cell’s text with the text-collection area, wrapping the per-resource zoom element, in both layouts', () => {
+  it('marks each cell’s text with the text-collection area directly around that text, in both layouts', () => {
     expect(
-      cell.match(/<ContentZoomRoot area="text-collection"[^>]*> ?<div style={contentStyle}>/g),
+      cell.match(
+        /<ContentZoomRoot area="text-collection"[^>]*> ?(?:{stateContent}|<div className="tw:p-2">{stateContent}<\/div>) ?<\/ContentZoomRoot>/g,
+      ),
     ).toHaveLength(2);
   });
 
-  it('never puts the marker on the element carrying the per-resource inline zoom', () => {
-    expect(cell).not.toMatch(/<ContentZoomRoot[^>]*style={contentStyle}/);
+  it('gives the cell text no zoom of its own, so the text-collection area alone sizes it', () => {
+    // Positive control: the file still renders the cell text this test is about.
+    expect(cell).toContain('{stateContent}');
+    expect(cell).not.toMatch(/\bzoom\s*:/);
+  });
+
+  it('handles no Ctrl/⌘+wheel of its own, so the wheel over a cell reaches the platform’s content zoom', () => {
+    // Positive control: the sweep reads the grid component, which registers other listeners.
+    expect(gridSources.map(({ filePath }) => filePath)).toContain(
+      path.join('scripture-text-grid', 'scripture-text-grid.component.tsx'),
+    );
+    const wheelHandlers = gridSources
+      .filter(({ text }) => /['"]wheel['"]|\bonWheel/.test(text))
+      .map(({ filePath }) => filePath);
+    expect(wheelHandlers).toEqual([]);
+  });
+
+  it('never reads the retired per-resource zoom state, so a level saved by an earlier version is ignored', () => {
+    // Positive control: the sweep sees the web view's other state keys, spelled the same way.
+    expect(grid).toContain("useWebViewState<ResourceCollectionViewMode>('viewMode'");
+    const readers = gridSources
+      .filter(({ text }) => text.includes('zoomByResourceId'))
+      .map(({ filePath }) => filePath);
+    expect(readers).toEqual([]);
   });
 });
 

@@ -166,12 +166,6 @@ export type ContentZoomDeclaration = {
  * Invariant, not checked at runtime: every listed type runs scripts. A declared pane opened with
  * `allowScripts: false` would offer zoom items that can only write a variable nothing in the pane
  * reads, because no bootstrap runs there to scale anything.
- *
- * `platformScriptureEditor.scriptureTextGrid` is a documented exception, not a precedent. Inside
- * its `text-collection` area, each resource cell still carries its own independent zoom
- * (Ctrl/Cmd+wheel and the right-click menu, plus a hover kebab in the grid's chapter view only —
- * its default verse view shows none; see `use-resource-zoom-input.hook.ts`). That per-resource
- * factor nests inside the area's CSS zoom and multiplies with it rather than replacing it.
  */
 export const CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE: ReadonlyMap<
   string,

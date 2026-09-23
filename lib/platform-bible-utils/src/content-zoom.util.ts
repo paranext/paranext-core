@@ -1,8 +1,8 @@
 /**
  * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
- * operations enforce. Both the platform's own per-pane zoom and the Text Collection grid's
- * per-resource zoom scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these
- * from here rather than keeping their own copy.
+ * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both
+ * scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these from here rather
+ * than keeping their own copy.
  */
 
 /**
