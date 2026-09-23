@@ -3,7 +3,7 @@
  * step navigation; a step renders only its body. Navigation always resets `canProceed` to `false` —
  * a step that wants Next/Finish enabled immediately calls `setCanProceed(true)` in a mount effect;
  * a step that gates on async work calls `setCanProceed(true)` only when the precondition is met. A
- * step that wants to offer a Skip path calls `setCanSkip(true)` to surface the shell's Skip button.
+ * step that offers "Don't sync yet" calls `setCanDeclineSync(true)` to receive `onDeclineSync`.
  * Sibling step components implement real steps by swapping entries in the shell's `stepComponents`
  * map.
  */
@@ -17,10 +17,10 @@ export interface FirstRunStepProps {
   /** Return to the previous step. Absent on the first step (Language). */
   onBack?: () => void;
   /**
-   * Decline the current step and finish the wizard — on the sync-consent step, "Don't sync yet".
-   * Present when the current step has called `setCanSkip(true)`.
+   * "Don't sync yet": withhold automatic sync for the rest of the app session, then finish the
+   * wizard. Present when the current step has called `setCanDeclineSync(true)`.
    */
-  onSkip?: () => void;
+  onDeclineSync?: () => void;
   /**
    * Report whether the shell's Next button should be enabled. If not called, the shell's prior
    * state persists — which is disabled for any step reached via navigation (the shell resets to
@@ -29,24 +29,25 @@ export interface FirstRunStepProps {
    */
   setCanProceed?: (canProceed: boolean | undefined) => void;
   /**
-   * Request the shell to show (`true`) or hide (`false`) its Skip button. Call with `true` on mount
-   * to expose a step-specific skip path; call with `false` if the skip is no longer valid (e.g.
-   * after an async action starts).
+   * Offer (`true`) or withdraw (`false`) the "Don't sync yet" decline, supplied as `onDeclineSync`.
+   * Call with `true` on mount to offer it; call with `false` if declining is no longer valid (e.g.
+   * after a sync starts). Only a step that asks about sync should call this: `onDeclineSync` defers
+   * automatic sync for the session.
    */
-  setCanSkip?: (canSkip: boolean) => void;
+  setCanDeclineSync?: (canDeclineSync: boolean) => void;
   /**
    * Call with `true` on mount when this step renders its own complete footer row (Back / secondary
    * / primary, e.g. via `WizardStepForm`) rather than using the shell's footer. The shell then
-   * renders no footer of its own, so the two do not stack. `onBack`/`onSkip` are still supplied —
-   * the step decides where to place them in its own row. Steps that use the shell's Next/Finish
-   * button leave this unset. When set, `canProceed` is ignored (it only gates the shell's own Next
-   * button).
+   * renders no footer of its own, so the two do not stack. `onBack`/`onDeclineSync` are still
+   * supplied — the step decides where to place them in its own row. Steps that use the shell's
+   * Next/Finish button leave this unset. When set, `canProceed` is ignored (it only gates the
+   * shell's own Next button).
    */
   setManagesOwnFooter?: (managesOwnFooter: boolean) => void;
   /**
    * Whether the shell is running an async action, such as finishing the wizard. A step that renders
-   * its own footer disables the shell-supplied actions (`onBack`, `onSkip`) while this is `true`,
-   * as the shell's own footer does.
+   * its own footer disables the shell-supplied actions (`onBack`, `onDeclineSync`) while this is
+   * `true`, as the shell's own footer does.
    */
   isBusy?: boolean;
   /**

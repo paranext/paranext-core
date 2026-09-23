@@ -56,10 +56,10 @@ const KEYS: LocalizeKey[] = [
 
 /**
  * Owns the wizard chrome (title, step indicator) and the shared footer (Back / Next), plus step
- * navigation. A step that offers an early exit calls `setCanSkip(true)` to surface the shell's
- * decline button ("Don't sync yet" — see the render site). Runs ordinary forward/back navigation
- * seeded from `entryStep` (the startup reducer already chose where to start). Derives the Next busy
- * state from the async action and surfaces a thrown action as an inline error.
+ * navigation. A step that offers an early exit calls `setCanDeclineSync(true)` to surface the
+ * shell's decline button ("Don't sync yet" — see the render site). Runs ordinary forward/back
+ * navigation seeded from `entryStep` (the startup reducer already chose where to start). Derives
+ * the Next busy state from the async action and surfaces a thrown action as an inline error.
  */
 export function FirstRunShell({
   entryStep,
@@ -72,7 +72,7 @@ export function FirstRunShell({
 }) {
   const [step, setStep] = useState<FirstRunStep>(entryStep);
   const [canProceed, setCanProceed] = useState<boolean | undefined>(true);
-  const [canSkip, setCanSkip] = useState(false);
+  const [canDeclineSync, setCanDeclineSync] = useState(false);
   const [managesOwnFooter, setManagesOwnFooter] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
@@ -101,7 +101,7 @@ export function FirstRunShell({
   // Mirror of isBusy for the synchronous re-entrancy guard: React batches state, so two calls in the
   // same tick both read the same stale `isBusy` from the render closure. The ref is updated
   // synchronously here, so a second call sees the in-flight write. Guarding inside runAction covers
-  // every async entry point (both the final-step completeFirstRun path and onSkip) in one place.
+  // every async entry point (both the final-step completeFirstRun path and onDeclineSync) in one place.
   const isBusyRef = useRef(false);
   const runAction = useCallback(async (action: () => void | Promise<void>) => {
     if (isBusyRef.current) return;
@@ -127,7 +127,7 @@ export function FirstRunShell({
     isBusyRef.current = false;
     setIsBusy(false);
     setCanProceed(false);
-    setCanSkip(false);
+    setCanDeclineSync(false);
     setManagesOwnFooter(false);
     setStep(next);
   }, []);
@@ -153,7 +153,7 @@ export function FirstRunShell({
   );
 
   // No useMemo: `declineWizardSync` is already stable, so both branches are referentially stable.
-  const onSkip = canSkip ? declineWizardSync : undefined;
+  const onDeclineSync = canDeclineSync ? declineWizardSync : undefined;
 
   // React refs passed to DOM elements must be initialized with null, not undefined.
   // eslint-disable-next-line no-null/no-null
@@ -204,9 +204,9 @@ export function FirstRunShell({
         <StepComponent
           onNext={onNext}
           onBack={onBack}
-          onSkip={onSkip}
+          onDeclineSync={onDeclineSync}
           setCanProceed={setCanProceed}
-          setCanSkip={setCanSkip}
+          setCanDeclineSync={setCanDeclineSync}
           setManagesOwnFooter={setManagesOwnFooter}
           isBusy={isBusy}
           allowContinueWithoutRegistration={allowContinueWithoutRegistration}
@@ -220,7 +220,7 @@ export function FirstRunShell({
 
         {/* Steps that render their own footer (via WizardStepForm) set managesOwnFooter so the shell
             does not stack a second Back/decline/Next row beneath the step's own. Both are still
-            handed to the step through onBack/onSkip; the step places them in its own row. */}
+            handed to the step through onBack/onDeclineSync; the step places them in its own row. */}
         {!managesOwnFooter && (
           <div className="tw:flex tw:items-center tw:justify-between">
             <div>
@@ -231,10 +231,10 @@ export function FirstRunShell({
               )}
             </div>
             <div className="tw:flex tw:gap-2">
-              {onSkip && (
-                // Label is sync-specific; if a future step also calls setCanSkip(true) for a
-                // different reason, the shell will need to accept a label callback from it.
-                <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
+              {onDeclineSync && (
+                // Fallback for a sync-declining step that uses the shell's footer; SyncConsentStep
+                // renders its own.
+                <Button variant="ghost" onClick={onDeclineSync} disabled={isBusy}>
                   {strings['%firstRun_button_dontSyncYet%']}
                 </Button>
               )}

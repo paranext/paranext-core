@@ -4,7 +4,7 @@ import { settingsService } from '@shared/services/settings.service';
 import {
   deferAutomaticSyncForSession,
   getAutomaticSyncConsent,
-  resetAutomaticSyncDeferral,
+  resetAutomaticSyncDeferralForTesting,
 } from '@main/first-run-consent.util';
 
 vi.mock('@shared/services/settings.service', () => ({
@@ -19,7 +19,7 @@ const mockLoggerWarn = vi.mocked(logger.warn);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resetAutomaticSyncDeferral();
+  resetAutomaticSyncDeferralForTesting();
 });
 
 /**

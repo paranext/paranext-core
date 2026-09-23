@@ -11,6 +11,10 @@ import * as commandService from '@shared/services/command.service';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { waitForScriptureWorkspaceReady } from '@main/startup-readiness.util';
+import {
+  deferAutomaticSyncForSession,
+  resetAutomaticSyncDeferralForTesting,
+} from '@main/first-run-consent.util';
 import { performStartupTasks, STARTUP_SYNC_RETRY_BUDGET_MS } from './startup-tasks';
 import { createSettingsStub, READ_THROWS } from './settings-stub.test-util';
 
@@ -106,6 +110,7 @@ async function startupWithSettingsChangedDuringReadinessWait(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetAutomaticSyncDeferralForTesting();
   mockSendCommand.mockResolvedValue(undefined);
   mockRequestNoRetry.mockResolvedValue(undefined);
   mockWaitForReady.mockResolvedValue({ outcome: 'ready' });
@@ -169,6 +174,16 @@ describe('performStartupTasks', () => {
     // window-close consent skips log at info for the same reason.
     expect(mockLoggerInfo).toHaveBeenCalledWith(
       expect.stringContaining('Startup sync skipped: first-run sync consent not confirmed'),
+    );
+  });
+
+  it('does NOT fire sync in simple mode after the user chose "Don\'t sync yet" this session', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true });
+    deferAutomaticSyncForSession();
+    await performStartupTasks();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining('automatic sync deferred for this session'),
     );
   });
 
@@ -711,6 +726,32 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).not.toHaveBeenCalled();
       expect(mockLoggerDebug).toHaveBeenCalledWith(
         expect.stringContaining('Startup sync skipped after the readiness wait'),
+      );
+    });
+
+    it('does not fire the sync when the user chooses "Don\'t sync yet" during the readiness wait', async () => {
+      stubSettings(SIMPLE_MODE_SETTINGS);
+      let resolveReadiness: (result: { outcome: 'ready' }) => void = () => {};
+      mockWaitForReady.mockReturnValue(
+        new Promise((resolve) => {
+          resolveReadiness = resolve;
+        }),
+      );
+
+      const startupPromise = performStartupTasks();
+      await vi.waitFor(() => expect(mockWaitForReady).toHaveBeenCalled());
+      // Positive control: nothing withheld the sync before the wait, so the skip below can only
+      // come from the post-wait re-check.
+      expect(mockLoggerInfo).not.toHaveBeenCalledWith(expect.stringContaining('skipped'));
+      deferAutomaticSyncForSession();
+      resolveReadiness({ outcome: 'ready' });
+      await startupPromise;
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /Startup sync skipped after the readiness wait.*automatic sync deferred for this session/,
+        ),
       );
     });
 
