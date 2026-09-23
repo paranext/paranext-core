@@ -15,7 +15,10 @@ import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
 
 type LocalizedStringsFile = {
-  metadata?: Record<string, { fallbackKey?: string }>;
+  metadata?: Record<
+    string,
+    { fallbackKey?: string; deprecationInfo?: { date: string; message: string } }
+  >;
   localizedStrings: Record<string, Record<string, string>>;
 };
 
@@ -269,6 +272,30 @@ describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) =>
 
   it('Spanish label differs from English', () => {
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The Text Collection cell's zoom menu is gone; content zoom alone sizes the cell text. Shipped keys
+// are immutable, so the four menu strings keep their values and are marked deprecated instead.
+describe('retired Text Collection per-column zoom strings', () => {
+  const retiredKeys = [
+    '%webView_scriptureTextGrid_cell_zoomIn%',
+    '%webView_scriptureTextGrid_cell_zoomOut%',
+    '%webView_scriptureTextGrid_cell_resetZoom%',
+    '%webView_scriptureTextGrid_cell_zoomOptions%',
+  ];
+
+  it.each(retiredKeys)('%s keeps its shipped values and is marked deprecated', (key) => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+    expect(localizedStrings.es[key]).toBeTruthy();
+    expect(metadata?.[key]?.deprecationInfo?.date).toBe('2026-09-23');
+    expect(metadata?.[key]?.deprecationInfo?.message).toBeTruthy();
+  });
+
+  it('is no longer requested by the cell', () => {
+    // Positive control: the cell still requests its other strings from this file.
+    expect(RESOURCE_CELL_STRING_KEYS).toContain('%webView_scriptureTextGrid_cell_copy%');
+    expect(RESOURCE_CELL_STRING_KEYS.filter((key) => retiredKeys.includes(key))).toEqual([]);
   });
 });
 

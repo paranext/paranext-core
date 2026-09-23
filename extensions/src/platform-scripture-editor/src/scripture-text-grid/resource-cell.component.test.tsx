@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
 import { ResourceCell } from './resource-cell.component';
@@ -45,6 +45,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_status_bookNotAvailable%': 'Book not in this text',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
+      '%webView_scriptureTextGrid_cell_copy%': 'Copy',
     },
     false,
   ],
@@ -482,86 +483,43 @@ describe('ResourceCell name display', () => {
     const { container } = render(<ResourceCell {...props} viewMode="chapter" />);
     const cellRoot = container.firstElementChild;
     const name = screen.getByText('WEB');
-    // Header mode: the name sits in a header band (which also hosts the zoom kebab) that is a
-    // direct child of the cell root, not an inline row shared with the editor.
+    // Header mode: the name sits in a header band that is a direct child of the cell root, not an
+    // inline row shared with the editor.
     expect(name.parentElement?.parentElement).toBe(cellRoot);
   });
 });
 
-describe('ResourceCell zoom', () => {
-  it('passes the controller factor to the cell content as a zoom style', () => {
-    const zoom = {
-      getZoom: () => 1.4,
-      setZoomForResource: vi.fn(),
-      adjustZoom: vi.fn(),
-      resetZoom: vi.fn(),
-      pruneToResourceIds: vi.fn(),
-    };
+describe('ResourceCell right-click menu', () => {
+  it('opens the cell’s own menu with Copy and no zoom items, and gives the text no zoom of its own', () => {
     setUsjResult(chapter, false);
-    render(
-      <div role="grid">
-        <div role="row">
-          <ResourceCell
-            resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }}
-            scrRef={scrRef}
-            setScrRef={() => {}}
-            viewMode="chapter"
-            zoom={zoom}
-            zoomMenuLabels={{
-              zoomIn: 'Zoom In',
-              zoomOut: 'Zoom Out',
-              reset: 'Reset Zoom',
-              options: 'Zoom options',
-            }}
-          />
-        </div>
-      </div>,
-    );
-    // jsdom does not serialize CSS `zoom` into the style attribute string, so
-    // `[style*="zoom"]` selectors fail. Instead check the CSSOM property directly on
-    // the content wrapper element: the first child of the cell's `text-collection` marker.
-    const contentWrapper = document.querySelector(
-      '[data-platform-content-zoom-root="text-collection"] > div',
-    );
-    expect(contentWrapper).not.toBeNull();
-    expect(contentWrapper instanceof HTMLElement && contentWrapper.style.zoom).toBe('1.4');
+    render(<ResourceCell {...props} viewMode="chapter" />);
+
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+
+    expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+    // jsdom does not serialize CSS `zoom` into the style attribute, so read the CSSOM property of
+    // every element between the text and the cell's `text-collection` marker.
+    const marker = document.querySelector('[data-platform-content-zoom-root="text-collection"]');
+    expect(marker).not.toBeNull();
+    const zoomed: Element[] = [];
+    for (
+      let element = screen.getByTestId('editorial').parentElement;
+      element && element !== marker?.parentElement;
+      element = element.parentElement
+    )
+      if (element.style.zoom) zoomed.push(element);
+    expect(zoomed).toEqual([]);
   });
 
-  it('does NOT forward a contextMenu to the editor when zoom and zoomMenuLabels are provided', () => {
-    // Zoom items are now surfaced via the view's own right-click DropdownMenu (intercept in
-    // capture phase), not via EditorOptions.contextMenu. The editor options should never contain
-    // a contextMenu so the editor's built-in menu and our menu don't conflict.
-    const zoom = {
-      getZoom: () => 1,
-      setZoomForResource: vi.fn(),
-      adjustZoom: vi.fn(),
-      resetZoom: vi.fn(),
-      pruneToResourceIds: vi.fn(),
-    };
+  it('does NOT forward a contextMenu to the editor', () => {
+    // The cell intercepts `contextmenu` in the capture phase and opens its own menu, so the editor
+    // must never receive a menu of its own that would conflict with it.
     setUsjResult(chapter, false);
-    render(
-      <div role="grid">
-        <div role="row">
-          <ResourceCell
-            resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }}
-            scrRef={scrRef}
-            setScrRef={() => {}}
-            viewMode="chapter"
-            zoom={zoom}
-            zoomMenuLabels={{
-              zoomIn: 'Zoom In',
-              zoomOut: 'Zoom Out',
-              reset: 'Reset Zoom',
-              options: 'Zoom options',
-            }}
-          />
-        </div>
-      </div>,
-    );
+    render(<ResourceCell {...props} viewMode="chapter" />);
 
     expect(capturedEditorOptions).toHaveBeenCalled();
     const [lastOptions] = capturedEditorOptions.mock.lastCall ?? [];
-    // The editor must not receive a contextMenu — zoom is handled by the view's own right-click menu.
     expect(lastOptions?.contextMenu).toBeUndefined();
   });
 });

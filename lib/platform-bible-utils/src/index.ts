@@ -147,16 +147,11 @@ export {
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
 export { computeEffectiveStructureProtection } from './structure-protection.util';
-export { createContentZoomWheelReader } from './content-zoom-wheel.util';
 export { clampZoom, roundZoom, adjustZoomFactor } from './content-zoom.util';
 
 // Types
 export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
 export type { NameablePhysicalKey } from './keyboard-util';
-export type {
-  ContentZoomWheelReader,
-  ContentZoomWheelReaderOptions,
-} from './content-zoom-wheel.util';
 export type {
   DebouncedFunction,
   DeepPartial,
