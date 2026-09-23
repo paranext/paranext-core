@@ -70,10 +70,10 @@ describe('computeRows — case-insensitive open-tab join', () => {
     expect(abcRows.every((r) => r.isMuted === false)).toBe(true);
   });
 
-  // The same casing mismatch reaches the SELECTION, not just the open-tab join: a selection can
-  // arrive lowercased from a persisted layout or a web view opened with a tab-derived id. Display
-  // and click have to agree on which project a selection names, or a row renders unchecked while
-  // clicking it clears the selection that was really there.
+  // Selection folds in the pair modes too, not just in `project` mode. The trigger label folds
+  // unconditionally, so a raw comparison here splits the component against itself: the trigger
+  // names the project while no row shows a check, `selectedRowRef` never attaches, and the
+  // open-popover scroll-into-view has nothing to scroll to.
   it('marks the selected row regardless of id casing (project mode)', () => {
     const rows = computeRows({
       mode: 'project',
@@ -110,6 +110,18 @@ describe('computeRows — case-insensitive open-tab join', () => {
     expect(selected.map((r) => [r.projectId, r.scrollGroupId])).toEqual([['ABC123', A]]);
   });
 
+  it('marks the selected pair regardless of id casing (projectScrollGroup mode)', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { projectId: 'abc123', scrollGroupId: A },
+    });
+    const selected = rows.filter((r) => r.isSelected);
+    expect(selected).toHaveLength(1);
+    expect(selected[0].projectId).toBe('ABC123');
+  });
+
   it('does not duplicate a bound-but-closed row for a differently-cased pair', () => {
     // The synthetic-row dedupe compares the pair against the rows already built. Comparing raw
     // would miss the match and append a second row for a project that is already listed.
@@ -137,6 +149,22 @@ describe('computeRows — case-insensitive open-tab join', () => {
     expect(closed!.projectId).toBe('ABC123');
     expect(closed!.scrollGroupId).toBe(C);
     expect(closed!.isSelected).toBe(true);
+  });
+
+  // The same synthetic row in the single-pair mode, which the `project-multi` cases above do not
+  // reach: a raw comparison drops the row entirely under mixed casing, losing its Open affordance
+  // rather than merely leaving it unchecked.
+  it('builds the bound-but-closed row for a selected pair whose casing differs', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects: upperProjects,
+      openTabs: [{ projectId: 'abc123', scrollGroupId: A }],
+      selection: { projectId: 'abc123', scrollGroupId: B },
+    });
+    const boundButClosed = rows.filter((r) => r.isBoundButClosed);
+    expect(boundButClosed).toHaveLength(1);
+    expect(boundButClosed[0].projectId).toBe('ABC123');
+    expect(boundButClosed[0].scrollGroupId).toBe(B);
   });
 });
 

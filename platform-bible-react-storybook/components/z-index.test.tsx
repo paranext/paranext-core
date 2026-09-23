@@ -53,6 +53,8 @@ import {
   Z_INDEX_FIRST_RUN,
   Z_INDEX_MODAL,
   Z_INDEX_MODAL_BACKDROP,
+  Z_INDEX_NESTED_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
   Z_INDEX_ONBOARDING_TOUR,
   Z_INDEX_OVERLAY,
   Z_INDEX_TOOLTIP,
@@ -71,6 +73,28 @@ beforeAll(() => {
 describe('z-index scale ordering', () => {
   test('modal content sits above its own backdrop', () => {
     expect(Z_INDEX_MODAL).toBeGreaterThan(Z_INDEX_MODAL_BACKDROP);
+  });
+
+  // A modal opened from another modal has to cover the one that launched it, backdrop included.
+  // Reusing the flat modal tier puts the inner backdrop BELOW the host's content, so the host stays
+  // bright while Radix makes it inert — a panel that looks live and swallows every click.
+  test('keeps a nested modal and its backdrop above the modal that hosts them', () => {
+    expect(Z_INDEX_NESTED_MODAL_BACKDROP).toBeGreaterThan(Z_INDEX_MODAL);
+    expect(Z_INDEX_NESTED_MODAL).toBeGreaterThan(Z_INDEX_NESTED_MODAL_BACKDROP);
+  });
+
+  // ...but not above tooltips: controls inside a nested modal carry them (the embedded pickers'
+  // close button does), and a tooltip rendering behind the surface that triggered it is invisible.
+  test('keeps tooltips above the nested modal tier', () => {
+    expect(Z_INDEX_TOOLTIP).toBeGreaterThan(Z_INDEX_NESTED_MODAL);
+  });
+
+  // Nor above the popover tier. A nested modal's own content opens popovers — the resource picker
+  // embedded in Share Layout renders its language filter on `PopoverContent` — and a popover that
+  // paints behind the modal that opened it is unusable. This holds today only because
+  // `Z_INDEX_TOOLTIP` happens to sit between the two, so it needs saying in its own right.
+  test('keeps popover-tier content above the nested modal tier', () => {
+    expect(Z_INDEX_ABOVE_DOCK).toBeGreaterThan(Z_INDEX_NESTED_MODAL);
   });
 
   test('overlay content sits above modal content', () => {
