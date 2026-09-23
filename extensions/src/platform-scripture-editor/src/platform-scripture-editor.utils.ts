@@ -26,6 +26,7 @@ import type { MarkerContent, Usj, USJ_VERSION } from '@eten-tech-foundation/scri
 import {
   aggregateUnsubscribers,
   selectableParagraphMarkers,
+  PROGRAMMATICALLY_APPLIED_MARKERS,
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
@@ -503,21 +504,17 @@ export async function convertScriptureRangeToEditorRange(
  */
 export const availableScrollGroupIds = [undefined, ...new Array(5).keys()];
 
-// `id` is excluded from `selectableParagraphMarkers` — it must never be a choice in the switcher menu —
-// but it should still be named when it's what the caret/selection is actually on (the trigger label
-// and gutter tooltip should read "id - Book identifier", not the generic misc fallback or a raw
-// marker echo). Kept as a separate set rather than folding into `selectableParagraphMarkers`, so "can the
-// user pick this from the switcher" and "does this have a real displayed title" stay two different
-// questions that can have different answers.
-const DISPLAY_ONLY_PARAGRAPH_MARKERS: ReadonlySet<string> = new Set(['id']);
-
 /**
  * True when a marker has a real localized title available via {@link getParagraphMarkerTitle} —
  * either because it's offered by the switcher ({@link selectableParagraphMarkers}) or because it's
- * one of the display-only exceptions ({@link DISPLAY_ONLY_PARAGRAPH_MARKERS}).
+ * one of {@link PROGRAMMATICALLY_APPLIED_MARKERS} (excluded from the switcher, but still named when
+ * it's what the caret/selection is actually on — e.g. "c - Chapter Number" rather than the generic
+ * misc fallback or a raw marker echo).
  */
 export function isDisplayableParagraphMarkerTitle(marker: string): boolean {
-  return selectableParagraphMarkers.includes(marker) || DISPLAY_ONLY_PARAGRAPH_MARKERS.has(marker);
+  return (
+    selectableParagraphMarkers.includes(marker) || PROGRAMMATICALLY_APPLIED_MARKERS.has(marker)
+  );
 }
 
 /**

@@ -4026,8 +4026,13 @@ export declare function isBlockMarker(marker: string): boolean;
  */
 export declare function isCharacterMarker(marker: string): boolean;
 /**
+ * `MarkerType.Paragraph` markers that are never valid to select via a plain paragraph-style retag,
+ * because they are instead applied through dedicated, structure-aware mechanisms.
+ */
+export declare const PROGRAMMATICALLY_APPLIED_MARKERS: ReadonlySet<string>;
+/**
  * Every USFM paragraph-style marker known to {@link usfmMarkers} that a user can validly choose to
- * apply. (Excludes programmatically applied markers.)
+ * apply via a plain paragraph-style retag. (Excludes {@link PROGRAMMATICALLY_APPLIED_MARKERS}.)
  */
 export declare const selectableParagraphMarkers: readonly string[];
 /**

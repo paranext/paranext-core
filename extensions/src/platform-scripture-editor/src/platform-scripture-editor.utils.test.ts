@@ -2645,7 +2645,7 @@ describe('generateParagraphMenuListItems', () => {
     expect(items.map((item) => item.marker).sort()).toEqual([...selectableParagraphMarkers].sort());
   });
 
-  it('offers li2, s1, bare q, lh, and b, and excludes id', () => {
+  it('offers li2, s1, bare q, lh, b, and cp, and excludes id and c', () => {
     const { ref } = makeMockEditorRef();
     const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
     const markers = items.map((item) => item.marker);
@@ -2655,7 +2655,9 @@ describe('generateParagraphMenuListItems', () => {
     expect(markers).toContain('q'); // bare `q`, distinct from `q1`
     expect(markers).toContain('lh');
     expect(markers).toContain('b');
-    expect(markers).not.toContain('id');
+    expect(markers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
+    expect(markers).not.toContain('id'); // programmatically-applied only
+    expect(markers).not.toContain('c'); // programmatically-applied only
   });
 
   it('fills the detail column from the marker description, so the paragraph menu is not the one menu with an empty second column', () => {
@@ -2736,13 +2738,15 @@ describe('isDisplayableParagraphMarkerTitle', () => {
     ).toBe(true);
   });
 
-  // `id` is applied programmatically and must never be a switcher choice, but the trigger label and
-  // gutter tooltip should still name it (`id - Book identifier`) when the caret/selection is
-  // actually on the id line, rather than falling back to the generic "Miscellaneous Marker" text or
-  // a raw `\id` echo.
-  it('is true for id even though id is excluded from selectableParagraphMarkers', () => {
+  // `id` and `c` are applied through their own dedicated mechanisms and must never be a switcher
+  // choice, but the trigger label and gutter tooltip should still name one when the caret/selection
+  // is actually on it, rather than falling back to the generic "Miscellaneous Marker" text or a raw
+  // marker echo.
+  it('is true for id and c even though both are excluded from selectableParagraphMarkers', () => {
     expect(selectableParagraphMarkers).not.toContain('id');
+    expect(selectableParagraphMarkers).not.toContain('c');
     expect(isDisplayableParagraphMarkerTitle('id')).toBe(true);
+    expect(isDisplayableParagraphMarkerTitle('c')).toBe(true);
   });
 
   it('is false for a marker with no title at all', () => {
