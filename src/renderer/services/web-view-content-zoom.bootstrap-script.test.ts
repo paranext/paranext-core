@@ -46,15 +46,32 @@ function wheel(
  * Presses or releases a modifier key physically, which is the only thing that tells a real
  * Ctrl/⌘+wheel from the ctrl+wheel Chromium synthesizes for a trackpad pinch.
  */
-function modifierKey(type: 'keydown' | 'keyup', physicalKey: 'Control' | 'Meta'): void {
+function modifierKey(
+  type: 'keydown' | 'keyup',
+  physicalKey: 'Control' | 'Meta',
+  repeat = false,
+): void {
   window.dispatchEvent(
     new KeyboardEvent(type, {
       bubbles: true,
       key: physicalKey,
       ctrlKey: physicalKey === 'Control',
       metaKey: physicalKey === 'Meta',
+      repeat,
     }),
   );
+}
+
+let platformSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+/**
+ * Makes the bootstrap installed next run on the given `navigator.platform`. The bootstrap reads it
+ * once, when it is installed, so this has to come before `install`. Jsdom's own value is empty,
+ * which the bootstrap reads as not macOS.
+ */
+function stubPlatform(platform: 'MacIntel' | 'Win32' | 'Linux x86_64'): void {
+  platformSpy?.mockRestore();
+  platformSpy = vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue(platform);
 }
 
 /**
@@ -160,6 +177,8 @@ describe('content-zoom bootstrap script', () => {
     // eslint-disable-next-line no-underscore-dangle
     window.__platformContentZoom?.destroy();
     window.matchMedia = originalMatchMedia;
+    platformSpy?.mockRestore();
+    platformSpy = undefined;
     vi.useRealTimers();
   });
 
@@ -661,6 +680,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('takes one wheel notch as one zoom step on a macOS mouse, whose notch is a few pixels, however long the pause between notches', async () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-notch-macos', TWO_AREAS);
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -681,6 +701,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('takes a macOS notch as a notch while Ctrl is held with the focus outside this iframe', async () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-notch-unfocused', TWO_AREAS);
     // The bootstrap runs inside the web view's iframe, so keydown only reaches it while that iframe
     // has focus — but a wheel is delivered by hit test, so Ctrl held while the focus sits in another
@@ -695,6 +716,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('lets what the pointer saw go stale, so one modified pointer event cannot outlaw pinching for good', () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-pinch-stale', TWO_AREAS);
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -716,6 +738,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('lets a real keyup overrule what the pointer saw, without waiting for that to go stale', () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-pinch-keyup', TWO_AREAS);
     // The key really was down, and the pointer saw it — but a keyup is the event that ends a key,
     // and it is fresher than any reading taken before it. A pinch moves no cursor, so waiting for
@@ -929,7 +952,8 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-cold', 1, 'main']]);
   });
 
-  it('takes the very same events as wheel notches while a modifier key is physically held', async () => {
+  it('takes the very same events as wheel notches on macOS while a modifier key is physically held', async () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-pinch-key', TWO_AREAS);
     modifierKey('keydown', 'Control');
     try {
@@ -953,6 +977,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('forgets a modifier key the window was holding when it lost focus', () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-pinch-blur', TWO_AREAS);
     // The keyup for a key held while focus moves away is delivered to somebody else, so a flag
     // left set here would send every later pinch down the notch path for the life of the pane.
@@ -962,6 +987,73 @@ describe('content-zoom bootstrap script', () => {
       wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
     }
     expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(4);
+  });
+
+  /**
+   * Replays a touchpad pinch made while Ctrl is physically held, frame by frame as Chromium on
+   * Windows delivers it: every frame a tiny `deltaY` carrying a whole tick of `wheelDeltaY`, and
+   * the held key's auto-repeat keydowns arriving in between.
+   */
+  function pinchWithCtrlHeld(frames: number, deltaY: number, target: HTMLElement): void {
+    for (let i = 0; i < frames; i += 1) {
+      modifierKey('keydown', 'Control', i > 0);
+      wheel(
+        { deltaY, deltaX: 0, deltaMode: 0, ctrlKey: true, wheelDeltaY: deltaY < 0 ? 120 : -120 },
+        target,
+      );
+    }
+  }
+
+  it.each(['Win32', 'Linux x86_64'] as const)(
+    'on %s takes a pinch made while Ctrl is held as travel through the zoom scale, not a step per frame',
+    async (platform) => {
+      stubPlatform(platform);
+      const { bound } = install('wv-pinch-ctrl-held', TWO_AREAS);
+      try {
+        // 20 frames of 0.2 px are 4 px of travel, short of the 9.53 px one step is worth. Read as
+        // notches, each frame's whole tick of wheelDeltaY would be a step of its own.
+        pinchWithCtrlHeld(20, -0.2, byId('verse'));
+        await oneFrame();
+        expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+        // 40 more make 12 px in all: one step.
+        pinchWithCtrlHeld(40, -0.2, byId('verse'));
+        await oneFrame();
+        expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-ctrl-held', 1, 'main']]);
+      } finally {
+        modifierKey('keyup', 'Control');
+      }
+    },
+  );
+
+  it('on Windows still takes a mouse notch made while Ctrl is held as one step', async () => {
+    stubPlatform('Win32');
+    const { bound } = install('wv-notch-ctrl-held-windows', TWO_AREAS);
+    try {
+      modifierKey('keydown', 'Control');
+      wheel({ deltaY: -100, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([
+        ['wv-notch-ctrl-held-windows', 1, 'main'],
+      ]);
+    } finally {
+      modifierKey('keyup', 'Control');
+    }
+  });
+
+  it('on macOS takes the same small frames with Ctrl physically held as notches, a step each', async () => {
+    stubPlatform('MacIntel');
+    const { bound } = install('wv-notch-ctrl-held-macos', TWO_AREAS);
+    try {
+      // The very stream the Windows and Linux cases read as a pinch. A macOS mouse notch is small
+      // enough to pass for a pinch frame, so there the held key is what reads these as notches.
+      pinchWithCtrlHeld(20, -0.2, byId('verse'));
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([
+        ['wv-notch-ctrl-held-macos', 20, 'main'],
+      ]);
+    } finally {
+      modifierKey('keyup', 'Control');
+    }
   });
 
   it('cancels every modified wheel over a zoom area, including one too small to step', () => {
