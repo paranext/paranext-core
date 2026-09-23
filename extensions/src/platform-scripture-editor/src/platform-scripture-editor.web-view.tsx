@@ -3698,23 +3698,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     const editorTree = (
       <TwoStepDeleteTooltipOverlay>
-        <EditorKeyboardShortcuts editorRef={editorRef}>
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={setScrRefNoScroll}
-            options={options}
-            logger={logger}
-            onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
-            onSelectionChange={handleSelectionChange}
-            onStateChange={(state) => {
-              setCanUndo(state.canUndo);
-              setCanRedo(state.canRedo);
-              setBlockMarker(state.blockMarker);
-              setContextMarker(state.contextMarker);
-            }}
-          />
-        </EditorKeyboardShortcuts>
+        {/* The Scripture text's `main` zoom area holds the editor and nothing else. The overlays
+            around it — this one's Backspace/Delete hint, the paragraph-marker tooltips and the
+            Simple-mode character-marker bar — stay at interface scale and place themselves from
+            rect differences, which a zoomed element reports in the same viewport pixels. The area
+            sits INSIDE this overlay rather than around it because the overlay positions its hint
+            relative to its own wrapper: inside the zoom, the hint's CSS offsets would be multiplied
+            by the zoom factor and land away from the verse. The wrapper holds no text itself. */}
+        <ContentZoomRoot>
+          <EditorKeyboardShortcuts editorRef={editorRef}>
+            <Editorial
+              ref={editorRef}
+              scrRef={scrRef}
+              onScrRefChange={setScrRefNoScroll}
+              options={options}
+              logger={logger}
+              onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
+              onSelectionChange={handleSelectionChange}
+              onStateChange={(state) => {
+                setCanUndo(state.canUndo);
+                setCanRedo(state.canRedo);
+                setBlockMarker(state.blockMarker);
+                setContextMarker(state.contextMarker);
+              }}
+            />
+          </EditorKeyboardShortcuts>
+        </ContentZoomRoot>
       </TwoStepDeleteTooltipOverlay>
     );
 
@@ -3899,17 +3908,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
-          The Scripture text zoom area: the toolbar and the footnotes-pane divider live outside it,
-          in the surrounding layout; the editor and everything it renders inline (including the
-          Simple-mode character-marker bar) scale with the text. Content that portals out of it
-          (menus, pop-ups) is not inside the area: the library's popovers, dropdown menus and
-          tooltips opened from inside follow it through the area `ContentZoomRoot` provides, while
-          the editor's own right-click menu stays at interface scale. */}
+          The zoom area is inside `renderEditor()`, around the editor tree only. */}
       <InPortal node={editorPortalNode}>
         <PortalContents>
-          <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
-            {renderEditor()}
-          </ContentZoomRoot>
+          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderEditor()}</div>
         </PortalContents>
       </InPortal>
       <div

@@ -28,12 +28,37 @@ function collapseWhitespace(text: string): string {
 describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => {
   const source = collapseWhitespace(readFileSync(WEB_VIEW_FILE, 'utf-8'));
 
-  it('wraps the reverse-portal editor contents in a ContentZoomRoot', () => {
-    // Structure only — the marker's own class list is styling, not part of the zoom contract this
-    // test guards.
+  it('marks the editor tree itself, not the reverse-portal wrapper around every editor state', () => {
+    // The portal wrapper is a plain div: the no-project, loading and book-not-available states
+    // rendered inside it are UI, not project text.
+    // Prettier keeps the wrapper and its only child on one line when they fit, so the optional
+    // spaces accept either layout.
     expect(source).toMatch(
-      /<InPortal node={editorPortalNode}> <PortalContents> <ContentZoomRoot[ >]/,
+      /<InPortal node={editorPortalNode}> <PortalContents> <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"> ?{renderEditor\(\)} ?<\/div>/,
     );
+    expect(source).toMatch(
+      /const editorTree = \( <TwoStepDeleteTooltipOverlay> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot> <EditorKeyboardShortcuts editorRef={editorRef}>/,
+    );
+  });
+
+  it('keeps every control and non-text state outside the text area', () => {
+    const open = source.indexOf('<ContentZoomRoot>');
+    const close = source.indexOf('</ContentZoomRoot>', open);
+    expect(open).toBeGreaterThan(-1);
+    expect(close).toBeGreaterThan(open);
+    const inside = source.slice(open, close);
+
+    expect(inside).toContain('<Editorial');
+    [
+      'CharacterMarkerBar',
+      'EmptyChapterView',
+      'BookNotAvailableView',
+      'ResourceBookNotAvailable',
+      '<Spinner',
+      'TwoStepDeleteTooltipOverlay',
+      'ParagraphMarkerTooltipOverlay',
+      '{workaround}',
+    ].forEach((control) => expect(inside).not.toContain(control));
   });
 
   it('hands the editor no context-menu container, so its right-click menu stays at interface scale', () => {
