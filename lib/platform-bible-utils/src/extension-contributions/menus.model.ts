@@ -55,6 +55,13 @@ export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
 export type MenuColumnWithHeader = OrderedExtensibleContainer & {
   /** Key that represents the text of the header text of the column */
   label: LocalizeKey;
+  /**
+   * Set to `true` to show this column's items without its header text in a menu that heads each
+   * section with its column's header, such as a web view's tab menu. The label still names the
+   * section for assistive technology. The application menubar ignores this, because there the
+   * header is what opens the column.
+   */
+  isHeaderHidden?: boolean;
 };
 
 export type MenuItemBase = OrderedItem & {
@@ -321,6 +328,11 @@ export const menuDocumentSchema = {
             isExperimental: {
               description:
                 'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
+              type: 'boolean',
+            },
+            isHeaderHidden: {
+              description:
+                "Set to `true` to show this column's items without its header text in a menu that heads each section with its column's header, such as a web view's tab menu. The label still names the section for assistive technology. The application menubar ignores this, because there the header is what opens the column.",
               type: 'boolean',
             },
           },
