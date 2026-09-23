@@ -108,12 +108,15 @@ export function createContentZoomWheelReader(
   // of three lines, 33 with that setting at one line, 120 on Linux, and as few as 4 on macOS - so
   // a pixel threshold zooms at a different speed on each of them and stops responding altogether
   // on the smallest. `wheelDeltaY` is Chromium's own and absent elsewhere; there the pixel delta
-  // stands in at the 100 px per tick that `deltaMode` 0 is defined around.
+  // stands in at the 100 px per tick that `deltaMode` 0 is defined around. It stands in too when
+  // `wheelDeltaY` is 0: that property is an integer rounded from the pixel delta, so a slow
+  // two-finger scroll's sub-pixel frames all report 0 while their travel is real, and reading
+  // them as 0 ticks would leave the gesture inert however long it runs.
   const WHEEL_TICK_DELTA = 120;
   const WHEEL_FALLBACK_TICK_PIXELS = 100;
   const ticksOf = (event: LegacyWheelEvent): number => {
     const { wheelDeltaY } = event;
-    return typeof wheelDeltaY === 'number' && Number.isFinite(wheelDeltaY)
+    return typeof wheelDeltaY === 'number' && Number.isFinite(wheelDeltaY) && wheelDeltaY !== 0
       ? -wheelDeltaY / WHEEL_TICK_DELTA
       : event.deltaY / WHEEL_FALLBACK_TICK_PIXELS;
   };

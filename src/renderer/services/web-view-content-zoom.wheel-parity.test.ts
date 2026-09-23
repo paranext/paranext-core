@@ -8,6 +8,48 @@ const AREA_HTML = '<div id="area" data-platform-content-zoom-root=""><p>text</p>
 /** One frame of a wheel gesture, as both sides receive it. */
 type Frame = { deltaY: number; wheelDeltaY?: number; deltaMode?: number };
 
+/**
+ * Something other than a wheel frame that both sides hear from the same window: a physical modifier
+ * key going down or up, a pointer event reporting the modifier state, the window losing focus, or
+ * the monotonic clock moving on.
+ */
+type Signal =
+  | { key: 'keydown' | 'keyup'; physicalKey: 'Control' | 'Meta' }
+  | { pointer: { ctrlKey: boolean; metaKey: boolean } }
+  | { blur: true }
+  | { advanceMs: number };
+
+/** One step of a sequence: a wheel frame, or a signal both sides hear. */
+type Step = Frame | Signal;
+
+const isFrame = (step: Step): step is Frame => 'deltaY' in step;
+
+/** Dispatches a signal once on the window, where both sides listen for it. */
+function dispatchSignal(signal: Signal): void {
+  if ('key' in signal)
+    window.dispatchEvent(
+      new KeyboardEvent(signal.key, {
+        key: signal.physicalKey,
+        ctrlKey: signal.physicalKey === 'Control' && signal.key === 'keydown',
+        metaKey: signal.physicalKey === 'Meta' && signal.key === 'keydown',
+      }),
+    );
+  // jsdom has no PointerEvent constructor; both sides read only the modifier flags, which a
+  // MouseEvent of the same type carries identically.
+  else if ('pointer' in signal)
+    window.dispatchEvent(new MouseEvent('pointermove', { ...signal.pointer }));
+  else if ('blur' in signal) window.dispatchEvent(new Event('blur'));
+  else vi.advanceTimersByTime(signal.advanceMs);
+}
+
+/**
+ * Three frames small enough to be read as a pinch by size alone but carrying a whole notch of
+ * `wheelDeltaY` each, as a macOS mouse notch does. Read as notches they are 3 steps; read as pinch
+ * travel (12 px against a ~9.53 px step) they are 1. Which of the two a side reads them as is what
+ * its physical-modifier tracking decides, so every modifier sequence below ends with these.
+ */
+const SMALL_NOTCHES: Frame[] = Array.from({ length: 3 }, () => ({ deltaY: -4, wheelDeltaY: 120 }));
+
 /** Builds one wheel event; `wheelDeltaY` is Chromium's own and is what the notch path reads. */
 function wheelEvent({ deltaY, wheelDeltaY, deltaMode = 0 }: Frame): WheelEvent {
   const event = new WheelEvent('wheel', {
@@ -27,11 +69,14 @@ function wheelEvent({ deltaY, wheelDeltaY, deltaMode = 0 }: Frame): WheelEvent {
  * The sequences both sides must agree on: a single notch each way, a burst of notches, a burst that
  * reverses direction mid-gesture, a burst of fractional ticks whose remainder carries across a
  * rounding boundary, a slow pinch, a brisk pinch whose frames would clear the size window on their
- * own, a fallback with no `wheelDeltaY`, and a line-mode wheel each way. Every sequence's expected
- * total is non-zero and direction-specific — never an equal-and-opposite pair — so a side that
- * mishandles it cannot land on the right total by cancellation.
+ * own, a fallback with no `wheelDeltaY`, a line-mode wheel each way, a notch just outside the pinch
+ * window, the physical-modifier tracking that tells a notch from a pinch (a held Control or Meta, a
+ * pointer event reporting Ctrl, that reading going stale, a keyup or a later pointer event
+ * overruling it, the window losing focus), and a slow Ctrl+scroll whose `wheelDeltaY` rounds to 0.
+ * Every sequence's expected total is non-zero and direction-specific — never an equal-and-opposite
+ * pair — so a side that mishandles it cannot land on the right total by cancellation.
  */
-const SEQUENCES: { name: string; frames: Frame[] }[] = [
+const SEQUENCES: { name: string; frames: Step[] }[] = [
   { name: 'one notch in', frames: [{ deltaY: -100, wheelDeltaY: 120 }] },
   { name: 'one notch out', frames: [{ deltaY: 100, wheelDeltaY: -120 }] },
   {
@@ -103,6 +148,64 @@ const SEQUENCES: { name: string; frames: Frame[] }[] = [
   // implements the branch at all, so it could never catch a regression here.
   { name: 'a line-mode wheel in', frames: [{ deltaY: -3, deltaMode: 1 }] },
   { name: 'a line-mode wheel out', frames: [{ deltaY: 3, deltaMode: 1 }] },
+  // A single frame just outside the size window that opens a pinch (`exp(0.06) - 1` ≈ 0.062 against
+  // 0.05) carrying a whole notch, so a side whose window were wider would read it as 6 px of pinch
+  // travel — no step at all — instead of the notch's one.
+  { name: 'a notch just outside the pinch window', frames: [{ deltaY: -6, wheelDeltaY: 120 }] },
+  // Physical-modifier tracking: which frames are notches and which are a pinch. Each sequence below
+  // ends in SMALL_NOTCHES, which total 3 as notches and 1 as a pinch, so a side that tracks a
+  // modifier differently lands on the other total.
+  {
+    name: 'small notches with Control physically held',
+    frames: [{ key: 'keydown', physicalKey: 'Control' }, ...SMALL_NOTCHES],
+  },
+  {
+    name: 'small notches with Meta physically held',
+    frames: [{ key: 'keydown', physicalKey: 'Meta' }, ...SMALL_NOTCHES],
+  },
+  {
+    name: 'small notches after a pointer event reporting Ctrl',
+    frames: [{ pointer: { ctrlKey: true, metaKey: false } }, ...SMALL_NOTCHES],
+  },
+  {
+    name: 'a pinch once a pointer reading of Ctrl has gone stale',
+    frames: [
+      { pointer: { ctrlKey: true, metaKey: false } },
+      // Past the 2 s a pointer reading is trusted for.
+      { advanceMs: 2500 },
+      ...SMALL_NOTCHES,
+    ],
+  },
+  {
+    name: 'a pinch after a keyup overrules a pointer reading of Ctrl',
+    frames: [
+      { pointer: { ctrlKey: true, metaKey: false } },
+      { key: 'keyup', physicalKey: 'Control' },
+      ...SMALL_NOTCHES,
+    ],
+  },
+  {
+    name: 'a pinch after a pointer event reports a held Control released',
+    frames: [
+      { key: 'keydown', physicalKey: 'Control' },
+      { pointer: { ctrlKey: false, metaKey: false } },
+      ...SMALL_NOTCHES,
+    ],
+  },
+  {
+    name: 'a pinch after the window loses focus with Control held',
+    frames: [{ key: 'keydown', physicalKey: 'Control' }, { blur: true }, ...SMALL_NOTCHES],
+  },
+  {
+    // A slow two-finger scroll with Ctrl held: Chromium's integer `wheelDeltaY` rounds each frame's
+    // sub-pixel `deltaY` to 0, so the travel has to be read from the pixel delta instead. 200
+    // frames of 0.3 px is 60 px, past the half tick that rounds to one step.
+    name: 'a slow Ctrl+scroll whose wheelDeltaY rounds to 0',
+    frames: [
+      { key: 'keydown', physicalKey: 'Control' },
+      ...Array.from({ length: 200 }, () => ({ deltaY: -0.3, wheelDeltaY: 0 })),
+    ],
+  },
 ];
 
 // Outside what this test pins: the reader clamps the step count PER EVENT (`clampSteps` inside
@@ -119,6 +222,9 @@ describe('content-zoom wheel reading: bootstrap and platform-bible-utils agree',
   let frameQueue: FrameRequestCallback[] = [];
 
   beforeEach(() => {
+    // Only the monotonic clock both sides time pinch latches and pointer readings with, so a
+    // sequence decides how much time passes between its steps.
+    vi.useFakeTimers({ toFake: ['performance'] });
     frameQueue = [];
     // The bootstrap coalesces the notch path onto an animation frame; queue callbacks instead of
     // running them inline (a same-tick invocation would re-enter `requestZoomSteps` and clobber
@@ -136,6 +242,7 @@ describe('content-zoom wheel reading: bootstrap and platform-bible-utils agree',
     // eslint-disable-next-line no-underscore-dangle
     window.__platformContentZoom?.destroy();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   const flushFrames = () => {
@@ -151,9 +258,22 @@ describe('content-zoom wheel reading: bootstrap and platform-bible-utils agree',
       const { bound } = install('web-view-1', AREA_HTML);
       const area = document.getElementById('area');
       if (!area) throw new Error('the marked area is missing from the fixture');
-      frames.forEach((frame) => {
-        area.dispatchEvent(wheelEvent(frame));
-      });
+      // Both sides are live at once, so a signal dispatched on the window reaches both of them at
+      // the same moment and each wheel frame is handed to both before the next step runs.
+      const reader = createContentZoomWheelReader();
+      let readerSteps = 0;
+      try {
+        frames.forEach((step) => {
+          if (!isFrame(step)) {
+            dispatchSignal(step);
+            return;
+          }
+          area.dispatchEvent(wheelEvent(step));
+          readerSteps += reader.read(wheelEvent(step), 'main');
+        });
+      } finally {
+        reader.dispose();
+      }
       flushFrames();
       // `act()` hands the bound helper a positive count to zoom in and a negative one to zoom
       // out, which is the reader's own convention, so the two sides are summed the same way.
@@ -165,17 +285,7 @@ describe('content-zoom wheel reading: bootstrap and platform-bible-utils agree',
       // `ctrlKey` from `wheelEvent()` would make every sequence resolve to 0 on both sides, and the
       // equality check below would still pass at 0 === 0.
       expect(bootstrapSteps).not.toBe(0);
-
-      const reader = createContentZoomWheelReader();
-      try {
-        const readerSteps = frames.reduce(
-          (total, frame) => total + reader.read(wheelEvent(frame), 'main'),
-          0,
-        );
-        expect(readerSteps).toBe(bootstrapSteps);
-      } finally {
-        reader.dispose();
-      }
+      expect(readerSteps).toBe(bootstrapSteps);
     });
   });
 });
