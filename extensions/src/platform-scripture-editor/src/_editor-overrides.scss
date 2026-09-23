@@ -235,8 +235,12 @@ button.toolbar-item {
 // there is room, and the menu still can't outgrow the panel when there isn't.
 // Needs the `.typeahead-popover` qualifier to out-specify that rule — the plugin puts both classes
 // on the menu's outer element and nests a second `.typeahead-popover` inside it.
-// The editor package carries this same rule; drop this override when the vendored `_editor.scss`
-// is next refreshed.
+// Drop this override once `paranext/scripture-editors`' own editor stylesheet caps
+// `.typeahead-popover.auto-embed-menu ul` to the viewport itself — check that repo directly, not
+// merely whether `_editor.scss` was refreshed: the fix is not on `scripture-editors` `main` today,
+// and the upstream PR this is adapted from (eten-tech-foundation/scripture-editors#555) closed
+// unmerged, so a routine refresh from either source reinstates the fixed 200px cap with a hidden
+// scrollbar. Pinned by `_editor-overrides.scss.test.ts`.
 .typeahead-popover.auto-embed-menu ul {
   max-height: calc(100vh - 16px);
 
