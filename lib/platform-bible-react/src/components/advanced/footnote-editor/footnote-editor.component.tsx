@@ -59,6 +59,7 @@ import {
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
+import { isEditorContextMenuOpenFor } from '../editor-context-menu.util';
 import { MarkerMenu } from '../marker-menu.component';
 import { generateInlineMarkerMenuListItems } from './footnote-editor.utils';
 
@@ -1002,6 +1003,15 @@ export default function FootnoteEditor({
           event.stopPropagation();
           editorRef.current?.selectNote(0);
           editorRef.current?.focus();
+          return;
+        }
+        // This popover's own right-click menu is up: claim and drop `\`, mirroring the main
+        // editor's swallow-while-menu-open behavior. See `isEditorContextMenuOpenFor`. Scoped to
+        // THIS popover's root — a second editor's open menu (e.g. the main Standard-view editor)
+        // must never trip this gate.
+        if (isEditorContextMenuOpenFor(editorParentRef.current)) {
+          event.preventDefault();
+          event.stopPropagation();
           return;
         }
         // ACTIVE palette: the trigger never lands, whatever the selection shape — typing filters

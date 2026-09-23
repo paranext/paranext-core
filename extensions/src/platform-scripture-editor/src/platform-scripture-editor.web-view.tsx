@@ -2371,16 +2371,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
         // Everything below runs only with no open session — the `if (session)` above returns.
         if (event.key === defaultMarkersMenuTrigger) {
-          // The editor's own right-click menu is up: leave it the only keyboard mode on screen.
-          // It stays open across a palette, and a palette session then claims Escape one capture
-          // step above the menu's listener, so the menu would survive the dismissal with its
-          // highlighted item still armed for the next Enter. See `isEditorContextMenuOpen`.
-          //
-          // CLAIMED, not merely declined: the editor keeps DOM focus while the menu is up, so an
-          // unclaimed `\` falls through to Lexical and types a backslash into the document behind
-          // the menu. The menu has no use for the key either, so it does nothing at all. Enter
-          // below stands down the OTHER way, because the menu does want that key.
-          if (isEditorContextMenuOpen()) {
+          // The editor's own right-click menu is up: CLAIMED, not merely declined. See
+          // `isEditorContextMenuOpen` for why, and why Enter below stands down the other way.
+          if (isEditorContextMenuOpen(editorContainerRef.current)) {
             event.preventDefault();
             event.stopPropagation();
             return;
@@ -2405,13 +2398,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // representation, so it serializes as a plain space: the same data problem as an unmarked
         // split.
         if (event.key === 'Enter') {
-          // The editor's own right-click menu is up: it owns Enter outright for as long as it is
-          // open — invoking its highlighted item when it has an enabled one, swallowing the press
-          // otherwise — so no palette may open underneath it and nothing reaches the document.
-          // HANDED DOWN rather than claimed here: the menu's listener is one capture step further
-          // down (on `document`) and never sees a press this handler stops. See
-          // `isEditorContextMenuOpen`.
-          if (isEditorContextMenuOpen()) return;
+          // The editor's own right-click menu is up: HANDED DOWN rather than claimed here, so the
+          // menu's own listener gets the press. See `isEditorContextMenuOpen`.
+          if (isEditorContextMenuOpen(editorContainerRef.current)) return;
           const ctx = editorRef.current?.getMarkerMenuContext();
           // Pass through untouched when there's no context, inside a note, or inside marker glyph
           // text — the library engine owns Enter in those cases (e.g. `\fp` inside a footnote).
@@ -2437,7 +2426,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           event.preventDefault();
           // Swallowed while the editor's right-click menu is up rather than opening a second popup
           // over it. See `isEditorContextMenuOpen`.
-          if (!isEditorContextMenuOpen()) showInlineMarkersMenu();
+          if (!isEditorContextMenuOpen(editorContainerRef.current)) showInlineMarkersMenu();
         } else if (showMarkersMenu && event.key === 'Escape') {
           event.preventDefault();
           setShowMarkersMenu(false);
@@ -2456,7 +2445,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         event.stopPropagation();
         // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.
         // See `isEditorContextMenuOpen`.
-        if (!isEditorContextMenuOpen()) insertCommentAtCurrentSelection();
+        if (!isEditorContextMenuOpen(editorContainerRef.current)) insertCommentAtCurrentSelection();
       } else if (
         !isReadOnlyEffective &&
         viewType === 'standard' &&
@@ -2478,7 +2467,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         event.preventDefault();
         // Swallowed while the editor's right-click menu is up: the insert opens the footnote editor,
         // which would land over a menu that is still open. See `isEditorContextMenuOpen`.
-        if (isEditorContextMenuOpen()) return;
+        if (isEditorContextMenuOpen(editorContainerRef.current)) return;
         // Both are async and this handler is not, so surface a rejection instead of dropping it as
         // an unhandled promise: the user pressed a key and must not be left with no marker and no
         // explanation.

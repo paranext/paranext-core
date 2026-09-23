@@ -594,6 +594,17 @@ describe('createInsertContextMenuItems', () => {
     expect(items.map((i) => i.title)).toEqual(insertMenuItems.map((i) => `LOC:${i.label}`));
   });
 
+  // createInsertContextMenuItems takes no interface-mode input, so it cannot honor a per-mode
+  // hide: an Insert-column item hidden from Simple mode's top menu would still show up here. The
+  // parity test above compares labels/order only and would pass vacuously in that case, so pin the
+  // gap directly rather than leaving it latent.
+  it('has no Insert-column item declaring hiddenInterfaceModes, since the builder cannot honor it', () => {
+    const itemsWithHiddenModes = insertMenuItems.filter(
+      (item: { hiddenInterfaceModes?: string[] }) => item.hiddenInterfaceModes?.length,
+    );
+    expect(itemsWithHiddenModes).toEqual([]);
+  });
+
   it('disables note inserts when read-only and the comment insert per permission', () => {
     const readOnly = createInsertContextMenuItems(strings, makeActions(), {
       ...ENABLED,
@@ -617,32 +628,40 @@ describe('createInsertContextMenuItems', () => {
     expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([false, false, false, true]);
   });
 
-  it('dispatches each item to its matching action', () => {
+  // Per-item, not aggregate: calling every item's onSelect and counting each action's TOTAL calls
+  // (the previous shape here) passes under any permutation of the item-to-action mapping — it
+  // cannot tell "Insert footnote" wired to insertCrossReference from the correct wiring. Asserting
+  // ONE item's onSelect against every action's call count catches exactly that cross-wiring.
+  it.each([
+    [0, 'insertFootnote'],
+    [1, 'insertCrossReference'],
+    [2, 'insertEndnote'],
+    [3, 'insertComment'],
+  ] as const)('item %i runs ONLY its own action (%s)', (index, actionName) => {
     const actions = makeActions();
     const items = createInsertContextMenuItems(strings, actions, ENABLED);
-    items.forEach((i) => i.onSelect());
-    expect(actions.insertFootnote).toHaveBeenCalledTimes(1);
-    expect(actions.insertCrossReference).toHaveBeenCalledTimes(1);
-    expect(actions.insertEndnote).toHaveBeenCalledTimes(1);
-    expect(actions.insertComment).toHaveBeenCalledTimes(1);
+    items[index].onSelect();
+    (Object.keys(actions) as (keyof typeof actions)[]).forEach((name) => {
+      expect(actions[name]).toHaveBeenCalledTimes(name === actionName ? 1 : 0);
+    });
   });
 });
 
 describe('isEditorContextMenuOpen', () => {
   /**
-   * The markup `ContextMenuPlugin` actually portals into the document: both classes on the outer
-   * element, a second `.typeahead-popover` nested inside it, and `selected` on the highlighted
-   * item.
+   * Builds a `.editor-input`-bearing editor root inside its own container, marked as if
+   * `ContextMenuPlugin` had opened a right-click menu for it when `menuOpen` is set — see
+   * `isEditorContextMenuOpenFor` (`editor-context-menu.util.ts`) for what this function delegates
+   * to and why the signal is per-editor rather than a document-wide class query.
    */
-  function renderContextMenu({ highlighted }: { highlighted: boolean }) {
-    const portal = document.createElement('div');
-    portal.className = 'typeahead-popover auto-embed-menu';
-    portal.innerHTML = `<div class="typeahead-popover"><ul>
-      <li class="item" role="option"><span class="text">Cut</span></li>
-      <li class="item${highlighted ? ' selected' : ''}" role="option"><span class="text">Insert end note</span></li>
-    </ul></div>`;
-    document.body.append(portal);
-    return portal;
+  function makeEditor({ menuOpen }: { menuOpen: boolean }): HTMLDivElement {
+    const container = document.createElement('div');
+    const root = document.createElement('div');
+    root.className = 'editor-input';
+    if (menuOpen) root.setAttribute('aria-controls', 'editor-context-menu');
+    container.append(root);
+    document.body.append(container);
+    return container;
   }
 
   afterEach(() => {
@@ -650,30 +669,25 @@ describe('isEditorContextMenuOpen', () => {
   });
 
   it('is false with no context menu open', () => {
-    expect(isEditorContextMenuOpen()).toBe(false);
+    expect(isEditorContextMenuOpen(makeEditor({ menuOpen: false }))).toBe(false);
   });
 
-  // Both triggers stand down for the whole time the menu is up, not only while it holds something
-  // to invoke: a menu holding nothing still holds the keyboard, and a palette opened under it
-  // survives the Escape that was meant to close the menu.
-  it('is true while the menu is open with nothing highlighted', () => {
-    renderContextMenu({ highlighted: false });
-    expect(isEditorContextMenuOpen()).toBe(true);
+  // Keyed on the menu being OPEN, not on a highlighted item — see `isEditorContextMenuOpen`'s
+  // TSDoc for why a menu holding nothing to invoke still holds the keyboard.
+  it('is true while the given editor’s own menu is open', () => {
+    expect(isEditorContextMenuOpen(makeEditor({ menuOpen: true }))).toBe(true);
   });
 
-  it('is true while an item is highlighted', () => {
-    renderContextMenu({ highlighted: true });
-    expect(isEditorContextMenuOpen()).toBe(true);
+  // Scoped to the given container: the footnote-editor popover mounts its own `ContextMenuPlugin`
+  // instance, whose portal shares the same classes as the main editor's — a DIFFERENT editor's open
+  // menu elsewhere in the document must never trip THIS container's gate.
+  it('ignores a different editor’s open menu elsewhere in the document', () => {
+    const ownEditor = makeEditor({ menuOpen: false });
+    makeEditor({ menuOpen: true });
+    expect(isEditorContextMenuOpen(ownEditor)).toBe(false);
   });
 
-  // The marker typeahead and the marker palette reuse `.typeahead-popover` and the same `selected`
-  // item class; neither is the menu this gate is about, and standing down on one of those would
-  // break the palette's own reopen.
-  it('ignores a popover that is not the context menu', () => {
-    const other = document.createElement('div');
-    other.className = 'typeahead-popover';
-    other.innerHTML = '<ul><li class="item selected"><span class="text">q1</span></li></ul>';
-    document.body.append(other);
-    expect(isEditorContextMenuOpen()).toBe(false);
+  it('is false for an editor that has not mounted yet', () => {
+    expect(isEditorContextMenuOpen(undefined)).toBe(false);
   });
 });
