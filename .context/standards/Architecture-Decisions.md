@@ -1537,11 +1537,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   when something asks.
 - **Decision:** Four rules.
   1. **Install is idempotent.** An already-installed, up-to-date resource is a no-op success. The
-     catalog's `Installed` flag is not trusted on its own for this: C# refreshes the collection and
-     confirms the resource is genuinely on disk, and installs it when it is not, so a success is
-     never reported over an empty disk — a state the uninstall path already treats as reachable. The
-     no-op sends the same notifications a real install does, because the caller's view is the thing
-     that was wrong.
+     question is asked twice, either side of `ScrTextCollection.RefreshScrTexts()`:
+     `InstallableResource.Installed` resolves `ExistingScrText` against the live collection on every
+     read, so the first answer describes the collection as it stands — possibly from before another
+     process removed the project — and only the second describes the disk now. Refreshing
+     unconditionally would put a full rescan in front of every ordinary install, so the cheap answer
+     gates the expensive one. The no-op sends the same notifications a real install does, because
+     the caller's view is the thing that was wrong.
   2. **`installed` is a hint, so a caller that acts on it refreshes first.** The resource panels, the
      text grid and both pickers await `platformGetResources.refreshResourceFlags` and then read the
      catalog, rather than acting on a snapshot that is one refresh behind. A listing does not

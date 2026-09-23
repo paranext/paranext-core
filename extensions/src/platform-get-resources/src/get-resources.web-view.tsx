@@ -53,6 +53,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   // Mirrors the list for the async action handlers, which cannot read a value captured at render.
   const resolvedResourcesRef = useRef(resolvedResources);
+  useEffect(() => {
+    resolvedResourcesRef.current = resolvedResources;
+  }, [resolvedResources]);
 
   // The two unavailable reasons need opposite treatments. `notReady` means the provider has not
   // registered yet — transient, so a retry genuinely can work and it earns the error state (see
@@ -161,6 +164,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
           }
           // Registered before the refetch so the list it brings back cannot arrive unwatched.
           const listAgreed = new Promise<void>((resolve, reject) => {
+            // Nothing should be able to act on a row while its action is in flight — the table
+            // renders progress there instead of a button — but if one ever did, dropping the
+            // displaced entry would leave its promise pending forever, and its row spinning.
+            pendingActionsRef.current.get(dblEntryUid)?.settle(false);
             pendingActionsRef.current.set(dblEntryUid, {
               action: newInstallInfo.action,
               listWhenRegistered: resolvedResourcesRef.current,
@@ -206,28 +213,40 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   }, [hasSettled, refetchResources]);
 
   /**
-   * Settles each action waiting to see itself in the list. A failed refetch settles them too: it
-   * leaves the previous list in place, which will never agree — and never disagree either, so
-   * waiting on it is what an unending spinner is made of.
+   * Settles each action waiting to see itself in the list.
+   *
+   * Two things can end the wait, and the failure one cannot be expressed as a change to the list.
+   * `usePromise` keeps the previous value through a rejection, so a failed refetch leaves the list
+   * at the same identity and the same contents — it will never agree with the action, and never
+   * visibly disagree either. `isResourcesUnavailable` does not fill the gap: it is `false` whenever
+   * there are rows to show, which there always are once a user has clicked one. So a failed fetch
+   * is read from the fetch's own outcome instead, and an action that cannot be confirmed is
+   * reported as one rather than left spinning for the life of the dialog.
    */
   useEffect(() => {
-    resolvedResourcesRef.current = resolvedResources;
     if (pendingActionsRef.current.size === 0) return;
 
+    // `hasSettled` is what distinguishes a fetch that failed from one still in flight: `refetch`
+    // clears it, and the fetch sets it on both of its paths.
+    const hasFetchFailed = hasSettled && isResourcesError;
+
     pendingActionsRef.current.forEach((pending, dblEntryUid) => {
-      if (resolvedResources === pending.listWhenRegistered && !isResourcesUnavailable) return;
+      const hasLaterList = resolvedResources !== pending.listWhenRegistered;
+      // Still waiting: no newer list yet, and no failure to report.
+      if (!hasLaterList && !hasFetchFailed) return;
 
       const resource = resolvedResources.find((res) => res.dblEntryUid === dblEntryUid);
-      // A row that has dropped out of the catalog cannot answer for its own resource either way.
+      // A fetch that failed cannot confirm anything, and a row that has dropped out of the catalog
+      // cannot answer for its own resource either way.
       const didTakeEffect =
-        !isResourcesUnavailable &&
+        !hasFetchFailed &&
         resource !== undefined &&
         (pending.action === 'installing' ? resource.installed : !resource.installed);
 
       pendingActionsRef.current.delete(dblEntryUid);
       pending.settle(didTakeEffect);
     });
-  }, [resolvedResources, isResourcesUnavailable]);
+  }, [resolvedResources, hasSettled, isResourcesError]);
 
   /** Removes resources from array of resources that are currently being handled */
   useEffect(() => {

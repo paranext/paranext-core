@@ -5,8 +5,7 @@ import {
   useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
-import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { isPlatformError } from 'platform-bible-utils';
 import { usePromise, useRetryablePromise } from 'platform-bible-react';
 import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { DblResourceData } from 'platform-bible-utils';
@@ -104,18 +103,11 @@ function TeamLayoutDialogWrapper({
     hasSettled: hasResourcesSettled,
     refetch: onRetryResources,
   } = useRetryablePromise(
-    useCallback(async () => {
-      // The picker's selection path acts on `installed` — `selectTextConnection` installs only when
-      // the row says the resource is missing — and `getCachedResources` answers one refresh behind,
-      // so a stale row sends it to download something already on disk. A failed refresh still
-      // leaves a usable catalog to read.
-      try {
-        await sendCommand('platformGetResources.refreshResourceFlags');
-      } catch (error) {
-        logger.warn(`Could not refresh DBL resource flags: ${getErrorMessage(error)}`);
-      }
-      return sendCommand('platformGetResources.getCachedResources');
-    }, []),
+    // Deliberately not refreshed before this read. The flags can be one refresh behind, and acting
+    // on a stale one now costs a redundant install that succeeds as a no-op and corrects itself —
+    // where awaiting the refresh would hold the dialog's first paint on a backend call, which is
+    // the blocking `getCachedResources` was written to avoid.
+    useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
   );
 
   const allResources = catalog?.status === 'available' ? catalog.resources : undefined;

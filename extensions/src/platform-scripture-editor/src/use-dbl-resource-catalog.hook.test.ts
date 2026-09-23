@@ -75,6 +75,12 @@ describe('useDblResourceCatalog', () => {
     await waitFor(() =>
       expect(mockSendCommand).toHaveBeenCalledWith('platformGetResources.getCachedResources'),
     );
+    // ...and asks it to skip the update-status round trip: no panel renders `updateAvailable`, so
+    // waiting on a second backend call for it would be paying for a value this hook discards.
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformGetResources.refreshResourceFlags',
+      false,
+    );
     const commandOrder = mockSendCommand.mock.calls.map(([command]) => command);
     expect(
       commandOrder.indexOf('platformGetResources.refreshResourceFlags'),

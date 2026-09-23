@@ -120,6 +120,55 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
                 Name = existing.Name + "-renamed",
             };
 
+        /// <summary>
+        /// The root of PT-4588: installing a resource that is already installed and up to date is
+        /// what the caller asked for, so it is a no-op success rather than a throw. A caller whose
+        /// catalog wrongly reports the resource missing would otherwise retry forever.
+        /// </summary>
+        [Test]
+        public void IsInstallAlreadySatisfied_TrueForAnInstalledUpToDateResourceOnDisk()
+        {
+            using DummyScrText existing = new();
+
+            Assert.That(
+                DblResourcesDataProvider.IsInstallAlreadySatisfied(
+                    UpToDateResource("97196133a859179b", existing)
+                ),
+                Is.True
+            );
+        }
+
+        /// <summary>
+        /// A resource with no local project is not "already satisfied", so the install proceeds.
+        /// This is also why the caller asks twice either side of a refresh rather than comparing
+        /// two different properties: <c>Installed</c> is <c>ExistingScrText != null</c> resolved
+        /// against the live collection, so refreshing is the only thing that changes the answer.
+        /// </summary>
+        [Test]
+        public void IsInstallAlreadySatisfied_FalseWhenNoLocalProjectBacksTheResource()
+        {
+            InstallableResource notInstalled = new InstalledResource(null!)
+            {
+                DBLEntryUid = HexId.FromStr("97196133a859179b"),
+            };
+
+            Assert.That(DblResourcesDataProvider.IsInstallAlreadySatisfied(notInstalled), Is.False);
+        }
+
+        /// <summary>An update is still an install: it must not be skipped as already satisfied.</summary>
+        [Test]
+        public void IsInstallAlreadySatisfied_FalseWhenANewerVersionIsAvailable()
+        {
+            using DummyScrText existing = new();
+
+            Assert.That(
+                DblResourcesDataProvider.IsInstallAlreadySatisfied(
+                    OutOfDateResource("97196133a859179b", existing)
+                ),
+                Is.False
+            );
+        }
+
         [Test]
         public async Task RecomputeDblResourcesUpdateStatus_ReturnsEmptyBeforeCatalogIsFetched()
         {

@@ -81,7 +81,7 @@ export function useDblResourceCatalog(): DblResourceCatalogState {
       // installed would send it to download something already on disk. Bring the flags up to date
       // first; a failure here is not fatal, since the read below still returns the catalog.
       try {
-        await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
+        await papi.commands.sendCommand('platformGetResources.refreshResourceFlags', false);
       } catch (error) {
         logger.warn(
           `Could not refresh DBL resource flags before reading: ${getErrorMessage(error)}`,

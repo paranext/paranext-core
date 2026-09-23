@@ -243,7 +243,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         // the reconciled flags rather than the snapshot `getCachedResources` answers with, which is
         // one refresh behind. A failed refresh still leaves a usable catalog to read.
         try {
-          await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
+          await papi.commands.sendCommand('platformGetResources.refreshResourceFlags', false);
         } catch (error) {
           logger.warn(`Could not refresh DBL resource flags: ${getErrorMessage(error)}`);
         }

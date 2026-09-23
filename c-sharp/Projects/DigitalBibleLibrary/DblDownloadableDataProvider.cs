@@ -622,6 +622,22 @@ internal class DblResourcesDataProvider(
             }
         });
 
+    /// <summary>
+    /// Whether an install request is already satisfied, so installing again would do nothing.
+    /// </summary>
+    /// <remarks>
+    /// <c>Installed</c> is not a flag captured when the catalog was fetched: it resolves
+    /// <c>ExistingScrText</c> (or <c>ExistingDictionary</c>) against the live
+    /// <c>ScrTextCollection</c> on every read. So this answers for the collection as it stands, and
+    /// <c>RefreshScrTexts()</c> before the call is what makes that the disk as it is now rather
+    /// than as the collection last saw it — which is how a resource removed outside this process
+    /// stops counting as installed.
+    /// </remarks>
+    /// <param name="resource">The catalog entry the caller asked to install.</param>
+    /// <returns>True when the resource is installed and up to date.</returns>
+    internal static bool IsInstallAlreadySatisfied(InstallableResource resource) =>
+        resource.Installed && !resource.IsNewerThanCurrentlyInstalled();
+
     private void InstallDblResourceCore(string DBLEntryUid)
     {
         FindResource(
@@ -638,14 +654,15 @@ internal class DblResourcesDataProvider(
         // anything. Throwing strands a caller whose catalog says the resource is missing: every
         // retry it offers gets the same error, however many times the user asks.
         //
-        // `Installed` is the catalog's flag rather than a look at the disk, and the uninstall path
-        // below carries its own error for the two disagreeing, so confirm the files are really
-        // there before reporting success — and fall through to installing when they are not,
-        // because a success reported over an empty disk is one no retry can clear.
-        if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
+        // Asked twice, either side of a refresh. `Installed` reads the project collection live, so
+        // the first answer describes the collection as it stands — possibly from before another
+        // process removed the project — and only the second describes the disk now. Refreshing
+        // unconditionally would put a full collection rescan in front of every ordinary install, so
+        // the cheap answer gates the expensive one.
+        if (IsInstallAlreadySatisfied(installableResource))
         {
             ScrTextCollection.RefreshScrTexts();
-            if (installableResource.ExistingScrText != null)
+            if (IsInstallAlreadySatisfied(installableResource))
             {
                 Console.WriteLine(
                     $"DBL resource {DBLEntryUid} is already installed and up to date. Installation skipped."

@@ -152,6 +152,38 @@ describe('GetResourcesDialog action reporting', () => {
     expect(screen.getByTestId('handling')).toHaveTextContent('');
   });
 
+  it('settles a removal on the opposite flag from an install', async () => {
+    // The two actions read the same row and want contrary answers, so a branch that checked
+    // `installed` for both would report every successful removal as a failure.
+    serveCatalogWithInstalled(true, false);
+    await renderDialogAndSettle();
+
+    fireEvent.click(screen.getByRole('button', { name: 'remove' }));
+
+    await waitFor(() => expect(mocks.uninstallDblResource).toHaveBeenCalledWith('uid-1'));
+    await waitFor(() => expect(screen.getByTestId('handling')).toHaveTextContent(''));
+    expect(mocks.actionErrors).toEqual([]);
+  });
+
+  it('ends a row when the refetch after its action fails', async () => {
+    // `usePromise` keeps the previous value through a rejection, so a failed refetch leaves the list
+    // at the same identity and the same contents: it will never agree with the action, and never
+    // visibly disagree either. Waiting for the list alone waits for the life of the dialog.
+    serveCatalogWithInstalled(false);
+    await renderDialogAndSettle();
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === 'platformGetResources.getCachedResources')
+        throw new Error('catalog fetch failed');
+      return undefined;
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'install' }));
+
+    await waitFor(() => expect(mocks.actionErrors).toHaveLength(1));
+    expect(mocks.actionErrors[0]).toContain('platformGetResources.actionDidNotTakeEffect');
+    expect(screen.getByTestId('handling')).toHaveTextContent('');
+  });
+
   it('reports no failure when the list does come to agree', async () => {
     // The same path as above, for a resource that genuinely installs: the row must settle quietly.
     serveCatalogWithInstalled(false, true);

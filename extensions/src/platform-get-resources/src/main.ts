@@ -266,17 +266,6 @@ function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promis
 }
 
 /**
- * Brings the derived flags up to date and resolves once they are, so the next read of the catalog
- * sees them.
- *
- * `getCachedResources` deliberately does not wait for the sync, which makes it one refresh behind:
- * it answers from the array it has and leaves the corrected one to the next call. For `installed`
- * that is invisible, because the caller that just installed something already knows. For
- * `updateAvailable` it is the whole defect — an updated resource keeps its "Update" badge, since
- * nothing else about the row changes and no data-update event exists to announce the correction. A
- * caller that has just changed local state awaits this first, then re-reads.
- */
-/**
  * Runs a flag sync that starts after this call rather than joining one already in flight, which may
  * have asked the backend before whatever prompted this call. Never rejects.
  *
@@ -287,9 +276,22 @@ async function syncAfterInFlight(shouldRecomputeUpdateStatus: boolean): Promise<
   await ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus);
 }
 
-async function refreshResourceFlags(): Promise<void> {
-  // Also refreshes `updateAvailable`, which a background sync never does.
-  await syncAfterInFlight(true);
+/**
+ * Brings the derived flags up to date and resolves once they are, so the next read of the catalog
+ * sees them.
+ *
+ * `getCachedResources` deliberately does not wait for the sync, which makes it one refresh behind:
+ * it answers from the array it has and leaves the corrected one to the next call. For `installed`
+ * that is invisible to the caller that just installed something, but a caller that acts on the flag
+ * — a panel deciding whether to download — reads a row from before the change. For
+ * `updateAvailable` it is the whole defect: an updated resource keeps its "Update" badge, since
+ * nothing else about the row changes and no data-update event exists to announce the correction.
+ *
+ * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`. It costs a second
+ *   backend round trip, so a caller that reads `installed` alone passes `false`.
+ */
+async function refreshResourceFlags(shouldRecomputeUpdateStatus = true): Promise<void> {
+  await syncAfterInFlight(shouldRecomputeUpdateStatus);
 }
 
 async function getCachedResources(): Promise<DblResourceCatalog> {
@@ -615,12 +617,7 @@ export async function activate(context: ExecutionActivationContext) {
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     syncAfterInFlight(false);
   });
-  context.registrations.add({
-    dispose: async () => {
-      unsubscribeFromProjectsChanged();
-      return true;
-    },
-  });
+  context.registrations.add(unsubscribeFromProjectsChanged);
 
   const refreshIntervalId = setInterval(() => {
     // The mutex returns a floating promise here; we want fire-and-forget interval behavior
