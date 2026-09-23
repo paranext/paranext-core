@@ -13,7 +13,8 @@ export const ANALYTICS_POSTHOG_ENV_VAR = 'PT_ANALYTICS_POSTHOG';
 
 /**
  * PostHog project keys per analytics environment. These are write-only client keys that PostHog
- * designs to ship inside client applications; they cannot read data. This is the only place in the
+ * designs to ship inside client applications; they cannot read data. Committing one is an accepted
+ * exception to the repository's no-secrets rule for that reason. This is the only place in the
  * codebase that holds one.
  *
  * TODO(PT-4401): the `production` slot deliberately reuses the Test project key until the
