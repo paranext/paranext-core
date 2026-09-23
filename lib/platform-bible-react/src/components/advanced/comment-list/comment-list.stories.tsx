@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { LanguageStrings, LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
 import { expect } from 'storybook/test';
+import { ContentZoomTextProvider } from '@/context/content-zoom-text.context';
 import CommentList from './comment-list.component';
 import { sampleComments, verseTextConflictReplacementSample } from './comment-sample.data';
 import {
@@ -443,4 +444,36 @@ export const WithStaleConflict: Story = {
       getConflictResolutionOptionsCallback={async () => 'accept'}
     />
   ),
+};
+
+/**
+ * Storybook stands in for the platform: the rule it injects into every web view, and a 200 % factor
+ * for the main area.
+ */
+const PLATFORM_ZOOM_STAND_IN =
+  '.comment-list-zoom-story{--platform-content-zoom-main:2}' +
+  '[data-platform-content-zoom-root=""]{zoom:var(--platform-content-zoom-main,1)}';
+
+/**
+ * The list inside a `ContentZoomTextProvider`, the way the Comments web view hosts it, at 200 %:
+ * the snippet, bodies, diffs and composer text grow; cards, buttons, badges and avatars do not.
+ */
+export const ZoomedText: Story = {
+  render: () => (
+    <div className="comment-list-zoom-story">
+      <style>{PLATFORM_ZOOM_STAND_IN}</style>
+      <ContentZoomTextProvider>
+        <CommentListStory initialThreads={sampleComments} />
+      </ContentZoomTextProvider>
+    </div>
+  ),
+  play: async ({ canvasElement, step }) => {
+    await step('Text is marked and no marked element holds a button', async () => {
+      const marked = Array.from(
+        canvasElement.querySelectorAll('[data-platform-content-zoom-root]'),
+      );
+      await expect(marked.length).toBeGreaterThan(0);
+      await expect(marked.some((element) => element.querySelector('button'))).toBe(false);
+    });
+  },
 };
