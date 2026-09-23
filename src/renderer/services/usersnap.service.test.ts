@@ -46,6 +46,17 @@ function createMockSpaceApi() {
   };
 }
 
+/**
+ * Mocks the build-time Usersnap space key for the next `importService()`. Core ships it empty; a
+ * product built on core sets it, so most cases here run with a non-empty key.
+ */
+function mockSpaceApiKey(spaceApiKey: string): void {
+  vi.doMock('@shared/data/platform.data', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@shared/data/platform.data')>()),
+    USERSNAP_SPACE_API_KEY: spaceApiKey,
+  }));
+}
+
 async function importService() {
   vi.resetModules();
   return import('@renderer/services/usersnap.service');
@@ -66,10 +77,26 @@ describe('initializeUsersnapApi load/init timeout/race logic', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     resetLoadSpaceDeferred();
+    mockSpaceApiKey('test-space-key');
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.doUnmock('@shared/data/platform.data');
+  });
+
+  it('without a space key: resolves without loading the space or starting the timeout', async () => {
+    mockSpaceApiKey('');
+    const { initializeUsersnapApi } = await importService();
+    const { logger } = await import('@shared/services/logger.service');
+
+    await expect(initializeUsersnapApi()).resolves.toBeUndefined();
+
+    expect(mockLoadSpace).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(logger.info).toHaveBeenCalledWith(
+      'Usersnap is not configured (no space API key); feedback forms are unavailable',
+    );
   });
 
   it('resolves before the timeout: api.init called, no destroy', async () => {
@@ -159,5 +186,34 @@ describe('initializeUsersnapApi load/init timeout/race logic', () => {
       ),
     );
     expect(spaceApi.destroy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('openUsersnapForm', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetLoadSpaceDeferred();
+    mockSpaceApiKey('test-space-key');
+  });
+
+  afterEach(() => {
+    vi.doUnmock('@shared/data/platform.data');
+  });
+
+  it('without a project key: tells the user the form is unavailable instead of opening it', async () => {
+    const { initializeUsersnapApi, openUsersnapForm } = await importService();
+    const { notificationService } = await import('@shared/services/notification.service');
+    const spaceApi = createMockSpaceApi();
+    const initPromise = initializeUsersnapApi();
+    loadSpaceDeferred.resolve(spaceApi);
+    await initPromise;
+
+    await openUsersnapForm('');
+
+    expect(spaceApi.show).not.toHaveBeenCalled();
+    expect(notificationService.send).toHaveBeenCalledWith({
+      message: '%mainMenu_feedback_unavailable%',
+      severity: 'warning',
+    });
   });
 });

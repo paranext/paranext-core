@@ -1,21 +1,14 @@
+import {
+  USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
+  USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
+  USERSNAP_SPACE_API_KEY,
+} from '@shared/data/platform.data';
 import { appService } from '@shared/services/app.service';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { loadSpace, type InitOptions, type SpaceApi } from '@usersnap/browser';
 import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
-
-/**
- * These API keys are unique IDs that can be used to interact with our feedback forms on Usersnap. A
- * Project key relates to a specific form can be shown, and the user can submit their feedback
- * through it. Note that these keys can be used only to SUBMIT reports to our Usersnap Projects, and
- * not to RETRIEVE any information related to them.
- *
- * The Space is the container that holds these Projects.
- */
-export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string = '68df6b26-c519-4829-8d07-2201d31fac9d';
-export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string = 'bd3bc542-1f0c-40e4-85f7-315f5138ea88';
-export const USERSNAP_SPACE_API_KEY: string = '1cf2709b-3ff0-4cff-8952-a2d2bca7590d';
 
 /**
  * Milliseconds to wait for Usersnap's `loadSpace` + `init` to finish before giving up.
@@ -164,6 +157,11 @@ function stopUsersnapObserver(): void {
 
 /** Initializes the global UserSnap API instance */
 export async function initializeUsersnapApi() {
+  if (!USERSNAP_SPACE_API_KEY) {
+    logger.info('Usersnap is not configured (no space API key); feedback forms are unavailable');
+    return;
+  }
+
   try {
     const defaultInitParams: InitOptions = {
       enableScreenshot: true,
@@ -272,6 +270,10 @@ export async function openUsersnapForm(apiKey: string) {
 
   if (!apiKey) {
     logger.error('Cannot open Usersnap form: API key is required');
+    await notificationService.send({
+      message: '%mainMenu_feedback_unavailable%',
+      severity: 'warning',
+    });
     return;
   }
 
