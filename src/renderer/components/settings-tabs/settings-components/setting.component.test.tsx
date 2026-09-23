@@ -554,7 +554,9 @@ describe('platform.zoomFactor stepper', () => {
         label="Interface scaling"
       />,
     );
-    screen.getByRole('button', { name: 'Increase interface scaling' }).focus();
+    act(() => {
+      screen.getByRole('button', { name: 'Increase interface scaling' }).focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(
       'Already at the largest interface scaling (300 %)',
     );

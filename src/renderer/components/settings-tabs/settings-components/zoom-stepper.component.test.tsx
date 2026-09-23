@@ -153,7 +153,9 @@ describe('ZoomStepper', () => {
   it('stays focusable at its bound', () => {
     render(<ZoomStepper {...baseProps} value={3} onChange={vi.fn()} />);
     const increase = screen.getByRole('button', { name: LABELS.increase });
-    increase.focus();
+    act(() => {
+      increase.focus();
+    });
     expect(increase).toHaveFocus();
   });
 
@@ -169,31 +171,41 @@ describe('ZoomStepper', () => {
   it('names the limit rather than the button when the bound is reached', async () => {
     render(<ZoomStepper {...baseProps} value={3} onChange={vi.fn()} />);
     const increase = screen.getByRole('button', { name: LABELS.increase });
-    increase.focus();
+    act(() => {
+      increase.focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atMaximum);
   });
 
   it('names the lower limit on the decrease button at the minimum', async () => {
     render(<ZoomStepper {...baseProps} value={0.5} onChange={vi.fn()} />);
-    screen.getByRole('button', { name: LABELS.decrease }).focus();
+    act(() => {
+      screen.getByRole('button', { name: LABELS.decrease }).focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atMinimum);
   });
 
   it('names the default rather than the button when reset has nothing to reset', async () => {
     render(<ZoomStepper {...baseProps} value={1} onChange={vi.fn()} />);
-    screen.getByRole('button', { name: LABELS.reset }).focus();
+    act(() => {
+      screen.getByRole('button', { name: LABELS.reset }).focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atDefault);
   });
 
   it('names the reset button while there is something to reset', async () => {
     render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
-    screen.getByRole('button', { name: LABELS.reset }).focus();
+    act(() => {
+      screen.getByRole('button', { name: LABELS.reset }).focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.reset);
   });
 
   it('names the button when it is not at a bound', async () => {
     render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
-    screen.getByRole('button', { name: LABELS.increase }).focus();
+    act(() => {
+      screen.getByRole('button', { name: LABELS.increase }).focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.increase);
   });
 
@@ -202,7 +214,9 @@ describe('ZoomStepper', () => {
     [LABELS.increase, LABELS.decrease, LABELS.reset].forEach((name) => {
       const button = screen.getByRole('button', { name });
       expect(button.tagName).toBe('BUTTON');
-      button.focus();
+      act(() => {
+        button.focus();
+      });
       expect(button).toHaveFocus();
     });
   });
@@ -514,6 +528,41 @@ describe('ZoomStepper percentage field', () => {
     expect(percentField()).toHaveDisplayValue('180');
     fireEvent.blur(percentField());
     expect(onChange).toHaveBeenCalledWith(1.8);
+  });
+
+  it('does not write a stale value back when an unedited field loses focus', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+    fireEvent.focus(percentField());
+    // The value changes elsewhere (another window, a zoom shortcut) while the field has focus.
+    rerender(<ZoomStepper {...baseProps} value={2} onChange={onChange} />);
+    fireEvent.blur(percentField());
+    expect(onChange).not.toHaveBeenCalled();
+    expect(percentField()).toHaveDisplayValue(showsPercent(200));
+  });
+
+  it('commits a typed value once and does not re-commit it over a later change', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+    typeAndEnter('137');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(1.37);
+    rerender(<ZoomStepper {...baseProps} value={2} onChange={onChange} />);
+    fireEvent.blur(percentField());
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(percentField()).toHaveDisplayValue(showsPercent(200));
+  });
+
+  it('clears the announcement when the value changes elsewhere', () => {
+    const { container, rerender } = render(
+      <ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    const liveRegion = container.querySelector('[aria-live="polite"]');
+    // Positive control: the press did announce, so an empty region below means it was cleared.
+    expect(liveRegion).toHaveTextContent(showsPercent(130));
+    rerender(<ZoomStepper {...baseProps} value={2} onChange={vi.fn()} />);
+    expect(liveRegion).toBeEmptyDOMElement();
   });
 
   it('disables the field along with the buttons', () => {
