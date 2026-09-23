@@ -866,9 +866,9 @@ export function forgetContentZoom(webViewId: WebViewId): void {
  *
  * Hidden panes are handled: rc-dock keeps an inactive tab mounted under `display: none`, and both
  * the variables and the rules that read them are data-driven, so they apply with no layout and are
- * already correct when the tab is shown. Only the indicator needs geometry, and it is passed only
- * for a direct user action, which needs a visible pane. The bootstrap's `cornerOf` still falls back
- * to a fixed corner when every rect it measures is zero.
+ * already correct when the tab is shown. The indicator needs no geometry either: it sits at a fixed
+ * inset from the pane's own viewport corner, and it is passed only for a direct user action, which
+ * needs a visible pane.
  */
 export function pushContentZoom(
   webViewId: WebViewId,

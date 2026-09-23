@@ -741,71 +741,25 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       else window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS);
     };
 
-    // An area's own text direction, read off one of its marked elements (falling back to the
-    // document's when the area currently has no elements) so a marker inside an otherwise-LTR
-    // document (or vice versa) still anchors on its own inline-end, not the document's.
-    const directionOf = (element) => {
-      const style = window.getComputedStyle ? window.getComputedStyle(element) : undefined;
-      return style && style.direction === 'rtl' ? 'rtl' : 'ltr';
-    };
-    // An element's box clipped to its nearest ancestor that clips overflow - or, with none below the
-    // body, to the viewport - so a marker scrolled out of its own list cannot stretch the union
-    // above that list and over another pane. The body and the root are not taken as clippers: their
-    // overflow belongs to the viewport, and their own boxes span the whole document. Clippers found
-    // on one walk are remembered in the maps for the rest of the same placement, since the markers
-    // of one area usually share their scroll container.
-    const CLIPPING_OVERFLOW = ['auto', 'scroll', 'hidden', 'clip'];
-    const clipsOverflow = (element) => {
-      const style = window.getComputedStyle(element);
-      return CLIPPING_OVERFLOW.includes(style.overflowY) || CLIPPING_OVERFLOW.includes(style.overflowX);
-    };
-    const nearestClipper = (element, clipperOf) => {
-      const walked = [];
-      let clipper = null;
-      let node = element.parentElement;
-      while (node && node !== document.body && node !== document.documentElement) {
-        if (clipperOf.has(node)) { clipper = clipperOf.get(node); break; }
-        walked.push(node);
-        if (clipsOverflow(node)) { clipper = node; break; }
-        node = node.parentElement;
+    // The badge sits at a fixed inset from the web view's own viewport corner, never next to the
+    // zoomed text: text moves on every zoom step and can lie partly or wholly outside the visible
+    // pane, and a badge that followed it would jump with each step or land out of sight. It is on
+    // the inline-end side of the zoomed area's text direction - top-right for an LTR area, top-left
+    // for an RTL one - read off the area's first marked element (the document's own direction when
+    // the area has none rendered), so a marker inside an otherwise-LTR document (or vice versa)
+    // still gets its own inline-end.
+    const INDICATOR_INSET_TOP = 12;
+    const INDICATOR_INSET_INLINE = 16;
+    const isRtlArea = (areaId) => {
+      let anchor;
+      const markers = document.querySelectorAll('[' + ATTR + ']');
+      for (let i = 0; i < markers.length && !anchor; i += 1) {
+        if (idOf(markers[i]) === areaId) anchor = markers[i];
       }
-      walked.forEach((visited) => clipperOf.set(visited, clipper));
-      return clipper;
-    };
-    const visibleRectOf = (element, clipperOf, boundsOf) => {
-      const rect = element.getBoundingClientRect();
-      const clipper = nearestClipper(element, clipperOf);
-      if (!boundsOf.has(clipper)) {
-        boundsOf.set(clipper, clipper
-          ? clipper.getBoundingClientRect()
-          : { top: 0, left: 0, right: window.innerWidth, bottom: window.innerHeight });
-      }
-      const bounds = boundsOf.get(clipper);
-      const top = Math.max(rect.top, bounds.top);
-      const left = Math.max(rect.left, bounds.left);
-      const right = Math.min(rect.right, bounds.right);
-      const bottom = Math.min(rect.bottom, bounds.bottom);
-      return right > left && bottom > top ? { top, left, right } : undefined;
-    };
-    // Top inline-end corner of the union of the visible parts of one area's elements, in viewport
-    // pixels: top-right for an LTR area, top-left for an RTL one.
-    const cornerOf = (areaId) => {
-      let top = Infinity; let left = Infinity; let right = -Infinity; let anchor;
-      const clipperOf = new Map();
-      const boundsOf = new Map();
-      document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
-        if (idOf(element) !== areaId) return;
-        if (!anchor) anchor = element;
-        const rect = visibleRectOf(element, clipperOf, boundsOf);
-        if (!rect) return;
-        top = Math.min(top, rect.top); left = Math.min(left, rect.left); right = Math.max(right, rect.right);
-      });
-      const rtl = directionOf(anchor || document.documentElement) === 'rtl';
-      if (top === Infinity) return rtl ? { top: 12, left: 16, rtl } : { top: 12, right: 16, rtl };
-      const topOffset = Math.max(0, top) + 12;
-      return rtl
-        ? { top: topOffset, left: Math.max(0, left) + 16, rtl }
-        : { top: topOffset, right: Math.max(0, window.innerWidth - right) + 16, rtl };
+      const style = window.getComputedStyle
+        ? window.getComputedStyle(anchor || document.documentElement)
+        : undefined;
+      return !!style && style.direction === 'rtl';
     };
     let hideTimer;
     let announceTimer;
@@ -824,8 +778,8 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
         badge = document.createElement('div');
         badge.id = '${INDICATOR_ID}';
         // The visible badge is not the live region: its text is rewritten on every wheel notch.
-        // It starts transparent at the fallback corner, so the first show places it rather than it
-        // appearing at the flow position.
+        // It starts transparent at its corner, so it never appears at the flow position. It is a
+        // direct child of the body rather than of any view element, so no area's zoom scales it.
         badge.setAttribute('aria-hidden', 'true');
         badge.style.cssText = 'position:fixed;top:12px;right:16px;z-index:2147483647;pointer-events:none;' +
           'padding:4px 10px;border-radius:6px;font:600 13px/1.4 system-ui,sans-serif;' +
@@ -851,26 +805,23 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
         document.body.appendChild(liveRegion);
       }
     };
-    // Placing the badge is the only part of a show that reads layout: cornerOf's rects and
-    // directionOf's computed style, both of which force style and layout on the spot because the
-    // zoom write that preceded them has just invalidated both. A wheel gesture delivers 50-120
-    // notches a second and only the last one in a frame is ever painted, so a notch asks for a
-    // placement instead of performing one: the requests collapse into a single callback, running
-    // once before the frame is painted with whichever area the burst settled on. The reads still
-    // force style and layout where they stand - a rAF callback runs ahead of the frame's own style
-    // and layout pass, not after it - but once per frame rather than once per notch.
+    // Placing the badge is the only part of a show that reads style: isRtlArea's computed style,
+    // which forces a style recalculation on the spot because the zoom write that preceded it has
+    // just invalidated it. A wheel gesture delivers 50-120 notches a second and only the last one in
+    // a frame is ever painted, so a notch asks for a placement instead of performing one: the
+    // requests collapse into a single callback, running once before the frame is painted with
+    // whichever area the burst settled on.
     const placeBadge = () => {
       placementFrame = undefined;
       const areaId = placementArea;
       placementArea = undefined;
       if (!badge || areaId === undefined) return;
-      const corner = cornerOf(areaId);
-      badge.style.top = corner.top + 'px';
-      if (corner.rtl) {
-        badge.style.left = corner.left + 'px';
+      badge.style.top = INDICATOR_INSET_TOP + 'px';
+      if (isRtlArea(areaId)) {
+        badge.style.left = INDICATOR_INSET_INLINE + 'px';
         badge.style.right = '';
       } else {
-        badge.style.right = corner.right + 'px';
+        badge.style.right = INDICATOR_INSET_INLINE + 'px';
         badge.style.left = '';
       }
     };
