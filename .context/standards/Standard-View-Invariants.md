@@ -94,8 +94,10 @@ its own for a region, because the engine is what knows which markers the caret's
 consequences worth knowing here:
 
 - **`generateInlineMarkerMenuListItems` is a different menu.** It builds from the `usfmMarkers` map
-  in `platform-bible-utils` and serves the OTHER view types (`viewType !== 'standard'`); it never
-  runs in Standard view. A Standard-view palette question is never answered by that function.
+  in `platform-bible-utils` and serves the OTHER view types. Its result is computed in EVERY view
+  (the `inlineMarkerMenuItems` memo in `platform-scripture-editor.web-view.tsx` carries no
+  `viewType` guard) but only ever OPENED outside Standard view (`viewType !== 'standard'`). A
+  Standard-view palette question is never answered by that function.
 - **Everything offered must be insertable, and the `\` only commits to the document through a
   palette that opened.** With nothing to offer, the `\` is an ordinary character and lands. The
   editor half owns the rule that no offered entry is a silent no-op — see "A menu offers nothing it
