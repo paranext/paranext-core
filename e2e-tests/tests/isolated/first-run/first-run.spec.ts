@@ -10,8 +10,10 @@
  *
  * - Wizard appears and localisation resolves
  * - Forward navigation: Language → Internet Settings → Identify (Next hidden at Identify)
- * - "Don't sync yet" on Sync consent closes the wizard (PT-4178, PT-4369)
+ * - "Don't sync yet" on Sync consent closes the wizard (PT-4178)
  * - Sync progress step renders the syncing heading with Finish disabled (PT-4179)
+ * - Choosing "Unrestricted" on Internet Settings starts no Send/Receive before Sync consent, and each
+ *   consent choice leaves the automatic sync gate in the state it promises
  *
  * Navigation note: IdentifyStep hides the shell's Next button and owns its own "Save and restart"
  * primary action (which triggers a real app restart in production). SyncConsentStep (PT-4178)
@@ -21,7 +23,16 @@
  * the language step regardless of the machine's registration state, "Save and restart" calls
  * onNext() directly, and "Sync" resolves immediately without a real backend call.
  */
+import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { sendPapiRequestOnce } from '../../../fixtures/helpers';
+import {
+  makeSampleProjectEditable,
+  openEditableScriptureEditorForProject,
+  SAMPLE_WEB_PROJECT_ID,
+  sendPapiCommandWhenRegistered,
+} from '../../../fixtures/scripture-editor-helpers';
+import { captureAppOutput } from '../multi-window/multi-window.util';
 import { FirstRunPage } from './first-run.page';
 
 // Override dev-appdata so the wizard always shows, even after a developer has run the app
@@ -177,5 +188,190 @@ test.describe('First-run wizard', () => {
     // running app with its own primary button.
     const finishBtn = frPage.dialog.getByRole('button', { name: 'Finish' });
     await expect(finishBtn).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+/**
+ * Start counting sync notification toasts in the main window, and return a reader for the count.
+ *
+ * Every Send/Receive that reaches the data provider in a dev build shows one: paranext-core has no
+ * Send/Receive implementation, so the `#if DEBUG` placeholder of the
+ * `paratextBibleSendReceive.syncProjects` handler sends a "Syncing projects… (dev placeholder)"
+ * notification, which the renderer shows as a toast — the sync notification a user sees. The toast
+ * is counted from the DOM as it is added, because it auto-closes after a few seconds and a poll
+ * could miss it.
+ *
+ * Install after the demo-mode reload; a reload discards the observer.
+ */
+async function watchSyncNotifications(mainPage: Page): Promise<() => Promise<number>> {
+  await mainPage.evaluate(() => {
+    const root = document.documentElement;
+    const counted = new WeakSet<Element>();
+    root.dataset.e2eSyncNotifications = '0';
+    const countNewToasts = () => {
+      document.querySelectorAll('[data-sonner-toast]').forEach((toast) => {
+        if (counted.has(toast)) return;
+        if (!/Syncing projects[\s\S]*\(dev placeholder\)/.test(toast.textContent ?? '')) return;
+        counted.add(toast);
+        root.dataset.e2eSyncNotifications = String(Number(root.dataset.e2eSyncNotifications) + 1);
+      });
+    };
+    new MutationObserver(countNewToasts).observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    countNewToasts();
+  });
+  return () =>
+    mainPage.evaluate(() => Number(document.documentElement.dataset.e2eSyncNotifications));
+}
+
+/** Logged by `syncOnProjectSwitch` when the first-run consent gate withholds its sync. */
+function projectSwitchSyncSkippedLog(consent: 'unconfirmed' | 'deferred'): string {
+  return `Project-switch sync skipped: first-run sync consent is ${consent}`;
+}
+
+const INTERNET_SETTINGS_OBJECT = 'object:paratextRegistration.internetSettingsDataProvider-data';
+
+type InternetSettings = { permittedInternetUse: string } & Record<string, unknown>;
+
+async function getInternetSettings(): Promise<InternetSettings> {
+  // One selector argument, which the provider ignores; it serializes as `null`.
+  return sendPapiRequestOnce<InternetSettings>(`${INTERNET_SETTINGS_OBJECT}.getInternetSettings`, [
+    undefined,
+  ]);
+}
+
+/**
+ * Put the permitted internet use back to what the machine started with. The Internet Settings step
+ * writes each selection straight to ParatextData's own internet settings, which are shared with a
+ * co-installed Paratext 9 rather than scoped to the test profile. Writes back what the provider
+ * just returned with only that one field changed — the same write the step makes, so the masked
+ * secrets in the read are kept as they are.
+ */
+async function restorePermittedInternetUse(original: string): Promise<void> {
+  const current = await getInternetSettings();
+  if (current.permittedInternetUse === original) return;
+  await sendPapiRequestOnce(`${INTERNET_SETTINGS_OBJECT}.setInternetSettings`, [
+    undefined,
+    { ...current, permittedInternetUse: original },
+  ]);
+}
+
+type SyncConsentReached = {
+  frPage: FirstRunPage;
+  /** Sync notification toasts shown since the wizard came up, the positive control's included. */
+  syncNotificationCount: () => Promise<number>;
+};
+
+/**
+ * Drive the wizard to its Sync consent step with "Unrestricted" chosen on Internet Settings, assert
+ * that no Send/Receive started on the way, then hand over to `choose` for the consent choice.
+ *
+ * Two positive controls keep the negative assertion from passing on a corpus that could never have
+ * matched:
+ *
+ * 1. Before the wizard is advanced, the test sends `syncProjects` itself and waits for its sync
+ *    notification toast. That proves the whole observation path — the data provider's handler, the
+ *    notification router, the renderer's toast behind the wizard overlay — works in this app
+ *    instance, before the window the negative assertion covers even starts.
+ * 2. With "Unrestricted" selected, the test switches the Simple-mode editor slot to a project, which
+ *    is what the default active project picker behind the wizard overlay does once internet use is
+ *    permitted. The gate's skip line must then appear inside the asserted window, proving an
+ *    automatic sync trigger actually ran there and was turned away.
+ *
+ * The seeded `platform.firstRunComplete: false` is what the gate reads, and demo mode never
+ * persists completion, so the whole wizard runs with consent unconfirmed.
+ */
+async function reachSyncConsentAfterUnrestricted(
+  mainPage: Page,
+  electronApp: ElectronApplication,
+  choose: (reached: SyncConsentReached) => Promise<void>,
+): Promise<void> {
+  const capture = captureAppOutput(electronApp);
+  await injectDemoMode(mainPage);
+  const frPage = new FirstRunPage(mainPage);
+  await frPage.waitForWizard();
+
+  const syncNotificationCount = await watchSyncNotifications(mainPage);
+  await sendPapiCommandWhenRegistered('paratextBibleSendReceive.syncProjects', []);
+  await expect.poll(syncNotificationCount, { timeout: 30_000 }).toBe(1);
+
+  const gateWindowStart = capture.mark();
+  await frPage.clickNext(); // Language → Internet Settings
+  await expect(frPage.unrestrictedOption).toBeEnabled({ timeout: 60_000 });
+  const originalInternetUse = (await getInternetSettings()).permittedInternetUse;
+  try {
+    await frPage.selectUnrestricted();
+
+    await makeSampleProjectEditable();
+    await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+    await expect
+      .poll(() => capture.textFrom(gateWindowStart), { timeout: 30_000 })
+      .toContain(projectSwitchSyncSkippedLog('unconfirmed'));
+
+    await frPage.clickNext(); // Internet Settings → Identify
+    await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
+    await expect(frPage.syncButton).toBeVisible({ timeout: 10_000 });
+    // Still only the positive control's toast.
+    expect(await syncNotificationCount()).toBe(1);
+
+    await choose({ frPage, syncNotificationCount });
+  } finally {
+    await restorePermittedInternetUse(originalInternetUse);
+  }
+}
+
+test.describe('First-run sync consent gate', () => {
+  // The isolated project root gives the editor switch a project that exists on every machine.
+  // DEV_NOISY=false keeps the Simple layout's own editor slot, which the switch replaces.
+  test.use({
+    electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  });
+  // The wizard path's cold-start budgets (see 'First-run wizard' above) plus a sample-project
+  // install and an editor open, each of which is also budgeted for a cold boot.
+  test.describe.configure({ timeout: 360_000 });
+
+  test('"Don\'t sync yet" after Unrestricted: no sync before consent, then deferred for the session', async ({
+    mainPage,
+    electronApp,
+  }) => {
+    await reachSyncConsentAfterUnrestricted(
+      mainPage,
+      electronApp,
+      async ({ frPage, syncNotificationCount }) => {
+        await frPage.clickDontSyncYet();
+        await frPage.waitForDismissed();
+
+        // The main process recorded the deferral, so every automatic trigger answers 'deferred'
+        // for the rest of this session. (A second project switch cannot demonstrate it here: the
+        // isolated root holds one project, and reopening it only focuses the existing editor.)
+        expect(await sendPapiCommandWhenRegistered('platform.getAutomaticSyncConsent')).toBe(
+          'deferred',
+        );
+        expect(await syncNotificationCount()).toBe(1);
+      },
+    );
+  });
+
+  test('"Sync" after Unrestricted: no sync before consent, and choosing Sync does not defer', async ({
+    mainPage,
+    electronApp,
+  }) => {
+    await reachSyncConsentAfterUnrestricted(mainPage, electronApp, async ({ frPage }) => {
+      await frPage.clickSync(); // Sync consent → Sync progress
+      await expect(
+        frPage.dialog.getByRole('heading', { name: /syncing your projects/i }),
+      ).toBeVisible({ timeout: 10_000 });
+
+      // Demo mode resolves the Sync button without sending the command, so the sync it starts is
+      // not observable here. What is: this choice must not record the session deferral that "Don't
+      // sync yet" does. Demo mode never persists completion, so a gate that was not deferred still
+      // answers 'unconfirmed'.
+      expect(await sendPapiCommandWhenRegistered('platform.getAutomaticSyncConsent')).toBe(
+        'unconfirmed',
+      );
+    });
   });
 });
