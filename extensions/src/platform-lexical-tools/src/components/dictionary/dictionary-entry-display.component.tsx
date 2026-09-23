@@ -1,6 +1,7 @@
 import {
   Button,
   cn,
+  ContentZoomRoot,
   DrawerDescription,
   DrawerTitle,
   Separator,
@@ -164,7 +165,7 @@ export function DictionaryEntryDisplay({
         <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-2">
           <span className="tw:flex tw:flex-row tw:items-baseline tw:gap-2">
             <TitleComponent className="tw:text-2xl tw:font-normal scripture-font">
-              {dictionaryEntry.lemma}
+              <ContentZoomRoot as="span">{dictionaryEntry.lemma}</ContentZoomRoot>
             </TitleComponent>
             <DescriptionComponent className="tw:text-lg tw:text-muted-foreground">
               {formattedGlosses}
@@ -189,6 +190,8 @@ export function DictionaryEntryDisplay({
         <h3 className="tw:mb-1 tw:font-semibold">
           {localizedStrings['%platformLexicalTools_dictionary_sensesLabel%']}
         </h3>
+        {/* Each sense's glosses and definition zoom with the pane; the sense card, its number and
+            its domains keep interface size. */}
         <ToggleGroup
           type="single"
           value={
@@ -215,12 +218,17 @@ export function DictionaryEntryDisplay({
               >
                 <div className="tw:flex tw:items-baseline tw:gap-2">
                   <span className="tw:font-bold tw:text-accent-foreground">{senseIndex + 1}</span>
-                  <span className="tw:text-base">{sense.glosses.join(', ')}</span>
+                  <ContentZoomRoot as="span" className="tw:text-base">
+                    {sense.glosses.join(', ')}
+                  </ContentZoomRoot>
                 </div>
                 {sense.definition && (
-                  <div className="tw:mt-1 tw:max-w-lg tw:text-start tw:text-sm tw:text-muted-foreground">
+                  <ContentZoomRoot
+                    as="div"
+                    className="tw:mt-1 tw:max-w-lg tw:text-start tw:text-sm tw:text-muted-foreground"
+                  >
                     {sense.definition}
-                  </div>
+                  </ContentZoomRoot>
                 )}
                 <DomainsDisplay
                   domains={sense.domains}
