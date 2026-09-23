@@ -45,7 +45,9 @@ export { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP };
  * by spreading its own saved state onto the new project, so the levels arrive at the new project
  * looking exactly like levels chosen for it. This stamp is what tells the two apart: a pane whose
  * stamp still names what it shows keeps its levels, and a pane whose stamp names something else is
- * re-seeded from the memory of the identity it shows now.
+ * re-seeded from the memory of the identity it shows now. A pane that commits a level while it
+ * resolves no identity is stamped with its kind alone (`kind:`), which reads as stale once it
+ * resolves one.
  *
  * Written and read only by the platform (`web-view-content-zoom.service.ts`). Unlike the levels
  * key, nothing outside core has a reason to read it, so it is not part of the extension-facing
