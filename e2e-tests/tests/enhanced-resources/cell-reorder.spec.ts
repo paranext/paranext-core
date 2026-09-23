@@ -126,7 +126,7 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
       { type: 'project', name: 'Resource B', id: idB, isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
 
     // Wait for both draggable cells to appear.
     await expect(stg.cellDraggable).toHaveCount(2, { timeout: 15_000 });
@@ -169,7 +169,7 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
       { type: 'project', name: 'Resource B', id: idB, isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.cellDraggable).toHaveCount(2, { timeout: 15_000 });
 
     const labelsBefore = await getCellLabels(stg);
@@ -206,7 +206,7 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     expect(reloadedId).toBeTruthy();
 
     // Re-acquire the page object after reload and wait for the cells to repopulate.
-    const stgAfterReload = await openScriptureTextGrid(mainPage);
+    const stgAfterReload = await openScriptureTextGrid(mainPage, projectId);
     await expect(stgAfterReload.cellDraggable).toHaveCount(2, { timeout: 20_000 });
 
     const labelsAfterReload = await getCellLabels(stgAfterReload);
@@ -245,7 +245,7 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
       { type: 'project', name: 'Resource B', id: idB, isInTextCollection: false },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     // Only idA is visible initially (idB is hidden by default).
     await expect(stg.cellDraggable).toHaveCount(1, { timeout: 15_000 });
 
