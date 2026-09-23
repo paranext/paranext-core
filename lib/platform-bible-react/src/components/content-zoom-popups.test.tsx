@@ -18,7 +18,7 @@ import {
 
 /** The zoom-area marker. The platform zooms every element that carries it. */
 const ROOT = 'data-platform-content-zoom-root';
-/** A pop-up flag the platform does not recognize; asserted absent so no pop-up grows it again. */
+/** A pop-up flag the platform does not recognize; asserted absent so no pop-up carries it. */
 const UNRECOGNIZED_POPUP_FLAG = 'data-platform-content-zoom-popup';
 /** The custom property a scaled pop-up would carry. */
 const POPUP_FACTOR = '--platform-content-zoom-popup-factor';

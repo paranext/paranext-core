@@ -273,8 +273,8 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     // this the editor would pay for a whole-document scan per keystroke. A removed node's subtree is
     // intact and queryable while the record holds it, so a marker removed inside a larger subtree is
     // seen too; nesting needs no case of its own, because any change to a marker's marked ancestry is
-    // itself the addition, removal or retitling of a marker. A marker inside a shadow root is still
-    // invisible here, as it was before, since the observer does not traverse shadow trees.
+    // itself the addition, removal or retitling of a marker. A marker inside a shadow root is
+    // invisible here, since the observer does not traverse shadow trees.
     const isAreaRecord = (record) => {
       if (isIndicatorRecord(record)) return false;
       // Until the parent has taken a report, every mutation is worth another try: that retry is the
