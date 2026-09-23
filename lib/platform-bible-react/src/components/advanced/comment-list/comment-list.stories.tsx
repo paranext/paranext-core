@@ -463,7 +463,12 @@ export const ZoomedText: Story = {
     <div className="comment-list-zoom-story">
       <style>{PLATFORM_ZOOM_STAND_IN}</style>
       <ContentZoomTextProvider>
-        <CommentListStory initialThreads={sampleComments} />
+        <CommentListStory
+          initialThreads={sampleComments}
+          canUserAssignThreadCallback={async () => true}
+          canUserResolveThreadCallback={async () => true}
+          canUserEditOrDeleteCommentCallback={async () => true}
+        />
       </ContentZoomTextProvider>
     </div>
   ),
