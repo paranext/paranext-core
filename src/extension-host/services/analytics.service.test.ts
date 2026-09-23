@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
+  isPostHogEnabled: vi.fn(),
+  getCommonProperties: vi.fn(),
+  posthogSend: vi.fn(),
+  posthogShutdown: vi.fn(),
+  PostHogAnalyticsProvider: vi.fn(),
 }));
 
 vi.mock('@shared/services/data-provider.service', () => ({
@@ -19,6 +24,23 @@ vi.mock('@shared/services/logger.service', () => ({
   __esModule: true,
   default: { debug: mocks.debug, info: mocks.info, warn: mocks.warn, error: mocks.error },
   logger: { debug: mocks.debug, info: mocks.info, warn: mocks.warn, error: mocks.error },
+}));
+vi.mock('@extension-host/services/analytics.config', () => ({
+  isPostHogEnabled: mocks.isPostHogEnabled,
+  POSTHOG_HOST: 'https://eu.i.posthog.com',
+  POSTHOG_PROJECT_KEYS: { test: 'phc_test', production: 'phc_prod_placeholder' },
+}));
+vi.mock('@extension-host/services/analytics-enrichment', () => ({
+  getCommonProperties: mocks.getCommonProperties,
+  // Real merge semantics (caller wins) without importing the real module, which would pull the
+  // app service network object into this test.
+  mergeWithCommonProperties: (
+    callerProperties: Record<string, unknown> | undefined,
+    commonProperties: Record<string, unknown>,
+  ) => ({ ...commonProperties, ...callerProperties }),
+}));
+vi.mock('@extension-host/services/analytics-providers/posthog-analytics.provider', () => ({
+  PostHogAnalyticsProvider: mocks.PostHogAnalyticsProvider,
 }));
 
 /**
@@ -52,6 +74,19 @@ beforeEach(() => {
   mocks.waitForNetworkObject.mockResolvedValue({
     id: 'paratextRegistration.internetSettingsDataProvider',
   });
+  mocks.isPostHogEnabled.mockReturnValue(false);
+  mocks.getCommonProperties.mockResolvedValue({
+    app_version: '0.6.0',
+    os_platform: 'linux',
+    os_release: '6.6',
+  });
+  mocks.posthogSend.mockResolvedValue(undefined);
+  mocks.posthogShutdown.mockResolvedValue(undefined);
+  mocks.PostHogAnalyticsProvider.mockImplementation((environment: string) => ({
+    environment,
+    send: mocks.posthogSend,
+    shutdown: mocks.posthogShutdown,
+  }));
 });
 
 afterEach(() => {
@@ -240,11 +275,14 @@ test('a failure reading settings from an already-found data provider logs a dist
 test('an event fired after initialize has already resolved is stamped and flushed immediately', async () => {
   vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
 
-  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+  const { initialize, trackEvent, flushPending } = await import(
+    '@extension-host/services/analytics.service'
+  );
   await initialize();
   mocks.debug.mockClear();
 
   trackEvent('second_event', { count: 2 });
+  await flushPending();
 
   const sentLog = findSentLog('Test');
   expect(sentLog).toBeDefined();
@@ -284,7 +322,9 @@ test('a failing provider send is caught and logged, without initialize or trackE
 test('trackEvent drops a non-serializable property and warns immediately, but still sends the rest of the event', async () => {
   vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
 
-  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+  const { initialize, trackEvent, flushPending } = await import(
+    '@extension-host/services/analytics.service'
+  );
   await initialize();
   mocks.warn.mockClear();
 
@@ -298,6 +338,7 @@ test('trackEvent drops a non-serializable property and warns immediately, but st
     expect.stringContaining("dropping non-serializable property 'circularRef'"),
   );
 
+  await flushPending();
   const sentLog = findSentLog('Test');
   expect(sentLog).toBeDefined();
   expect(sentLog).toContain('"name":"bad_properties_event"');
@@ -311,7 +352,9 @@ test('trackEvent drops a non-serializable property and warns immediately, but st
 test('trackEvent drops properties whose values are functions, symbols, or undefined -- JSON.stringify does not throw for these, it just silently omits them', async () => {
   vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
 
-  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+  const { initialize, trackEvent, flushPending } = await import(
+    '@extension-host/services/analytics.service'
+  );
   await initialize();
   mocks.warn.mockClear();
 
@@ -332,6 +375,7 @@ test('trackEvent drops properties whose values are functions, symbols, or undefi
     expect.stringContaining("dropping non-serializable property 'explicitlyUndefined'"),
   );
 
+  await flushPending();
   const fullEventLog = findFullEventLog('Test');
   expect(fullEventLog).toBeDefined();
   expect(fullEventLog).toContain('"valid":"ok"');
@@ -340,16 +384,19 @@ test('trackEvent drops properties whose values are functions, symbols, or undefi
   expect(fullEventLog).not.toContain('explicitlyUndefined');
 });
 
-test('trackEvent omits properties entirely when none of them survive sanitization', async () => {
+test('trackEvent leaves only the common properties when none of the caller properties survive sanitization', async () => {
   vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
 
-  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+  const { initialize, trackEvent, flushPending } = await import(
+    '@extension-host/services/analytics.service'
+  );
   await initialize();
 
   const circular: Record<string, unknown> = {};
   circular.self = circular;
 
   trackEvent('all_properties_bad', { onlyBad: circular });
+  await flushPending();
 
   const sentLog = findSentLog('Test');
   expect(sentLog).toBeDefined();
@@ -358,5 +405,119 @@ test('trackEvent omits properties entirely when none of them survive sanitizatio
   const fullEventLog = findFullEventLog('Test');
   expect(fullEventLog).toBeDefined();
   expect(fullEventLog).toContain('"name":"all_properties_bad"');
-  expect(fullEventLog).not.toContain('"properties"');
+  expect(fullEventLog).toContain('"app_version":"0.6.0"');
+  expect(fullEventLog).not.toContain('onlyBad');
+});
+
+test('every event is enriched with the common properties and the analytics environment before reaching the provider', async () => {
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+  trackEvent('app_launch', { source: 'test' });
+  await initialize();
+
+  const fullEvent = findFullEventLog('Test');
+  expect(fullEvent).toBeDefined();
+  expect(fullEvent).toContain('"app_version":"0.6.0"');
+  expect(fullEvent).toContain('"os_platform":"linux"');
+  expect(fullEvent).toContain('"analytics_environment":"test"');
+  expect(fullEvent).toContain('"source":"test"');
+});
+
+test('an event fired after initialization is also enriched', async () => {
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent, flushPending } = await import(
+    '@extension-host/services/analytics.service'
+  );
+  await initialize();
+  trackEvent('later_event');
+  await flushPending();
+  expect(findFullEventLog('Test')).toContain('"app_version":"0.6.0"');
+});
+
+test('a caller property with the same name as a common property wins', async () => {
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+  trackEvent('app_launch', { app_version: 'caller' });
+  await initialize();
+  const fullEvent = findFullEventLog('Test');
+  // Positive control: enrichment ran, so the collision was real.
+  expect(fullEvent).toContain('"os_platform":"linux"');
+  expect(fullEvent).toContain('"app_version":"caller"');
+  expect(fullEvent).not.toContain('"app_version":"0.6.0"');
+});
+
+test('when PostHog is disabled both environments use the console provider', async () => {
+  mocks.get.mockResolvedValue({
+    getInternetSettings: vi.fn().mockResolvedValue({ selectedServer: 'Production' }),
+  });
+  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+  trackEvent('app_launch');
+  await initialize();
+  // The choice is the config's, not a hard-coded default.
+  expect(mocks.isPostHogEnabled).toHaveBeenCalled();
+  expect(findSentLog('Production')).toBeDefined();
+  expect(mocks.PostHogAnalyticsProvider).not.toHaveBeenCalled();
+});
+
+test('when PostHog is enabled, a PostHog provider per environment is constructed with that environment key and the EU host, and events go to it instead of the console', async () => {
+  mocks.isPostHogEnabled.mockReturnValue(true);
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+  trackEvent('app_launch');
+  await initialize();
+
+  expect(mocks.PostHogAnalyticsProvider).toHaveBeenCalledWith(
+    'test',
+    'phc_test',
+    'https://eu.i.posthog.com',
+  );
+  expect(mocks.PostHogAnalyticsProvider).toHaveBeenCalledWith(
+    'production',
+    'phc_prod_placeholder',
+    'https://eu.i.posthog.com',
+  );
+  expect(mocks.posthogSend).toHaveBeenCalledTimes(1);
+  expect(mocks.posthogSend.mock.calls[0][0]).toMatchObject({
+    name: 'app_launch',
+    environment: 'test',
+    properties: { app_version: '0.6.0', analytics_environment: 'test' },
+  });
+  expect(findSentLog('Test')).toBeUndefined();
+});
+
+test('a PostHog provider rejection is logged and the service keeps accepting events', async () => {
+  mocks.isPostHogEnabled.mockReturnValue(true);
+  mocks.posthogSend.mockRejectedValueOnce(new Error('offline'));
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent, flushPending } = await import(
+    '@extension-host/services/analytics.service'
+  );
+  trackEvent('app_launch');
+  await initialize();
+  await flushPending();
+  expect(mocks.error).toHaveBeenCalledWith(
+    expect.stringContaining("failed to send event 'app_launch'"),
+  );
+  trackEvent('second');
+  await flushPending();
+  expect(mocks.posthogSend).toHaveBeenCalledTimes(2);
+});
+
+test('shutdown asks every constructed provider to shut down and never rejects', async () => {
+  mocks.isPostHogEnabled.mockReturnValue(true);
+  mocks.posthogShutdown.mockRejectedValueOnce(new Error('boom'));
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent, shutdown } = await import(
+    '@extension-host/services/analytics.service'
+  );
+  trackEvent('app_launch');
+  await initialize();
+  await expect(shutdown()).resolves.toBeUndefined();
+  expect(mocks.posthogShutdown).toHaveBeenCalledTimes(2);
+});
+
+test('shutdown before any provider was created is a no-op', async () => {
+  const { shutdown } = await import('@extension-host/services/analytics.service');
+  await expect(shutdown()).resolves.toBeUndefined();
+  expect(mocks.posthogShutdown).not.toHaveBeenCalled();
 });
