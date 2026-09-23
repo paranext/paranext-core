@@ -26,9 +26,9 @@ function createWebViewContext(initialState: Record<string, unknown> = {}) {
   const context = {
     webViewId: WEB_VIEW_ID,
     getWebViewState: <T>(stateKey: string, defaultValue: T): T =>
-      // Test double of the untyped web view state store
+      // Test double of the untyped web view state store, which returns the stored object itself
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      stateKey in state ? (structuredClone(state[stateKey]) as T) : defaultValue,
+      stateKey in state ? (state[stateKey] as T) : defaultValue,
     setWebViewState: <T>(stateKey: string, stateValue: T) => {
       state[stateKey] = stateValue;
       emitUpdate();
@@ -109,6 +109,36 @@ describe('useWebViewState', () => {
     rerender();
     writeExternally('contentZoom', { level: 1.2 });
     expect(result.current[0]).toBe(afterRemoval);
+  });
+
+  it('keeps the same saved object when an unrelated update re-delivers an equal value', () => {
+    const { useSlot, writeExternally } = createWebViewContext({ items: ['a', 'b'] });
+    let effectRuns = 0;
+
+    const { result, rerender } = renderHook(() => {
+      const [items] = useSlot('items', []);
+      useEffect(() => {
+        effectRuns += 1;
+      }, [items]);
+      return items;
+    });
+    const before = result.current;
+    expect(before).toEqual(['a', 'b']);
+    expect(effectRuns).toBe(1);
+
+    // Each update carries a freshly deserialized copy of the whole state, `items` included
+    rerender();
+    writeExternally('contentZoom', { level: 1.2 });
+    rerender();
+    writeExternally('contentZoom', { level: 1.4 });
+
+    expect(Object.is(before, result.current)).toBe(true);
+    expect(effectRuns).toBe(1);
+
+    // A genuinely changed saved value still replaces it
+    writeExternally('items', ['a', 'c']);
+    expect(result.current).toEqual(['a', 'c']);
+    expect(effectRuns).toBe(2);
   });
 
   it('updates the slot when a saved value arrives with an update', () => {
