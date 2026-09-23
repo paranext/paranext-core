@@ -568,9 +568,14 @@ async function internalGetMetadataWithRetries(
       );
   }
   if (allProjectsMetadataArray.length === 0) {
-    logger.warn(
-      `Did not find any project metadata${retryTimes > 0 ? ` on retry ${retryTimes}` : ''} for ${JSON.stringify(options)} after the grace period. If you expected to find projects for these filters, this probably indicates a problem. Maybe not all PDPFs loaded in time.`,
-    );
+    const message = `Did not find any project metadata${retryTimes > 0 ? ` on retry ${retryTimes}` : ''} for ${JSON.stringify(options)} after the grace period. If you expected to find projects for these filters, this probably indicates a problem. Maybe not all PDPFs loaded in time.`;
+    // A query that names specific projects can legitimately come back empty: the caller asked
+    // whether a project exists and it does not (yet), and `getMetadataForProject` already reports
+    // that to its caller as a rejection. A consumer that retries such a lookup on a timer would
+    // otherwise fill the production log with a warning per attempt. Only an unfiltered query
+    // returning nothing points at a platform problem worth a warning there.
+    if (options.includeProjectIds) logger.debug(message);
+    else logger.warn(message);
   }
 
   return allProjectsMetadataArray;

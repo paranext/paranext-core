@@ -4808,10 +4808,6 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-09-22
 - **Status:** Accepted
-- **Amended 2026-09-23:** the retry after a failed lookup is timer-driven and in place (it was
-  rejoin-driven when first recorded), a later successful subscribe clears the failure stamp, a
-  member that cannot report contributes nothing, and alternative (d) was added. Wording below
-  reflects the amended decision.
 - **Context:** `projectDataProviders.get(projectInterface, projectId)` looks cheap at the call site
   and is not. It runs `projectLookupService.getMetadataForProject`, which waits for a matching PDP
   factory and then asks EVERY registered factory for `getAvailableProjects`
@@ -4829,17 +4825,23 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   repeatedly — a hook or effect keyed on the set of open web views, a selection, a setting that
   another surface writes — acts on the **diff** of that set: it acquires only what joined, releases
   only what left, and keeps resolved providers (and failed lookups) for its own lifetime so a
-  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, or a
-  provider that could not be subscribed to, is kept for a bounded delay (30 seconds in the hook)
-  and then looked up afresh by a timer the failed subscription arms for itself, whether or not the
-  project leaves the set, whatever the failure was: the lookup service's `No project found` is
-  also what a late-registering factory or a mid-session resource install produces, so no message
-  text is treated as a permanent verdict. A later successful subscribe clears the stamp, and a
-  member that cannot report contributes no books rather than its previous list.
+  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, a provider
+  that could not be subscribed to, or one whose setting could not be read, is kept for a bounded
+  delay (30 seconds in the hook) and then looked up afresh by a timer the failed subscription arms
+  for itself, without waiting for the project to leave and rejoin (leaving cancels the timer),
+  whatever the failure was: the lookup service's `No project found` is also what a
+  late-registering factory or a mid-session resource install produces, so no message text is
+  treated as a permanent verdict. The attempts are not capped: an id that never resolves costs one
+  fan-out per delay for as long as its view stays open, which after rule (1) is a handful of
+  requests, and the lookup service logs an empty answer to a single-project query at debug rather
+  than warn so the cadence does not fill the production log. A real value delivered by the
+  subscription clears the stamp (not the subscribe resolving, which proves only that the listener
+  attached), and a member that cannot report contributes no books rather than its previous list.
   `useOpenProjectBookIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the
   reference implementation; the scroll-group service's `ensureVersificationSubscribed` is the
-  older in-tree instance and evicts immediately on failure, which suits a pull-driven module-level
-  cache that is re-read on every use. (2)
+  older in-tree instance and evicts immediately on failure, so, being pull-driven and re-read on
+  every conversion, it pays a fan-out per conversion for a project that never resolves — a gap
+  outside this decision, not a pattern it endorses. (2)
   The **lookup service stays a broadcast** with no cache of its own for now: which factories serve
   which project changes as factories register, as resources install, and as layering factories
   come and go, and a stale answer there is a correctness bug for every caller, not a performance
@@ -4859,16 +4861,27 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   project both consumers hold costs two fan-outs. They differ in shape (the scroll-group cache is
   pull-driven and re-read on every conversion; the hook's is push-driven and consulted on join or
   by its retry timer), so a shared cache would have to carry the retry policy of the push-driven
-  consumer. Worth doing when a third consumer appears.
+  consumer. Worth doing when a third consumer appears. (e) **Heal from network events instead of a
+  timer** — `use-project-picker-data.hook.ts` already does this for the same failure mode,
+  refetching on `platform.onDidChangeProjects` and on `object:onDidCreateNetworkObject` filtered
+  to PDP factories, debounced. It costs nothing while idle and heals in about 200 ms. Not chosen
+  for the hook: three more network subscriptions against one timer, and the events miss a C#
+  factory that starts serving an id without a new factory registering. Remains the right shape
+  for a consumer that must heal fast.
 - **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
   `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
-  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup or
-  subscribe failed is retried by a timer after the delay, in place, so a project the backend begins
-  serving later in the session is picked up within one delay of its failure, never sooner; a
-  consumer that needs it sooner would subscribe to project-list or factory-registration events and
-  evict on those instead. A subscription that dies without reporting a failure (a provider whose
-  network object is disposed by an extension host restart while the subscription stays registered
-  locally) is not covered by the timer; as of 2026-09-23 it is recorded as deferred on PT-4597.
+  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup,
+  subscribe or setting read failed is retried by a timer after the delay, in place, so a project
+  the backend begins serving later in the session is picked up within one delay of its failure,
+  never sooner; a consumer that needs it sooner takes alternative (e). Reviewers of any
+  `subscribeSetting` consumer should also know that a read failure is a value in the callback, not
+  a rejection, so a catch around the subscribe does not see it. The retry mutates the toolbar's
+  book list on its own cadence, without a user action: a project that fails while the picker is
+  open loses its books from the list mid-interaction, accepted over showing books that cannot be
+  navigated to. A subscription that dies without reporting a failure (a provider whose network
+  object is disposed by an extension host restart while the subscription stays registered
+  locally) is not covered by the timer; as of 2026-09-24 it is carried as item C3 in PT-4592's
+  layer-1 carryover section.
   The flap sources that exposed this are tracked as PT-4592 (a panel republishing its navigable
   project ids while its reference list resolves transiently empty) and PT-4743 (one installed
   resource yielding two picker rows under two project id spellings). Revisit rule (2) if a
