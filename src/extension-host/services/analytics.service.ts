@@ -236,11 +236,15 @@ async function enrichAndFlush(
 ): Promise<void> {
   let { properties } = unresolvedEvent;
   try {
+    const merged = mergeWithCommonProperties(
+      unresolvedEvent.properties,
+      await getCommonProperties(),
+    );
     // Both environments send to one PostHog project because their slots share the Test key, so this
-    // property is the only way to tell real-user traffic from test traffic in the dashboard.
+    // property is the only way to tell real-user traffic from test traffic in the dashboard. Spread
+    // last so a caller property of the same name can never overwrite it.
     // TODO(PT-4401): remove it once each environment has its own project.
-    const common = { ...(await getCommonProperties()), analytics_environment: environment };
-    properties = sanitizeProperties(mergeWithCommonProperties(unresolvedEvent.properties, common));
+    properties = sanitizeProperties({ ...merged, analytics_environment: environment });
   } catch (error) {
     logger.warn(
       `Analytics: enrichment failed for '${unresolvedEvent.name}': ${getErrorMessage(error)}`,
