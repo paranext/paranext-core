@@ -144,7 +144,7 @@ export function createContentZoomWheelReader(
   // A trackpad pinch never reaches a document as a gesture of its own: Chromium's touchpad pinch
   // event queue (`touchpad_pinch_event_queue.cc`) synthesizes one as ctrl+wheel with `deltaMode` 0,
   // no horizontal component, a tick of exactly ±1 and `deltaY = -100·ln(scale)`. Counted as ticks
-  // that would be a full zoom step per frame, so a pinch is recognised BEFORE the tick path and
+  // that would be a full zoom step per frame, so a pinch is recognized BEFORE the tick path and
   // measured as travel through the zoom scale instead, the way pdf.js separates the two
   // (`isPinchToZoom` in its `web/app.js`).
   //

@@ -4690,7 +4690,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   fixed `tw:w-72` width, `tw:flex tw:flex-col tw:gap-2.5` layout and `tw:p-2.5` padding, and a
   pop-up's content renderers return fragments — so their children were direct flex items of that
   element. Moving the content inward moves it out of reach of every one of those, which is a
-  behaviour change at interface scale and not only when zoomed. So the wrapper must take over the
+  behavior change at interface scale and not only when zoomed. So the wrapper must take over the
   width, the flex layout and the padding together, with `width: 'auto'` and `tw:p-0` on
   `Popover.Content` so the fixed class cannot reassert itself over the wrapper. Splitting them —
   taking the padding inward and leaving the width and gap behind — silently resizes and respaces
@@ -4704,7 +4704,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `OverlayHost` is deliberately the one place that depends on the content-zoom
   service: `OverlayContextMenu` is part of the generated extension-facing declaration bundle, and an
   import of the service from there would publish it — including its test-only seams — to extension
-  authors. A command palette shown centred, with no anchor position, is not anchored to any pane's
+  authors. A command palette shown centered, with no anchor position, is not anchored to any pane's
   content and stays at interface scale, as does a modal dialog.
 - **Alternatives:**
   - per-call-site `ContentZoomRoot` wraps with a `zoomArea` prop threaded through the comment

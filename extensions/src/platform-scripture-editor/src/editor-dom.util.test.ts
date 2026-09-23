@@ -1687,13 +1687,13 @@ describe('createPendingCommentCenterAnchorSource', () => {
     expect(source.measure()).toBeUndefined();
   });
 
-  it("returns a zero-size rect at the container's centre when it has layout", () => {
+  it("returns a zero-size rect at the container's center when it has layout", () => {
     const container = addEditorContainer();
     stubClientRects(container, [new DOMRect(100, 200, 300, 400)]);
 
     const source = createPendingCommentCenterAnchorSource(container);
 
-    // centre x = 100 + 300/2 = 250; centre y = 200 + 400/2 = 400; zero size.
+    // center x = 100 + 300/2 = 250; center y = 200 + 400/2 = 400; zero size.
     expect(rectNumbers(source.measure())).toEqual({ x: 250, y: 400, width: 0, height: 0 });
     expect(source.contextElement).toBe(container);
   });

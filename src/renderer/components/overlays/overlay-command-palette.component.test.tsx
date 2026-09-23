@@ -1171,7 +1171,7 @@ describe('OverlayCommandPalette (store-connected)', () => {
 
   it('forwards frameScale to the presentational component it renders', () => {
     // A `position` plus a sized `request.anchor` puts the palette in its anchored branch, the one
-    // that reads frameScale (the centred branch has no anchor).
+    // that reads frameScale (the centered branch has no anchor).
     const entry = createPaletteEntry({
       position: { x: 10, y: 20 },
       request: {

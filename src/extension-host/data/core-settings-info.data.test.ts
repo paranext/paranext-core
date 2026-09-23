@@ -151,7 +151,7 @@ describe('content zoom settings', () => {
 
   it('does not declare or validate the per-type zoom-area record', () => {
     const all = groups.flatMap((group) => Object.keys(group.properties));
-    // Positive control: the neighbouring content-zoom settings are still declared.
+    // Positive control: the neighboring content-zoom settings are still declared.
     expect(all).toContain('platform.webViewContentZoomMemory');
     expect(all).not.toContain('platform.webViewContentZoomTypesWithAreas');
     expect(Object.keys(coreSettingsValidators)).not.toContain(
