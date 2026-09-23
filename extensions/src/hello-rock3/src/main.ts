@@ -118,11 +118,10 @@ class HelloRock3ProjectWebViewFactory extends WebViewFactory<
     const projectId = openWebViewOptions.projectId || savedWebView.projectId || undefined;
     return {
       title: projectId
-        ? `Hello Third Rock Project: ${
-            (await (
-              await papi.projectDataProviders.get('platform.base', projectId)
-            ).getSetting('platform.name')) ?? projectId
-          }`
+        ? await papi.localization.getLocalizedProjectTitle({
+            localizeKey: '%helloRock3_project_titleWithProject%',
+            projectId,
+          })
         : 'Hello Third Rock Project',
       ...savedWebView,
       content: helloRock3ProjectWebView,
@@ -218,11 +217,10 @@ const helloRock3ProjectViewerProvider: IWebViewProviderWithType = {
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     return {
       title: projectId
-        ? `Hello Third Rock Project Viewer: ${
-            (await (
-              await papi.projectDataProviders.get('platform.base', projectId)
-            ).getSetting('platform.name')) ?? projectId
-          }`
+        ? await papi.localization.getLocalizedProjectTitle({
+            localizeKey: '%helloRock3_projectViewer_titleWithProject%',
+            projectId,
+          })
         : 'Hello Third Rock Project Viewer',
       ...savedWebView,
       content: helloRock3ProjectViewerWebView,
