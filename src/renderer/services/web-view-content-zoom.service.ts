@@ -217,14 +217,13 @@ const OWN_LEVEL_WRITE_DEBOUNCE_MS = 250;
 
 /**
  * A pane's levels given in this window but not yet written into its definition, paired with the
- * identity stamp ({@link identityStampFor}) the pane showed when the write was chosen — `undefined`
- * when the pane had no resolvable identity at that moment, which is a fact about the write, not the
- * absence of one: a pending write with no resolvable identity still has an entry here, and only a
- * pane with NO entry at all has nothing pending. Kept as one record (set whole in
- * {@link setOwnLevels}, cleared whole everywhere it is cleared) so {@link seedFromMemory} and
- * {@link commitOwnLevels} can each tell a pending write chosen for the pane's CURRENT identity from
- * one that predates a re-point the pane's own definition stamp never caught up to, because no
- * commit for it had landed yet either.
+ * stamp a commit would have carried when the write was chosen ({@link commitStampFor}): the stamp of
+ * the identity the pane showed, the kind alone when it showed none, or `undefined` for a pane of no
+ * remembered kind — a fact about the write, not the absence of one: only a pane with NO entry at
+ * all has nothing pending. Kept as one record (set whole in {@link setOwnLevels}, cleared whole
+ * everywhere it is cleared) so {@link seedFromMemory} and {@link commitOwnLevels} can each tell a
+ * pending write chosen for the pane's CURRENT identity from one that predates a re-point the pane's
+ * own definition stamp never caught up to, because no commit for it had landed yet either.
  */
 const pendingOwnLevelWrites = new Map<
   WebViewId,
@@ -352,11 +351,7 @@ function effectiveOwnLevels(
 ): Levels {
   if (!definition) return {};
   const pending = pendingOwnLevelWrites.get(definition.id);
-  if (pending) {
-    const currentId = memoryIdentityFor(definition);
-    const currentStamp = currentId ? identityStampFor(currentId) : undefined;
-    if (pending.identity === currentStamp) return pending.levels;
-  }
+  if (pending && pending.identity === commitStampFor(definition)) return pending.levels;
   return getOwnLevels(definition);
 }
 
@@ -601,6 +596,22 @@ function isContentZoomBootstrapAlive(webViewId: WebViewId): boolean {
 /** The value stored under {@link CONTENT_ZOOM_IDENTITY_STATE_KEY} for one pane's identity. */
 function identityStampFor(id: MemoryIdentity): string {
   return `${id.kind}:${id.identity}`;
+}
+
+/**
+ * The stamp a commit of the pane's levels carries right now: the stamp of the identity it resolves
+ * to, or, for a pane of a remembered kind that resolves none yet (an empty panel before any project
+ * is opened), the kind alone (`kind:`). That stamp names no identity, so it reads as stale the
+ * moment the pane resolves one, and the levels chosen before then are not carried onto that
+ * identity. `undefined` for a pane of no remembered kind, which never resolves an identity.
+ */
+function commitStampFor(
+  definition: Pick<SavedWebViewDefinition, 'webViewType' | 'projectId' | 'state'>,
+): string | undefined {
+  const kind = getContentZoomKind(definition.webViewType);
+  if (!kind) return undefined;
+  const id = memoryIdentityFor(definition);
+  return id ? identityStampFor(id) : `${kind}:`;
 }
 
 /** The identity a pane's state is stamped with, or `undefined` for a pane with no stamp. */
@@ -1217,7 +1228,9 @@ export async function __flushContentZoomWritesForTesting(): Promise<void> {
  * would misattribute it to whatever identity — or lack of one — is current. The pane is left to
  * re-seed itself from its next fresh area report, which reads what the identity it shows now
  * actually remembers. The one case that is not a mismatch is a write chosen with no identity whose
- * pane still has none: nothing about the pane has changed, so it commits exactly as it always did.
+ * pane still has none: nothing about the pane has changed, so it commits, stamped with the kind
+ * alone ({@link commitStampFor}) so the level is not adopted by the first identity the pane
+ * resolves.
  *
  * A failure anywhere in here — the definition read included, which throws once the dock layout is
  * gone — is logged and reported as `false` rather than left to propagate: this runs from a burst's
@@ -1235,8 +1248,7 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
       pendingOwnLevelWrites.delete(webViewId);
       return false;
     }
-    const currentId = memoryIdentityFor(definition);
-    const currentStamp = currentId ? identityStampFor(currentId) : undefined;
+    const currentStamp = commitStampFor(definition);
     if (pending.identity !== currentStamp) {
       pendingOwnLevelWrites.delete(webViewId);
       return true;
@@ -1280,10 +1292,9 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
  */
 function setOwnLevels(webViewId: WebViewId, levels: Levels): boolean {
   const currentDefinition = deps.getDefinition(webViewId);
-  const currentId = currentDefinition ? memoryIdentityFor(currentDefinition) : undefined;
   pendingOwnLevelWrites.set(webViewId, {
     levels,
-    identity: currentId ? identityStampFor(currentId) : undefined,
+    identity: currentDefinition ? commitStampFor(currentDefinition) : undefined,
   });
   if (ownLevelWriteTimers.has(webViewId)) return true;
   if (!commitOwnLevels(webViewId)) return false;
