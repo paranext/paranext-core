@@ -317,8 +317,32 @@ test('a failing provider send is caught and logged at debug, without initialize 
     setTimeout(resolve, 0);
   });
 
-  expect(mocks.debug).toHaveBeenCalledWith(expect.stringContaining('boom'));
+  expect(mocks.debug).toHaveBeenCalledWith(
+    "Analytics: failed to send event 'app_launch': boom (test)",
+  );
   expect(mocks.error).not.toHaveBeenCalled();
+});
+
+test('a provider send that throws synchronously is logged at error with the error message, without initialize or trackEvent throwing', async () => {
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  vi.doMock('@extension-host/services/analytics-providers/console-analytics.provider', () => ({
+    ConsoleAnalyticsProvider: class {
+      constructor(private readonly environment: string) {}
+
+      send(): Promise<void> {
+        throw new Error(`sync boom (${this.environment})`);
+      }
+    },
+  }));
+
+  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+
+  trackEvent('app_launch');
+  await expect(initialize()).resolves.toBeUndefined();
+
+  expect(mocks.error).toHaveBeenCalledWith(
+    "Analytics: failed to send event 'app_launch': sync boom (test)",
+  );
 });
 
 test('trackEvent drops a non-serializable property and warns immediately, but still sends the rest of the event', async () => {
@@ -335,9 +359,10 @@ test('trackEvent drops a non-serializable property and warns immediately, but st
 
   trackEvent('bad_properties_event', { valid: 'ok', circularRef: circular });
 
-  // Warned at trackEvent() call time, before the event is ever queued or sent
+  // Warned at trackEvent() call time, before the event is ever queued or sent. The reason is the
+  // error's message alone, without the `TypeError:` prefix `String(error)` would add.
   expect(mocks.warn).toHaveBeenCalledWith(
-    expect.stringContaining("dropping non-serializable property 'circularRef'"),
+    expect.stringMatching(/dropping non-serializable property 'circularRef': Converting circular/),
   );
 
   await flushPending();
