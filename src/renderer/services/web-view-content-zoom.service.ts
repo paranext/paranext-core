@@ -942,9 +942,9 @@ export function pushContentZoom(
  * For the iframe load hook: treats every load as a fresh content session, including an in-place
  * reload that replaces a pane's content without the component unmounting (`forgetContentZoom` only
  * runs on unmount, so the pane's id, and anything keyed by it, survives a reload). Clears any
- * fallback grace left over from whatever the pane showed before, then arms a fresh one exactly as if
- * the pane had just been opened and cancels it again for a pane that must not wait one out — a URL
- * pane, which is scaled whole from the start, and a pane whose definition has gone, which has
+ * fallback grace left over from whatever the pane showed before, then arms a fresh one exactly as
+ * if the pane had just been opened and cancels it again for a pane that must not wait one out — a
+ * URL pane, which is scaled whole from the start, and a pane whose definition has gone, which has
  * nothing to scale; a pane that goes on to report an area within the grace cancels it as usual. The
  * pane's own expectation of marking an area ({@link expectAreasByWebViewId}) is untouched by a load:
  * the entry is keyed by the pane's web view TYPE, which a reload does not change, and its value may
@@ -953,8 +953,8 @@ export function pushContentZoom(
  * content from the {@link pushContentZoom} below, at once — no wait for a fresh grace to elapse. The
  * whole-iframe `zoom` a reload does not reset on its own (it lives on the host `<iframe>` element,
  * not the content a reload replaces) is cleared and, if still warranted, reapplied by that same
- * push, which assigns the host zoom in both directions, so the new content never renders showing the
- * old content's answer for even a moment.
+ * push, which assigns the host zoom in both directions, so the new content never renders showing
+ * the old content's answer for even a moment.
  *
  * The pane's last-reported areas are deliberately kept across the load itself rather than dropped
  * here. A real load replaces the iframe's realm, so the fresh content's bootstrap reports its own
@@ -1745,7 +1745,9 @@ export function initializeContentZoomService(
             typesWithAreasLoaded = true;
           });
         } catch (e) {
-          logger.warn(`Content zoom: could not subscribe to the type record. ${getErrorMessage(e)}`);
+          logger.warn(
+            `Content zoom: could not subscribe to the type record. ${getErrorMessage(e)}`,
+          );
         }
       })(),
     ]);
