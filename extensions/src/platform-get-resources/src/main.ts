@@ -537,6 +537,21 @@ export async function activate(context: ExecutionActivationContext) {
   const refreshResourceFlagsCommandPromise = papi.commands.registerCommand(
     'platformGetResources.refreshResourceFlags',
     refreshResourceFlags,
+    {
+      method: {
+        // Experimental: this command's contract is not yet stable.
+        'x-experimental': true,
+        summary:
+          "Brings the resource catalog's derived flags (installed, projectId, updateAvailable) " +
+          'up to date and resolves once they are, so the next read of the catalog sees them',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
   );
 
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(

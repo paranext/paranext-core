@@ -1519,7 +1519,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   installed trivially fails its "is the installed copy the newest" test — so the front end clears
   `updateAvailable` for any row it reconciles as not installed rather than persisting a flag that
   describes nothing. That keeps the cached flag meaning what the list renders it as: "the copy on
-  disk is out of date".
+  disk is out of date". Both `refreshResourceFlags` and the `recomputeDblResourcesUpdateStatus`
+  method it calls through are now marked `@experimental` / `'x-experimental': true`, because this
+  recompute contract remains untested beyond its one caller.
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
 
 ## adr-dbl-install-status-from-backend: The backend is the authority on which DBL resources are installed, and on which project id
@@ -1573,6 +1575,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   styles; it was judged below the bar for its own work and is not reproduced. Folding the install lookup into the existing single
   pass removed the per-row `ExistingScrText` scans from the catalog projection as well, so the
   projection now costs one collection pass rather than one per catalogued row.
+  `recomputeDblResourcesInstallStatus` is now marked `@experimental` / `'x-experimental': true` for
+  the same reason as its sibling in `adr-dbl-cache-recompute-on-read` — the contract remains
+  untested beyond its one caller.
 - **Source:** PT-4484; builds directly on `adr-dbl-cache-recompute-on-read`.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended

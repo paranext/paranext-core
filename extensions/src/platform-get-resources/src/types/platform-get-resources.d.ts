@@ -46,6 +46,7 @@ declare module 'platform-get-resources' {
      * removing a resource, where the user is already waiting on their own action.
      *
      * @returns Whether an update is available, keyed by DBL Entry UID.
+     * @experimental
      */
     recomputeDblResourcesUpdateStatus: () => Promise<DblResourceUpdateStatus>;
     /**
@@ -65,6 +66,7 @@ declare module 'platform-get-resources' {
      *
      * @returns The local project id of each catalogued resource, keyed by DBL Entry UID; an empty
      *   string for one that is not installed.
+     * @experimental
      */
     recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
     /**
@@ -181,6 +183,8 @@ declare module 'papi-shared-types' {
      * updating or removing a resource — and then re-read the catalog, or the read will return the
      * flags from before the change. Without it an updated resource keeps its "update available"
      * flag until the catalog is read a second time, because nothing else about the row changes.
+     *
+     * @experimental
      */
     'platformGetResources.refreshResourceFlags': () => Promise<void>;
 
