@@ -22,39 +22,44 @@ export const USERSNAP_INIT_TIMEOUT_MS = 5 * 1000;
 let globalUsersnapApi: SpaceApi | undefined;
 let isUsersnapFormOpen = false;
 let apiKeyOfOpenForm: string | undefined;
-let shadowRootStylingInterval: ReturnType<typeof setInterval> | undefined;
+let shadowRootWaitInterval: ReturnType<typeof setInterval> | undefined;
+let shadowRootObserver: MutationObserver | undefined;
 
-/** Searches for Usersnap shadow DOM elements and applies custom styles */
-function findAndStyleUsersnapShadowRoots(): boolean {
+/**
+ * Applies custom styles to the open form's buttons in the Usersnap widget's shadow root. Runs on
+ * every change to the shadow root, so it must be idempotent: the changes it makes itself trigger it
+ * again and must then find nothing left to do.
+ */
+function findAndStyleUsersnapShadowRoots(): void {
   try {
-    const usersnapWidget = document.querySelector('us-widget');
-    if (!usersnapWidget) return false;
+    const shadowRoot = document.querySelector('us-widget')?.shadowRoot;
+    if (!shadowRoot) return;
 
-    if (!usersnapWidget.shadowRoot) return false;
-
-    const closeButton = usersnapWidget.shadowRoot.querySelector<HTMLButtonElement>(
+    const closeButton = shadowRoot.querySelector<HTMLButtonElement>(
       'button[title="Close annotation"]',
     );
 
-    if (!closeButton) return false;
-
     if (apiKeyOfOpenForm === USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY) {
+      // The idea form renders this button only once the user starts taking a screenshot.
+      if (!closeButton) return;
       closeButton.style.top = 'unset';
       closeButton.style.right = '22ch';
       closeButton.style.height = '54px';
       closeButton.style.bottom = '0';
     } else if (apiKeyOfOpenForm === USERSNAP_PROJECT_REPORT_ISSUE_API_KEY) {
-      closeButton.remove();
+      closeButton?.remove();
 
-      const collapseButton = usersnapWidget.shadowRoot.querySelector<HTMLButtonElement>(
+      if (shadowRoot.querySelector('button[aria-label="Close feedback form"]')) return;
+
+      const collapseButton = shadowRoot.querySelector<HTMLButtonElement>(
         'button[aria-label="Collapse form"]',
       );
 
-      if (!(collapseButton instanceof HTMLButtonElement)) return false;
+      if (!(collapseButton instanceof HTMLButtonElement)) return;
 
       const newCloseButton = collapseButton.cloneNode(true);
 
-      if (!(newCloseButton instanceof HTMLButtonElement)) return false;
+      if (!(newCloseButton instanceof HTMLButtonElement)) return;
 
       collapseButton.style.right = '36px';
 
@@ -76,37 +81,61 @@ function findAndStyleUsersnapShadowRoots(): boolean {
 
       collapseButton.parentNode?.insertBefore(newCloseButton, collapseButton.nextSibling);
     }
-
-    return true;
   } catch (error) {
-    logger.warn('Failed to find Usersnap close button in shadow roots:', error);
-    return false;
+    logger.warn('Failed to style Usersnap close buttons in the shadow root:', error);
   }
 }
 
-/** How often to look for the open form's buttons in the Usersnap widget's shadow root */
-const SHADOW_ROOT_STYLING_INTERVAL_MS = 100;
-/** How long to keep looking for the open form's buttons before giving up */
-const SHADOW_ROOT_STYLING_TIMEOUT_MS = 10 * 1000;
+/** How often to look for the Usersnap widget's shadow root */
+const SHADOW_ROOT_WAIT_INTERVAL_MS = 100;
+/** How long to keep looking for the Usersnap widget's shadow root before giving up */
+const SHADOW_ROOT_WAIT_TIMEOUT_MS = 10 * 1000;
+
+/** Stops restyling the Usersnap widget's shadow root, and stops waiting for it to appear */
+function stopShadowRootStyling(): void {
+  if (shadowRootWaitInterval) {
+    clearInterval(shadowRootWaitInterval);
+    shadowRootWaitInterval = undefined;
+  }
+  shadowRootObserver?.disconnect();
+  shadowRootObserver = undefined;
+}
+
+/** Styles the open form's buttons now, and again whenever the widget's shadow root changes */
+function observeShadowRoot(shadowRoot: ShadowRoot): void {
+  findAndStyleUsersnapShadowRoots();
+  shadowRootObserver = new MutationObserver(findAndStyleUsersnapShadowRoots);
+  shadowRootObserver.observe(shadowRoot, { childList: true, subtree: true });
+}
 
 /**
- * Polls until the open form's buttons can be styled. The `<us-widget>` element and its shadow root
- * exist from load time, so opening a form adds no new element to observe; the form's contents are
- * rendered into the existing shadow root shortly after the `open` event.
+ * Keeps the open form's buttons styled for as long as the form is open. The form renders some of
+ * them only later, in response to the user (the idea form's annotation close button appears when
+ * the user starts a screenshot), so the shadow root is observed rather than checked once. The
+ * `<us-widget>` element and its shadow root normally exist from load time; if they do not exist
+ * yet, poll briefly for them.
  */
 function startShadowRootStyling(): void {
-  if (shadowRootStylingInterval) clearInterval(shadowRootStylingInterval);
+  stopShadowRootStyling();
+
+  const getShadowRoot = () => document.querySelector('us-widget')?.shadowRoot ?? undefined;
+
+  const shadowRoot = getShadowRoot();
+  if (shadowRoot) {
+    observeShadowRoot(shadowRoot);
+    return;
+  }
 
   const startTime = Date.now();
-  shadowRootStylingInterval = setInterval(() => {
-    const success = findAndStyleUsersnapShadowRoots();
-    if (!success && Date.now() - startTime < SHADOW_ROOT_STYLING_TIMEOUT_MS) return;
+  shadowRootWaitInterval = setInterval(() => {
+    const foundShadowRoot = getShadowRoot();
+    if (!foundShadowRoot && Date.now() - startTime < SHADOW_ROOT_WAIT_TIMEOUT_MS) return;
 
-    if (!success)
-      logger.warn('Timeout reached while waiting for Usersnap shadow DOM elements to appear');
-    clearInterval(shadowRootStylingInterval);
-    shadowRootStylingInterval = undefined;
-  }, SHADOW_ROOT_STYLING_INTERVAL_MS);
+    clearInterval(shadowRootWaitInterval);
+    shadowRootWaitInterval = undefined;
+    if (foundShadowRoot) observeShadowRoot(foundShadowRoot);
+    else logger.warn('Timeout reached while waiting for the Usersnap widget to appear');
+  }, SHADOW_ROOT_WAIT_INTERVAL_MS);
 }
 
 /** Initializes the global UserSnap API instance */
@@ -198,10 +227,7 @@ export async function initializeUsersnapApi() {
       isUsersnapFormOpen = false;
       apiKeyOfOpenForm = undefined;
 
-      if (shadowRootStylingInterval) {
-        clearInterval(shadowRootStylingInterval);
-        shadowRootStylingInterval = undefined;
-      }
+      stopShadowRootStyling();
     });
 
     globalUsersnapApi = api;

@@ -211,17 +211,34 @@ describe('close-button styling of the open form', () => {
     return { open: getHandler('open'), close: getHandler('close') };
   }
 
-  /** Adds a `<us-widget>` whose shadow root holds the form's header buttons, as Usersnap renders it. */
-  function addUsersnapWidget(): ShadowRoot {
+  /**
+   * Adds a `<us-widget>` whose shadow root holds the form's header buttons, as Usersnap renders it.
+   * The idea form renders no annotation close button until the user starts a screenshot.
+   */
+  function addUsersnapWidget({ withAnnotationCloseButton = true } = {}): ShadowRoot {
     const widget = document.createElement('us-widget');
     const shadowRoot = widget.attachShadow({ mode: 'open' });
     shadowRoot.innerHTML = `
       <div class="header">
         <button aria-label="Collapse form">-</button>
-        <button title="Close annotation">x</button>
+        ${withAnnotationCloseButton ? '<button title="Close annotation">x</button>' : ''}
       </div>`;
     document.body.appendChild(widget);
     return shadowRoot;
+  }
+
+  /** Adds the annotation close button the widget renders when the user starts a screenshot. */
+  function addAnnotationCloseButton(shadowRoot: ShadowRoot): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.title = 'Close annotation';
+    button.textContent = 'x';
+    shadowRoot.appendChild(button);
+    return button;
+  }
+
+  /** Lets pending MutationObserver callbacks, which are delivered as microtasks, run. */
+  async function flushMutationObservers(): Promise<void> {
+    await vi.advanceTimersByTimeAsync(0);
   }
 
   beforeEach(() => {
@@ -279,7 +296,75 @@ describe('close-button styling of the open form', () => {
     expect(shadowRoot.querySelector('button[aria-label="Close feedback form"]')).toBeNull();
   });
 
-  it('keeps polling until the form buttons appear', async () => {
+  it('idea form: styles an annotation close button that appears after the form opened', async () => {
+    const { open } = await initializeAndGetFormHandlers();
+    const shadowRoot = addUsersnapWidget({ withAnnotationCloseButton: false });
+
+    open({ apiKey: SUBMIT_IDEA_KEY });
+    // The user may take any amount of time before starting a screenshot.
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    const closeButton = addAnnotationCloseButton(shadowRoot);
+    await flushMutationObservers();
+
+    expect(closeButton.style.right).toBe('22ch');
+    expect(closeButton.style.bottom).toBe('0px');
+    expect(closeButton.style.height).toBe('54px');
+  });
+
+  it('idea form: leaves an annotation close button alone once the form has closed', async () => {
+    const { open, close } = await initializeAndGetFormHandlers();
+    const shadowRoot = addUsersnapWidget({ withAnnotationCloseButton: false });
+    const disconnectSpy = vi.spyOn(MutationObserver.prototype, 'disconnect');
+
+    open({ apiKey: SUBMIT_IDEA_KEY });
+    await vi.advanceTimersByTimeAsync(200);
+    close();
+
+    const closeButton = addAnnotationCloseButton(shadowRoot);
+    await flushMutationObservers();
+
+    expect(closeButton.style.right).toBe('');
+    expect(closeButton.style.bottom).toBe('');
+    expect(closeButton.style.height).toBe('');
+    // Styling after close is also ruled out by the cleared form key, so check the observer itself
+    // stops too rather than living on for the rest of the session.
+    const disconnectCallCount = disconnectSpy.mock.calls.length;
+    disconnectSpy.mockRestore();
+    expect(disconnectCallCount).toBe(1);
+  });
+
+  it('report form: adds only one close button when the widget re-renders after styling', async () => {
+    const { open } = await initializeAndGetFormHandlers();
+    const shadowRoot = addUsersnapWidget();
+
+    open({ apiKey: REPORT_ISSUE_KEY });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(shadowRoot.querySelectorAll('button[aria-label="Close feedback form"]')).toHaveLength(1);
+
+    shadowRoot.appendChild(document.createElement('div'));
+    await flushMutationObservers();
+    shadowRoot.appendChild(document.createElement('div'));
+    await flushMutationObservers();
+
+    expect(shadowRoot.querySelectorAll('button[aria-label="Close feedback form"]')).toHaveLength(1);
+  });
+
+  it('report form: removes an annotation close button the widget renders later', async () => {
+    const { open } = await initializeAndGetFormHandlers();
+    const shadowRoot = addUsersnapWidget();
+
+    open({ apiKey: REPORT_ISSUE_KEY });
+    await vi.advanceTimersByTimeAsync(200);
+
+    addAnnotationCloseButton(shadowRoot);
+    await flushMutationObservers();
+
+    expect(shadowRoot.querySelector('button[title="Close annotation"]')).toBeNull();
+    expect(shadowRoot.querySelectorAll('button[aria-label="Close feedback form"]')).toHaveLength(1);
+  });
+
+  it('keeps polling until the widget appears', async () => {
     const { open } = await initializeAndGetFormHandlers();
 
     open({ apiKey: REPORT_ISSUE_KEY });
@@ -294,7 +379,7 @@ describe('close-button styling of the open form', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('stops polling on close before the form buttons appear', async () => {
+  it('stops polling on close before the widget appears', async () => {
     const { open, close } = await initializeAndGetFormHandlers();
 
     open({ apiKey: REPORT_ISSUE_KEY });
@@ -305,7 +390,7 @@ describe('close-button styling of the open form', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('gives up polling after 10 seconds when the form buttons never appear', async () => {
+  it('gives up polling after 10 seconds when the widget never appears', async () => {
     const { open } = await initializeAndGetFormHandlers();
     const { logger } = await import('@shared/services/logger.service');
 
@@ -314,7 +399,7 @@ describe('close-button styling of the open form', () => {
 
     expect(vi.getTimerCount()).toBe(0);
     expect(logger.warn).toHaveBeenCalledWith(
-      'Timeout reached while waiting for Usersnap shadow DOM elements to appear',
+      'Timeout reached while waiting for the Usersnap widget to appear',
     );
   });
 });
