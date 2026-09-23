@@ -168,7 +168,7 @@ export function DictionaryEntryDisplay({
               <ContentZoomRoot as="span">{dictionaryEntry.lemma}</ContentZoomRoot>
             </TitleComponent>
             <DescriptionComponent className="tw:text-lg tw:text-muted-foreground">
-              {formattedGlosses}
+              <ContentZoomRoot as="span">{formattedGlosses}</ContentZoomRoot>
             </DescriptionComponent>
           </span>
           <ul className="tw:flex tw:flex-row tw:gap-1">
