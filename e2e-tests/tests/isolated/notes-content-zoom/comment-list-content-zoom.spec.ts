@@ -251,7 +251,7 @@ test.describe('comment list content zoom', () => {
       await expect.poll(() => readIndicatorText(listFrame), { timeout: 2_000 }).toBe('110%');
     });
 
-    await test.step('the card menu and the assign popover follow the list zoom and stay beside their buttons', async () => {
+    await test.step('the card menu and the assign popover stay at interface scale beside their buttons', async () => {
       const card = cardLocator(listFrame, threadIds[0]);
       await card.click();
       const menuTrigger = card.locator('button[aria-haspopup="menu"]').first();
@@ -276,7 +276,7 @@ test.describe('comment list content zoom', () => {
       const measureAssignItem = async () => {
         await assignTrigger.click();
         await expect(assign).toBeVisible();
-        await expect(assign).toHaveAttribute('data-platform-content-zoom-root', '');
+        await expect(assign).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
         // Also waits for the popover's open animation, so the entry below is read at its settled size.
         await expectPopupBesideTriggerAndInsideFrame(listFrame, assign, assignTrigger);
         const box = await assign.locator('[data-slot="command-item"]').first().boundingBox();
@@ -305,13 +305,13 @@ test.describe('comment list content zoom', () => {
         const factor = factors[i];
         await zoomAreaTo(mainPage, listFrame, listId, 'main', factor);
         const zoomed = await measureMenuItem();
-        expect(zoomed.height / atDefault.height).toBeCloseTo(factor, 1);
+        expect(zoomed.height / atDefault.height).toBeCloseTo(1, 1);
         await expectPopupBesideTriggerAndInsideFrame(listFrame, zoomed.menu, menuTrigger);
         await mainPage.keyboard.press('Escape');
         // Same collapse-on-Escape side effect as above; re-select for the next measurement.
         await card.click();
         if (assignAtDefault !== undefined)
-          expect((await measureAssignItem()) / assignAtDefault).toBeCloseTo(factor, 1);
+          expect((await measureAssignItem()) / assignAtDefault).toBeCloseTo(1, 1);
       }
       /* eslint-enable no-await-in-loop */
 

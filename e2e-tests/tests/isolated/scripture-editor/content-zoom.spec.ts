@@ -508,7 +508,7 @@ test.describe('scripture editor content zoom', () => {
       expect(await readFactor(editorFrame, 'footnotes')).toBe(1.1);
     });
 
-    await test.step('the footnote popover follows the text zoom and stays beside its caller, even scrolled and in a narrow pane', async () => {
+    await test.step('the footnote popover stays at interface scale and beside its caller, even scrolled, re-zoomed and in a narrow pane', async () => {
       const caller = editorFrame.locator(TEXT_NOTE_CALLER_SELECTOR).first();
       const popover = editorFrame.locator('[data-slot="popover-content"]').filter({
         has: editorFrame.locator('.editor-input'),
@@ -523,7 +523,7 @@ test.describe('scripture editor content zoom', () => {
       const openFootnotePopover = async () => {
         await caller.click({ force: true });
         await expect(popover).toBeVisible();
-        await expect(popover).toHaveAttribute('data-platform-content-zoom-root', '');
+        await expect(popover).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
         await expectSettledBeside(editorFrame, popover, caller);
       };
 
@@ -534,18 +534,18 @@ test.describe('scripture editor content zoom', () => {
       const cancelAtDefault = await boxOf(cancel);
       await closeFootnotePopover();
 
-      // Growth by the zoom factor is measured on the popover's controls: the popover's own width is
-      // sized by its content (`w-max`) and capped by the pane, so it does not scale linearly.
+      // Size is measured on the popover's controls: the popover's own width is sized by its
+      // content (`w-max`) and capped by the pane.
       await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1.5);
       await openFootnotePopover();
-      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(1.5, 1);
+      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(1, 1);
       await closeFootnotePopover();
 
       await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
       // Scroll the text before opening, so the caller is no longer where it sat at the top.
       expect((await scrollText(editorFrame, { to: 120 })).after).toBe(120);
       await openFootnotePopover();
-      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(2, 1);
+      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(1, 1);
 
       // Scroll after opening: the popover moves with its caller.
       await scrollTextKeepingVisible(editorFrame, 60, caller);
@@ -560,6 +560,8 @@ test.describe('scripture editor content zoom', () => {
       await expect(async () =>
         expectPopupBesideTriggerAndInsideFrame(editorFrame, popover, caller),
       ).toPass({ timeout: 5_000 });
+      // The text reflowed under the open popover; the popover kept its size.
+      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(1, 1);
       await sendCommandWithId(mainPage, CONTENT_ZOOM_COMMANDS.in, editorId, 'main');
       await expect.poll(() => readFactor(editorFrame, '')).toBe(2);
       await closeFootnotePopover();
@@ -587,7 +589,7 @@ test.describe('scripture editor content zoom', () => {
       expect((await scrollText(editorFrame, { to: 0 })).after).toBe(0);
     });
 
-    await test.step("the standard view's marker palette follows the text zoom", async () => {
+    await test.step("the standard view's marker palette stays at interface scale beside its trigger", async () => {
       // The standard view asks the platform for a command palette rather than rendering its own
       // menu, so this pop-up is drawn by the renderer, outside the web view, and cannot read the
       // pane's zoom variables.
@@ -603,7 +605,7 @@ test.describe('scripture editor content zoom', () => {
       // rather than reusing a position captured once.
       const text = mainInput.getByText('Yahweh', { exact: false }).first();
       // The anchored branch puts `data-overlay-command-palette` on both its `PopoverContent` (the
-      // sized, zoomed box) and, nested inside it, the `Command` that fills that box — so the bare
+      // sized box) and, nested inside it, the `Command` that fills that box — so the bare
       // attribute selector is ambiguous. `data-slot="popover-content"` narrows to the outer element.
       const palette = mainPage.locator(
         '[data-slot="popover-content"][data-overlay-command-palette]',
@@ -673,7 +675,7 @@ test.describe('scripture editor content zoom', () => {
         await zoomAreaTo(mainPage, editorFrame, editorId, 'main', factor);
         const caret = await openPalette();
         widths.set(factor, (await boxOf(palette)).width);
-        // Drawn bigger, still placed against its trigger and still inside the window.
+        // Same size at every zoom, placed against its trigger and inside the window.
         await expectBesideTriggerAndInsideWindow(caret);
         await closePalette();
       }
@@ -682,94 +684,14 @@ test.describe('scripture editor content zoom', () => {
       const atDefault = widths.get(1);
       if (!atDefault) throw new Error('No 100 % palette width recorded');
       [1.5, 2].forEach((factor) => {
-        expect((widths.get(factor) ?? 0) / atDefault).toBeCloseTo(factor, 1);
+        expect((widths.get(factor) ?? 0) / atDefault).toBeCloseTo(1, 1);
       });
 
       // Back to the default so the next step starts from its own baseline.
       await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
     });
 
-    await test.step("the marker palette's arrow stays centred on its trigger at every zoom factor", async () => {
-      // Radix positions the palette's Arrow by writing a raw pixel offset onto its own wrapper,
-      // which is a descendant of PopoverContent. If that wrapper sits inside the zoomed subtree,
-      // the browser re-scales the offset on top of Radix's own (already zoom-aware) number, and the
-      // arrow drifts off its trigger — collapsing to the content's own left corner (see
-      // overlay-command-palette.component.tsx).
-      //
-      // "Yahweh" (verse 1, used above) sits close enough to the palette content's own left edge that
-      // a collapsed-to-zero offset reads the same as a correct one, so it cannot catch this defect.
-      // "that great city" (verse 2) sits far enough from that edge to discriminate a real offset
-      // from a collapsed one — the precondition assertion below enforces that distance per factor,
-      // so a trigger swapped in here that drifts back toward the edge fails loudly instead of
-      // silently disabling the check.
-      const mainInput = editorFrame.locator('.editor-input').first();
-      const text = mainInput.getByText('that great city', { exact: false }).first();
-      // Same ambiguity as the width-growth step above: the anchored branch puts
-      // `data-overlay-command-palette` on both its `PopoverContent` and the nested `Command`.
-      const palette = mainPage.locator(
-        '[data-slot="popover-content"][data-overlay-command-palette]',
-      );
-      // PopoverContent's only two children are the zoomed content div and the Arrow — see
-      // overlay-command-palette.component.tsx. Selecting "not a div" finds the Arrow's own wrapper
-      // (or the arrow element itself) without depending on Radix's exact internal tag name.
-      const arrow = palette.locator('> *:not(div)');
-
-      // Sub-pixel in practice: Radix's own offset puts the arrow's centre on the trigger exactly,
-      // so this absorbs rounding only. Keep it tight — the defect this guards displaced the arrow
-      // by tens of pixels, growing with the zoom, so a wide band would pass against it.
-      const arrowCentreTolerancePx = 2;
-      // How far the trigger must sit from the palette's own left edge for a correct arrow (centred
-      // on the trigger) and a collapsed one (pinned to that edge) to be distinguishable at all,
-      // well clear of the tolerance above.
-      const minTriggerOffsetFromPaletteEdgePx = arrowCentreTolerancePx + 20;
-      const factors = [1, 1.5, 2];
-      // Sequential: each level's palette must be opened, measured and closed before the next.
-      /* eslint-disable no-await-in-loop */
-      for (let i = 0; i < factors.length; i += 1) {
-        const factor = factors[i];
-        await zoomAreaTo(mainPage, editorFrame, editorId, 'main', factor);
-        await text.click();
-        const trigger = await scrollTriggerNearPaneTop(
-          editorFrame,
-          await readCaretBox(editorFrame),
-        );
-        await mainPage.keyboard.press('\\');
-        await expect(palette).toBeVisible();
-        await waitForPopupAnimations(palette);
-
-        // Precondition: the trigger must sit far enough from the palette's own left edge that a
-        // collapsed arrow cannot coincide with a correctly positioned one. Derived from the
-        // trigger's and the palette's own geometry only, never from the arrow itself, so it holds
-        // independent of whether the arrow below turns out correct or collapsed — a collapsed arrow
-        // fails the assertion after this one by construction rather than by luck.
-        const paletteBox = await boxOf(palette);
-        expect(
-          Math.abs(trigger.x - paletteBox.x),
-          `trigger sits meaningfully away from the palette's left edge at ${factor * 100}%, so a collapsed arrow cannot pass by coincidence`,
-        ).toBeGreaterThan(minTriggerOffsetFromPaletteEdgePx);
-
-        // Radix/floating-ui can still reposition the arrow after the open animation ends
-        // (`autoUpdate`, and the size/shift middleware settle asynchronously), so a single instant
-        // read risks a flake; retry until it settles or the timeout is reached.
-        await expect(async () => {
-          const arrowBox = await boxOf(arrow);
-          const arrowCentreX = arrowBox.x + arrowBox.width / 2;
-          expect(
-            Math.abs(arrowCentreX - trigger.x),
-            `arrow centred on its trigger at ${factor * 100}%`,
-          ).toBeLessThanOrEqual(arrowCentreTolerancePx);
-        }).toPass({ timeout: 5_000 });
-
-        await mainPage.keyboard.press('Escape');
-        await expect(palette).toBeHidden();
-      }
-      /* eslint-enable no-await-in-loop */
-
-      // Back to the default so the next step starts from its own baseline.
-      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
-    });
-
-    await test.step('the inline marker menu and the comment editor follow the text zoom', async () => {
+    await test.step('the inline marker menu and the comment editor stay at interface scale and follow the text', async () => {
       // The inline marker menu is the non-standard views' `\` menu (the standard view opens the
       // platform's command palette instead), and the markers view is read-only, so cycle
       // standard -> markers -> formatted.
@@ -797,7 +719,7 @@ test.describe('scripture editor content zoom', () => {
         const caret = await placeCaret();
         await mainPage.keyboard.press('\\');
         await expect(markerMenu).toBeVisible();
-        await expect(markerMenu).toHaveAttribute('data-platform-content-zoom-root', '');
+        await expect(markerMenu).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
         await expectSettledBeside(editorFrame, markerMenu, caret);
         return caret;
       };
@@ -808,7 +730,7 @@ test.describe('scripture editor content zoom', () => {
       const openCommentEditor = async (trigger: PageBox) => {
         await mainPage.keyboard.press('Control+Shift+N');
         await expect(commentEditor).toBeVisible();
-        await expect(commentEditor).toHaveAttribute('data-platform-content-zoom-root', '');
+        await expect(commentEditor).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
         await expectSettledBeside(editorFrame, commentEditor, trigger);
       };
       const closeCommentEditor = async () => {
@@ -829,8 +751,8 @@ test.describe('scripture editor content zoom', () => {
         ).toPass({ timeout: 5_000 });
       };
 
-      // Growth: both pop-ups have fixed widths (500 px and 400 px) that fit the pane at every level
-      // here, so their painted width scales by the zoom factor.
+      // Both pop-ups have fixed widths (500 px and 400 px), so at interface scale their painted
+      // width is the same at every text zoom.
       const widths = new Map<number, { menu: number; comment: number }>();
       // Sequential: each zoom level's pop-ups must be opened, measured and closed before the next.
       /* eslint-disable no-await-in-loop */
@@ -850,8 +772,8 @@ test.describe('scripture editor content zoom', () => {
       const atDefault = widths.get(1);
       if (!atDefault) throw new Error('No 100 % widths recorded');
       [1.5, 2].forEach((factor) => {
-        expect((widths.get(factor)?.menu ?? 0) / atDefault.menu).toBeCloseTo(factor, 1);
-        expect((widths.get(factor)?.comment ?? 0) / atDefault.comment).toBeCloseTo(factor, 1);
+        expect((widths.get(factor)?.menu ?? 0) / atDefault.menu).toBeCloseTo(1, 1);
+        expect((widths.get(factor)?.comment ?? 0) / atDefault.comment).toBeCloseTo(1, 1);
       });
 
       // Still at 200 %: scroll after opening, and each pop-up moves with its caret. The text
@@ -880,7 +802,7 @@ test.describe('scripture editor content zoom', () => {
       // Stays in the formatted view: the next step needs it too.
     });
 
-    await test.step("the footnote editor's marker menu sits beside the selection and is zoomed once", async () => {
+    await test.step("the footnote editor's marker menu sits beside the selection at interface scale", async () => {
       // The footnote editor opens its own inline marker menu on `\` only outside the standard
       // view (which opens the platform's command palette instead); the previous step left the
       // pane in the formatted view.
@@ -965,21 +887,12 @@ test.describe('scripture editor content zoom', () => {
       await openFootnotePopover();
       const selection = await selectAcrossNoteMarkers();
       await openMenu();
-      await expect(menu).toHaveAttribute('data-platform-content-zoom-root', '');
-      // Its own zoom root, outside the zoomed footnote popover: nested inside it, the menu would
-      // be zoomed twice.
-      const popoverElement = await popover.elementHandle();
-      expect(
-        await menu.evaluate(
-          (element, popoverRoot) => !!popoverRoot?.contains(element),
-          popoverElement,
-        ),
-      ).toBe(false);
+      await expect(menu).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
       await waitForPopupAnimations(menu);
       await expectSettledBeside(editorFrame, menu, selection);
       const itemHeightRatio = (await boxOf(menuItem)).height / itemHeightAtDefault;
-      expect(itemHeightRatio).toBeGreaterThan(2 * 0.85);
-      expect(itemHeightRatio).toBeLessThan(2 * 1.15);
+      expect(itemHeightRatio).toBeGreaterThan(0.85);
+      expect(itemHeightRatio).toBeLessThan(1.15);
       await closeMenu();
       await closeFootnotePopover();
 
