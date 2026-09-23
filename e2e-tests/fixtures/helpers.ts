@@ -2661,9 +2661,7 @@ export async function getOpenWebViewDefinitions(page: Page): Promise<OpenWebView
     const { papi } = window as unknown as {
       papi: {
         webViews: {
-          getAllOpenWebViewDefinitions: () => Promise<
-            { id: string; webViewType: string; projectId?: string }[]
-          >;
+          getAllOpenWebViewDefinitions: () => Promise<OpenWebViewSummary[]>;
         };
       };
     };

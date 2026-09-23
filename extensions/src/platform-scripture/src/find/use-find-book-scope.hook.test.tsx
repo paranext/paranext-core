@@ -17,10 +17,10 @@ function buildOptions(overrides: Overrides = {}): FindBookScopeOptions {
 }
 
 describe('useFindBookScope — a project that lacks the saved books', () => {
-  // THE REGRESSION THIS EXISTS FOR. Find follows the Simple-mode editor onto read-only projects and
-  // published resources. Writing the narrowed selection back through the persisted web view state
-  // meant briefly opening a New Testament resource permanently shrank — usually emptied — the saved
-  // book scope, and returning to the user's own project did not bring it back.
+  // Find follows the Simple-mode editor onto read-only projects and published resources. If the
+  // narrowed selection were written back, briefly opening a New Testament resource would permanently
+  // shrink — usually empty — the saved scope, and returning to the user's own project would not
+  // bring it back.
   it('never writes the narrowed selection back to the saved one', () => {
     const setSavedBookIds = vi.fn();
     const savedBookIds = ['GEN', 'EXO'];

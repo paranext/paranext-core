@@ -16,34 +16,36 @@ import {
   FIND_WEBVIEW_TYPE,
   isReportedReadOnly,
   makeProjectReadOnly,
-  openScriptureEditor,
+  openSimpleModeEditor,
+  SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE,
+  selectProjectInTitlebar,
+  waitForEditorBoundToProject,
 } from '../../fixtures/simple-mode-columns.page';
 
 /**
- * End-to-end proof that, in SIMPLE interface mode, the Find panel follows the editor onto a project
- * the user cannot edit.
+ * End-to-end proof that, in SIMPLE interface mode, the Find panel follows the editor onto a
+ * translation project with editing switched off (`Editable=F`).
  *
- * Column 3's panels re-point from `openScriptureEditor`, and Find is re-pointed by a separate call
- * at the end of that command (`updateRelatedFindPanel`) because it is the one panel that needs the
- * id of the editor the open just created. Nothing imports `main.ts`, so that call site — and in
- * particular whether it is reached for a non-editable project — is only reachable from a running
- * app. A read-only project is the case that distinguishes "Find follows the editor" from "Find
- * follows the editor only while the project is writable": a project's editability says nothing
- * about whether searching it is useful.
+ * Column 3's panels re-point from the `platformScriptureEditor.openScriptureEditor` command, and
+ * Find is re-pointed by a separate call at the end of that command (`updateRelatedFindPanel`)
+ * because it is the one panel that needs the id of the editor the open just created. Nothing
+ * imports `main.ts`, so that call site — and in particular whether it is reached for a non-editable
+ * project — is only reachable from a running app. An `Editable=F` project is the case that
+ * distinguishes "Find follows the editor" from "Find follows the editor only while the project is
+ * writable": a project's editability says nothing about whether searching it is useful.
  *
- * The assertion is that Find MOVED, so the suite needs a second, editable project to start from.
+ * The switch under test is driven through the title bar's project picker, which lists `Editable=F`
+ * projects (marked read-only) alongside editable ones. Only the starting point — Find bound to a
+ * second, editable project, so that the assertion can be that Find MOVED — is set up over PAPI.
  *
- * Only the `Editable=F` translation-project half of the rule is covered here. The other half — Find
- * follows a published resource while the Text Collection does not — is deliberately left to the
- * unit tests on `openOrUpdateRelatedPanels`, which reach that branch without an app.
+ * The `main.ts` call site is covered end to end only for `Editable=F`. That Find also follows a
+ * published resource is pinned by the `updateRelatedFindPanel` unit tests, which catch a
+ * project-kind gate inside that function but not one reintroduced at its call site.
+ *
+ * This spec belongs to no subset, so `npm run test:e2e:isolated find` does not run it. Run it with
+ * `npm run test:e2e:isolated tests/isolated/find-follows-read-only-project-simple.spec.ts`, or with
+ * `all`.
  */
-
-/**
- * Web view type of the fixed Column 2 scripture-editor slot in the simple layout. It must be in the
- * dock state before `openScriptureEditor` is called — simple mode routes the open to that slot as a
- * tab replacement, which fails outright if the target tab is not there yet.
- */
-const SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
 // DEV_NOISY=false keeps the test-only extensions and their tabs out of the layout. Simple mode is
 // seeded through the fixture rather than a preConfigureSettings call in a hook, which the fixture
@@ -54,7 +56,7 @@ test.use({
   seedSettings: { 'platform.firstRunComplete': true },
 });
 
-test.describe('simple mode: Find follows the editor onto a read-only project', () => {
+test.describe('simple mode: Find follows the editor onto an Editable=F project', () => {
   // App startup plus two editor opens, each of which re-points the whole of Column 3.
   test.setTimeout(420_000);
 
@@ -81,12 +83,22 @@ test.describe('simple mode: Find follows the editor onto a read-only project', (
   });
 
   test.afterAll(() => {
-    cleanupCommentTestProject(editableProject);
-    cleanupCommentTestProject(readOnlyProject);
-    restoreRecentProjects?.();
+    // Each step on its own: a project folder Windows still holds open makes its delete throw, which
+    // must skip neither the other delete nor the recent-projects restore.
+    try {
+      try {
+        cleanupCommentTestProject(editableProject);
+      } finally {
+        cleanupCommentTestProject(readOnlyProject);
+      }
+    } finally {
+      restoreRecentProjects?.();
+    }
   });
 
-  test('re-points Find when a project the user cannot edit is opened', async ({ mainPage }) => {
+  test('re-points Find when an Editable=F project is picked in the title bar', async ({
+    mainPage,
+  }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
 
     // Both slots have to be in the dock before the opens below: the editor open replaces the
@@ -102,19 +114,20 @@ test.describe('simple mode: Find follows the editor onto a read-only project', (
     await waitForPapiMethodRegistered('command:platformScriptureEditor.openScriptureEditor');
 
     // ── Starting point: Find is bound to the editable project ─────────────────────────────────
-    const editableEditorId = await openScriptureEditor(editableProject.projectId);
+    const editableEditorId = await openSimpleModeEditor(editableProject.projectId);
     await expect(mainPage.locator(`iframe[data-web-view-id="${editableEditorId}"]`)).toBeAttached({
       timeout: 60_000,
     });
     await waitForOverlayGone(mainPage, 90_000);
     await expectFindBoundToProject(mainPage, editableProject.projectId);
 
-    // The project under test really is one the user cannot edit — otherwise this test would pass
+    // The project under test really does have editing switched off — otherwise this test would pass
     // against a Find panel that only ever follows editable projects.
     expect(await isReportedReadOnly(readOnlyProject.projectId)).toBe(true);
 
-    // ── Open the read-only project; Find follows ──────────────────────────────────────────────
-    const readOnlyEditorId = await openScriptureEditor(readOnlyProject.projectId);
+    // ── Pick the Editable=F project in the title bar; Find follows ────────────────────────────
+    await selectProjectInTitlebar(mainPage, readOnlyProject.shortName);
+    const readOnlyEditorId = await waitForEditorBoundToProject(mainPage, readOnlyProject.projectId);
     await expect(mainPage.locator(`iframe[data-web-view-id="${readOnlyEditorId}"]`)).toBeAttached({
       timeout: 60_000,
     });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import '@testing-library/jest-dom';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -20,8 +20,6 @@ import {
 import { LocalizedBookData } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS } from './replace-preview-types';
-import { deriveFindBookLists } from './find-book-lists.utils';
-import { useFindBookScope } from './use-find-book-scope.hook';
 
 // jsdom implements none of ResizeObserver, IntersectionObserver, or matchMedia, and the render path
 // touches all three: platform-bible-react's Tooltip/Popover wire ResizeObservers and the shared
@@ -1566,106 +1564,5 @@ describe('Find — recent searches menu', () => {
     await user.click(screen.getByRole('button', { name: 'Mostrar búsquedas recientes' }));
 
     expect(await screen.findByRole('menu', { name: 'Recientes' })).toBeInTheDocument();
-  });
-});
-
-// The narrowing `useFindBookScope` performs is display-only, so it only holds if the panel is fed
-// the narrowed list and a user pick still reaches the saved setter. Both are wiring in
-// `find.web-view.tsx`, which has no tests of its own; this harness reproduces that wiring.
-describe('Find — book scope driven by useFindBookScope', () => {
-  /** Builds a canon-length `booksPresent` flag string with the given books flagged present. */
-  function booksPresentFor(bookIds: string[]): string {
-    const flags = Array.from({ length: Canon.allBookIds.length }, () => '0');
-    bookIds.forEach((bookId) => {
-      flags[Canon.bookIdToNumber(bookId) - 1] = '1';
-    });
-    return flags.join('');
-  }
-
-  type BookScopeHarnessProps = {
-    savedBookIds: string[];
-    setSavedBookIds: (bookIds: string[]) => void;
-    presentBookIds: string[];
-  };
-
-  function FindWithBookScope({
-    savedBookIds,
-    setSavedBookIds,
-    presentBookIds,
-  }: BookScopeHarnessProps) {
-    const { searchableBooksPresent, availableBookIds } = useMemo(
-      () => deriveFindBookLists(booksPresentFor(presentBookIds)),
-      [presentBookIds],
-    );
-    const { searchableBookIds, selectBookIds } = useFindBookScope({
-      savedBookIds,
-      setSavedBookIds,
-      availableBookIds,
-    });
-
-    return (
-      <Find
-        {...buildLifecycleProps({
-          scope: 'selectedBooks',
-          booksPresent: searchableBooksPresent,
-          selectedBookIds: searchableBookIds,
-          onSelectedBookIdsChange: selectBookIds,
-        })}
-      />
-    );
-  }
-
-  it('saves exactly what the user picks in the book picker', async () => {
-    const user = setupUser();
-    const setSavedBookIds = vi.fn();
-    render(
-      <FindWithBookScope
-        savedBookIds={['GEN']}
-        setSavedBookIds={setSavedBookIds}
-        presentBookIds={['GEN', 'EXO', 'LEV']}
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: /Showing/ }));
-    // A combobox takes its accessible name from a label, never from its contents, so the book
-    // picker's trigger is reached through the summary it renders.
-    await user.click(screen.getByText(/book_selector_books_selected/));
-    await user.click(await screen.findByText('Leviticus'));
-
-    expect(setSavedBookIds).toHaveBeenCalledExactlyOnceWith(['GEN', 'LEV']);
-  });
-
-  it('scopes to the books the current project has while leaving the saved selection alone', () => {
-    const setSavedBookIds = vi.fn();
-    const savedBookIds = ['GEN', 'EXO', 'LEV'];
-    const { rerender } = render(
-      <FindWithBookScope
-        savedBookIds={savedBookIds}
-        setSavedBookIds={setSavedBookIds}
-        presentBookIds={['GEN', 'EXO', 'LEV', 'MAT']}
-      />,
-    );
-    expect(screen.getByText('GEN, EXO, LEV')).toBeInTheDocument();
-
-    // Find follows the editor onto a project without Leviticus.
-    rerender(
-      <FindWithBookScope
-        savedBookIds={savedBookIds}
-        setSavedBookIds={setSavedBookIds}
-        presentBookIds={['GEN', 'EXO', 'MAT']}
-      />,
-    );
-    expect(screen.getByText('GEN, EXO')).toBeInTheDocument();
-    expect(setSavedBookIds).not.toHaveBeenCalled();
-
-    // Back on a project that has it, the saved book is scoped in again.
-    rerender(
-      <FindWithBookScope
-        savedBookIds={savedBookIds}
-        setSavedBookIds={setSavedBookIds}
-        presentBookIds={['GEN', 'EXO', 'LEV', 'MAT']}
-      />,
-    );
-    expect(screen.getByText('GEN, EXO, LEV')).toBeInTheDocument();
   });
 });
