@@ -364,8 +364,7 @@ export { useViewVisibility } from './hooks/use-view-visibility.hook';
 export { useRunWhenVisible } from './hooks/use-run-when-visible.hook';
 export {
   useLivePopoverAnchor,
-  measureRange,
-  measureElement,
+  measureBox,
   leftEdgeRect,
   type LivePopoverAnchor,
   type LivePopoverAnchorSource,

@@ -1,12 +1,7 @@
 import { logger } from '@papi/frontend';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Unsubscriber } from 'platform-bible-utils';
-import {
-  leftEdgeRect,
-  LivePopoverAnchorSource,
-  measureElement,
-  measureRange,
-} from 'platform-bible-react';
+import { leftEdgeRect, LivePopoverAnchorSource, measureBox } from 'platform-bible-react';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -674,7 +669,7 @@ function measureCaretInAnnotation(
   const caret = document.createRange();
   caret.setStart(textNodes[nodeIndex], offsetInAnnotation - nodeStart);
   caret.collapse(true);
-  return measureRange(caret);
+  return measureBox(caret);
 }
 
 /**
@@ -723,7 +718,7 @@ export function createPendingCommentAnchorSource(
         // Between the re-render and the mark appearing, a moved range would place the popover at
         // the start of the text node; keep the last good rect instead.
         if (!isRangeIntact()) return undefined;
-        const rangeRect = measureRange(range);
+        const rangeRect = measureBox(range);
         return rangeRect && leftEdgeRect(rangeRect);
       }
       const caretRect =
@@ -768,7 +763,7 @@ export function createNoteAnchorSource(
     measure: () => {
       const target = element.isConnected ? element : getElementByKey(noteKey);
       if (!target) return undefined;
-      const rect = measureElement(target);
+      const rect = measureBox(target);
       return rect && leftEdgeRect(rect);
     },
     contextElement: element.closest('.editor-input') ?? element,
@@ -788,7 +783,7 @@ export function createPendingCommentCenterAnchorSource(
 ): LivePopoverAnchorSource {
   return {
     measure: () => {
-      const rect = measureElement(editorContainer);
+      const rect = measureBox(editorContainer);
       if (!rect) return undefined;
       return new DOMRect(rect.left + rect.width / 2, rect.top + rect.height / 2, 0, 0);
     },

@@ -59,7 +59,7 @@ import {
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
-  measureRange,
+  measureBox,
   Popover,
   PopoverAnchor,
   PopoverContent,
@@ -1938,7 +1938,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (!contextElement) return;
       markersMenuAnchor.setSource({
         measure: () => {
-          const rect = measureRange(range);
+          const rect = measureBox(range);
           return rect && leftEdgeRect(rect);
         },
         contextElement,
