@@ -2,14 +2,15 @@ import { Minus, Plus, RotateCcw } from 'lucide-react';
 import {
   Button,
   ButtonGroup,
-  ButtonGroupText,
+  cn,
+  Input,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
 import { adjustZoomFactor } from 'platform-bible-utils';
-import { useEffect, useRef, useState } from 'react';
+import { KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
 import { formatZoomPercent } from '@shared/utils/content-zoom.util';
 
@@ -35,19 +36,39 @@ const STEP_BASELINE_WINDOW_MS = 1500;
 const BOUND_BUTTON_CLASSNAME =
   'tw:aria-disabled:opacity-50 tw:aria-disabled:cursor-default tw:aria-disabled:hover:bg-background tw:aria-disabled:hover:text-inherit';
 
+/** Smallest whole percentage the field accepts; a smaller typed number is raised to it. */
+const MIN_PERCENT = Math.round(MIN_ZOOM_FACTOR * 100);
+/** Largest whole percentage the field accepts; a larger typed number is lowered to it. */
+const MAX_PERCENT = Math.round(MAX_ZOOM_FACTOR * 100);
+
+/**
+ * Reads the percentage field's text as a factor. Whitespace — including the narrow no-break space
+ * the field itself displays before `%` (a Unicode `\s`) — and one trailing `%` are ignored; what is
+ * left must be whole digits. The number is clamped to the allowed range and otherwise kept as
+ * typed, not snapped to the buttons' step. `undefined` means the text is not a whole percentage at
+ * all.
+ */
+function parsePercentInput(text: string): number | undefined {
+  const digits = text.replace(/\s/gu, '').replace(/%$/u, '');
+  if (!/^\d+$/u.test(digits)) return undefined;
+  const percent = Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, Number.parseInt(digits, 10)));
+  return percent / 100;
+}
+
 /** Props for {@link ZoomStepper}. */
 export type ZoomStepperProps = {
   /** Current factor, e.g. `1.2` for 120 %. */
   value: number;
   /** Factor the reset button returns to; reset is disabled while the value is already here. */
   defaultValue: number;
-  /** When true, every button is disabled. Defaults to `false`. */
+  /** When true, every button and the percentage field are disabled. Defaults to `false`. */
   disabled?: boolean;
   /**
-   * Localized strings for the three buttons: an accessible name each, plus the three that explain
-   * why a press would do nothing — the two zoom bounds and the reset button already sitting on
-   * `defaultValue`. Such a button's tooltip shows that string instead of its name, so a press that
-   * does nothing says why rather than repeating what the button is called.
+   * Localized strings: an accessible name for each of the three buttons and for the percentage
+   * field, plus the three that explain why a press would do nothing — the two zoom bounds and the
+   * reset button already sitting on `defaultValue`. Such a button's tooltip shows that string
+   * instead of its name, so a press that does nothing says why rather than repeating what the
+   * button is called.
    */
   labels: {
     increase: string;
@@ -56,22 +77,31 @@ export type ZoomStepperProps = {
     atMaximum: string;
     atMinimum: string;
     atDefault: string;
+    /** Accessible name of the percentage field; the outer group already names the setting. */
+    percentInput: string;
   };
-  /** Localized accessible name for the group as a whole — normally the setting's own label. */
+  /** Localized accessible name for the control as a whole — normally the setting's own label. */
   groupLabel?: string;
-  /** Called with the new factor whenever a press changes it. Never called with an unchanged value. */
+  /** Called with the new factor whenever a press or a typed commit changes it. Never unchanged. */
   onChange: (factor: number) => void;
-  /** Additional css classes for the group container. */
+  /** Additional css classes for the outer container. */
   className?: string;
 };
 
 /**
- * The platform's zoom stepper: a `+`/`−`/reset control for editing a zoom factor without typing a
- * decimal, displaying the factor as a percentage. Its step comes from the platform's shared zoom
- * arithmetic ({@link adjustZoomFactor}) and its range from {@link MIN_ZOOM_FACTOR} /
- * {@link MAX_ZOOM_FACTOR}, so a press here moves the factor by exactly the rule every other zoom
- * surface follows. `defaultValue` is a prop because the reset target is the calling setting's own
- * default rather than a platform constant.
+ * The platform's zoom stepper: `−`/`+` buttons, a percentage field and a reset button for editing a
+ * zoom factor without typing a decimal. Its step comes from the platform's shared zoom arithmetic
+ * ({@link adjustZoomFactor}) and its range from {@link MIN_ZOOM_FACTOR} / {@link MAX_ZOOM_FACTOR}, so
+ * a press here moves the factor by exactly the rule every other zoom surface follows.
+ * `defaultValue` is a prop because the reset target is the calling setting's own default rather
+ * than a platform constant.
+ *
+ * The field takes any whole percentage in range, committed on Enter or when it loses focus; Escape
+ * abandons the edit. The buttons always land on the 10 % grid, so from a typed 137 % `+` goes to
+ * 150 % and `−` to 130 %.
+ *
+ * The two button groups — `[−, +]` and `[percentage, reset]` — sit side by side and wrap onto two
+ * rows when their container is too narrow for both.
  */
 export function ZoomStepper({
   value,
@@ -101,6 +131,20 @@ export function ZoomStepper({
    */
   const recentlyEmittedRef = useRef<number[]>([]);
 
+  /**
+   * The percentage field's text while the user is editing it, or `undefined` while it simply shows
+   * the current value. Kept while a write from elsewhere arrives, so a change the user did not make
+   * never overwrites what they are typing.
+   */
+  const [draft, setDraft] = useState<string | undefined>(undefined);
+
+  /**
+   * What the visually hidden live region says: the percentage the last button press moved to. The
+   * field cannot announce it itself — an input must not be a live region — and the pressed button
+   * keeps focus, so nothing else would say it.
+   */
+  const [announcement, setAnnouncement] = useState('');
+
   useEffect(() => {
     // A prop this component never asked for is a write from elsewhere (another window, a clamp) and
     // is authoritative at once; a prop it did ask for is a confirmation, which leaves any newer
@@ -123,11 +167,41 @@ export function ZoomStepper({
   // What the control answers with: the press it is still waiting on, or the confirmed prop.
   const baseline = pending?.factor ?? value;
 
-  const emit = (next: number) => {
-    if (next === baseline) return;
+  /** Asks for `next`, unless it is what the control already answers with. `true` when it asked. */
+  const emit = (next: number): boolean => {
+    if (next === baseline) return false;
     recentlyEmittedRef.current = [next, ...recentlyEmittedRef.current].slice(0, 2);
     setPending({ factor: next, at: performance.now() });
     onChange(next);
+    return true;
+  };
+
+  const press = (next: number) => {
+    if (emit(next)) setAnnouncement(formatZoomPercent(next));
+  };
+
+  /**
+   * Commits the field's text, if it is a whole percentage, and returns the factor the control
+   * answers with afterwards. Text that is not a percentage commits nothing, so the field falls back
+   * to the current value — there is no error to show, because the field only ever settles on a
+   * valid value.
+   */
+  const commitDraft = (): number => {
+    if (draft === undefined) return baseline;
+    const typed = parsePercentInput(draft);
+    if (typed === undefined) return baseline;
+    emit(typed);
+    return typed;
+  };
+
+  const handlePercentKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      setDraft(formatZoomPercent(commitDraft()));
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setDraft(formatZoomPercent(baseline));
+    }
   };
 
   // A bounded button stays a real, focusable `<button>` with `aria-disabled` instead of the native
@@ -141,85 +215,109 @@ export function ZoomStepper({
 
   return (
     <TooltipProvider>
-      <ButtonGroup aria-label={groupLabel} className={className}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={labels.decrease}
-              aria-disabled={decreaseDisabled || undefined}
-              className={BOUND_BUTTON_CLASSNAME}
-              onClick={() => {
-                if (decreaseDisabled) return;
-                emit(adjustZoomFactor(baseline, -1));
-              }}
-            >
-              <Minus />
-            </Button>
-          </TooltipTrigger>
-          {/* The bound string only when the bound itself is what stops the press: while the whole
-              control is disabled, a bound button is stopped for a different reason, which these
-              strings would misstate. */}
-          <TooltipContent>
-            {decreaseDisabled && !disabled ? labels.atMinimum : labels.decrease}
-          </TooltipContent>
-        </Tooltip>
-        {/* The readout shows the press this control is still waiting on, so the number, the buttons
-            and the arithmetic always agree: a write travels through a debounce before it is even
-            sent, and a number that sits still for that long reads as a press the control ignored.
-            aria-live announces the new percentage after a press; the buttons keep focus, so nothing
-            else would say it. */}
-        <ButtonGroupText
-          aria-live="polite"
-          className="tw:min-w-14 tw:justify-center tw:tabular-nums"
-        >
-          {formatZoomPercent(baseline)}
-        </ButtonGroupText>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={labels.increase}
-              aria-disabled={increaseDisabled || undefined}
-              className={BOUND_BUTTON_CLASSNAME}
-              onClick={() => {
-                if (increaseDisabled) return;
-                emit(adjustZoomFactor(baseline, 1));
-              }}
-            >
-              <Plus />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {increaseDisabled && !disabled ? labels.atMaximum : labels.increase}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={labels.reset}
-              aria-disabled={resetDisabled || undefined}
-              className={BOUND_BUTTON_CLASSNAME}
-              onClick={() => {
-                if (resetDisabled) return;
-                emit(defaultValue);
-              }}
-            >
-              <RotateCcw />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {resetDisabled && !disabled ? labels.atDefault : labels.reset}
-          </TooltipContent>
-        </Tooltip>
-      </ButtonGroup>
+      {/* Two groups rather than one so plain flex wrapping can put the percentage and reset under
+          the step buttons when the row is too narrow for both; each group rounds its own outer
+          corners. */}
+      <div
+        role="group"
+        aria-label={groupLabel}
+        className={cn('tw:flex tw:flex-wrap tw:gap-2', className)}
+      >
+        <ButtonGroup>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={labels.decrease}
+                aria-disabled={decreaseDisabled || undefined}
+                className={BOUND_BUTTON_CLASSNAME}
+                onClick={() => {
+                  if (decreaseDisabled) return;
+                  press(adjustZoomFactor(baseline, -1));
+                }}
+              >
+                <Minus />
+              </Button>
+            </TooltipTrigger>
+            {/* The bound string only when the bound itself is what stops the press: while the whole
+                control is disabled, a bound button is stopped for a different reason, which these
+                strings would misstate. */}
+            <TooltipContent>
+              {decreaseDisabled && !disabled ? labels.atMinimum : labels.decrease}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={labels.increase}
+                aria-disabled={increaseDisabled || undefined}
+                className={BOUND_BUTTON_CLASSNAME}
+                onClick={() => {
+                  if (increaseDisabled) return;
+                  press(adjustZoomFactor(baseline, 1));
+                }}
+              >
+                <Plus />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {increaseDisabled && !disabled ? labels.atMaximum : labels.increase}
+            </TooltipContent>
+          </Tooltip>
+        </ButtonGroup>
+        <ButtonGroup>
+          {/* Shows the press this control is still waiting on, so the number, the buttons and the
+              arithmetic always agree: a write travels through a debounce before it is even sent,
+              and a number that sits still for that long reads as a press the control ignored. */}
+          <Input
+            type="text"
+            inputMode="numeric"
+            aria-label={labels.percentInput}
+            disabled={disabled}
+            value={draft ?? formatZoomPercent(baseline)}
+            onFocus={(event) => {
+              setDraft(formatZoomPercent(baseline));
+              event.currentTarget.select();
+            }}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={handlePercentKeyDown}
+            onBlur={() => {
+              commitDraft();
+              setDraft(undefined);
+            }}
+            className="tw:w-16 tw:bg-muted tw:text-center tw:text-sm tw:font-medium tw:tabular-nums"
+          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={labels.reset}
+                aria-disabled={resetDisabled || undefined}
+                className={BOUND_BUTTON_CLASSNAME}
+                onClick={() => {
+                  if (resetDisabled) return;
+                  press(defaultValue);
+                }}
+              >
+                <RotateCcw />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {resetDisabled && !disabled ? labels.atDefault : labels.reset}
+            </TooltipContent>
+          </Tooltip>
+        </ButtonGroup>
+        <span aria-live="polite" className="tw:sr-only">
+          {announcement}
+        </span>
+      </div>
     </TooltipProvider>
   );
 }
