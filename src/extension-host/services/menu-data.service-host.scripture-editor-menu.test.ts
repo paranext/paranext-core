@@ -166,10 +166,10 @@ describe("The scripture editor's Project menu, per mode", () => {
 
   test('Simple serves its shipped layout', async () => {
     expect(describeSections(await getEditorTopMenuInMode('simple'))).toEqual([
+      ['platform.app', ['platform.openSettings']],
       [
-        'platform.app',
+        'platformScriptureEditor.simpleEdit',
         [
-          'platform.openSettings',
           'platformScriptureEditor.editSubmenu ▸ platformScriptureEditor.undo, platformScriptureEditor.redo, platformScriptureEditor.cutSelection, platformScriptureEditor.copySelection, platformScriptureEditor.pasteAtSelection',
         ],
       ],
@@ -202,12 +202,21 @@ describe("The scripture editor's Project menu, per mode", () => {
         [
           'platformScriptureEditor.showBibleTextsPanel',
           'platformScriptureEditor.showCommentariesPanel',
-          'legacyCommentManager.showCommentListPanel',
           'platformScriptureEditor.showTextCollectionPanel',
           'platformScripture.openFind',
+          'legacyCommentManager.showCommentListPanel',
         ],
       ],
+      ['platformScriptureEditor.simpleQualityChecks', ['platformScripture.openChecksSidePanel']],
     ]);
+  });
+
+  test("Simple's Edit section is shown without a heading, and every other section has one", async () => {
+    const simpleMenu = await getEditorTopMenuInMode('simple');
+    const headerHiddenColumns = keyedEntries<{ isHeaderHidden?: boolean }>(simpleMenu.columns)
+      .filter(([, column]) => column.isHeaderHidden)
+      .map(([columnKey]) => columnKey);
+    expect(headerHiddenColumns).toEqual(['platformScriptureEditor.simpleEdit']);
   });
 
   test("Power's served items include none of Simple's own entries", async () => {
@@ -244,14 +253,13 @@ describe("The scripture editor's Project menu, per mode", () => {
    * has to sign off on.
    */
   const POWER_ONLY_COMMANDS = new Set([
-    // The four inventories, Markers Checklist and Open Checks: following the v0 Simple design, which
-    // has no quality tools in the Project menu.
+    // The four inventories and Markers Checklist: Simple's design keeps its quality tools to the
+    // Checks side panel, under Quality checks.
     'platformScripture.openCharactersInventory',
     'platformScripture.openRepeatedWordsInventory',
     'platformScripture.openMarkersInventory',
     'platformScripture.openPunctuationInventory',
     'platformScripture.openMarkersChecklist',
-    'platformScripture.openChecksSidePanel',
     // The auto-show footnote pane toggle: Simple keeps PT9's manual footnotes pane, which Show
     // footnotes opens and which then stays open, so Simple has no automatic behavior to turn on.
     'platformScriptureEditor.toggleFootnotesAutoShow',

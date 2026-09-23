@@ -145,6 +145,9 @@ columns and gate items into them — see `adr-menu-per-mode-layout-via-mode-gate
   columns have items, each is headed by its `label`; a column with no items (including one whose
   items are all hidden in the current interface mode) is not shown at all. So label columns as
   section titles, and hide a section by hiding its items. See `adr-menu-section-headings-from-column-labels`.
+- **A section with no heading** sets `"isHeaderHidden": true` on its column. It is still divided
+  from its neighbors, and its `label` still names it for screen readers, so give it a real label.
+  The application menubar ignores the flag. See `adr-menu-per-mode-layout-via-mode-gated-columns`.
 - **Do not add `shortcut` to `menus.json`** — the schema rejects it and the whole file fails to
   load. Hints come from the keyboard shortcuts catalog's `command` join; see
   `.claude/rules/keyboard-shortcuts-catalog.md` and `adr-menu-shortcut-hints-joined-from-catalog`.
