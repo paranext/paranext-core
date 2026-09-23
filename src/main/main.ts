@@ -42,6 +42,7 @@ import { startBookChapterControlServiceRouter } from '@main/services/book-chapte
 import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
+import { selectDisplayMediaSource } from '@main/services/display-media-request.util';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
@@ -2350,6 +2351,14 @@ async function main() {
           respond({ requestHeaders });
         },
       );
+
+      // Usersnap's native screenshot asks for a display-media stream. Serve the requesting window's
+      // own top frame without showing an OS screen picker. Only a window's top frame may capture
+      // it; web views and any other iframe are denied (see `selectDisplayMediaSource`).
+      session.defaultSession.setDisplayMediaRequestHandler((request, respond) => {
+        const source = selectDisplayMediaSource(request.frame);
+        respond(source ? { video: source } : {});
+      });
 
       // Install Chromium devtools extensions once (not per-window)
       if (isDebug) {

@@ -24,12 +24,6 @@ let isUsersnapFormOpen = false;
 let apiKeyOfOpenForm: string | undefined;
 let shadowRootStylingInterval: ReturnType<typeof setInterval> | undefined;
 
-/**
- * MutationObserver to detect when Usersnap elements are added to the DOM This will attempt to find
- * and style Usersnap shadow DOMs
- */
-let usersnapDomObserver: MutationObserver | undefined;
-
 /** Searches for Usersnap shadow DOM elements and applies custom styles */
 function findAndStyleUsersnapShadowRoots(): boolean {
   try {
@@ -69,7 +63,12 @@ function findAndStyleUsersnapShadowRoots(): boolean {
       newCloseButton.style.display = 'flex';
       newCloseButton.style.alignItems = 'center';
       newCloseButton.style.justifyContent = 'center';
-      newCloseButton.style.color = '#FFFFFF99';
+      // The glyph must read against whichever header colour the widget uses, so take the colour
+      // from the collapse button's own icon rather than hard-coding one.
+      const collapseIcon = collapseButton.querySelector('svg *');
+      newCloseButton.style.color = collapseIcon
+        ? getComputedStyle(collapseIcon).stroke
+        : getComputedStyle(collapseButton).color;
       newCloseButton.style.fontSize = '.8rem';
       newCloseButton.addEventListener('click', async () => {
         await closeOpenUsersnapForm();
@@ -85,74 +84,29 @@ function findAndStyleUsersnapShadowRoots(): boolean {
   }
 }
 
-/** Sets up the Usersnap DOM observer, but doesn't start it yet */
-function initializeUsersnapDomObserver(): void {
-  if (usersnapDomObserver) return;
+/** How often to look for the open form's buttons in the Usersnap widget's shadow root */
+const SHADOW_ROOT_STYLING_INTERVAL_MS = 100;
+/** How long to keep looking for the open form's buttons before giving up */
+const SHADOW_ROOT_STYLING_TIMEOUT_MS = 10 * 1000;
 
-  try {
-    usersnapDomObserver = new MutationObserver((mutations) => {
-      if (!isUsersnapFormOpen) return;
+/**
+ * Polls until the open form's buttons can be styled. The `<us-widget>` element and its shadow root
+ * exist from load time, so opening a form adds no new element to observe; the form's contents are
+ * rendered into the existing shadow root shortly after the `open` event.
+ */
+function startShadowRootStyling(): void {
+  if (shadowRootStylingInterval) clearInterval(shadowRootStylingInterval);
 
-      const shouldSearchForShadowRoots = mutations.some((mutation) => {
-        if (mutation.type !== 'childList') return false;
-        return Array.from(mutation.addedNodes).some((node) => {
-          if (node instanceof Element && node.nodeType === Node.ELEMENT_NODE && node.shadowRoot) {
-            return true;
-          }
-          return false;
-        });
-      });
+  const startTime = Date.now();
+  shadowRootStylingInterval = setInterval(() => {
+    const success = findAndStyleUsersnapShadowRoots();
+    if (!success && Date.now() - startTime < SHADOW_ROOT_STYLING_TIMEOUT_MS) return;
 
-      if (shouldSearchForShadowRoots) {
-        const startTime = Date.now();
-        const maxDuration = 10000; // 10 seconds
-        shadowRootStylingInterval = setInterval(() => {
-          const success = findAndStyleUsersnapShadowRoots();
-          const elapsed = Date.now() - startTime;
-
-          if (success || elapsed >= maxDuration) {
-            if (!success) {
-              logger.warn(
-                'Timeout reached while waiting for Usersnap shadow DOM elements to appear',
-              );
-            }
-            clearInterval(shadowRootStylingInterval);
-            shadowRootStylingInterval = undefined;
-          }
-        }, 100);
-      }
-    });
-
-    logger.debug('Usersnap DOM observer initialized');
-  } catch (error) {
-    logger.warn('Failed to initialize Usersnap DOM observer:', error);
-    usersnapDomObserver = undefined;
-  }
-}
-
-/** Starts the Usersnap DOM observer */
-function startUsersnapObserver(): void {
-  if (usersnapDomObserver) {
-    try {
-      usersnapDomObserver.observe(document.body, {
-        childList: true,
-        subtree: true,
-      });
-    } catch (error) {
-      logger.warn('Failed to start Usersnap DOM observer:', error);
-    }
-  }
-}
-
-/** Disconnects the Usersnap DOM observer */
-function stopUsersnapObserver(): void {
-  if (usersnapDomObserver) {
-    try {
-      usersnapDomObserver.disconnect();
-    } catch (error) {
-      logger.warn('Failed to stop Usersnap DOM observer:', error);
-    }
-  }
+    if (!success)
+      logger.warn('Timeout reached while waiting for Usersnap shadow DOM elements to appear');
+    clearInterval(shadowRootStylingInterval);
+    shadowRootStylingInterval = undefined;
+  }, SHADOW_ROOT_STYLING_INTERVAL_MS);
 }
 
 /** Initializes the global UserSnap API instance */
@@ -165,6 +119,10 @@ export async function initializeUsersnapApi() {
   try {
     const defaultInitParams: InitOptions = {
       enableScreenshot: true,
+      // The DOM-capture screenshot serializes every web view iframe together with its bundle and
+      // exceeds Usersnap's 20 MB payload limit, so the widget takes a real screenshot instead,
+      // served by the display-media request handler in the main process.
+      nativeScreenshot: true,
       collectGeoLocation: 'none',
       useSystemFonts: true,
       useLocalStorage: true,
@@ -231,7 +189,7 @@ export async function initializeUsersnapApi() {
       isUsersnapFormOpen = true;
       apiKeyOfOpenForm = event.apiKey;
 
-      startUsersnapObserver();
+      startShadowRootStyling();
     });
     api.on('beforeSubmit', async (event) => {
       event.api.setValue('custom', customData);
@@ -244,13 +202,9 @@ export async function initializeUsersnapApi() {
         clearInterval(shadowRootStylingInterval);
         shadowRootStylingInterval = undefined;
       }
-
-      stopUsersnapObserver();
     });
 
     globalUsersnapApi = api;
-
-    initializeUsersnapDomObserver();
   } catch (error) {
     logger.warn('Failed to initialize UserSnap API; feedback forms will be unavailable:', error);
     globalUsersnapApi = undefined;
