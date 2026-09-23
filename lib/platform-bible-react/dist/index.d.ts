@@ -4233,9 +4233,11 @@ export declare function useHasContentBelow(scrollerRef: React$1.RefObject<HTMLEl
  */
 export type LivePopoverAnchorSource = {
 	/**
-	 * Reads the anchor's current viewport rect. Returns `undefined` when the source can no longer be
-	 * measured; the anchor then keeps its last rect.
+	 * Reads the anchor's current viewport rect. Called every time the popover is positioned, which
+	 * can be more than once per frame.
 	 *
+	 * @returns The anchor's rect in viewport coordinates, or `undefined` when the source can no
+	 *   longer be measured; the anchor then keeps its last rect.
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	measure: () => DOMRect | undefined;
@@ -4265,8 +4267,10 @@ export type LivePopoverAnchor = {
 	 */
 	virtualRef: React$1.RefObject<VirtualAnchorElement>;
 	/**
-	 * Points the anchor at a new source. Call it before opening the popover.
+	 * Points the anchor at a new source and measures it at once, so the popover opens against it
+	 * rather than against the previous source. Call it before opening the popover.
 	 *
+	 * @param source What the anchor follows from now on.
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	setSource: (source: LivePopoverAnchorSource) => void;
@@ -4282,35 +4286,68 @@ export type LivePopoverAnchor = {
  * hidden pane has no layout, so a source measures nothing there. The anchor keeps the last rect it
  * had rather than collapsing to the pane's corner, and the next frame after the tab is shown
  * measures again and catches up. Sources report "no measurement" by returning `undefined`; see
- * {@link measureRange} and {@link measureElement}.
+ * {@link measureBox}.
  *
+ * @example
+ *
+ * ```tsx
+ * const anchor = useLivePopoverAnchor();
+ * const [isOpen, setIsOpen] = useState(false);
+ *
+ * const openAtSelection = () => {
+ *   const selection = window.getSelection();
+ *   if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
+ *   // Clone the range: the live selection keeps moving while the popover is open.
+ *   const range = selection.getRangeAt(0).cloneRange();
+ *   // Point the anchor at its source BEFORE opening, so the popover never opens at a stale rect.
+ *   anchor.setSource({
+ *     measure: () => {
+ *       const rect = measureBox(range);
+ *       return rect && leftEdgeRect(rect);
+ *     },
+ *     contextElement: editorRef.current,
+ *   });
+ *   setIsOpen(true);
+ * };
+ *
+ * return (
+ *   <Popover open={isOpen} onOpenChange={setIsOpen}>
+ *     <PopoverAnchor virtualRef={anchor.virtualRef} />
+ *     <PopoverContent>…</PopoverContent>
+ *   </Popover>
+ * );
+ * ```
+ *
+ * @returns A stable anchor (the same object on every render): its `virtualRef` goes to
+ *   `PopoverAnchor`, and its `setSource` points it at what to follow.
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function useLivePopoverAnchor(): LivePopoverAnchor;
 /**
- * The current viewport rect of a text range, or `undefined` when the range no longer lies in
- * rendered text (its nodes were replaced, so it collapsed to an element boundary that has no box).
+ * The current viewport rect of a text range or an element, for a {@link LivePopoverAnchorSource}'s
+ * `measure`.
  *
+ * A target counts as unmeasurable only when it paints no box at all (`getClientRects()` is empty),
+ * never merely because its box is small: a zero-width or zero-height box — a collapsed caret, an
+ * empty element — is still a real, positioned point.
+ *
+ * @param target The range or element to measure.
+ * @returns The target's bounding rect in viewport coordinates, or `undefined` when it paints
+ *   nothing: a range whose text the editor replaced (it collapsed to an element boundary that has
+ *   no box), or an element with no layout because it or an ancestor is `display: none`, as inside
+ *   an inactive rc-dock tab pane.
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function measureRange(range: Range): DOMRect | undefined;
+export declare function measureBox(target: Range | Element): DOMRect | undefined;
 /**
  * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
  * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
  *
+ * @param rect The rect to take the left edge of, such as a selection's box from {@link measureBox}.
+ * @returns A new rect at `rect`'s left and top, with zero width and `rect`'s height.
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function leftEdgeRect(rect: DOMRect): DOMRect;
-/**
- * The current viewport rect of an element, or `undefined` when the element has no layout at all —
- * the case when it, or an ancestor, is `display: none`, as inside an inactive rc-dock tab pane.
- * Matches {@link measureRange}'s rule: an element that IS laid out still returns its box even at
- * zero width or height (a real, positioned point, such as a collapsed caret's element), because
- * `getClientRects()` is empty only when nothing was painted, never merely because a box is small.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare function measureElement(element: Element): DOMRect | undefined;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */
