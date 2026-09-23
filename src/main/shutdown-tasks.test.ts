@@ -779,7 +779,7 @@ describe('performWindowCloseTasks', () => {
   it('does NOT sync a closing window after the user chose "Don\'t sync yet" this session', async () => {
     stubSettings({ mode: 'simple', firstRunComplete: true });
     deferAutomaticSyncForSession();
-    mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
 
     await performWindowCloseTasks('2');
 

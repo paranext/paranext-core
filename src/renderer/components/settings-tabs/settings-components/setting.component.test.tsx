@@ -701,7 +701,12 @@ describe('Setting description', () => {
 });
 
 describe('Setting error announcement', () => {
+  afterEach(() => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
   it('announces the error and marks the control invalid only while the setting is an error', () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
     const { rerender } = render(
       <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
     );
@@ -716,7 +721,7 @@ describe('Setting error announcement', () => {
         label="Language"
       />,
     );
-    expect(screen.getByRole('alert')).toHaveTextContent('%settings_errorMessages_errorOccurred%');
+    expect(screen.getByRole('alert')).toHaveTextContent('An error occurred');
     expect(screen.getByRole('textbox')).toBeInvalid();
   });
 });
