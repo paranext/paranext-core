@@ -5816,6 +5816,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `web-view-content-zoom.wheel-parity.test.ts` are gone with the per-column zoom, so the bootstrap's
   inlined reader is the only one and there is no second copy left to single-source. The area names
   in the Decision are unchanged.
+- **Amended 2026-09-23 (a pinch made while Ctrl is held):** the physical-modifier tracking named in
+  the Consequences is consulted on macOS only. On Windows and Linux a touchpad pinch made while Ctrl
+  is physically held arrives as the same ctrl+wheel frames as any other pinch — a fraction of a
+  pixel of `deltaY` each, with a whole tick of `wheelDeltaY` — and reading the held key as evidence
+  of a mouse notch sent every frame down the tick path at a full zoom step per frame. There the size
+  test alone tells the two apart: a pinch frame sits within about 1 % of scale 1, while a mouse
+  notch (33 px or more) is far outside the window that opens a pinch. On macOS, where a mouse notch
+  can be as small as a pinch frame, the held key still decides. The bootstrap reads the platform
+  once, from `navigator.platform`.
 
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
