@@ -46,12 +46,20 @@ export function findVerseBlockForVerse(
   const blocks = [...port.querySelectorAll<HTMLElement>('.verse-block[data-verse-start]')].filter(
     isPlacedBlock,
   );
-  const [firstBlock] = blocks;
-  if (!firstBlock) return undefined;
+  if (blocks.length === 0) return undefined;
+
+  // The top of the passage is the block with the lowest verse, not the first in document order:
+  // `querySelectorAll` walks column by column, so its first block is the first COLUMN's first verse,
+  // which is further down whenever that column starts later than another (a commentary on 10-12
+  // beside a full text).
+  let topBlock = blocks[0];
+  blocks.forEach((block) => {
+    if (Number(block.dataset.verseStart) < Number(topBlock.dataset.verseStart)) topBlock = block;
+  });
 
   // A non-finite verse can only come from a malformed reference; nothing is "nearest" to it, so the
   // top of the passage is the only defensible answer (and matches a verse-0 reference).
-  if (!Number.isFinite(verseNum)) return firstBlock;
+  if (!Number.isFinite(verseNum)) return topBlock;
 
   let best: HTMLElement | undefined;
   let bestStart = Number.NEGATIVE_INFINITY;
@@ -62,7 +70,7 @@ export function findVerseBlockForVerse(
     bestStart = start;
   });
   // A reference above every block (an intro verse 0) belongs at the top of the passage.
-  return best ?? firstBlock;
+  return best ?? topBlock;
 }
 
 /**
@@ -101,6 +109,9 @@ export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolea
 
 /**
  * Scrolls `port` so `block` sits just below the sticky header.
+ *
+ * Flush, with no context above it, unlike the Scripture editor's `VERSE_NUMBER_SCROLL_OFFSET` — a
+ * deliberate difference; see `adr-aligned-grid-flattens-the-editor-dom` before changing either.
  *
  * Arithmetic on `scrollTop` rather than `scrollIntoView`, which would also scroll the web view's
  * ancestors to bring the grid itself into view. Instant, not smooth: this also runs as the catch-up

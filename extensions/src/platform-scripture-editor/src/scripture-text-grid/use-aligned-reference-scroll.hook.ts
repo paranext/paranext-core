@@ -65,11 +65,13 @@ export function useAlignedReferenceScroll(
       // moving the port. Comparing against the position we wrote, clamped into the range that is
       // valid now, tells the two apart; `overflow-anchor: none` does not help here, because a clamp
       // is not scroll anchoring.
-      const maxScrollTop = port.scrollHeight - port.clientHeight;
-      // Only clamp where the port reports something to scroll. A port that reports none — nothing
-      // overflows, or the environment lays nothing out — would otherwise clamp every position to 0
-      // and read the reference scroll's own write as the reader's.
-      const expected = maxScrollTop > 0 ? Math.min(applied, maxScrollTop) : applied;
+      // Content that shrinks until nothing overflows clamps scrollTop to 0, so the valid range
+      // bottoms out at 0 rather than going negative. Only a port with no height at all is left
+      // unclamped: that is an environment that lays nothing out (jsdom), where scrollTop keeps
+      // whatever was written and clamping would read this hook's own write as the reader's.
+      const hasLayout = port.clientHeight > 0;
+      const maxScrollTop = Math.max(0, port.scrollHeight - port.clientHeight);
+      const expected = hasLayout ? Math.min(applied, maxScrollTop) : applied;
       if (Math.abs(port.scrollTop - expected) > SCROLL_MATCH_TOLERANCE_PX) {
         hasStoodDownRef.current = true;
         return;

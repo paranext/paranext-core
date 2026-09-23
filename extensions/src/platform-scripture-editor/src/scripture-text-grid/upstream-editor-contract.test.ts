@@ -61,8 +61,8 @@ describe('platform-editor DOM contract', () => {
   const bundle = readInstalledEditorBundle();
 
   it('ships a built entry to check against', () => {
-    // A source-only yalc link produces no dist, and every assertion below would pass vacuously.
-    // If this fails, the editor package was installed without being built: re-run `npm install`.
+    // An editor staged without being built has no dist, and every assertion below would pass
+    // vacuously. If this fails, re-run `npm install` (or `npm run stage-dev-packages`).
     expect(bundle).toBeTypeOf('string');
   });
 
@@ -77,9 +77,9 @@ describe('platform-editor DOM contract', () => {
 
   Object.entries(API_CONTRACT).forEach(([name, why]) => {
     it(`still exports ${name} — ${why}`, () => {
-      // The installed editor is the one the app runs against, and it can be a yalc-linked build
-      // rather than the version the manifests pin. Checking the bundle says whether the app will
-      // actually get the block-verse layout, rather than whether a version number looks right.
+      // The installed editor is the one the app runs against, and it is a staged build of a moving
+      // branch, so its version number says nothing about which symbols it has. Checking the bundle
+      // says whether the app will actually get the block-verse layout.
       expect(bundle).toContain(name);
     });
   });

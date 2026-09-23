@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 
@@ -975,6 +975,39 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
       port.scrollTop = 400;
 
       // A slower resource then renders and moves the target, which must still be corrected.
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      await waitFor(() => expect(port.scrollTop).toBe(1500 - HEADER_HEIGHT));
+    });
+
+    it('keeps following the reference when content shrinks until nothing overflows', async () => {
+      // With nothing left to scroll the browser clamps scrollTop all the way to 0. That is still a
+      // clamp, not the reader, so a later column growing the content again must still be corrected.
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+
+      // Resources are unchecked until what is left fits the port.
+      Object.defineProperty(port, 'scrollHeight', { value: PORT_HEIGHT, configurable: true });
+      Object.defineProperty(port, 'clientHeight', { value: PORT_HEIGHT, configurable: true });
+      port.scrollTop = 0;
+      alignedVerseBlocks = [{ start: 1, end: 1, top: 100 }];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      // Let the mutation-driven check run against the shrunk content.
+      await act(
+        () =>
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, 50);
+          }),
+      );
+
+      Object.defineProperty(port, 'scrollHeight', { value: 2000, configurable: true });
       alignedVerseBlocks = [
         { start: 1, end: 1, top: 100 },
         { start: 2, end: 2, top: 600 },
