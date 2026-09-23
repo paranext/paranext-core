@@ -84,9 +84,24 @@ describe('getMenuSectionsWithItems', () => {
 
   it('gives a section to each column with items, labeled and sorted by `order`', () => {
     expect(getMenuSectionsWithItems(MENU_WITH_SUBMENU)).toEqual([
-      { columnKey: 'platform.app', label: 'Project' },
-      { columnKey: 'platformScriptureEditor.tools', label: 'Tools' },
+      { columnKey: 'platform.app', label: 'Project', isHeaderHidden: false },
+      { columnKey: 'platformScriptureEditor.tools', label: 'Tools', isHeaderHidden: false },
     ]);
+  });
+
+  it("carries a column's isHeaderHidden into its section", () => {
+    const sections = getMenuSectionsWithItems({
+      ...MENU_WITH_SUBMENU,
+      columns: {
+        ...MENU_WITH_SUBMENU.columns,
+        'platformScriptureEditor.tools': {
+          ...MENU_WITH_SUBMENU.columns['platformScriptureEditor.tools'],
+          isHeaderHidden: true,
+        },
+      },
+    });
+
+    expect(sections.map(({ isHeaderHidden }) => isHeaderHidden)).toEqual([false, true]);
   });
 
   it('gives no section of its own to a submenu group, whose items belong to no column', () => {
