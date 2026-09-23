@@ -42,6 +42,7 @@ import {
   buildLanguageFilterOptions,
   getResourcePickerBodyState,
   matchesResourceType,
+  partitionFilterSelection,
 } from 'platform-bible-react/experimental';
 import type {
   DblResourceData,
@@ -56,18 +57,6 @@ import {
   newPlatformError,
 } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
-
-/**
- * The resource types this build offers: the type filter's options, in the order they are listed
- * there, and the set a persisted type selection is narrowed against.
- */
-const RESOURCE_TYPES: ResourceType[] = [
-  'ScriptureResource',
-  'CommentaryResource',
-  'EnhancedResource',
-  'SourceLanguageResource',
-  'XmlResource',
-];
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -119,6 +108,31 @@ type GetResourcesLocalizedStrings = {
   [localizedKey in GetResourcesLocalizedStringKey]?: LocalizedStringValue;
 };
 
+/**
+ * The resource types this build offers, each with the key of its type filter label. Typed as a
+ * `Record` over `ResourceType` so a type added to that union does not compile until it is listed
+ * here — otherwise it would be missing from the type filter and quietly dropped from saved
+ * selections.
+ */
+const RESOURCE_TYPE_LABEL_KEYS: Record<ResourceType, GetResourcesLocalizedStringKey> = {
+  ScriptureResource: '%resources_type_Scripture%',
+  CommentaryResource: '%resources_type_Commentary%',
+  EnhancedResource: '%resources_type_ER%',
+  SourceLanguageResource: '%resources_type_SLR%',
+  XmlResource: '%resources_type_XR%',
+};
+
+function isOfferedResourceType(value: string): value is ResourceType {
+  return Object.keys(RESOURCE_TYPE_LABEL_KEYS).includes(value);
+}
+
+/**
+ * The resource types this build offers: the type filter's options, in the order they are listed
+ * there, and the set a persisted type selection is narrowed against.
+ */
+const RESOURCE_TYPES: ResourceType[] =
+  Object.keys(RESOURCE_TYPE_LABEL_KEYS).filter(isOfferedResourceType);
+
 export type ResourceAction = 'install' | 'remove';
 
 type SortConfig = {
@@ -127,6 +141,10 @@ type SortConfig = {
 };
 
 const emptyResources: DblResourceData[] = [];
+// Module-level so an omitted prop keeps one identity across renders; a fresh literal default would
+// invalidate every memo derived from it.
+const emptySelection: string[] = [];
+const noLocalizedStrings: [GetResourcesLocalizedStrings, boolean] = [{}, false];
 
 const getActionButtonContent = (
   resource: DblResourceData,
@@ -294,15 +312,15 @@ export type GetResourcesProps = {
  * @returns The Get Resources dialog UI.
  */
 export function GetResources({
-  localizedStringsWithLoadingState = [{}, false],
+  localizedStringsWithLoadingState = noLocalizedStrings,
   resources = emptyResources,
   isLoadingResources = false,
   isResourcesError = false,
   onRetryResources,
   areDownloadsUnavailable = false,
   idsBeingHandled = [],
-  selectedTypes = [],
-  selectedLanguages = [],
+  selectedTypes = emptySelection,
+  selectedLanguages = emptySelection,
   onSelectedTypesChange = () => {},
   onSelectedLanguagesChange = () => {},
   onInstallOrRemoveResource = () => {},
@@ -342,11 +360,6 @@ export function GetResources({
   const typesText: string = getLocalizedString('%resources_types%');
   const typesSearchPlaceholder: string = getLocalizedString('%resources_types_searchPlaceholder%');
   const typesNoResultsText: string = getLocalizedString('%resources_types_noResults%');
-  const typeScriptureText: string = getLocalizedString('%resources_type_Scripture%');
-  const typeCommentaryText: string = getLocalizedString('%resources_type_Commentary%');
-  const typeErText: string = getLocalizedString('%resources_type_ER%');
-  const typeSlrText: string = getLocalizedString('%resources_type_SLR%');
-  const typeXrText: string = getLocalizedString('%resources_type_XR%');
   const typeUnknownText: string = getLocalizedString('%resources_type_unknown%');
   const updateText: string = getLocalizedString('%resources_update%');
 
@@ -414,36 +427,31 @@ export function GetResources({
   );
 
   /**
-   * The language selection with any language the filter no longer offers dropped.
+   * The language selection split into the languages the filter offers and the ones it is holding.
    *
    * This selection is persisted across sessions and seeded from installed resources, so narrowing
    * the type filter can leave a language selected that no longer has a row. Filtering on the raw
    * selection would empty the grid, and the badge for a language absent from the options renders
-   * with no label — an X the user has to guess at.
+   * with no label — an X the user has to guess at. So only `effectiveLanguages` filters rows or
+   * reaches the language filter; held languages are written back on every change and apply again
+   * once the type filter offers them.
    */
-  const effectiveLanguages = useMemo(
-    () => selectedLanguages.filter((language) => languageOptions.some((o) => o.value === language)),
+  const { offered: effectiveLanguages, held: heldLanguages } = useMemo(
+    () => partitionFilterSelection(selectedLanguages, languageOptions),
     [selectedLanguages, languageOptions],
   );
 
+  const localizedStrings = localizedStringsWithLoadingState[0];
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
-    const labelByType: Record<ResourceType, string> = {
-      ScriptureResource: typeScriptureText,
-      CommentaryResource: typeCommentaryText,
-      EnhancedResource: typeErText,
-      SourceLanguageResource: typeSlrText,
-      XmlResource: typeXrText,
-    };
-
     // Counted over the whole catalogue, not the type-scoped list the language counts use: a type's
     // own count must not depend on which types are selected, or picking one would zero out the
     // others and there would be no way to see what selecting them would bring back.
     return RESOURCE_TYPES.map((type) => ({
       value: type,
-      label: labelByType[type],
+      label: localizedStrings[RESOURCE_TYPE_LABEL_KEYS[type]] ?? RESOURCE_TYPE_LABEL_KEYS[type],
       secondaryLabel: resources.filter((resource) => resource.type === type).length.toString(),
     }));
-  }, [typeScriptureText, typeCommentaryText, typeErText, typeSlrText, typeXrText, resources]);
+  }, [localizedStrings, resources]);
 
   const textFilteredResources = useMemo(() => {
     return typeScopedResources.filter((resource) => {
@@ -562,7 +570,9 @@ export function GetResources({
               <Filter
                 entries={languageOptions}
                 selected={effectiveLanguages}
-                onChange={onSelectedLanguagesChange}
+                onChange={(languages) =>
+                  onSelectedLanguagesChange([...heldLanguages, ...languages])
+                }
                 placeholder={languagesText}
                 searchPlaceholder={languagesSearchPlaceholder}
                 commandEmptyMessage={languagesNoResultsText}

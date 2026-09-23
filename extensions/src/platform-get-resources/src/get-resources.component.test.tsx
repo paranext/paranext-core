@@ -344,4 +344,16 @@ describe('GetResources language filter', () => {
     expect(screen.getByText('Resource Amharic ScriptureResource')).toBeDefined();
     expect(screen.getByText('Resource Nepali ScriptureResource')).toBeDefined();
   });
+
+  it('keeps a hidden language in the saved selection when another language is picked', () => {
+    // Coptic is hidden, not discarded: widening the type filter again should bring it back, which
+    // only works if choosing a visible language does not overwrite the saved selection without it.
+    const onSelectedLanguagesChange = vi.fn();
+    renderGetResources({ selectedLanguages: ['Coptic'], onSelectedLanguagesChange });
+
+    openLanguageFilter();
+    fireEvent.click(screen.getByRole('option', { name: (name) => name.startsWith('Amharic') }));
+
+    expect(onSelectedLanguagesChange).toHaveBeenCalledWith(['Coptic', 'Amharic']);
+  });
 });

@@ -396,9 +396,9 @@ export const ManyLanguagesScopedToScripture: Story = {
       ].filter((language) => !scriptureLanguages.has(language));
 
       await expect(languagesWithoutScripture.length).toBeGreaterThan(0);
-      languagesWithoutScripture.forEach((language) => {
-        expect(offered.has(language)).toBe(false);
-      });
+      await expect(languagesWithoutScripture.filter((language) => offered.has(language))).toEqual(
+        [],
+      );
       // ...and the scoping is not just hiding everything.
       await expect(offered.size).toBeGreaterThan(0);
     });
