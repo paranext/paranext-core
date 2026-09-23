@@ -140,6 +140,7 @@
           },
           {
             "label": "%webView_platformScriptureEditor_zoomIn%",
+            "hiddenInterfaceModes": ["simple"],
             "localizeNotes": "Scripture editor top menu > Options > Zoom in. Enlarges the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected.",
             "group": "platformScriptureEditor.zoom",
             "order": 1,
@@ -147,6 +148,7 @@
           },
           {
             "label": "%webView_platformScriptureEditor_zoomOut%",
+            "hiddenInterfaceModes": ["simple"],
             "localizeNotes": "Scripture editor top menu > Options > Zoom out. Shrinks the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected.",
             "group": "platformScriptureEditor.zoom",
             "order": 2,
@@ -154,6 +156,7 @@
           },
           {
             "label": "%webView_platformScriptureEditor_resetZoomToDefault%",
+            "hiddenInterfaceModes": ["simple"],
             "localizeNotes": "Scripture editor top menu > Options > Reset zoom to default. Returns whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane) to the Settings default zoom.",
             "group": "platformScriptureEditor.zoom",
             "order": 3,
