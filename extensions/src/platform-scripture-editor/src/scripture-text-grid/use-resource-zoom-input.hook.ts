@@ -38,8 +38,10 @@ function hasZoomModifier(event: WheelEvent): boolean {
  * These chords reach the WebView iframe — `main.ts`'s `before-input-event` handlers do not claim
  * them — where they are claimed by the platform's own pane-level content-zoom handler
  * (`web-view-content-zoom.bootstrap-script.ts`), which has no notion of a resource cell. So today
- * they zoom the whole pane rather than the focused resource. Zoom ships three working paths:
- * right-click context menu, hover/touch kebab, and Ctrl/Cmd+wheel.
+ * they zoom the whole pane rather than the focused resource. Per-resource zoom works through the
+ * right-click context menu and Ctrl/Cmd+wheel in both view modes, and through the hover/touch kebab
+ * only in the chapter view: the default verse view shows each resource's name inline (`nameDisplay:
+ * 'inline'`), which renders no kebab.
  */
 export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomInputOptions): void {
   useEffect(() => {

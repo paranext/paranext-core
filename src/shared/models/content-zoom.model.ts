@@ -167,9 +167,9 @@ export type ContentZoomDeclaration = {
  *
  * `platformScriptureEditor.scriptureTextGrid` is a documented exception, not a precedent. Inside
  * its `text-collection` area, each resource cell still carries its own independent zoom
- * (Ctrl/Cmd+wheel, the right-click menu and the hover kebab; see
- * `use-resource-zoom-input.hook.ts`). That per-resource factor nests inside the area's CSS zoom and
- * multiplies with it rather than replacing it.
+ * (Ctrl/Cmd+wheel and the right-click menu, plus a hover kebab in the grid's chapter view only —
+ * its default verse view shows none; see `use-resource-zoom-input.hook.ts`). That per-resource
+ * factor nests inside the area's CSS zoom and multiplies with it rather than replacing it.
  */
 export const CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE: ReadonlyMap<
   string,
