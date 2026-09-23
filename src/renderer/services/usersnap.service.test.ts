@@ -415,7 +415,7 @@ describe('openUsersnapForm', () => {
     vi.doUnmock('@shared/data/platform.data');
   });
 
-  it('without a project key: tells the user the form is unavailable instead of opening it', async () => {
+  it('without a project key: tells the user the forms are not configured instead of opening one', async () => {
     const { initializeUsersnapApi, openUsersnapForm } = await importService();
     const { notificationService } = await import('@shared/services/notification.service');
     const spaceApi = createMockSpaceApi();
@@ -427,7 +427,22 @@ describe('openUsersnapForm', () => {
 
     expect(spaceApi.show).not.toHaveBeenCalled();
     expect(notificationService.send).toHaveBeenCalledWith({
-      message: '%mainMenu_feedback_unavailable%',
+      message: '%mainMenu_feedback_notConfigured%',
+      severity: 'warning',
+    });
+  });
+
+  it('without a space key: tells the user the forms are not configured', async () => {
+    mockSpaceApiKey('');
+    const { initializeUsersnapApi, openUsersnapForm } = await importService();
+    const { notificationService } = await import('@shared/services/notification.service');
+    await initializeUsersnapApi();
+
+    await openUsersnapForm('test-report-issue-key');
+
+    expect(mockLoadSpace).not.toHaveBeenCalled();
+    expect(notificationService.send).toHaveBeenCalledWith({
+      message: '%mainMenu_feedback_notConfigured%',
       severity: 'warning',
     });
   });
