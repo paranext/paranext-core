@@ -148,6 +148,8 @@ export class FeatureWebViewProvider implements IWebViewProvider {
 
 There is no id-reuse idiom that survives a close: `existingId: '?'` resolves through the **live** dock layout (`findFirstWebViewDefinitionByType` in `src/renderer/services/web-view.service-shard.ts`), so it only finds a currently-open instance — it is a **dedupe** mechanism (don't open a second instance while one is already open; see `openFind` in `extensions/src/platform-scripture/src/main.ts`), not a persistence mechanism. Once a tab is closed it is removed from the layout, and the next `openWebView` mints a fresh id with empty state. For state that must survive close/reopen (or across sessions), use user-scoped `papi.settings` instead of `useWebViewState`.
 
+Pass a stable `default` (a module-level constant or a memoized value) when the returned value feeds an effect's dependency list — an inline `[]` or `{}` is a new object every render.
+
 ### Custom Web View Options
 
 When a web view accepts custom options (project IDs, mode flags, etc.), declare a typed interface that **extends `OpenWebViewOptions`** — do not pass an inline object literal.
