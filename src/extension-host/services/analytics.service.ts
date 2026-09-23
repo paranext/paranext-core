@@ -211,9 +211,9 @@ function flushQueue(environment: AnalyticsEnvironment): void {
   const provider = getProviders()[environment];
   // TODO(PT-4374): drainQueue removes each event before provider.send() settles, so a failed send
   // only logs -- the event is already gone from the in-memory queue and can't be retried. Fine for
-  // this ticket's non-durable, fire-and-forget queue, but the durable cross-restart queue that
-  // ticket adds should drain (persist-delete) on confirmed success, not unconditionally at dequeue
-  // time, so a failure can be retried instead of silently lost.
+  // this ticket's non-durable, fire-and-forget queue, but the drain that ticket adds on top of
+  // PT-4373's durable cross-restart queue should persist-delete on confirmed success, not
+  // unconditionally at dequeue time, so a failure can be retried instead of silently lost.
   drainQueue(queues[environment], (event) => {
     try {
       // Debug, not warn: the provider owns the one user-visible line per failed event. The
