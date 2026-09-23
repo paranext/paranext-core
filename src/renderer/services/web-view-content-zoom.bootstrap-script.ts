@@ -238,8 +238,9 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       activeArea = areaId;
     };
     // A MutationObserver callback already runs as a microtask after its batch of synchronous DOM
-    // changes, well before the next paint - refreshing straight from it (no rAF hop) is what lets the
-    // parent clear a hidden whole-iframe fallback zoom before the view is ever shown at the wrong scale.
+    // changes, well before the next paint - refreshing straight from it (no rAF hop) re-reports the
+    // area list before the view is ever painted, so the parent's view of the pane's areas is current
+    // from the first frame.
     let reported = false;
     const refresh = () => {
       const next = collectAreas();
