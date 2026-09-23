@@ -132,9 +132,11 @@ export function ZoomStepper({
   const recentlyEmittedRef = useRef<number[]>([]);
 
   /**
-   * The percentage field's text while the user is editing it, or `undefined` while it simply shows
-   * the current value. Kept while a write from elsewhere arrives, so a change the user did not make
-   * never overwrites what they are typing.
+   * The percentage field's text once the user has typed into it, or `undefined` while it simply
+   * shows the current value — including while it merely has focus. Only an edit sets it, so leaving
+   * a field the user never typed into commits nothing and cannot write a shown value back over a
+   * change made elsewhere. Kept while a write from elsewhere arrives, so a change the user did not
+   * make never overwrites what they are typing.
    */
   const [draft, setDraft] = useState<string | undefined>(undefined);
 
@@ -152,6 +154,9 @@ export function ZoomStepper({
     if (recentlyEmittedRef.current.includes(value)) return;
     recentlyEmittedRef.current = [];
     setPending(undefined);
+    // The last press no longer describes the value, and leaving its text would make a later press
+    // that lands on the same percentage announce nothing.
+    setAnnouncement('');
   }, [value]);
 
   // A press that never gets confirmed must not pin the buttons' enabled state forever. Expiring on
@@ -181,26 +186,27 @@ export function ZoomStepper({
   };
 
   /**
-   * Commits the field's text, if it is a whole percentage, and returns the factor the control
-   * answers with afterwards. Text that is not a percentage commits nothing, so the field falls back
-   * to the current value — there is no error to show, because the field only ever settles on a
-   * valid value.
+   * Commits what the user typed, if it is a whole percentage. Text that is not a percentage commits
+   * nothing, so the field falls back to the current value — there is no error to show, because the
+   * field only ever settles on a valid value. The caller clears the draft afterwards.
    */
-  const commitDraft = (): number => {
-    if (draft === undefined) return baseline;
+  const commitDraft = () => {
+    if (draft === undefined) return;
+    // The focused field shows the typed value itself, so a press's announcement is stale now.
+    setAnnouncement('');
     const typed = parsePercentInput(draft);
-    if (typed === undefined) return baseline;
+    if (typed === undefined) return;
     emit(typed);
-    return typed;
   };
 
   const handlePercentKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      setDraft(formatZoomPercent(commitDraft()));
+      commitDraft();
+      setDraft(undefined);
     } else if (event.key === 'Escape') {
       event.preventDefault();
-      setDraft(formatZoomPercent(baseline));
+      setDraft(undefined);
     }
   };
 
@@ -280,10 +286,7 @@ export function ZoomStepper({
             aria-label={labels.percentInput}
             disabled={disabled}
             value={draft ?? formatZoomPercent(baseline)}
-            onFocus={(event) => {
-              setDraft(formatZoomPercent(baseline));
-              event.currentTarget.select();
-            }}
+            onFocus={(event) => event.currentTarget.select()}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handlePercentKeyDown}
             onBlur={() => {
