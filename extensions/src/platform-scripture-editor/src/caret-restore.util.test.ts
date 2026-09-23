@@ -110,9 +110,84 @@ describe('scheduleCaretRestore', () => {
     expect(editor.setSelection).toHaveBeenCalledTimes(1);
   });
 
-  // The failure this exists for: the editor reports the document loaded but the placement does not
-  // take. Before, one fixed delay meant one attempt, and the caret stayed at the end of the chapter
-  // — where the user's next Backspace deleted text far from where they were working.
+  // The editor reads a caret at the very start of a paragraph whose marker is shown back as that
+  // paragraph's marker location, which carries no offset. Taken as a failed placement, it would be
+  // re-applied every 50 ms for the whole window, snapping back any caret the user moved.
+  it('accepts a paragraph-start placement the editor reads back as the marker location', () => {
+    const { timers, advance, pendingCount } = fakeTimers();
+    const paragraphStart: SelectionRange = { start: { jsonPath: '$.content[3]', offset: 0 } };
+    const editor: CaretRestoreEditor = {
+      hasLoadedDocument: () => true,
+      setSelection: vi.fn(),
+      getSelection: () => ({ start: { jsonPath: '$.content[3]' } }),
+      focus: vi.fn(),
+    };
+    const settled: CaretRestoreResult[] = [];
+
+    scheduleCaretRestore({
+      target: paragraphStart,
+      editor,
+      isStillWanted: () => true,
+      onSettled: (result) => settled.push(result),
+      timers,
+    });
+
+    advance(50);
+    expect(editor.setSelection).toHaveBeenCalledTimes(1);
+    expect(editor.focus).toHaveBeenCalledTimes(1);
+    expect(settled).toEqual([{ outcome: 'restored' }]);
+    expect(pendingCount()).toBe(0);
+  });
+
+  it('does not take a marker location on another paragraph for the placement', () => {
+    const { timers, advance } = fakeTimers();
+    const editor: CaretRestoreEditor = {
+      hasLoadedDocument: () => true,
+      setSelection: vi.fn(),
+      getSelection: () => ({ start: { jsonPath: '$.content[4]' } }),
+      focus: vi.fn(),
+    };
+
+    scheduleCaretRestore({
+      target: { start: { jsonPath: '$.content[3]', offset: 0 } },
+      editor,
+      isStillWanted: () => true,
+      timers,
+    });
+
+    advance(200);
+    expect(editor.focus).not.toHaveBeenCalled();
+  });
+
+  // With no target the caret belongs at the end of the document, which focusing a freshly loaded
+  // editor gives it — but only once the load has happened: focused against the outgoing document,
+  // the caret stays where the user was typing and is then lost to the load.
+  it('with no target, only focuses, and only once the document has loaded', () => {
+    const { timers, advance } = fakeTimers();
+    const { editor, getSelection } = fakeEditor({ loadsAfterMs: 300, now: timers.now });
+    const settled: CaretRestoreResult[] = [];
+
+    scheduleCaretRestore({
+      target: undefined,
+      editor,
+      isStillWanted: () => true,
+      onSettled: (result) => settled.push(result),
+      timers,
+    });
+
+    advance(250);
+    expect(editor.focus).not.toHaveBeenCalled();
+
+    advance(100);
+    expect(editor.focus).toHaveBeenCalledTimes(1);
+    expect(editor.setSelection).not.toHaveBeenCalled();
+    expect(getSelection()).toBe(ELSEWHERE);
+    expect(settled).toEqual([{ outcome: 'restored' }]);
+  });
+
+  // The editor can report the document loaded while the placement still does not take. A single
+  // attempt would then leave the caret at the end of the chapter — where the user's next Backspace
+  // deletes text far from where they were working.
   it('retries a placement that does not take', () => {
     const { timers, advance } = fakeTimers();
     let accepts = false;

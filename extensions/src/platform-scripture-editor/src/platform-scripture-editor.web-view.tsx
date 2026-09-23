@@ -2940,6 +2940,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // focusing it then would take them back out of whatever they moved to.
       const caretToRestore =
         document.hasFocus() && editorRef.current?.isFocused() ? caretTarget : undefined;
+      // The outgoing document's first block, taken before the push-back: its leaving the editor is
+      // what says the load has happened. `getUsj()` cannot say so, because `setUsj` makes it return
+      // the incoming document straight away, before the editor has built that document's nodes. A
+      // load builds every node afresh (`root` is the only key it keeps), so no block of the outgoing
+      // document survives it.
+      const editorRoot = editorRef.current?.getElementByKey('root');
+      const outgoingFirstBlock = editorRoot?.firstElementChild ?? undefined;
       try {
         setEditorUsj.current(repairedUsj);
       } catch (error) {
@@ -2958,29 +2965,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const isStillWanted = () =>
         chapterKeyRef.current === savedChapterKey && document.hasFocus() && !!editorRef.current;
 
-      // The end of the document is where an editor focused with no selection puts the caret, so
-      // that target is the focus and nothing more.
-      if (caretToRestore === CARET_AT_DOCUMENT_END) {
-        pendingCaretRestore.current = undefined;
-        setTimeout(() => {
-          if (!isStillWanted()) return;
-          try {
-            editorRef.current?.focus();
-          } catch (error) {
-            logger.warn(
-              `Error focusing the editor after a chapter marker correction: ${getErrorMessage(error)}`,
-            );
-          }
-        }, EDITOR_LOAD_DELAY_TIME);
-        return;
-      }
-
       pendingCaretRestore.current = scheduleCaretRestore({
-        target: caretToRestore,
+        // The end of the document is where an editor focused with no selection puts the caret, so
+        // that target is the focus and nothing more.
+        target: caretToRestore === CARET_AT_DOCUMENT_END ? undefined : caretToRestore,
         editor: {
           // The push-back is what the caret addresses, so it is only placeable once the editor is
           // holding that document and not the one it replaced.
           hasLoadedDocument: () => {
+            if (outgoingFirstBlock && editorRoot?.contains(outgoingFirstBlock)) return false;
             const editorUsj = editorRef.current?.getUsj();
             return (
               !!editorUsj && deepEqualAcrossIframes(correctEditorUsjVersion(editorUsj), repairedUsj)

@@ -170,9 +170,9 @@ test.describe('scripture editor chapter-marker repair', () => {
     });
 
     await test.step('the chapter still saves after a repair', async () => {
-      // The regression this whole change exists for: before the repair, the refused document stayed
-      // in the editor and every later save of the chapter was refused too, so everything typed
-      // after the mistyped marker was silently lost at the chapter switch.
+      // A document Paratext refuses stays in the editor, so unless the repair lets the write
+      // through, every later save of the chapter is refused too and everything typed after the
+      // mistyped marker is silently lost at the chapter switch.
       //
       // Positive control first: wait for Jonah 2's own verse text so the negative assertion runs
       // against RENDERED chapter-2 content — `not.toContainText` alone is satisfied by the empty

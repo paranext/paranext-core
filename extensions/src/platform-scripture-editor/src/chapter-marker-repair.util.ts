@@ -403,7 +403,8 @@ export function prepareUsjForChapterSave(
   usjFromPdp: Usj | undefined,
   expectedChapterNum: number,
 ): ChapterSavePreparation {
-  if (!resolveUsjToSaveToPdp(usjFromEditor, usjFromPdp))
+  const editorUsjToSave = resolveUsjToSaveToPdp(usjFromEditor, usjFromPdp);
+  if (!editorUsjToSave)
     return { repairedUsj: undefined, usjToSave: undefined, caretTarget: undefined };
 
   const {
@@ -419,7 +420,7 @@ export function prepareUsjForChapterSave(
   );
   return {
     repairedUsj: didRepair ? repaired : undefined,
-    usjToSave: resolveUsjToSaveToPdp(repaired, usjFromPdp),
+    usjToSave: didRepair ? resolveUsjToSaveToPdp(repaired, usjFromPdp) : editorUsjToSave,
     caretTarget:
       caretTarget === CARET_AT_DOCUMENT_END &&
       isStoredChapterWithoutItsMarker(usjFromEditor, usjFromPdp)

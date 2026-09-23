@@ -113,10 +113,10 @@ describe('planSaveFailureResponse', () => {
   });
 });
 
-// The lifecycle the web view used to keep inline, which is the half that decides whether a user
-// ever sees a failing chapter: what suppresses a repeat report is also the only thing that knows
-// when to stop suppressing, and the `duration: 0` notice raised for a suppressed run stays on
-// screen until a completed write takes it down.
+// The memory's lifecycle, which is the half that decides whether a user ever sees a failing
+// chapter: what suppresses a repeat report is also the only thing that knows when to stop
+// suppressing, and the `duration: 0` notice raised for a suppressed run stays on screen until a
+// completed write takes it down.
 describe('the save-failure memory across a run of saves', () => {
   const SYNC_BLOCKED = 'write refused (SR_EDIT_BLOCKED) during sync';
   const PERMISSIONS = 'Permissions exception for projectId abc123';

@@ -15,6 +15,11 @@
  */
 
 import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
+import {
+  isUsjMarkerLocation,
+  isUsjTextContentLocation,
+  type UsjDocumentLocation,
+} from '@eten-tech-foundation/scripture-utilities';
 
 /** How often a caret placement that could not be made yet is retried. */
 const CARET_RESTORE_RETRY_MS = 50;
@@ -49,7 +54,8 @@ export interface CaretRestoreEditor {
   getSelection: () => SelectionRange | undefined;
   /**
    * Gives the editor DOM focus. Called only once the caret is in place, because an editor focused
-   * with no selection takes the end of the document instead.
+   * with no selection takes the end of the document instead — which is exactly what a restore with
+   * no target wants, once the document it addresses has loaded.
    */
   focus: () => void;
 }
@@ -81,23 +87,37 @@ export interface ScheduledCaretRestore {
   cancel: () => void;
 }
 
+/**
+ * The offset a location addresses within its `jsonPath`. The editor reports a caret at the very
+ * start of a paragraph whose marker is shown as that paragraph's marker location, with no offset —
+ * the same point as the paragraph's boundary 0 it was placed at.
+ */
+function offsetOf(location: UsjDocumentLocation): number | undefined {
+  if (isUsjMarkerLocation(location)) return 0;
+  return isUsjTextContentLocation(location) ? location.offset : undefined;
+}
+
 /** Whether a placement took: the caret reads back at the point it was asked for. */
 function isSelectionAt(selection: SelectionRange | undefined, target: SelectionRange): boolean {
   return (
-    selection?.start.jsonPath === target.start.jsonPath &&
-    selection?.start.offset === target.start.offset
+    selection !== undefined &&
+    selection.start.jsonPath === target.start.jsonPath &&
+    offsetOf(selection.start) === offsetOf(target.start)
   );
 }
 
 /**
  * Places the caret at `target` once the editor holds the document that target addresses, retrying
- * until it does.
+ * until it does. With no `target`, the caret belongs at the end of the document, which is where
+ * focusing an editor that has just loaded a document (and so has no selection) puts it — so the
+ * restore then only focuses, once the load has happened.
  *
  * The selection is set BEFORE the editor is focused, because focusing an editor that has no
  * selection puts the caret at the end of the document — which is both wrong and destructive, since
  * the keys that follow edit the end of the chapter rather than where the user was working.
  *
- * @param target Where the caret belongs, in the coordinates of the document being loaded.
+ * @param target Where the caret belongs, in the coordinates of the document being loaded, or
+ *   `undefined` for the end of that document.
  * @param editor The editor to place it in.
  * @param isStillWanted Asked before every attempt: false abandons the restore (the user has
  *   navigated away, or left the editor for another part of the app).
@@ -114,7 +134,7 @@ export function scheduleCaretRestore<THandle = ReturnType<typeof setTimeout>>({
   onSettled,
   timers,
 }: {
-  target: SelectionRange;
+  target: SelectionRange | undefined;
   editor: CaretRestoreEditor;
   isStillWanted: () => boolean;
   onSettled?: (result: CaretRestoreResult) => void;
@@ -129,6 +149,11 @@ export function scheduleCaretRestore<THandle = ReturnType<typeof setTimeout>>({
 
     try {
       if (editor.hasLoadedDocument()) {
+        if (!target) {
+          editor.focus();
+          onSettled?.({ outcome: 'restored' });
+          return;
+        }
         editor.setSelection(target);
         // Read back rather than assumed: a placement against a document the editor is not holding
         // reports nothing and changes nothing, and that silence is the whole reason for the retry.
