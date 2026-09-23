@@ -417,8 +417,11 @@ export function OverlayCommandPalettePresentational({
   // (bounded, and cancelled if the palette unmounts first).
   //
   // The input may not exist yet on the first attempts: an anchored palette renders it inside a
-  // Radix Popover portal, which mounts its content on a render AFTER this effect has run. Those
-  // attempts retry too, or no anchored palette would ever take focus.
+  // Radix Popover portal, which mounts its content on a render AFTER this effect has run. Retrying
+  // for a not-yet-mounted input is safe only when `keyForwarding` is unset (the Enter palette is
+  // the anchored case that needs it) — a `keyForwarding` palette anchors to a text selection in the
+  // requesting editor and must never take DOM focus from it, so it gets a single focus attempt
+  // against whatever is mounted right now and no retry loop waiting for a portal to appear.
   useEffect(() => {
     if (passive) return () => {};
     let rafId: number | undefined;
@@ -426,8 +429,14 @@ export function OverlayCommandPalettePresentational({
     const MAX_FOCUS_ATTEMPTS = 20;
     const tryFocus = () => {
       const input = inputRef.current;
-      input?.focus();
-      if ((input && document.activeElement === input) || attempts >= MAX_FOCUS_ATTEMPTS) return;
+      if (!input) {
+        if (keyForwarding || attempts >= MAX_FOCUS_ATTEMPTS) return;
+        attempts += 1;
+        rafId = requestAnimationFrame(tryFocus);
+        return;
+      }
+      input.focus();
+      if (document.activeElement === input || attempts >= MAX_FOCUS_ATTEMPTS) return;
       attempts += 1;
       rafId = requestAnimationFrame(tryFocus);
     };
@@ -435,7 +444,7 @@ export function OverlayCommandPalettePresentational({
     return () => {
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     };
-  }, [passive]);
+  }, [passive, keyForwarding]);
 
   // Active-mode search text: locally typed AND externally driven. When the cross-frame focus
   // fight loses (the editor iframe re-grabs focus on every Lexical commit), the extension
