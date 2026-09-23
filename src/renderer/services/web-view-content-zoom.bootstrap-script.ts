@@ -554,12 +554,15 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
 
     // Whether a physically held modifier key is evidence that a ctrl+wheel is a mouse notch. It is
     // only on macOS, whose mouse notch can be as small as a pinch frame (≈4 px), so there the size
-    // test cannot tell the two apart and the held key is what does. On Windows and Linux a notch is
-    // 33 px or more, far outside the size window, while a pinch frame sits within about 1 % of a
-    // scale of 1. Pinching while Ctrl is held is an ordinary way to pinch there, and reading the
-    // held key as a notch would send every frame of it down the tick path at a whole step each. So
-    // everywhere but macOS the size test decides alone. Read once: the platform cannot change under
-    // a running pane.
+    // test cannot tell the two apart and the held key is what does. On Windows and Linux a detented
+    // wheel's notch is 100 px at the system default, 33 px at the smallest common one-line setting -
+    // both far outside the window that OPENS a pinch, which only the frame that starts a gesture has
+    // to clear (a running gesture's later frames ride the latch above, whatever their size). A smooth
+    // or free-spin wheel can emit frames small enough for the latch to read as a pinch; that is
+    // acceptable, since pinching while Ctrl is held is an ordinary way to pinch there, and reading
+    // the held key as a notch would send every frame of it down the tick path at a whole step each.
+    // So everywhere but macOS the size test decides alone. Read once: the platform cannot change
+    // under a running pane.
     const IS_MAC = /^Mac/.test(navigator.platform || '');
 
     // Which modifier keys are PHYSICALLY down - the thing a synthesized pinch's \`ctrlKey\` is not.

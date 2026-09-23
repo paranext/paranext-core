@@ -5821,10 +5821,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is physically held arrives as the same ctrl+wheel frames as any other pinch — a fraction of a
   pixel of `deltaY` each, with a whole tick of `wheelDeltaY` — and reading the held key as evidence
   of a mouse notch sent every frame down the tick path at a full zoom step per frame. There the size
-  test alone tells the two apart: a pinch frame sits within about 1 % of scale 1, while a mouse
-  notch (33 px or more) is far outside the window that opens a pinch. On macOS, where a mouse notch
-  can be as small as a pinch frame, the held key still decides. The bootstrap reads the platform
-  once, from `navigator.platform`.
+  test alone tells the two apart: the frame that opens a pinch sits within about 1 % of a scale of
+  1, and the running gesture carries the rest, while a mouse notch (33 px or more) is far outside
+  the window that opens a pinch. On macOS, where a mouse notch can be as small as a pinch frame, the
+  held key still decides. The bootstrap reads the platform once, from `navigator.platform`.
 
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
@@ -7475,6 +7475,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   exactly that (`…/use-resource-zoom-input.hook.ts`)" — no longer exists. The grid registers no
   wheel listener, so the platform's bubble-phase listener handles Ctrl+wheel over its cells. The
   bubble phase is still what keeps precedence for any view that does claim a sub-region.
+- **Amended 2026-09-23:** how the bootstrap tells a trackpad pinch from a wheel notch, and why a held modifier counts as evidence only on macOS, is recorded in the amendments of `adr-resource-panes-name-their-zoom-areas`.
 
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
