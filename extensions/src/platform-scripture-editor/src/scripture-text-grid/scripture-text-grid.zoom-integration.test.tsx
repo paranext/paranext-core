@@ -96,6 +96,7 @@ describe('ScriptureTextGrid zoom wiring integration (real useResourceZoomInput)'
   it('Ctrl+wheel over the first cell calls adjustZoom with the first resourceId', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -125,6 +126,7 @@ describe('ScriptureTextGrid zoom wiring integration (real useResourceZoomInput)'
   it('Ctrl+wheel over the second cell resolves the second resourceId independently', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}

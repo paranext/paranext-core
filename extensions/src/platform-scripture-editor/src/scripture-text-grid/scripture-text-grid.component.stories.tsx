@@ -61,6 +61,7 @@ export const Row: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -80,6 +81,7 @@ export const RowDraggable: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -99,6 +101,7 @@ export const ChapterContextOpen: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -149,6 +152,7 @@ export const RowWithZoomEnabled: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -171,6 +175,7 @@ export const AlignedGridView: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}

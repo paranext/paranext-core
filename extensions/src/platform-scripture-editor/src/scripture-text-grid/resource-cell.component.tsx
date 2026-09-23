@@ -29,7 +29,8 @@ import {
   resolveDisplayVerseNum,
   sliceUsjToVerse,
 } from './verse-display.utils';
-import { findVerseMarkerForVerse } from './reference-scroll.utils';
+import { VERSE_NUMBER_SCROLL_OFFSET } from '../editor-dom.util';
+import { findVerseMarkerForVerse, isMarkerFullyInPortView } from './reference-scroll.utils';
 import { useReferenceScroll } from './use-reference-scroll.hook';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
@@ -188,6 +189,9 @@ export function ResourceCell({
   // This cell's own scroll port, when it has one. React's ref API requires `null` here.
   // eslint-disable-next-line no-null/no-null
   const contentRef = useRef<HTMLDivElement>(null);
+  // The reference this cell last published, so the scroll group's echo of the reader's own click
+  // can be told from a genuine navigation. Consumed by `useReferenceScroll`.
+  const lastPublishedScrRefRef = useRef<SerializedVerseRef | undefined>(undefined);
   // Chapter surfaces render a whole chapter in a short port — the chapter-context split, a chapter
   // column, the single-resource view — so they have to follow the scroll group's verse themselves.
   // The other two modes deliberately do not:
@@ -202,6 +206,11 @@ export function ResourceCell({
   // mode that is the common path, not the edge: column 3 shows one tab at a time.
   useReferenceScroll(contentRef, scrRef, isViewVisible, findVerseMarkerForVerse, {
     isEnabled: viewMode === 'chapter',
+    isTargetVisible: isMarkerFullyInPortView,
+    publishedScrRefRef: lastPublishedScrRefRef,
+    // The same framing the Scripture editor, the model text panel and the reference panels use, so
+    // a reference lands the same way whichever view the reader is looking at.
+    leadInPx: VERSE_NUMBER_SCROLL_OFFSET,
   });
   // Give the editor this resource's valid markers so it recognizes them (footnote/apparatus and
   // other resource-specific markers) instead of rendering them inline as raw text. Mirrors the
@@ -264,6 +273,9 @@ export function ResourceCell({
   const handleScrRefChange = useCallback(
     (nextScrRef: SerializedVerseRef) => {
       if (viewMode === 'verse' && isFallenForward) return;
+      // Arm the echo latch before publishing: this reference is about to come back as a prop, and
+      // scrolling for it would move the text out from under the click that produced it.
+      lastPublishedScrRefRef.current = nextScrRef;
       setScrRef(nextScrRef);
     },
     [viewMode, isFallenForward, setScrRef],

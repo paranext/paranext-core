@@ -15,7 +15,7 @@ import { parseVerseRange } from './verse-display.utils';
  * Returning `undefined` means "nothing has rendered yet", which callers use to tell that from "the
  * verse is missing" and leave their pending scroll armed.
  */
-export type VerseTargetFinder = (port: ParentNode, verseNum: number) => HTMLElement | undefined;
+export type VerseTargetFinder = (port: HTMLElement, verseNum: number) => HTMLElement | undefined;
 
 /**
  * Whether the grid's generated row rules place a block carrying this `data-verse-start`.
@@ -102,7 +102,13 @@ const VERSE_MARKER_SELECTOR = 'span[data-marker="v"][data-number]';
  * the chapter.
  *
  * Unlike {@link findVerseBlockForVerse} there is no upper bound to respect: the inline layout places
- * no verse on a fixed row, so every rendered marker is a candidate.
+ * no verse on a fixed row, so every rendered marker is a candidate. That finder's `isPlacedBlock`
+ * has a second effect this one deliberately does not copy: it also screens out elements with no
+ * layout box, whose all-zero rect would send the reader to the top of the chapter and pin them
+ * there. The hazard is generic, but the guard is not free — it costs a `getBoundingClientRect()`
+ * per candidate on a scan that runs for every mutation frame — and no case is known where the
+ * editor emits a `span[data-marker="v"]` without a layout box in the inline layout. Nothing in this
+ * repo hides one. Add the screen here if such a case turns up; it was weighed, not overlooked.
  *
  * Sub-verse markers (`\v 3a`, `\v 3b`) both resolve to verse 3 and the earlier one wins, which puts
  * the reader at the start of the verse. The aligned layout's equivalent collision is worse — both
@@ -113,14 +119,14 @@ const VERSE_MARKER_SELECTOR = 'span[data-marker="v"][data-number]';
  * @returns The marker to bring into view, or `undefined` when none has rendered yet.
  */
 export function findVerseMarkerForVerse(
-  port: ParentNode,
+  port: HTMLElement,
   verseNum: number,
 ): HTMLElement | undefined {
   // The common case — the reference names a verse the chapter starts — is answerable without
   // collecting every marker, and this runs on each frame in which the cell's editor mutates.
   if (Number.isInteger(verseNum) && verseNum >= 1) {
     const exact = port.querySelector<HTMLElement>(
-      `span[data-marker="v"][data-number="${verseNum}"]`,
+      `${VERSE_MARKER_SELECTOR}[data-number="${verseNum}"]`,
     );
     if (exact) return exact;
   }
@@ -141,9 +147,7 @@ export function findVerseMarkerForVerse(
     //
     // This nearest-start-wins scan is deliberately the same rule as `findVerseBlockForVerse`'s
     // above, tie-break included — the two layouts should not disagree about which verse a
-    // reference belongs to. Change one and change the other. They are written out twice rather
-    // than shared because the block finder belongs to the aligned grid and is still under review;
-    // fold them into one helper once that settles.
+    // reference belongs to. Change one and change the other.
     if (!Number.isFinite(start) || start > verseNum || start <= bestStart) return;
     best = marker;
     bestStart = start;
@@ -172,34 +176,55 @@ function getFirstVisibleY(port: HTMLElement): number {
 }
 
 /**
- * Whether `block` is showing in `port`, counting anything behind a sticky header as covered rather
- * than visible.
+ * Whether the reader can see a scroll target, as one layout counts "visible".
  *
- * Two rules, because the layouts aim this at different things:
+ * Injected beside {@link VerseTargetFinder}, because the layouts aim the scroll at different kinds
+ * of element and so answer this differently. A `true` here means "leave the port alone".
+ */
+export type TargetVisibilityTest = (port: HTMLElement, target: HTMLElement) => boolean;
+
+/**
+ * Whether any part of `block` is showing in `port`, counting anything behind a sticky header as
+ * covered rather than visible.
  *
- * - A target SHORTER than the visible area has to fit inside it completely. A chapter cell's target
- *   is a one-line verse marker whose verse text follows _after_ it, so a marker clipped at the
- *   bottom edge would count as "showing" while the reader sees a verse number and none of its verse
- *   — and the leave-a-visible-verse-alone rule would then decline to scroll.
- * - A target TALLER than the visible area can never fit, so any part showing counts. That is the
- *   aligned grid's whole verse block, where scrolling back to the top would fight a reader who is
- *   part-way through a long verse.
+ * The aligned grid's rule, and the default. Its target is a whole verse block, so a sliver on
+ * screen still means the reader can see that verse, and scrolling it to the top would fight a
+ * reader who is part-way through it.
  *
- * @param port The scroll port — the grid root in the aligned view, the cell's content box in a
- *   chapter cell.
- * @param block The verse block or marker to test.
- * @returns True when the reader can see the target.
+ * @param port The scroll port — the grid root in the aligned view.
+ * @param block The verse block to test.
+ * @returns True when the reader can see some of the block.
  */
 export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolean {
   const blockRect = block.getBoundingClientRect();
+  return (
+    blockRect.bottom > getFirstVisibleY(port) && blockRect.top < port.getBoundingClientRect().bottom
+  );
+}
+
+/**
+ * Whether all of `marker` is showing in `port`, counting anything behind a sticky header as covered
+ * rather than visible.
+ *
+ * A chapter cell's rule. Its target is a one-line verse marker whose verse text follows _after_ it,
+ * so "any part showing" would count a marker clipped at the bottom edge as visible while the reader
+ * sees a verse number and none of its verse — and the leave-a-visible-verse-alone rule would then
+ * decline to scroll. Demanding the marker fit completely is what makes the verse readable.
+ *
+ * A target taller than the visible area can never fit, so it falls back to the any-part-showing
+ * rule rather than being called hidden forever. That also covers a port reporting no visible area
+ * at all — a hidden pane, or an environment that lays nothing out.
+ *
+ * @param port The scroll port — the cell's content box in a chapter cell.
+ * @param marker The verse marker to test.
+ * @returns True when the reader can see the whole marker.
+ */
+export function isMarkerFullyInPortView(port: HTMLElement, marker: HTMLElement): boolean {
+  const markerRect = marker.getBoundingClientRect();
   const firstVisibleY = getFirstVisibleY(port);
   const portBottom = port.getBoundingClientRect().bottom;
-  // A port reporting no visible area — a hidden pane, or an environment that lays nothing out —
-  // takes the permissive rule below, since no height can be less than zero. Demanding a target fit
-  // inside nothing would call everything hidden and scroll for it.
-  if (blockRect.height < portBottom - firstVisibleY)
-    return blockRect.top >= firstVisibleY && blockRect.bottom <= portBottom;
-  return blockRect.bottom > firstVisibleY && blockRect.top < portBottom;
+  if (markerRect.height >= portBottom - firstVisibleY) return isBlockInPortView(port, marker);
+  return markerRect.top >= firstVisibleY && markerRect.bottom <= portBottom;
 }
 
 /**
@@ -214,7 +239,16 @@ export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolea
  *
  * @param port The scroll port (the grid root).
  * @param block The verse block to bring to the top of the port.
+ * @param leadInPx How much room to leave above the target, so the reader keeps a little of the
+ *   preceding verse for context. Defaults to none, which is what the aligned grid wants: its verse
+ *   blocks carry their own padding, so their rect top is already the padding edge. A position above
+ *   the top of the content is clamped by the browser, which is the right answer for a target near
+ *   the start of the chapter.
  */
-export function scrollPortToBlock(port: HTMLElement, block: HTMLElement): void {
-  port.scrollTop += block.getBoundingClientRect().top - getFirstVisibleY(port);
+export function scrollPortToBlock(
+  port: HTMLElement,
+  block: HTMLElement,
+  leadInPx: number = 0,
+): void {
+  port.scrollTop += block.getBoundingClientRect().top - getFirstVisibleY(port) - leadInPx;
 }
