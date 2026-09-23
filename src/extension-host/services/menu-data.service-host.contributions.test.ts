@@ -116,6 +116,12 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
    *
    * Update these lists only alongside a deliberate decision about whether the item belongs in each
    * mode — never to make a failing run green.
+   *
+   * Paratext 10's repo patch re-adds two `platform.helpFeedback` items
+   * (`platform.usersnapSubmitIdea` and `platform.usersnapReportIssue`), so these exact-equality
+   * pins fail inside a patched build. The empty `platform.helpFeedback` group and the
+   * `%mainMenu_feedbackForm_screenshot%` / `%mainMenu_feedbackForm_textArea%` labels stay in core
+   * as anchors for that patch.
    */
   const SIMPLE_MAIN_MENU = [
     'helloRock3.createNewProject',

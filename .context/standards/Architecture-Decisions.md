@@ -6947,6 +6947,44 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
 
+## adr-usersnap-lives-in-product-patch: Usersnap keys and Help items live in the product's repo patch; core ships empty constants
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** The Usersnap account core's feedback forms used to share was lost (PT-3923), and
+  product decided that the live Usersnap integration is Paratext 10 only (PT-4530, question 13).
+  Usersnap's space and project keys are write-only client keys, so they are not secrets, but they
+  identify one product's Usersnap space and do not belong in a public repo that other products build
+  on. Paratext 10 already carries its product-specific changes to core as a repo patch.
+- **Decision:** Core keeps the Usersnap service and commands (`initializeUsersnapApi` and
+  `openUsersnapForm` in `src/renderer/services/usersnap.service.ts`) but ships the
+  `USERSNAP_SPACE_API_KEY`, `USERSNAP_PROJECT_REPORT_ISSUE_API_KEY` and
+  `USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY` constants in `src/shared/data/platform.data.ts` empty, and
+  no items in the `platform.helpFeedback` menu group (`src/extension-host/data/menu.data.json`).
+  As of 2026-09-24, Paratext 10's `repo-patches/paranext-core.patch` (in the `paratext-10-studio`
+  repo) sets the keys
+  and re-adds the two items, `platform.usersnapSubmitIdea` and `platform.usersnapReportIssue`. The
+  main-process display-media handler that serves the widget's native screenshot is registered only
+  when the space key is set (`registerDisplayMediaRequestHandler` in
+  `src/main/services/display-media-request.util.ts`), and it serves only the window's top frame
+  (`selectDisplayMediaSource`). Code running in that frame's origin shares the grant, which includes
+  web views created with the default `allowSameOrigin`.
+- **Alternatives:** **Keys as `{{ productInfo.* }}` tokens replaced at build time** — rejected: dev
+  runs of a temp build would carry the unreplaced tokens and send them to Usersnap. **Keep the keys
+  in core** — rejected: the repo is public and the keys are product-specific. **Grant capture only
+  while a feedback form is open** — not done: the exposure it would remove is an installed
+  extension's same-origin web view capturing the pixels of an isolated web view, judged not worth a
+  renderer-to-main signal. Revisit if a product ships untrusted extensions.
+- **Consequences:** Platform.Bible makes no Usersnap request, registers no display-media handler,
+  and tells a user who reaches a feedback command that the forms are not available in this build.
+  The exact-equality main-menu pins in
+  `src/extension-host/services/menu-data.service-host.contributions.test.ts` fail inside a patched
+  build; the test says so, and the empty `platform.helpFeedback` group and the
+  `%mainMenu_feedbackForm_screenshot%` / `%mainMenu_feedbackForm_textArea%` labels stay in core as
+  anchors for the patch. Any core change touching a file the patch edits requires regenerating the
+  Paratext 10 patch.
+- **Source:** PT-4558 (PR #2855).
+
 ## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
 
 - **Date:** 2026-09-15
