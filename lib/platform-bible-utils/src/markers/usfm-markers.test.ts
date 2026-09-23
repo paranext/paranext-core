@@ -4,6 +4,7 @@ import {
   isBlockMarker,
   isCharacterMarker,
   usfmMarkers,
+  PROGRAMMATICALLY_APPLIED_MARKERS,
 } from './usfm-markers';
 
 describe('isBlockMarker', () => {
@@ -131,13 +132,15 @@ describe('selectableParagraphMarkers', () => {
     expect(selectableParagraphMarkers).toContain('b');
     expect(selectableParagraphMarkers).toContain('h'); // Headers category — deliberately not excluded
     expect(selectableParagraphMarkers).toContain('cl'); // DivisionMarks category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
   });
 
-  // The one confirmed, deliberate exclusion (see the comment on PROGRAMMATICALLY_APPLIED_MARKERS):
-  // `id` is applied programmatically and must never be offered as something a user can choose.
-  it('excludes id even though it is a MarkerType.Paragraph marker', () => {
+  // The confirmed, deliberate exclusions (see the comment on PROGRAMMATICALLY_APPLIED_MARKERS):
+  it('excludes id and c even though they are MarkerType.Paragraph markers', () => {
     expect(usfmMarkers.id?.type).toBe(MarkerType.Paragraph);
     expect(selectableParagraphMarkers).not.toContain('id');
+    expect(usfmMarkers.c?.type).toBe(MarkerType.Paragraph);
+    expect(selectableParagraphMarkers).not.toContain('c');
   });
 
   it('excludes markers that are not MarkerType.Paragraph', () => {
@@ -145,6 +148,11 @@ describe('selectableParagraphMarkers', () => {
     expect(selectableParagraphMarkers).not.toContain('nd'); // Character
     expect(selectableParagraphMarkers).not.toContain('qs'); // Character
     expect(selectableParagraphMarkers).not.toContain('qac'); // Character
+  });
+
+  it('PROGRAMMATICALLY_APPLIED_MARKERS contains id and c', () => {
+    expect(PROGRAMMATICALLY_APPLIED_MARKERS.has('id')).toBe(true);
+    expect(PROGRAMMATICALLY_APPLIED_MARKERS.has('c')).toBe(true);
   });
 
   it('contains only MarkerType.Paragraph markers', () => {

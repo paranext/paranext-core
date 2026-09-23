@@ -86,6 +86,7 @@ import {
   ABORTED,
   compareScrRefs,
   selectableParagraphMarkers,
+  PROGRAMMATICALLY_APPLIED_MARKERS,
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
@@ -259,9 +260,10 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // recent-searches labels, and the show-more-books/not-in-project strings that appear once a
   // book outside this project is reachable.
   ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
-  // `id` is display-only (see isDisplayableParagraphMarkerTitle) — never offered by the switcher,
-  // but its title still needs to be preloaded for the trigger label / gutter tooltip.
-  ...[...selectableParagraphMarkers, 'id'].map(
+  // PROGRAMMATICALLY_APPLIED_MARKERS members are display-only (see isDisplayableParagraphMarkerTitle)
+  // — never offered by the switcher, but their titles still need to be preloaded for the trigger
+  // label / gutter tooltip.
+  ...[...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_MARKERS].map(
     (marker): LocalizeKey => `%paragraphMenu_${marker}_markerDescription%`,
   ),
   ...Object.entries(usfmMarkers)
