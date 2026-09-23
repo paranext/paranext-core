@@ -788,7 +788,9 @@ declare module 'shared/models/web-view.model' {
    * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
    * updated to the new `defaultStateValue`. A state value showing `defaultStateValue` keeps that same
    * object across updates to other keys of the web view state, but still pass a stable default
-   * (module-level or memoized) if the value is used in an effect's dependency list.
+   * (module-level or memoized) if the value is used in an effect's dependency list. Likewise, a saved
+   * value that is deeply equal to the current state value keeps the current object, so saving an
+   * equal new object does not give the state value a new identity.
    *
    * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
    *
@@ -904,7 +906,9 @@ declare module 'shared/models/web-view.model' {
      * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
      * updated to the new `defaultStateValue`. A state value showing `defaultStateValue` keeps that same
      * object across updates to other keys of the web view state, but still pass a stable default
-     * (module-level or memoized) if the value is used in an effect's dependency list.
+     * (module-level or memoized) if the value is used in an effect's dependency list. Likewise, a saved
+     * value that is deeply equal to the current state value keeps the current object, so saving an
+     * equal new object does not give the state value a new identity.
      *
      * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
      *
@@ -1108,7 +1112,9 @@ declare module 'shared/global-this.model' {
      * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
      * updated to the new `defaultStateValue`. A state value showing `defaultStateValue` keeps that same
      * object across updates to other keys of the web view state, but still pass a stable default
-     * (module-level or memoized) if the value is used in an effect's dependency list.
+     * (module-level or memoized) if the value is used in an effect's dependency list. Likewise, a saved
+     * value that is deeply equal to the current state value keeps the current object, so saving an
+     * equal new object does not give the state value a new identity.
      *
      * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
      *
