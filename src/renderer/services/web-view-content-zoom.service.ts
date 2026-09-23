@@ -253,6 +253,14 @@ const activeAreaByWebViewId = new Map<WebViewId, string>();
  */
 const unknownAreasLoggedByWebViewId = new Map<WebViewId, Set<string>>();
 
+/**
+ * Each pane's declaration (`undefined` for an undeclared type), read once from its definition.
+ * Every tab title asks {@link isContentZoomable} on each render, and a definition read walks the
+ * dock layout. Dropped when the pane's definition is updated (its type may change) and when it is
+ * forgotten.
+ */
+const declarationByWebViewId = new Map<WebViewId, ContentZoomDeclaration | undefined>();
+
 /** Test seam only. Production code never calls this. */
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
 export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>): void {
@@ -267,6 +275,7 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   areasByWebViewId.clear();
   activeAreaByWebViewId.clear();
   unknownAreasLoggedByWebViewId.clear();
+  declarationByWebViewId.clear();
   ownLevelWriteTimers.forEach((timer) => clearTimeout(timer));
   ownLevelWriteTimers.clear();
   pendingOwnLevelWrites.clear();
@@ -387,8 +396,13 @@ function logUnknownArea(webViewId: WebViewId, areaId: ContentZoomAreaId): void {
  * on a path that must not throw use {@link isContentZoomable}, which catches.
  */
 function getDeclarationForWebView(webViewId: WebViewId): ContentZoomDeclaration | undefined {
+  if (declarationByWebViewId.has(webViewId)) return declarationByWebViewId.get(webViewId);
   const webViewType = deps.getDefinition(webViewId)?.webViewType;
-  return webViewType === undefined ? undefined : getContentZoomDeclaration(webViewType);
+  // A pane with no definition yet is not remembered, so it is read again once it has one.
+  if (webViewType === undefined) return undefined;
+  const declaration = getContentZoomDeclaration(webViewType);
+  declarationByWebViewId.set(webViewId, declaration);
+  return declaration;
 }
 
 /**
@@ -838,6 +852,7 @@ export function forgetContentZoom(webViewId: WebViewId): void {
   commitOwnLevels(webViewId);
   forgetAreaState(webViewId);
   clearStaleAreaGrace(webViewId);
+  declarationByWebViewId.delete(webViewId);
 }
 
 /**
@@ -1534,6 +1549,7 @@ export function initializeContentZoomService(
     // compared the levels would have to be right about every other way a pane's variables can go
     // stale to avoid suppressing a push the pane needed.
     deps.onDidUpdateWebView(({ webView }) => {
+      declarationByWebViewId.delete(webView.id);
       // The emitter behind this event is not isolated, so a throw here aborts its whole subscriber
       // loop and every later subscriber misses the update — the cost of this one reaches well past
       // zoom, which is why it is guarded even though the read only fails during teardown.
