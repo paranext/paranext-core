@@ -570,14 +570,14 @@ describe('NOTE_INSERT_CONFIG', () => {
   );
 
   it('gives each kind a distinct marker, commit-message key, and edit description', () => {
-    const kinds = Object.keys(NOTE_INSERT_CONFIG) as (keyof typeof NOTE_INSERT_CONFIG)[];
-    const markers = kinds.map((kind) => NOTE_INSERT_CONFIG[kind].marker);
-    const commitMessageKeys = kinds.map((kind) => NOTE_INSERT_CONFIG[kind].commitMessageKey);
-    const editDescriptions = kinds.map((kind) => NOTE_INSERT_CONFIG[kind].editDescription);
+    const configs = Object.values(NOTE_INSERT_CONFIG);
+    const markers = configs.map((config) => config.marker);
+    const commitMessageKeys = configs.map((config) => config.commitMessageKey);
+    const editDescriptions = configs.map((config) => config.editDescription);
 
-    expect(new Set(markers).size).toBe(kinds.length);
-    expect(new Set(commitMessageKeys).size).toBe(kinds.length);
-    expect(new Set(editDescriptions).size).toBe(kinds.length);
+    expect(new Set(markers).size).toBe(configs.length);
+    expect(new Set(commitMessageKeys).size).toBe(configs.length);
+    expect(new Set(editDescriptions).size).toBe(configs.length);
   });
 });
 
@@ -705,9 +705,11 @@ describe('createInsertContextMenuItems', () => {
     const actions = makeActions();
     const items = createInsertContextMenuItems(strings, actions, ENABLED);
     items[index].onSelect();
-    (Object.keys(actions) as (keyof typeof actions)[]).forEach((name) => {
-      expect(actions[name]).toHaveBeenCalledTimes(name === actionName ? 1 : 0);
-    });
+    (['insertFootnote', 'insertCrossReference', 'insertEndnote', 'insertComment'] as const).forEach(
+      (name) => {
+        expect(actions[name]).toHaveBeenCalledTimes(name === actionName ? 1 : 0);
+      },
+    );
   });
 });
 

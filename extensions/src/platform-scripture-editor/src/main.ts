@@ -639,7 +639,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       | AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined>
       | undefined;
     /** Posts an insert-note-at-selection message of the given kind to this editor's web view. */
-    async function insertNoteAtSelection(
+    async function postInsertNoteMessage(
       method: EditorMessageInsertTextualNoteAtSelection['method'],
     ): Promise<void> {
       const message: EditorWebViewMessage = { method };
@@ -800,10 +800,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(message);
         }
       },
-      insertFootnoteAtSelection: () => insertNoteAtSelection('insertFootnoteAtSelection'),
+      insertFootnoteAtSelection: () => postInsertNoteMessage('insertFootnoteAtSelection'),
       insertCrossReferenceAtSelection: () =>
-        insertNoteAtSelection('insertCrossReferenceAtSelection'),
-      insertEndnoteAtSelection: () => insertNoteAtSelection('insertEndnoteAtSelection'),
+        postInsertNoteMessage('insertCrossReferenceAtSelection'),
+      insertEndnoteAtSelection: () => postInsertNoteMessage('insertEndnoteAtSelection'),
       async insertCommentAtSelection() {
         const { projectId } = currentWebViewDefinition;
         if (!projectId) {
