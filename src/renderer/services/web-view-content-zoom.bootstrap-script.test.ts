@@ -1172,7 +1172,7 @@ describe('content-zoom bootstrap script', () => {
     spy.mockRestore();
   });
 
-  it('measures the badge corner once per animation frame, however many levels arrive in one task', async () => {
+  it('places the badge once per animation frame, however many levels arrive in one task', async () => {
     // A show is the parent's answer to a zoom change, so a level arriving per call is the zoom
     // service calling back into the pane once it has written each one.
     install('wv-show-burst', TWO_AREAS);
@@ -1182,7 +1182,8 @@ describe('content-zoom bootstrap script', () => {
     // eslint-disable-next-line no-underscore-dangle
     const api = window.__platformContentZoom;
     if (!api) throw new Error('indicator api missing');
-    // The two reads that force style and layout when they run in the task that wrote the zoom.
+    // The read that forces a style recalculation when it runs in the task that wrote the zoom, and
+    // the layout read the fixed-corner badge never needs.
     const rects = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     const computedStyles = vi.spyOn(window, 'getComputedStyle');
     let percent = 100;
@@ -1197,10 +1198,9 @@ describe('content-zoom bootstrap script', () => {
     expect(rects).not.toHaveBeenCalled();
 
     await oneFrame();
-    // One placement for the whole run of shows: one direction read, and one rect for the single
-    // element the target area has.
+    // One placement for the whole run of shows: one direction read, and no geometry at all.
     expect(computedStyles).toHaveBeenCalledTimes(1);
-    expect(rects).toHaveBeenCalledTimes(1);
+    expect(rects).not.toHaveBeenCalled();
     // And it places the badge for the level the run settled on.
     const badge = byId('platform-content-zoom-indicator');
     expect(badge.textContent).toBe('150 %');
@@ -1748,12 +1748,12 @@ describe('content-zoom bootstrap script', () => {
     expect(badge.style.right).toBe('');
   });
 
-  it('anchors the indicator to the visible part of an area, not to a marker scrolled out of its list', async () => {
+  it("keeps the indicator in the web view's top-right corner, wherever the zoomed area's text is", async () => {
     install(
-      'wv-clipped',
+      'wv-fixed-corner',
       '<div id="list" style="overflow-y:auto">' +
-        '<div data-platform-content-zoom-root="comments" id="above">one</div>' +
-        '<div data-platform-content-zoom-root="comments" id="visible">two</div>' +
+        '<div data-platform-content-zoom-root id="high">one</div>' +
+        '<div data-platform-content-zoom-root="footnotes" id="low">two</div>' +
         '</div>',
     );
     const box = (top: number, left: number, bottom: number, right: number): DOMRect => ({
@@ -1767,22 +1767,31 @@ describe('content-zoom bootstrap script', () => {
       height: bottom - top,
       toJSON: () => ({}),
     });
+    // Text at different places in the pane: one area near the top, the other low down and partly
+    // scrolled out of its list, and neither reaching the viewport's right edge.
     vi.spyOn(byId('list'), 'getBoundingClientRect').mockReturnValue(box(100, 0, 400, 500));
-    // Scrolled up out of the list: its box ends above the list's top edge.
-    vi.spyOn(byId('above'), 'getBoundingClientRect').mockReturnValue(box(-200, 0, 50, 500));
-    vi.spyOn(byId('visible'), 'getBoundingClientRect').mockReturnValue(box(150, 0, 300, 480));
+    vi.spyOn(byId('high'), 'getBoundingClientRect').mockReturnValue(box(120, 40, 200, 300));
+    vi.spyOn(byId('low'), 'getBoundingClientRect').mockReturnValue(box(350, 60, 700, 480));
     // The bootstrap script defines this global; the double underscore marks it as an internal
     // platform/pane contract, not a name this file invents.
     // eslint-disable-next-line no-underscore-dangle
     const api = window.__platformContentZoom;
     if (!api) throw new Error('indicator api missing');
-
-    api.showIndicator('comments', '120 %');
-    await nextFrame();
     const badge = byId('platform-content-zoom-indicator');
-    // 12 px below the visible marker's top, 16 px in from its right edge.
-    expect(badge.style.top).toBe('162px');
-    expect(badge.style.right).toBe(`${window.innerWidth - 480 + 16}px`);
+
+    const expectCornerAfterShowing = async (areaId: string): Promise<void> => {
+      api.showIndicator(areaId, '150 %');
+      await nextFrame();
+      // Positive control: the show landed on this area.
+      expect(badge.dataset.area).toBe(areaId);
+      expect(badge.style.position).toBe('fixed');
+      expect(badge.style.top).toBe('12px');
+      expect(badge.style.right).toBe('16px');
+      expect(badge.style.left).toBe('');
+    };
+    await expectCornerAfterShowing('main');
+    await expectCornerAfterShowing('footnotes');
+    await expectCornerAfterShowing('main');
   });
 
   it('shows a transient indicator on the named area', () => {
