@@ -719,3 +719,59 @@ describe('ResourcePickerDialog', () => {
     });
   });
 });
+
+describe('ResourcePickerDialog disabled rows', () => {
+  const REASON = 'Licensing terms prohibit using this text as a model.';
+  const disableEsvAndNlt = (resource: { displayName: string }) =>
+    resource.displayName === 'ESV' || resource.displayName === 'NLT' ? REASON : undefined;
+
+  function rowOf(name: string) {
+    const row = screen.getByText(name).closest('tr');
+    if (!row) throw new Error(`${name} row not found`);
+    return row;
+  }
+
+  it('does not select an installed or downloadable row that has a disabled reason', () => {
+    const { onSelect } = renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    fireEvent.click(rowOf('ESV'));
+    fireEvent.keyDown(rowOf('NLT'), { key: 'Enter' });
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('marks a disabled row as disabled and gives its reason to assistive technology', () => {
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    const esvRow = rowOf('ESV');
+    expect(esvRow).toHaveAttribute('aria-disabled', 'true');
+    expect(esvRow).toHaveTextContent(REASON);
+  });
+
+  it('keeps a disabled row hoverable and focusable so its reason can be shown', () => {
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    const esvRow = rowOf('ESV');
+    expect(esvRow.className).not.toContain('pointer-events-none');
+    expect(esvRow).toHaveAttribute('tabindex', '0');
+  });
+
+  it('still selects rows without a disabled reason', () => {
+    const { onSelect } = renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    fireEvent.click(rowOf('KJV'));
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'KJV' }));
+  });
+
+  it('lets an already-selected row be deselected even when it has a disabled reason', () => {
+    const { onSelect } = renderDialog({
+      allowDeselect: true,
+      getDisabledReason: (resource) => (resource.displayName === 'NIV' ? REASON : undefined),
+    });
+
+    fireEvent.click(rowOf('NIV'));
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'NIV' }));
+  });
+});

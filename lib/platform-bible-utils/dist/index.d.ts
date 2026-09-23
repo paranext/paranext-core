@@ -5227,6 +5227,11 @@ export type DblResourceData = {
 	installed: boolean;
 	updateAvailable: boolean;
 	projectId: string;
+	/**
+	 * Whether licensing terms prohibit using this resource as a model or base for a new translation,
+	 * so pickers for those must not offer it. Absent on rows that did not come from the DBL catalog.
+	 */
+	isRestrictedAsModelText?: boolean;
 };
 /**
  * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or,

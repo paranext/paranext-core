@@ -855,6 +855,15 @@ export function ManageBooksDialog({
         id: p.id,
         shortName: p.shortName,
         fullName: p.fullName,
+        // Creating from a template copies only its structure (markers, chapters and verses), but
+        // the license forbids even that use as a base.
+        isDisabled: p.isRestrictedAsBase,
+        disabledReason: p.isRestrictedAsBase
+          ? t(
+              '%restrictedModelOrBaseText_disabledReason%',
+              'This text is disabled from being selected because of licensing terms which prohibit its use as a model or base for a new translation.',
+            )
+          : undefined,
         customData: {
           versificationId: p.versificationId,
           // Group header reads "{name} versification" (lowercase), localized via a template so

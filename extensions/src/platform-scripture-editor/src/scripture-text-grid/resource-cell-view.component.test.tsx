@@ -948,3 +948,44 @@ describe('ResourceCellView content zoom marker', () => {
     expect(marker?.contains(screen.getByRole('button', { name: 'Reorder WEB' }))).toBe(false);
   });
 });
+
+describe('ResourceCellView copyright indicator', () => {
+  const INDICATOR = <span data-testid="copyright-indicator" />;
+
+  it('puts the indicator in the header next to the name', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    expect(screen.getByText('NIV').parentElement).toContainElement(
+      screen.getByTestId('copyright-indicator'),
+    );
+  });
+
+  it('puts the indicator beside the hanging name in inline mode, outside the verse text', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    const indicator = screen.getByTestId('copyright-indicator');
+    expect(screen.getByText('NIV').parentElement).toContainElement(indicator);
+    expect(screen.getByText('In the beginning').parentElement).not.toContainElement(indicator);
+  });
+});

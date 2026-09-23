@@ -2956,6 +2956,26 @@ declare module 'platform-scripture' {
   }
 
   // #endregion Markers Checklist Types
+
+  /**
+   * The copyright notice to show when a project is opened: the value of the
+   * `platformScripture.copyrightNotice` project setting.
+   *
+   * - `none`: no notice.
+   * - `notification`: the project's copyright starts with "Notification:", as the ESV's does.
+   *   `bannerText` is the rest of that first paragraph, in the project's own words; show it as
+   *   Paratext 9 does. `details` is the rest of the copyright.
+   * - `restrictedLicense`: a traditionally licensed Biblica text, which is for reference only and may
+   *   not be used as the basis of a new translation. The caller supplies the wording of the notice
+   *   and of Biblica's terms for "More info". `copyrightYears` is the years in the text's copyright
+   *   statement (e.g. "1973, 1978, 1984, 2011"), or "" when it names none.
+   *
+   * `details` is plain text with one paragraph per line (`\n`), for "More info". It is never HTML.
+   */
+  export type CopyrightNotice =
+    | { kind: 'none' }
+    | { kind: 'notification'; bannerText: string; details: string }
+    | { kind: 'restrictedLicense'; copyrightYears: string };
 }
 
 declare module 'papi-shared-types' {
@@ -2992,6 +3012,7 @@ declare module 'papi-shared-types' {
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
     IFindHistoryDataProvider,
+    CopyrightNotice,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -3432,6 +3453,12 @@ declare module 'papi-shared-types' {
      * `†` (ViewUsfmXhtmlConverter.cs:73-74).
      */
     'platformScripture.crossRefCallers': string;
+
+    /**
+     * The copyright notice to show when this project is opened. Computed from the project's
+     * copyright, full name and DBL id; read-only through the settings surface.
+     */
+    'platformScripture.copyrightNotice': CopyrightNotice;
   }
 
   export interface NetworkEvents {

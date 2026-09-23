@@ -106,6 +106,8 @@ export type ResourceCellViewProps = {
   reorderHint?: string;
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
+  /** The resource's copyright notice indicator, shown beside its name */
+  copyrightIndicator?: ReactNode;
 };
 
 function ZoomItemsShared({
@@ -218,6 +220,7 @@ export function ResourceCellView({
   reorderHandleLabel,
   reorderHint,
   onReorderKeyDown,
+  copyrightIndicator,
 }: ResourceCellViewProps) {
   let readyContent: ReactNode = editor;
   if (isVerseEmpty) {
@@ -315,6 +318,7 @@ export function ResourceCellView({
         // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
+          {copyrightIndicator}
           <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto">
             <ContentZoomRoot area={zoomArea} label={label}>
               {stateContent}
@@ -354,6 +358,7 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
             <ResourceNameLabel label={label} className="tw:min-w-0 tw:flex-1 tw:text-xs" />
+            {copyrightIndicator}
             {zoomMenuLabels ? (
               <TooltipProvider>
                 <DropdownMenu>
