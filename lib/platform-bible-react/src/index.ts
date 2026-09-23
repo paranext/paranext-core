@@ -365,8 +365,7 @@ export { useRunWhenVisible } from './hooks/use-run-when-visible.hook';
 export { useHasContentBelow } from './hooks/use-has-content-below.hook';
 export {
   useLivePopoverAnchor,
-  measureRange,
-  measureElement,
+  measureBox,
   leftEdgeRect,
   type LivePopoverAnchor,
   type LivePopoverAnchorSource,
