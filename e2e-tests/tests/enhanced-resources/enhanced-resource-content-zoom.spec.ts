@@ -1,10 +1,10 @@
 /**
  * E2E for Enhanced Resources' three content-zoom areas: the Bible text (the view's unnamed `main`
- * area), the entries panel (`entries` — dictionary / encyclopedia / images / maps), and the
- * footnotes list (`footnotes`, shown only when F7 is on). Each pane answers Ctrl+`=`/`-`/`0`
- * independently, and the view's own memory is keyed on `state.resourceId` (its definition carries
- * no `projectId`), so closing and reopening the same resource restores the level while a different
- * resource starts fresh.
+ * area), the entries panel's text (`entries` — the lemma, gloss, definition and article text of the
+ * dictionary and encyclopedia tabs), and the footnotes list (`footnotes`, shown only when F7 is
+ * on). Each pane answers Ctrl+`=`/`-`/`0` independently, and the view's own memory is keyed on
+ * `state.resourceId` (its definition carries no `projectId`), so closing and reopening the same
+ * resource restores the level while a different resource starts fresh.
  *
  * Covered:
  *
@@ -200,13 +200,16 @@ test.describe('Enhanced Resources content zoom', () => {
     const topBeforeAnyZoom = await scripturePaneTop(frame);
 
     // The Dictionary tab is the default `activeTab` and shows entries for the current scope with
-    // no filter needed; a row inside it sits inside the `entries` ContentZoomRoot, unlike the tab
-    // trigger itself which sits in the tab bar above it. Excludes `dictionary-entry-detail-*`,
+    // no filter needed; a row's lemma, transliteration and preview carry the `entries` marker,
+    // unlike the tab trigger in the tab bar above it. Excludes `dictionary-entry-detail-*`,
     // which shares the `dictionary-entry-` prefix and would otherwise make `.first()` depend on
     // whether a row has already expanded.
     const entryRow = frame
       .locator('[data-testid^="dictionary-entry-"]:not([data-testid^="dictionary-entry-detail-"])')
       .first();
+    // A click must land on marked entry text to aim the next chord at `entries`: the panel itself
+    // is no longer an area, so a click on a gap or a control keeps the last-used area.
+    const entryText = entryRow.locator('[data-platform-content-zoom-root="entries"]').first();
     const footnotesList = frame.locator(
       '[data-platform-content-zoom-root="footnotes"] [role="listbox"]',
     );
@@ -247,7 +250,7 @@ test.describe('Enhanced Resources content zoom', () => {
       const mainFactorBefore = await readFactor(frame, '');
 
       await expect(entryRow).toBeVisible({ timeout: 15_000 });
-      await entryRow.click();
+      await entryText.click();
       await expect.poll(() => readActiveArea(frame)).toBe('entries');
       await mainPage.keyboard.press('Control+0');
       await expect.poll(() => readFactor(frame, 'entries')).toBeGreaterThan(0);
@@ -288,6 +291,53 @@ test.describe('Enhanced Resources content zoom', () => {
       expect(await readFactor(frame, 'entries')).toBe(entriesFactorBefore);
     });
 
+    await test.step('the entry text grows while the "hide less relevant senses" switch keeps its size', async () => {
+      // Clicking the row's lemma opens the entry detail beside the list (the click bubbles to the
+      // row) and aims the chords at `entries`.
+      await entryText.click();
+      await expect.poll(() => readActiveArea(frame)).toBe('entries');
+      const detailLemma = frame
+        .locator(
+          '[data-testid^="dictionary-entry-detail-source-"] [data-platform-content-zoom-root="entries"]',
+        )
+        .first();
+      const hideSwitch = frame
+        .locator('[data-testid^="dictionary-entry-detail-"]')
+        .getByRole('switch')
+        .first();
+      await expect(detailLemma).toBeVisible({ timeout: 15_000 });
+      await expect(hideSwitch).toBeVisible({ timeout: 15_000 });
+
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(frame, 'entries')).toBe(entriesBaseline);
+      const lemmaBefore = await detailLemma.boundingBox();
+      const switchBefore = await hideSwitch.boundingBox();
+      if (!lemmaBefore || !switchBefore) throw new Error('Detail lemma or switch has no box');
+
+      // Each chord must land before the next is pressed: the steps are sequential on purpose.
+      /* eslint-disable no-await-in-loop */
+      for (let step = 1; step <= 5; step += 1) {
+        await mainPage.keyboard.press('Control+=');
+        await expect
+          .poll(() => readFactor(frame, 'entries'))
+          .toBeCloseTo(entriesBaseline + step / 10, 5);
+      }
+      /* eslint-enable no-await-in-loop */
+
+      const lemmaAfter = await detailLemma.boundingBox();
+      const switchAfter = await hideSwitch.boundingBox();
+      if (!lemmaAfter || !switchAfter) throw new Error('Detail lemma or switch lost');
+      expect(lemmaAfter.height / lemmaBefore.height).toBeCloseTo(
+        (entriesBaseline + 0.5) / entriesBaseline,
+        1,
+      );
+      expect(Math.abs(switchAfter.height - switchBefore.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(switchAfter.width - switchBefore.width)).toBeLessThanOrEqual(1);
+
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(frame, 'entries')).toBe(entriesBaseline);
+    });
+
     await test.step('the ribbons row and the top toolbar keep their heights through all of it', async () => {
       const topAfterAllZoom = await scripturePaneTop(frame);
       expect(Math.abs(topAfterAllZoom - topBeforeAnyZoom)).toBeLessThanOrEqual(2);
@@ -299,7 +349,7 @@ test.describe('Enhanced Resources content zoom', () => {
       await mainPage.keyboard.press('Control+0');
       await expect.poll(() => readFactor(frame, '')).toBe(mainBaseline);
 
-      await entryRow.click();
+      await entryText.click();
       await expect.poll(() => readActiveArea(frame)).toBe('entries');
       await mainPage.keyboard.press('Control+0');
       await expect.poll(() => readFactor(frame, 'entries')).toBe(entriesBaseline);

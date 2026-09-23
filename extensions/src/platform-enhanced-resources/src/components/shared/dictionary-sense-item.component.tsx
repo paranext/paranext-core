@@ -5,6 +5,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   cn,
+  useContentZoomTextProps,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { Fragment } from 'react';
@@ -160,6 +161,7 @@ export function DictionarySenseItem({
   onDomainClick,
   localizedStringsWithLoadingState = [{}, false],
 }: DictionarySenseItemProps) {
+  const contentZoomTextProps = useContentZoomTextProps();
   const getLocalizedString = (key: DictionarySenseItemLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
@@ -260,7 +262,16 @@ export function DictionarySenseItem({
         <span className="tw:shrink-0 tw:text-sm tw:font-semibold tw:tabular-nums">
           {sense.senseNumber}.
         </span>
-        {sense.definition && <span className="tw:flex-1 tw:text-sm">{sense.definition}</span>}
+        {sense.definition && (
+          <span
+            className="tw:flex-1 tw:text-sm"
+            // The hook returns only the content-zoom marker attribute, or nothing.
+            // eslint-disable-next-line react/jsx-props-no-spreading
+            {...contentZoomTextProps}
+          >
+            {sense.definition}
+          </span>
+        )}
         {fn022Mode ? (
           <TooltipProvider delayDuration={150}>
             <Tooltip>
@@ -294,7 +305,14 @@ export function DictionarySenseItem({
           {tableRows.map((row) => (
             <Fragment key={row.key}>
               <dt className="tw:font-semibold tw:text-muted-foreground">{row.label}</dt>
-              <dd className="tw:m-0">{renderRowValue(row, sense.id, onDomainClick)}</dd>
+              <dd
+                className="tw:m-0"
+                // Glosses, notes and comments are resource text; a domain row holds a link.
+                // eslint-disable-next-line react/jsx-props-no-spreading
+                {...(row.kind === 'text' ? contentZoomTextProps : {})}
+              >
+                {renderRowValue(row, sense.id, onDomainClick)}
+              </dd>
             </Fragment>
           ))}
         </dl>
