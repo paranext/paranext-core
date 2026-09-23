@@ -337,12 +337,12 @@ function getOwnLevels(definition: Pick<SavedWebViewDefinition, 'state'> | undefi
 /**
  * The pane's own levels, with a write this window has not committed yet taking precedence — but
  * only when that write was chosen for the identity the pane resolves to right now
- * ({@link memoryIdentityFor}). A pending write chosen for another identity, or for none when the
- * pane now resolves one (or the reverse), belongs to a project the pane no longer shows: returning
- * it here would leak that stale level into whatever reads this function, including
- * {@link syncSiblingsFromMemory}, which would then re-record it as the CURRENT identity's own. The
- * committed levels are returned instead, until {@link commitOwnLevels} or a fresh area report
- * resolves the mismatch.
+ * ({@link pendingWriteForCurrentIdentity}). A pending write chosen for another identity, or for none
+ * when the pane now resolves one (or the reverse), belongs to a project the pane no longer shows:
+ * returning it here would leak that stale level into whatever reads this function, including
+ * {@link syncSiblingsFromMemory}, which would then re-record it as the CURRENT identity's own.
+ * Committed levels whose stamp names another identity ({@link hasStaleStamp}) are left out for the
+ * same reason, so the pane follows memory and the default until a seed or a commit replaces them.
  */
 function effectiveOwnLevels(
   definition:
@@ -350,9 +350,9 @@ function effectiveOwnLevels(
     | undefined,
 ): Levels {
   if (!definition) return {};
-  const pending = pendingOwnLevelWrites.get(definition.id);
-  if (pending && pending.identity === commitStampFor(definition)) return pending.levels;
-  return getOwnLevels(definition);
+  const pending = pendingWriteForCurrentIdentity(definition);
+  if (pending) return pending.levels;
+  return hasStaleStamp(definition) ? {} : getOwnLevels(definition);
 }
 
 /**
@@ -622,6 +622,38 @@ function storedIdentityStamp(
   return typeof value === 'string' ? value : undefined;
 }
 
+/**
+ * Whether the own levels stored in the pane's state belong to something other than what it shows:
+ * the pane resolves an identity, and its stored stamp names a different one — another project, or
+ * the kind alone from before it resolved any ({@link commitStampFor}). An unstamped pane is not
+ * stale, and neither is a stamped pane that resolves no identity (its project gone, say): nothing
+ * says its levels belong anywhere else, so it keeps showing them.
+ *
+ * Every reader of a pane's own levels decides through this one check — the head bake, the push, a
+ * zoom step, the sibling sync and the seed — so none of them shows, steps from or saves a stale
+ * level another would have discarded.
+ */
+function hasStaleStamp(
+  definition: Pick<SavedWebViewDefinition, 'webViewType' | 'projectId' | 'state'>,
+): boolean {
+  const id = memoryIdentityFor(definition);
+  if (!id) return false;
+  const storedStamp = storedIdentityStamp(definition);
+  return storedStamp !== undefined && storedStamp !== identityStampFor(id);
+}
+
+/**
+ * The pane's pending own-level write, if it was chosen for the stamp a commit would carry right now
+ * ({@link commitStampFor}). A pending write chosen under another stamp predates a re-point and
+ * belongs to what the pane showed then, so it is not returned.
+ */
+function pendingWriteForCurrentIdentity(
+  definition: Pick<SavedWebViewDefinition, 'id' | 'webViewType' | 'projectId' | 'state'>,
+): { levels: Levels; identity: string | undefined } | undefined {
+  const pending = pendingOwnLevelWrites.get(definition.id);
+  return pending && pending.identity === commitStampFor(definition) ? pending : undefined;
+}
+
 /** The identity bits {@link seedFromMemory} and {@link reseedIfIdentityChanged} both need. */
 type IdentityState = {
   definition: SavedWebViewDefinition;
@@ -734,8 +766,7 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
   // Read once and reused by both checks below: neither the `hasOwnLevels` return nor the
   // `memoryLoaded` return touches this map, so a pane whose pending write already names `stamp` is
   // the same fact whichever of the two paths asks it.
-  const pendingWrite = pendingOwnLevelWrites.get(webViewId);
-  const pendingWriteMatchesStamp = pendingWrite !== undefined && pendingWrite.identity === stamp;
+  const pendingWriteMatchesStamp = pendingWriteForCurrentIdentity(definition) !== undefined;
   if (storedStamp === undefined) {
     if (hasOwnLevels) {
       // An unread `cachedMemory` is `{}` by construction, not evidence that nothing is remembered
@@ -805,9 +836,7 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
 function reseedIfIdentityChanged(webViewId: WebViewId): void {
   const resolved = resolveIdentityState(webViewId);
   if (!resolved) return;
-  // The only check that is load-bearing here: `seedFromMemory` re-checks `!id` and
-  // `stamp === storedStamp` itself, so re-checking them before delegating would only repeat them.
-  if (resolved.storedStamp === undefined) return;
+  if (!hasStaleStamp(resolved.definition)) return;
   seedFromMemory(webViewId, resolved);
 }
 
@@ -1248,11 +1277,11 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
       pendingOwnLevelWrites.delete(webViewId);
       return false;
     }
-    const currentStamp = commitStampFor(definition);
-    if (pending.identity !== currentStamp) {
+    if (!pendingWriteForCurrentIdentity(definition)) {
       pendingOwnLevelWrites.delete(webViewId);
       return true;
     }
+    const currentStamp = commitStampFor(definition);
     const { levels } = pending;
     const state: Record<string, unknown> = { ...(definition.state ?? {}) };
     // The identity stamp lives exactly as long as the levels it belongs to: a pane that has levels
@@ -1398,21 +1427,19 @@ export async function resetContentZoom(
  * head. Memory contributes every area remembered for this pane's kind and identity that the state
  * does not already hold.
  *
- * Honors the identity stamp the same way {@link seedFromMemory} does: a stored stamp naming another
- * identity means the pane's own levels belong to a project it no longer shows (a reused web view id
- * re-pointed before this bake runs, ahead of the dock update that would re-seed it) — they are
- * skipped entirely rather than baked, and memory for the identity shown now fills every area
- * instead. No stamp at all is the ordinary not-yet-stamped case and leaves the own levels standing,
- * merged with memory exactly as usual.
+ * Reads the pane's own levels through {@link effectiveOwnLevels}, so it honors the identity stamp
+ * the same way the push and {@link seedFromMemory} do: a stored stamp naming another identity
+ * ({@link hasStaleStamp}) means the pane's own levels belong to something it no longer shows (a
+ * reused web view id re-pointed before this bake runs, ahead of the dock update that would re-seed
+ * it) — they are skipped entirely rather than baked, and memory for the identity shown now fills
+ * every area instead. No stamp at all, or a stamp on a pane that resolves no identity, leaves the
+ * own levels standing, merged with memory exactly as usual.
  */
 export async function getInitialContentZoomForWebView(
   webView: Pick<SavedWebViewDefinition, 'id' | 'webViewType' | 'projectId' | 'state'>,
 ): Promise<{ defaultZoom: number; levels: Levels }> {
   const id = memoryIdentityFor(webView);
-  const storedStamp = storedIdentityStamp(webView);
-  const ownLevelsStale =
-    storedStamp !== undefined && storedStamp !== (id ? identityStampFor(id) : undefined);
-  const levels: Levels = ownLevelsStale ? {} : { ...effectiveOwnLevels(webView) };
+  const levels: Levels = { ...effectiveOwnLevels(webView) };
   if (id) {
     // Initialization pre-warms the cache and the memory subscription keeps it current, so opening
     // a pane does not wait on a settings round trip — except a pane opened before that first read
@@ -1474,8 +1501,7 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       // One read and one write per pane: every write reconciles the whole dock layout, so a pane
       // whose two areas both moved must not cost two of them.
       const current = deps.getDefinition(definition.id) ?? definition;
-      const currentStamp = storedIdentityStamp(current);
-      if (currentStamp !== undefined && currentStamp !== identityStampFor(id)) {
+      if (hasStaleStamp(current)) {
         // This pane's stamp names a different project than the one this delta is for — its own
         // re-seed is owed first (missed because memory hadn't loaded, or because this ran before
         // onDidUpdateWebView registered), not a patch of another project's level onto it.
@@ -1516,10 +1542,7 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       // to store them. A pending write recorded for another identity does not count — it predates a
       // re-point this pane's stamp has not caught up to yet, and forcing it through here would
       // misattribute a stale project's level to the identity memory just delivered a change for.
-      const pendingForCurrentIdentity = pendingOwnLevelWrites.get(definition.id);
-      const owesAWrite =
-        pendingForCurrentIdentity !== undefined &&
-        pendingForCurrentIdentity.identity === identityStampFor(id);
+      const owesAWrite = pendingWriteForCurrentIdentity(current) !== undefined;
       if (!changed && !owesAWrite) return;
       // The sibling shows the level whether or not the write reached its definition, for the same
       // reason the acting pane does: the push reads `effectiveOwnLevels`, and a level that did not

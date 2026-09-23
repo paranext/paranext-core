@@ -594,42 +594,40 @@ describe('web-view-content-zoom.service', () => {
     });
     // Registers the pane's areas (this first report also seeds it, which the next line overrides).
     setContentZoomAreas('notes-s4', ['main', 'footnotes']);
-    // Already holds its own "main" from an earlier sync; the stamp names a project it no longer
-    // shows, so its own re-seed for "notes:AAA" is owed.
+    // Its stamp names a project it no longer shows, so its own re-seed for "notes:AAA" is owed.
     definitions.set('notes-s4', {
       ...requireDefinition('notes-s4'),
       state: zoomState({ main: 1.5 }, 'notes:ZZZ'),
     });
 
-    // An edit to a DIFFERENT area is chosen for the pane's CURRENT identity and stays pending (its
-    // commit fails), so the redirect below finds a pending write it must not overwrite.
+    // An edit to "main" is chosen for the pane's CURRENT identity and stays pending (its commit
+    // fails) while its memory write lands, so the redirect below finds a pending write it must not
+    // overwrite.
     updateDefinition.mockImplementation(() => false);
-    await adjustContentZoom('notes-s4', 1, 'footnotes');
-    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    await adjustContentZoom('notes-s4', 1, 'main');
+    const mainLevel = adjustZoomFactor(1, 1); // the default (1), stepped once
+    await __flushContentZoomWritesForTesting();
+    expect(settings[MEMORY]).toEqual({ 'notes:AAA:main': mainLevel });
     expect(definitions.get('notes-s4')?.state).toEqual(zoomState({ main: 1.5 }, 'notes:ZZZ'));
 
     // A sibling's reset removes "main" from memory. The stamp mismatch redirects this pane to its
-    // own re-seed, which is a no-op: the pending "footnotes" edit, already chosen for the pane's
-    // current identity, outranks memory rather than being overwritten by it -- so "main" is never
-    // revisited by this delta.
+    // own re-seed, which is a no-op: the pending edit, already chosen for the pane's current
+    // identity, outranks memory rather than being overwritten by it -- so the deletion never
+    // reaches this pane through this delta.
     memoryCallbacks.forEach((cb) => cb({}));
     expect(definitions.get('notes-s4')?.state).toEqual(zoomState({ main: 1.5 }, 'notes:ZZZ'));
 
-    // The pending edit commits on its own, stamping the pane under its real identity -- but it
-    // still carries the stale "main" the deletion above was never able to reach.
+    // The pending edit commits, stamping the pane under its real identity -- with the "main" the
+    // deletion above was never able to reach.
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
     await __flushContentZoomWritesForTesting();
-    const footnotesLevel = adjustZoomFactor(1, 1); // the default (1), stepped once
-    expect(definitions.get('notes-s4')?.state).toEqual(
-      zoomState({ main: 1.5, footnotes: footnotesLevel }, 'notes:AAA'),
-    );
+    expect(definitions.get('notes-s4')?.state).toEqual(zoomState({ main: mainLevel }, 'notes:AAA'));
 
     // The same (still empty) memory record reaches this window again. With the pane now correctly
     // stamped, this is its first real chance to learn "main" was removed -- unless the earlier
     // no-op was wrongly counted as having taken that deletion already.
     memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('notes-s4')?.state).toEqual(
-      zoomState({ footnotes: footnotesLevel }, 'notes:AAA'),
-    );
+    expect(definitions.get('notes-s4')?.state).toEqual({});
   });
 
   it("keeps walking the siblings when reading one pane's definition throws", async () => {
@@ -878,6 +876,21 @@ describe('web-view-content-zoom.service', () => {
         state: zoomState({ main: 1.3 }, 'editor:PROJ-A'),
       }),
     ).resolves.toEqual({ defaultZoom: 1, levels: { main: 2 } });
+  });
+
+  it('bakes the own levels of a stamped pane whose project is gone', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.4 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    // No projectId and no state.resourceId: the pane resolves no identity, so nothing says its
+    // levels belong to anything other than what it shows.
+    await expect(
+      getInitialContentZoomForWebView({
+        id: 'w',
+        webViewType: 'legacyCommentManager.commentListPanel',
+        state: zoomState({ main: 1.2 }, 'notes:AAA'),
+      }),
+    ).resolves.toEqual({ defaultZoom: 1, levels: { main: 1.2 } });
   });
 
   it("seeds a newly opened pane's state from memory on its first area report", async () => {
@@ -1282,6 +1295,45 @@ describe('web-view-content-zoom.service', () => {
     onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-x') });
     expect(definitions.get('notes-x')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
     expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
+  it("neither shows nor saves a re-pointed pane's previous project's levels while memory cannot be read", async () => {
+    // Both the read and the subscription for memory fail, so `memoryLoaded` never becomes true.
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          if (key === MEMORY) throw new Error('network blip');
+          return settings[key];
+        },
+        set: settingsSet,
+        subscribe: async (key: string) => {
+          if (key === MEMORY) throw new Error('subscription unavailable');
+          return async () => {};
+        },
+      },
+    });
+    await initializeContentZoomService();
+    definitions.set('notes-m', {
+      id: 'notes-m',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: zoomState({ main: 1.5, footnotes: 0.8 }, 'notes:AAA'),
+    });
+    setContentZoomAreas('notes-m', ['main', 'footnotes']);
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-main')).toBe('1.5');
+
+    definitions.set('notes-m', { ...requireDefinition('notes-m'), projectId: 'bbb' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-m') });
+    // Project A's levels are not shown for project B.
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-main')).toBe('1');
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-footnotes')).toBe('1');
+
+    // A zoom step starts from project B's level, and saves none of project A's other areas under B.
+    await adjustContentZoom('notes-m', 1, 'main');
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-m')?.state).toEqual(zoomState({ main: 1.1 }, 'notes:BBB'));
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-main')).toBe('1.1');
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-footnotes')).toBe('1');
   });
 
   it("re-seeds, rather than merges, a re-pointed pane's missed update once a memory change for its NEW identity reaches it first", async () => {
@@ -1689,19 +1741,21 @@ describe('web-view-content-zoom.service', () => {
 
     // The user zooms before any re-seed for the re-point has run, and that write's own commit fails.
     updateDefinition.mockImplementation(() => false);
-    await adjustContentZoom('notes-14', 1, 'main'); // chosen under project B's identity: 1.3, pending
+    // Chosen under project B's identity, stepping from B's level rather than project A's stale 1.2:
+    // 1.1, pending.
+    await adjustContentZoom('notes-14', 1, 'main');
     expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
 
     // The re-point's own definition update arrives -- the platform's first chance to notice it.
     updateDefinition.mockImplementation(applyDefinitionUpdate);
     onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-14') });
-    // The user's still-pending 1.3 must survive: it was already chosen for the identity this
+    // The user's still-pending 1.1 must survive: it was already chosen for the identity this
     // re-seed is stamping, so it must not be replaced by project B's remembered 0.8.
     expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
 
     // A later retry lands the user's own edit, not memory's remembered level.
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.3 }, 'notes:BBB'));
+    expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.1 }, 'notes:BBB'));
   });
 
   it('treats a non-string identity stamp as no stamp at all', async () => {
