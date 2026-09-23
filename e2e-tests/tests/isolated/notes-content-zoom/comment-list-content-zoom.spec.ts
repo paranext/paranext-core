@@ -12,7 +12,7 @@
  *
  * `npm run test:e2e:isolated notes-content-zoom`
  */
-import { type Frame, type Page } from '@playwright/test';
+import { type Frame } from '@playwright/test';
 import { test, expect } from '../../../fixtures/comment.fixture';
 import {
   type CommentTestProject,
@@ -22,6 +22,7 @@ import {
   openCommentList,
 } from '../../../fixtures/comment-test-helpers';
 import {
+  closeDockTab,
   ctrlWheel,
   expectPopupBesideTriggerAndInsideFrame,
   firstLineBoxHeight,
@@ -133,25 +134,6 @@ async function expectCardSettledBelowToolbar(
       { timeout: 15_000 },
     )
     .toBe('below the toolbar');
-}
-
-/**
- * Closes a dock tab by web view id. `data-web-view-id` is set on `.platform-tab-title`
- * (`platform-tab-title.component.tsx`), not on rc-dock's own `.dock-tab` element, so the close
- * button is found via its ancestor rather than a `.dock-tab[data-web-view-id]` selector that never
- * matches anything.
- *
- * `dispatchEvent` rather than a real hover+click: on a crowded tab strip the close button can sit
- * outside the visible/scrollable area, and `rc-dock` renders a `.dock-tab-hit-area` sibling over
- * the same region for drag/drop hit-testing, either of which can make Playwright's actionability
- * check report the button as covered or non-actionable for a real click (see `closeFindPanel` in
- * `find/replace.spec.ts`, which uses the same `dispatchEvent` for the same reason).
- */
-async function closeDockTab(page: Page, webViewId: string): Promise<void> {
-  const tabTitle = page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
-  const dockTab = tabTitle.locator('xpath=ancestor::*[contains(@class,"dock-tab")][1]');
-  await dockTab.locator('.dock-tab-close-btn').dispatchEvent('click');
-  await expect(tabTitle).not.toBeVisible({ timeout: 10_000 });
 }
 
 test.describe('comment list content zoom', () => {
