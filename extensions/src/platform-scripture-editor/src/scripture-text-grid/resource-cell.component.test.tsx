@@ -89,6 +89,12 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_copy%': 'Copy',
       '%webView_scriptureTextGrid_cell_noVersesToShow%':
         'No verses to show in this chapter. Switch to Verse or Chapter view to read this text.',
+      '%platformScripture_copyrightNotice_restrictedLicense_banner%':
+        '{label}: may not be used as a base text.',
+      '%platformScripture_copyrightNotice_restrictedLicense_details%':
+        '{fullName} copyright © {years}. {permissionsLink}',
+      '%platformScripture_copyrightNotice_details_title%': 'Copyright for {name}',
+      '%platformScripture_copyrightNotice_details_close%': 'Close',
     },
     false,
   ],
@@ -1168,5 +1174,23 @@ describe('ResourceCell reference scroll wiring', () => {
     rerender(<ResourceCell {...props} viewMode="chapter" scrRef={clicked} />);
 
     expect(port.scrollTop).toBe(0);
+  });
+});
+
+describe('ResourceCell copyright notice', () => {
+  it('offers the notice of a restricted text beside its name', () => {
+    setUsjResult(undefined, true);
+    mockUseProjectSetting.mockImplementation((_projectId: unknown, key: unknown) => {
+      if (key === 'platformScripture.copyrightNotice')
+        return [{ kind: 'restrictedLicense', copyrightYears: '2011' }, vi.fn(), vi.fn(), false];
+      if (key === 'platform.name') return ['NIV11', vi.fn(), vi.fn(), false];
+      return ['ltr', vi.fn(), vi.fn(), false];
+    });
+
+    render(<ResourceCell {...props} />);
+
+    expect(
+      screen.getByRole('button', { name: 'NIV11: may not be used as a base text.' }),
+    ).toBeInTheDocument();
   });
 });

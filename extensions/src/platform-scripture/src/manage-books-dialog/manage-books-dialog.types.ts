@@ -107,6 +107,12 @@ export type ManageBooksDialogProject = {
    */
   versificationName?: string;
   /**
+   * Whether licensing terms prohibit using the project as the base of new text: a traditionally
+   * licensed Biblica text. Sourced from the C# `ProjectSummary.IsRestrictedAsBase` field. The
+   * Create "Based on" picker lists such a project but does not let it be chosen.
+   */
+  isRestrictedAsBase?: boolean;
+  /**
    * Locale-stable project-type key (the PT9 `ProjectType` enum value, e.g. "Standard"). Forwarded
    * to the Copy "From" `<ProjectSelector>` so it can group projects by type. Arrives on the same
    * project-list round-trip as the rest of this shape, so it costs no extra fetch.
@@ -249,6 +255,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_filter_books%',
   '%manageBooks_genericError%',
   '%manageBooks_projectSelector_versificationSectionHeading%',
+  // Shared with the model text pickers; lives with the copyright notice strings
+  '%platformScripture_copyrightNotice_restrictedModelText_tooltip%',
   '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
   // Section headings for the built-in `type` grouping in the manage-books project pickers. The
   // wire carries the raw PT9 `ProjectType` enum value with no display name, so the web view maps
