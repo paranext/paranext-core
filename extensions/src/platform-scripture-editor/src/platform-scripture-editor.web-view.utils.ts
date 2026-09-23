@@ -30,7 +30,10 @@ import type {
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
 import { markerMenuItemToPaletteItem, type MarkerMenuItem } from 'platform-bible-react';
-import { stripMarkerNestingPrefix } from 'platform-bible-react/experimental';
+import {
+  isEditorContextMenuOpenFor,
+  stripMarkerNestingPrefix,
+} from 'platform-bible-react/experimental';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
@@ -368,9 +371,10 @@ export interface InsertContextMenuState {
 }
 
 /**
- * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu
- * (`contributions/menus.json`, group `platformScriptureEditor.insertTextualNotes`) — same items,
- * same order; pinned by the parity test in `platform-scripture-editor.web-view.utils.test.ts`.
+ * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu's
+ * `platformScriptureEditor.insert` column (`contributions/menus.json`, every group in that column)
+ * — same items, same order; pinned by the parity test in
+ * `platform-scripture-editor.web-view.utils.test.ts`.
  */
 export function createInsertContextMenuItems(
   localizedStrings: LanguageStrings,
@@ -404,14 +408,7 @@ export function createInsertContextMenuItems(
 }
 
 /**
- * Matches the editor's own right-click context menu — `ContextMenuPlugin`'s portal, which carries
- * both classes on its outer element and is rendered only while the menu is open. The same portal
- * selector the context-menu e2e spec locates the menu by.
- */
-const EDITOR_CONTEXT_MENU = '.typeahead-popover.auto-embed-menu';
-
-/**
- * Whether the editor's right-click context menu is open at all.
+ * Whether the given editor's own right-click context menu is open at all.
  *
  * Gates every key this web view acts on in the editor. While the menu is up it is the only keyboard
  * mode on screen, and nothing else opens underneath it or over it:
@@ -422,10 +419,10 @@ const EDITOR_CONTEXT_MENU = '.typeahead-popover.auto-embed-menu';
  *   shortcuts. Each is swallowed rather than acted on: every one of them would open a popup (the
  *   markers menu, the footnote editor, the comment editor) over a menu that stays open.
  *
- * The menu has no idea the palettes exist and stays open across one, and a palette session then
- * claims Escape with `stopPropagation` on `window` — one capture step above the menu's `document`
- * listener — so a palette opened underneath survives the dismissal that was meant for the menu,
- * leaving a menu whose highlighted item silently runs on the next Enter.
+ * The menu has no idea the palettes exist and stays open across one. A palette session's own Escape
+ * claims the key with `stopPropagation` on `window` — one capture step above the menu's `document`
+ * listener — so THAT ESCAPE DISMISSES THE PALETTE, not the menu: the menu, never reached, survives
+ * with its highlighted item still armed for the next Enter.
  *
  * Keyed on the menu being OPEN rather than on a highlighted item, because a menu holding nothing to
  * invoke still holds the keyboard. The two standard-view triggers then stand down differently,
@@ -439,7 +436,14 @@ const EDITOR_CONTEXT_MENU = '.typeahead-popover.auto-embed-menu';
  *   `ContextMenuPlugin` claims Enter from a CAPTURE-phase listener on `document` while this web
  *   view's is on `window`; capture descends window → document, so a `stopPropagation()` here would
  *   end the press before the menu's listener ran at all.
+ *
+ * Scoped to ONE editor: `ContextMenuPlugin` mounts once per Lexical editor instance (the main
+ * Standard-view editor and the footnote-editor popover each have their own), and every instance's
+ * portal shares the same classes, so a document-wide check cannot tell whose menu is open. See
+ * {@link isEditorContextMenuOpenFor} for the per-editor signal this reads.
+ *
+ * @param editorContainer The main editor's own container (or its `.editor-input` root).
  */
-export function isEditorContextMenuOpen(): boolean {
-  return !!document.querySelector(EDITOR_CONTEXT_MENU);
+export function isEditorContextMenuOpen(editorContainer: Element | null | undefined): boolean {
+  return isEditorContextMenuOpenFor(editorContainer);
 }

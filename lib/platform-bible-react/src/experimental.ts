@@ -103,6 +103,7 @@ export {
   stripMarkerNestingPrefix,
   type PaletteFilterMode,
 } from './components/advanced/marker-palette-filter.util';
+export { isEditorContextMenuOpenFor } from './components/advanced/editor-context-menu.util';
 export {
   default as NavigationHistoryButtons,
   NAVIGATION_HISTORY_BUTTONS_STRING_KEYS,
