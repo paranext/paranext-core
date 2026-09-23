@@ -4349,7 +4349,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `platform.contentZoomIdentity` (`kind:identity`), written and removed with them, because a pane
   re-pointed at another project keeps its web view id and the view spreads its own saved state onto
   the new definition — so without the stamp the previous project's levels are indistinguishable from
-  levels chosen for the new one.
+  levels chosen for the new one. A pane of a remembered kind that commits a level while it resolves
+  no memory identity (for example the Simple-mode Comments panel before any project is opened) is
+  stamped with its kind alone, `kind:` (e.g. `notes:`). The empty identity segment names no project,
+  so the stamp never equals any resolvable `kind:identity`. As soon as the pane resolves an identity,
+  the seed, the definition-update re-seed, the head bake, the push and the sibling sync all treat
+  those levels as stale and replace them with what memory remembers for the new identity, or the
+  default. While the pane still resolves no identity, the stamp is not stale and its levels stay in
+  place. A stamp is judged stale only when the pane resolves an identity and the stamp names a
+  different one (`hasStaleStamp` in `web-view-content-zoom.service.ts`), so a stamped pane whose
+  project is gone keeps showing its own level. A pane of a kind that is not remembered carries no
+  stamp.
 - **Alternatives:** (a) **A per-view service with its own hidden `Record` store** — the April
   content-zoom prototype, PR #2211 — rejected: two stores for one value, and the one that is not the
   definition has to be taught by hand about every lifecycle event the definition gets for free.
@@ -5863,12 +5873,19 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   grid's own wheel/pinch handling (`use-resource-zoom-input.hook.ts`) now reads notches and pinches
   through `createContentZoomWheelReader` from `platform-bible-utils`, while the platform's injected
   bootstrap (`web-view-content-zoom.bootstrap-script.ts`) keeps its own separate copy of the same
-  notch/pinch reading for chrome-driven chords; `web-view-content-zoom.wheel-parity.test.ts` pins
-  both copies to identical totals over the same Ctrl-held wheel sequences, so their step arithmetic
-  cannot silently drift apart. It does not compare their physical-modifier tracking (a held Control
-  or ⌘, a pointer event reporting Ctrl, clearing on blur), which is what tells a macOS mouse notch
-  from a trackpad pinch. Enhanced Resources has no leftover zoom fallback that could fall out of
-  step with the platform mechanism. The Scripture editor's right-click menu stays at interface scale in
+  notch/pinch reading for chrome-driven chords; `web-view-content-zoom.wheel-parity.test.ts` drives
+  both copies with the same sequences and requires identical totals: Ctrl-held wheel sequences, and
+  the physical-modifier tracking that tells a macOS mouse notch from a trackpad pinch — a held
+  Control or ⌘, a pointer event reporting Ctrl and that reading going stale, a keyup or a later
+  pointer event overruling it, and clearing on blur — so neither their step arithmetic nor their
+  modifier tracking can silently drift apart. The two copies are still two copies: making the reader
+  one source (one self-contained core the utility wraps and the bootstrap splices in through `?raw`)
+  is deferred to a ticket. Not compared: `visibilitychange` clearing, and the per-event versus
+  per-frame clamp split the test documents. Enhanced Resources has no leftover zoom fallback that
+  could fall out of step with the platform mechanism. The retired `scripturePaneZoom` web-view-state
+  key is left behind, unread and unpruned, in every web-view definition saved before this change
+  (`useWebViewState` removes a key only through an explicit `resetWebViewState()`); no migration
+  clears it. The Scripture editor's right-click menu stays at interface scale in
   every one of these panes; see `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn).
 - **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
   PT-4583 (Enhanced Resources viewer).
@@ -7586,7 +7603,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   resolves the pane's *active* area rather than the area holding the caret; the bootstrap's
   `pointerdown`/`focusin` tracking re-converges the two, except while a click's own answering refocus
   into another area is being suppressed — that one move is held off so the clicked area stays the
-  target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once. The
+  target, and a Tab or a typed key ends the suppression — making the caret's area the active one — so
+  a deliberate focus move or the user working where the caret is retargets zoom at once; a modifier
+  pressed on its own or a zoom chord does not end it. The
   window-chrome listener also stands down behind the three full-screen overlays that bypass
   `OverlayHost` (connection lost, workspace updating, first run), not only behind a modal dialog:
   the level is persisted, so a zoom made behind one of those would outlive it. The in-view bootstrap
