@@ -136,6 +136,7 @@
       "%webView_platformScriptureEditor_title_editable_indicator%": "(Editable)",
       "%webView_platformScriptureEditor_title_editable_no_project%": "Scripture Editor",
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
+      "%webView_platformScriptureEditor_title_format_2%": "{projectName} {editable}",
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(Read-only)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
       "%webView_platformScriptureEditor_toggleFootnotesAutoShow%": "Auto-show footnote pane",
@@ -340,6 +341,7 @@
       "%webView_platformScriptureEditor_title_editable_indicator%": "(editable)",
       "%webView_platformScriptureEditor_title_editable_no_project%": "Editor de Escrituras",
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
+      "%webView_platformScriptureEditor_title_format_2%": "{projectName} {editable}",
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(solo lectura)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
       "%webView_platformScriptureEditor_toggleFootnotesAutoShow%": "Mostrar nota al pie automáticamente",
@@ -463,6 +465,12 @@
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
+    },
+    "%webView_platformScriptureEditor_title_format%": {
+      "deprecationInfo": {
+        "date": "2026-09-23",
+        "message": "The project's name now fills a {projectName} placeholder, matching other per-project titles, rather than {projectId}. The new key is %webView_platformScriptureEditor_title_format_2%."
+      }
     }
   }
 }

@@ -18,7 +18,11 @@
  * platform commands ship.
  */
 import papi, { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
+import {
+  useLocalizedProjectTitle,
+  useLocalizedStrings,
+  useProjectSetting,
+} from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -33,7 +37,6 @@ import {
   type ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
 import {
-  formatReplacementString,
   getErrorMessage,
   makeProjectSelectorCustomData,
   normalizeProjectId,
@@ -452,81 +455,33 @@ global.webViewComponent = function ManageBooksWebView({
   // invocation), seed the projectId from the first available scripture project
   // once the manage-books NetworkObject resolves. The setter is a no-op when
   // projectId is already set so this only fires for the cold-open case.
-  //
-  // Also recompute the dock-tab title from the new project's `platform.name`
-  // setting and pass it to `updateWebViewDefinition` so the tab label tracks
-  // project switches in real time. Mirrors `manage-books.web-view-provider.ts`
-  // getWebView's title shape:
-  //   `${titleTemplate}` when no project, otherwise
-  //   `${titleTemplate} — {projectName}` (formatted via formatReplacementString).
-  // Keeping these two title-construction sites in sync is intentional — the
-  // initial title (provider) and update title (here) MUST match so the user
-  // does not see the title shape change between cold-open and project switch.
-  // Persist projectId to the web view's saved state on change. Kept as its own
-  // effect so the title-update effect below can be triggered by `projectId`-only
-  // and not get cancelled when `setPersistedProjectId` triggers a re-render.
+  // Kept as its own effect so persisting the projectId does not re-run the
+  // title update below.
   useEffect(() => {
     if (projectId && projectId !== persistedProjectId) {
       setPersistedProjectId(projectId);
     }
   }, [projectId, persistedProjectId, setPersistedProjectId]);
 
-  // Update the dock-tab title (and projectId) on project change so the tab
-  // label tracks the active project in real time. Mirrors
-  // `manage-books.web-view-provider.ts:getWebView` so the
-  // initial title (cold open) and update title (project switch) both produce
-  // `${titleTemplate}` (no project) or `${titleTemplate} — {projectName}`.
-  //
-  // `lastAppliedProjectIdRef` dedupes when this effect re-runs for non-projectId
-  // dep changes (e.g. `localizedStrings` arriving from the localization service).
-  // It must be a ref (not state) so the dedupe survives React's render → cleanup →
-  // re-run cycle without cancelling the in-flight async PDP fetch.
-  const lastAppliedProjectIdRef = useRef<string | undefined>(undefined);
+  // Keep the dock-tab title (and projectId) in step with the selected project.
+  // Built from the same localize key `manage-books.web-view-provider.ts` uses for
+  // the initial title, so the title does not change shape on a project switch.
+  const tabTitle = useLocalizedProjectTitle(projectId, '%manageBooks_dialog_titleWithProject%');
   useEffect(() => {
-    if (!projectId) return undefined;
-    if (lastAppliedProjectIdRef.current === projectId) return undefined;
-    lastAppliedProjectIdRef.current = projectId;
-
-    let cancelled = false;
-    (async () => {
-      // Resolve the projectName (display name) the same way the provider does:
-      // `platform.name` setting, falling back to projectId when unavailable.
-      let projectName: string | undefined;
-      try {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-        const nameSetting = await pdp.getSetting('platform.name');
-        projectName = typeof nameSetting === 'string' ? nameSetting : projectId;
-      } catch {
-        projectName = projectId;
-      }
-      if (cancelled) return;
-
-      // Compose the title using the localized template; if the localized string
-      // hasn't loaded yet (string-fetch race), fall back to the English default
-      // so the title still updates.
-      const titleTemplate = localizedStrings['%manageBooks_dialog_title%'] ?? 'Manage books';
-      const title = projectName
-        ? formatReplacementString(`${titleTemplate} — {projectName}`, { projectName })
-        : titleTemplate;
-
-      try {
-        const ok = updateWebViewDefinition({ projectId, title });
-        if (!ok) {
-          logger.debug(
-            `manage-books: updateWebViewDefinition returned false (likely racing the saved-definition lifecycle)`,
-          );
-        }
-      } catch (e) {
-        logger.warn(
-          `manage-books: updateWebViewDefinition threw: ${e instanceof Error ? e.message : String(e)}`,
+    if (!projectId || tabTitle === undefined) return;
+    try {
+      const ok = updateWebViewDefinition({ projectId, title: tabTitle });
+      if (!ok) {
+        logger.debug(
+          `manage-books: updateWebViewDefinition returned false (likely racing the saved-definition lifecycle)`,
         );
       }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, updateWebViewDefinition, localizedStrings]);
+    } catch (e) {
+      logger.warn(
+        `manage-books: updateWebViewDefinition threw: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }, [projectId, tabTitle, updateWebViewDefinition]);
 
   // Build a typed subset for the picker by copying the picker's keys out of the shared map.
   // This avoids a `as`-assertion (banned by no-type-assertion lint rule) at the wire boundary.

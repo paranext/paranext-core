@@ -21,10 +21,9 @@ export interface ChecklistWebViewOptions extends GetWebViewOptions {
 }
 
 /**
- * Web view provider for the Markers Checklist tool. Resolves the project short-name via the
- * platform base PDP and formats the tab title from the `%markersChecklist_windowTitle%` localize
- * key. Mirrors `InventoryWebViewProvider` (`inventory.web-view-provider.ts`) with the same
- * project-name-formatted title pattern.
+ * Web view provider for the Markers Checklist tool. Formats the tab title from the
+ * `%markersChecklist_windowTitle%` localize key with the project's short name, via
+ * `papi.localization.getLocalizedProjectTitle`.
  *
  * @experimental This web view provider, its WebView state shape, and its options
  *   ({@link ChecklistWebViewOptions}) are not yet a stable contract and may change without notice.
@@ -45,20 +44,17 @@ export class ChecklistWebViewProvider implements IWebViewProvider {
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    let projectName: string | undefined;
-    if (projectId) {
-      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-      projectName = (await pdp.getSetting('platform.name')) ?? projectId;
-    }
-
-    const title = formatReplacementString(
-      await papi.localization.getLocalizedString({
-        localizeKey: '%markersChecklist_windowTitle%',
-      }),
-      {
-        projectName: projectName ?? '',
-      },
-    );
+    const title = projectId
+      ? await papi.localization.getLocalizedProjectTitle({
+          localizeKey: '%markersChecklist_windowTitle%',
+          projectId,
+        })
+      : formatReplacementString(
+          await papi.localization.getLocalizedString({
+            localizeKey: '%markersChecklist_windowTitle%',
+          }),
+          { projectName: '' },
+        );
 
     return {
       ...savedWebView,

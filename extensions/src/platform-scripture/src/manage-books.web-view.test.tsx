@@ -70,6 +70,7 @@ vi.mock('@papi/frontend/react', () => ({
     Object.fromEntries(keys.map((key) => [key, key])),
     false,
   ],
+  useLocalizedProjectTitle: () => undefined,
   useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
     defaultValue,
     vi.fn(),

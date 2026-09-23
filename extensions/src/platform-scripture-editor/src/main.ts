@@ -609,8 +609,13 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       projectId,
       isReadOnlyForTitle,
       async (projectIdFormat) => {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
-        return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
+        try {
+          const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
+          return await pdp.getSetting('platform.name');
+        } catch (e) {
+          logger.warn(`Error getting project name for title: ${getErrorMessage(e)}`);
+          return undefined;
+        }
       },
       papi.localization.getLocalizedStrings,
     );

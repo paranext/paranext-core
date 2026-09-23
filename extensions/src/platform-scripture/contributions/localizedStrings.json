@@ -339,6 +339,7 @@
       "%manageBooks_delete_confirmTitle%": "Delete books from {0}?",
       "%manageBooks_delete_emptyState_noBooks%": "This project has no books to delete.",
       "%manageBooks_dialog_title%": "Manage books",
+      "%manageBooks_dialog_titleWithProject%": "Manage books — {projectName}",
       "%manageBooks_filter_books%": "Filter books",
       "%manageBooks_genericError%": "An unexpected error occurred.",
       "%manageBooks_projectSelector_boundButClosedTooltip%": "Bound to {group} · not currently open",

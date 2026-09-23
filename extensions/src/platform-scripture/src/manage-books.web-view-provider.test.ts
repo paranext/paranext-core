@@ -10,6 +10,7 @@ vi.mock('@papi/backend', () => ({
     },
     localization: {
       getLocalizedString: vi.fn().mockResolvedValue('Manage Books'),
+      getLocalizedProjectTitle: vi.fn().mockResolvedValue('Manage Books — project-1'),
     },
   },
 }));

@@ -3327,6 +3327,36 @@ describe('formatEditorTitle', () => {
     );
     expect(title).toBe('My Project (Read-only)');
   });
+
+  it('fills {projectName} in the default title format', async () => {
+    const getLocalizedStrings = vi.fn().mockResolvedValue({
+      '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+      '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+      '%webView_platformScriptureEditor_title_format_2%': '{projectName} {editable}',
+    });
+    const title = await formatEditorTitle(
+      undefined,
+      'project-1',
+      false,
+      mockGetProjectName,
+      getLocalizedStrings,
+    );
+    expect(title).toBe('My Project (Editable)');
+  });
+
+  it.each([
+    ['empty', ''],
+    ['missing', undefined],
+  ])('shows the project id when the name is %s', async (_description, projectName) => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      false,
+      vi.fn().mockResolvedValue(projectName),
+      mockGetLocalizedStrings,
+    );
+    expect(title).toBe('project-1 (Editable)');
+  });
 });
 
 // #region updateRelatedTextCollectionPanel

@@ -39,6 +39,8 @@
       "%helloRock3_overlay_popover_unknown%": "Unknown",
       "%helloRock3_overlay_sayHello%": "Say Hello",
       "%helloRock3_overlay_showAlert%": "Show Alert",
+      "%helloRock3_project_titleWithProject%": "Hello Third Rock Project: {projectName}",
+      "%helloRock3_projectViewer_titleWithProject%": "Hello Third Rock Project Viewer: {projectName}",
       "%helloRock3_react%": "React",
       "%helloRock3_select_project%": "Select Project",
       "%helloRock3_select_projects%": "Select Projects",

@@ -11,5 +11,6 @@ export { default as useProjectSetting } from '@renderer/hooks/papi-hooks/use-pro
 export { default as useDialogCallback } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 export { default as useDataProviderMulti } from '@renderer/hooks/papi-hooks/use-data-provider-multi.hook';
 export { default as useLocalizedStrings } from '@renderer/hooks/papi-hooks/use-localized-strings-hook';
+export { default as useLocalizedProjectTitle } from '@renderer/hooks/papi-hooks/use-localized-project-title.hook';
 export { default as useWebViewController } from '@renderer/hooks/papi-hooks/use-web-view-controller.hook';
 export { default as useRecentScriptureRefs } from '@renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';

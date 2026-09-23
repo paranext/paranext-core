@@ -25,8 +25,10 @@ import type PapiFrontend from '@papi/frontend';
 import type { MarkerContent, Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
+  formatProjectTitle,
   formatReplacementString,
   getErrorMessage,
+  getProjectDisplayName,
   isLocalizeKey,
   isPlatformError,
   LanguageStrings,
@@ -234,22 +236,31 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
 
 // #region Editor Title Formatting
 
-const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
+const PROJECT_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format_2%';
 const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
 const READONLY_KEY = '%webView_platformScriptureEditor_title_readonly_indicator%';
 const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
 const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
+/**
+ * Builds the editor's tab title. A localize key title is localized, then `{projectName}` is
+ * replaced with the project's short name (or its id when the name is unavailable) and `{editable}`
+ * with the editable or read-only indicator. `{projectId}` is replaced with the short name too, for
+ * titles written before `{projectName}` existed.
+ *
+ * @param getProjectName Gets the project's `platform.name` setting. Whatever it resolves to that is
+ *   not a non-empty string shows the project id instead.
+ */
 export async function formatEditorTitle(
   unformattedTitle: string | undefined,
   projectId: string | undefined,
   isReadOnly: boolean,
-  getProjectName: (projectId: string) => Promise<string>,
+  getProjectName: (projectId: string) => Promise<unknown>,
   getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LanguageStrings>,
 ): Promise<string> {
   let title = unformattedTitle;
   if (!title) {
-    if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
+    if (projectId) title = PROJECT_TITLE_FORMAT_STRING_KEY;
     else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
   }
   if (isLocalizeKey(title)) {
@@ -257,16 +268,15 @@ export async function formatEditorTitle(
       localizeKeys: [EDITABLE_KEY, READONLY_KEY, title],
     });
     const localizedTitleFormatStr = localizedStrings[title];
-    const localizedEditable = localizedStrings[EDITABLE_KEY];
-    const localizedReadonly = localizedStrings[READONLY_KEY];
+    const editable = isReadOnly ? localizedStrings[READONLY_KEY] : localizedStrings[EDITABLE_KEY];
 
-    let projectName = projectId;
-    if (projectId) projectName = await getProjectName(projectId);
-
-    title = formatReplacementString(localizedTitleFormatStr, {
-      projectId: projectName,
-      editable: isReadOnly ? localizedReadonly : localizedEditable,
-    });
+    if (projectId) {
+      const projectName = await getProjectName(projectId);
+      title = formatProjectTitle(localizedTitleFormatStr, projectId, projectName, {
+        projectId: getProjectDisplayName(projectId, projectName),
+        editable,
+      });
+    } else title = formatReplacementString(localizedTitleFormatStr, { projectId, editable });
   }
 
   return title;

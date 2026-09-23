@@ -118,4 +118,59 @@ export type ILocalizationService = {
      * the book so that the book name can be displayed in the UI language within the UI
      */
     getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+    /**
+     * Builds a localized title for something scoped to one project, such as a web view's tab: looks
+     * up the localized format for `localizeKey` and the project's short name (its `platform.name`
+     * setting), then replaces `{projectName}` in the format with that name. Use it in a web view
+     * provider's `getWebView` so the tab opens with its final title; in the web view itself, use
+     * the `useLocalizedProjectTitle` hook to keep the title up to date.
+     *
+     * Never rejects, so a failed lookup cannot keep a web view from opening:
+     *
+     * - If the short name cannot be read, or is empty, the project id is shown in its place.
+     * - If the format cannot be localized, the title is just the project's name (or id).
+     *
+     * Both failures are logged as warnings.
+     *
+     * @example
+     *
+     * ```typescript
+     * // With `"%myExtension_tabTitle%": "My Tool: {projectName}"` contributed
+     * const title = await papi.localization.getLocalizedProjectTitle({
+     *   localizeKey: '%myExtension_tabTitle%',
+     *   projectId,
+     * });
+     * // 'My Tool: WEB'
+     * ```
+     *
+     * @param options.localizeKey Key of the localized title format. The format should contain a
+     *   `{projectName}` placeholder.
+     * @param options.projectId Id of the project the title is for
+     * @param options.replacements Values for any other `{key}` placeholders in the format
+     * @param options.locales BCP 47 language codes to look the format up in, as for
+     *   `getLocalizedString`. Defaults to the interface languages.
+     * @returns The formatted title
+     */
+    getLocalizedProjectTitle(options: LocalizedProjectTitleOptions): Promise<string>;
   } & IDataProvider<LocalizationDataDataTypes>;
+
+/** Options for `papi.localization.getLocalizedProjectTitle`. */
+export type LocalizedProjectTitleOptions = {
+  /**
+   * Key of the localized title format. The format should contain a `{projectName}` placeholder,
+   * which is replaced with the project's short name (or its id when the name is unavailable).
+   */
+  localizeKey: LocalizeKey;
+  /** Id of the project the title is for */
+  projectId: string;
+  /**
+   * Values for any other `{key}` placeholders in the format. A `projectName` entry is ignored in
+   * favor of the project's name.
+   */
+  replacements?: { [key: string]: unknown };
+  /**
+   * BCP 47 language codes to look the format up in, as for `getLocalizedString`. Defaults to the
+   * interface languages.
+   */
+  locales?: string[];
+};

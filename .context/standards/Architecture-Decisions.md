@@ -4690,6 +4690,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   unable to explain the padlock to sighted pointer users. Both are written up in
   [`.context/designs/PT-4549-followup-projectselector-accessible-name.md`](../designs/PT-4549-followup-projectselector-accessible-name.md).
 
+## adr-project-titles-from-one-formatter: Per-project titles are built by one shared formatter, reached through a papi resolver and a matching hook
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** Tabs scoped to one project (Inventories, Markers Checklist, Manage Books, the comment
+  list, the Scripture Editor, and extensions' own tools) each looked up `platform.name` and
+  formatted the title by hand, in a provider, a web view, or both. The copies disagreed on the
+  fallback (`??` vs `||`, id vs no name, rejecting vs catching a failed lookup) and on the
+  placeholder (`{projectName}` vs the editor's `{projectId}`), and Manage Books carried a comment
+  warning that its provider and web view had to be kept in sync by hand.
+- **Decision:** One pure formatter, `formatProjectTitle` in `platform-bible-utils` (with
+  `getProjectDisplayName` for the fallback rule), owns the title: `{projectName}` is the project's
+  short name when it is a non-empty string, otherwise its id. Two thin callers wrap it:
+  `papi.localization.getLocalizedProjectTitle` for providers and other async code, which never
+  rejects, and the `useLocalizedProjectTitle` hook for web views, which returns `undefined` while
+  loading. Because both call the same formatter, a provider's opening title and its web view's
+  updates cannot drift.
+- **Alternatives:** **A resolver only, no hook** — rejected: web views that update their title
+  (unsaved marker, project switch) would keep re-deriving loading and error handling from
+  `useProjectSetting` and `useLocalizedStrings`. **Hosting the resolver on
+  `papi.projectDataProviders`** — rejected: the result is a localized string, and
+  `papi.localization` already hosts a composed helper of this shape
+  (`getLocalizedIdFromBookNumber`). **Putting the lookups in `platform-bible-utils`** — not
+  possible: the library cannot import papi, so only the pure part lives there.
+- **Consequences:** An empty short name now shows the id everywhere, and a failed lookup no longer
+  keeps a tab from opening. Titles that need their own words around the project go through a
+  localized format rather than string concatenation (Manage Books' em-dash and the comment list's
+  `": "` are now localizable). The editor keeps filling `{projectId}` with the name for
+  caller-supplied titles, as its options document. **Revisit** if a title ever needs the full name
+  (`platform.fullName`) rather than the short name.
+
 ## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
 
 - **Date:** 2026-09-22

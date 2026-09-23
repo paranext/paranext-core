@@ -68,31 +68,17 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    // Kick off the (independent) title localization now so it runs concurrently with the
-    // project-name lookup below instead of serially before it.
-    const baseTitlePromise = papi.localization.getLocalizedString({
+    // The base title has its own key so it keeps its Paratext 9 fallback translations
+    const baseTitle = await papi.localization.getLocalizedString({
       localizeKey: '%webView_legacyCommentManager_commentList_title%',
     });
-
-    // A caller-supplied projectId may be invalid or not yet loaded; a rejection here would fail the
-    // whole open, so guard the lookup and fall back to the id rather than let the title throw.
-    let projectName: string | undefined;
-    if (projectId) {
-      try {
-        const baseProjectPdp = await papi.projectDataProviders.get('platform.base', projectId);
-        projectName = await baseProjectPdp.getSetting('platform.name');
-      } catch (error) {
-        logger.warn(
-          `Could not resolve a name for project ${projectId}; using the id in the title`,
-          error,
-        );
-      }
-    }
-
-    const baseTitle = await baseTitlePromise;
-    // Fall back to the id when the name is missing OR empty (`||`, not `??`, so an empty-string
-    // project name doesn't render a blank "Comments: " suffix).
-    const title = projectId ? `${baseTitle}: ${projectName || projectId}` : baseTitle;
+    const title = projectId
+      ? await papi.localization.getLocalizedProjectTitle({
+          localizeKey: '%webView_legacyCommentManager_commentList_titleWithProject%',
+          projectId,
+          replacements: { commentListTitle: baseTitle },
+        })
+      : baseTitle;
 
     return {
       ...savedWebView,
