@@ -244,3 +244,18 @@ export async function expectPopupBesideTriggerAndInsideFrame(
       `content fits vertically in a pop-up that does not scroll (scroll ${overflow.scrollHeight}, client ${overflow.clientHeight}): ${boxes}`,
     ).toBeLessThanOrEqual(overflow.clientHeight + tolerance);
 }
+
+/**
+ * Closes a dock tab by web view id and waits for its title to disappear. `data-web-view-id` is on
+ * `.platform-tab-title` (`platform-tab-title.component.tsx`), not on rc-dock's own `.dock-tab`, so
+ * the close button is found through the title's `.dock-tab` ancestor. The click is dispatched
+ * rather than performed: on a crowded tab strip the button can sit outside the visible area, and
+ * rc-dock's `.dock-tab-hit-area` overlays the same region, so a real click can report it as not
+ * actionable.
+ */
+export async function closeDockTab(page: Page, webViewId: string): Promise<void> {
+  const tabTitle = page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
+  const dockTab = tabTitle.locator('xpath=ancestor::*[contains(@class,"dock-tab")][1]');
+  await dockTab.locator('.dock-tab-close-btn').dispatchEvent('click');
+  await expect(tabTitle).toBeHidden({ timeout: 10_000 });
+}
