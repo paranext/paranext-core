@@ -72,10 +72,11 @@ export type OverlayCommandPalettePresentationalProps = {
   /** Maximum height in pixels. Defaults to 400. */
   maxHeight?: number;
   /**
-   * The CSS `zoom` on the requesting pane's iframe. The anchor's size arrives in the pane's own
-   * pixels while its position has already been translated by this factor, so the size needs the
-   * same multiplication to describe the trigger as it is painted. Only a pane scaled as a whole
-   * frame has a factor here; one that marks zoom areas reports its trigger already translated.
+   * The scale factor for mapping the requesting pane's iframe-relative anchor geometry to window
+   * pixels. The anchor's size arrives in the pane's own pixels while its position has already been
+   * translated by this factor, so the size needs the same multiplication to describe the trigger as
+   * it is painted. The platform currently applies no whole-frame scale, so this is always `1`; the
+   * prop exists to keep that mapping correct if a frame scale is ever applied.
    *
    * @experimental This field is unstable and may change or disappear without notice
    */
