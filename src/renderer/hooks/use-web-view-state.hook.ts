@@ -38,6 +38,8 @@ export function useWebViewState<T>(
   // `getWebViewState` returns the given default itself when the state has no value at stateKey
   const readState = useCallback((key: string) => {
     const value = this.getWebViewState(key, defaultStateValueRef.current);
+    // Identity, not deep equality: a saved object equal to the default is still a saved value. A
+    // saved primitive identical to the default counts as the default, which shows the same value
     isDefaultRef.current = Object.is(value, defaultStateValueRef.current);
     return value;
   }, []);
@@ -60,9 +62,8 @@ export function useWebViewState<T>(
 
         if (updatedState && stateKey in updatedState) {
           isDefaultRef.current = false;
-          // Every update carries a freshly deserialized copy of the whole state, so keep the current
-          // object when the saved value is unchanged; otherwise an update to any other key would
-          // re-run the caller's effects that depend on this value
+          // An equal value saved as a new object (by this caller's own setState or by another
+          // writer) keeps the current object, so the caller's effects that depend on it don't re-run
           setStateInternal((currentState) =>
             deepEqual(currentState, updatedState[stateKey])
               ? currentState
@@ -86,13 +87,15 @@ export function useWebViewState<T>(
 
   const setState = useCallback(
     (newStateValue: T) => {
-      isDefaultRef.current = false;
       this.setWebViewState(stateKey, newStateValue);
     },
     [stateKey],
   );
 
   const resetState = useCallback(() => {
+    // Take the reset branch of the update handler even if the slot already shows a default, so it
+    // switches to the latest `defaultStateValue`
+    isDefaultRef.current = false;
     this.resetWebViewState(stateKey);
   }, [stateKey]);
 
