@@ -11,6 +11,7 @@
 import type { Frame, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  closeDockTab,
   firstLineBoxHeight,
   readContentZoomMemory,
   zoomAreaTo,
@@ -58,18 +59,6 @@ async function expectZoomItemsOffered(page: Page, webViewId: string): Promise<vo
   await expect(zoomIn).toBeEnabled();
   await page.keyboard.press('Escape');
   await expect(zoomIn).toBeHidden();
-}
-
-/**
- * Closes a dock tab by web view id. The close button is found via the `.platform-tab-title`
- * ancestor because `data-web-view-id` is not on rc-dock's `.dock-tab`. `dispatchEvent` because
- * rc-dock's hit-area overlays can make a real click report the button as covered.
- */
-async function closeDockTab(page: Page, webViewId: string): Promise<void> {
-  const tabTitle = page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
-  const dockTab = tabTitle.locator('xpath=ancestor::*[contains(@class,"dock-tab")][1]');
-  await dockTab.locator('.dock-tab-close-btn').dispatchEvent('click');
-  await expect(tabTitle).toBeHidden({ timeout: 10_000 });
 }
 
 /** Asserts the text grew by about the zoom factor while the control kept its size. */

@@ -36,7 +36,7 @@
 import type { Frame, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { readContentZoomMemory } from '../../fixtures/content-zoom-helpers';
+import { closeDockTab, readContentZoomMemory } from '../../fixtures/content-zoom-helpers';
 import { getEditorFrame, readFactor } from '../../fixtures/scripture-editor-helpers';
 import { closeAllNonHomeDockTabs, dismissMarbleGuideIfShown } from './test-helpers';
 
@@ -126,20 +126,6 @@ async function openEnhancedResourceForId(page: Page, resourceId: string): Promis
     .locator(`iframe[data-web-view-id="${id}"]`)
     .waitFor({ state: 'attached', timeout: 20_000 });
   return id;
-}
-
-/**
- * Closes a dock tab by web view id. Modelled on `closeDockTab` in
- * `comment-list-content-zoom.spec.ts`: `dispatchEvent` rather than a real hover+click, because on a
- * crowded tab strip the close button can sit outside the visible/scrollable area, and rc-dock
- * renders a hit-testing sibling over the same region that can make a real click report the button
- * as non-actionable.
- */
-async function closeEnhancedResourceTab(page: Page, webViewId: string): Promise<void> {
-  const tabTitle = page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
-  const dockTab = tabTitle.locator('xpath=ancestor::*[contains(@class,"dock-tab")][1]');
-  await dockTab.locator('.dock-tab-close-btn').dispatchEvent('click');
-  await expect(tabTitle).not.toBeVisible({ timeout: 10_000 });
 }
 
 /**
@@ -401,13 +387,13 @@ test.describe('Enhanced Resources content zoom', () => {
       )
       .toBe(zoomedFactor);
 
-    await closeEnhancedResourceTab(mainPage, editorId);
+    await closeDockTab(mainPage, editorId);
     const reopenedId = await openEnhancedResourceForId(mainPage, DEFAULT_RESOURCE_ID);
     await dismissMarbleGuideIfShown(mainPage);
     const reopenedFrame = await getEditorFrame(mainPage, reopenedId);
     await expect(reopenedFrame.getByTestId('er-scripture-pane')).toBeVisible({ timeout: 15_000 });
     await expect.poll(() => readFactor(reopenedFrame, '')).toBe(zoomedFactor);
-    await closeEnhancedResourceTab(mainPage, reopenedId);
+    await closeDockTab(mainPage, reopenedId);
   });
 
   test('a different resource starts at the Settings default, not a previously zoomed resource’s level', async ({
