@@ -1,4 +1,5 @@
 import { useEvent } from 'platform-bible-react';
+import { deepEqual } from 'platform-bible-utils';
 import { useState, useCallback, useEffect, useRef } from 'react';
 
 // We don't add this to PAPI directly like other hooks because `this` has to be bound to a web view's iframe context
@@ -59,9 +60,16 @@ export function useWebViewState<T>(
 
         if (updatedState && stateKey in updatedState) {
           isDefaultRef.current = false;
-          // We are trusting the developer used the correct type as we have no way to validate state
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          setStateInternal(updatedState[stateKey] as T);
+          // Every update carries a freshly deserialized copy of the whole state, so keep the current
+          // object when the saved value is unchanged; otherwise an update to any other key would
+          // re-run the caller's effects that depend on this value
+          setStateInternal((currentState) =>
+            deepEqual(currentState, updatedState[stateKey])
+              ? currentState
+              : // We are trusting the developer used the correct type as we have no way to validate state
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                (updatedState[stateKey] as T),
+          );
           return;
         }
 
