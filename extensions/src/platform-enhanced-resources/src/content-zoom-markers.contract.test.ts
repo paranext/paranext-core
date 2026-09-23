@@ -35,6 +35,21 @@ function listSourceFiles(dir: string, excludeFile: string): string[] {
   return files;
 }
 
+/**
+ * The zoom area id each `<tagName …>` opening tag in `fileSource` names through its `area`
+ * attribute, or `main` for a tag with none. Two steps — collect each whole opening tag, then look
+ * for `area="…"` anywhere inside it — so the attribute's position among the others does not matter.
+ * A single pass with an optional `area` group cannot do this: the group either binds only to the
+ * first attribute or, made lazy, is skipped entirely.
+ *
+ * The opening tag runs to the first `>` that is not part of an arrow function's `=>`; a `>`
+ * comparison inside an attribute expression would still end it early.
+ */
+function areasOf(fileSource: string, tagName: string): string[] {
+  const openingTags = fileSource.match(new RegExp(`<${tagName}\\b(?:=>|[^>])*>`, 'g')) ?? [];
+  return openingTags.map((tag) => /(?:^|\s)area="([a-z][a-z0-9-]*)"/.exec(tag)?.[1] ?? 'main');
+}
+
 describe('content zoom markers (Enhanced Resources)', () => {
   const webView = source('web-views/enhanced-resource.web-view.tsx');
   const footnotesPane = source('components/footnotes-pane/footnotes-pane.component.tsx');
@@ -90,18 +105,30 @@ describe('content zoom markers (Enhanced Resources)', () => {
     const files = listSourceFiles(SRC_DIR, THIS_FILE).map((filePath) =>
       readFileSync(filePath, 'utf-8').replace(/\s+/g, ' '),
     );
-    const roots = files.flatMap((fileSource) =>
-      [...fileSource.matchAll(/<ContentZoomRoot(?:\s+area="([a-z-]+)")?[ >]/g)].map(
-        (m) => m[1] ?? 'main',
-      ),
-    );
-    const providers = files.flatMap((fileSource) =>
-      [...fileSource.matchAll(/<ContentZoomTextProvider(?:\s+area="([a-z-]+)")?[ >]/g)].map(
-        (m) => m[1] ?? 'main',
-      ),
-    );
+    const roots = files.flatMap((fileSource) => areasOf(fileSource, 'ContentZoomRoot'));
+    const providers = files.flatMap((fileSource) => areasOf(fileSource, 'ContentZoomTextProvider'));
     expect(roots.sort()).toEqual(['footnotes', 'main']);
     expect(providers).toEqual(['entries']);
+  });
+
+  it('reads an area id wherever it sits among the tag’s attributes', () => {
+    expect(areasOf('<ContentZoomRoot area="entries" className="x">', 'ContentZoomRoot')).toEqual([
+      'entries',
+    ]);
+    expect(areasOf('<ContentZoomRoot className="x" area="entries">', 'ContentZoomRoot')).toEqual([
+      'entries',
+    ]);
+    expect(
+      areasOf('<ContentZoomTextProvider key="k" area="entries">', 'ContentZoomTextProvider'),
+    ).toEqual(['entries']);
+    expect(
+      areasOf('<ContentZoomRoot onFocus={() => focus()} area="entries">', 'ContentZoomRoot'),
+    ).toEqual(['entries']);
+    expect(areasOf('<ContentZoomRoot className="x"> <ContentZoomRoot>', 'ContentZoomRoot')).toEqual(
+      ['main', 'main'],
+    );
+    expect(areasOf('<ContentZoomRoot data-area="entries">', 'ContentZoomRoot')).toEqual(['main']);
+    expect(areasOf('<ContentZoomRootLike area="entries">', 'ContentZoomRoot')).toEqual([]);
   });
 
   it('keeps the ribbons, toolbar, tab bar and both resize handles outside every area', () => {
