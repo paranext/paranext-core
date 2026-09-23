@@ -396,7 +396,7 @@ Analytics events are transmitted to PostHog (EU region) only in a **packaged pro
 PT_ANALYTICS_POSTHOG=true npm start
 ```
 
-The value must be exactly `true`. Both analytics environments currently send to the PostHog **Test** project; the project keys live only in `src/extension-host/services/analytics.config.ts`. Every event carries `app_version`, `os_platform`, `os_release` and `analytics_environment`, is flagged anonymous (no person profile), and has GeoIP disabled. No usage or behavioural data is sent. The one event today is `app_launch`, fired once per launch.
+The value must be exactly `true`. Both analytics environments currently send to the PostHog **Test** project; the project keys live only in `src/extension-host/services/analytics.config.ts`. Every event carries `app_version`, `os_platform`, `os_release`, `os_arch` and `analytics_environment`, is flagged anonymous (no person profile), and has GeoIP disabled. No usage or behavioural data is sent. The one event today is `app_launch`, fired once per launch.
 
 A failed send (offline, blocked by a proxy, or an HTTP error from PostHog) is logged once at warn level, naming the event but none of its properties, and the event is dropped. `posthog-node` reports these failures through an `'error'` event rather than a rejected promise, and retries a request itself before giving up, so the warn line can appear up to about 50 seconds after launch. The debug-level `sent 'app_launch' to PostHog` line only means the SDK reported no error; the PostHog dashboard is the only proof that an event was delivered.
 

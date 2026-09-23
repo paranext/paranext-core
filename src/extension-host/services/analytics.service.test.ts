@@ -79,6 +79,7 @@ beforeEach(() => {
     app_version: '0.6.0',
     os_platform: 'linux',
     os_release: '6.6',
+    os_arch: 'x64',
   });
   mocks.posthogSend.mockResolvedValue(undefined);
   mocks.posthogShutdown.mockResolvedValue(undefined);

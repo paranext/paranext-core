@@ -22,13 +22,14 @@ beforeEach(() => {
   mocks.getAppInfo.mockResolvedValue({ version: '0.6.0-alpha.1+42' });
 });
 
-test('common properties carry the app version and the OS platform and release', async () => {
+test('common properties carry the app version and the OS platform, release and architecture', async () => {
   const { getCommonProperties } = await import('@extension-host/services/analytics-enrichment');
   const properties = await getCommonProperties();
   expect(properties).toEqual({
     app_version: '0.6.0-alpha.1+42',
     os_platform: os.platform(),
     os_release: os.release(),
+    os_arch: os.arch(),
   });
 });
 
