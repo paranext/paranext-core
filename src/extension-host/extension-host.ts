@@ -38,8 +38,9 @@ process.on('message', (message) => {
   if (isString(message) && message === gracefulShutdownMessage) {
     logger.info('Beginning to shut down process due to graceful shutdown message');
     (async () => {
-      // Analytics first: its shutdown is self-bounded to about a second, and extension
-      // deactivation below may take the rest of the budget.
+      // Analytics first: its shutdown is self-bounded to half a second (its
+      // ANALYTICS_SHUTDOWN_BUDGET_MS), and extension deactivation below may take the rest of the
+      // budget.
       try {
         await analyticsService.shutdown();
       } catch (error) {
