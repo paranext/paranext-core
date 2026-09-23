@@ -959,6 +959,34 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-4s')?.state).toEqual(zoomState({ main: 1.5, footnotes: 0.9 }));
   });
 
+  it("does not merge back a level a sibling has just reset into an unstamped pane's own levels", async () => {
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('editor-sib', {
+      id: 'editor-sib',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: zoomState({ main: 1.3, footnotes: 0.9 }),
+    });
+    setContentZoomAreas('editor-sib', ['main', 'footnotes']);
+    // The sibling's reset deletes the shared "main" key; the delete is still in the memory debounce
+    // window, so the cached record still remembers the level just given up.
+    await resetContentZoom('editor-sib', 'main');
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 });
+
+    // Restored with a level of its own for another area, and no stamp.
+    definitions.set('editor-own', {
+      id: 'editor-own',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: { [LEVELS]: { footnotes: 0.7 } },
+    });
+    setContentZoomAreas('editor-own', ['main', 'footnotes']);
+    expect(definitions.get('editor-own')?.state).toEqual(zoomState({ footnotes: 0.7 }));
+    expect(cssVar(iframeFor('editor-own'), '--platform-content-zoom-main')).toBe('1');
+  });
+
   it('seeds a declared pane on an empty first report, and its first non-empty report keeps that seed without rewriting it', async () => {
     settings[MEMORY] = { 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 };
     __setContentZoomDepsForTesting({});
