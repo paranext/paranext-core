@@ -19,9 +19,11 @@ import {
   isBlockMarker,
   isLocalizeKey,
   LanguageStrings,
+  LocalizeKey,
   usfmMarkers,
   type PaletteItem,
 } from 'platform-bible-utils';
+import type { EditorMessageInsertTextualNoteAtSelection } from 'platform-scripture-editor';
 import type { MutableRefObject } from 'react';
 import type {
   ContextMenuOptionConfig,
@@ -351,6 +353,79 @@ export function parseCallerSequenceSetting(value: string): string[] | undefined 
   return callers.length > 0 ? callers : undefined;
 }
 
+/** What one textual-note kind needs to insert itself and record why. */
+export interface NoteInsertConfig {
+  /** The USFM marker `EditorRef.insertMarker` takes for this kind. */
+  marker: string;
+  /** Version-history commit message shown for this kind's insert. */
+  commitMessageKey: LocalizeKey;
+  /** Names the edit in log lines, e.g. `'inserting footnote'`. */
+  editDescription: string;
+}
+
+/**
+ * ONE table for every textual-note kind, keyed by the same method union the editor message and the
+ * command handlers use — the marker, the version-history commit message, and the log description
+ * all move together for a given kind instead of being repeated at each of the four call sites that
+ * used to need a matching three-way switch (the context-menu wrappers, the top-menu message
+ * listener, the Ctrl+T/Ctrl+Shift+T shortcut, and each hook's dependency array).
+ */
+export const NOTE_INSERT_CONFIG: Record<
+  EditorMessageInsertTextualNoteAtSelection['method'],
+  NoteInsertConfig
+> = {
+  insertFootnoteAtSelection: {
+    marker: 'f',
+    commitMessageKey: '%versionHistoryCommit_beforeInsertFootnote%',
+    editDescription: 'inserting footnote',
+  },
+  insertCrossReferenceAtSelection: {
+    marker: 'x',
+    commitMessageKey: '%versionHistoryCommit_beforeInsertCrossReference%',
+    editDescription: 'inserting cross-reference',
+  },
+  insertEndnoteAtSelection: {
+    marker: 'fe',
+    commitMessageKey: '%versionHistoryCommit_beforeInsertEndnote%',
+    editDescription: 'inserting endnote',
+  },
+};
+
+/**
+ * Whether a note-insert callback should skip the version-history snapshot and the marker insert
+ * entirely, checked BEFORE either runs: with no mounted editor, or a read-only one (which already
+ * folds in a sync freeze), an insert can never land, and skipping ahead of the snapshot is what
+ * stops a read-only top-menu click from writing a forced, empty version-history commit. No
+ * user-visible notice for the read-only case here — left to a separate PR.
+ */
+export function shouldSkipNoteInsert(hasEditor: boolean, isReadOnlyEffective: boolean): boolean {
+  return !hasEditor || isReadOnlyEffective;
+}
+
+const INSERT_FOOTNOTE_TITLE_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_insertFootnoteAtSelection%';
+const INSERT_CROSS_REFERENCE_TITLE_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%';
+const INSERT_ENDNOTE_TITLE_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_insertEndnoteAtSelection%';
+const INSERT_COMMENT_TITLE_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_insertCommentAtSelection%';
+
+/**
+ * Localize keys used by {@link createInsertContextMenuItems}. Spread these into the editor web
+ * view's localized-strings list so the values are loaded and passed into `localizedStrings` —
+ * mirrors the established `CHARACTER_MARKER_MENU_STRING_KEYS` pattern
+ * (`character-marker-menu.utils.ts`), which ties a menu builder to its own keys the same way
+ * instead of letting the builder and the web view's key list repeat the same literals
+ * independently.
+ */
+export const INSERT_CONTEXT_MENU_STRING_KEYS = Object.freeze([
+  INSERT_FOOTNOTE_TITLE_KEY,
+  INSERT_CROSS_REFERENCE_TITLE_KEY,
+  INSERT_ENDNOTE_TITLE_KEY,
+  INSERT_COMMENT_TITLE_KEY,
+] as const);
+
 /** Callbacks the editor context menu's insert items dispatch to. */
 export interface InsertContextMenuActions {
   insertFootnote: () => void;
@@ -384,22 +459,22 @@ export function createInsertContextMenuItems(
   const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
   return [
     {
-      title: localizedStrings['%webView_platformScriptureEditor_insertFootnoteAtSelection%'],
+      title: localizedStrings[INSERT_FOOTNOTE_TITLE_KEY],
       onSelect: actions.insertFootnote,
       isDisabled: isReadOnly,
     },
     {
-      title: localizedStrings['%webView_platformScriptureEditor_insertCrossReferenceAtSelection%'],
+      title: localizedStrings[INSERT_CROSS_REFERENCE_TITLE_KEY],
       onSelect: actions.insertCrossReference,
       isDisabled: isReadOnly,
     },
     {
-      title: localizedStrings['%webView_platformScriptureEditor_insertEndnoteAtSelection%'],
+      title: localizedStrings[INSERT_ENDNOTE_TITLE_KEY],
       onSelect: actions.insertEndnote,
       isDisabled: isReadOnly,
     },
     {
-      title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
+      title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
       onSelect: actions.insertComment,
       // Disabled while sync-blocked too, so the menu reflects the frozen state.
       isDisabled: !canUserCreateComments || isSyncBlocked,

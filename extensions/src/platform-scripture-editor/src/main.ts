@@ -17,6 +17,7 @@ import {
 } from 'platform-bible-utils';
 import {
   EditorDecorations,
+  EditorMessageInsertTextualNoteAtSelection,
   SelectionChangeEvent,
   EditorWebViewMessage,
   OpenEditorOptions,
@@ -153,80 +154,39 @@ async function openPlatformResourceViewer(
   return open(true, projectId, existingTabIdToReplace, options);
 }
 
+/**
+ * Paratext 9's `UpdateInsertMenuItems` (`TextForm.cs`) shows footnote, cross-reference, and end
+ * note only when the project is not a resource project and not Study Bible additions, and enables
+ * them only with book text and a view that allows note insertion. Platform.Bible keeps all three
+ * Insert items always available instead and gates at submission — see
+ * `adr-menus-always-available-gate-at-submission` in Architecture-Decisions.md; the submission-time
+ * check itself is the web view's read-only/sync-blocked guard on each insert callback.
+ */
+async function insertNoteAtSelection(
+  method: EditorMessageInsertTextualNoteAtSelection['method'],
+  webViewId: string | undefined,
+): Promise<void> {
+  logger.debug(`Requesting ${method} on WebView ${webViewId}`);
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.[method]();
+}
+
 async function insertFootnoteAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting footnote...');
-
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertFootnoteAtSelection();
+  return insertNoteAtSelection('insertFootnoteAtSelection', webViewId);
 }
 
 async function insertCrossReferenceAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting cross-reference...');
-
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertCrossReferenceAtSelection();
+  return insertNoteAtSelection('insertCrossReferenceAtSelection', webViewId);
 }
 
 async function insertEndnoteAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting endnote...');
-
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertEndnoteAtSelection();
+  return insertNoteAtSelection('insertEndnoteAtSelection', webViewId);
 }
 
 async function insertCommentAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting project comment...');
-
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertCommentAtSelection();
+  logger.debug(`Requesting insertCommentAtSelection on WebView ${webViewId}`);
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.insertCommentAtSelection();
 }
 
 /** Function to prompt for a project or use the one passed in and open it in the editor */
@@ -671,6 +631,17 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     let firstSelectionAsync:
       | AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined>
       | undefined;
+    /** Posts an insert-note-at-selection message of the given kind to this editor's web view. */
+    async function insertNoteAtSelection(
+      method: EditorMessageInsertTextualNoteAtSelection['method'],
+    ): Promise<void> {
+      const message: EditorWebViewMessage = { method };
+      await papi.webViewProviders.postMessageToWebView(
+        currentWebViewDefinition.id,
+        webViewNonce,
+        message,
+      );
+    }
     return {
       async selectRange(range) {
         try {
@@ -822,36 +793,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(message);
         }
       },
-      async insertFootnoteAtSelection() {
-        const message: EditorWebViewMessage = {
-          method: 'insertFootnoteAtSelection',
-        };
-        await papi.webViewProviders.postMessageToWebView(
-          currentWebViewDefinition.id,
-          webViewNonce,
-          message,
-        );
-      },
-      async insertCrossReferenceAtSelection() {
-        const message: EditorWebViewMessage = {
-          method: 'insertCrossReferenceAtSelection',
-        };
-        await papi.webViewProviders.postMessageToWebView(
-          currentWebViewDefinition.id,
-          webViewNonce,
-          message,
-        );
-      },
-      async insertEndnoteAtSelection() {
-        const message: EditorWebViewMessage = {
-          method: 'insertEndnoteAtSelection',
-        };
-        await papi.webViewProviders.postMessageToWebView(
-          currentWebViewDefinition.id,
-          webViewNonce,
-          message,
-        );
-      },
+      insertFootnoteAtSelection: () => insertNoteAtSelection('insertFootnoteAtSelection'),
+      insertCrossReferenceAtSelection: () =>
+        insertNoteAtSelection('insertCrossReferenceAtSelection'),
+      insertEndnoteAtSelection: () => insertNoteAtSelection('insertEndnoteAtSelection'),
       async insertCommentAtSelection() {
         const { projectId } = currentWebViewDefinition;
         if (!projectId) {
