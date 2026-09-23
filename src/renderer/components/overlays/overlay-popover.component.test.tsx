@@ -193,13 +193,12 @@ describe('OverlayPopoverPresentational', () => {
     });
   });
 
-  describe('content zoom', () => {
-    it('renders exactly as before when the requesting pane is not zoomed', () => {
+  describe('sizing and anchoring', () => {
+    it('sizes the inner wrapper with the default caps and leaves PopoverContent unsized', () => {
       render(
         <OverlayPopoverPresentational
           content={{ type: 'text', body: 'Just a body' }}
           position={position}
-          contentScale={1}
           onDismiss={vi.fn()}
         />,
       );
@@ -211,10 +210,10 @@ describe('OverlayPopoverPresentational', () => {
       const innerEl = inner as HTMLElement;
       const { style } = innerEl;
       // jsdom leaves an inline style property that was never assigned as `undefined` rather than
-      // the empty string a real browser reports for an unset CSS property, so a scale of 1 (which
-      // never assigns `zoom` at all) is checked against both.
+      // the empty string a real browser reports for an unset CSS property, so the absent `zoom` is
+      // checked against both.
       expect(style.zoom || '').toBe('');
-      // The popover's own default cap, unrelated to content zoom, unchanged.
+      // The popover's own default cap.
       expect(style.maxHeight).toBe('400px');
       // PopoverContent's own width is 'auto', so the inner div is what actually sizes the popover
       // — it must carry the width and flex layout classes for the popover to size and space its
@@ -231,92 +230,11 @@ describe('OverlayPopoverPresentational', () => {
       expect((content as HTMLElement).style.width).toBe('auto');
     });
 
-    it('draws at the pane’s scale and caps its size by the space Radix reports, divided', () => {
-      render(
-        <OverlayPopoverPresentational
-          content={{ type: 'text', body: 'Just a body' }}
-          position={position}
-          contentScale={1.5}
-          onDismiss={vi.fn()}
-        />,
-      );
-
-      const inner = document.querySelector('[data-overlay-popover-zoom]');
-      expect(inner).toBeInTheDocument();
-      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const innerEl = inner as HTMLElement;
-      const { style } = innerEl;
-      expect(style.zoom).toBe('1.5');
-      // The default (no caller maxWidth/maxHeight) still combines with the Radix cap — this is the
-      // cap the component falls back to, not a bare, uncombined Radix value.
-      expect(style.maxWidth).toBe(
-        'min(320px, calc(var(--radix-popover-content-available-width) / 1.5))',
-      );
-      expect(style.maxHeight).toBe(
-        'min(400px, calc(var(--radix-popover-content-available-height) / 1.5))',
-      );
-      // The width and layout classes must still be on the inner (zoomed) div at a zoom, not just at
-      // scale 1 — they are what sizes the popover at every scale.
-      expect(innerEl.className).toContain('tw:w-72');
-      expect(innerEl.className).toContain('tw:flex');
-      expect(innerEl.className).toContain('tw:flex-col');
-      expect(innerEl.className).toContain('tw:gap-2.5');
-    });
-
-    it("combines the caller's own maxWidth with the Radix cap so a zoomed popover still stays inside the window", () => {
-      // 280 is deliberately distinct from this component's own 320 default, so the assertion below
-      // can only pass if the CALLER's value made it into the combined cap, not the default.
-      render(
-        <OverlayPopoverPresentational
-          content={{ type: 'text', body: 'Just a body' }}
-          position={position}
-          contentScale={1.5}
-          maxWidth={280}
-          onDismiss={vi.fn()}
-        />,
-      );
-
-      const inner = document.querySelector('[data-overlay-popover-zoom]');
-      expect(inner).toBeInTheDocument();
-      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { style } = inner as HTMLElement;
-      expect(style.maxWidth).toBe(
-        'min(280px, calc(var(--radix-popover-content-available-width) / 1.5))',
-      );
-    });
-
-    it("combines the caller's own maxHeight with the Radix cap so a zoomed popover still stays inside the window", () => {
-      // 360 is deliberately distinct from this component's own 400 default, so the assertion below
-      // can only pass if the CALLER's value made it into the combined cap, not the default. Height
-      // has its own branch from width, so it needs its own case.
-      render(
-        <OverlayPopoverPresentational
-          content={{ type: 'text', body: 'Just a body' }}
-          position={position}
-          contentScale={1.5}
-          maxHeight={360}
-          onDismiss={vi.fn()}
-        />,
-      );
-
-      const inner = document.querySelector('[data-overlay-popover-zoom]');
-      expect(inner).toBeInTheDocument();
-      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { style } = inner as HTMLElement;
-      expect(style.maxHeight).toBe(
-        'min(360px, calc(var(--radix-popover-content-available-height) / 1.5))',
-      );
-    });
-
     it("leaves the caller's own maxWidth exactly as given at interface scale", () => {
       render(
         <OverlayPopoverPresentational
           content={{ type: 'text', body: 'Just a body' }}
           position={position}
-          contentScale={1}
           maxWidth={280}
           onDismiss={vi.fn()}
         />,
@@ -330,12 +248,11 @@ describe('OverlayPopoverPresentational', () => {
       expect(style.maxWidth).toBe('280px');
     });
 
-    it('renders the arrow as a sibling of the zoomed inner div, not inside it', () => {
+    it('renders the arrow as a sibling of the inner wrapper, not inside it', () => {
       render(
         <OverlayPopoverPresentational
           content={{ type: 'text', body: 'Just a body' }}
           position={position}
-          contentScale={1.5}
           onDismiss={vi.fn()}
         />,
       );
@@ -347,9 +264,9 @@ describe('OverlayPopoverPresentational', () => {
       // querySelector returns Element | null; the assertions above guard null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const contentEl = content as HTMLElement;
-      // PopoverContent has exactly two direct children: the zoomed div and the arrow. Radix requires
-      // the arrow to be a child of PopoverContent, and it must be the OTHER child — a descendant of
-      // the zoomed div would have Radix's own pixel offset re-scaled by that div's `zoom`.
+      // PopoverContent has exactly two direct children: the inner wrapper and the arrow. Radix
+      // requires the arrow to be a child of PopoverContent, and it must be the OTHER child — inside
+      // the wrapper it would sit in the scrolled box.
       const otherChildren = Array.from(contentEl.children).filter((child) => child !== inner);
       expect(otherChildren).toHaveLength(1);
       expect(inner?.contains(otherChildren[0])).toBe(false);
@@ -362,7 +279,6 @@ describe('OverlayPopoverPresentational', () => {
           position={position}
           anchor={{ width: 40, height: 20 }}
           frameScale={1.5}
-          contentScale={1.5}
           onDismiss={vi.fn()}
         />,
       );
@@ -379,9 +295,8 @@ describe('OverlayPopoverPresentational', () => {
 });
 
 describe('OverlayPopover (store-connected)', () => {
-  // The connector forwards `contentScale`/`frameScale` straight through to the presentational
-  // component without reading any service of its own, so this test needs no service mocks: it
-  // supplies both as explicit props and drives the real connector end to end.
+  // The connector forwards `frameScale` straight through to the presentational component without
+  // reading any service of its own, so this test needs no service mocks.
   type PopoverEntry = Extract<OverlayEntry, { type: 'popover' }>;
 
   function createPopoverEntry(overrides?: Partial<PopoverEntry>): PopoverEntry {
@@ -401,18 +316,9 @@ describe('OverlayPopover (store-connected)', () => {
     };
   }
 
-  it('forwards contentScale and frameScale to the presentational component it renders', () => {
-    // Distinct values (1.5 vs 1.25) so a mix-up (forwarding one prop as the other, or dropping one
-    // pass-through) shows up as a wrong number rather than an accidental pass.
+  it('forwards frameScale to the presentational component it renders', () => {
     const entry = createPopoverEntry();
-    render(<OverlayPopover overlay={entry} contentScale={1.5} frameScale={1.25} />);
-
-    const inner = document.querySelector('[data-overlay-popover-zoom]');
-    expect(inner).toBeInTheDocument();
-    // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const { style } = inner as HTMLElement;
-    expect(style.zoom).toBe('1.5');
+    render(<OverlayPopover overlay={entry} frameScale={1.25} />);
 
     const anchor = document.querySelector('[data-overlay-popover-anchor]');
     expect(anchor).toBeInTheDocument();
