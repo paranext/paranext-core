@@ -221,6 +221,30 @@ test('a client shutdown that hangs is abandoned when the time it was given runs 
   expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('exceeded 400 ms'));
 });
 
+test('a send after shutdown rejects without constructing a client when none existed yet, and does not warn', async () => {
+  const provider = await makeProvider();
+  await provider.shutdown(400);
+  await expect(
+    provider.send({ name: 'late_event', timestamp: 1700000000000, environment: 'test' }),
+  ).rejects.toThrow('has shut down');
+  expect(mocks.PostHog).not.toHaveBeenCalled();
+  expect(mocks.warn).not.toHaveBeenCalled();
+});
+
+test('a send after shutdown rejects without using the client that was shut down, and does not warn', async () => {
+  const provider = await makeProvider();
+  await provider.send({ name: 'app_launch', timestamp: 1700000000000, environment: 'test' });
+  // Positive control: the client was built and used before shutdown.
+  expect(mocks.captureImmediate).toHaveBeenCalledTimes(1);
+  await provider.shutdown(400);
+  await expect(
+    provider.send({ name: 'late_event', timestamp: 1700000000001, environment: 'test' }),
+  ).rejects.toThrow('has shut down');
+  expect(mocks.captureImmediate).toHaveBeenCalledTimes(1);
+  expect(mocks.PostHog).toHaveBeenCalledTimes(1);
+  expect(mocks.warn).not.toHaveBeenCalled();
+});
+
 test('a client shutdown that rejects is logged and swallowed', async () => {
   mocks.clientShutdown.mockRejectedValue(new Error('socket closed'));
   const provider = await makeProvider();
