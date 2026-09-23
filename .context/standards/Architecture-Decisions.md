@@ -321,6 +321,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   of the implementing branch, which surfaced and fixed a startup-path regression (analytics
   initialization briefly gated extension-host activation) before merge.
 
+## adr-analytics-posthog-transport: PostHog transport behind the analytics seam; keys in one config module; common properties enriched in the service; anonymous per-launch identity
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** PT-4729 asked for a minimal, working pipeline from Platform.Bible to PostHog for
+  Sprint 91, sending only product version and OS, with usage tracking and consent deferred. The
+  team had already chosen PostHog (PT-4340) and installed `posthog-node` (PT-4356). The pipeline
+  had to be the durable one later tickets extend, not a spike.
+- **Decision:** `PostHogAnalyticsProvider` implements the existing `AnalyticsProvider` seam in the
+  extension host using `posthog-node`'s `captureImmediate`, one client per analytics environment.
+  Project keys and the EU host live only in `analytics.config.ts`, which also owns the enabled
+  rule: packaged production builds, or `PT_ANALYTICS_POSTHOG=true` in development. Both slots use
+  the Test project key until PT-4401. Common properties (`app_version`, `os_platform`,
+  `os_release`, `analytics_environment`) are added by the service before routing, not by the
+  provider, so they survive a vendor swap; PT-4359 extends that function. Identity is a random UUID
+  per process from `analytics-identity.ts`, events are flagged `$process_person_profile: false`,
+  and GeoIP is disabled; PT-4367 replaces the identity function. The service gained `shutdown()`,
+  called first in the extension host's graceful shutdown, bounded to 1 s by the provider.
+- **Alternatives:** `posthog-js` in the renderer for autocaptured properties — rejected: autocapture
+  is usage tracking the ticket forbids, the browser SDK reports Chromium's version not the app's,
+  and it would bypass the abstraction. Properties at the `app_launch` call site — rejected: every
+  future event would have to repeat them. Properties inside the provider — rejected: lost on a
+  vendor swap. Persisted installation id — deferred to PT-4367 by product decision.
+- **Consequences:** Packaged builds now make outbound HTTPS calls to `eu.i.posthog.com` from the
+  extension host; Node `fetch` ignores the C# proxy settings, so users behind a corporate proxy
+  silently fail to report (logged at warn). No retry or offline queue yet (PT-4373/PT-4374); a
+  failed send is dropped after one warn line naming the event only. Hard-coding the Test key is an
+  accepted, temporary exception to the no-secrets rule because PostHog project keys are write-only
+  client keys designed to ship in apps; the Production key must never be committed.
+- **Source:** PT-4729 (epic PT-1797); design
+  `PRDs/analytics/2026-09-23-pt-4729-posthog-provider-design.md`.
+
 ## adr-app-global-shortcuts-in-main: App-global keyboard shortcuts go through the main-process `before-input-event` handler
 
 - **Formerly:** ADR-0002
