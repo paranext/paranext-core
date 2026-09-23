@@ -301,10 +301,11 @@ export const initialize = createCachedInitializer(async (): Promise<void> => {
 
 /**
  * Records an analytics event for delivery. If the 'test'/'production' environment is already
- * resolved (see `initialize()`), the event is stamped and flushed immediately; otherwise it's held
- * until `initialize()` resolves it. Synchronous and fire-and-forget either way: never throws, and
- * does not wait for the event to actually be transmitted -- callers get no signal of eventual
- * delivery success.
+ * resolved (see `initialize()`), the event is routed straight away: it is enriched with the common
+ * properties behind any event still being enriched, then handed to its environment's provider.
+ * Otherwise it's held until `initialize()` resolves the environment. Synchronous and
+ * fire-and-forget either way: never throws, and does not wait for the event to actually be
+ * transmitted -- callers get no signal of eventual delivery success.
  *
  * @param name Event name, e.g. `'app_launch'`.
  * @param properties Arbitrary event properties, if any. A value that can't survive `JSON.stringify`
@@ -333,6 +334,9 @@ export function trackEvent(name: string, properties?: Record<string, unknown>): 
 export async function shutdown(): Promise<void> {
   // No providers means no event has finished enrichment yet. An event still mid-enrichment at this
   // point is intentionally abandoned: waiting for it could eat the whole shutdown budget.
+  // TODO(PT-4373): this also drops events still waiting for the environment to resolve (up to
+  // ENVIRONMENT_RESOLUTION_TIMEOUT_MS in a packaged build); persist them unresolved and resolve them
+  // on the next launch instead of guessing an environment here.
   if (!providers) return;
   const deadline = Date.now() + ANALYTICS_SHUTDOWN_BUDGET_MS;
   // flushPending() never rejects, so only the timeout can end this wait early.
