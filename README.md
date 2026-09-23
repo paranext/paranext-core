@@ -388,6 +388,16 @@ PT_ANALYTICS_TEST_OVERRIDE=true npm start
 
 The value must be exactly `true`; any other value (including other truthy-looking strings) is ignored and normal resolution applies.
 
+### Analytics transport (PostHog)
+
+Analytics events are transmitted to PostHog (EU region) only in a **packaged production build**. Development builds and automated E2E runs log events to the console instead, so they never inflate real event counts. To watch your own events reach PostHog while developing, opt in explicitly:
+
+```bash
+PT_ANALYTICS_POSTHOG=true npm start
+```
+
+The value must be exactly `true`. Both analytics environments currently send to the PostHog **Test** project; the project keys live only in `src/extension-host/services/analytics.config.ts`. Every event carries `app_version`, `os_platform`, `os_release` and `analytics_environment`, is flagged anonymous (no person profile), and has GeoIP disabled. No usage or behavioural data is sent. The one event today is `app_launch`, fired once per launch.
+
 ## GitHub Pages
 
 **[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
