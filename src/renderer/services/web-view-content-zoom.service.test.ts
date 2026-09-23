@@ -1523,6 +1523,34 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-10')?.state).toEqual(zoomState({ main: 0.8 }, 'editor:PROJ-X'));
   });
 
+  it('does not carry a level committed before the pane had an identity onto the first project it is pointed at', async () => {
+    settings[MEMORY] = { 'notes:XXX:main': 0.8 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    // An empty panel, before any project is opened: no projectId and no state.resourceId.
+    definitions.set('notes-empty', {
+      id: 'notes-empty',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      state: {},
+    });
+    setContentZoomAreas('notes-empty', ['main']);
+    await adjustContentZoom('notes-empty', 1, 'main');
+    await __flushContentZoomWritesForTesting();
+    // The step lands while the pane has no identity, and the pane keeps showing it meanwhile.
+    expect(definitions.get('notes-empty')?.state?.[LEVELS]).toEqual({ main: 1.1 });
+    expect(cssVar(iframeFor('notes-empty'), '--platform-content-zoom-main')).toBe('1.1');
+
+    // Pointed at project XXX, spreading its saved state onto the new definition, then re-reported
+    // the way a reload's bootstrap reports.
+    definitions.set('notes-empty', { ...requireDefinition('notes-empty'), projectId: 'xxx' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-empty') });
+    setContentZoomAreas('notes-empty', []);
+    setContentZoomAreas('notes-empty', ['main']);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-empty')?.state).toEqual(zoomState({ main: 0.8 }, 'notes:XXX'));
+    expect(cssVar(iframeFor('notes-empty'), '--platform-content-zoom-main')).toBe('0.8');
+  });
+
   it('does not commit a write chosen under a resolvable identity once the pane becomes unresolvable', async () => {
     settings[MEMORY] = { 'editor:PROJ-A:main': 1.2 };
     __setContentZoomDepsForTesting({});
@@ -1703,7 +1731,7 @@ describe('web-view-content-zoom.service', () => {
     expect(updateDefinition).not.toHaveBeenCalled();
   });
 
-  it("drops a stale identity stamp when a level-holding pane's own-level write finds no resolvable identity", async () => {
+  it("replaces a stale identity stamp with the kind alone when a level-holding pane's own-level write finds no resolvable identity", async () => {
     definitions.set('editor-1', {
       id: 'editor-1',
       webViewType: 'platformScriptureEditor.react',
@@ -1714,8 +1742,10 @@ describe('web-view-content-zoom.service', () => {
     });
     await adjustContentZoom('editor-1', 1, 'main');
     // The new level commits, but with no resolvable identity to stamp it with, the stale stamp is
-    // dropped rather than left to name a project the new level was never chosen for.
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.6 } });
+    // replaced by the kind alone rather than left to name a project the new level was never chosen
+    // for — and that stamp still marks the level as belonging to no project, so a later project
+    // does not adopt it.
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.6 }, 'editor:'));
   });
 
   it('does nothing for an unknown web view', async () => {
