@@ -44,9 +44,11 @@ export interface AnalyticsProvider {
   send(event: AnalyticsEvent): Promise<void>;
   /**
    * Flushes anything not yet transmitted and releases resources. Optional: a provider with nothing
-   * to flush (e.g. console) omits it. Must settle promptly and bound its own wait: the extension
-   * host's whole graceful-shutdown budget is about 1.5 s, and the analytics service awaits this
-   * call without a timeout of its own.
+   * to flush (e.g. console) omits it.
+   *
+   * @param timeoutMs What is left of the analytics service's shutdown budget. The provider must
+   *   settle within it, abandoning its flush if necessary: the service awaits this call without a
+   *   timeout of its own, and extension deactivation still has to run after it.
    */
-  shutdown?(): Promise<void>;
+  shutdown?(timeoutMs: number): Promise<void>;
 }

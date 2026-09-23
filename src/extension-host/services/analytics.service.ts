@@ -20,6 +20,7 @@ import {
   mergeWithCommonProperties,
 } from '@extension-host/services/analytics-enrichment';
 import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { raceWithTimeout } from '@extension-host/services/analytics-timeout';
 
 /**
  * Env var that forces analytics to target the test environment regardless of build/S/R target, for
@@ -42,10 +43,13 @@ const INTERNET_SETTINGS_DATA_PROVIDER_ID = 'paratextRegistration.internetSetting
 const ENVIRONMENT_RESOLUTION_TIMEOUT_MS = 30_000;
 
 /**
- * How long `shutdown()` waits for in-flight routing before shutting the providers down anyway. The
- * extension host's whole graceful shutdown budget is about 1.5 s.
+ * The whole of analytics' share of the extension host's graceful shutdown: the wait for in-flight
+ * routing and every provider's flush together. Main allows the extension host
+ * `PROCESS_CLOSE_TIME_OUT_MS * 3/4` (about 1.5 s; see `waitForExtensionHost` in
+ * `src/main/services/extension-host.service.ts`) before it hard-kills the process, and extension
+ * deactivation runs after analytics, so this leaves it about 1 s.
  */
-const ANALYTICS_SHUTDOWN_TIMEOUT_MS = 1000;
+const ANALYTICS_SHUTDOWN_BUDGET_MS = 500;
 
 const queues: {
   test: AnalyticsEvent[];
@@ -317,26 +321,21 @@ export function trackEvent(name: string, properties?: Record<string, unknown>): 
 
 /**
  * Flushes and releases every provider that was created. Called from the extension host's graceful
- * shutdown path, which has only about 1.5 s in total, so the wait for in-flight routing is bounded
- * here, providers bound their own flush time, and this never rejects.
+ * shutdown path, so the wait for in-flight routing and the providers' flushes share one deadline,
+ * `ANALYTICS_SHUTDOWN_BUDGET_MS` from the start of this call, and this never rejects.
  */
 export async function shutdown(): Promise<void> {
   // No providers means no event has finished enrichment yet. An event still mid-enrichment at this
   // point is intentionally abandoned: waiting for it could eat the whole shutdown budget.
   if (!providers) return;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, ANALYTICS_SHUTDOWN_TIMEOUT_MS);
-  });
-  try {
-    await Promise.race([flushPending(), timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+  const deadline = Date.now() + ANALYTICS_SHUTDOWN_BUDGET_MS;
+  // flushPending() never rejects, so only the timeout can end this wait early.
+  await raceWithTimeout(flushPending(), ANALYTICS_SHUTDOWN_BUDGET_MS);
+  const remainingMs = Math.max(0, deadline - Date.now());
   await Promise.all(
     Object.values(providers).map(async (provider) => {
       try {
-        await provider.shutdown?.();
+        await provider.shutdown?.(remainingMs);
       } catch (error) {
         logger.warn(`Analytics: provider shutdown failed: ${getErrorMessage(error)}`);
       }

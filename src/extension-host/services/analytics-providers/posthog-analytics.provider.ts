@@ -7,13 +7,7 @@ import {
   AnalyticsProvider,
 } from '@shared/models/analytics.model';
 import { getDistinctId } from '@extension-host/services/analytics-identity';
-
-/**
- * How long a shutdown flush may take before it is abandoned. The extension host's whole graceful
- * shutdown budget is about 1.5 s before main hard-kills the process, and extension deactivation
- * still has to run after this.
- */
-export const POSTHOG_SHUTDOWN_TIMEOUT_MS = 1000;
+import { raceWithTimeout } from '@extension-host/services/analytics-timeout';
 
 /**
  * Sends analytics events to a PostHog project. One instance per analytics environment, bound to
@@ -81,28 +75,18 @@ export class PostHogAnalyticsProvider implements AnalyticsProvider {
     }
   }
 
-  async shutdown(): Promise<void> {
+  async shutdown(timeoutMs: number): Promise<void> {
     if (!this.client) return;
-    const { client } = this;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<'timeout'>((resolve) => {
-      timer = setTimeout(() => resolve('timeout'), POSTHOG_SHUTDOWN_TIMEOUT_MS);
-    });
     try {
-      const outcome = await Promise.race([
-        client.shutdown(POSTHOG_SHUTDOWN_TIMEOUT_MS).then(() => 'done' as const),
-        timeout,
-      ]);
-      if (outcome === 'timeout')
+      const outcome = await raceWithTimeout(this.client.shutdown(timeoutMs), timeoutMs);
+      if (outcome.timedOut)
         logger.warn(
-          `Analytics: PostHog shutdown (${this.environment}) exceeded ${POSTHOG_SHUTDOWN_TIMEOUT_MS} ms; abandoning flush`,
+          `Analytics: PostHog shutdown (${this.environment}) exceeded ${timeoutMs} ms; abandoning flush`,
         );
     } catch (error) {
       logger.warn(
         `Analytics: PostHog shutdown (${this.environment}) failed: ${getErrorMessage(error)}`,
       );
-    } finally {
-      if (timer) clearTimeout(timer);
     }
   }
 
