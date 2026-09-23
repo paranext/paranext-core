@@ -58,7 +58,17 @@ function buildTarget(port: HTMLElement, contentTop: number): HTMLElement {
 function renderScroll(
   port: HTMLElement,
   findTarget: VerseTargetFinder,
-  { isEnabled = true, verseNum = 5, isViewVisible = true } = {},
+  {
+    isEnabled = true,
+    verseNum = 5,
+    isViewVisible = true,
+    publishedScrRefRef,
+  }: {
+    isEnabled?: boolean;
+    verseNum?: number;
+    isViewVisible?: boolean;
+    publishedScrRefRef?: RefObject<SerializedVerseRef | undefined>;
+  } = {},
 ) {
   const portRef: RefObject<HTMLElement | null> = { current: port };
   // What the hook is currently mounted with, so changing one input does not silently reset another.
@@ -67,6 +77,7 @@ function renderScroll(
     (props: { verseNum: number; isEnabled: boolean; isViewVisible: boolean }) =>
       useReferenceScroll(portRef, reference(props.verseNum), props.isViewVisible, findTarget, {
         isEnabled: props.isEnabled,
+        publishedScrRefRef,
       }),
     { initialProps: current },
   );
@@ -260,6 +271,57 @@ describe('useReferenceScroll disabled', () => {
     setEnabled(true);
 
     expect(findTarget).toHaveBeenCalledWith(port, 9);
+    expect(port.scrollTop).toBe(BELOW_THE_FOLD);
+  });
+});
+
+describe('useReferenceScroll echo latch', () => {
+  it('does not scroll for a reference this view just published', () => {
+    // The reader clicked deep inside a long verse, so the verse MARKER is off screen. Without the
+    // latch the visibility test says "not showing" and the port yanks the text they clicked on up
+    // to the top. The editor and the reference panels keep the same guard.
+    const port = buildPort();
+    const target = buildTarget(port, BELOW_THE_FOLD);
+    const publishedScrRefRef: RefObject<SerializedVerseRef | undefined> = { current: undefined };
+    const { navigateTo } = renderScroll(port, () => target, { publishedScrRefRef });
+    port.scrollTop = 0;
+
+    // The cell publishes verse 9, then the scroll group echoes it straight back.
+    publishedScrRefRef.current = reference(9);
+    navigateTo(9);
+
+    expect(port.scrollTop).toBe(0);
+    expect(publishedScrRefRef.current).toBeUndefined();
+  });
+
+  it('still scrolls for a genuine navigation to a different verse', () => {
+    const port = buildPort();
+    const target = buildTarget(port, BELOW_THE_FOLD);
+    const publishedScrRefRef: RefObject<SerializedVerseRef | undefined> = { current: undefined };
+    const { navigateTo } = renderScroll(port, () => target, { publishedScrRefRef });
+    port.scrollTop = 0;
+
+    // Published verse 9, but the group moved somewhere else entirely.
+    publishedScrRefRef.current = reference(9);
+    navigateTo(12);
+
+    expect(port.scrollTop).toBe(BELOW_THE_FOLD);
+  });
+
+  it('discards a latch whose echo never arrived, so a later move to that verse still scrolls', () => {
+    // A publish whose echo never lands as its own update would otherwise leave the latch armed
+    // forever, and the next genuine navigation onto that verse would be swallowed.
+    const port = buildPort();
+    const target = buildTarget(port, BELOW_THE_FOLD);
+    const publishedScrRefRef: RefObject<SerializedVerseRef | undefined> = { current: undefined };
+    const { navigateTo } = renderScroll(port, () => target, { publishedScrRefRef });
+    port.scrollTop = 0;
+
+    publishedScrRefRef.current = reference(9);
+    navigateTo(12); // some other reference consumes and discards the stale latch
+    port.scrollTop = 0;
+    navigateTo(9); // now a real navigation to the verse that was published earlier
+
     expect(port.scrollTop).toBe(BELOW_THE_FOLD);
   });
 });

@@ -1,9 +1,11 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useRunWhenVisible } from 'platform-bible-react';
 import { useEffect, useRef, type RefObject } from 'react';
+import { isEchoOfPublishedScrRef } from '../editor-dom.util';
 import {
   isBlockInPortView,
   scrollPortToBlock,
+  type TargetVisibilityTest,
   type VerseTargetFinder,
 } from './reference-scroll.utils';
 
@@ -21,8 +23,11 @@ const SCROLL_MATCH_TOLERANCE_PX = 1;
  *
  * - A verse already on screen is left where it is. Clicking a verse reports it as the new reference,
  *   and scrolling it to the top under the reader's cursor would be the wrong answer to a click.
- *   This is the same rule `useBcvSyncScroll` implements for the comment list. It is also why no
- *   echo latch is needed: a reference this view published is, by construction, already visible.
+ *   This is the same rule `useBcvSyncScroll` implements for the comment list. Where the anchor is a
+ *   whole verse block that rule is enough on its own — a reference this view published is, by
+ *   construction, still on screen. A one-line marker anchor is not: a click deep inside a long
+ *   verse publishes a verse whose marker is above the fold, so a chapter cell also passes
+ *   `publishedScrRefRef` and the echo is skipped outright.
  * - A reference is re-checked as content arrives, because content that renders late adds height above
  *   the target and pushes it back off screen.
  * - Once the reader scrolls the port themselves, this stops until the reference changes.
@@ -40,15 +45,32 @@ const SCROLL_MATCH_TOLERANCE_PX = 1;
  * @param options `isEnabled` (default `true`) turns the hook off — no target lookup, no geometry
  *   reads, no mutation observer — for a view whose layout is scrolled by an ancestor or that has
  *   nothing to scroll to, where a React hook still has to be called unconditionally.
+ *   `isTargetVisible` (default {@link isBlockInPortView}) is how this layout decides the reader can
+ *   already see the target, and so that the port should be left alone. Injected beside `findTarget`
+ *   because it is the second thing the layouts disagree on: a whole verse block counts as seen when
+ *   any of it shows, while a one-line verse marker has to fit completely for its verse to be
+ *   readable. `publishedScrRefRef` holds the reference this view itself last published, so the
+ *   update that bounces back off the scroll group can be told from a genuine navigation and
+ *   skipped.
  */
 export function useReferenceScroll(
   portRef: RefObject<HTMLElement | null>,
   scrRef: SerializedVerseRef,
   isViewVisible: boolean,
   findTarget: VerseTargetFinder,
-  options?: { isEnabled?: boolean },
+  options?: {
+    isEnabled?: boolean;
+    isTargetVisible?: TargetVisibilityTest;
+    publishedScrRefRef?: RefObject<SerializedVerseRef | undefined>;
+    leadInPx?: number;
+  },
 ): void {
-  const { isEnabled = true } = options ?? {};
+  const {
+    isEnabled = true,
+    isTargetVisible = isBlockInPortView,
+    publishedScrRefRef,
+    leadInPx,
+  } = options ?? {};
   // Where this hook last left the port. A scrollTop that no longer matches means the reader moved
   // it, so the reference is left alone until it changes. `undefined` re-arms.
   const appliedScrollTopRef = useRef<number | undefined>(undefined);
@@ -57,6 +79,11 @@ export function useReferenceScroll(
   // verse 1 the same key, so stepping between them never re-armed. Both finders already put a
   // reference above the first verse at the top of the passage.
   const targetReference = `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum} ${scrRef.versificationStr}`;
+  // Refreshed during render so the re-arm effect can compare the incoming reference against the
+  // echo latch while keying only on `targetReference` — `scrRef` is a fresh object every render,
+  // and listing it would re-arm the scroll on every render instead of on every reference change.
+  const scrRefRef = useRef(scrRef);
+  scrRefRef.current = scrRef;
 
   // Set once the reader has moved the port for the current reference. From then on nothing here
   // will move it again, so the observer below stops doing any work at all rather than re-deciding
@@ -96,7 +123,7 @@ export function useReferenceScroll(
     const block = findTarget(port, scrRef.verseNum);
     if (!block) return;
 
-    if (!isBlockInPortView(port, block)) scrollPortToBlock(port, block);
+    if (!isTargetVisible(port, block)) scrollPortToBlock(port, block, leadInPx);
     appliedScrollTopRef.current = port.scrollTop;
   });
 
@@ -110,10 +137,31 @@ export function useReferenceScroll(
   // before the hook was switched on.
   useEffect(() => {
     if (!isEnabled) return;
+    // A reference this view itself published is the reader's own click coming back off the scroll
+    // group. Scrolling for it would drag their click target to the top right after they clicked it
+    // — the guard the Scripture editor, the model text panel and the reference panels all keep. A
+    // block anchor does not need it, because a clicked block is by construction still on screen and
+    // the visibility test alone declines to scroll; a chapter cell's marker anchor does, because a
+    // click deep inside a long verse publishes a verse whose marker is above the fold.
+    if (
+      publishedScrRefRef &&
+      isEchoOfPublishedScrRef(publishedScrRefRef.current, scrRefRef.current)
+    ) {
+      publishedScrRefRef.current = undefined;
+      // The clicked verse IS this port's position now, so late content must not pull it away
+      // either. Standing down says that, and the next reference change lifts it.
+      appliedScrollTopRef.current = undefined;
+      hasStoodDownRef.current = true;
+      return;
+    }
+    // The latch is only ever valid for the very NEXT reference; anything else discards it. A
+    // publish whose echo never arrives as its own update would otherwise leave it armed forever,
+    // and a later genuine navigation onto that verse would be swallowed.
+    if (publishedScrRefRef) publishedScrRefRef.current = undefined;
     appliedScrollTopRef.current = undefined;
     hasStoodDownRef.current = false;
     requestScroll();
-  }, [isEnabled, targetReference, requestScroll]);
+  }, [isEnabled, targetReference, requestScroll, publishedScrRefRef]);
 
   // The reference usually changes before the chapter it points into has rendered, and in the
   // aligned view each column arrives separately, so re-check as the DOM changes. Several editors

@@ -1151,4 +1151,16 @@ describe('ResourceCellView content scroll ownership', () => {
     expect(container.querySelector('[data-cell-header]')).toBeInTheDocument();
     expect(container.querySelector('[data-cell-pad]')).toBeInTheDocument();
   });
+
+  it('keeps the header OUTSIDE the content box, which the chapter scroll depends on', () => {
+    // `getFirstVisibleY` measures a sticky header by looking for `[data-cell-header]` INSIDE the
+    // port. In a chapter cell the header is the port's sibling, so that lookup finds nothing and
+    // contributes no offset — which is the only reason the port math needs no per-layout branch.
+    // Making this header sticky inside the scroll box (the natural way to keep a column label
+    // visible while scrolling, and what the aligned grid does with its own row-1 headers) would
+    // silently land every chapter-mode scroll one header-height too low.
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-content] [data-cell-header]')).toBeNull();
+  });
 });

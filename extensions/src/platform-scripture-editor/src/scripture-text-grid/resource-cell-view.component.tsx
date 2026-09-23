@@ -508,6 +508,10 @@ export function ResourceCellView({
             style={contentStyle}
             dir={textDirection}
           >
+            {/* The zoom root sits INSIDE the content box, never on it: that box is the scroll
+                port a chapter cell scrolls to a verse (`useReferenceScroll`), and `zoom` on the
+                port would leave the target's viewport rect and the port's `scrollTop` in
+                different coordinate spaces, so the port overshoots by the zoom factor. */}
             <div data-cell-pad className="tw:p-2">
               <ContentZoomRoot area={zoomArea} label={label}>
                 {stateContent}
