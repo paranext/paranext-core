@@ -32,6 +32,7 @@ import {
   setContentZoomAreas,
 } from '@renderer/services/web-view-content-zoom.service';
 import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
+import { isCreateElementAllowedByStack } from '@renderer/services/renderer-create-element-guard.util';
 import { localThemeService } from '@renderer/services/theme.service';
 import {
   deleteFullWebViewStateById,
@@ -102,7 +103,6 @@ import {
 import { markStartupOnce } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
 import cloneDeep from 'lodash/cloneDeep';
-import memoizeOne from 'memoize-one';
 import {
   AsyncVariable,
   deserialize,
@@ -405,66 +405,6 @@ export const WEBVIEW_IFRAME_SRCDOC_SANDBOX = ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUE
     value !== IFRAME_SANDBOX_ALLOW_POPUPS,
 ).join(' ');
 
-/**
- * Get Regex to test stack traces against for creating script and iframe tags on the renderer
- * document. Only renderer code is allowed to create script and iframe tags. script and iframe tags
- * coming from any other source throw an error.
- *
- * Note that sourceURLs can't have spaces in them, so we explicitly test for a space before the
- * source so bad actors can't put these special words into their sourceURL
- */
-/* In development, safe errors look like this:
-Error
-	at document.createElement (http://localhost/renderer.dev.js...)
-	at __webpack_require__.l (http://localhost/renderer.dev.js...)
-  ...
-*/
-/* In development, bad errors look more like this:
-Error
-	at document.createElement (http://localhost/renderer.dev.js...)
-	at evil.web-view.htmlfile://app.asar
-*/
-/* In production, safe errors look like this:
-Error
-	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/renderer.js...)
-	at i.l (file:///C:/Users/app.asar/dist/renderer/renderer.js...)
-  ...
-*/
-/* In production, bad errors look more like this:
-Error
-	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/stuffnthings)
-	at evil.web-view.htmlfile://app.asar
-*/
-const getRendererScriptRegex = memoizeOne(() =>
-  globalThis.isPackaged
-    ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)/
-    : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/\S*\/renderer\.dev\.js\S*\)/,
-);
-/**
- * Get Regex to test stack traces against for rendering Usersnap feedback forms on the renderer
- * document. Only Usersnap is allowed to create form and anchor tags. forms and anchor tags coming
- * from any other source throw an error.
- *
- * Note that sourceURLs can't have spaces in them, so we explicitly test for a space before the
- * source so bad actors can't put these special words into their sourceURL
- */
-/* In development, safe errors look like this:
-Error
-	at document.createElement (http://localhost/renderer.dev.js...)
-	at Kl (https://resources.usersnap.com/widget-assets/js/chunks/6057/cf91460f62d8c495661e.js...)
-  ...
-*/
-/* In production, safe errors look like this:
-Error
-	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/renderer.js...)
-	at Kl (https://resources.usersnap.com/widget-assets/js/chunks/6057/cf91460f62d8c495661e.js...)
-  ...
-*/
-const getRendererUsersnapRegex = memoizeOne(() =>
-  globalThis.isPackaged
-    ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(https?:\/\/resources\.usersnap\.com\/widget-assets\/js\/chunks\/\d+\/\w+\.js\S*\)/
-    : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/resources\.usersnap\.com\/widget-assets\/js\/chunks\/\d+\/\w+\.js\S*\)/,
-);
 /**
  * The HTML tags that are not allowed at all in the main renderer window. Our MutationObserver
  * deletes these immediately if it sees them.
@@ -3756,10 +3696,7 @@ export const initialize = () => {
       const tagName = tagNameCaps.toLowerCase();
       if (FORBIDDEN_HTML_TAGS.includes(tagName) || RESTRICTED_HTML_TAGS.includes(tagName)) {
         const stackTrace = Error().stack ?? '';
-        if (
-          getRendererScriptRegex().test(stackTrace) ||
-          getRendererUsersnapRegex().test(stackTrace)
-        ) {
+        if (isCreateElementAllowedByStack(stackTrace, globalThis.isPackaged)) {
           logger.debug(
             `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackTrace}`,
           );
