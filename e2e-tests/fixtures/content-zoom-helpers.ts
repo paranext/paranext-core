@@ -58,14 +58,27 @@ export async function readIndicatorText(frame: Frame): Promise<string | undefine
   return text?.replace(/\s/gu, '');
 }
 
-/** Bounding box (main-frame-relative) of one zoom area's marked root element. */
+/**
+ * A box to aim a pointer gesture at one zoom area: the first element marked with that area id
+ * (several elements may share one id), clipped to the web view's frame so its centre lies on screen
+ * even when the marked text is taller than the pane. Main-frame-relative.
+ */
 export async function areaBox(
   frame: Frame,
   areaId: string,
 ): Promise<{ x: number; y: number; width: number; height: number }> {
-  const box = await frame.locator(`[data-platform-content-zoom-root="${areaId}"]`).boundingBox();
+  const box = await frame
+    .locator(`[data-platform-content-zoom-root="${areaId}"]`)
+    .first()
+    .boundingBox();
   if (!box) throw new Error(`Zoom area "${areaId}" has no bounding box`);
-  return box;
+  const pane = await frameBox(frame);
+  const left = Math.max(box.x, pane.x);
+  const top = Math.max(box.y, pane.y);
+  const right = Math.min(box.x + box.width, pane.x + pane.width);
+  const bottom = Math.min(box.y + box.height, pane.y + pane.height);
+  if (right <= left || bottom <= top) throw new Error(`Zoom area "${areaId}" is not on screen`);
+  return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
 /**

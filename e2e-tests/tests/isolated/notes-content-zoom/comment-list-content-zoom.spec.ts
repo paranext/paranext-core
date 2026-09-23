@@ -1,8 +1,10 @@
 /**
  * E2E for the comment list's per-pane content zoom: Ctrl+wheel and the
- * `platform.webViewContentZoom*` commands scale the comment cards while the filter toolbar stays
- * fixed, the level is remembered per project, a same-project editor keeps an independent level, and
- * BCV-driven scroll sync still lands on the right card once the list is zoomed.
+ * `platform.webViewContentZoom*` commands zoom only the list's project text (comment bodies,
+ * snippets, diffs) while the cards, their buttons, the empty and loading states and the filter
+ * toolbar keep interface scale; the level is remembered per project, a same-project editor keeps an
+ * independent level, and BCV-driven scroll sync still lands on the right card once the list is
+ * zoomed.
  *
  * ONE test() per spec file, matching every other suite built on the worker-scoped comment fixture:
  * a second Electron instance against the shared renderer dev server has a documented dock-tab
@@ -165,7 +167,7 @@ test.describe('comment list content zoom', () => {
     cleanupCommentTestProject(projectB);
   });
 
-  test('Ctrl+wheel and the zoom commands scale the comment cards, remember the level per project, and stay BCV-synced once zoomed', async ({
+  test('Ctrl+wheel and the zoom commands zoom only the comment text while cards and controls keep interface scale, remember the level per project, and stay BCV-synced once zoomed', async ({
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance, several zoom gestures each waiting on a debounced
@@ -219,27 +221,38 @@ test.describe('comment list content zoom', () => {
     const toolbarBoxBaseline = await scopeTrigger.boundingBox();
     if (!toolbarBoxBaseline) throw new Error('Filter toolbar not found');
 
-    await test.step('Ctrl+wheel over the list scales only the cards', async () => {
-      const cardBefore = cardLocator(listFrame, threadIds[0]);
-      const cardBoxBefore = await cardBefore.boundingBox();
-      if (!cardBoxBefore) throw new Error('Comment card not found');
+    await test.step('Ctrl+wheel zooms the list; at 200 % the comment text doubles while card controls and the filter toolbar keep their size', async () => {
+      const card = cardLocator(listFrame, threadIds[0]);
+      const body = card.locator('[data-platform-content-zoom-root]', {
+        hasText: 'Zoom test comment 1',
+      });
+      const readToggle = card.getByRole('button', { name: /^Mark as (read|unread)$/ });
+      const cardBoxBefore = await card.boundingBox();
+      const bodyBoxBefore = await body.boundingBox();
+      const toggleBoxBefore = await readToggle.boundingBox();
+      if (!cardBoxBefore || !bodyBoxBefore || !toggleBoxBefore)
+        throw new Error('Comment card, body or read toggle not found');
 
-      // Aimed at the first card rather than the zoom area's own box: the area is taller than the
-      // pane, so its centre point can lie outside the window and the wheel event would land nowhere.
+      // Aimed at the first card: the list is taller than the pane, and the wheel resolves to the
+      // list's only area wherever inside the card it lands.
       await ctrlWheel(mainPage, cardBoxBefore, -120);
       await expect.poll(() => readFactor(listFrame, '')).toBe(1.1);
 
-      const cardBoxAfter = await cardBefore.boundingBox();
-      if (!cardBoxAfter) throw new Error('Comment card not found after zoom');
-      // A tight tolerance around the actual 1.1 factor: a wide band (e.g. 0.99–1.21) would also
-      // accept a ratio of 1.0, so a missing marker that left the whole-iframe fallback scaling
-      // nothing would pass unnoticed.
-      const ratio = cardBoxAfter.height / cardBoxBefore.height;
-      expect(ratio).toBeCloseTo(1.1, 1);
+      await zoomAreaTo(mainPage, listFrame, listId, 'main', 2);
+      const bodyBoxZoomed = await body.boundingBox();
+      const toggleBoxZoomed = await readToggle.boundingBox();
+      if (!bodyBoxZoomed || !toggleBoxZoomed) throw new Error('Body or read toggle lost at 200 %');
+      expect(bodyBoxZoomed.height / bodyBoxBefore.height).toBeCloseTo(2, 1);
+      // The card's own button stays at interface size: only the comment text scales, not the card.
+      expect(Math.abs(toggleBoxZoomed.height - toggleBoxBefore.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(toggleBoxZoomed.width - toggleBoxBefore.width)).toBeLessThanOrEqual(1);
 
       const toolbarBoxZoomed = await scopeTrigger.boundingBox();
       if (!toolbarBoxZoomed) throw new Error('Filter toolbar not found after zoom');
       expect(Math.abs(toolbarBoxZoomed.height - toolbarBoxBaseline.height)).toBeLessThanOrEqual(2);
+
+      // The following steps expect the level the wheel set.
+      await zoomAreaTo(mainPage, listFrame, listId, 'main', 1.1);
     });
 
     await test.step('the zoom indicator carries the area and the current percentage', async () => {
