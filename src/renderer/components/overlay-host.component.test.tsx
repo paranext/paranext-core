@@ -13,24 +13,12 @@ import { OverlayHost } from './overlay-host.component';
 // network service on import. The stubs echo the scale props they receive into data attributes, so
 // the cases below read the host's decision rather than the stub's.
 vi.mock('@renderer/components/overlays/overlay-command-palette.component', () => ({
-  OverlayCommandPalette: ({
-    contentScale,
-    frameScale,
-  }: {
-    contentScale?: number;
-    frameScale?: number;
-  }) => (
-    <div
-      data-testid="overlay-body"
-      data-content-scale={contentScale}
-      data-frame-scale={frameScale}
-    />
+  OverlayCommandPalette: ({ frameScale }: { frameScale?: number }) => (
+    <div data-testid="overlay-body" data-frame-scale={frameScale} />
   ),
 }));
 vi.mock('@renderer/components/overlays/overlay-context-menu.component', () => ({
-  OverlayContextMenu: ({ contentScale }: { contentScale?: number }) => (
-    <div data-testid="overlay-body" data-content-scale={contentScale} />
-  ),
+  OverlayContextMenu: () => <div data-testid="overlay-body" />,
 }));
 vi.mock('@renderer/components/overlays/overlay-modal-dialog.component', () => ({
   OverlayModalDialog: ({ frameScale }: { frameScale?: number }) => (
@@ -38,18 +26,8 @@ vi.mock('@renderer/components/overlays/overlay-modal-dialog.component', () => ({
   ),
 }));
 vi.mock('@renderer/components/overlays/overlay-popover.component', () => ({
-  OverlayPopover: ({
-    contentScale,
-    frameScale,
-  }: {
-    contentScale?: number;
-    frameScale?: number;
-  }) => (
-    <div
-      data-testid="overlay-body"
-      data-content-scale={contentScale}
-      data-frame-scale={frameScale}
-    />
+  OverlayPopover: ({ frameScale }: { frameScale?: number }) => (
+    <div data-testid="overlay-body" data-frame-scale={frameScale} />
   ),
 }));
 
@@ -110,18 +88,6 @@ function commandPaletteEntry(): OverlayEntry {
   };
 }
 
-function contextMenuEntry(): OverlayEntry {
-  return {
-    type: 'contextMenu',
-    id: 'menu-1',
-    webViewId: 'web-view-1',
-    items: [],
-    position: { x: 100, y: 200 },
-    resolve: () => {},
-    reject: () => {},
-  };
-}
-
 afterEach(() => {
   vi.clearAllMocks();
   mockGetOverlays.mockReturnValue([]);
@@ -176,18 +142,6 @@ describe('OverlayHost', () => {
   });
 
   describe('scale props', () => {
-    it.each([
-      ['context menu', contextMenuEntry],
-      ['popover', popoverEntry],
-      ['command palette', commandPaletteEntry],
-    ])('hands a %s overlay no content scale, so it draws at interface scale', (_kind, entry) => {
-      mockGetOverlays.mockReturnValue([entry()]);
-
-      render(<OverlayHost />);
-
-      expect(screen.getByTestId('overlay-body').dataset.contentScale).toBeUndefined();
-    });
-
     it("passes the requesting pane's frame scale to a popover overlay", () => {
       mockGetWebViewIframeZoom.mockReturnValue(1.25);
       mockGetOverlays.mockReturnValue([popoverEntry()]);

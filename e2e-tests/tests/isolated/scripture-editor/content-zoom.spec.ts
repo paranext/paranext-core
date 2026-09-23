@@ -591,8 +591,7 @@ test.describe('scripture editor content zoom', () => {
 
     await test.step("the standard view's marker palette stays at interface scale beside its trigger", async () => {
       // The standard view asks the platform for a command palette rather than rendering its own
-      // menu, so this pop-up is drawn by the renderer, outside the web view, and cannot read the
-      // pane's zoom variables.
+      // menu, so this pop-up is drawn by the renderer, outside the web view.
       const mainInput = editorFrame.locator('.editor-input').first();
       // Standard view carries `marker-editable` (`_usj-nodes.scss`: "standard view
       // (.marker-editable)"); `marker-hidden` and `marker-visible` belong to the formatted and

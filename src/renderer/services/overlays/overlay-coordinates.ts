@@ -32,7 +32,7 @@ export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): n
 }
 
 /**
- * Reads the CSS `zoom` the content zoom service has set on a WebView's host `<iframe>` element.
+ * Reads the CSS `zoom` on a WebView's host `<iframe>` element, if any.
  *
  * A zoomed iframe's own `getBoundingClientRect()` is unchanged — only its inner viewport shrinks or
  * grows — and the inner document measures itself in unscaled inner pixels, so an inner point at `x`
@@ -42,7 +42,10 @@ export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): n
  * unlike computed style, is defined for this non-standard property in every environment the
  * renderer runs in).
  *
- * A pane that marks zoom areas carries no whole-iframe `zoom`, so this answers `1` for it.
+ * The platform currently sets no whole-iframe `zoom` — content zoom is applied to marked areas
+ * inside the iframe, never to the frame as a whole — so this returns `1`. The function is kept so
+ * that a whole-frame scale, should one ever be applied, still maps positions and anchor sizes
+ * correctly.
  *
  * @param webViewId The webViewId of the iframe
  * @returns The scale factor the iframe's contents are rendered at
