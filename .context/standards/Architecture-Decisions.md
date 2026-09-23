@@ -5630,11 +5630,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
-## adr-share-layout-renders-without-a-catalog: Share Layout always renders, and states what it cannot show
+## adr-share-layout-renders-without-a-catalog: The Team layout dialog always renders, and states what it cannot show
 
 - **Date:** 2026-09-03
 - **Status:** Accepted
-- **Context:** `ShareLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
+- **Context:** `TeamLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
   Confirm writes that snapshot back over `platformScripture.referencedProjectsAndResources`. Every
   input to that snapshot is indistinguishable from a legitimate empty value while it is in flight: a
   project setting resolves to its `defaultValue` (`createUseDataHook`), the personal lists are
@@ -5646,21 +5646,43 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   to do with DBL) out of reach, and on a core build with no DBL credentials the dialog would then
   never open at all, because `notConfigured` is the normal state there.
 - **Decision:** The dialog blocks on **delivery**, not on success. It renders a spinner until
-  `canWrite`, all three project settings, both personal lists and the catalog have each settled once
+  `canWrite`, all four project settings (`referencedProjectsAndResources`, `modelTexts`,
+  `sharedLayoutDefaultTab` and the team structure lock `structureProtected`), both personal lists
+  and the catalog have each settled once
   — and then it always renders, whatever the catalog said. References it cannot classify stay in
   `otherResources` (round-tripped unchanged by Confirm, as before) and are **counted out loud** in a
   notice above the tabs, carrying a retry only when the reason is recoverable. The settle gate
   latches on the FIRST settle, so a retry driven from inside the mounted dialog cannot unmount the
   body and discard the admin's in-progress edits.
+
+  The gate **is** the snapshot: the latch captures every value the body mounts from into one state
+  object, and the body is rendered from that object rather than from the live memos beside it. So
+  the props the body mounted with and the values Confirm reference-compares its result against are
+  the same objects by construction. Read live at render time they would agree only by timing — the
+  latching effect and the render it triggers happen to flush in one turn — and a delivery landing in
+  that window would make every untouched field fail its comparison and write.
+
+  One exception re-opens the snapshot: a catalog arriving after the body mounted, while the admin
+  has edited nothing. Without a catalog both tab lists mount EMPTY (every saved `dblResource` is
+  unclassifiable), so a dialog that promises a review of what is about to be shared shows nothing at
+  all, and the retry cannot fix it. That case re-captures the seed and remounts the body. A body
+  with edits in it is never re-seeded — a remount discards them — so it keeps the mount-time
+  partition, and the hidden-resource count is pinned to that partition rather than recomputed live,
+  or the caveat would vanish the moment the catalog landed and leave the empty lists reading as the
+  truth.
 - **Alternatives:** **Keep blocking on a failed catalog** — rejected: it makes a transient provider
   registration (~10s of background retries) hide unrelated settings, and a retry landing after the
   body mounted cannot fix a snapshot anyway, which is what the delivery gate already handles.
   **Render with no catalog and say nothing** — rejected: that is the dead end this epic exists to
   remove, under a heading that promises a review of what is about to be shared.
-- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate, or it
-  reintroduces the erasure. A surface that cannot show part of its own subject should say how much
-  it is hiding rather than rendering a short list silently.
-- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13).
+- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate AND
+  to the latched seed, or it reintroduces the erasure — a field compared against a live value
+  instead of the seed writes whenever that value moves under an open dialog, which is reachable
+  from a catalog retry, another admin's write, or an S/R delivery. A surface that cannot show part
+  of its own subject should say how much it is hiding rather than rendering a short list silently,
+  and a caveat about what a snapshot omits has to be pinned to that snapshot, not recomputed from
+  data the snapshot is no longer following.
+- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13); PT-4557 review round 4 (A-1 to A-4).
 
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 
@@ -6312,6 +6334,68 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
   `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
   a manual pass rather than by automation.
+
+## adr-team-lock-lives-in-the-team-layout-dialog: The team-wide USFM structure lock is staged in the Team layout dialog, not toggled from the toolbar
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** The editor toolbar carried two adjacent lock buttons: a personal structure-protection
+  toggle (`Lock`/`LockOpen`, Ctrl/Cmd+Shift+L) and, for admins only, a team-wide one
+  (`Shield`/`ShieldOff`, Ctrl/Cmd+Alt+Shift+L) wired straight to
+  `platformScripture.structureProtected`. Two near-identical icon buttons whose only difference is
+  *whose* structure they lock is not a distinction a toolbar can make. Putting the team-wide lock in
+  the Team layout dialog instead was the original design intent — raised by Sebastian in a comment on
+  the design document — which did not carry into the implementation design, so the toolbar pair got
+  built. PT-4557's NTH-2 then proposed resolving the ambiguity a different way: one button for
+  translators plus a popover for admins.
+- **Decision:** The team-wide lock moves out of the toolbar entirely and becomes a switch in the Team
+  layout dialog's middle column, staged and saved with the rest of the layout — restoring the
+  original intent, approved by the product owner. The toolbar keeps the personal toggle alone. The
+  NTH-2 admin popover was built first and then abandoned: it reproduced the ambiguity it was meant to
+  remove — a control that *looks* like the personal toggle beside it but changes a setting for
+  everyone — and it applied on click, so a team-wide change had no review step. Two rules follow.
+  (1) **Structure protection is a Simple-mode feature end to end.** `isProtectionActive` is
+  `interfaceMode === 'simple'`, so in Power mode the lock is unenforced and the toolbar renders no
+  toggle — and the dialog's only opener is itself Simple-mode-gated, so the lock is authored and
+  enforced in the same mode. The toolbar's admin button was likewise Simple-only before this PR, so
+  removing it takes nothing away from Power mode. Opening the dialog in Power mode is noted as future
+  work at its call site; whoever does that must decide what the lock means there, since the setting
+  has no effect in Power mode today. (2) **Staged, not
+  immediate.** The lock joins the dialog's other settings behind Save, so an admin sees what they are
+  about to change for the team before it happens — and Cancel must discard it.
+- **Alternatives:** **(a) The NTH-2 admin popover on the toolbar** — built, then rejected: see above.
+  **(b) Keep the second toolbar button as it was** — rejected: two look-alike icon buttons whose only
+  difference is scope, with no review step on the team-wide one. **(c) Write the lock immediately on
+  toggle while staging everything else in the same dialog** — rejected: the Applying Changes
+  guideline forbids interleaving immediate- and explicit-apply controls as siblings, and the one
+  control that reaches every translator is the worst place to break that rule. **(d) Put it in
+  project settings instead** — rejected: it is a statement about what the team's editor does, which
+  is what the Team layout dialog is for; splitting it out would leave an admin setting the team's
+  layout in one place and the team's editing rules in another.
+- **Consequences:** The lock now has exactly one control in the whole app, so this dialog's failure
+  modes are its failure modes: a refused write must not be reported as a save, and a setting that
+  could not be READ must not be written back (its `false` fallback would unlock structure for every
+  translator on the project). Both are handled in `team-layout.dialog.tsx` and pinned by tests. Three
+  localization keys for the retired project-wide toolbar toggle were deprecated with no successor.
+  An admin opening the dialog only to flip the lock must not publish anything else: `handleConfirm`
+  writes each setting only when its own field changed, because on a project that has never shared a
+  layout the resource lists are seeded from the admin's *personal* selections — compared against
+  the seed the body was MOUNTED with, not the wrapper's live memos, which a catalog retry from
+  inside the open dialog re-identities. Two further consequences of that write path: a field whose
+  setter is momentarily `undefined` (its data provider unresolved, a window the mount gate is
+  deliberately latched across) counts as a FAILED save rather than a skipped one; and the four
+  writes are independent and non-atomic, so they are gathered with `allSettled` and the failure
+  message states that the save may be partial and that the dialog's values are the intended end
+  state, rather than promising a rollback that does not happen. And because the lock
+  is now saved as part of the team layout, it joins `readLayoutSignature`
+  (`shared-layout-receiver.model.ts`): every setting that dialog writes must be fingerprinted there,
+  or an admin who changes only that setting produces an identical signature and the team is never
+  notified — worst of all for the lock, the one change that REMOVES a capability from them. One question is still
+  open: the modal shell renders a ✕ that resolves the dialog with `undefined`, discarding the staged
+  edits silently, which a staged-commit dialog should not offer beside Cancel — whether to remove it
+  or make it behave as Cancel is with the product owner. Tracked separately from PT-4557, which
+  this entry closes, in `~/Desktop/PT-4557-followup-close-button-discards-staged-edits.md`.
+- **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25; round 3 A1, A2, A3).
 
 ## adr-theme-hosted-in-main: The theme service is hosted in main, and each window caches the current theme
 

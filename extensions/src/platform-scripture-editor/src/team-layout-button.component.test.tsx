@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { ShareLayoutButton } from './share-layout-button.component';
+import { TeamLayoutButton } from './team-layout-button.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip wires ResizeObservers.
 beforeAll(() => {
@@ -34,49 +34,58 @@ vi.mock('@papi/frontend/react', () => ({
 }));
 
 // Real Button/Tooltip/etc. still come from the actual module; only usePromise is mocked, mirroring
-// the [value, isLoading] contract share-layout.dialog.tsx relies on for the same admin check.
+// the [value, isLoading] contract team-layout.dialog.tsx relies on for the same admin check.
 vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return { ...actual, usePromise: mockUsePromise };
 });
 
 const STRINGS = {
-  '%webView_platformScriptureEditor_shareLayout_ariaLabel%': 'Share layout with team',
+  '%webView_platformScriptureEditor_teamLayout_ariaLabel%': 'Edit team layout',
 };
 
-const LABEL = 'Share layout with team';
+const LABEL = 'Edit team layout';
 
-/** `usePromise` returns `[value, isLoading]`; `canShareLayout` is `undefined` while unresolved. */
-function setPermission(canShareLayout: boolean | undefined, isLoading: boolean) {
-  mockUsePromise.mockReturnValue([canShareLayout, isLoading]);
+/** `usePromise` returns `[value, isLoading]`; `canEditTeamLayout` is `undefined` while unresolved. */
+function setPermission(canEditTeamLayout: boolean | undefined, isLoading: boolean) {
+  mockUsePromise.mockReturnValue([canEditTeamLayout, isLoading]);
 }
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('ShareLayoutButton', () => {
+describe('TeamLayoutButton', () => {
   it('renders nothing while the permission check is loading', () => {
     setPermission(undefined, true);
-    const { container } = render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
+    const { container } = render(<TeamLayoutButton projectId="p1" localizedStrings={STRINGS} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders nothing for a non-administrator', () => {
     setPermission(false, false);
-    const { container } = render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
+    const { container } = render(<TeamLayoutButton projectId="p1" localizedStrings={STRINGS} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders the button with the localized aria-label for an administrator', () => {
     setPermission(true, false);
-    render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
+    render(<TeamLayoutButton projectId="p1" localizedStrings={STRINGS} />);
     expect(screen.getByRole('button', { name: LABEL })).toBeInTheDocument();
   });
 
-  it('opens the Share Layout dialog for the project on click', () => {
+  // The button names a layout, so it shows a layout glyph; generic share arrows read as "export"
+  // beside the other toolbar actions.
+  it('shows a layout icon', () => {
     setPermission(true, false);
-    render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
+    render(<TeamLayoutButton projectId="p1" localizedStrings={STRINGS} />);
+    const button = screen.getByRole('button', { name: LABEL });
+    expect(button.querySelector('.lucide-panels-top-left')).toBeInTheDocument();
+  });
+
+  it('opens the Team layout dialog for the project on click', () => {
+    setPermission(true, false);
+    render(<TeamLayoutButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button', { name: LABEL }));
     expect(mockShowDialog).toHaveBeenCalledWith('platform.shareLayoutDialog', {
       projectId: 'p1',
@@ -86,10 +95,10 @@ describe('ShareLayoutButton', () => {
 
   it('falls back to the key text when no localized string is provided', () => {
     setPermission(true, false);
-    render(<ShareLayoutButton projectId="p1" />);
+    render(<TeamLayoutButton projectId="p1" />);
     expect(
       screen.getByRole('button', {
-        name: '%webView_platformScriptureEditor_shareLayout_ariaLabel%',
+        name: '%webView_platformScriptureEditor_teamLayout_ariaLabel%',
       }),
     ).toBeInTheDocument();
   });

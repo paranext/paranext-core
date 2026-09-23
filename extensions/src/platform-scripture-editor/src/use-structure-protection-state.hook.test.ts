@@ -90,12 +90,19 @@ function setup({
   interfaceMode = 'simple',
   canWrite = false,
   textConnectionsPdp = undefined,
+  isAdminSettingLoading = false,
 }: {
   adminSetting?: boolean | object;
   userSetting?: boolean | undefined | object;
   interfaceMode?: 'simple' | 'power';
   canWrite?: boolean;
   textConnectionsPdp?: ITextConnectionSettingsProjectDataProvider | undefined;
+  /**
+   * `useProjectSetting`'s loading slot for the admin setting. Overridable rather than hard-coded to
+   * `false`, which would run every case against a setting that has already been delivered — the one
+   * state in which the hook's own `isLoading` cannot be wrong.
+   */
+  isAdminSettingLoading?: boolean;
 } = {}) {
   mockUseProjectSetting.mockReturnValue([
     // adminSetting may be a PlatformError object in error-path tests, but the mocked tuple's first
@@ -104,7 +111,7 @@ function setup({
     adminSetting as boolean,
     mockSetAdminSetting,
     undefined,
-    false,
+    isAdminSettingLoading,
   ]);
   // The platform.interfaceMode setting value type is broader than our test literals; widen it.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -195,26 +202,6 @@ describe('useStructureProtectionState — truth table', () => {
 describe('useStructureProtectionState — setters', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('setAdminProtection is a no-op when canAdminToggle is false', async () => {
-    setup({ adminSetting: false, userSetting: false, canWrite: false });
-    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
-    await act(async () => {});
-    act(() => {
-      result.current.setAdminProtection(true);
-    });
-    expect(mockSetAdminSetting).not.toHaveBeenCalled();
-  });
-
-  it('setAdminProtection calls setSetting when canAdminToggle is true', async () => {
-    setup({ adminSetting: false, userSetting: false, canWrite: true });
-    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
-    await act(async () => {});
-    act(() => {
-      result.current.setAdminProtection(true);
-    });
-    expect(mockSetAdminSetting).toHaveBeenCalledWith(true);
   });
 
   it('setUserProtection calls the PDP setter regardless of role', async () => {
@@ -375,16 +362,6 @@ describe('useStructureProtectionState — power mode (feature inactive)', () => 
     expect(result.current.adminSettingError).toBeUndefined();
   });
 
-  it('setAdminProtection is a no-op in power mode even for an admin', async () => {
-    setup({ adminSetting: false, userSetting: false, interfaceMode: 'power', canWrite: true });
-    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
-    await act(async () => {});
-    act(() => {
-      result.current.setAdminProtection(true);
-    });
-    expect(mockSetAdminSetting).not.toHaveBeenCalled();
-  });
-
   it('setUserProtection is a no-op in power mode', async () => {
     setup({ adminSetting: false, userSetting: false, interfaceMode: 'power', canWrite: false });
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
@@ -400,5 +377,32 @@ describe('useStructureProtectionState — power mode (feature inactive)', () => 
     const { result } = renderHook(() => useStructureProtectionState('proj-1'));
     await act(async () => {});
     expect(result.current.isProtectionActive).toBe(true);
+  });
+});
+
+// `isLoading` is what tells the toolbar button "these values are mode-aware DEFAULTS, not the
+// project's state" — the button's auto-open tooltip suppression rides entirely on it. Both of
+// its terms are asserted here, because the button's own tests mock this hook wholesale and set
+// `isLoading` by hand, so nothing else proves the hook ever produces it.
+describe('useStructureProtectionState — isLoading', () => {
+  it('is true while the admin setting has not been delivered', async () => {
+    setup({ adminSetting: false, canWrite: true, isAdminSettingLoading: true });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it('is true while the permission check has not settled', () => {
+    // No `await act` here: the point is the render BEFORE the `canWrite` promise resolves.
+    setup({ adminSetting: false, canWrite: true });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it('is false once both the admin setting and the permission check have settled', async () => {
+    setup({ adminSetting: false, canWrite: true });
+    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
+    await act(async () => {});
+    expect(result.current.isLoading).toBe(false);
   });
 });

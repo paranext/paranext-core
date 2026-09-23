@@ -524,18 +524,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⇧⌘L', windows: 'Ctrl+Shift+L', linux: 'Ctrl+Shift+L' },
     locations: [
       'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
-    ],
-  },
-  {
-    id: 'scripture-toggle-project-structure-lock',
-    purpose: 'Lock or unlock the structure for everyone on the project',
-    category: 'Editing',
-    context: 'Scripture editor web view (Simple mode, users who can change project settings)',
-    // Does nothing while the lock state failed to load. The handler also accepts ⌃ for ⌘ on macOS,
-    // and Meta for Ctrl on Windows/Linux.
-    keys: { macOS: '⌥⇧⌘L', windows: 'Ctrl+Shift+Alt+L', linux: 'Ctrl+Alt+Shift+L' },
-    locations: [
-      'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
+      'extensions/src/platform-scripture-editor/src/use-structure-protection-state.hook.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {
