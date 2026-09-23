@@ -66,8 +66,6 @@ export type ContentZoomKind =
   | 'inventory'
   | 'checks'
   | 'checklist'
-  | 'word-list'
-  | 'compare-versions'
   | 'dictionary';
 
 /**
@@ -158,9 +156,10 @@ export type ContentZoomDeclaration = {
  *
  * Core lists extension web view types by string here because core code cannot import extension
  * source. This follows the same pattern as `SCRIPTURE_EDITOR_WEBVIEW_TYPE` and
- * `EDIT_BLOCKABLE_WEB_VIEW_TYPES`, and it covers types from other repositories too: Word List
- * (paratext-bible-extensions) and Send/Receive Compare Versions
- * (paratext-bible-internal-extensions).
+ * `EDIT_BLOCKABLE_WEB_VIEW_TYPES`, and it may list types from other repositories too. A type is
+ * listed only once its view marks its text: Word List (paratext-bible-extensions) and Send/Receive
+ * Compare Versions (paratext-bible-internal-extensions) join this map, each with its own kind, when
+ * their markers land in those repositories.
  *
  * Invariant, not checked at runtime: every listed type runs scripts. A declared pane opened with
  * `allowScripts: false` would offer zoom items that can only write a variable nothing in the pane
@@ -213,11 +212,6 @@ export const CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE: ReadonlyMap<
   [
     'platformScripture.markersChecklist',
     { kind: 'checklist', defaultArea: MAIN_CONTENT_ZOOM_AREA },
-  ],
-  ['paratextBibleWordList.react', { kind: 'word-list', defaultArea: MAIN_CONTENT_ZOOM_AREA }],
-  [
-    'paratextBibleSendReceive.compareVersions',
-    { kind: 'compare-versions', defaultArea: MAIN_CONTENT_ZOOM_AREA },
   ],
   ['platformLexicalTools.dictionary', { kind: 'dictionary', defaultArea: MAIN_CONTENT_ZOOM_AREA }],
 ]);

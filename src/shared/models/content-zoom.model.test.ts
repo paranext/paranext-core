@@ -41,10 +41,26 @@ describe('content-zoom.model', () => {
       'platformScripture.punctuationInventory': { kind: 'inventory', defaultArea: 'main' },
       'platformScripture.checksSidePanel': { kind: 'checks', defaultArea: 'main' },
       'platformScripture.markersChecklist': { kind: 'checklist', defaultArea: 'main' },
-      'paratextBibleWordList.react': { kind: 'word-list', defaultArea: 'main' },
-      'paratextBibleSendReceive.compareVersions': { kind: 'compare-versions', defaultArea: 'main' },
       'platformLexicalTools.dictionary': { kind: 'dictionary', defaultArea: 'main' },
     });
+  });
+
+  it('declares only kinds whose views mark their text in this repository', () => {
+    const kinds = new Set(
+      Array.from(CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.values(), ({ kind }) => kind),
+    );
+    expect([...kinds].sort()).toEqual([
+      'checklist',
+      'checks',
+      'dictionary',
+      'editor',
+      'find',
+      'inventory',
+      'notes',
+      'resource',
+    ]);
+    expect(getContentZoomDeclaration('paratextBibleWordList.react')).toBeUndefined();
+    expect(getContentZoomDeclaration('paratextBibleSendReceive.compareVersions')).toBeUndefined();
   });
 
   it('gives every declaration a default area the platform accepts', () => {
