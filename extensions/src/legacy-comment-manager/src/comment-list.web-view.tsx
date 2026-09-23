@@ -267,7 +267,7 @@ global.webViewComponent = function CommentListWebView({
   const initialOverrideRef = useRef<CurrentCommentListView | undefined>(
     initialFilters !== undefined || initialScopeFilter !== undefined
       ? {
-          filters: applyFilterOverrides(initialFilters),
+          filters: applyFilterOverrides(initialFilters, (warning) => logger.warn(warning)),
           scopeFilter: resolveScopeFilter(initialScopeFilter),
         }
       : undefined,

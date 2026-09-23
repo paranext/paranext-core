@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { logger } from '@papi/frontend';
-import type { CommentFilters, CommentPreset, ScopeFilter } from './comment-list-filters.model';
+import type {
+  CommentFilters,
+  CommentPreset,
+  ScopeFilter,
+  WarnFn,
+} from './comment-list-filters.model';
 import {
   applyFilterOverrides,
   buildCommentThreadSelector,
@@ -14,10 +18,6 @@ import {
   presetToLabelKey,
   scopeFilterToLabelKey,
 } from './comment-list-filters.model';
-
-vi.mock('@papi/frontend', () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
 
 const scrRef = { book: 'GEN', chapterNum: 3, verseNum: 5 };
 
@@ -96,39 +96,41 @@ describe('presets', () => {
 });
 
 describe('applyFilterOverrides — legacy axis mapping', () => {
+  // The model takes its diagnostic sink as a parameter rather than importing a logger, so these
+  // assert against the injected sink directly. See `WarnFn`'s doc for why it is injected.
+  let warn: WarnFn;
+
   beforeEach(() => {
-    vi.clearAllMocks();
+    warn = vi.fn();
   });
 
   it('narrows type: conflicts + another active axis onto conflict, not all', () => {
     // The Send/Receive "unresolved conflicts" view: falling back to 'all' would drop the conflict
     // constraint entirely and show the complete unfiltered list, the opposite of what was asked.
-    expect(applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' })).toEqual({
+    expect(applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' }, warn)).toEqual({
       preset: 'conflict',
     });
   });
 
   it('logs a warning naming the combination when narrowing an unmatched conflicts combination', () => {
-    applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('unresolved|all|conflicts|all'),
-    );
+    applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' }, warn);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('unresolved|all|conflicts|all'));
   });
 
   it('still maps the exact all|all|conflicts|all row onto conflict without logging', () => {
-    expect(applyFilterOverrides({ type: 'conflicts' })).toEqual({ preset: 'conflict' });
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(applyFilterOverrides({ type: 'conflicts' }, warn)).toEqual({ preset: 'conflict' });
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('logs a warning naming the combination when a legacy combination widens to all', () => {
     // 'team' assignment has no counterpart in the new preset model at all.
-    applyFilterOverrides({ assignment: 'team' });
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('all|all|all|team'));
+    applyFilterOverrides({ assignment: 'team' }, warn);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('all|all|all|team'));
   });
 
   it('does not log for an exactly-matched legacy combination', () => {
-    applyFilterOverrides({ resolved: 'unresolved' });
-    expect(logger.warn).not.toHaveBeenCalled();
+    applyFilterOverrides({ resolved: 'unresolved' }, warn);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -166,8 +168,8 @@ describe('applyFilterOverrides', () => {
       // shape here so the reproduction case can be expressed at all.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const overrides = malformed as Partial<CommentFilters>;
-      expect(() => applyFilterOverrides(overrides)).not.toThrow();
-      expect(applyFilterOverrides(overrides)).toEqual(DEFAULT_COMMENT_FILTERS);
+      expect(() => applyFilterOverrides(overrides, vi.fn())).not.toThrow();
+      expect(applyFilterOverrides(overrides, vi.fn())).toEqual(DEFAULT_COMMENT_FILTERS);
     },
   );
 });
