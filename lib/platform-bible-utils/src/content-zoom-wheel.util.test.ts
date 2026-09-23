@@ -172,7 +172,6 @@ describe('createContentZoomWheelReader', () => {
     reader = createContentZoomWheelReader();
     // Held physically, so none of these frames can be read as a pinch.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control' }));
-    const activeReader = reader;
     // Chromium's integer `wheelDeltaY` rounds a sub-pixel `deltaY` like this one to 0. The travel is
     // still real: 200 frames of 0.3 px is 60 px, past the half tick (50 px) that rounds to a step.
     const slowFrame = () => {
@@ -185,8 +184,9 @@ describe('createContentZoomWheelReader', () => {
       Object.defineProperty(event, 'wheelDeltaY', { value: 0 });
       return event;
     };
-    const steps = Array.from({ length: 200 }, () => activeReader.read(slowFrame(), 'a'));
-    expect(steps.reduce((sum, step) => sum + step, 0)).toBe(1);
+    let totalSteps = 0;
+    for (let frame = 0; frame < 200; frame += 1) totalSteps += reader.read(slowFrame(), 'a');
+    expect(totalSteps).toBe(1);
     window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }));
   });
 

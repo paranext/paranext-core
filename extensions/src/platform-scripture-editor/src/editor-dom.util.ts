@@ -686,7 +686,9 @@ function measureCaretInAnnotation(
  * the mark's rendered text and measures a collapsed range there, so the anchor follows the caret
  * through a zoom change or a pane resize, onto another line of a wrapped mark if the text reflows
  * that way. When the rendered mark does not contain the caret (it has painted only part of its text
- * so far), the anchor falls back to the union's left edge until it does.
+ * so far), the anchor falls back to the union's left edge until it does. It also falls back to the
+ * union's left edge when the marked run spans more than one DOM text node when the popover opens:
+ * only the caret's own text node is read at open, so the mark's text is never found inside it.
  *
  * @param range The DOM range the selection had when the popover opened. The caller clones it from
  *   the live selection first, since a live selection range keeps moving as the user reads or
