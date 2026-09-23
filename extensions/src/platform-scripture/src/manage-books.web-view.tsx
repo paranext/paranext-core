@@ -121,6 +121,11 @@ type ProjectListResult = {
      * list so the frontend does not have to fetch `platformScripture.versification` per project.
      */
     versification: string;
+    /**
+     * Whether licensing terms prohibit using the project as the base of new text. Mirrors the C#
+     * `ProjectSummary.IsRestrictedAsBase` wire field.
+     */
+    isRestrictedAsBase?: boolean;
   }[];
 };
 
@@ -866,6 +871,8 @@ global.webViewComponent = function ManageBooksWebView({
         // versification grouping. The localized name is resolved on the dialog side (it owns the
         // localizedStrings → versificationLabelKey map); here we forward the raw id.
         versificationId: p.versification,
+        // Licensing-restricted texts stay listed in the Create "Based on" picker but cannot be chosen
+        isRestrictedAsBase: p.isRestrictedAsBase,
         // Project type for the Copy "From" picker's type grouping. Already on this same wire
         // response, so it adds no round-trip. There is no localized display name on the wire, so
         // the raw key doubles as the section heading.

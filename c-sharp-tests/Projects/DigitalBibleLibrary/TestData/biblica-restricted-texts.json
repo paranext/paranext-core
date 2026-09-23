@@ -1,0 +1,394 @@
+[
+  {
+    "dblId": "300672556a449b25",
+    "shortName": "APSD",
+    "fullName": "Ang Pulong Sang Dios (Hiligaynon Bible)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "39739f1a7dcfe810",
+    "shortName": "APSD-CEB",
+    "fullName": "Cebuano Contemporary Bible (Ang Pulong sa Dios) 2014",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "c2a5eeda3414c2ce",
+    "shortName": "BCB",
+    "fullName": "Burmese Contemporary Bible",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "6f26e199139ea7f1",
+    "shortName": "BDS",
+    "fullName": "La Bible du Semeur 2015",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "fffe2a897323ec82",
+    "shortName": "BPH",
+    "fullName": "Bibelen på hverdagsdansk (The Bible in Everyday Danish) 2015",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "b19fcf462065a794",
+    "shortName": "CARS",
+    "fullName": "Central Asian Russian Scriptures",
+    "rightsHolders": "Biblica, Inc. | International Mission Board of the Southern Baptist Convention",
+    "openAccess": false
+  },
+  {
+    "dblId": "d9d0cd5c1bb43798",
+    "shortName": "CARSA",
+    "fullName": "Central Asian Russian Scriptures (TAZI)",
+    "rightsHolders": "Biblica, Inc. | International Mission Board of the Southern Baptist Convention",
+    "openAccess": false
+  },
+  {
+    "dblId": "54b8d8e29301a53f",
+    "shortName": "CARST",
+    "fullName": "Central Asian Russian Scriptures, for Tajikistan",
+    "rightsHolders": "Biblica, Inc. | International Mission Board of the Southern Baptist Convention",
+    "openAccess": false
+  },
+  {
+    "dblId": "d125bceacf2fa912",
+    "shortName": "CCB",
+    "fullName": "Chinese Contemporary Bible",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "517f2ffe6433ad18",
+    "shortName": "CCB-T",
+    "fullName": "Chinese Contemporary Bible (Traditional Script)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "3fa4c85c95be3aa6",
+    "shortName": "CCL",
+    "fullName": "The Word of God in Contemporary Chichewa (Mawu a Mulungu mu Chichewa Chalero)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "8d157691202518e4",
+    "shortName": "EIV",
+    "fullName": "Hungarian New Testament: Life, Truth and Light",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "963fbbc15c8cd2cd",
+    "shortName": "HD",
+    "fullName": "Habrit Hakhadasha/Haderekh “The Way” (Hebrew Living NT) 2009",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "da0947e25c9636bb",
+    "shortName": "HFA",
+    "fullName": "Hoffnung für alle (Hope for all)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "fdb480d858e14ced",
+    "shortName": "HTB",
+    "fullName": "Het Boek 2007",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "8676091b758f0d8d",
+    "shortName": "JCB",
+    "fullName": "Japanese Contemporary Bible (リビングバイブル) 2016",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "af5ec0cf514e94ec",
+    "shortName": "KGN",
+    "fullName": "Kiugo Gĩtheru Kĩa Ngai (The Holy Word of God)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "e959e47176271f18",
+    "shortName": "KLB",
+    "fullName": "Korean Living Bible (현대인의 성경) 1985",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "46c3dec0ed0f56b9",
+    "shortName": "KOK",
+    "fullName": "Croatian Living New Testament (Knjiga O Kristu) 2000",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "19cd186174de646a",
+    "shortName": "KSS",
+    "fullName": "Kurdi Sorani Standard 2016",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "da34f369635c82b8",
+    "shortName": "LCB",
+    "fullName": "Luganda Contemporary Bible",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "d9610ffb2f032758",
+    "shortName": "LEF",
+    "fullName": "The Word: Living Tswana New Testament 1993",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "d9f49e4ff03f8678",
+    "shortName": "LOC",
+    "fullName": "The Life of Christ as God Inspired Luke in the Holy Injil",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "feb24cb32810fabf",
+    "shortName": "LOCUK",
+    "fullName": "The Life of Christ as God Inspired Luke in the Holy Injil (Anglicised)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "d8e10d078df603c9",
+    "shortName": "MCV",
+    "fullName": "Malayalam Contemporary Version 2020",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "2b1625d1f4236ce5",
+    "shortName": "MNB",
+    "fullName": "Lingala New Testament and Psalms 2002",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "7f996672a9b6d67a",
+    "shortName": "MTDS",
+    "fullName": "Mushuj Testamento Diospaj Shimi (Quichua-Chimborazo NT)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "3b6ce54d76a633a4",
+    "shortName": "NASV",
+    "fullName": "New Amharic Standard Version 2001",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "24722a3b9010fa47",
+    "shortName": "NAV",
+    "fullName": "New Arabic Version (Ketab El Hayat)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "e1592fe262f26754",
+    "shortName": "NBV",
+    "fullName": "New Living Bible (Nueva Biblia Viva)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "7db214bcc316fddc",
+    "shortName": "NCT",
+    "fullName": "New Chhattisghari Translation (Nawan Chhattisgarhi Anuwad) 2016",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "def16ae158c3e79f",
+    "shortName": "NEN",
+    "fullName": "Kiswahili Contemporary Version 2015",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "5b888a42e2d9a89d",
+    "shortName": "NIrV",
+    "fullName": "New International Readers Version 2014",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "71c6eab17ae5b667",
+    "shortName": "NIV11",
+    "fullName": "New International Version 2011",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "78a9f6124f344018",
+    "shortName": "NIV11R",
+    "fullName": "New International Version 2011 (Revised format)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "3e2eb613d45e131e",
+    "shortName": "NIV11UK",
+    "fullName": "New International Version (Anglicised) 2011 (Revised format)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "a6219db975224f50",
+    "shortName": "NIV84",
+    "fullName": "New International Version 1984",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "1acb90cd67653967",
+    "shortName": "NLB",
+    "fullName": "Norwegian Living Bible",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "aeb99463c03f4577",
+    "shortName": "NMM",
+    "fullName": "Kiswahili Contemporary Scriptures (Neno TAZI) 2018",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "0f38fd5da9d586dc",
+    "shortName": "NRT14",
+    "fullName": "New Russian Translation 2014",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "fd1da25634593297",
+    "shortName": "NRT23",
+    "fullName": "New Russian Translation (Новый русский перевод ) 2023",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "361230230363baec",
+    "shortName": "NSP",
+    "fullName": "New Serbian Translation 2017 (Cyrillic Script)",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "66992eaaf3106fcf",
+    "shortName": "NTR",
+    "fullName": "New Romanian Translation 2016",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "699b9e6b33aa2329",
+    "shortName": "NUB",
+    "fullName": "nuBibeln (Swedish Contemporary Bible) 2015",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "867d75564182779d",
+    "shortName": "NVI-P",
+    "fullName": "Nova Versão Internacional 2011 (Brazil) - 2018 Update",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "01c25b8715dbb632",
+    "shortName": "NVI-S",
+    "fullName": "Nueva Versión Internacional 2025",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "a1d56ff41fa079a4",
+    "shortName": "NWM",
+    "fullName": "Kiyombe Contemporary Version, New Testament and Psalms",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "aee9474b4a88eefb",
+    "shortName": "OL",
+    "fullName": "Portuguese-PT: O Livro 2017",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "e95f4ff7407fc936",
+    "shortName": "PCB",
+    "fullName": "Persian Contemporary Bible",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "2e3185bcb90f9381",
+    "shortName": "PSZ",
+    "fullName": "Polish Living New Testament",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "6eda79520b919447",
+    "shortName": "SCB",
+    "fullName": "Shona Contemporary Bible",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "d26ef201ef9cf3f2",
+    "shortName": "SNC",
+    "fullName": "Slovo na cestu (Czech Living New Testament) 2012",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "5542a8cd0429163d",
+    "shortName": "TCB",
+    "fullName": "Tagalog Contemporary Bible (Ang Salita ng Dios) 2015",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "07ff1d5c6a53cb05",
+    "shortName": "TNCV",
+    "fullName": "Thai New Contemporary Version 2007",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "ed484deed765564d",
+    "shortName": "VCB",
+    "fullName": "Vietnamese Contemporary Bible (Kinh Thánh Hiện Đại) 2015",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  },
+  {
+    "dblId": "74a986a9a183ae1c",
+    "shortName": "ZB",
+    "fullName": "Slovenian Living New Testament",
+    "rightsHolders": "Biblica, Inc.",
+    "openAccess": false
+  }
+]

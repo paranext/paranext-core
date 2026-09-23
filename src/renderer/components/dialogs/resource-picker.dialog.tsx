@@ -18,10 +18,19 @@ import {
   toDblFetchResult,
   toLocalFetchResult,
 } from '@renderer/components/dialogs/resource-picker.utils';
+import {
+  getRestrictedModelTextReason,
+  RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+} from '@renderer/components/dialogs/restricted-model-text.utils';
+import { DblResourceData } from 'platform-bible-utils';
 import { useCallback, useMemo } from 'react';
 import { sendCommand } from '@shared/services/command.service';
 
-const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS, ...RESOURCE_PICKER_NOTICE_STRING_KEYS];
+const STRING_KEYS = [
+  ...RESOURCE_PICKER_DIALOG_STRING_KEYS,
+  ...RESOURCE_PICKER_NOTICE_STRING_KEYS,
+  RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+];
 
 /**
  * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
@@ -32,6 +41,7 @@ function ResourcePickerDialogWrapper({
   selectedResourceIds,
   notice,
   allowSelectingInstalled,
+  disableRestrictedModelTexts,
   submitDialog,
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
@@ -88,6 +98,14 @@ function ResourcePickerDialogWrapper({
     [dblCatalogFetch, localResources, localizedStrings, notice],
   );
 
+  const getDisabledReason = useMemo(
+    () =>
+      disableRestrictedModelTexts
+        ? (resource: DblResourceData) => getRestrictedModelTextReason(resource, localizedStrings)
+        : undefined,
+    [disableRestrictedModelTexts, localizedStrings],
+  );
+
   // These two describe having NOTHING to show; the notice above describes an incomplete list. A
   // permanent answer earns its own message and no retry, because no retry could change it.
   const hasFailedRecoverably =
@@ -107,6 +125,7 @@ function ResourcePickerDialogWrapper({
       localizedStrings={localizedStrings}
       notice={combinedNotice}
       allowSelectingInstalled={allowSelectingInstalled}
+      getDisabledReason={getDisabledReason}
       onSelect={submitDialog}
     />
   );

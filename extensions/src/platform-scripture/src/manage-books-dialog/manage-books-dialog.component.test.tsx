@@ -217,6 +217,44 @@ describe('ManageBooksDialog project pickers', () => {
     await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Type']));
   });
 
+  it('shows a text whose licence restricts it in the create reference picker, but not as a choice', async () => {
+    const user = setupUser();
+    const reason = 'Licensing prohibits using this text as a base.';
+    render(
+      dialog({
+        initialSection: 'create',
+        loadProjects: () => [
+          ...VERSIFIED_PROJECTS,
+          {
+            id: 'NIV11',
+            shortName: 'NIV11',
+            name: 'New International Version 2011',
+            versificationId: '4',
+            isRestrictedAsBase: true,
+          },
+        ],
+        localizedStrings: {
+          '%platformScripture_copyrightNotice_restrictedModelText_tooltip%': reason,
+        },
+      }),
+    );
+
+    await waitFor(() => expect(isSectionActive('create')).toBe(true));
+    const reference = await screen.findByTestId('manage-books-create-reference-trigger');
+    await user.click(within(reference).getByRole('combobox'));
+
+    const options = await screen.findAllByRole('option');
+    const niv = options.find((option) => option.textContent?.includes('NIV11'));
+    const kjv = options.find((option) => option.textContent?.includes('KJV'));
+    if (!niv || !kjv) throw new Error('Expected both projects in the picker');
+    expect(niv).toHaveAttribute('aria-disabled', 'true');
+    expect(kjv).not.toHaveAttribute('aria-disabled', 'true');
+
+    // The picker explains a disabled row in its tooltip
+    await user.hover(niv);
+    expect((await screen.findAllByText(reason)).length).toBeGreaterThan(0);
+  });
+
   it('locks the create reference picker to versification with no way to regroup it', async () => {
     const user = setupUser();
     render(

@@ -1708,6 +1708,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
             return scrText.IsResourceProject;
 
+        // The copyright notice is computed from several settings; no Settings.xml key holds it
+        if (settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE)
+            return CopyrightNotice.FromScrText(scrText);
+
         // Text direction comes from the project's ldml file, not from Settings.xml
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
@@ -1829,6 +1833,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (settingName == ProjectSettingsNames.PB_IS_PUBLISHED)
             throw new InvalidOperationException(
                 $"{ProjectSettingsNames.PB_IS_PUBLISHED} is a read-only computed setting."
+            );
+        if (settingName == ProjectSettingsNames.PB_COPYRIGHT_NOTICE)
+            throw new InvalidOperationException(
+                $"{ProjectSettingsNames.PB_COPYRIGHT_NOTICE} is a read-only computed setting."
             );
 
         // Figure out which setting name to use (resolved early so the admin gate below can use it

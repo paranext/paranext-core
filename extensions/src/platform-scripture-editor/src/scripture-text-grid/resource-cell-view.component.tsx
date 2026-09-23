@@ -136,6 +136,8 @@ export type ResourceCellViewProps = {
    * a passage down a column is the reason this view renders one editor per column.
    */
   headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
+  /** The resource's copyright notice indicator, shown beside its name */
+  copyrightIndicator?: ReactNode;
 };
 
 function ZoomItemsShared({
@@ -251,6 +253,7 @@ export function ResourceCellView({
   reorderHint,
   onReorderKeyDown,
   headerDrag,
+  copyrightIndicator,
 }: ResourceCellViewProps) {
   let readyContent: ReactNode = editor;
   if (emptyMessage) {
@@ -368,6 +371,7 @@ export function ResourceCellView({
         // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
+          {copyrightIndicator}
           <div className={`tw:min-w-0 tw:flex-1 ${contentOverflowClass}`} style={contentStyle}>
             <ContentZoomRoot area={zoomArea} label={label}>
               {stateContent}
@@ -414,6 +418,7 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
             <ResourceNameLabel label={label} className="tw:min-w-0 tw:flex-1 tw:text-xs" />
+            {copyrightIndicator}
             {zoomMenuLabels ? (
               <TooltipProvider>
                 <DropdownMenu>

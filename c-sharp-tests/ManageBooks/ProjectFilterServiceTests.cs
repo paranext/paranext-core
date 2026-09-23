@@ -231,6 +231,35 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         [Test]
+        public void FromScrText_MarksATraditionallyLicensedBiblicaTextAsRestrictedAsABase()
+        {
+            DummyScrText scrText = CreateScrText("NIV11", ProjectType.Standard, editable: false);
+            scrText.Settings.Copyright =
+                "The Holy Bible, New International Version® NIV® Copyright © 2011 by Biblica, Inc.®";
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.True);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictABiblicaOpenTextKnownOnlyByItsDblId()
+        {
+            DummyScrText scrText = CreateScrText("OBTT", ProjectType.Standard, editable: false);
+            scrText.Settings.Copyright = "Copyright © 2023 by Biblica, Inc., The Translation Trust";
+            scrText.Settings.DBLId = HexId.FromStr("f6a5ef6e2e75a8b4");
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictOtherTexts()
+        {
+            DummyScrText scrText = CreateScrText("WEB", ProjectType.Standard, editable: false);
+            scrText.Settings.Copyright = "Public domain";
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
         [Category("Contract")]
         [Property("CapabilityId", "CAP-011")]
         [Property("BehaviorId", "BHV-411")]

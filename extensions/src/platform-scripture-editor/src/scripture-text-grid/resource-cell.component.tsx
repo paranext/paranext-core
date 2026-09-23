@@ -36,9 +36,11 @@ import {
 } from './verse-display.utils';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from '../copyright-notice/copyright-notice.const';
+import { CopyrightNoticeIndicator } from '../copyright-notice/copyright-notice-indicator.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
-const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
+const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS, ...COPYRIGHT_NOTICE_STRING_KEYS];
 
 /**
  * A resource to render as a grid cell.
@@ -317,6 +319,12 @@ export function ResourceCell({
       reorderHint={reorderHint}
       onReorderKeyDown={onReorderKeyDown}
       headerDrag={headerDrag}
+      copyrightIndicator={
+        <CopyrightNoticeIndicator
+          projectId={resourceRef.projectId}
+          localizedStrings={localizedStrings}
+        />
+      }
       editor={
         <Editorial
           ref={editorRef}
