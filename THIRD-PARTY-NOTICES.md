@@ -2608,15 +2608,16 @@ below, paired with no copyright notice — there was no package to read one from
 
 ## npm production dependencies
 
-221 packages. License distribution:
+223 packages. License distribution:
 
 | License | Packages |
 | --- | --- |
-| MIT | 192 |
+| MIT | 193 |
 | MIT (reviewed exception) | 9 |
 | Apache-2.0 | 5 |
 | ISC | 5 |
 | BSD-3-Clause (reviewed exception) | 3 |
+| (Apache-2.0 AND MIT) (reviewed exception) | 1 |
 | (BSD-3-Clause AND Apache-2.0) (reviewed exception) | 1 |
 | (ISC AND MIT) (reviewed exception) | 1 |
 | (MIT AND Zlib) (reviewed exception) | 1 |
@@ -2635,7 +2636,7 @@ The following ship no license file of their own, so the identifier in the table 
 from their `package.json` (or, where a staged dev package is involved, from `package-lock.json`)
 and nothing of
 theirs appears under "License texts". The canonical text of the license each one declares is
-reproduced under "Canonical license texts for declared identifiers" instead: `@radix-ui/number@1.1.1`, `@radix-ui/react-compose-refs@1.1.2`, `@radix-ui/react-context@1.1.2`, `@radix-ui/react-direction@1.1.1`, `@radix-ui/react-id@1.1.1`, `@radix-ui/react-use-callback-ref@1.1.1`, `@radix-ui/react-use-escape-keydown@1.1.1`, `@radix-ui/react-use-layout-effect@1.1.1`, `@radix-ui/react-use-previous@1.1.1`, `@radix-ui/react-use-size@1.1.1`, `imurmurhash@0.1.4`, `isarray@1.0.0`, `rc-new-window@0.1.13`, `react-remove-scroll-bar@2.3.8`.
+reproduced under "Canonical license texts for declared identifiers" instead: `@posthog/core@1.48.10`, `@radix-ui/number@1.1.1`, `@radix-ui/react-compose-refs@1.1.2`, `@radix-ui/react-context@1.1.2`, `@radix-ui/react-direction@1.1.1`, `@radix-ui/react-id@1.1.1`, `@radix-ui/react-use-callback-ref@1.1.1`, `@radix-ui/react-use-escape-keydown@1.1.1`, `@radix-ui/react-use-layout-effect@1.1.1`, `@radix-ui/react-use-previous@1.1.1`, `@radix-ui/react-use-size@1.1.1`, `imurmurhash@0.1.4`, `isarray@1.0.0`, `rc-new-window@0.1.13`, `react-remove-scroll-bar@2.3.8`.
 
 For the packages named above whose folder was not read, whether they ship a license file of
 their own is not established here. The canonical text of the identifier `package-lock.json`
@@ -2677,6 +2678,7 @@ identifiers": `fsevents@2.3.3`.
 | `@lexical/text` | 0.43.0 | MIT |
 | `@lexical/utils` | 0.43.0 | MIT |
 | `@lexical/yjs` | 0.43.0 | MIT |
+| `@posthog/core` | 1.48.10 | MIT |
 | `@radix-ui/number` | 1.1.1 | MIT |
 | `@radix-ui/primitive` | 1.1.3 | MIT |
 | `@radix-ui/react-accessible-icon` | 1.1.7 | MIT |
@@ -2814,6 +2816,7 @@ identifiers": `fsevents@2.3.3`.
 | `normalize-path` | 3.0.0 | MIT |
 | `pako` | 1.0.11 | (MIT AND Zlib) (reviewed exception) |
 | `picomatch` | 2.3.2 | MIT |
+| `posthog-node` | 5.51.1 | (Apache-2.0 AND MIT) (reviewed exception) |
 | `process-nextick-args` | 2.0.1 | MIT |
 | `quill-delta` | 5.1.0 | BSD-3-Clause (reviewed exception) |
 | `radix-ui` | 1.4.3 | MIT |
@@ -2875,7 +2878,7 @@ identifiers": `fsevents@2.3.3`.
 
 ## License texts
 
-The 108 distinct license texts below cover the packages named beneath each heading.
+The 109 distinct license texts below cover the packages named beneath each heading.
 Every one of them was read from a package that ships it. Texts reproduced from SPDX, for
 packages that ship none, are in the section after this one instead.
 
@@ -6314,7 +6317,365 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### 71. process-nextick-args@2.0.1
+### 71. posthog-node@5.51.1
+
+```text
+Copyright 2020 Posthog / Hiberly, Inc.
+
+Copyright 2015 Mixpanel, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this work except in compliance with the License.
+You may obtain a copy of the License below, or at:
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+
+---
+
+Some files in this codebase contain code from getsentry/sentry-javascript.
+In such cases it is explicitly stated in the file header. This license only applies to the relevant code in such cases.
+
+MIT License
+
+Copyright (c) 2012 Functional Software, Inc. dba Sentry
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Some files in this codebase contain code from getsentry/sentry-react-native.
+In such cases it is explicitly stated in the file header. This license only applies to the relevant code in such cases.
+
+The MIT License (MIT)
+
+Copyright (c) 2017 Sentry
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Some files in this codebase contain code from facebook/metro by Meta Platforms, Inc. and affiliates.
+In such cases it is explicitly stated in the file header. This license only applies to the relevant code in such cases. 
+
+MIT License
+
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Some files in this codebase contain code from expo/expo by 650 Industries, Inc. (aka Expo).
+In such cases it is explicitly stated in the file header. This license only applies to the relevant code in such cases. 
+
+The MIT License (MIT)
+
+Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Some files in this codebase contain code from agentcathq/agentcat-typescript-sdk (formerly MCPCat/mcpcat-typescript-sdk).
+In such cases it is explicitly stated in the file header. This license only applies to the relevant code in such cases.
+
+MIT License
+
+Copyright (c) 2025 AgentCat, Inc. (formerly MCPcat)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### 72. process-nextick-args@2.0.1
 
 ```text
 # Copyright (c) 2015 Calvin Metcalf
@@ -6338,7 +6699,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.**
 ```
 
-### 72. quill-delta@5.1.0
+### 73. quill-delta@5.1.0
 
 ```text
 BSD 3-Clause License
@@ -6356,7 +6717,7 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### 73. rc-dock@3.3.2, react-reverse-portal@2.2.0
+### 74. rc-dock@3.3.2, react-reverse-portal@2.2.0
 
 ```text
 Apache License
@@ -6562,7 +6923,7 @@ Apache License
    limitations under the License.
 ```
 
-### 74. rc-dropdown@4.0.1, rc-trigger@5.3.4
+### 75. rc-dropdown@4.0.1, rc-trigger@5.3.4
 
 ```text
 The MIT License (MIT)
@@ -6587,7 +6948,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### 75. rc-motion@2.9.5, rc-overflow@1.5.0, rc-resize-observer@1.4.3
+### 76. rc-motion@2.9.5, rc-overflow@1.5.0, rc-resize-observer@1.4.3
 
 ```text
 The MIT License (MIT)
@@ -6601,7 +6962,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### 76. rc-util@5.44.4
+### 77. rc-util@5.44.4
 
 ```text
 The MIT License (MIT)
@@ -6628,7 +6989,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### 77. react-error-boundary@6.0.0
+### 78. react-error-boundary@6.0.0
 
 ```text
 The MIT License (MIT)
@@ -6653,7 +7014,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 78. react-hotkeys-hook@4.6.1
+### 79. react-hotkeys-hook@4.6.1
 
 ```text
 MIT License
@@ -6679,7 +7040,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 79. react-is@18.3.1
+### 80. react-is@18.3.1
 
 ```text
 MIT License
@@ -6705,7 +7066,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 80. react-resizable-panels@4.10.0
+### 81. react-resizable-panels@4.10.0
 
 ```text
 The MIT License (MIT)
@@ -6731,7 +7092,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 81. readable-stream@2.3.8, string_decoder@1.1.1
+### 82. readable-stream@2.3.8, string_decoder@1.1.1
 
 ```text
 Node.js is licensed for use as follows:
@@ -6783,7 +7144,7 @@ IN THE SOFTWARE.
 """
 ```
 
-### 82. readdirp@3.6.0
+### 83. readdirp@3.6.0
 
 ```text
 MIT License
@@ -6809,7 +7170,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 83. resize-observer-polyfill@1.5.1
+### 84. resize-observer-polyfill@1.5.1
 
 ```text
 The MIT License (MIT)
@@ -6835,7 +7196,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 84. safe-buffer@5.1.2
+### 85. safe-buffer@5.1.2
 
 ```text
 The MIT License (MIT)
@@ -6861,7 +7222,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### 85. setimmediate@1.0.5
+### 86. setimmediate@1.0.5
 
 ```text
 Copyright (c) 2012 Barnesandnoble.com, llc, Donavon West, and Domenic Denicola
@@ -6886,7 +7247,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### 86. shadcn@4.3.0
+### 87. shadcn@4.3.0
 
 ```text
 MIT License
@@ -6912,7 +7273,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 87. shallowequal@1.1.0
+### 88. shallowequal@1.1.0
 
 ```text
 MIT License
@@ -6938,7 +7299,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 88. signal-exit@4.1.0
+### 89. signal-exit@4.1.0
 
 ```text
 The ISC License
@@ -6959,7 +7320,7 @@ WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### 89. sonner@1.7.4
+### 90. sonner@1.7.4
 
 ```text
 MIT License
@@ -6985,7 +7346,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 90. source-map@0.6.1
+### 91. source-map@0.6.1
 
 ```text
 Copyright (c) 2009-2011, Mozilla Foundation and contributors
@@ -7017,7 +7378,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### 91. source-map-support@0.5.21
+### 92. source-map-support@0.5.21
 
 ```text
 The MIT License (MIT)
@@ -7043,7 +7404,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 92. tailwind-merge@3.5.0
+### 93. tailwind-merge@3.5.0
 
 ```text
 MIT License
@@ -7069,7 +7430,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 93. tailwindcss-scoped-preflight@4.0.1
+### 94. tailwindcss-scoped-preflight@4.0.1
 
 ```text
 MIT License
@@ -7095,7 +7456,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 94. to-regex-range@5.0.1
+### 95. to-regex-range@5.0.1
 
 ```text
 The MIT License (MIT)
@@ -7121,7 +7482,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### 95. tslib@2.8.1
+### 96. tslib@2.8.1
 
 ```text
 Copyright (c) Microsoft Corporation.
@@ -7138,7 +7499,7 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### 96. tw-animate-css@1.4.0
+### 97. tw-animate-css@1.4.0
 
 ```text
 MIT License
@@ -7164,7 +7525,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 97. unicode-segmenter@0.17.3
+### 98. unicode-segmenter@0.17.3
 
 ```text
 MIT License
@@ -7190,7 +7551,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 98. unzip-crx-3@0.2.0
+### 99. unzip-crx-3@0.2.0
 
 ```text
 The MIT License (MIT)
@@ -7216,7 +7577,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 99. util-deprecate@1.0.2
+### 100. util-deprecate@1.0.2
 
 ```text
 (The MIT License)
@@ -7245,7 +7606,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### 100. vaul@1.1.2
+### 101. vaul@1.1.2
 
 ```text
 MIT License
@@ -7259,7 +7620,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### 101. write-file-atomic@5.0.1
+### 102. write-file-atomic@5.0.1
 
 ```text
 Copyright (c) 2015, Rebecca Turner
@@ -7269,7 +7630,7 @@ Permission to use, copy, modify, and/or distribute this software for any purpose
 THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### 102. ws@8.21.1
+### 103. ws@8.21.1
 
 ```text
 Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>
@@ -7294,7 +7655,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### 103. yaku@0.16.7
+### 104. yaku@0.16.7
 
 ```text
 The MIT License (MIT)
@@ -7320,7 +7681,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 104. yjs@13.6.30
+### 105. yjs@13.6.30
 
 ```text
 The MIT License (MIT)
@@ -7348,7 +7709,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 105. Icu4c.Win.Min@59.1.7 (NuGet)
+### 106. Icu4c.Win.Min@59.1.7 (NuGet)
 
 ```text
 COPYRIGHT AND PERMISSION NOTICE (ICU 58 and later)
@@ -7738,7 +8099,7 @@ Database section 7.
  #    future claims in that contribution or in the TZ Database.
 ```
 
-### 106. Microsoft.Bcl.AsyncInterfaces@5.0.0 (NuGet), Microsoft.Bcl.Cryptography@9.0.9 (NuGet), Microsoft.DotNet.PlatformAbstractions@3.1.6 (NuGet), Microsoft.Extensions.Configuration@9.0.1 (NuGet), Microsoft.Extensions.Configuration.Abstractions@9.0.1 (NuGet), Microsoft.Extensions.Configuration.FileExtensions@9.0.1 (NuGet), Microsoft.Extensions.Configuration.Json@9.0.1 (NuGet), Microsoft.Extensions.Configuration.UserSecrets@9.0.1 (NuGet), Microsoft.Extensions.DependencyModel@9.0.9 (NuGet), Microsoft.Extensions.FileProviders.Abstractions@9.0.1 (NuGet), Microsoft.Extensions.FileProviders.Physical@9.0.1 (NuGet), Microsoft.Extensions.FileSystemGlobbing@9.0.1 (NuGet), Microsoft.Extensions.Primitives@9.0.1 (NuGet), Microsoft.Win32.Registry.AccessControl@9.0.9 (NuGet), Microsoft.Win32.SystemEvents@9.0.9 (NuGet), System.CodeDom@9.0.9 (NuGet), System.ComponentModel.Composition@9.0.9 (NuGet), System.ComponentModel.Composition.Registration@9.0.9 (NuGet), System.Configuration.ConfigurationManager@9.0.9 (NuGet), System.Data.Odbc@9.0.9 (NuGet), System.Data.OleDb@9.0.9 (NuGet), System.Diagnostics.EventLog@9.0.9 (NuGet), System.Diagnostics.PerformanceCounter@9.0.9 (NuGet), System.DirectoryServices@9.0.9 (NuGet), System.DirectoryServices.AccountManagement@9.0.9 (NuGet), System.DirectoryServices.Protocols@9.0.9 (NuGet), System.Drawing.Common@9.0.9 (NuGet), System.Formats.Asn1@9.0.9 (NuGet), System.IO.FileSystem.AccessControl@5.0.0 (NuGet), System.IO.Packaging@9.0.9 (NuGet), System.IO.Pipelines@9.0.9 (NuGet), System.IO.Ports@9.0.9 (NuGet), System.Management@9.0.9 (NuGet), System.Private.ServiceModel@4.10.3 (NuGet), System.Reflection.Context@9.0.9 (NuGet), System.Reflection.DispatchProxy@4.7.1 (NuGet), System.Runtime.Caching@9.0.9 (NuGet), System.Runtime.CompilerServices.Unsafe@6.0.0 (NuGet), System.Security.AccessControl@5.0.0 (NuGet), System.Security.Cryptography.Pkcs@9.0.9 (NuGet), System.Security.Cryptography.ProtectedData@9.0.9 (NuGet), System.Security.Cryptography.Xml@9.0.9 (NuGet), System.Security.Permissions@9.0.9 (NuGet), System.Security.Principal.Windows@5.0.0 (NuGet), System.ServiceModel.Duplex@4.10.3 (NuGet), System.ServiceModel.Http@4.10.3 (NuGet), System.ServiceModel.NetTcp@4.10.3 (NuGet), System.ServiceModel.Primitives@4.10.3 (NuGet), System.ServiceModel.Security@4.10.3 (NuGet), System.ServiceModel.Syndication@9.0.9 (NuGet), System.ServiceProcess.ServiceController@9.0.9 (NuGet), System.Speech@9.0.9 (NuGet), System.Text.Encoding.CodePages@9.0.9 (NuGet), System.Text.Encodings.Web@9.0.9 (NuGet), System.Text.Json@9.0.9 (NuGet), System.Threading.AccessControl@9.0.9 (NuGet), System.Web.Services.Description@4.10.3 (NuGet), System.Windows.Extensions@9.0.9 (NuGet)
+### 107. Microsoft.Bcl.AsyncInterfaces@5.0.0 (NuGet), Microsoft.Bcl.Cryptography@9.0.9 (NuGet), Microsoft.DotNet.PlatformAbstractions@3.1.6 (NuGet), Microsoft.Extensions.Configuration@9.0.1 (NuGet), Microsoft.Extensions.Configuration.Abstractions@9.0.1 (NuGet), Microsoft.Extensions.Configuration.FileExtensions@9.0.1 (NuGet), Microsoft.Extensions.Configuration.Json@9.0.1 (NuGet), Microsoft.Extensions.Configuration.UserSecrets@9.0.1 (NuGet), Microsoft.Extensions.DependencyModel@9.0.9 (NuGet), Microsoft.Extensions.FileProviders.Abstractions@9.0.1 (NuGet), Microsoft.Extensions.FileProviders.Physical@9.0.1 (NuGet), Microsoft.Extensions.FileSystemGlobbing@9.0.1 (NuGet), Microsoft.Extensions.Primitives@9.0.1 (NuGet), Microsoft.Win32.Registry.AccessControl@9.0.9 (NuGet), Microsoft.Win32.SystemEvents@9.0.9 (NuGet), System.CodeDom@9.0.9 (NuGet), System.ComponentModel.Composition@9.0.9 (NuGet), System.ComponentModel.Composition.Registration@9.0.9 (NuGet), System.Configuration.ConfigurationManager@9.0.9 (NuGet), System.Data.Odbc@9.0.9 (NuGet), System.Data.OleDb@9.0.9 (NuGet), System.Diagnostics.EventLog@9.0.9 (NuGet), System.Diagnostics.PerformanceCounter@9.0.9 (NuGet), System.DirectoryServices@9.0.9 (NuGet), System.DirectoryServices.AccountManagement@9.0.9 (NuGet), System.DirectoryServices.Protocols@9.0.9 (NuGet), System.Drawing.Common@9.0.9 (NuGet), System.Formats.Asn1@9.0.9 (NuGet), System.IO.FileSystem.AccessControl@5.0.0 (NuGet), System.IO.Packaging@9.0.9 (NuGet), System.IO.Pipelines@9.0.9 (NuGet), System.IO.Ports@9.0.9 (NuGet), System.Management@9.0.9 (NuGet), System.Private.ServiceModel@4.10.3 (NuGet), System.Reflection.Context@9.0.9 (NuGet), System.Reflection.DispatchProxy@4.7.1 (NuGet), System.Runtime.Caching@9.0.9 (NuGet), System.Runtime.CompilerServices.Unsafe@6.0.0 (NuGet), System.Security.AccessControl@5.0.0 (NuGet), System.Security.Cryptography.Pkcs@9.0.9 (NuGet), System.Security.Cryptography.ProtectedData@9.0.9 (NuGet), System.Security.Cryptography.Xml@9.0.9 (NuGet), System.Security.Permissions@9.0.9 (NuGet), System.Security.Principal.Windows@5.0.0 (NuGet), System.ServiceModel.Duplex@4.10.3 (NuGet), System.ServiceModel.Http@4.10.3 (NuGet), System.ServiceModel.NetTcp@4.10.3 (NuGet), System.ServiceModel.Primitives@4.10.3 (NuGet), System.ServiceModel.Security@4.10.3 (NuGet), System.ServiceModel.Syndication@9.0.9 (NuGet), System.ServiceProcess.ServiceController@9.0.9 (NuGet), System.Speech@9.0.9 (NuGet), System.Text.Encoding.CodePages@9.0.9 (NuGet), System.Text.Encodings.Web@9.0.9 (NuGet), System.Text.Json@9.0.9 (NuGet), System.Threading.AccessControl@9.0.9 (NuGet), System.Web.Services.Description@4.10.3 (NuGet), System.Windows.Extensions@9.0.9 (NuGet)
 
 ```text
 The MIT License (MIT)
@@ -7766,7 +8127,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 107. Newtonsoft.Json@13.0.4 (NuGet)
+### 108. Newtonsoft.Json@13.0.4 (NuGet)
 
 ```text
 The MIT License (MIT)
@@ -7791,7 +8152,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### 108. UnicodeHelper@0.9.3 (NuGet)
+### 109. UnicodeHelper@0.9.3 (NuGet)
 
 ```text
 MIT License
@@ -7838,9 +8199,10 @@ the license file the package itself ships. No copyright holder is inferred, and 
 placeholder is not read as one: where a package records no notice anywhere, that is stated
 rather than left blank.
 
-### Apache-2.0 — canonical text, 4 packages
+### Apache-2.0 — canonical text, 5 packages
 
 - `chroma-js@3.2.0` (npm) — Copyright (c) 2011-2025, Gregor Aisch All rights reserved.
+- `posthog-node@5.51.1` (npm) — Copyright 2020 Posthog / Hiberly, Inc.
 - `rc-new-window@0.1.13` (npm) — no copyright notice — an npm manifest has no field for one, and it bundles no license file to carry one
 - `CsvHelper@33.1.0` (NuGet) — Copyright © 2009-2024 Josh Close
 - `Microsoft.Extensions.ObjectPool@5.0.10` (NuGet) — © Microsoft Corporation. All rights reserved.
@@ -7970,10 +8332,11 @@ Permission to use, copy, modify, and/or distribute this software for any purpose
 THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### MIT — canonical text, 37 packages
+### MIT — canonical text, 39 packages
 
 - `@eten-tech-foundation/platform-editor@0.8.16` (npm) — Copyright © 2023-2025 ETEN Tech Foundation
 - `@eten-tech-foundation/scripture-utilities@0.1.6` (npm) — Copyright © 2023-2025 ETEN Tech Foundation
+- `@posthog/core@1.48.10` (npm) — no copyright notice — an npm manifest has no field for one, and it bundles no license file to carry one
 - `@radix-ui/number@1.1.1` (npm) — Copyright (c) 2022 WorkOS
 - `@radix-ui/react-compose-refs@1.1.2` (npm) — Copyright (c) 2022 WorkOS
 - `@radix-ui/react-context@1.1.2` (npm) — Copyright (c) 2022 WorkOS
@@ -7989,6 +8352,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO
 - `isarray@1.0.0` (npm) — Copyright (c) 2013 Julian Gruber \<julian@juliangruber.com\>
 - `lucide-react@1.8.0` (npm) — Copyright (c) 2026 Lucide Icons and Contributors
 - `pako@1.0.11` (npm) — Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn
+- `posthog-node@5.51.1` (npm) — Copyright 2020 Posthog / Hiberly, Inc.
 - `react-remove-scroll-bar@2.3.8` (npm) — Copyright (c) 2025 Anton Korzunov \<thekashey@gmail.com\>
 - `GlyssenCharacters@6.2.1` (NuGet) — Copyright © 2014-2023 Faith Comes By Hearing and SIL International
 - `GlyssenShared@6.2.1` (NuGet) — Copyright © 2014-2023 Faith Comes By Hearing and SIL International
