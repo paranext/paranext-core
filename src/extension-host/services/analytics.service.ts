@@ -66,8 +66,8 @@ let providers: Record<AnalyticsEnvironment, AnalyticsProvider> | undefined;
 /**
  * Builds the provider per environment on first use. PostHog when the config says so (packaged
  * production builds, or a developer opting in); otherwise the console provider, which is the
- * deliberate default for everyday development and automated E2E runs so those never inflate vendor
- * event counts.
+ * deliberate default for everyday development and automated E2E runs, so those make no calls to
+ * PostHog.
  */
 function getProviders(): Record<AnalyticsEnvironment, AnalyticsProvider> {
   if (providers) return providers;
