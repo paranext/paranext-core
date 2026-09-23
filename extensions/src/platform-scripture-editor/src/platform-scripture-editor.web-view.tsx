@@ -164,6 +164,7 @@ import {
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
+  withDocumentEndOnText,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
@@ -1391,10 +1392,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         return;
       }
 
+      // A caret at the end of the document is spelled one past the end of the last text; it sits
+      // at the end of that text, which is where the comment anchors.
+      const startTextDocumentLocation = withDocumentEndOnText(selection.start, startNode.length);
+      const endTextDocumentLocation = withDocumentEndOnText(
+        selection.end ?? selection.start,
+        startNode.length,
+      );
+      annotationRange.start = { ...startTextDocumentLocation };
+      annotationRange.end = { ...endTextDocumentLocation };
+
       // If the selection is collapsed (cursor with no range), require a non-whitespace character
       // on at least one side of the cursor position so the backend code can select the word
-      const startTextDocumentLocation = selection.start;
-      const endTextDocumentLocation = selection.end ?? selection.start;
       const isCollapsed =
         UsjReaderWriter.isUsjDocumentLocationForTextContent(startTextDocumentLocation) &&
         UsjReaderWriter.isUsjDocumentLocationForTextContent(endTextDocumentLocation) &&

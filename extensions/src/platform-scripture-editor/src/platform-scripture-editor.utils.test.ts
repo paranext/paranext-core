@@ -36,6 +36,7 @@ import {
   isMissingBookOnScreen,
   parseMissingBookError,
   resolveResourceContentState,
+  withDocumentEndOnText,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -3760,3 +3761,21 @@ describe('buildScriptureTextGridWebView', () => {
 });
 
 // #endregion
+
+describe('withDocumentEndOnText', () => {
+  it('brings the document-end spelling (one past the text) onto the end of the text', () => {
+    expect(withDocumentEndOnText({ jsonPath: '$.content[2].content[1]', offset: 9 }, 8)).toEqual({
+      jsonPath: '$.content[2].content[1]',
+      offset: 8,
+    });
+  });
+
+  it.each([
+    ['an offset inside the text', { jsonPath: '$.content[2].content[1]', offset: 3 }],
+    ['the end of the text', { jsonPath: '$.content[2].content[1]', offset: 8 }],
+    ['an offset no location rule produces', { jsonPath: '$.content[2].content[1]', offset: 10 }],
+    ['a location that is not on text', { jsonPath: '$.content[2].content[1]' }],
+  ])('leaves %s alone', (_name, location) => {
+    expect(withDocumentEndOnText(location, 8)).toBe(location);
+  });
+});
