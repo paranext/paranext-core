@@ -1758,6 +1758,35 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.1 }, 'notes:BBB'));
   });
 
+  it('does not stamp a pane whose saved levels are all invalid, so a later reopen still picks up what memory remembers', async () => {
+    definitions.set('editor-bad', {
+      id: 'editor-bad',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-P',
+      // Out of range: nothing here is a level the pane can keep.
+      state: { [LEVELS]: { main: 3.5 } },
+    });
+    setContentZoomAreas('editor-bad', ['main']);
+    expect(definitions.get('editor-bad')?.state).toEqual({});
+
+    // The pane closes; a sibling records a level for the same project and area meanwhile.
+    const closedState = definitions.get('editor-bad')?.state;
+    forgetContentZoom('editor-bad');
+    definitions.delete('editor-bad');
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-P:main': 1.3 }));
+
+    // Reopened with exactly the state it closed with.
+    definitions.set('editor-bad', {
+      id: 'editor-bad',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-P',
+      state: closedState,
+    });
+    setContentZoomAreas('editor-bad', ['main']);
+    expect(definitions.get('editor-bad')?.state).toEqual(zoomState({ main: 1.3 }, 'editor:PROJ-P'));
+    expect(cssVar(iframeFor('editor-bad'), '--platform-content-zoom-main')).toBe('1.3');
+  });
+
   it('treats a non-string identity stamp as no stamp at all', async () => {
     definitions.set('editor-8', {
       id: 'editor-8',

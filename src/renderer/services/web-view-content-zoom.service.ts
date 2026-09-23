@@ -782,13 +782,17 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
       Object.entries(settledMemoryLevelsFor(id)).forEach(([areaId, level]) => {
         if (merged[areaId] === undefined) merged[areaId] = level;
       });
-      deps.updateDefinition(webViewId, {
-        state: {
-          ...definition.state,
-          [CONTENT_ZOOM_LEVELS_STATE_KEY]: merged,
-          [CONTENT_ZOOM_IDENTITY_STATE_KEY]: stamp,
-        },
-      });
+      const state: Record<string, unknown> = { ...definition.state };
+      if (Object.keys(merged).length === 0) {
+        // Every saved entry was invalid and memory has nothing either: the pane is left with no
+        // levels and so no stamp, which keeps it open to what memory records later.
+        delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+        delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+      } else {
+        state[CONTENT_ZOOM_LEVELS_STATE_KEY] = merged;
+        state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
+      }
+      deps.updateDefinition(webViewId, { state });
       return;
     }
     if (pendingWriteMatchesStamp) return; // same case, pending-write half.
