@@ -273,7 +273,7 @@ test('a failure reading settings from an already-found data provider logs a dist
   expect(findSentLog('Test')).toBeDefined();
 });
 
-test('an event fired after initialize has already resolved is stamped and flushed immediately', async () => {
+test('an event fired after initialize has already resolved is routed to its provider without being held', async () => {
   vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
 
   const { initialize, trackEvent, flushPending } = await import(
