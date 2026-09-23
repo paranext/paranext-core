@@ -334,7 +334,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Project keys and the EU host live only in `analytics.config.ts`, which also owns the enabled
   rule: packaged production builds, or `PT_ANALYTICS_POSTHOG=true` in development. Both slots use
   the Test project key until PT-4401. Common properties (`app_version`, `os_platform`,
-  `os_release`, `analytics_environment`) are added by the service before routing, not by the
+  `os_release`, `os_arch`, `analytics_environment`) are added by the service before routing, not by the
   provider, so they survive a vendor swap; PT-4359 extends that function. Identity is a random UUID
   per process from `analytics-identity.ts`, events are flagged `$process_person_profile: false`,
   and GeoIP is disabled; PT-4367 replaces the identity function. The service gained `shutdown()`,

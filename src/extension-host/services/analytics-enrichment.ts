@@ -29,6 +29,9 @@ async function getAppVersion(): Promise<string> {
  * vendor-neutral so a provider swap keeps them. Nothing here may identify a person, a machine, a
  * project, a language, or a location.
  *
+ * `os_arch` is the architecture the app was built for, not the machine's: an x64 build running
+ * under emulation on an ARM machine reports x64.
+ *
  * TODO(PT-4359): the agreed set of per-event properties extends this function.
  */
 export async function getCommonProperties(): Promise<Record<string, unknown>> {
@@ -36,6 +39,7 @@ export async function getCommonProperties(): Promise<Record<string, unknown>> {
     app_version: await getAppVersion(),
     os_platform: os.platform(),
     os_release: os.release(),
+    os_arch: os.arch(),
   };
 }
 
