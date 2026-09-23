@@ -40,6 +40,22 @@ public sealed class ProjectSettingsNames
     /// </summary>
     public const string PB_IS_PUBLISHED = "platform.isPublished";
 
+    /// <summary>
+    /// The copyright notice to show when the project is opened (see <c>CopyrightNotice</c>). This
+    /// is a computed, read-only setting derived from the project's Copyright, full name and DBL id.
+    /// Intentionally NOT included in s_platformBibleToParatextSettingsNames because no Paratext
+    /// setting name maps to it.
+    /// </summary>
+    public const string PB_COPYRIGHT_NOTICE = "platformScripture.copyrightNotice";
+
+    /// <summary>
+    /// Settings.xml names read raw (through <c>GetRawParatextSetting</c>) to compute
+    /// <see cref="PB_COPYRIGHT_NOTICE"/>-style licensing flags without touching a resource's files.
+    /// Neither is a platform setting, so neither is in s_platformBibleToParatextSettingsNames.
+    /// </summary>
+    public const string PT_COPYRIGHT = "Copyright";
+    public const string PT_DBL_ID = "DBLId";
+
     public const string PB_TEXT_DIRECTION = "platform.textDirection";
     public const string PT_TEXT_DIRECTION = "TextDirection";
 

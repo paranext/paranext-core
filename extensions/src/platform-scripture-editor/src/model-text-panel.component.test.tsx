@@ -742,3 +742,28 @@ describe('ModelTextPanel', () => {
     expect(container).toHaveAttribute('dir', 'ltr');
   });
 });
+
+/** Whether `later` comes after `earlier` in document order */
+function comesAfter(earlier: Node, later: Node) {
+  // compareDocumentPosition reports its answer as bit flags
+  // eslint-disable-next-line no-bitwise
+  return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+describe('ModelTextPanel copyright notice', () => {
+  it('shows the notice below the model text header, leaving the header row alone', async () => {
+    renderPanel({
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter: vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' })),
+      copyrightNotice: <div data-testid="copyright-notice">Notice</div>,
+    });
+
+    const editor = await screen.findByTestId('editorial');
+    const header = screen.getByTestId('model-text-header');
+    const notice = screen.getByTestId('copyright-notice');
+    expect(header).not.toContainElement(notice);
+    expect(comesAfter(header, notice)).toBe(true);
+    expect(comesAfter(notice, editor)).toBe(true);
+  });
+});

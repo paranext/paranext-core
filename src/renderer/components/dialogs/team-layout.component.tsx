@@ -192,6 +192,11 @@ export type TeamLayoutDialogContentProps = {
    */
   hiddenInTextCollectionCount: number;
   resourcePickerLocalizedStrings: ResourcePickerDialogLocalizedStrings;
+  /**
+   * Why a resource cannot be picked as the model text, or `undefined` when it can. Applies to the
+   * model text picker only; any text can be a tab's resource.
+   */
+  getModelTextDisabledReason?: (resource: DblResourceData) => string | undefined;
   localizedStrings: TeamLayoutDialogLocalizedStrings;
   /**
    * Reports whether the admin has changed anything since mount. The host uses it to decide whether
@@ -509,6 +514,7 @@ export function TeamLayoutDialogContent({
   hiddenResourceCount,
   hiddenInTextCollectionCount,
   resourcePickerLocalizedStrings,
+  getModelTextDisabledReason,
   localizedStrings: strings,
   onDirtyChange,
   onConfirm,
@@ -884,6 +890,7 @@ export function TeamLayoutDialogContent({
                     selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
                     allowDeselect
                     localizedStrings={resourcePickerLocalizedStrings}
+                    getDisabledReason={getModelTextDisabledReason}
                     onSelect={handleSelectModelText}
                   />
                   {/* Picking a model text closes this dialog, so unlike the multi-select Manage

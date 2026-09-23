@@ -1,4 +1,5 @@
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 
@@ -38,6 +39,11 @@ namespace Paranext.DataProvider.ManageBooks;
 /// matching the platformScripture.versification contribution default the old getSetting path
 /// returned, and PT9's absent-versification == English semantics.
 /// </param>
+/// <param name="IsRestrictedAsBase">
+/// Whether licensing terms prohibit using the project as the base of new text: a traditionally
+/// licensed Biblica text (see <c>BiblicaLicensing</c>). The Create "Based on" picker shows such a
+/// project but does not let it be chosen. Not in Paratext 9, which has no such restriction.
+/// </param>
 public record ProjectSummary(
     string ProjectId,
     string Name,
@@ -45,7 +51,8 @@ public record ProjectSummary(
     bool IsEditable,
     bool IsResource = false,
     string FullName = "",
-    string Versification = "4"
+    string Versification = "4",
+    bool IsRestrictedAsBase = false
 )
 {
     /// <summary>
@@ -98,6 +105,16 @@ public record ProjectSummary(
             // (projectSettings.json → platformScripture.versification default: 4), and PT9's own
             // ScrVers accessor treats absent versification as English. "0" would regress such
             // projects from the English group to the Unknown group in the Create "Based on" picker.
-            Versification: scrText.GetRawParatextSetting(ProjectSettingsNames.PT_VERSIFICATION, "4")
+            Versification: scrText.GetRawParatextSetting(
+                ProjectSettingsNames.PT_VERSIFICATION,
+                "4"
+            ),
+            // Raw reads like the ones above: the typed Copyright and DBLId accessors can reach into a
+            // resource's zipped files, which a list over every project must not do
+            IsRestrictedAsBase: BiblicaLicensing.IsRestrictedLicense(
+                scrText.GetRawParatextSetting(ProjectSettingsNames.PT_COPYRIGHT),
+                scrText.GetRawParatextSetting(ProjectSettingsNames.PT_FULL_NAME),
+                scrText.GetRawParatextSetting(ProjectSettingsNames.PT_DBL_ID)
+            )
         );
 }

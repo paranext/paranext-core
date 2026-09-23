@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paratext.Data;
 using Paratext.Data.Archiving;
@@ -113,7 +115,10 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// An installed entry that reports an update available, via the name-mismatch branch of
         /// <c>IsNewerThanCurrentlyInstalled</c>.
         /// </summary>
-        private static InstallableResource OutOfDateResource(string dblEntryUid, ScrText existing) =>
+        private static InstallableResource OutOfDateResource(
+            string dblEntryUid,
+            ScrText existing
+        ) =>
             new InstalledResource(existing)
             {
                 DBLEntryUid = HexId.FromStr(dblEntryUid),
@@ -413,6 +418,34 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             // on. Without this the single `isComplete = false` in the catch could be deleted and
             // the suite would stay green, because every consumer test constructs the record itself.
             Assert.That(installedProjectIds.IsComplete, Is.False);
+        }
+
+        private static DblResourcesDataProvider.DblResourceData CatalogRow(string dblEntryUid) =>
+            new(dblEntryUid, "Name", "Full name", "English", ResourceType.DBL, 1, false, false, "");
+
+        [Test]
+        public void DblResourceData_MarksTraditionallyLicensedBiblicaTextsAsRestrictedModelTexts()
+        {
+            // NIV11
+            Assert.That(CatalogRow("71c6eab17ae5b667").IsRestrictedAsModelText, Is.True);
+        }
+
+        [Test]
+        public void DblResourceData_DoesNotRestrictOtherTexts()
+        {
+            // WEB
+            Assert.That(CatalogRow("97196133a859179b").IsRestrictedAsModelText, Is.False);
+        }
+
+        [Test]
+        public void DblResourceData_SendsTheRestrictionUnderItsFrontEndName()
+        {
+            string json = JsonSerializer.Serialize(
+                CatalogRow("71c6eab17ae5b667"),
+                SerializationOptions.CreateSerializationOptions()
+            );
+
+            Assert.That(json, Does.Contain("\"isRestrictedAsModelText\":true"));
         }
     }
 }

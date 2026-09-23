@@ -206,6 +206,8 @@ import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
 } from './sync-blocked-banner.component';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
 /**
  * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
@@ -244,6 +246,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
   ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
   ...CHARACTER_MARKER_MENU_STRING_KEYS,
@@ -3899,6 +3902,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
+      {/* Outside the zoomed, scrolling text area, so the notice stays put while the text scrolls */}
+      <ProjectCopyrightNotice
+        projectId={projectId}
+        localizedStrings={localizedStrings}
+        useWebViewState={useWebViewState}
+      />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
           The Scripture text zoom area: the toolbar and the footnotes-pane divider live outside it,
           in the surrounding layout; the editor and everything it renders inline (including the
