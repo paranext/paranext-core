@@ -5,6 +5,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Button,
+  ContentZoomRoot,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -314,9 +315,12 @@ export function ResourceCellView({
         // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
-          <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto" style={contentStyle}>
-            {stateContent}
-          </div>
+          {/* The pane's `text-collection` zoom marks this wrapper; the per-resource zoom stays on
+              the element inside it. Zoom on two nested elements multiplies, while an inline `zoom`
+              on the marker itself would replace the pane's level. */}
+          <ContentZoomRoot area="text-collection" className="tw:min-w-0 tw:flex-1 tw:overflow-auto">
+            <div style={contentStyle}>{stateContent}</div>
+          </ContentZoomRoot>
         </div>
       ) : (
         // Chapter context: a compact header line (colored name with a bottom border) with the zoom
@@ -391,9 +395,16 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
           </div>
-          <div className="tw:flex-1 tw:overflow-auto" style={contentStyle} dir={textDirection}>
-            <div className="tw:p-2">{stateContent}</div>
-          </div>
+          {/* Same nesting as the verse row: pane zoom on the marker, per-resource zoom inside it. */}
+          <ContentZoomRoot
+            area="text-collection"
+            className="tw:flex-1 tw:overflow-auto"
+            dir={textDirection}
+          >
+            <div style={contentStyle}>
+              <div className="tw:p-2">{stateContent}</div>
+            </div>
+          </ContentZoomRoot>
         </>
       )}
       {zoomMenuLabels ? (

@@ -519,8 +519,10 @@ describe('ResourceCell zoom', () => {
     );
     // jsdom does not serialize CSS `zoom` into the style attribute string, so
     // `[style*="zoom"]` selectors fail. Instead check the CSSOM property directly on
-    // the content wrapper element (the div with dir="ltr" that carries the zoom style).
-    const contentWrapper = document.querySelector('[dir="ltr"]');
+    // the content wrapper element: the first child of the cell's `text-collection` marker.
+    const contentWrapper = document.querySelector(
+      '[data-platform-content-zoom-root="text-collection"] > div',
+    );
     expect(contentWrapper).not.toBeNull();
     expect(contentWrapper instanceof HTMLElement && contentWrapper.style.zoom).toBe('1.4');
   });

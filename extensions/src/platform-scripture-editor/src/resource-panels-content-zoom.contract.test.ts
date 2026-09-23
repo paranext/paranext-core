@@ -20,8 +20,8 @@ function source(fileName: string): string {
 
 /**
  * Every `.ts`/`.tsx` file under `dir`, excluding test files. Used below to sweep the whole
- * extension for `ContentZoomRoot` usages rather than trusting the five files that happen to carry
- * markers today — a `ContentZoomRoot` added later inside `resource-cell-view.component.tsx`,
+ * extension for `ContentZoomRoot` usages rather than trusting the files that happen to carry
+ * markers today — a `ContentZoomRoot` added later around the cells in
  * `scripture-text-grid.component.tsx`, or a second one inside either panel's own `renderContent()`
  * subtree would nest, be silently ignored by the platform, and leave every test above (each reading
  * only its own named file) green. Test files are excluded by name pattern rather than one at a
@@ -53,25 +53,29 @@ const ALLOWED_CONTENT_ZOOM_ROOT_COUNTS: Readonly<Record<string, number>> = {
   'platform-scripture-editor-footnotes.component.tsx': 1,
   'platform-scripture-editor.web-view.tsx': 1,
   'resource-text-panel.component.tsx': 1,
-  'scripture-text-grid.web-view.tsx': 1,
+  // One per cell layout (verse row and chapter column); every cell shares the one area id.
+  [path.join('scripture-text-grid', 'resource-cell-view.component.tsx')]: 2,
 };
 
 describe('content zoom markers (Text Collection grid)', () => {
   const grid = source('scripture-text-grid.web-view.tsx');
+  const cell = source(path.join('scripture-text-grid', 'resource-cell-view.component.tsx'));
 
-  it('marks the grid body, not the outer element that also holds the View Options row', () => {
-    expect(grid).toMatch(
-      /<ContentZoomRoot area="text-collection" className="tw:flex-1 tw:overflow-hidden">/,
+  it('leaves the grid body unmarked, so the headers, grips and kebabs inside it keep their size', () => {
+    expect(grid).toContain(
+      '<div className="tw:flex-1 tw:overflow-hidden"> {gridBodyState === \'catalogError\'',
     );
+    expect(grid).not.toContain('<ContentZoomRoot');
   });
 
-  it('keeps the View Options header outside the marked area', () => {
-    // The header is the sibling above the marked body; if it moved inside, it would scale with the
-    // content, which is exactly what marking a content root is for avoiding.
-    const headerIndex = grid.indexOf('tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1');
-    const areaIndex = grid.indexOf('<ContentZoomRoot');
-    expect(headerIndex).toBeGreaterThan(-1);
-    expect(areaIndex).toBeGreaterThan(headerIndex);
+  it('marks each cell’s text with the text-collection area, wrapping the per-resource zoom element, in both layouts', () => {
+    expect(
+      cell.match(/<ContentZoomRoot area="text-collection"[^>]*> ?<div style={contentStyle}>/g),
+    ).toHaveLength(2);
+  });
+
+  it('never puts the marker on the element carrying the per-resource inline zoom', () => {
+    expect(cell).not.toMatch(/<ContentZoomRoot[^>]*style={contentStyle}/);
   });
 });
 
