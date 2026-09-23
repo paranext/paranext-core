@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CONTENT_ZOOM_ROOT_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import {
   CONTENT_ZOOM_COMMANDS,
@@ -39,5 +40,9 @@ describe('content-zoom.model', () => {
 
   it('names the main area with the empty value, its id, and the "true" React writes for a bare JSX prop', () => {
     expect(CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES).toEqual(['', 'main', 'true']);
+  });
+
+  it('keeps the library marker attribute equal to the platform constant', () => {
+    expect(LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe(CONTENT_ZOOM_ROOT_ATTRIBUTE);
   });
 });
