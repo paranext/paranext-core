@@ -18,12 +18,12 @@ export const platformSettings: SettingsContribution = [
       },
       'platform.zoomFactor': {
         label: '%settings_platform_zoomFactor_label_2%',
-        description: '%settings_platform_zoomFactor_description%',
+        description: '%settings_platform_zoomFactor_description_2%',
         default: DEFAULT_ZOOM_FACTOR,
       },
       'platform.webViewContentZoom': {
         label: '%settings_platform_webViewContentZoom_label%',
-        description: '%settings_platform_webViewContentZoom_description%',
+        description: '%settings_platform_webViewContentZoom_description_2%',
         default: DEFAULT_ZOOM_FACTOR,
       },
       'platform.webViewContentZoomMemory': {

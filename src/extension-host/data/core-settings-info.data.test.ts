@@ -91,7 +91,7 @@ describe('content zoom settings', () => {
     const group = groups[0];
     expect(group.properties['platform.webViewContentZoom']).toMatchObject({
       label: '%settings_platform_webViewContentZoom_label%',
-      description: '%settings_platform_webViewContentZoom_description%',
+      description: '%settings_platform_webViewContentZoom_description_2%',
       default: 1,
     });
     expect(group.properties['platform.webViewContentZoomMemory']).toMatchObject({
@@ -100,10 +100,11 @@ describe('content zoom settings', () => {
     });
   });
 
-  it('labels the whole-application zoom with the renamed key, leaving the shipped one for fallback', () => {
+  it('labels the whole-application zoom with the renamed key and describes it in percentages', () => {
     const [group] = Array.isArray(platformSettings) ? platformSettings : [platformSettings];
     expect(group.properties['platform.zoomFactor']).toMatchObject({
       label: '%settings_platform_zoomFactor_label_2%',
+      description: '%settings_platform_zoomFactor_description_2%',
     });
   });
 
