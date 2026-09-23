@@ -9,15 +9,15 @@ type UpdateListener = (event: { webView: { id: string; state?: Record<string, un
 
 /**
  * Builds the web view globals the hook reads from `this`, backed by an in-memory state record.
- * Every state write emits the update event with a deserialized copy of the whole state, as the web
- * view service does over the network.
+ * Every state write emits the update event with a shallow copy of the whole state, as the web view
+ * service does within the window: values at untouched keys keep their identity.
  */
 function createWebViewContext(initialState: Record<string, unknown> = {}) {
   const state: Record<string, unknown> = { ...initialState };
   const listeners = new Set<UpdateListener>();
 
   const emitUpdate = (webViewId = WEB_VIEW_ID) => {
-    const event = { webView: { id: webViewId, state: structuredClone(state) } };
+    const event = { webView: { id: webViewId, state: { ...state } } };
     act(() => {
       listeners.forEach((listener) => listener(event));
     });
@@ -111,7 +111,7 @@ describe('useWebViewState', () => {
     expect(result.current[0]).toBe(afterRemoval);
   });
 
-  it('keeps the same saved object when an unrelated update re-delivers an equal value', () => {
+  it('keeps the same saved object when an equal value is saved as a new object', () => {
     const { useSlot, writeExternally } = createWebViewContext({ items: ['a', 'b'] });
     let effectRuns = 0;
 
@@ -126,12 +126,16 @@ describe('useWebViewState', () => {
     expect(before).toEqual(['a', 'b']);
     expect(effectRuns).toBe(1);
 
-    // Each update carries a freshly deserialized copy of the whole state, `items` included
+    // Unrelated updates leave the saved object alone
     rerender();
     writeExternally('contentZoom', { level: 1.2 });
     rerender();
     writeExternally('contentZoom', { level: 1.4 });
+    expect(Object.is(before, result.current)).toBe(true);
+    expect(effectRuns).toBe(1);
 
+    // Re-saving an equal value as a new array keeps the current object
+    writeExternally('items', ['a', 'b']);
     expect(Object.is(before, result.current)).toBe(true);
     expect(effectRuns).toBe(1);
 
@@ -142,13 +146,17 @@ describe('useWebViewState', () => {
   });
 
   it('updates the slot when a saved value arrives with an update', () => {
-    const { useSlot, writeExternally } = createWebViewContext();
+    const { useSlot, writeExternally, removeExternally } = createWebViewContext();
 
     const { result } = renderHook(() => useSlot('items', []));
     expect(result.current[0]).toEqual([]);
 
     writeExternally('items', ['b']);
     expect(result.current[0]).toEqual(['b']);
+
+    // Having held a saved value, the slot resets to the default when that value is removed
+    removeExternally('items');
+    expect(result.current[0]).toEqual([]);
   });
 
   it("shows the caller's own write, and the default again after resetting it", () => {
@@ -162,6 +170,40 @@ describe('useWebViewState', () => {
 
     act(() => result.current[2]());
     expect(result.current[0]).toBe(defaultItems);
+  });
+
+  it('applies the latest default when resetting a slot that already shows a default', () => {
+    const defaultA: string[] = [];
+    const defaultB: string[] = [];
+    const { useSlot } = createWebViewContext();
+
+    const { result, rerender } = renderHook(
+      ({ defaultItems }: { defaultItems: string[] }) => useSlot('items', defaultItems),
+      { initialProps: { defaultItems: defaultA } },
+    );
+    expect(result.current[0]).toBe(defaultA);
+
+    rerender({ defaultItems: defaultB });
+    act(() => result.current[2]());
+    expect(result.current[0]).toBe(defaultB);
+  });
+
+  it('shows the default for a new key without a value and keeps it across unrelated updates', () => {
+    const { useSlot, writeExternally } = createWebViewContext({ first: ['x'] });
+
+    const { result, rerender } = renderHook(
+      ({ stateKey }: { stateKey: string }) => useSlot(stateKey, []),
+      { initialProps: { stateKey: 'first' } },
+    );
+    expect(result.current[0]).toEqual(['x']);
+
+    rerender({ stateKey: 'second' });
+    const defaultShown = result.current[0];
+    expect(defaultShown).toEqual([]);
+
+    rerender({ stateKey: 'second' });
+    writeExternally('contentZoom', { level: 1.2 });
+    expect(result.current[0]).toBe(defaultShown);
   });
 
   it('ignores updates for other web views', () => {
