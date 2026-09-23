@@ -636,10 +636,10 @@ function storedIdentityStamp(
 function hasStaleStamp(
   definition: Pick<SavedWebViewDefinition, 'webViewType' | 'projectId' | 'state'>,
 ): boolean {
-  const id = memoryIdentityFor(definition);
-  if (!id) return false;
   const storedStamp = storedIdentityStamp(definition);
-  return storedStamp !== undefined && storedStamp !== identityStampFor(id);
+  if (storedStamp === undefined) return false;
+  const id = memoryIdentityFor(definition);
+  return id !== undefined && storedStamp !== identityStampFor(id);
 }
 
 /**
@@ -1245,13 +1245,12 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
  * Also records the pane's identity right now alongside the levels (see
  * {@link pendingOwnLevelWrites}), so a later {@link seedFromMemory} or {@link commitOwnLevels} call
  * can tell this write apart from one that predates a re-point.
+ *
+ * @param definition The pane's definition as the caller has just read it.
  */
-function setOwnLevels(webViewId: WebViewId, levels: Levels): boolean {
-  const currentDefinition = deps.getDefinition(webViewId);
-  pendingOwnLevelWrites.set(webViewId, {
-    levels,
-    identity: currentDefinition ? commitStampFor(currentDefinition) : undefined,
-  });
+function setOwnLevels(definition: SavedWebViewDefinition, levels: Levels): boolean {
+  const webViewId = definition.id;
+  pendingOwnLevelWrites.set(webViewId, { levels, identity: commitStampFor(definition) });
   if (ownLevelWriteTimers.has(webViewId)) return true;
   if (!commitOwnLevels(webViewId)) return false;
   ownLevelWriteTimers.set(
@@ -1280,7 +1279,7 @@ function writeOwnLevel(
   const levels: Levels = { ...effectiveOwnLevels(definition) };
   if (level === undefined) delete levels[areaId];
   else levels[areaId] = level;
-  setOwnLevels(definition.id, levels);
+  setOwnLevels(definition, levels);
 }
 
 /**
@@ -1474,7 +1473,7 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       // The sibling shows the level whether or not the write reached its definition, for the same
       // reason the acting pane does: the push reads `effectiveOwnLevels`, and a level that did not
       // get stored stays pending there for the next write to carry.
-      const stored = setOwnLevels(definition.id, levels);
+      const stored = setOwnLevels(current, levels);
       pushContentZoom(definition.id);
       if (!stored) everyPaneTookItsUpdate = false;
     } catch (e) {
@@ -1586,7 +1585,9 @@ export function initializeContentZoomService(
         // the push below, which keeps the pane's variables current even when its own identity check
         // could not be stored.
         try {
-          reseedIfIdentityChanged(definition);
+          // Checked on the event's own payload first: most updates are of panes with no stamp,
+          // which have nothing to re-seed.
+          if (storedIdentityStamp(webView) !== undefined) reseedIfIdentityChanged(definition);
         } catch (e) {
           logger.warn(
             `Content zoom: could not re-seed web view ${webView.id}. ${getErrorMessage(e)}`,
