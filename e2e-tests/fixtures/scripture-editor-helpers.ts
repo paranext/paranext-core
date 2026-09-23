@@ -442,8 +442,6 @@ export async function waitForHomeTab(mainPage: Page): Promise<void> {
     .locator('.dock-tab', { hasText: 'Home' })
     .first()
     .waitFor({ timeout: LAUNCH_PHASE_TIMEOUT_MS });
-
-  await suppressOnboardingTour(mainPage);
 }
 
 /**
