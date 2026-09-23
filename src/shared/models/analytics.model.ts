@@ -41,4 +41,10 @@ export interface AnalyticsProvider {
    *   guarantee it never throws.
    */
   send(event: AnalyticsEvent): Promise<void>;
+  /**
+   * Flushes anything not yet transmitted and releases resources. Optional: a provider with nothing
+   * to flush (e.g. console) omits it. Must settle promptly; the analytics service bounds the call,
+   * so an implementation should not rely on being awaited to completion.
+   */
+  shutdown?(): Promise<void>;
 }
