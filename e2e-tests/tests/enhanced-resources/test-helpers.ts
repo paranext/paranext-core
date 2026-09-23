@@ -27,8 +27,8 @@ export async function closeAllNonHomeDockTabs(page: Page): Promise<void> {
 export const ER_FRAME_SELECTOR = 'iframe[title="Enhanced Resource"]';
 
 export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
-export const SCRIPTURE_TEXT_GRID_TAB_TITLE = /^Scripture text$/;
-export const SCRIPTURE_TEXT_GRID_FRAME_SELECTOR = 'iframe[title="Scripture text"]';
+export const SCRIPTURE_TEXT_GRID_TAB_TITLE = /^Text Collection$/;
+export const SCRIPTURE_TEXT_GRID_FRAME_SELECTOR = 'iframe[title="Text Collection"]';
 
 /** Narrow PAPI slice used by Scripture Text Grid e2e helpers. */
 export type ScriptureTextGridPapiWindow = {
@@ -53,7 +53,7 @@ export type ScriptureTextGridPapiWindow = {
       openWebView: (
         type: string,
         layout?: unknown,
-        options?: { existingId?: string },
+        options?: { existingId?: string; projectId?: string },
       ) => Promise<string | undefined>;
     };
   };
@@ -134,7 +134,10 @@ export async function flagResourcesAndOpenScriptureTextGrid(
         await pdp.resetTextCollectionOverlay();
         await pdp.resetCellOrder();
         await pdp.initializeTextCollectionOverlay();
-        await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
+        await papi.webViews.openWebView(webViewType, undefined, {
+          existingId: '?',
+          projectId: testProjectId,
+        });
         return { projectId: testProjectId, modelTexts: originalModelTexts };
       } catch (error) {
         await pdp.setSetting('platformScripture.modelTexts', originalModelTexts);
@@ -165,7 +168,10 @@ export async function restoreScriptureTextGridProjectSettings(page: Page): Promi
         await pdp.setSetting('platformScripture.modelTexts', payload.modelTexts);
         await pdp.resetTextCollectionOverlay();
         await pdp.resetCellOrder();
-        await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
+        await papi.webViews.openWebView(webViewType, undefined, {
+          existingId: '?',
+          projectId: payload.projectId,
+        });
       },
       { payload: restore, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE },
     )
@@ -197,14 +203,29 @@ export type ScriptureTextGrid = {
   switchToChapterView: () => Promise<void>;
 };
 
-/** Open (or focus) the Scripture Text Grid tab and return a page object with pre-bound locators. */
-export async function openScriptureTextGrid(page: Page): Promise<ScriptureTextGrid> {
-  await page.evaluate(async (webViewType) => {
-    // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
-    const { papi } = window as unknown as ScriptureTextGridPapiWindow;
-    await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
-  }, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+/**
+ * Open (or focus) the Scripture Text Grid tab and return a page object with pre-bound locators.
+ *
+ * @param projectId The project to bind the grid to. Required whenever the grid is opened fresh (no
+ *   editor is open for `useTextCollectionProjectId` to fall back to) — pass the same id used to
+ *   seed the model texts, or the grid renders empty.
+ */
+export async function openScriptureTextGrid(
+  page: Page,
+  projectId?: string,
+): Promise<ScriptureTextGrid> {
+  await page.evaluate(
+    async ({ webViewType, gridProjectId }) => {
+      // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+      const { papi } = window as unknown as ScriptureTextGridPapiWindow;
+      await papi.webViews.openWebView(webViewType, undefined, {
+        existingId: '?',
+        projectId: gridProjectId,
+      });
+    },
+    { webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, gridProjectId: projectId },
+  );
 
   const tab = page.locator('.dock-tab', { hasText: SCRIPTURE_TEXT_GRID_TAB_TITLE });
   await expect(tab).toBeVisible({ timeout: 15_000 });
