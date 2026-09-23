@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import menuDataObject from '@extension-host/data/menu.data.json';
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
+import { USERSNAP_SPACE_API_KEY } from '@shared/data/platform.data';
 import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
 import { JsonDocumentLike, PlatformMenus } from 'platform-bible-utils';
 import { describe, expect, test, vi } from 'vitest';
@@ -117,12 +118,15 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
    * Update these lists only alongside a deliberate decision about whether the item belongs in each
    * mode — never to make a failing run green.
    *
-   * Paratext 10's repo patch re-adds two `platform.helpFeedback` items
-   * (`platform.usersnapSubmitIdea` and `platform.usersnapReportIssue`), so these exact-equality
-   * pins fail inside a patched build. The empty `platform.helpFeedback` group and the
-   * `%mainMenu_feedbackForm_screenshot%` / `%mainMenu_feedbackForm_textArea%` labels stay in core
-   * as anchors for that patch.
+   * A product build that sets the Usersnap space key (Paratext 10, through its repo patch) also
+   * re-adds two `platform.helpFeedback` items, so those are expected exactly when the key is set.
+   * The empty `platform.helpFeedback` group and the `%mainMenu_feedbackForm_screenshot%` /
+   * `%mainMenu_feedbackForm_textArea%` labels stay in core as anchors for that patch.
    */
+  const PRODUCT_FEEDBACK_ITEMS = USERSNAP_SPACE_API_KEY
+    ? ['platform.usersnapReportIssue', 'platform.usersnapSubmitIdea']
+    : [];
+
   const SIMPLE_MAIN_MENU = [
     'helloRock3.createNewProject',
     'helloRock3.deleteProject',
@@ -132,6 +136,7 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
     'platform.openSettings',
     'platform.quit',
     'platform.showOnboardingTour',
+    ...PRODUCT_FEEDBACK_ITEMS,
     'platform.visitFAQsPage',
   ];
 
@@ -147,6 +152,7 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
     'platform.openSettings',
     'platform.quit',
     'platform.showOnboardingTour',
+    ...PRODUCT_FEEDBACK_ITEMS,
     'platform.visitFAQsPage',
     'platform.visitFeatureRoadmapPage',
     'platform.visitGettingStartedPage',

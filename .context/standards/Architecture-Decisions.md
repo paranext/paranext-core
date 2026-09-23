@@ -6979,8 +6979,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** Platform.Bible makes no Usersnap request, registers no display-media handler,
   and tells a user who reaches a feedback command that the forms are not available in this build.
   The exact-equality main-menu pins in
-  `src/extension-host/services/menu-data.service-host.contributions.test.ts` fail inside a patched
-  build; the test says so, and the empty `platform.helpFeedback` group and the
+  `src/extension-host/services/menu-data.service-host.contributions.test.ts` expect the two
+  feedback items exactly when `USERSNAP_SPACE_API_KEY` is set, so they hold in core and in a
+  patched build alike; the empty `platform.helpFeedback` group and the
   `%mainMenu_feedbackForm_screenshot%` / `%mainMenu_feedbackForm_textArea%` labels stay in core as
   anchors for the patch. Any core change touching a file the patch edits requires regenerating the
   Paratext 10 patch.
