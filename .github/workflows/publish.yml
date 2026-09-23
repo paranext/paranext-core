@@ -1,6 +1,9 @@
 name: Publish
 run-name: Publish release v${{ github.event.inputs.version }} on ${{ github.head_ref || github.ref_name }}
 
+# Every step that calls a remote service gets `timeout-minutes: 90`: above the slowest successful
+# run on record, so a slow service still passes, but far below the 6-hour job cap a stall runs to.
+
 # Make sure these match with the matrix.os values below
 env:
   OS_WINDOWS: windows-latest
@@ -52,21 +55,25 @@ jobs:
 
       - name: Install MacPorts
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         uses: paranext/setup-macports@v0.2.0
 
       - name: Update MacPorts ports tree
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         # Not using `-v` for verbose because it is very slow and does not add much value
         run: |
           sudo port sync
 
       - name: Install loader tools on macOS
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         run: |
           sudo port -v install ld64
 
       - name: Install icu4c on macOS
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         run: |
           sudo port -v install icu @78.3_1 +universal
 
@@ -93,11 +100,12 @@ jobs:
 
       - name: Install snap tools on Linux
         if: ${{ matrix.os == env.OS_LINUX }}
-        # A Snap Store outage can stall this step until the 6-hour job default.
-        timeout-minutes: 15
+        timeout-minutes: 90
         run: |
-          sudo apt update
-          sudo apt install -y snapd
+          # apt is safe to kill mid-download; snap is not (snapd keeps the change running), so only
+          # apt gets a per-command bound.
+          timeout 10m sudo apt update
+          timeout 10m sudo apt install -y snapd
           # The snap store CDN intermittently answers a download with a 502 and snapd
           # gives up on the first try, failing the job before the build even starts.
           retry() {
@@ -135,9 +143,11 @@ jobs:
           sudo iptables -P FORWARD ACCEPT
 
       - name: Checkout git repo
+        timeout-minutes: 90
         uses: actions/checkout@v4
 
       - name: Install .NET
+        timeout-minutes: 90
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ matrix.dotnet_version }}
@@ -161,15 +171,18 @@ jobs:
           exit 1
 
       - name: Install Volta and toolchain
+        timeout-minutes: 90
         uses: volta-cli/action@v4
 
       - name: Install Node and NPM
+        timeout-minutes: 90
         uses: actions/setup-node@v4
         with:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
 
       - name: Install packages and build
+        timeout-minutes: 90
         run: |
           npm ci
           npm run build
@@ -200,6 +213,7 @@ jobs:
 
       - name: Prepare release - Windows
         if: ${{ matrix.os == env.OS_WINDOWS }}
+        timeout-minutes: 90
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -209,6 +223,7 @@ jobs:
 
       - name: Code signing - Windows
         if: ${{ matrix.os == env.OS_WINDOWS }}
+        timeout-minutes: 90
         # See https://github.com/cognitedata/code-sign-action/blob/main/README.md for descriptions
         env:
           CERTIFICATE_HOST: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST }}
@@ -223,6 +238,7 @@ jobs:
 
       - name: Prepare release - macOS
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         env:
           # The APPLE_* values are used for auto updates signing
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -247,8 +263,7 @@ jobs:
       # which uploads a per-platform artifact on every push.
       - name: Prepare release - Linux
         if: ${{ matrix.os == env.OS_LINUX }}
-        # A Snap Store outage can stall this step until the 6-hour job default.
-        timeout-minutes: 30
+        timeout-minutes: 90
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
@@ -276,6 +291,7 @@ jobs:
 
       - name: Upload snapcraft logs (Linux)
         if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
           name: snapcraft-logs
@@ -292,6 +308,7 @@ jobs:
       # jobs to create the same release.
       - name: Publish draft release
         if: ${{ matrix.os == env.OS_LINUX }}
+        timeout-minutes: 90
         uses: ncipollo/release-action@v1
         with:
           # Need to allow updates in order to re-run this workflow against an existing draft
@@ -316,6 +333,7 @@ jobs:
       - name: Upload release assets to S3
         id: upload_s3
         if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
+        timeout-minutes: 90
         uses: shallwefootball/upload-s3-action@v1.3.3
         with:
           aws_key_id: ${{ secrets.AWS_S3_RELEASE_ACCESS_KEY_ID }}
@@ -332,6 +350,7 @@ jobs:
 
       - name: Checkout bump ref
         if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
+        timeout-minutes: 90
         uses: actions/checkout@v4
         with:
           clean: false
@@ -342,6 +361,7 @@ jobs:
       # and gitleaks is not part of the runner image.
       - name: Install gitleaks for the pre-commit hook
         if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
+        timeout-minutes: 90
         env:
           GITLEAKS_VERSION: 8.30.1
         run: |
@@ -353,6 +373,7 @@ jobs:
 
       - name: Bump repo versions
         if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
+        timeout-minutes: 90
         uses: ./.github/actions/bump-versions-action
         with:
           newVersion: ${{ inputs.newVersionAfterPublishing }}

@@ -1,5 +1,8 @@
 name: Test
 
+# Every step that calls a remote service gets `timeout-minutes: 90`: above the slowest successful
+# run on record, so a slow service still passes, but far below the 6-hour job cap a stall runs to.
+
 # Make sure these match with the matrix.os values below
 env:
   OS_WINDOWS: windows-latest
@@ -39,21 +42,25 @@ jobs:
     steps:
       - name: Install MacPorts
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         uses: paranext/setup-macports@v0.2.0
 
       - name: Update MacPorts ports tree
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         # Not using `-v` for verbose because it is very slow and does not add much value
         run: |
           sudo port sync
 
       - name: Install loader tools on macOS
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         run: |
           sudo port -v install ld64
 
       - name: Install icu4c on macOS
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         run: |
           sudo port -v install icu @78.3_1 +universal
 
@@ -92,11 +99,12 @@ jobs:
 
       - name: Install snap tools on Linux
         if: ${{ matrix.os == env.OS_LINUX }}
-        # A Snap Store outage can stall this step until the 6-hour job default.
-        timeout-minutes: 15
+        timeout-minutes: 90
         run: |
-          sudo apt update
-          sudo apt install -y snapd
+          # apt is safe to kill mid-download; snap is not (snapd keeps the change running), so only
+          # apt gets a per-command bound.
+          timeout 10m sudo apt update
+          timeout 10m sudo apt install -y snapd
           # The snap store CDN intermittently answers a download with a 502 and snapd
           # gives up on the first try, failing the job before the build even starts.
           retry() {
@@ -134,9 +142,11 @@ jobs:
           sudo iptables -P FORWARD ACCEPT
 
       - name: Check out Git repository
+        timeout-minutes: 90
         uses: actions/checkout@v4
 
       - name: Install .NET
+        timeout-minutes: 90
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ matrix.dotnet_version }}
@@ -152,6 +162,7 @@ jobs:
       # `.config/dotnet-tools.json` pins `nuget-license`, which `dotnet tool restore` fetches into
       # the same store: without it a tool-version bump reuses a cache that predates it.
       - name: Cache NuGet packages
+        timeout-minutes: 90
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
@@ -166,9 +177,11 @@ jobs:
           file_path: 'package.json'
 
       - name: Install Volta and toolchain
+        timeout-minutes: 90
         uses: volta-cli/action@v4
 
       - name: Install Node.js and NPM
+        timeout-minutes: 90
         uses: actions/setup-node@v4
         with:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
@@ -179,6 +192,7 @@ jobs:
       # committed lock, which needs no Ruby.
       - name: Install Ruby
         if: ${{ matrix.os == env.OS_LINUX }}
+        timeout-minutes: 90
         uses: ruby/setup-ruby@v1
         with:
           # Pinned to match the developer prerequisite. licensee 10.x requires >= 3.2, and letting
@@ -188,6 +202,7 @@ jobs:
           bundler-cache: true
 
       - name: Install packages
+        timeout-minutes: 90
         run: npm ci
 
       # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
@@ -198,6 +213,7 @@ jobs:
           npm run typecheck
 
       - name: Build
+        timeout-minutes: 90
         run: npm run build
 
       # `npm run build` compiles main, renderer and extension-host with NODE_ENV=production but
@@ -230,6 +246,7 @@ jobs:
       # file. It needs Ruby and the dotnet restore that `npm run build` above performs.
       - name: verify third-party notices against the committed lock
         if: ${{ matrix.os == env.OS_LINUX }}
+        timeout-minutes: 90
         run: npm run verify:third-party-notices
 
       # The notices file is packaged into every platform's installer, so a Linux-generated
@@ -265,9 +282,11 @@ jobs:
           exit 1
 
       - name: dotnet unit tests
+        timeout-minutes: 90
         run: dotnet test c-sharp-tests/c-sharp-tests.csproj
 
       - name: Install Playwright Browsers
+        timeout-minutes: 90
         run: npx playwright install --with-deps
 
       - name: npm unit tests
@@ -302,6 +321,7 @@ jobs:
 
       - name: Upload Playwright test results
         if: ${{ !cancelled() }}
+        timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
           name: playwright-results-${{ matrix.os }}
@@ -313,6 +333,7 @@ jobs:
 
       - name: check dotnet formatting
         if: ${{ matrix.os == env.OS_LINUX }}
+        timeout-minutes: 90
         run: |
           cd c-sharp
           dotnet tool restore
@@ -327,8 +348,8 @@ jobs:
         run: npm run lint
 
       - name: check packaging
-        # Only the Linux leg builds the snap, which a Snap Store outage can stall.
-        timeout-minutes: ${{ matrix.os == env.OS_LINUX && 30 || 360 }}
+        id: packaging
+        timeout-minutes: 90
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
@@ -345,6 +366,7 @@ jobs:
 
       - name: Delete previous Windows artifacts created by this workflow
         if: ${{ matrix.os == env.OS_WINDOWS }}
+        timeout-minutes: 90
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -363,6 +385,7 @@ jobs:
 
       - name: Upload Windows artifacts
         if: ${{ matrix.os == env.OS_WINDOWS }}
+        timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
           name: app-windows-test
@@ -373,6 +396,7 @@ jobs:
 
       - name: Delete previous macOS artifacts created by this workflow
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -389,6 +413,7 @@ jobs:
 
       - name: Upload macOS artifacts
         if: ${{ matrix.os == env.OS_MACOS }}
+        timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
           name: app-macos-test
@@ -398,6 +423,7 @@ jobs:
 
       - name: Delete previous Linux artifacts created by this workflow
         if: ${{ matrix.os == env.OS_LINUX }}
+        timeout-minutes: 90
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -420,15 +446,16 @@ jobs:
             echo "Renamed $file to $newName"
           done
 
-      # `!cancelled()` means this uploads snaps that failed the metadata check as well as passing
-      # ones, so the name states which it is: `app-linux-test` passed, `app-linux-test-failed-check`
-      # did not. Download the plain name when you want a working snap, the suffixed one when you
+      # `!cancelled()` means this uploads snaps from a failed packaging step or metadata check as well
+      # as passing ones, so the name states which it is: `app-linux-test` passed,
+      # `app-linux-test-failed-check` did not. Download the plain name when you want a working snap, the suffixed one when you
       # want to unsquash the build that failed.
       - name: Upload Linux artifacts
         if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
+        timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
-          name: app-linux-test${{ steps.snap-metadata.outcome == 'failure' && '-failed-check' || '' }}
+          name: app-linux-test${{ (steps.packaging.outcome == 'failure' || steps.snap-metadata.outcome == 'failure') && '-failed-check' || '' }}
           retention-days: 14
           path: |
             ./release/build/*.snap
@@ -450,6 +477,7 @@ jobs:
 
       - name: Upload snapcraft logs (Linux)
         if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
           name: snapcraft-logs
