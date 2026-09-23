@@ -582,7 +582,7 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-1')?.state).toEqual({});
   });
 
-  it('does not let a stamp-mismatch redirect that turns out to be a no-op advance the record a later delta is computed against', async () => {
+  it('does not let a stamp-mismatch redirect that turns out to be a no-op count as the pane having taken the delta', async () => {
     settings[MEMORY] = { 'notes:AAA:main': 1.5 };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
@@ -663,9 +663,65 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-3')?.state).toEqual({}); // after it: still reached
     expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } });
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-2'));
-    // The record did not advance, so the same delta reaches the pane that missed it.
+    // The delta stays owed to the pane that missed it, so the next change still reaches it.
     throwingPane = undefined;
     memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-2')?.state).toEqual({});
+  });
+
+  it('does not replay a removal a pane still owes onto a sibling opened after it, when an unrelated key changes', () => {
+    requireDefinition('editor-1').state = zoomState({ main: 1.5 });
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.5 }));
+    // editor-1 cannot take the reset of "main", so that removal stays owed to it.
+    updateDefinition.mockImplementation(
+      (id: string, update: { state?: Record<string, unknown> }) => {
+        if (id === 'editor-1') throw new Error('local storage quota exceeded');
+        return applyDefinitionUpdate(id, update);
+      },
+    );
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.5 }));
+
+    // A sibling of the same project reopens holding a level of its own that memory has never held
+    // since it opened: the removal above happened before it existed and is no news to it.
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: zoomState({ main: 1.2 }),
+    });
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-B:main': 1.3 }));
+
+    expect(definitions.get('editor-2')?.state).toEqual(zoomState({ main: 1.2 }));
+    // The pane that owed the removal still receives it.
+    expect(definitions.get('editor-1')?.state).toEqual({});
+  });
+
+  it('delivers a level added and then reset again while another pane left the walk unconfirmed', async () => {
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    // editor-2 cannot take any update, so no walk from here on is confirmed by every pane.
+    updateDefinition.mockImplementation(
+      (id: string, update: { state?: Record<string, unknown> }) => {
+        if (id === 'editor-2') throw new Error('local storage quota exceeded');
+        return applyDefinitionUpdate(id, update);
+      },
+    );
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.5 }));
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.5 }));
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.5');
+
+    // A reset elsewhere removes "main" again.
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('editor-1')?.state).toEqual({});
     expect(definitions.get('editor-2')?.state).toEqual({});
   });
 

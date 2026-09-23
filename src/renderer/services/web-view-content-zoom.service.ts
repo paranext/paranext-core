@@ -150,15 +150,26 @@ let cachedMemory: MemoryRecord = {};
 let memoryLoaded = false;
 
 /**
- * The memory record the sibling sync last reconciled against, so it can tell an entry that was
- * deleted from an entry that was never there. Only the memory subscription advances it, and only
- * after a walk in which every pane took its update: the deletion half of a delta exists nowhere
- * else, so a walk that threw partway, or one a pane's failed write left owed, must leave the record
- * where it was for the next emission to find. A local write must not advance it either, or this
- * window would have no record of the entry the write removed and would leave its own sibling panes
- * at the level the write just gave up.
+ * The memory record the sibling sync last walked the panes against, so it can tell an entry that
+ * was deleted from an entry that was never there. Only the memory subscription advances it, after a
+ * walk that visited every pane; a walk that threw before it could leaves it where it was. What a
+ * single pane failed to take is owed to that pane alone ({@link owedMemoryByWebViewId}), so one
+ * pane's failure never holds this record back for the others. A local write must not advance it, or
+ * this window would have no record of the entry the write removed and would leave its own sibling
+ * panes at the level the write just gave up.
  */
 let lastSyncedMemory: MemoryRecord = {};
+
+/**
+ * Per pane, every memory entry a sibling-sync walk named while that pane did not take its update —
+ * its definition write did not land, its turn threw, or it was sent to its own re-seed. Only the
+ * keys matter: each later walk revisits them for that pane alongside its own delta, until the pane
+ * confirms a walk. An entry added and removed again while the pane stays unconfirmed is still named
+ * here, although neither end of any later delta holds it. A pane opened after such a walk owes
+ * nothing, so a removal it never saw is not replayed onto its own level. Entries for panes no
+ * longer open are dropped at the start of each walk.
+ */
+const owedMemoryByWebViewId = new Map<WebViewId, MemoryRecord>();
 
 /**
  * The localized word the reset indicator prefixes the default percentage with, read once at
@@ -268,6 +279,7 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   cachedMemory = {};
   memoryLoaded = false;
   lastSyncedMemory = {};
+  owedMemoryByWebViewId.clear();
   cachedDefaultLabel = undefined;
   initialized = undefined;
   clearAllStaleAreaGraces();
@@ -1401,30 +1413,37 @@ function repushAllPanes(): void {
  * truth: whenever it changes — from this window or another — every open pane whose entries changed
  * is brought in line, silently (no indicator; the pane the user acted on already showed one).
  *
- * Only the areas one of the two records names are touched. An area whose key is in `memory` takes
- * that level; an area whose key `previousMemory` had and `memory` no longer does gives up its own
- * level, which is how a reset in one pane returns its siblings with it. An area named by neither is
- * left exactly as it is: a key that was never there is no evidence that a pane holding its own
- * level should give it up, and treating it as such would wipe the level of every restored pane the
- * moment the subscription delivers its first value.
+ * Only the areas one of the records names are touched: `memory`, `previousMemory`, or what the pane
+ * is still owed from earlier walks ({@link owedMemoryByWebViewId}). An area whose key is in `memory`
+ * takes that level; an area whose key only the older records name gives up its own level, which is
+ * how a reset in one pane returns its siblings with it. An area named by none is left exactly as it
+ * is: a key that was never there is no evidence that a pane holding its own level should give it
+ * up, and treating it as such would wipe the level of every restored pane the moment the
+ * subscription delivers its first value.
  *
  * Hidden panes need no special handling here: writing a level and pushing its variable is
  * data-driven and applies with no layout, so an inactive tab is already in line when it is shown.
  *
- * @returns `true` when every pane that needed a change took it, so this delta is fully applied;
- *   `false` when at least one pane's write did not land or its turn threw, which leaves the delta
- *   still owed to that pane. Either way every remaining pane is visited, and a pane that throws is
- *   logged and stepped over: one pane's failure is not the others'.
+ * Every pane is visited. A pane whose write did not land, that was sent to its own re-seed, or
+ * whose turn threw (logged and stepped over) keeps everything this walk reconciled it against as
+ * owed, for the next walk to retry; any other pane's debt is settled. One pane's failure is not the
+ * others'.
  */
-function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryRecord): boolean {
-  let everyPaneTookItsUpdate = true;
-  deps.getAllOpenDefinitions().forEach((definition) => {
+function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryRecord): void {
+  const openDefinitions = deps.getAllOpenDefinitions();
+  const openIds = new Set(openDefinitions.map((definition) => definition.id));
+  [...owedMemoryByWebViewId.keys()].forEach((webViewId) => {
+    if (!openIds.has(webViewId)) owedMemoryByWebViewId.delete(webViewId);
+  });
+  openDefinitions.forEach((definition) => {
+    const olderMemory = { ...owedMemoryByWebViewId.get(definition.id), ...previousMemory };
+    let tookItsUpdate = true;
     try {
       const id = memoryIdentityFor(definition);
       if (!id) return;
       const areas = new Set([
         ...Object.keys(collectMemoryLevelsFor(memory, id)),
-        ...Object.keys(collectMemoryLevelsFor(previousMemory, id)),
+        ...Object.keys(collectMemoryLevelsFor(olderMemory, id)),
       ]);
       // One read and one write per pane: every write reconciles the whole dock layout, so a pane
       // whose two areas both moved must not cost two of them.
@@ -1436,9 +1455,8 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
         reseedIfIdentityChanged(current);
         // The re-seed's outcome is not visible from here — it may be a deliberate no-op, e.g. a
         // pending own-level write already chosen for this identity outranking memory — so this
-        // pane's catch-up is unconfirmed. Leave the delta owed rather than letting the walk's
-        // record advance past whatever it still owes this pane.
-        everyPaneTookItsUpdate = false;
+        // pane's catch-up is unconfirmed, and the delta stays owed to it.
+        tookItsUpdate = false;
         return;
       }
       const levels: Levels = { ...effectiveOwnLevels(current) };
@@ -1477,15 +1495,17 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       // get stored stays pending there for the next write to carry.
       const stored = setOwnLevels(current, levels);
       pushContentZoom(definition.id);
-      if (!stored) everyPaneTookItsUpdate = false;
+      if (!stored) tookItsUpdate = false;
     } catch (e) {
       logger.warn(
         `Content zoom: could not bring web view ${definition.id} in line with memory. ${getErrorMessage(e)}`,
       );
-      everyPaneTookItsUpdate = false;
+      tookItsUpdate = false;
+    } finally {
+      if (tookItsUpdate) owedMemoryByWebViewId.delete(definition.id);
+      else owedMemoryByWebViewId.set(definition.id, olderMemory);
     }
   });
-  return everyPaneTookItsUpdate;
 }
 
 /**
@@ -1525,11 +1545,11 @@ async function subscribeToMemory(): Promise<void> {
       cachedMemory = memory;
       memoryLoaded = true;
       try {
-        // Only a walk in which every pane took its update may advance the record the next delta
-        // is computed against: a pane whose write did not land is retried against the same delta
-        // on the next memory change, because the deletion half of the delta exists nowhere else.
-        // A throw leaves the record where it was for the same reason.
-        if (syncSiblingsFromMemory(memory, previousMemory)) lastSyncedMemory = memory;
+        // A pane that did not take its update keeps the delta as its own debt, so the record
+        // advances past it. A throw before the walk finished leaves the record where it was: the
+        // deletion half of the delta exists nowhere else.
+        syncSiblingsFromMemory(memory, previousMemory);
+        lastSyncedMemory = memory;
       } catch (e) {
         logger.warn(`Content zoom: could not bring sibling panes in line. ${getErrorMessage(e)}`);
       }
