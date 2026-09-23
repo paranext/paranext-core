@@ -146,7 +146,7 @@ test.describe('Scripture Text Grid — content zoom', () => {
     test.skip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
 
     // `stg.cellDraggable` (`data-testid="scripture-text-grid-cell-draggable"`), not
     // `[role="gridcell"]`: nothing in the grid carries that role. A resource entry is a
@@ -176,7 +176,7 @@ test.describe('Scripture Text Grid — content zoom', () => {
     test.skip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const webViewId = await waitForOpenWebViewIdByType(mainPage, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
     const frame = await getEditorFrame(mainPage, webViewId);
 
@@ -223,7 +223,7 @@ test.describe('Scripture Text Grid — content zoom', () => {
     test.skip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const webViewId = await waitForOpenWebViewIdByType(mainPage, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
     const frame = await getEditorFrame(mainPage, webViewId);
 
