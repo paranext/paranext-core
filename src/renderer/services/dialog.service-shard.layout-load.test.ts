@@ -75,8 +75,6 @@ vi.mock('@renderer/services/usersnap.service', () => ({
   closeOpenUsersnapForm: vi.fn(),
   isUsersnapFormCurrentlyOpen: vi.fn(),
   openUsersnapForm: vi.fn(),
-  USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: '',
-  USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: '',
 }));
 
 // Dialog shard dependencies

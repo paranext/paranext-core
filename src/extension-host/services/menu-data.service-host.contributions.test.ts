@@ -126,8 +126,6 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
     'platform.openSettings',
     'platform.quit',
     'platform.showOnboardingTour',
-    'platform.usersnapReportIssue',
-    'platform.usersnapSubmitIdea',
     'platform.visitFAQsPage',
   ];
 
@@ -143,8 +141,6 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
     'platform.openSettings',
     'platform.quit',
     'platform.showOnboardingTour',
-    'platform.usersnapReportIssue',
-    'platform.usersnapSubmitIdea',
     'platform.visitFAQsPage',
     'platform.visitFeatureRoadmapPage',
     'platform.visitGettingStartedPage',
@@ -202,8 +198,7 @@ describe('Extension-contributed main menu items are gated for Simple mode', () =
 describe('Simple main menu keeps what Saroj still needs', () => {
   /**
    * These must survive the pruning. `platform.visitFAQsPage` is relabeled to "Community support",
-   * not removed, so its command is expected to still be here. The two Usersnap items are
-   * load-bearing for PT-4558, which refines them.
+   * not removed, so its command is expected to still be here.
    *
    * "Show the tour" is a deliberate addition to that list: it postdates the Simple Help menu
    * screenshots this pruning follows, and an onboarding tour is aimed squarely at the newcomer
@@ -214,8 +209,6 @@ describe('Simple main menu keeps what Saroj still needs', () => {
     ['Exit', 'platform.quit'],
     ['Community support', 'platform.visitFAQsPage'],
     ['Show the tour', 'platform.showOnboardingTour'],
-    ['Submit an idea', 'platform.usersnapSubmitIdea'],
-    ['Report a bug / Send feedback', 'platform.usersnapReportIssue'],
     ['About Platform.Bible', 'platform.about'],
   ] as const;
 

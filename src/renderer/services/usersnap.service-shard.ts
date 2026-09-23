@@ -16,9 +16,11 @@ import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
   openUsersnapForm,
+} from '@renderer/services/usersnap.service';
+import {
   USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
   USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
-} from '@renderer/services/usersnap.service';
+} from '@shared/data/platform.data';
 import {
   getServiceShardAttributes,
   USERSNAP_SERVICE_SHARD_OBJECT_TYPE,
