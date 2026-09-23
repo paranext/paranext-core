@@ -50,7 +50,6 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
-  ContentZoomAreaProvider,
   ContentZoomRoot,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
@@ -291,16 +290,16 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 
 /**
- * The footnote editor popover's minimum width: 500 px, yielding to the zoomed width cap (the pane's
- * available width divided by the zoom factor) so a zoomed popover still fits a narrow pane. Until
- * Radix has published the available width, the viewport width stands in for it: the footnote editor
- * locks its own width on its first layout, which happens before that.
+ * The footnote editor popover's minimum width: 500 px, yielding to the pane's available width so
+ * the popover still fits a narrow pane. Until Radix has published the available width, the viewport
+ * width stands in for it: the footnote editor locks its own width on its first layout, which
+ * happens before that.
  *
  * Set inline rather than as a Tailwind arbitrary class: the web view's SCSS + PostCSS pipeline
  * drops a rule whose value is this `min()` expression, so the minimum is an inline style.
  */
 const FOOTNOTE_POPOVER_MIN_WIDTH =
-  'min(500px, calc(var(--radix-popover-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))';
+  'min(500px, var(--radix-popover-content-available-width, 100vw))';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
@@ -3990,66 +3989,64 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         )}
       </div>
       {/* The popovers below are rendered beside the editor and anchored to live positions in its
-          text (see useLivePopoverAnchor), so they belong to the text's zoom area, scale with it,
-          and follow the text when it scrolls or reflows. */}
-      <ContentZoomAreaProvider>
-        {/** Inline markers menu components */}
-        <Popover open={showMarkersMenu}>
-          <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
-          <PopoverContent
-            className="tw:w-[500px] tw:p-0"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-          >
-            <MarkerMenu
-              markerMenuItems={inlineMarkerMenuItems}
-              localizedStrings={localizedStrings}
-              searchRef={markerMenuSearchRef}
-              searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
-            />
-          </PopoverContent>
-        </Popover>
-        {/** Footnote editor components */}
-        <Popover open={showFootnoteEditor}>
-          <PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />
-          <PopoverContent
-            className="tw:w-max tw:p-[10px]"
-            style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}
-          >
-            <FootnoteEditor
-              classNameForEditor="scripture-font"
-              noteOps={editingNoteOps.current}
-              noteKey={editingNoteKey.current}
-              onClose={onFootnoteEditorClose}
-              onNoteEdit={onFootnoteEditorNoteEdit}
-              scrRef={scrRef}
-              editorOptions={options}
-              defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
-              localizedStrings={localizedStrings}
-              parentEditorRef={editorRef}
-              markerPalette={footnoteMarkerPalette}
-            />
-          </PopoverContent>
-        </Popover>
-        {/** Comment editor for creating new comment threads */}
-        <Popover open={showCommentEditor}>
-          <PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />
-          {/* `always`: re-measured every frame while open. Marking the selection as the pending
+          text (see useLivePopoverAnchor), so they follow the text when it scrolls or reflows. They
+          stay at interface scale. */}
+      {/** Inline markers menu components */}
+      <Popover open={showMarkersMenu}>
+        <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
+        <PopoverContent
+          className="tw:w-[500px] tw:p-0"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <MarkerMenu
+            markerMenuItems={inlineMarkerMenuItems}
+            localizedStrings={localizedStrings}
+            searchRef={markerMenuSearchRef}
+            searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
+          />
+        </PopoverContent>
+      </Popover>
+      {/** Footnote editor components */}
+      <Popover open={showFootnoteEditor}>
+        <PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />
+        <PopoverContent
+          className="tw:w-max tw:p-[10px]"
+          style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}
+        >
+          <FootnoteEditor
+            classNameForEditor="scripture-font"
+            noteOps={editingNoteOps.current}
+            noteKey={editingNoteKey.current}
+            onClose={onFootnoteEditorClose}
+            onNoteEdit={onFootnoteEditorNoteEdit}
+            scrRef={scrRef}
+            editorOptions={options}
+            defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+            localizedStrings={localizedStrings}
+            parentEditorRef={editorRef}
+            markerPalette={footnoteMarkerPalette}
+          />
+        </PopoverContent>
+      </Popover>
+      {/** Comment editor for creating new comment threads */}
+      <Popover open={showCommentEditor}>
+        <PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />
+        {/* `always`: re-measured every frame while open. Marking the selection as the pending
               comment re-renders the text under the anchor without any scroll, resize or layout
               shift that would otherwise trigger a re-measure. */}
-          <PopoverContent className="tw:w-[400px] tw:p-[10px]" updatePositionStrategy="always">
-            <CommentEditor
-              assignableUsers={commentEditorAssignableUsers}
-              onSave={onCommentEditorSave}
-              onClose={onCommentEditorCancel}
-              localizedStrings={localizedStrings}
-              initialAssignedUser={lastAssignedUser}
-            />
-          </PopoverContent>
-        </Popover>
-      </ContentZoomAreaProvider>
+        <PopoverContent className="tw:w-[400px] tw:p-[10px]" updatePositionStrategy="always">
+          <CommentEditor
+            assignableUsers={commentEditorAssignableUsers}
+            onSave={onCommentEditorSave}
+            onClose={onCommentEditorCancel}
+            localizedStrings={localizedStrings}
+            initialAssignedUser={lastAssignedUser}
+          />
+        </PopoverContent>
+      </Popover>
     </div>
   );
 };
