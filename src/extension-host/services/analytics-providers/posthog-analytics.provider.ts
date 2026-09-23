@@ -27,6 +27,12 @@ export class PostHogAnalyticsProvider implements AnalyticsProvider {
   /** Set once client construction has thrown; later sends fail fast without re-attempting. */
   private constructionError: unknown;
 
+  /**
+   * Set as soon as `shutdown()` starts. The SDK must not be used after its own `shutdown()`, and a
+   * send arriving that late must not build a fresh client either, so later sends reject.
+   */
+  private isShutDown = false;
+
   constructor(
     private readonly environment: AnalyticsEnvironment,
     private readonly projectKey: string,
@@ -76,6 +82,7 @@ export class PostHogAnalyticsProvider implements AnalyticsProvider {
   }
 
   async shutdown(timeoutMs: number): Promise<void> {
+    this.isShutDown = true;
     if (!this.client) return;
     try {
       const outcome = await raceWithTimeout(this.client.shutdown(timeoutMs), timeoutMs);
@@ -91,6 +98,9 @@ export class PostHogAnalyticsProvider implements AnalyticsProvider {
   }
 
   private getClient(): PostHog {
+    // Rejecting rather than resolving keeps the event marked as undelivered, and the caller logs
+    // the rejection at debug: a send racing shutdown is expected, not worth a warning.
+    if (this.isShutDown) throw new Error(`PostHog provider (${this.environment}) has shut down`);
     if (this.client) return this.client;
     if (this.constructionError !== undefined) {
       logger.debug('Analytics: PostHog client is unusable; dropping event');
