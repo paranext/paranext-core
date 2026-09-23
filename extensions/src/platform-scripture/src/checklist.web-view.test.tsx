@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { newPlatformError } from 'platform-bible-utils';
+import { localizedValueFor } from './project-selector.test-utils';
 
 // ---------------------------------------------------------------------------
 // jsdom harness — cmdk (inside ProjectSelector's popover) and Radix need these
@@ -98,24 +99,35 @@ vi.mock('@papi/frontend', () => {
   };
 });
 
-vi.mock('@papi/frontend/react', () => ({
-  // Echo each requested key back as its own value, matching useLocalizedStrings' pre-resolution
-  // behavior — every entry is always a string.
-  useLocalizedStrings: (keys: string[]) => [
-    Object.fromEntries(keys.map((key) => [key, key])),
-    false,
-  ],
-  useProjectDataProvider: vi.fn(() => undefined),
-  useData: vi.fn(() => ({
-    RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
-    WebViewMenu: (_selector: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), false],
-  })),
-}));
+vi.mock('@papi/frontend/react', async () => {
+  // Imported inside the factory: `vi.mock` factories are hoisted above the file's imports, so a
+  // top-level binding may still be in its temporal dead zone when the factory runs. One rule, no
+  // exceptions — whether the helper happens to be initialized first depends on module load order,
+  // which is not a property a test should rest on. Aliased because the same names are bound at the
+  // top level.
+  const { isProjectSelectorSharedKey: isSharedKey, localizedValueFor: valueFor } = await import(
+    './project-selector.test-utils'
+  );
+  return {
+    // Echo each requested key back as its own value, which is what useLocalizedStrings does before
+    // it resolves. The shared `%projectSelector_*%` block is the exception — the picker treats a
+    // key echoed as its own value as unresolved, so those get a resolved-looking value instead.
+    useLocalizedStrings: (keys: string[]) => [
+      Object.fromEntries(keys.map((key) => [key, isSharedKey(key) ? valueFor(key) : key])),
+      false,
+    ],
+    useProjectDataProvider: vi.fn(() => undefined),
+    useData: vi.fn(() => ({
+      RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
+      WebViewMenu: (_selector: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), false],
+    })),
+  };
+});
 
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
-  // Imported inside the factory: a hoisted `vi.mock` factory must not close over the file's
-  // top-level import bindings.
+  // Imported inside the factory, for the same reason as above. Aliased where the name is also
+  // bound at the top level.
   const { useEffect, useState: useStateInMock } = await import('react');
   return {
     ...original,
@@ -228,6 +240,65 @@ describe('ChecklistWebView recently-opened-projects wiring', () => {
   });
 });
 
+// The module-level stub leaves `%markersChecklist_*%` keys echoed as their own values, which is
+// the unresolved path (see `./project-selector.test-utils`). The picker would fall back to its own
+// generic English there, so the web view has to supply its specific wording itself.
+describe('ChecklistWebView picker labels when its own strings are unresolved', () => {
+  const OTHER_PROJECTS: MockProject[] = [
+    { id: 'project-9', shortName: 'P9', fullName: 'Project Nine' },
+  ];
+
+  it('labels the comparative-texts picker with its own wording, not the picker default', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = OTHER_PROJECTS;
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    const trigger = await screen.findByTestId('checklist-comparative-texts-trigger');
+    expect(within(trigger).getByRole('combobox')).toHaveTextContent('Select comparative projects');
+    expect(within(trigger).getByRole('combobox')).not.toHaveTextContent('Select a project');
+  });
+
+  it('labels the primary-project picker with its own wording, not the picker default', async () => {
+    mockRecentProjects.value = [];
+    // No row matches the web view's projectId, so the trigger shows its placeholder rather than a
+    // selected project's short name.
+    mockProjects.value = OTHER_PROJECTS;
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    const trigger = await screen.findByTestId('checklist-primary-project-trigger');
+    expect(within(trigger).getByRole('combobox')).toHaveTextContent(
+      'Select primary Scripture text',
+    );
+    expect(within(trigger).getByRole('combobox')).not.toHaveTextContent('Select a project');
+  });
+
+  // Visible text and accessible name come from one value per picker, so a screen reader user can
+  // tell the two toolbar comboboxes apart on the unresolved path — where both would otherwise be
+  // announced as the picker's generic "Projects & resources".
+  it('gives each picker a distinct accessible name', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = OTHER_PROJECTS;
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    await screen.findByTestId('checklist-primary-project-trigger');
+    expect(
+      screen.getByRole('combobox', { name: 'Select primary Scripture text' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('combobox', { name: 'Select comparative projects' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('combobox', { name: 'Projects & resources' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('ChecklistWebView comparative-texts picker', () => {
   // Two scroll groups of the same project: the case the picker has to keep collapsed, because a
   // comparative-text ref names a project and carries no scroll group.
@@ -268,7 +339,9 @@ describe('ChecklistWebView comparative-texts picker', () => {
     const { user } = await openComparativePicker();
 
     // The grouping is available and active: the open project is bucketed under "Open tabs".
-    const openTabsHeading = await screen.findByText('%projectSelector_openTabsSectionHeading%');
+    const openTabsHeading = await screen.findByText(
+      localizedValueFor('%projectSelector_openTabsSectionHeading%'),
+    );
     expect(openTabsHeading).toBeInTheDocument();
 
     // One row per project, even though the project is open in two scroll groups.
@@ -313,17 +386,21 @@ describe('ChecklistWebView comparative-texts picker', () => {
     await user.click(getGroupByTrigger());
     await user.click(
       await screen.findByRole('menuitemradio', {
-        name: '%projectSelector_grouping_lastUsed_label%',
+        name: localizedValueFor('%projectSelector_grouping_lastUsed_label%'),
       }),
     );
 
     // PROJECT-2 is the only comparative row (the primary project is filtered out), so exactly one
     // of these two headings can render: which one is the whole assertion.
     expect(
-      await screen.findByText('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      await screen.findByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      screen.queryByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      ),
     ).not.toBeInTheDocument();
   });
 
