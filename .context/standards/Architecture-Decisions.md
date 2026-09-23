@@ -2022,64 +2022,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 ## adr-editor-context-menu-follows-its-area-via-a-container: The editor library renders its context menu into an element the host supplies
 
-- **Date:** 2026-09-18
-- **Status:** Withdrawn (2026-09-23). The option this entry relies on, `EditorOptions.contextMenuContainer`,
-  is not part of the editor library: as of 2026-09-23 it is no longer pursued
-  (paranext/scripture-editors#17, to be closed unmerged), so no host hands the editor a container and
-  its right-click menu stays at interface scale. The entry is kept below as the record of what was
-  considered.
-- **Context:** The Scripture editor's right-click menu is drawn by `ContextMenuPlugin` in
-  `paranext/scripture-editors`, not by our `ContextMenuContent`. It portalled hand-built markup to
-  `document.body`, outside every zoom area, so at 200 % it stayed at interface scale beside text
-  twice its size — at the text pane and inside the footnote editor pop-up alike.
-- **Decision:** the library takes an optional `EditorOptions.contextMenuContainer?: () =>
-  HTMLElement | undefined` getter. It calls that getter once, inside its own `contextmenu`
-  handler, and stores the returned element in state — never during render. Inside that element the
-  menu inherits the area's CSS `zoom`; it divides its viewport coordinates by
-  `Element.currentCSSZoom`, clamps to the container's rect narrowed by every clipping ancestor and
-  the viewport, and caps its height to that box. Every host that mounts the editor inside a zoom
-  area supplies that area's `ContentZoomRoot` element: the editor web view for the text pane, the
-  Model Text panel, the Bible Texts / Commentaries panel, and the Enhanced Resources web view for
-  its scripture pane. `FootnoteEditor` overrides the container with its own root, because the web
-  view's value would otherwise flow through `FootnoteEditor`'s own `...editorOptions` spread and
-  bind the pop-up's menu against the text pane's box instead of the pop-up's own.
-- **Alternatives:**
-  - stamping `data-platform-content-zoom-root` + `data-platform-content-zoom-popup` on the
-    portalled element, as our own pop-ups do — rejected: it puts our attribute names and
-    `--platform-content-zoom-*` variable names inside a library that also serves Scribe and the
-    PERF demos, where `currentCSSZoom` is a standard property that needs no convention;
-  - a generic attribute bag the host fills in — the positioning still lives in the library, keyed
-    off an attribute it does not understand;
-  - positioning the menu from here — the plugin owns the `contextmenu` event and the clamp, and
-    the host cannot see the menu's measured size;
-  - dropping the menu's hard-coded 14px font and 200px width — measured irrelevant: CSS `zoom`
-    scales `px` lengths, so those already scale; changing them would restyle the menu at 100 %.
-- **Consequences:**
-  - the library gains no knowledge of this platform; the only shared vocabulary is a standard DOM
-    property;
-  - a fixed-position menu is not clipped by a scrolling ancestor, so staying inside the pane is
-    computed rather than inherited — the clipping-ancestor walk is load-bearing in split layouts;
-  - resolving the container lazily, inside the `contextmenu` handler, rather than reading it during
-    render is load-bearing, not incidental: an earlier shape that called the host's getter during
-    render made React Compiler abandon optimizing the whole component
-    (`react-hooks/preserve-manual-memoization`). The getter shape also lets both hosts pass a
-    stable `useCallback`, or a plain ref read, with no `useState` and no memo churn of their own;
-  - the capped menu's outer element gets `overflowY: auto` while the inner `<ul>` still carries
-    `editor.css`'s own `max-height: 200px; overflow-y: scroll`; a short pane at zoom 200 % or more
-    with a full menu can bind both constraints at once, producing two nested scroll regions with
-    only one visible scrollbar (`scrollbar-width: none` hides the inner one). Left as is:
-    collapsing the two caps would mean changing the library's own stylesheet for every host, and
-    the menu was usable in hand checks at 200 %. Revisit if a user reports a menu that will not
-    scroll to its last item;
-  - the fix reaches core through the `platform-yalc` pin, so the behaviour lives in
-    `scripture-editors` and core holds only the call sites;
-  - a host that mounts the editor inside a zoom area and does not supply its area's element leaves
-    its right-click menu at interface size against `document.body`, with no other signal, so each
-    host's tests pin its wiring. `scripture-text-grid`'s `resource-cell-view` is not a host of this
-    kind: it zooms its cells itself and intercepts `onContextMenuCapture` with its own menu — the
-    grid web view always supplies the labels that enable it, and only a story or test renders a cell
-    without them — so the editor's menu never opens there.
-- **Source:** PT-4713.
+- **Status:** Withdrawn. The slug is retired with the entry and will not be reused.
+- **Why the entry is not here:** it recorded an editor-library option proposed in
+  `paranext/scripture-editors#17` that was not adopted, because pop-ups stay at interface scale.
+  Left readable, it would look like an available approach to a survey of this log — by a person or
+  by `.claude/agents/pt10-reuse-scout.md`. Deleting it rather than marking it superseded is the
+  carve-out described under "Don't rewrite history" above. Git history keeps the text.
+- **What covers this ground instead:** `adr-pop-ups-stay-at-interface-scale`.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
@@ -4780,7 +4729,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-pop-ups-follow-their-content-zoom-area: A pop-up takes the zoom of the area it opens from
 
 - **Date:** 2026-09-17
-- **Status:** Accepted
+- **Status:** Superseded by adr-pop-ups-stay-at-interface-scale
 - **Context:** pop-ups portal to `document.body`, outside the zoom area, so they rendered at
   interface scale next to zoomed content, and a hand-wrapped editor popover was misplaced at
   200 %.
@@ -4858,6 +4807,30 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     until it closes — accepted, not a bug to be fixed later.
 - **Source:** PT-4634; the outside-the-web-view extension (`papi.overlays` command palette,
   popover, context menu) by PT-4712.
+
+## adr-pop-ups-stay-at-interface-scale: Pop-ups keep interface scale next to zoomed content; only their position follows it
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** UX (2026-09-22) ruled that anything that pops up must not scale with content zoom.
+  This replaces `adr-pop-ups-follow-their-content-zoom-area`.
+- **Decision:**
+  - Library popovers, dropdown menus, tooltips, platform overlays, the editor's right-click menu and
+    the inline footnote and comment editors always render at interface scale.
+  - They stay anchored to live positions in the zoomed content (`useLivePopoverAnchor`, the
+    editor's anchor sources, the overlay `frameScale` anchor size). CSS `zoom` reports geometry in
+    viewport pixels, so an unscaled pop-up placed from a zoomed anchor lands correctly.
+  - No pop-up carries a zoom marker, and no library component reads a zoom area for sizing.
+- **Alternatives:**
+  - **Pop-ups follow their area.** The rule this entry replaces; rejected by UX.
+  - **Follow only for the inline editors.** Rejected: UX named them explicitly.
+- **Consequences:**
+  - The following are removed: the area context and pop-up attribute, the overlay `contentScale`
+    prop, and the editor's `contextMenuContainer` wiring.
+  - `paranext/scripture-editors#17` (the `contextMenuContainer` option) is no longer needed; as of
+    2026-09-23 it is still open, awaiting closure unmerged.
+  - Live anchoring stays, because anchors captured once go stale on scroll even at 100 %.
+- **Source:** UX feedback 2026-09-22; reverses PT-4712 and PT-4713; epic PT-4575.
 
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
