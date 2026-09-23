@@ -5872,6 +5872,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   every one of these panes; see `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn).
 - **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
   PT-4583 (Enhanced Resources viewer).
+- **Amended 2026-09-23 (`adr-zoom-areas-mark-project-text`):** the Text Collection grid no longer
+  marks its whole body. Each cell marks only its own text with the `text-collection` area
+  (`resource-cell-view.component.tsx`), and that marker wraps the per-resource zoom rather than
+  carrying it, so the two still multiply. The area names in the Decision are unchanged.
 
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
@@ -8011,6 +8015,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
   adding the ordering tests in `z-index.test.tsx` and this decision record.
 
+## adr-zoom-areas-mark-project-text: A view marks the elements that render project text, sharing one area id, never the region around them
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** Marking a whole region (a card list, a grid body, a tab body) scaled buttons,
+  inputs and headers with the text. UX (2026-09-22) ruled that only project text zooms.
+- **Decision:**
+  - Flowing, editor-like text keeps one marker around each text body, with every control moved
+    out.
+  - Card, list and table views mark each text element, and all of them share one area id. The
+    platform already treats many elements with one id as one area.
+  - `ContentZoomRoot` can render a `span` (`as="span"`) for inline text.
+  - Library components that render project text mark it only inside a `ContentZoomTextProvider`,
+    which the hosting view opts into.
+  - Ambiguous elements are not marked unless they are project-language text. The comment composer
+    and USFM marker tokens are marked; the editor's comment pop-up is a pop-up and is not.
+- **Alternatives:**
+  - **A font-size multiplier.** Rejected: rem sizes and specificity ties, and it contradicts
+    `adr-zoom-composition` (a).
+  - **Region markers with controls moved out.** Impossible for cards, where controls and text
+    interleave.
+- **Consequences:**
+  - More markers per view. A rescan costs one `querySelectorAll` per marker-changing commit.
+  - Highlight rings inside a marked span scale with it.
+  - Hosts must not nest a provider-marked subtree inside a `ContentZoomRoot`.
+  - A marker's own inline `zoom` replaces the platform's rule instead of multiplying, so a view
+    with its own zoom (the Text Collection's per-resource factor) keeps it on an element inside the
+    marker.
+  - In a view with several areas, a click or wheel over an unmarked control or gap targets the area
+    used last, because the bootstrap resolves the area from the nearest marked ancestor.
+  - Text rendered at a fixed size beside zoomed text but inside its geometry needs converting: the
+    Simple-mode gutter reservation divides by the area's factor, and the character-marker bar's
+    baseline probe takes the paragraph's `currentCSSZoom`.
+- **Source:** UX feedback 2026-09-22; epic PT-4575.
+
 ## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas
 
 - **Date:** 2026-09-15
@@ -8071,3 +8110,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   superseded by that entry. No view is scaled whole any more, and the per-type record is gone. The
   rest of this decision (the composition, CSS `zoom` on marked areas, zoom areas as a platform
   capability) stands.
+- **Amended 2026-09-23 (`adr-zoom-areas-mark-project-text`):** the Consequences' statement that
+  PT-4582 marks the grid pane's own area around the per-resource zoom no longer holds: the Text
+  Collection grid marks each cell's own text with the `text-collection` area, wrapping the
+  per-resource zoom, not the pane body. The composition formula itself is unchanged.
