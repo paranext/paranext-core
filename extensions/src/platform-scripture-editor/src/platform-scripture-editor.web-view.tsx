@@ -1609,8 +1609,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    *
    * Checks read-only BEFORE the version-history snapshot: a read-only top-menu click (which reaches
    * this with no prior gate — the menu item itself has no enablement) must not write a forced,
-   * empty version-history commit. No user-visible notice for that case here — left to a separate
-   * PR.
+   * empty version-history commit. The refusal is logged, not shown to the user.
    */
   const insertNoteAtCurrentSelection = useCallback(
     async (kind: EditorMessageInsertTextualNoteAtSelection['method']) => {
