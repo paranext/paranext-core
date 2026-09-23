@@ -148,8 +148,8 @@ test.describe('First-run wizard', () => {
     await frPage.clickNext(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
 
-    // "Don't sync yet" invokes completeFirstRun(), which marks setup complete and unmounts the
-    // overlay without persisting any sync preference.
+    // "Don't sync yet" invokes declineFirstRunSync(), which records the session's sync deferral and
+    // then marks setup complete and unmounts the overlay, without persisting any sync preference.
     await expect(frPage.dontSyncYetButton).toBeVisible({
       timeout: 5_000,
     });

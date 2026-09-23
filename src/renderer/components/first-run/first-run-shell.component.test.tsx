@@ -173,14 +173,14 @@ function makeDummyStep(label: string): ComponentType<FirstRunStepProps> {
   return DummyStep;
 }
 
-// SyncConsent dummy also calls setCanSkip(true) — the real step does this, and shell tests that
+// SyncConsent dummy also calls setCanDeclineSync(true) — the real step does this, and shell tests that
 // navigate through STUB_STEPS to syncConsent verify the shell surfaces the decline button only on
 // that step.
-function SyncConsentDummy({ setCanProceed, setCanSkip }: FirstRunStepProps) {
+function SyncConsentDummy({ setCanProceed, setCanDeclineSync }: FirstRunStepProps) {
   useEffect(() => {
     setCanProceed?.(true);
-    setCanSkip?.(true);
-  }, [setCanProceed, setCanSkip]);
+    setCanDeclineSync?.(true);
+  }, [setCanProceed, setCanDeclineSync]);
   return <p>sync-consent-step</p>;
 }
 
@@ -269,19 +269,19 @@ describe('FirstRunShell', () => {
     expect(await screen.findByRole('button', { name: DONT_SYNC_YET })).toBeInTheDocument();
   });
 
-  it('shows "Don\'t sync yet" when a step calls setCanSkip(true) and hides it after navigating away', async () => {
-    function SkippableStep({ setCanSkip }: FirstRunStepProps) {
-      useEffect(() => setCanSkip?.(true), [setCanSkip]);
+  it('shows "Don\'t sync yet" when a step calls setCanDeclineSync(true) and hides it after navigating away', async () => {
+    function SyncDecliningStep({ setCanDeclineSync }: FirstRunStepProps) {
+      useEffect(() => setCanDeclineSync?.(true), [setCanDeclineSync]);
       return <p>skippable</p>;
     }
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DUMMY_STEPS, language: SkippableStep }}
+        stepComponents={{ ...DUMMY_STEPS, language: SyncDecliningStep }}
       />,
     );
     await waitFor(() => screen.getByRole('button', { name: DONT_SYNC_YET }));
-    // Navigate away — shell must reset canSkip so the next step does not inherit it.
+    // Navigate away — shell must reset canDeclineSync so the next step does not inherit it.
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
     expect(screen.queryByRole('button', { name: DONT_SYNC_YET })).not.toBeInTheDocument();
   });
@@ -376,7 +376,7 @@ describe('FirstRunShell', () => {
     await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
   });
 
-  it('does not decline twice if onSkip fires twice in one tick (runAction guard)', async () => {
+  it('does not decline twice if onDeclineSync fires twice in one tick (runAction guard)', async () => {
     let done!: () => void;
     mockDecline.mockImplementation(
       () =>
@@ -384,16 +384,16 @@ describe('FirstRunShell', () => {
           done = resolve;
         }),
     );
-    // Fire onSkip twice synchronously from one handler — the runAction re-entrancy guard (shared
+    // Fire onDeclineSync twice synchronously from one handler — the runAction re-entrancy guard (shared
     // with onNext) must block the second call, not just the footer button's disabled state.
-    function DoubleSkipStep({ onSkip, setCanSkip }: FirstRunStepProps) {
-      useEffect(() => setCanSkip?.(true), [setCanSkip]);
+    function DoubleDeclineStep({ onDeclineSync, setCanDeclineSync }: FirstRunStepProps) {
+      useEffect(() => setCanDeclineSync?.(true), [setCanDeclineSync]);
       return (
         <button
           type="button"
           onClick={() => {
-            onSkip?.();
-            onSkip?.();
+            onDeclineSync?.();
+            onDeclineSync?.();
           }}
         >
           double skip
@@ -403,7 +403,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="syncConsent"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncConsent: DoubleSkipStep }}
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncConsent: DoubleDeclineStep }}
       />,
     );
     await userEvent.click(await screen.findByRole('button', { name: /double skip/i }));

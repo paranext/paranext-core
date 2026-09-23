@@ -60,7 +60,7 @@
     "fallbackKey": "%firstRun_button_dontSyncYet%",
     "deprecationInfo": {
       "date": "2026-08-16",
-      "message": "Reworded to the wizard-scoped \"Don't sync yet\" per PT-4178's approved labelling: the choice defers only the wizard's own sync rather than setting a standing preference. The new key is %firstRun_button_dontSyncYet%."
+      "message": "Reworded to the wizard-scoped \"Don't sync yet\" per PT-4178's approved labelling: the choice defers every automatic sync for the rest of the session rather than setting a standing preference. The new key is %firstRun_button_dontSyncYet%."
     }
   },
   "%firstRun_error_body%": {

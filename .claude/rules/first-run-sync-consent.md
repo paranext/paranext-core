@@ -42,4 +42,5 @@ user-initiated paths too. The gate is applied per trigger, so **a new automatic 
 it reintroduces the bug silently**. Reviewers should treat any new `syncProjects` /
 `sendReceiveProjects` call site as needing this gate or an explicit reason why not.
 
-Rationale and rejected alternatives: the `first-run-sync-consent` ADR in `.context/standards/Architecture-Decisions.md`.
+Rationale and rejected alternatives: `adr-first-run-sync-consent` in
+[`Architecture-Decisions.md`](../../.context/standards/Architecture-Decisions.md).

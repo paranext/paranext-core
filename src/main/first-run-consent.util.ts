@@ -36,6 +36,10 @@ let isAutomaticSyncDeferred = false;
 /**
  * Records that the user declined the first-run wizard's sync ("Don't sync yet"), so no automatic
  * sync starts for the rest of this app session. The next launch syncs as usual.
+ *
+ * One-way on purpose: nothing lifts the deferral short of a restart, not even choosing "Sync" in a
+ * wizard raised again later in the session. The decline is what the user said for this session, and
+ * a way to lift it would be a way past the gate.
  */
 export function deferAutomaticSyncForSession(): void {
   isAutomaticSyncDeferred = true;
@@ -45,8 +49,11 @@ export function deferAutomaticSyncForSession(): void {
  * The first-run sync consent gate, and the canonical statement of its rule. Every automatic
  * Simple-mode sync must get `granted` from this before it starts: the startup, shutdown and
  * window-close syncs call it directly, and the extension host reaches it through the
- * `platform.getAutomaticSyncConsent` command. The rationale and rejected alternatives are in the
- * `first-run-sync-consent` ADR (`.context/standards/Architecture-Decisions.md`).
+ * `platform.getAutomaticSyncConsent` command. The rationale and rejected alternatives are in
+ * `adr-first-run-sync-consent` (`.context/standards/Architecture-Decisions.md`).
+ *
+ * TODO(PT-4605): the Send/Receive extension's `paratextBibleSendReceive.syncOpenProjects` can start
+ * an automatic sync that never asks this gate; core has no call site to gate it at.
  *
  * Fails CLOSED: only a literal `true` in `platform.firstRunComplete` counts as answered, and an
  * unreadable flag reads as `unconfirmed`. Never rejects, so callers need no try/catch of their
@@ -78,6 +85,6 @@ export async function getAutomaticSyncConsent(): Promise<AutomaticSyncConsent> {
  *
  * WARNING: Test-only. @internal
  */
-export function resetAutomaticSyncDeferral(): void {
+export function resetAutomaticSyncDeferralForTesting(): void {
   isAutomaticSyncDeferred = false;
 }

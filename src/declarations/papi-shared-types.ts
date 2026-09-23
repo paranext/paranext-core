@@ -97,6 +97,7 @@ declare module 'papi-shared-types' {
     /**
      * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
      * user chooses "Don't sync yet" in the first-run wizard; the next launch syncs as usual.
+     * One-way on purpose: nothing lifts the deferral before a restart.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -508,6 +509,8 @@ declare module 'papi-shared-types' {
      * Send/Receive is unaffected. The first-run wizard does not write it: declining there ("Don't
      * sync yet") withholds automatic sync for that session only. A `false` can be left over from an
      * earlier first-run wizard, which wrote it on decline, and nothing in core resets it.
+     *
+     * TODO(PT-4607): give profiles left with that `false` a way back to automatic startup sync.
      */
     'platform.syncOnStartup': boolean;
     /**

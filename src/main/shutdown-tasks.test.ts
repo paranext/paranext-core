@@ -15,7 +15,10 @@ import {
   startWindowCloseTasksWithoutWaiting,
 } from './shutdown-tasks';
 import { createSettingsStub, READ_THROWS } from './settings-stub.test-util';
-import { deferAutomaticSyncForSession, resetAutomaticSyncDeferral } from './first-run-consent.util';
+import {
+  deferAutomaticSyncForSession,
+  resetAutomaticSyncDeferralForTesting,
+} from './first-run-consent.util';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -75,7 +78,7 @@ const stubSettings = createSettingsStub(mockSettingsGet, {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resetAutomaticSyncDeferral();
+  resetAutomaticSyncDeferralForTesting();
   mockRequestNoRetry.mockResolvedValue(undefined);
 });
 

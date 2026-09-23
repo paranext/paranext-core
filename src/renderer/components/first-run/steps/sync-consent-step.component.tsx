@@ -27,10 +27,10 @@ const defaultSyncFn = (): Promise<void> =>
  * Sync consent wizard step. Renders its own footer: Back on the left, and "Don't sync yet" beside
  * the primary "Sync" on the right, so declining reads as a peer choice rather than an afterthought.
  * "Sync" runs `paratextBibleSendReceive.syncProjects` then calls `onNext`. "Don't sync yet" calls
- * the shell-supplied `onSkip`, which withholds automatic sync for the rest of the session and
- * finishes the wizard.
+ * the shell-supplied `onDeclineSync`, which withholds automatic sync for the rest of the session
+ * and finishes the wizard.
  *
- * On mount the step calls `setCanSkip(true)` so the shell supplies `onSkip`,
+ * On mount the step calls `setCanDeclineSync(true)` so the shell supplies `onDeclineSync`,
  * `setCanProceed(undefined)` to hide the shell's generic Next/Finish, and
  * `setManagesOwnFooter(true)` so the shell does not stack its own footer beneath this one. "Don't
  * sync yet" is withdrawn while a sync is in flight, and the footer is disabled while the shell is
@@ -41,9 +41,9 @@ const defaultSyncFn = (): Promise<void> =>
 function SyncConsentStep({
   onNext,
   onBack,
-  onSkip,
+  onDeclineSync,
   setCanProceed,
-  setCanSkip,
+  setCanDeclineSync,
   setManagesOwnFooter,
   isBusy = false,
   onSync = defaultSyncFn,
@@ -54,8 +54,8 @@ function SyncConsentStep({
 
   // useEffect (async) is fine here — a brief delay before "Don't sync yet" appears is harmless.
   useEffect(() => {
-    setCanSkip?.(true);
-  }, [setCanSkip]);
+    setCanDeclineSync?.(true);
+  }, [setCanDeclineSync]);
   // Before the first paint, so the shell's own footer never flashes beneath this one.
   useLayoutEffect(() => {
     setCanProceed?.(undefined);
@@ -64,14 +64,14 @@ function SyncConsentStep({
 
   const handleSync = async () => {
     setError('');
-    setCanSkip?.(false); // withdraw the decline while the sync is in flight
+    setCanDeclineSync?.(false); // withdraw the decline while the sync is in flight
     setIsSyncing(true);
     try {
       await onSync();
       onNext();
     } catch (e) {
       setError(getErrorMessage(e));
-      setCanSkip?.(true); // restore it so the user can still decline after a failed sync
+      setCanDeclineSync?.(true); // restore it so the user can still decline after a failed sync
     } finally {
       setIsSyncing(false);
     }
@@ -90,8 +90,8 @@ function SyncConsentStep({
       }
       primaryButton={
         <div className="tw:flex tw:gap-2">
-          {onSkip && !isSyncing && (
-            <Button variant="outline" onClick={onSkip} disabled={isBusy}>
+          {onDeclineSync && !isSyncing && (
+            <Button variant="outline" onClick={onDeclineSync} disabled={isBusy}>
               {strings['%firstRun_button_dontSyncYet%']}
             </Button>
           )}
