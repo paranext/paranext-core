@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { forwardRef, ReactNode, useImperativeHandle } from 'react';
-import { describe, it, expect, beforeAll, beforeEach, onTestFinished, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
 import { ContentZoomAreaProvider } from '@/components/advanced/content-zoom-root.component';
 import userEvent from '@testing-library/user-event';
@@ -289,27 +289,14 @@ describe('FootnoteEditor width lock', () => {
   });
 });
 
-describe('FootnoteEditor context-menu container', () => {
-  it('passes its own root as the context-menu container, not the caller one', () => {
-    const decoy = document.createElement('div');
-    document.body.append(decoy);
-    // Testing Library's auto-cleanup only unmounts what it rendered, so this one is ours to remove.
-    onTestFinished(() => decoy.remove());
+describe('FootnoteEditor context menu', () => {
+  it('hands its editor no context-menu container, so the menu stays at interface scale', () => {
+    renderFootnoteEditor({ view: editableView });
 
-    const { container } = renderFootnoteEditor({
-      view: editableView,
-      contextMenuContainer: () => decoy,
-    });
-
-    const ownRoot = container.querySelector('.footnote-editor');
-    expect(ownRoot).not.toBeNull();
-
-    // The stub records `options` as `unknown` (see the `vi.mock` factory above); this component
-    // always builds a real `EditorOptions` object to pass down, so narrowing it back here is safe.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const passedOptions = mockRegisterOptions.mock.calls.at(-1)?.[0] as EditorOptions;
-    expect(passedOptions.contextMenuContainer?.()).toBe(ownRoot);
-    expect(passedOptions.contextMenuContainer?.()).not.toBe(decoy);
+    const passedOptions: unknown = mockRegisterOptions.mock.calls.at(-1)?.[0];
+    // Positive control: this component always sets `hasExternalUI`, so the options really arrived.
+    expect(passedOptions).toHaveProperty('hasExternalUI', true);
+    expect(passedOptions).not.toHaveProperty('contextMenuContainer');
   });
 });
 

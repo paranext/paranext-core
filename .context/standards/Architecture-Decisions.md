@@ -1905,7 +1905,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-editor-context-menu-follows-its-area-via-a-container: The editor library renders its context menu into an element the host supplies
 
 - **Date:** 2026-09-18
-- **Status:** Accepted
+- **Status:** Withdrawn (2026-09-23). The option this entry relies on, `EditorOptions.contextMenuContainer`,
+  is not part of the editor library: as of 2026-09-23 it is no longer pursued
+  (paranext/scripture-editors#17, to be closed unmerged), so no host hands the editor a container and
+  its right-click menu stays at interface scale. The entry is kept below as the record of what was
+  considered.
 - **Context:** The Scripture editor's right-click menu is drawn by `ContextMenuPlugin` in
   `paranext/scripture-editors`, not by our `ContextMenuContent`. It portalled hand-built markup to
   `document.body`, outside every zoom area, so at 200 % it stayed at interface scale beside text
@@ -4538,8 +4542,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
     (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
     when first opened from zoomed content. The Scripture editor's right-click menu is not one of
-    these — it is drawn by the editor library and follows its area by a different route; see
-    `adr-editor-context-menu-follows-its-area-via-a-container`;
+    these — it is drawn by the editor library and stays at interface scale; see
+    `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn);
   - a pop-up portaled into a container inside another area inherits that container's zoom;
   - a command palette blocks the window's input while open, so the pane it was drawn for cannot
     change underneath it; a popover and a context menu do not block input, so a zoom chord pressed
@@ -5477,9 +5481,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   cannot silently drift apart. It does not compare their physical-modifier tracking (a held Control
   or ⌘, a pointer event reporting Ctrl, clearing on blur), which is what tells a macOS mouse notch
   from a trackpad pinch. Enhanced Resources has no leftover zoom fallback that could fall out of
-  step with the platform mechanism. Each pane that mounts the Scripture editor also hands it its zoom area's
-  element for the editor's right-click menu; see
-  `adr-editor-context-menu-follows-its-area-via-a-container`.
+  step with the platform mechanism. The Scripture editor's right-click menu stays at interface scale in
+  every one of these panes; see `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn).
 - **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
   PT-4583 (Enhanced Resources viewer).
 

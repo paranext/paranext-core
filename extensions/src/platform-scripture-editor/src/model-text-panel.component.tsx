@@ -390,14 +390,6 @@ export function ModelTextPanel({
   // doesn't churn (and reload the editor) on every fetch of identical content.
   const extraValidMarkers = useExtraValidMarkers(usj);
 
-  // The Model Text zoom area's element, handed to the editor so its right-click menu portals inside
-  // the area: the menu then takes the area's zoom and stays bounded by the pane. The getter reads a
-  // plain ref and has no dependencies, so `options` below keeps its identity.
-  // An element ref starts out null.
-  // eslint-disable-next-line no-null/no-null
-  const zoomRootRef = useRef<HTMLDivElement>(null);
-  const getZoomRoot = useCallback(() => zoomRootRef.current ?? undefined, []);
-
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,
@@ -410,9 +402,8 @@ export function ModelTextPanel({
       // editor's `auto` is not a mode core passes; anything else falls back to ltr.
       textDirection: textDirection === 'rtl' ? 'rtl' : 'ltr',
       view: VIEW_OPTIONS,
-      contextMenuContainer: getZoomRoot,
     }),
-    [textDirection, extraValidMarkers, getZoomRoot],
+    [textDirection, extraValidMarkers],
   );
 
   // Read-only: push incoming USJ directly into the editor whenever it changes. This effect is the
@@ -754,11 +745,7 @@ export function ModelTextPanel({
           prompt, a spinner or an error — with no scripture content to scale. Some of them (an
           unconfigured readiness, a failed install) can stay on screen indefinitely without that
           changing. */}
-      <ContentZoomRoot
-        ref={zoomRootRef}
-        area="model-text"
-        className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
-      >
+      <ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
         {renderContent()}
       </ContentZoomRoot>
     </div>

@@ -103,14 +103,6 @@ export type EnhancedScripturePaneProps = {
   resourceId?: string;
   /** User's preferred gloss language (e.g., "en") - threaded into TooltipInputDto. */
   glossLanguage?: string;
-  /**
-   * The element the editor draws its right-click menu into. The editor portals that menu to
-   * `document.body` by default, outside any zoom area, so a view that zooms this pane passes the
-   * zoom area's element and the menu takes the area's zoom. Called only when the menu opens, so the
-   * element may not exist yet at first render. The pane reads the latest function, so a new one on
-   * every render does not change the editor's options.
-   */
-  contextMenuContainer?: () => HTMLElement | undefined;
 };
 
 const ANNOTATION_TYPE_MARBLE_WORD = 'marble-word';
@@ -574,7 +566,6 @@ export function EnhancedScripturePane({
   erProxy,
   resourceId,
   glossLanguage,
-  contextMenuContainer,
 }: EnhancedScripturePaneProps) {
   // Editorial's forwarded ref is typed `EditorRef | null`; we match that to satisfy the prop type.
   // eslint-disable-next-line no-null/no-null
@@ -626,20 +617,12 @@ export function EnhancedScripturePane({
   // Marble annotation marks (see EDITORIAL_OPTIONS note above). When the set genuinely changes, the
   // annotation effect re-applies marks on the new USJ anyway.
   const extraValidMarkers = useExtraValidMarkers(usj);
-  // The editor gets one getter that never changes and reads the view's latest one when the menu
-  // opens, so a view that hands over a new function each render cannot change `editorialOptions`.
-  const contextMenuContainerRef = useLatestRef(contextMenuContainer);
-  const getContextMenuContainer = useCallback(
-    () => contextMenuContainerRef.current?.(),
-    [contextMenuContainerRef],
-  );
   const editorialOptions = useMemo(
     () => ({
       ...EDITORIAL_OPTIONS,
       nodes: { extraValidMarkers },
-      contextMenuContainer: getContextMenuContainer,
     }),
-    [extraValidMarkers, getContextMenuContainer],
+    [extraValidMarkers],
   );
 
   // Hold the latest scrRef + localizer in refs so the annotation effect's hover callbacks

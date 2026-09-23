@@ -86,21 +86,15 @@ describe('content zoom markers (Bible Texts / Commentaries panel)', () => {
 
   it('marks the content below the selector, keeping the selector itself fixed', () => {
     expect(panel).toMatch(
-      /<ResourceSelectorDropdown[\s\S]*?\/> <ContentZoomRoot ref={zoomRootRef} area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> {renderContent\(\)} <\/ContentZoomRoot>/,
+      /<ResourceSelectorDropdown[\s\S]*?\/> <ContentZoomRoot area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> {renderContent\(\)} <\/ContentZoomRoot>/,
     );
   });
 
-  it('hands the editor the marked area as its right-click menu container', () => {
-    // The editor draws its right-click menu itself and portals it to `document.body`, outside the
-    // zoom area, so the menu only takes the pane's zoom if the editor is told which element to
-    // render into. Three pieces, each silent if dropped: the menu just reverts to interface size.
-    // The empty dependency list is part of the contract — a changing dependency would rebuild the
-    // `options` memo and make `Editorial` reload its state.
-    expect(panel).toContain(
-      'const getZoomRoot = useCallback(() => zoomRootRef.current ?? undefined, []);',
-    );
-    expect(panel).toContain('contextMenuContainer: getZoomRoot');
-    expect(panel).toContain('<ContentZoomRoot ref={zoomRootRef}');
+  it('hands the editor no right-click menu container, so the menu stays at interface scale', () => {
+    // Positive control: the editor options are still built in this file.
+    expect(panel).toContain('const options: EditorOptions = useMemo(');
+    expect(panel).not.toContain('contextMenuContainer');
+    expect(panel).not.toContain('zoomRootRef');
   });
 });
 
@@ -109,18 +103,15 @@ describe('content zoom markers (Model Text panel)', () => {
 
   it('marks the content below the label row, keeping the 42 px header fixed', () => {
     expect(panel).toMatch(
-      /<ContentZoomRoot ref={zoomRootRef} area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> {renderContent\(\)} <\/ContentZoomRoot>/,
+      /<ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> {renderContent\(\)} <\/ContentZoomRoot>/,
     );
   });
 
-  it('hands the editor the marked area as its right-click menu container', () => {
-    // Same three pieces as the Bible Texts / Commentaries panel above: without them the menu
-    // reverts to interface size against `document.body` with nothing else to notice it by.
-    expect(panel).toContain(
-      'const getZoomRoot = useCallback(() => zoomRootRef.current ?? undefined, []);',
-    );
-    expect(panel).toContain('contextMenuContainer: getZoomRoot');
-    expect(panel).toContain('<ContentZoomRoot ref={zoomRootRef}');
+  it('hands the editor no right-click menu container, so the menu stays at interface scale', () => {
+    // Positive control: the editor options are still built in this file.
+    expect(panel).toContain('const options: EditorOptions = useMemo(');
+    expect(panel).not.toContain('contextMenuContainer');
+    expect(panel).not.toContain('zoomRootRef');
   });
 
   it('leaves the label row outside the marked area', () => {

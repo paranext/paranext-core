@@ -36,24 +36,14 @@ describe('content zoom markers (Enhanced Resources)', () => {
 
   it('marks the Bible text as the view’s main area', () => {
     expect(webView).toMatch(
-      /<ContentZoomRoot ref={scriptureZoomRootRef} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> <EnhancedScripturePane/,
+      /<ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> <EnhancedScripturePane/,
     );
   });
 
-  it('hands the Bible text pane its area as the editor’s right-click menu container', () => {
-    // The editor draws its right-click menu itself and portals it to `document.body`, outside the
-    // zoom area, so the menu only takes the pane's zoom if the pane is told which element to render
-    // into. Three pieces, each silent if dropped: the menu just reverts to interface size. The empty
-    // dependency list is part of the contract — the pane keeps its `options` identity stable so the
-    // editor never reconciles away the Marble marks, and a getter that changed would tempt a change
-    // there.
-    expect(webView).toContain(
-      'const getScriptureZoomRoot = useCallback(() => scriptureZoomRootRef.current ?? undefined, []);',
-    );
-    expect(webView).toMatch(
-      /<EnhancedScripturePane [^>]*contextMenuContainer={getScriptureZoomRoot}/,
-    );
-    expect(webView).toContain('<ContentZoomRoot ref={scriptureZoomRootRef}');
+  it('hands the Bible text pane no right-click menu container, so the menu stays at interface scale', () => {
+    expect(webView).toContain('<EnhancedScripturePane');
+    expect(webView).not.toContain('contextMenuContainer');
+    expect(webView).not.toContain('scriptureZoomRootRef');
   });
 
   it('marks the entries panel, keeping the tab bar outside it', () => {

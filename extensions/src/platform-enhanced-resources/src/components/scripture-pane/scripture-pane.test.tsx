@@ -38,12 +38,7 @@ let lastEditorialLogger:
 // `extraValidMarkers` and — critically — that its identity stays STABLE across USJ changes that
 // don't change the marker set (an identity change would make the real Editorial reconcile and
 // destroy Marble marks).
-let lastEditorialOptions:
-  | {
-      nodes?: { extraValidMarkers?: readonly string[] };
-      contextMenuContainer?: () => HTMLElement | undefined;
-    }
-  | undefined;
+let lastEditorialOptions: { nodes?: { extraValidMarkers?: readonly string[] } } | undefined;
 
 // papi.overlays is an external boundary; mock it so unit tests can assert on
 // hover-lifecycle calls without spinning up the real overlay service.
@@ -88,11 +83,7 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
     Editorial: React.forwardRef(function MockEditorial(
       props: {
         defaultUsj?: unknown;
-        options?: {
-          isReadonly?: boolean;
-          nodes?: { extraValidMarkers?: readonly string[] };
-          contextMenuContainer?: () => HTMLElement | undefined;
-        };
+        options?: { isReadonly?: boolean; nodes?: { extraValidMarkers?: readonly string[] } };
         logger?: {
           error: (...args: unknown[]) => void;
           warn: (...args: unknown[]) => void;
@@ -406,55 +397,18 @@ describe('EnhancedScripturePane', () => {
     });
   });
 
-  // The editor draws its right-click menu itself and portals it to `document.body`, outside the
-  // zoom area. The view hands the pane its area's element so the menu renders inside it and takes
-  // the area's zoom; the pane forwards that to Editorial as `contextMenuContainer`.
-  describe('context-menu container passed to Editorial', () => {
-    const renderPane = (contextMenuContainer?: () => HTMLElement | undefined) => (
+  it('hands Editorial no context-menu container, so the editor keeps its menu at interface scale', () => {
+    render(
       <EnhancedScripturePane
         usj={{ type: 'USJ', version: '3.1', content: [] }}
         annotations={[]}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
-        contextMenuContainer={contextMenuContainer}
-      />
+      />,
     );
 
-    it('resolves the view’s container only when the editor asks for it', () => {
-      const container = document.createElement('div');
-      const getContainer = vi.fn(() => container);
-      render(renderPane(getContainer));
-
-      // The area's element may not exist when the pane first renders, so the view's getter must not
-      // run during render.
-      expect(getContainer).not.toHaveBeenCalled();
-      expect(lastEditorialOptions?.contextMenuContainer?.()).toBe(container);
-      expect(getContainer).toHaveBeenCalledTimes(1);
-    });
-
-    it('offers the editor a getter that finds nothing when the view supplies no container', () => {
-      render(renderPane());
-
-      // A positive control first: the option is a function the editor can call, so the `undefined`
-      // below is the pane's answer rather than the option being absent.
-      expect(typeof lastEditorialOptions?.contextMenuContainer).toBe('function');
-      expect(lastEditorialOptions?.contextMenuContainer?.()).toBeUndefined();
-    });
-
-    it('keeps options identity stable when the view passes a new getter, and reads the latest one', () => {
-      // A new `options` identity makes the real Editorial reconcile its Lexical config and destroy
-      // the Marble annotation marks, so a view that hands over a fresh arrow each render must not
-      // reach the editor's options.
-      const first = document.createElement('div');
-      const second = document.createElement('div');
-      const { rerender } = render(renderPane(() => first));
-      const optionsBefore = lastEditorialOptions;
-      expect(optionsBefore?.contextMenuContainer?.()).toBe(first);
-
-      rerender(renderPane(() => second));
-
-      expect(lastEditorialOptions).toBe(optionsBefore);
-      expect(lastEditorialOptions?.contextMenuContainer?.()).toBe(second);
-    });
+    // Positive control: the options object reached the editor, so the absence below is real.
+    expect(lastEditorialOptions?.nodes).toBeDefined();
+    expect(lastEditorialOptions).not.toHaveProperty('contextMenuContainer');
   });
 
   it('exports the localized string keys as a frozen array', () => {

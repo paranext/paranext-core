@@ -335,23 +335,14 @@ export function ResourceTextPanel({
   // stable identity while the marker set is unchanged, so `options` doesn't churn on every fetch.
   const extraValidMarkers = useExtraValidMarkers(usjFromPdp);
 
-  // The panel's zoom area's element, handed to the editor so its right-click menu portals inside the
-  // area: the menu then takes the area's zoom and stays bounded by the pane. The getter reads a
-  // plain ref and has no dependencies, so `options` below keeps its identity.
-  // An element ref starts out null.
-  // eslint-disable-next-line no-null/no-null
-  const zoomRootRef = useRef<HTMLDivElement>(null);
-  const getZoomRoot = useCallback(() => zoomRootRef.current ?? undefined, []);
-
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
-      contextMenuContainer: getZoomRoot,
     }),
-    [textDirection, extraValidMarkers, getZoomRoot],
+    [textDirection, extraValidMarkers],
   );
 
   // `contentState` and `isBlankChapter` are deps because the content-area branches below UNMOUNT
@@ -727,11 +718,7 @@ export function ResourceTextPanel({
         )}
       />
 
-      <ContentZoomRoot
-        ref={zoomRootRef}
-        area={contentZoomArea}
-        className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
-      >
+      <ContentZoomRoot area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
         {renderContent()}
       </ContentZoomRoot>
     </div>

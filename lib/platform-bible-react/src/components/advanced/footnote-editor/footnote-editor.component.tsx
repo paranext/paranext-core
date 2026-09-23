@@ -74,11 +74,7 @@ export interface FootnoteEditorProps {
   scrRef: SerializedVerseRef;
   /** The unique note key to identify the note being edited used to apply changes to the note */
   noteKey: string | undefined;
-  /**
-   * View options of the parent editor. The component overrides `contextMenuContainer` (the menu is
-   * drawn inside the popover, so it takes the popover's zoom and stays within its bounds) and drops
-   * any inherited context-menu extras, so a `contextMenuContainer` supplied here has no effect.
-   */
+  /** View options of the parent editor */
   editorOptions: EditorOptions;
   /** Trigger key to open the footnote editor marker menu */
   defaultMarkerMenuTrigger: string;
@@ -360,9 +356,6 @@ export default function FootnoteEditor({
       // let a right-click here silently mutate the main document. The popover keeps only the
       // built-in Cut/Copy/Paste context-menu items.
       contextMenu: undefined,
-      // The menu belongs to this popover, not to the document behind it: portalling it into this
-      // component's own root gives it the popover's zoom and bounds it by the popover's box.
-      contextMenuContainer: () => containerRef.current ?? undefined,
       markerMenuTrigger: defaultMarkerMenuTrigger,
       hasExternalUI: true,
       view: {
