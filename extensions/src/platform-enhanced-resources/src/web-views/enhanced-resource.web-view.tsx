@@ -6,6 +6,7 @@ import type { UseWebViewStateHook, WebViewProps } from '@papi/core';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ContentZoomRoot,
+  ContentZoomTextProvider,
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
@@ -683,96 +684,101 @@ export function EnhancedResourceWebView({
                 hasMatches={hasMatches}
                 localizedStringsWithLoadingState={childStrings}
               />
-              <ContentZoomRoot area="entries" className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
-                <Tabs value={activeTab} className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
-                  <TabsContent
-                    value="dictionary"
-                    data-testid="er-dictionary-tab-panel"
-                    className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
-                  >
-                    <DictionaryTab
-                      items={dictionaryItems}
-                      selectedTokenId={dictionarySelectedTokenId}
-                      isLoading={dictionaryIsLoading}
-                      emptyState={dictionaryEmptyState}
-                      filterWord={dictionaryFilterWord}
-                      scopeLabel={dictionaryScopeLabel}
-                      activeDictionary={dictionaryActiveDictionary}
-                      hideLessRelevantSenses={dictionaryHideLessRelevantSenses}
-                      onSelectionChange={onDictionarySelectionChange}
-                      onSourceTextClick={onDictionarySourceTextClick}
-                      onAllOccurrencesClick={onDictionaryAllOccurrencesClick}
-                      onSenseOccurrencesClick={onDictionarySenseOccurrencesClick}
-                      onSenseDomainClick={onDictionarySenseDomainClick}
-                      onBrowseSemanticDomainsClick={onBrowseSemanticDomainsClick}
-                      onToggleHideLessRelevantSenses={onDictionaryToggleHideLessRelevantSenses}
-                      onHelpfulnessAnswer={onDictionaryHelpfulnessAnswer}
-                      onGiveFeedback={onDictionaryGiveFeedback}
-                      onCopySurfaceForm={onDictionaryCopySurfaceForm}
-                      onCopyLemma={onDictionaryCopyLemma}
-                      onFindSense={onDictionaryFindSense}
-                      onFindLemma={onDictionaryFindLemma}
-                      onFindText={onDictionaryFindText}
-                      localizedStringsWithLoadingState={childStrings}
-                    />
-                  </TabsContent>
-                  <TabsContent
-                    value="encyclopedia"
-                    data-testid="er-encyclopedia-tab-panel"
-                    className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
-                  >
-                    <EncyclopediaTab
-                      items={encyclopediaItems}
-                      selectedTokenId={encyclopediaSelectedTokenId}
-                      isLoading={encyclopediaIsLoading}
-                      emptyState={encyclopediaEmptyState}
-                      filterWord={encyclopediaFilterWord}
-                      scopeLabel={encyclopediaScopeLabel}
-                      articleDataMap={encyclopediaArticleDataMap}
-                      onSelectionChange={onEncyclopediaSelectionChange}
-                      onSourceTextClick={onEncyclopediaSourceTextClick}
-                      onCopySurfaceForm={onEncyclopediaCopySurfaceForm}
-                      onCopyLemma={onEncyclopediaCopyLemma}
-                      onArticleLinkClick={onEncyclopediaArticleLinkClick}
-                      localizedStringsWithLoadingState={childStrings}
-                    />
-                  </TabsContent>
-                  <TabsContent
-                    value="media"
-                    data-testid="er-media-tab-panel"
-                    className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
-                  >
-                    <MediaImagesTab
-                      items={mediaImagesItems}
-                      selectedItemId={mediaImagesSelectedItemId}
-                      isLoading={mediaImagesIsLoading}
-                      loaded={mediaImagesLoaded}
-                      scopeLabel={mediaImagesScopeLabel}
-                      thumbnailUrlResolver={mediaImagesThumbnailUrlResolver}
-                      onSelectionChange={onMediaImagesSelectionChange}
-                      onMaximize={onMediaImagesMaximize}
-                      localizedStringsWithLoadingState={childStrings}
-                    />
-                  </TabsContent>
-                  <TabsContent
-                    value="maps"
-                    data-testid="er-maps-tab-panel"
-                    className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
-                  >
-                    <MediaMapsTab
-                      items={mediaMapsItems}
-                      selectedItemId={mediaMapsSelectedItemId}
-                      isLoading={mediaMapsIsLoading}
-                      loaded={mediaMapsLoaded}
-                      scopeLabel={mediaMapsScopeLabel}
-                      thumbnailUrlResolver={mediaMapsThumbnailUrlResolver}
-                      onSelectionChange={onMediaMapsSelectionChange}
-                      onMaximize={onMediaMapsMaximize}
-                      localizedStringsWithLoadingState={childStrings}
-                    />
-                  </TabsContent>
-                </Tabs>
-              </ContentZoomRoot>
+              {/* The `entries` zoom area is the lemma, gloss, definition and article text the tabs
+                  render, marked by each component inside this provider; the tab buttons, switches,
+                  copy, find and feedback controls and the media thumbnails keep interface scale. */}
+              <ContentZoomTextProvider area="entries">
+                <div className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
+                  <Tabs value={activeTab} className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
+                    <TabsContent
+                      value="dictionary"
+                      data-testid="er-dictionary-tab-panel"
+                      className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
+                    >
+                      <DictionaryTab
+                        items={dictionaryItems}
+                        selectedTokenId={dictionarySelectedTokenId}
+                        isLoading={dictionaryIsLoading}
+                        emptyState={dictionaryEmptyState}
+                        filterWord={dictionaryFilterWord}
+                        scopeLabel={dictionaryScopeLabel}
+                        activeDictionary={dictionaryActiveDictionary}
+                        hideLessRelevantSenses={dictionaryHideLessRelevantSenses}
+                        onSelectionChange={onDictionarySelectionChange}
+                        onSourceTextClick={onDictionarySourceTextClick}
+                        onAllOccurrencesClick={onDictionaryAllOccurrencesClick}
+                        onSenseOccurrencesClick={onDictionarySenseOccurrencesClick}
+                        onSenseDomainClick={onDictionarySenseDomainClick}
+                        onBrowseSemanticDomainsClick={onBrowseSemanticDomainsClick}
+                        onToggleHideLessRelevantSenses={onDictionaryToggleHideLessRelevantSenses}
+                        onHelpfulnessAnswer={onDictionaryHelpfulnessAnswer}
+                        onGiveFeedback={onDictionaryGiveFeedback}
+                        onCopySurfaceForm={onDictionaryCopySurfaceForm}
+                        onCopyLemma={onDictionaryCopyLemma}
+                        onFindSense={onDictionaryFindSense}
+                        onFindLemma={onDictionaryFindLemma}
+                        onFindText={onDictionaryFindText}
+                        localizedStringsWithLoadingState={childStrings}
+                      />
+                    </TabsContent>
+                    <TabsContent
+                      value="encyclopedia"
+                      data-testid="er-encyclopedia-tab-panel"
+                      className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
+                    >
+                      <EncyclopediaTab
+                        items={encyclopediaItems}
+                        selectedTokenId={encyclopediaSelectedTokenId}
+                        isLoading={encyclopediaIsLoading}
+                        emptyState={encyclopediaEmptyState}
+                        filterWord={encyclopediaFilterWord}
+                        scopeLabel={encyclopediaScopeLabel}
+                        articleDataMap={encyclopediaArticleDataMap}
+                        onSelectionChange={onEncyclopediaSelectionChange}
+                        onSourceTextClick={onEncyclopediaSourceTextClick}
+                        onCopySurfaceForm={onEncyclopediaCopySurfaceForm}
+                        onCopyLemma={onEncyclopediaCopyLemma}
+                        onArticleLinkClick={onEncyclopediaArticleLinkClick}
+                        localizedStringsWithLoadingState={childStrings}
+                      />
+                    </TabsContent>
+                    <TabsContent
+                      value="media"
+                      data-testid="er-media-tab-panel"
+                      className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
+                    >
+                      <MediaImagesTab
+                        items={mediaImagesItems}
+                        selectedItemId={mediaImagesSelectedItemId}
+                        isLoading={mediaImagesIsLoading}
+                        loaded={mediaImagesLoaded}
+                        scopeLabel={mediaImagesScopeLabel}
+                        thumbnailUrlResolver={mediaImagesThumbnailUrlResolver}
+                        onSelectionChange={onMediaImagesSelectionChange}
+                        onMaximize={onMediaImagesMaximize}
+                        localizedStringsWithLoadingState={childStrings}
+                      />
+                    </TabsContent>
+                    <TabsContent
+                      value="maps"
+                      data-testid="er-maps-tab-panel"
+                      className="tw:flex tw:flex-1 tw:flex-col tw:overflow-y-auto tw:data-[state=inactive]:hidden"
+                    >
+                      <MediaMapsTab
+                        items={mediaMapsItems}
+                        selectedItemId={mediaMapsSelectedItemId}
+                        isLoading={mediaMapsIsLoading}
+                        loaded={mediaMapsLoaded}
+                        scopeLabel={mediaMapsScopeLabel}
+                        thumbnailUrlResolver={mediaMapsThumbnailUrlResolver}
+                        onSelectionChange={onMediaMapsSelectionChange}
+                        onMaximize={onMediaMapsMaximize}
+                        localizedStringsWithLoadingState={childStrings}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </ContentZoomTextProvider>
             </ResizablePanel>
           </ResizablePanelGroup>
         )}

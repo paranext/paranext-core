@@ -14,8 +14,9 @@ function source(relativePath: string): string {
  * Every `.ts`/`.tsx` file under `dir`, excluding `excludeFile` (an absolute path). Used to sweep
  * the whole extension for `ContentZoomRoot` usages rather than trusting the two files that happen
  * to carry markers today — a `ContentZoomRoot` added later inside any other component (a tab, the
- * scripture pane, the article viewer) would nest inside `main` or `entries`, which the platform
- * silently ignores and logs once, so the guard has to see every file that could introduce one.
+ * scripture pane, the article viewer) would nest inside `main` or `footnotes`, which the platform
+ * silently ignores and logs once, so the guard has to see every file that could introduce one. Test
+ * files are skipped: they render markers and providers as fixtures, not as part of the view.
  */
 function listSourceFiles(dir: string, excludeFile: string): string[] {
   const files: string[] = [];
@@ -23,7 +24,11 @@ function listSourceFiles(dir: string, excludeFile: string): string[] {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...listSourceFiles(fullPath, excludeFile));
-    } else if (fullPath !== excludeFile && /\.tsx?$/.test(entry.name)) {
+    } else if (
+      fullPath !== excludeFile &&
+      /\.tsx?$/.test(entry.name) &&
+      !/\.test\.tsx?$/.test(entry.name)
+    ) {
       files.push(fullPath);
     }
   });
@@ -46,10 +51,21 @@ describe('content zoom markers (Enhanced Resources)', () => {
     expect(webView).not.toContain('scriptureZoomRootRef');
   });
 
-  it('marks the entries panel, keeping the tab bar outside it', () => {
+  it('opts the entries panel into text marking without marking the panel itself, keeping the tab bar outside', () => {
     expect(webView).toMatch(
-      /<EnhancedResourceTabBar[\s\S]*?\/> <ContentZoomRoot area="entries" className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0"> <Tabs value={activeTab}/,
+      /<EnhancedResourceTabBar[\s\S]*?\/> (?:\{\/\*.*?\*\/\} )?<ContentZoomTextProvider area="entries"> <div className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0"> <Tabs value={activeTab}/,
     );
+    expect(webView).not.toContain('<ContentZoomRoot area="entries"');
+  });
+
+  it('marks entry text in each component that renders it', () => {
+    [
+      'components/dictionary-tab/dictionary-display-item.component.tsx',
+      'components/dictionary-tab/dictionary-entry-detail.component.tsx',
+      'components/shared/dictionary-sense-item.component.tsx',
+      'components/encyclopedia-tab/encyclopedia-display-item.component.tsx',
+      'components/encyclopedia-tab/encyclopedia-entry-detail.component.tsx',
+    ].forEach((file) => expect(source(file)).toContain('useContentZoomTextProps()'));
   });
 
   it('marks the footnotes list as its own area', () => {
@@ -58,34 +74,34 @@ describe('content zoom markers (Enhanced Resources)', () => {
     );
   });
 
-  it('marks exactly three areas across the whole extension — main, entries, footnotes — with no others added anywhere', () => {
-    // Swept across every source file in the extension, not just the two that carry markers: a
-    // ContentZoomRoot added to any other component (a tab, the scripture pane, the article viewer)
-    // would nest inside `main` or `entries`, and one around the wrapper that holds all three would
-    // contain them. The platform ignores a nested marker and logs it rather than erroring, so the
-    // viewer would be left with one area and no way to tell.
-    const areaAttrs = listSourceFiles(SRC_DIR, THIS_FILE).flatMap((filePath) => {
-      const fileSource = readFileSync(filePath, 'utf-8').replace(/\s+/g, ' ');
-      return [...fileSource.matchAll(/<ContentZoomRoot(?:\s+area="([a-z-]+)")?[ >]/g)].map(
+  it('uses exactly the main, entries and footnotes areas across the whole extension', () => {
+    // Swept across every source file: a ContentZoomRoot added to any other component would nest
+    // inside `main` or `footnotes`, and one around the entries provider would contain its text
+    // markers. The platform ignores a nested marker and logs it rather than erroring.
+    const files = listSourceFiles(SRC_DIR, THIS_FILE).map((filePath) =>
+      readFileSync(filePath, 'utf-8').replace(/\s+/g, ' '),
+    );
+    const roots = files.flatMap((fileSource) =>
+      [...fileSource.matchAll(/<ContentZoomRoot(?:\s+area="([a-z-]+)")?[ >]/g)].map(
         (m) => m[1] ?? 'main',
-      );
-    });
-    expect(areaAttrs.sort()).toEqual(['entries', 'footnotes', 'main']);
+      ),
+    );
+    const providers = files.flatMap((fileSource) =>
+      [...fileSource.matchAll(/<ContentZoomTextProvider(?:\s+area="([a-z-]+)")?[ >]/g)].map(
+        (m) => m[1] ?? 'main',
+      ),
+    );
+    expect(roots.sort()).toEqual(['footnotes', 'main']);
+    expect(providers).toEqual(['entries']);
   });
 
   it('keeps the ribbons, toolbar, tab bar and both resize handles outside every area', () => {
-    // WarningRibbons and the top toolbar sit before the first ContentZoomRoot; the resize handle
-    // and tab bar sit between the two ContentZoomRoot elements in the web view — never inside one —
-    // so they stay at interface scale while the panes zoom. The footnotes pane's own resize handle,
-    // between its two ResizablePanels, sits before its ContentZoomRoot for the same reason.
     const firstOpenIndex = webView.indexOf('<ContentZoomRoot');
     const firstCloseIndex = webView.indexOf('</ContentZoomRoot>');
-    const secondOpenIndex = webView.indexOf('<ContentZoomRoot', firstCloseIndex);
-    // Without this, a missing second marker makes `indexOf` return -1, `betweenAreas` slice to
-    // end-of-file, and the two `betweenAreas` assertions below pass on a view that marks one area.
-    expect(secondOpenIndex).toBeGreaterThan(firstCloseIndex);
+    const providerIndex = webView.indexOf('<ContentZoomTextProvider', firstCloseIndex);
+    expect(providerIndex).toBeGreaterThan(firstCloseIndex);
     const beforeFirstArea = webView.slice(0, firstOpenIndex);
-    const betweenAreas = webView.slice(firstCloseIndex, secondOpenIndex);
+    const betweenAreas = webView.slice(firstCloseIndex, providerIndex);
 
     expect(beforeFirstArea).toContain('<WarningRibbons');
     expect(beforeFirstArea).toContain('<EnhancedResourceTopToolbar');
