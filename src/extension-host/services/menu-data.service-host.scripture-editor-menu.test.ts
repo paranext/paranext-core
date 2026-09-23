@@ -174,14 +174,6 @@ describe("The scripture editor's Project menu, per mode", () => {
         ],
       ],
       [
-        'platformScriptureEditor.options',
-        [
-          'platform.webViewContentZoomIn',
-          'platform.webViewContentZoomOut',
-          'platform.webViewContentZoomReset',
-        ],
-      ],
-      [
         'platformScriptureEditor.simpleView',
         [
           'platformScriptureEditor.changeView',
@@ -261,6 +253,13 @@ describe("The scripture editor's Project menu, per mode", () => {
     // The Power Comments item opens a separate Comment List web view; Simple's own Comments item
     // (legacyCommentManager.showCommentListPanel) fronts the shared Column 3 tab instead.
     'legacyCommentManager.openCommentList',
+    // Per-pane zoom: the v0 Simple design has no Options column, and every other item in that
+    // column is already Power-only, so serving these here would resurrect the whole column for a
+    // control Simple already offers. Simple reaches zoom from the tab menu instead, which core's
+    // `defaultWebViewTabMenu` serves in every mode.
+    'platform.webViewContentZoomIn',
+    'platform.webViewContentZoomOut',
+    'platform.webViewContentZoomReset',
   ]);
 
   /**
