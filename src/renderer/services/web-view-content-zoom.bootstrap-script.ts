@@ -530,7 +530,7 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     const PINCH_SCALE_PIXELS = 100;
     // How far \`exp(-deltaY / 100)\` may sit from 1 and still OPEN a pinch rather than be a wheel
     // notch. A notch clears it on every platform but macOS, where the physical-modifier test is
-    // what tells the two apart.
+    // what tells the two apart (see IS_MAC below).
     const PINCH_MAX_SCALE_DEVIATION = 0.05;
     // How long a pinch's classification survives its last frame. A pinch is a stream at the
     // display's refresh rate, so anything arriving within this window is the same gesture; a
@@ -552,8 +552,19 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     // first frame of a pane's life is judged on its size alone.
     let pinchLatchTime = -Infinity;
 
+    // Whether a physically held modifier key is evidence that a ctrl+wheel is a mouse notch. It is
+    // only on macOS, whose mouse notch can be as small as a pinch frame (≈4 px), so there the size
+    // test cannot tell the two apart and the held key is what does. On Windows and Linux a notch is
+    // 33 px or more, far outside the size window, while a pinch frame sits within about 1 % of a
+    // scale of 1. Pinching while Ctrl is held is an ordinary way to pinch there, and reading the
+    // held key as a notch would send every frame of it down the tick path at a whole step each. So
+    // everywhere but macOS the size test decides alone. Read once: the platform cannot change under
+    // a running pane.
+    const IS_MAC = /^Mac/.test(navigator.platform || '');
+
     // Which modifier keys are PHYSICALLY down - the thing a synthesized pinch's \`ctrlKey\` is not.
-    // Two sources feed it, because neither sees the whole picture on its own:
+    // Consulted on macOS only (see IS_MAC). Two sources feed it, because neither sees the whole
+    // picture on its own:
     //
     // - Key events, in capture phase so a view that stops them from propagating cannot strand a
     //   flag. This bootstrap runs inside the web view's iframe, so these only arrive while that
@@ -570,7 +581,8 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     // moving again, and then nothing can correct it - so a pointer reading is trusted for a bounded
     // time and the pane falls back to what the key events know. A modifier held while the window
     // loses focus or visibility has its keyup delivered to somebody else, so both are cleared there
-    // too. Every flag left standing sends later pinches down the notch path at a step a frame.
+    // too. On macOS, every flag left standing sends later pinches down the notch path at a step a
+    // frame.
     const PHYSICAL_MODIFIER_KEYS = ['Control', 'Meta'];
     // Long enough for the gesture a pointer reading was taken for - a user who moves the mouse with
     // Ctrl held is about to turn the wheel - and short next to the life of a pane.
@@ -619,7 +631,7 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       // Chromium's synthesized pinch is ctrl+wheel on every platform, never meta+wheel, so ⌘+wheel
       // on a Mac is a mouse gesture however small its delta - the same test pdf.js makes.
       e.ctrlKey &&
-      !anyPhysicalModifier(now) &&
+      !(IS_MAC && anyPhysicalModifier(now)) &&
       e.deltaMode === 0 &&
       e.deltaX === 0 &&
       (Math.abs(Math.exp(-e.deltaY / PINCH_SCALE_PIXELS) - 1) < PINCH_MAX_SCALE_DEVIATION ||
