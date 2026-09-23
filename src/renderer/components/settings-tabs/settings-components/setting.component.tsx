@@ -165,6 +165,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_errorMessages_errorOccurred%',
   '%settings_errorMessages_viewError%',
   '%settings_uiLanguageSelector_fallbackLanguages%',
+  '%settings_zoomStepper_percentInput%',
   ...ERROR_POPOVER_STRING_KEYS,
 ];
 
@@ -340,6 +341,7 @@ export function Setting({
             atMaximum: localizedStrings['%settings_platform_webViewContentZoom_atMaximum%'],
             atMinimum: localizedStrings['%settings_platform_webViewContentZoom_atMinimum%'],
             atDefault: localizedStrings['%settings_platform_webViewContentZoom_atDefault%'],
+            percentInput: localizedStrings['%settings_zoomStepper_percentInput%'],
           }}
           onChange={debouncedHandleStepperChange}
         />
