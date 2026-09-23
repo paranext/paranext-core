@@ -2354,8 +2354,10 @@ async function main() {
       );
 
       // Usersnap's native screenshot asks for a display-media stream. When Usersnap is configured,
-      // serve the requesting window's own top frame without showing an OS screen picker; web views
-      // and any other iframe are denied (see `selectDisplayMediaSource`).
+      // serve the window's top frame without showing an OS screen picker. Code in the top frame's
+      // origin, including web views created with the default `allowSameOrigin`, shares that grant;
+      // web views with `allowSameOrigin: false` and any other iframe are denied (see
+      // `selectDisplayMediaSource`).
       registerDisplayMediaRequestHandler(session.defaultSession, USERSNAP_SPACE_API_KEY);
 
       // Install Chromium devtools extensions once (not per-window)

@@ -3,9 +3,10 @@
  * may capture.
  *
  * The handler answers without showing an OS screen picker, so a granted request is a silent capture
- * of the whole window. Only the window's own top frame may ask: that is where the Usersnap feedback
- * widget requests its native screenshot. Web views are `about:srcdoc` iframes running extension
- * code, and no iframe may obtain a capture of the window around it.
+ * of the whole window. Only the window's top frame is served: that is where the Usersnap feedback
+ * widget requests its native screenshot. Code running in the top frame's origin shares that grant,
+ * including web views created with the default `allowSameOrigin`. Web views created with
+ * `allowSameOrigin: false`, and any other iframe, are denied.
  */
 
 import { logger } from '@shared/services/logger.service';
