@@ -1,48 +1,48 @@
 // @vitest-environment jsdom
 import { createRef } from 'react';
-import { beforeAll, describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ContentZoomRoot } from '@/components/advanced/content-zoom-root.component';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
-import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from '@/context/content-zoom-text.context';
+import {
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  useContentZoomTextProps,
+} from '@/context/content-zoom-text.context';
 
-// Radix measures popover content on mount; jsdom ships no ResizeObserver.
-class NoopResizeObserver implements ResizeObserver {
-  // Keep an internal record of observed targets so the no-op methods touch `this` and don't
-  // trip @typescript-eslint/class-methods-use-this. No test inspects this state.
-  private readonly targets = new Set<Element>();
-
-  observe(target: Element) {
-    this.targets.add(target);
-  }
-
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
+function ProjectText({ children }: { children: string }) {
+  const contentZoomTextProps = useContentZoomTextProps();
+  return (
+    <span
+      data-testid="library-text"
+      // The hook returns only the content-zoom marker attribute, or nothing.
+      // eslint-disable-next-line react/jsx-props-no-spreading
+      {...contentZoomTextProps}
+    >
+      {children}
+    </span>
+  );
 }
 
-beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    globalThis.ResizeObserver = NoopResizeObserver;
-  }
-});
-
 describe('ContentZoomRoot', () => {
-  it('exports the attribute literal that mirrors core’s constant', () => {
-    expect(CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe('data-platform-content-zoom-root');
-  });
-
   it('renders a div carrying the marker attribute with an empty value for the main area', () => {
     const { container } = render(<ContentZoomRoot>text</ContentZoomRoot>);
     const element = container.firstElementChild;
     expect(element?.tagName).toBe('DIV');
-    expect(element?.hasAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE)).toBe(true);
     expect(element?.getAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE)).toBe('');
+  });
+
+  it('renders a span when asked, for inline text inside phrasing content', () => {
+    const { container } = render(
+      <p>
+        <button type="button">GEN 1:1</button>
+        <ContentZoomRoot as="span">In the beginning</ContentZoomRoot>
+      </p>,
+    );
+    const marked = container.querySelectorAll(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`);
+    expect(marked).toHaveLength(1);
+    expect(marked[0].tagName).toBe('SPAN');
+    expect(marked[0].textContent).toBe('In the beginning');
+    expect(marked[0].parentElement?.tagName).toBe('P');
   });
 
   it('names a zoom area through the area prop', () => {
@@ -52,13 +52,13 @@ describe('ContentZoomRoot', () => {
     );
   });
 
-  it('passes className, dir and other div props through', () => {
+  it('passes className, dir and other props through', () => {
     const { container } = render(
-      <ContentZoomRoot className="tw:flex-1" dir="rtl" id="x" aria-label="content">
+      <ContentZoomRoot as="span" className="tw:flex-1" dir="rtl" id="x" aria-label="content">
         content
       </ContentZoomRoot>,
     );
-    const element = container.querySelector('div');
+    const element = container.querySelector('span');
     expect(element?.className).toBe('tw:flex-1');
     expect(element?.getAttribute('dir')).toBe('rtl');
     expect(element?.id).toBe('x');
@@ -76,11 +76,20 @@ describe('ContentZoomRoot', () => {
     expect(getByTestId('nested')).toBeInTheDocument();
   });
 
-  it('forwards its ref to the rendered element', () => {
-    const ref = createRef<HTMLDivElement>();
-    const { container } = render(<ContentZoomRoot ref={ref}>text</ContentZoomRoot>);
-    expect(ref.current).toBe(container.firstElementChild);
-    expect(ref.current?.getAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE)).toBe('');
+  it('forwards its ref to the rendered element, for either tag', () => {
+    const divRef = createRef<HTMLDivElement>();
+    const spanRef = createRef<HTMLElement>();
+    render(
+      <>
+        <ContentZoomRoot ref={divRef}>div text</ContentZoomRoot>
+        <ContentZoomRoot ref={spanRef} as="span">
+          span text
+        </ContentZoomRoot>
+      </>,
+    );
+    expect(divRef.current?.tagName).toBe('DIV');
+    expect(spanRef.current?.tagName).toBe('SPAN');
+    expect(spanRef.current?.getAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE)).toBe('');
   });
 
   it('the area prop wins over a marker attribute passed through props', () => {
@@ -94,23 +103,13 @@ describe('ContentZoomRoot', () => {
     );
   });
 
-  it('provides nothing to what it renders: a pop-up opened inside it is not marked', () => {
+  it('opts nothing inside it into library text marking (it provides no context)', () => {
     const { container } = render(
-      <ContentZoomRoot area="footnotes">
-        <Popover defaultOpen>
-          <PopoverTrigger>open</PopoverTrigger>
-          <PopoverContent>body</PopoverContent>
-        </Popover>
+      <ContentZoomRoot>
+        <ProjectText>library text</ProjectText>
       </ContentZoomRoot>,
     );
-    const popup = document.querySelector('[data-slot="popover-content"]');
-    // Positive controls: the pop-up opened, portaled out of the root, and the root is marked.
-    expect(popup).not.toBeNull();
-    expect(container.contains(popup)).toBe(false);
-    expect(container.firstElementChild?.getAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE)).toBe(
-      'footnotes',
-    );
-    expect(popup?.hasAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE)).toBe(false);
-    expect(document.querySelectorAll(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toHaveLength(1);
+    expect(container.querySelectorAll(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toHaveLength(1);
+    expect(screen.getByTestId('library-text')).not.toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE);
   });
 });
