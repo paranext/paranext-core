@@ -78,6 +78,7 @@ vi.mock('@papi/frontend/react', async () => {
       Object.fromEntries(keys.map((key) => [key, isSharedKey(key) ? valueFor(key) : key])),
       false,
     ],
+    useLocalizedProjectTitle: () => undefined,
     useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
       defaultValue,
       vi.fn(),

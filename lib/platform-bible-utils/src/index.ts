@@ -149,6 +149,8 @@ export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
 export {
   normalizeProjectId,
+  formatProjectTitle,
+  getProjectDisplayName,
   hasDistinctFullName,
   normalizeFullName,
   formatProjectName,

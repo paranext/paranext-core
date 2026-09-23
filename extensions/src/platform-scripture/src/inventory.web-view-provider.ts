@@ -31,21 +31,12 @@ export class InventoryWebViewProvider implements IWebViewProvider {
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    let projectName: string | undefined;
-
-    if (projectId) {
-      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-      projectName = (await pdp.getSetting('platform.name')) ?? projectId;
-    }
-
-    const title = formatReplacementString(
-      await papi.localization.getLocalizedString({
-        localizeKey: this.titleKey,
-      }),
-      {
-        projectName,
-      },
-    );
+    const title = projectId
+      ? await papi.localization.getLocalizedProjectTitle({ localizeKey: this.titleKey, projectId })
+      : formatReplacementString(
+          await papi.localization.getLocalizedString({ localizeKey: this.titleKey }),
+          { projectName: undefined },
+        );
 
     return {
       ...savedWebView,
