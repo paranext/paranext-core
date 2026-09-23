@@ -44,7 +44,7 @@ internal class DblResourcesDataProvider(
 
     #region Internal classes
 
-    private class DblResourceData(
+    internal class DblResourceData(
         string DblEntryUid,
         string DisplayName,
         string FullName,
@@ -68,6 +68,13 @@ internal class DblResourcesDataProvider(
         public bool Installed { get; set; } = Installed;
         public bool UpdateAvailable { get; set; } = UpdateAvailable;
         public string ProjectId { get; set; } = ProjectId;
+
+        /// <summary>
+        /// Whether licensing terms prohibit using this resource as a model or base for a new
+        /// translation, so pickers for those must not offer it
+        /// </summary>
+        public bool IsRestrictedAsModelText =>
+            BiblicaLicensing.IsRestrictedAsModelText(DblEntryUid);
     }
 
     #endregion
