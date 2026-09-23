@@ -2301,7 +2301,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   strong as the durable completion write — `first-run-store.ts` treats its localStorage cache as
   authoritative when the setting reads `false`, so a user whose write fails is shown the full app
   while every gate still answers `unconfirmed`, until one of `resolveInternal`'s per-launch
-  re-attempts of that write succeeds.
+  re-attempts of that write succeeds (PT-4775). An already-onboarded profile upgrading into the
+  gate may also miss its first startup sync, if the gate reads the flag before the renderer
+  backfills it; that race is unconfirmed (PT-4776).
 
   Every consent skip logs at `info`, which packaged builds keep, and names its reason. `unconfirmed`
   cannot tell an unfinished wizard from an unreadable flag, so the failed read warns for itself.
