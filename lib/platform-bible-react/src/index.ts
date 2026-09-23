@@ -77,7 +77,12 @@ export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/co
 export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
 export { ContentZoomRoot } from './components/advanced/content-zoom-root.component';
 export type { ContentZoomRootProps } from './components/advanced/content-zoom-root.component';
-export { CONTENT_ZOOM_ROOT_ATTRIBUTE } from './context/content-zoom-text.context';
+export {
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  ContentZoomTextProvider,
+  useContentZoomTextProps,
+} from './context/content-zoom-text.context';
+export type { ContentZoomTextProviderProps } from './context/content-zoom-text.context';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
