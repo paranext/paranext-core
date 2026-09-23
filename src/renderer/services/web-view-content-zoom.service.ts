@@ -1,4 +1,4 @@
-import { getWebViewIframe, parseIframeZoom } from '@renderer/services/overlays/overlay-coordinates';
+import { getWebViewIframe } from '@renderer/services/overlays/overlay-coordinates';
 import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_IDENTITY_STATE_KEY,
@@ -480,35 +480,6 @@ export function resolveContentZoomArea(
   }
   const active = activeAreaByWebViewId.get(webViewId);
   return active && areas.includes(active) ? active : areas[0];
-}
-
-/**
- * The scale a pane's content is drawn at, for a platform surface that has to match it but renders
- * outside the pane - an overlay in the renderer's own document, which cannot read the pane's zoom
- * variables. A pane with areas answers with the level of its active area - the one last clicked or
- * focused, else the first, which is where a request with no area of its own resolves - and the
- * Settings default when that area holds no level of its own. The scale is therefore that of the
- * area the user is working in, which for a pop-up opened by hover can differ from the area that
- * opened it; a pane with no areas answers with the CSS `zoom` on its iframe, the whole-frame
- * fallback. `1` is the answer for anything it cannot resolve.
- *
- * Read at render time, with no subscription. For a command palette the level cannot change
- * underneath it while it is open: the palette blocks the window's input
- * ({@link resolveContentZoomTarget}'s `isWindowInputBlocked` check), so a zoom chord cannot resolve
- * a target, and the wheel listener lives inside the pane, where the pointer is not. A popover or a
- * context menu do not block input, so a chord pressed while one is open can still re-scale the pane
- * behind it - the overlay then keeps the level it was drawn at until it closes. That gap is
- * accepted rather than subscribed away: it needs a chord pressed while a pop-up is on screen, it
- * corrects itself the next time the pop-up opens, and a change-event-and-re-render path through
- * three components is disproportionate to a cosmetic mismatch.
- *
- * @experimental This function is unstable and may change or disappear without notice
- */
-export function getContentZoomScaleForWebView(webViewId: WebViewId): number {
-  const area = resolveContentZoomArea(webViewId, undefined);
-  if (area === undefined) return parseIframeZoom(deps.getIframe(webViewId));
-  const own = effectiveOwnLevels(deps.getDefinition(webViewId));
-  return own[area] ?? cachedDefault ?? DEFAULT_ZOOM_FACTOR;
 }
 
 /**
