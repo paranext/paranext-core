@@ -2201,6 +2201,34 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it('reads a pane definition for its declaration once, until the pane is updated or forgotten', async () => {
+    const getDefinition = vi.fn((id: string) => definitions.get(id));
+    __setContentZoomDepsForTesting({ getDefinition });
+    await initializeContentZoomService();
+    const editor: SavedWebViewDefinition = {
+      id: 'editor-9',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    };
+    definitions.set('editor-9', editor);
+    getDefinition.mockClear();
+    expect(isContentZoomable('editor-9')).toBe(true);
+    expect(isContentZoomable('editor-9')).toBe(true);
+    expect(getDefinition).toHaveBeenCalledTimes(1);
+
+    // An update may change the pane's type, so the answer follows the updated definition.
+    definitions.set('editor-9', { ...editor, webViewType: 'thirdParty.view' });
+    if (!onDidUpdateWebViewCallback) throw new Error('test setup: no web-view update subscriber');
+    onDidUpdateWebViewCallback({ webView: requireDefinition('editor-9') });
+    expect(isContentZoomable('editor-9')).toBe(false);
+
+    // A forgotten pane's id may come back as another view, so its declaration is read afresh.
+    forgetContentZoom('editor-9');
+    definitions.set('editor-9', editor);
+    expect(isContentZoomable('editor-9')).toBe(true);
+  });
+
   it('does nothing for an undeclared pane that reported no areas (menu and macOS paths)', async () => {
     openUndeclaredPane('ext-1');
     setContentZoomAreas('ext-1', []);
@@ -2344,9 +2372,16 @@ describe('web-view-content-zoom.service', () => {
     await initializeContentZoomService();
     openUndeclaredPane('ext-1');
     setContentZoomAreas('ext-1', ['main']);
+    // A declared pane whose type has not been read yet: the throwing read is its first.
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
     definitionReadThrows = true;
     expect(isContentZoomable('ext-1')).toBe(true);
-    expect(isContentZoomable('editor-1')).toBe(false); // declared, but its type cannot be read now
+    expect(isContentZoomable('editor-2')).toBe(false); // declared, but its type cannot be read now
   });
 
   it('drops the areas of content whose bootstrap never runs again, once the wait after its load runs out', async () => {
