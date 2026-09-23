@@ -1626,9 +1626,12 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
 
     const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
     expect(renderProjectIndicator).toBeDefined();
-    expect(
-      renderProjectIndicator?.({ id: 'ro', shortName: 'RO', fullName: 'Readonly' }),
-    ).not.toBeUndefined();
+    // The glyph and the text explaining it travel together. A read-only row that returned a node
+    // with no label would put an unexplained padlock in the popover, which is the defect the
+    // tooltip line exists to close; a label with no node would describe an icon that is not there.
+    const readOnly = renderProjectIndicator?.({ id: 'ro', shortName: 'RO', fullName: 'Readonly' });
+    expect(readOnly?.node).toBeDefined();
+    expect(readOnly?.label).toBe('Test read-only');
     expect(
       renderProjectIndicator?.({ id: 'ed', shortName: 'ED', fullName: 'Editable' }),
     ).toBeUndefined();
@@ -1670,13 +1673,15 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
       allProjects: [],
     });
 
-    expect(
-      requireCapturedProjectSelectorProps().renderProjectIndicator?.({
-        id: 'roRecent',
-        shortName: 'RR',
-        fullName: 'Readonly Recent',
-      }),
-    ).not.toBeUndefined();
+    // Both halves, not merely a truthy return: an indicator carrying `{ node: undefined }` is not
+    // `undefined` and would satisfy a bare existence check while marking nothing.
+    const recentReadOnly = requireCapturedProjectSelectorProps().renderProjectIndicator?.({
+      id: 'roRecent',
+      shortName: 'RR',
+      fullName: 'Readonly Recent',
+    });
+    expect(recentReadOnly?.node).toBeDefined();
+    expect(recentReadOnly?.label).toBe('Test read-only');
   });
 
   it('marks a read-only project with the read-only indicator, not merely with something', async () => {
@@ -1696,7 +1701,7 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
 
     // Scoped to this container rather than `screen`: the toolbar rendered above is still mounted
     // and carries icons of its own.
-    const { container } = render(<div>{indicator}</div>);
+    const { container } = render(<div>{indicator?.node}</div>);
     expect(within(container).getByRole('img', { name: 'Test read-only' })).toBeInTheDocument();
   });
 

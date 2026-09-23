@@ -598,6 +598,9 @@ export const TEAM_LAYOUT_DIALOG: DialogDefinition<typeof SHARE_LAYOUT_DIALOG_TYP
   ...DIALOG_BASE,
   tabType: SHARE_LAYOUT_DIALOG_TYPE,
   defaultTitle: '%shareLayoutDialog_teamLayout_title%',
+  // The component renders both halves itself (`team-layout.component.tsx`), unconditionally.
+  providesOwnTitle: true,
+  providesOwnDescription: true,
   // A cap, not a fixed width: the modal host applies this as `maxWidth` over a `w-full`
   // DialogContent, so the dialog takes the available app width and stops here. Sized so each of
   // the three equal columns clears ~400px — the third carries tabs, a resource list, a select and

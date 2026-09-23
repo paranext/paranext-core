@@ -52,6 +52,8 @@ const TEAM_LAYOUT_STRINGS: TeamLayoutDialogLocalizedStrings = {
 
 const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_title%': 'Resource picker',
+  '%resourcePicker_description%':
+    "Choose a resource to add. Picking one downloads it if it isn't already installed.",
   '%resourcePicker_section_already_selected%': 'Included',
   '%resourcePicker_section_installed%': 'Installed',
   '%resourcePicker_section_available_to_download%': 'Available to download',
@@ -120,7 +122,12 @@ const ALL_RESOURCES: DblResourceData[] = [
 
 // Generates a long list of scripture resources so both scrollable regions can be exercised in a
 // story: the "Text Collection Resources" list in the main dialog body, and the resource picker
-// list inside the "Manage" popover.
+// list inside the "Manage" modal.
+//
+// The picker portals to `document.body`, so in Storybook it escapes this meta's decorator box and
+// sizes against the canvas rather than against the dialog it covers in the app. The browser-level
+// guard for the picker's own layout lives with the component, in
+// `resource-picker-dialog.stories.tsx`.
 const MANY_SCRIPTURE_RESOURCES: DblResourceData[] = Array.from({ length: 30 }, (_, i) => ({
   dblEntryUid: `scroll-test-uid-${i}`,
   displayName: `Scroll Test Version ${i + 1}`,

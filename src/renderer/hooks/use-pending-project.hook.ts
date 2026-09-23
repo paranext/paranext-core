@@ -1,7 +1,43 @@
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, normalizeProjectId } from 'platform-bible-utils';
+import { notificationService } from '@shared/services/notification.service';
+import { getErrorMessage, normalizeProjectId, type LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+/**
+ * Message shown when a picked project fails to open. Declared here rather than inline so the key is
+ * spelled exactly once — `PlatformNotification.message` accepts any string, so a typo would not
+ * fail the build; it would ship a raw `%key%` into a toast.
+ */
+export const PROJECT_OPEN_FAILED_MESSAGE_KEY: LocalizeKey = '%toolbar_project_open_failed%';
+
+/**
+ * Shared by every "couldn't open that project" toast so a user retrying against an unavailable
+ * editor replaces the message rather than collecting one copy per attempt.
+ */
+export const PROJECT_OPEN_FAILED_NOTIFICATION_ID = 'toolbar-project-open-failed';
+
+/**
+ * Sends the "couldn't open that project" toast and swallows its own failure.
+ *
+ * A named function rather than a chain inside the open-failure handler: nesting one promise in
+ * another's rejection path is what `promise/no-nesting` is about, and pulling it out keeps the
+ * handler itself synchronous — an `async` handler there would be a promise nobody holds, so a throw
+ * outside the inner `catch` would surface as an unhandled rejection rather than a logged warning.
+ */
+function reportProjectOpenFailure() {
+  notificationService
+    .send({
+      message: PROJECT_OPEN_FAILED_MESSAGE_KEY,
+      severity: 'warning',
+      notificationId: PROJECT_OPEN_FAILED_NOTIFICATION_ID,
+    })
+    .catch((notificationError: unknown) => {
+      logger.warn(
+        `Toolbar could not notify the user that opening a project failed: ${getErrorMessage(notificationError)}`,
+      );
+    });
+}
 
 /**
  * How long the toolbar keeps naming a just-selected project before falling back to whatever the
@@ -24,6 +60,14 @@ export type PendingProjectState = {
    * there is nothing to bridge.
    */
   pendingProject: ProjectItem | undefined;
+  /**
+   * The project to name right now: the pending pick when there is one, otherwise whatever the
+   * editor reports.
+   *
+   * Resolved here rather than by each surface so the rule for which of the two wins lives in one
+   * place — a caller handed both can combine them into a state that contradicts itself.
+   */
+  displayedProject: ProjectItem | undefined;
   /**
    * Opens a project, and — when `item` carries the display fields to do it with — starts naming it
    * immediately, ahead of the editor reporting it.
@@ -102,7 +146,15 @@ export function usePendingProject(
         logger.warn(`Could not open project ${projectId}: ${getErrorMessage(e)}`);
         // Latest-wins, keyed on the attempt rather than the project: a slow failure for an earlier
         // pick must not clear a newer one, even when both name the same project.
-        if (attempt === attemptRef.current) setPendingProject(undefined);
+        if (attempt !== attemptRef.current) return;
+        setPendingProject(undefined);
+        // Dropping the name back to whatever is open would otherwise undo the user's pick with no
+        // account of why. The same latest-wins gate governs the report, because a failure the user
+        // has already moved on from would otherwise toast while the project they picked afterwards
+        // is open and named in the trigger, which reads as that one failing. Only this path
+        // reports: the timeout above is not a failure, since an editor that opens in another
+        // window never reports here and has not gone wrong.
+        reportProjectOpenFailure();
       });
     },
     [currentProject, openProject],
@@ -140,7 +192,7 @@ export function usePendingProject(
     [],
   );
 
-  return { pendingProject, beginOpenProject };
+  return { pendingProject, displayedProject: pendingProject ?? currentProject, beginOpenProject };
 }
 
 export default usePendingProject;

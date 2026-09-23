@@ -8644,6 +8644,34 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
      */
     dialogRole?: 'dialog' | 'alertdialog';
     /**
+     * Whether this dialog's own `Component` renders a `DialogTitle`.
+     *
+     * When it does, the modal shell must not also render its fallback title: Radix derives the id
+     * from the `Dialog.Root` context, so a second title reuses the same id. The duplicate id is a
+     * `duplicate-id-aria` accessibility violation, and `aria-labelledby` resolves to whichever
+     * element comes first in document order — the shell's generic text, not the component's specific,
+     * localized text.
+     *
+     * Independent of {@link providesOwnDescription} on purpose: a dialog that renders a title but no
+     * description (or the reverse) still needs the shell's fallback for the half it omits, and a
+     * single combined flag would make it choose between a duplicate id and no accessible description
+     * at all.
+     *
+     * Defaults to `false`, which keeps the fallback title for dialogs that render none.
+     */
+    providesOwnTitle?: boolean;
+    /**
+     * Whether this dialog's own `Component` renders a `DialogDescription`.
+     *
+     * The description half of {@link providesOwnTitle}, with the same duplicate-id consequence. Set it
+     * only when the component renders a description for EVERY state it can be opened in — a
+     * description that renders conditionally (from an optional `prompt`, say) leaves the dialog with
+     * no description at all whenever the value is absent, because the shell's fallback is gone.
+     *
+     * Defaults to `false`, which keeps the fallback description for dialogs that render none.
+     */
+    providesOwnDescription?: boolean;
+    /**
      * The function used to load the dialog into the dock layout. Default uses the `Component` field
      * and passes in the `DialogProps`
      */

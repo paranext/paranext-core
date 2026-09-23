@@ -258,6 +258,8 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
       ...localizedOptions,
       isDialog: true as const,
       role: dialogDef.dialogRole ?? 'dialog',
+      providesOwnTitle: dialogDef.providesOwnTitle ?? false,
+      providesOwnDescription: dialogDef.providesOwnDescription ?? false,
       initialSize: dialogDef.initialSize,
       submitDialog: (data: DialogTypes[DialogTabType]['responseType']) => {
         if (!modalOverlayId) {

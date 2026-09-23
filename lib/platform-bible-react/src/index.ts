@@ -402,6 +402,8 @@ export {
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
+  Z_INDEX_NESTED_MODAL,
 } from './components/z-index';
 
 // Tooltip delay
