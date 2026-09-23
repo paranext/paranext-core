@@ -171,6 +171,18 @@ path that fails to resolve (or an offset past the node it lands on) is a bug or 
 expected state. Keep those host-side checks as fail-safes, log them, and do not write code that
 compensates for an expected divergence — there isn't one.
 
+**Every caret has a location, so `undefined` means "no selection".** `getSelection` and
+`onSelectionChange` answer `undefined` only when there is no selection (or the layout has no USJ
+locations at all), never because a position could not be translated. While an edit is pending, typed
+bytes the settled document carries as an attribute are reported as that attribute's location (a
+typed `\cat x\cat*` is the note's `category`; a typed figure's `|src="…"` is its `file`), and bytes
+with no settled counterpart at all snap LEFT to the nearest location at or before them — the same
+rule as a USFM byte with no USJ representation. A host should treat `undefined` as a cleared
+selection, not as an error. The other direction is strict: `setSelection`, `setAnnotation` and
+`insertNote` refuse a location that names nothing in the settled document (and one inside a scope
+the editor can pair only in part) and log the refusal, rather than approximate it. Rationale:
+`adr-editor-outbound-positions-snap-left` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
+
 That holds across Standard view's space-run collapse too. A run the user types stays on screen while
 `getUsj()` carries one space (ratified in the editor repo's invariants, §4), and the editor's
 position model drops the run's extra spaces exactly where serialization does, from one shared

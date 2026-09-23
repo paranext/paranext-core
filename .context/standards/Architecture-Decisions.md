@@ -1424,6 +1424,46 @@ step, no automation. Just a record.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
 
+## adr-editor-outbound-positions-snap-left: The editor reports every caret, snapping bytes with no settled counterpart left
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** Under `adr-editor-positions-are-settled-coordinates` the editor translates live
+  positions into the settled document `getUsj()` returns. While a typed literal is pending, some of
+  its bytes had no settled counterpart the translation could find, and `getSelection` /
+  `onSelectionChange` answered `undefined` for them — the same answer as "there is no selection", so
+  a host could not tell a cleared selection from a caret the editor could not express. Two of those
+  shapes are ordinary USJ positions (a typed `\cat` folds into a note's `category`; a typed figure's
+  `|src="…"` is its `file`/`size`/`ref` attributes); the rest are bytes the settle genuinely spells
+  differently from how they were typed (a figure's typed `file="…"` settles to `src="…"`), and two
+  such literals in one paragraph left the whole paragraph untranslatable.
+- **Decision:** Outbound positions never answer `undefined` for a real caret. Bytes the settled
+  document carries as attributes map exactly, to the location `UsjReaderWriter` gives the same USFM
+  byte. Anything else with no settled counterpart snaps LEFT to the nearest translatable position at
+  or before it — the rule this editor already applies to a USFM byte with no USJ representation —
+  each end of a range on its own, and the front of the scope when nothing in it translates. A
+  scope's run pairing holds for as much of the scope as it can, so a caret in front of an
+  unpairable literal still reports exactly. Inbound stays strict: a host location naming nothing in
+  the settled document, or inside a scope paired only in part, is refused and logged. A memoized
+  plan the live tree has moved on from stays an outbound refusal too; no read that prepares its own
+  plan reaches it.
+- **Alternatives:** **Keep refusing untranslatable carets** — rejected: `undefined` would keep two
+  meanings, and a host would have to guess whether to clear its selection. **A separate refusal
+  signal on the selection callback** — rejected: every host would need to handle a state no user
+  action can resolve, while the nearest earlier location is always a sound answer. **Snap to the
+  nearest position in either direction** — rejected: it would disagree with the snap-left rule USFM
+  bytes already follow, and a caret could report a position past bytes it has not reached.
+  **Snapping inbound as well** — rejected: a host location is data the host will act on (an
+  annotation, a note insertion); resolving it approximately would mark or insert at the wrong bytes
+  silently.
+- **Consequences:** `undefined` from `getSelection` / `onSelectionChange` means "no selection", so a
+  host (`handleSelectionChange` in `platform-scripture-editor.web-view.tsx`) can treat it as a
+  cleared selection. A position read while such a literal is pending and set back lands on the
+  snapped representative, not on the byte — the same lossy round trip as any snapped-left byte. The
+  editor-side rule and its tests live in the editor repo (`docs/standard-view-invariants.md`, "A
+  position has one spelling").
+- **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11.
+
 ## adr-editor-positions-are-settled-coordinates: The platform editor's public position API is settled coordinates, translated once at the editor boundary
 
 - **Date:** 2026-09-14
