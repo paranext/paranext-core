@@ -353,8 +353,9 @@ describe('ResourceCellView zoom UI', () => {
       />,
     );
     // jsdom doesn't serialize `zoom` into the style attribute string, so we walk up to the
-    // overflow-auto content wrapper and read its CSSOM style.zoom directly.
-    // Structure: span → div.p-2 (inner padding wrapper) → div.overflow-auto (zoom applied here)
+    // per-resource zoom element and read its CSSOM style.zoom directly.
+    // Structure: span → div.p-2 (inner padding wrapper) → div (per-resource zoom applied here);
+    // the pane's `text-collection` marker one level further out carries the layout classes.
     const content = screen.getByText('verse').parentElement?.parentElement;
     expect(content).not.toBeNull();
     expect(content instanceof HTMLElement && content.style.zoom).toBe('1.4');
@@ -765,5 +766,74 @@ describe('ResourceCellView reorder grip', () => {
     // The grip still renders (no aria-label supplied); the label text is still shown in the header.
     expect(screen.getByText('Genesis')).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+});
+
+describe('ResourceCellView content zoom marker', () => {
+  const menuLabels = {
+    zoomIn: 'Zoom In',
+    zoomOut: 'Zoom Out',
+    reset: 'Reset Zoom',
+    options: 'Zoom options',
+  };
+
+  function renderMarkedCell(nameDisplay: 'inline' | 'header') {
+    return renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>marked verse</span>}
+        zoomFactor={1.4}
+        zoomMenuLabels={menuLabels}
+        nameDisplay={nameDisplay}
+        showDragHandle
+        reorderHandleLabel="Reorder WEB"
+      />,
+    );
+  }
+
+  /** The verse's nearest ancestor carrying the per-resource inline zoom. */
+  function perResourceZoomElement(verse: HTMLElement): HTMLElement | undefined {
+    const ancestors: HTMLElement[] = [];
+    for (let element = verse.parentElement; element; element = element.parentElement)
+      ancestors.push(element);
+    return ancestors.find((element) => element.style.zoom === '1.4');
+  }
+
+  it.each(['inline', 'header'] as const)(
+    '%s layout: marks one wrapper, with the text-collection area, around the element carrying the per-resource zoom',
+    (nameDisplay) => {
+      const { container } = renderMarkedCell(nameDisplay);
+      const markers = container.querySelectorAll('[data-platform-content-zoom-root]');
+      expect(markers).toHaveLength(1);
+      const marker = markers[0];
+      expect(marker.getAttribute('data-platform-content-zoom-root')).toBe('text-collection');
+
+      const verse = screen.getByText('marked verse');
+      const zoomed = perResourceZoomElement(verse);
+      expect(zoomed).toBeDefined();
+      // An inline `zoom` on the marker itself would replace the pane's zoom instead of multiplying.
+      expect(zoomed).not.toBe(marker);
+      expect(marker instanceof HTMLElement && marker.style.zoom).toBeFalsy();
+      expect(zoomed !== undefined && marker.contains(zoomed)).toBe(true);
+    },
+  );
+
+  it.each(['inline', 'header'] as const)(
+    '%s layout: leaves the resource name outside the marker',
+    (nameDisplay) => {
+      const { container } = renderMarkedCell(nameDisplay);
+      const marker = container.querySelector('[data-platform-content-zoom-root]');
+      expect(marker?.contains(screen.getByText('WEB'))).toBe(false);
+    },
+  );
+
+  it('header layout: leaves the reorder grip and the zoom kebab outside the marker', () => {
+    const { container } = renderMarkedCell('header');
+    const marker = container.querySelector('[data-platform-content-zoom-root]');
+    expect(marker?.contains(screen.getByRole('button', { name: 'Reorder WEB' }))).toBe(false);
+    expect(marker?.contains(screen.getByRole('button', { name: 'Zoom options' }))).toBe(false);
   });
 });
