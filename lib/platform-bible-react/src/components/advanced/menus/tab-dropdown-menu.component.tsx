@@ -165,7 +165,8 @@ export type TabDropdownMenuProps = {
  * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
  * the next by a line; columns without items are left out. Groups within a column are not
  * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
- * row. With `showSectionHeadings`, each section is headed by its column label.
+ * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
+ * sets `isHeaderHidden`.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -222,12 +223,17 @@ export default function TabDropdownMenu({
             hideFocusRing(triggerRef.current ?? undefined);
         }}
       >
-        {sections.map(({ columnKey, label }, index) => {
+        {sections.map(({ columnKey, label, isHeaderHidden }, index) => {
           const headingId = `${headingIdPrefix}-${columnKey}`;
+          const showHeading = showHeadings && !isHeaderHidden;
           return (
             <Fragment key={columnKey}>
-              <DropdownMenuGroup aria-labelledby={showHeadings ? headingId : undefined}>
-                {showHeadings && <DropdownMenuLabel id={headingId}>{label}</DropdownMenuLabel>}
+              <DropdownMenuGroup
+                aria-labelledby={showHeading ? headingId : undefined}
+                // A section shown without its heading is still named for assistive technology
+                aria-label={showHeadings && isHeaderHidden ? label : undefined}
+              >
+                {showHeading && <DropdownMenuLabel id={headingId}>{label}</DropdownMenuLabel>}
                 <TooltipProvider>
                   {getGroupContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
                 </TooltipProvider>

@@ -3272,7 +3272,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Date:** 2026-09-18
 - **Status:** Accepted
 - **Context:** Simple's scripture editor Project menu needed a different section structure from
-  Power's (Project / View / Insert / Tools vs Project / Edit / Options / Tools / Insert), with Power
+  Power's (Project / Edit ▸ / View / Insert / Tools / Quality checks vs Project / Edit / Options /
+  Tools / Insert), with Power
   unchanged. Both modes are served from one menu document, and `hiddenInterfaceModes` exists on
   items only; columns and groups have no per-mode switch.
 - **Decision:** A mode that needs its own sections gets its own columns (e.g.
@@ -3283,7 +3284,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`adr-menu-section-headings-from-column-labels`) makes each mode's unused columns vanish.
   Simple's Comments entry is a new item that fronts the third-column Comments tab; the Power item
   (`legacyCommentManager.openCommentList`, which opens a separate Comment List web view) stays
-  hidden in Simple. The Edit flyout's Undo/Redo/Cut/Copy/Paste are menu command ids handled inside
+  hidden in Simple. The design puts Edit ▸ in a section of its own with no heading, so columns take
+  an optional `isHeaderHidden` flag: `TabDropdownMenu` still divides and names that section (its
+  label becomes the group's `aria-label`), it just draws no heading. The Edit flyout's
+  Undo/Redo/Cut/Copy/Paste are menu command ids handled inside
   the editor web view (`menuCommandHandler`) through `EditorRef`, not PAPI commands: they act on that
   web view's own editor, and the clipboard needs the click's user activation, which a PAPI round
   trip loses.
@@ -3291,16 +3295,20 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   change to a shared model for one consumer. Per-mode menu documents — rejected: duplicates every
   shared item and splits the contribution surface. Reordering Power to match Simple — rejected:
   Power must not change. Un-hiding the Power Comments item in Simple — rejected: it opens a
-  different web view from the tab Simple's Tools section points at.
+  different web view from the tab Simple's Tools section points at. For the unheaded Edit section:
+  making a column's `label` optional — rejected: the menubar needs it to open the column, and the
+  section would lose its accessible name; an empty localized string as the label — rejected: it
+  hides the heading by accident of the data, not by intent, and still leaves the section unnamed.
 - **Consequences:** A few items are declared twice (once per mode), so a command change must touch
   both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
   and order, and checks that a command served in both modes carries the same label in each, so a
-  missed, reordered or relabelled copy fails there. Simple's Tools order is pinned to the
-  third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
-  Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
-  it to a Simple column removes its only entry point: Simple now has no menu route at all to the
-  four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
-  no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
+  missed, reordered or relabelled copy fails there. Simple's Tools order follows the design (Bible
+  texts, Commentaries, Text collection, Find, Comments), not the third-column tab order, which puts
+  Comments third; `shipped-simple-layout-order.test.ts` still requires one Tools item per
+  third-column tab, so adding a tab (e.g. Dictionary) fails that test until a Tools item exists.
+  Hiding a Power-only item without re-adding it to a Simple column removes its only entry point:
+  Simple has no menu route at all to the four Inventories or Markers Checklist. Its only quality
+  tool is Open Checks, under a Quality checks section, as product asked on 2026-09-23. Auto-show footnote pane
   (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
   manual footnotes pane: Show footnotes opens it and it stays open. Per-pane zoom
 (`platform.webViewContentZoomIn`/`Out`/`Reset`) is Power-only for a structural reason rather than a

@@ -175,6 +175,24 @@ describe('TabDropdownMenu', () => {
     expect(screen.getAllByRole('separator')).toHaveLength(2);
   });
 
+  it('shows a column that sets isHeaderHidden with no heading, but still names and divides it', async () => {
+    await openMenu({
+      ...EDITOR_MENU,
+      columns: {
+        ...EDITOR_MENU.columns,
+        'platformScriptureEditor.edit': { label: 'Edit', order: 2, isHeaderHidden: true },
+      },
+    });
+
+    // Positive control: the neighboring sections keep their visible headings
+    expect(screen.getByText('Project')).toBeInTheDocument();
+    expect(screen.getByText('Insert')).toBeInTheDocument();
+    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+    const edit = screen.getByRole('group', { name: 'Edit' });
+    expect(within(edit).getByRole('menuitem', { name: /^Find/ })).toBeInTheDocument();
+    expect(screen.getAllByRole('separator')).toHaveLength(2);
+  });
+
   it('shows no heading when only one section has items', async () => {
     await openMenu({
       ...EDITOR_MENU,
