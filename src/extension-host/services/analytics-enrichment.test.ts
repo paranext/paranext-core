@@ -70,6 +70,20 @@ test('caller properties win over common properties on a name collision, and the 
   expect(mocks.debug).toHaveBeenCalledWith(expect.stringContaining("'app_version'"));
 });
 
+test('a caller key that only matches an inherited Object.prototype member is not reported as a collision', async () => {
+  const { mergeWithCommonProperties } = await import(
+    '@extension-host/services/analytics-enrichment'
+  );
+  const merged = mergeWithCommonProperties(
+    { constructor: 'caller-value', app_version: 'caller-says-so' },
+    { app_version: '0.6.0' },
+  );
+  expect(merged.constructor).toBe('caller-value');
+  // Positive control: a real collision in the same call is still logged.
+  expect(mocks.debug).toHaveBeenCalledWith(expect.stringContaining("'app_version'"));
+  expect(mocks.debug).not.toHaveBeenCalledWith(expect.stringContaining("'constructor'"));
+});
+
 test('merging with no caller properties returns the common properties unchanged', async () => {
   const { mergeWithCommonProperties } = await import(
     '@extension-host/services/analytics-enrichment'
