@@ -214,7 +214,10 @@ export function ToolbarCompoundLabel({
             {second}
           </span>
         </TooltipTrigger>
-        <TooltipContent>{fullText}</TooltipContent>
+        {/* `dir="auto"` because the tooltip is the joined form as one text node: at the narrowest
+            step it is the only place the secondary field is readable at all, and a separator
+            between two scripts otherwise lands on the visually wrong side. */}
+        <TooltipContent dir="auto">{fullText}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

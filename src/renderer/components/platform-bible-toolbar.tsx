@@ -19,6 +19,7 @@ import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-targe
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
+import { parseProjectNameTemplate } from '@renderer/components/projects/project-name-template.util';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
@@ -72,7 +73,6 @@ import {
   type LanguageStrings,
   LocalizeKey,
   normalizeProjectId,
-  PROJECT_NAME_SEPARATOR,
 } from 'platform-bible-utils';
 import { CSSProperties, useCallback, useMemo } from 'react';
 
@@ -130,10 +130,10 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_toolbar_select_project%',
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
-  '%projectPicker_toolbar_trigger_label%',
+  '%projectPicker_toolbar_trigger_label_2%',
   '%projectPicker_toolbar_trigger_label_empty%',
   '%projectPicker_toolbar_trigger_label_error%',
-  '%projectPicker_toolbar_label_shortNameAndName%',
+  '%projectPicker_toolbar_label_shortNameAndFullName%',
   '%projectPicker_toolbar_trigger_label_shortNameOnly%',
   '%projectPicker_section_recent%',
   '%projectPicker_section_projects_localOnly%',
@@ -159,11 +159,11 @@ const PICKER_STRING_FALLBACKS = {
   '%projectPicker_search_placeholder%': 'Search projects…',
   '%projectPicker_section_projects_localOnly%': 'Your projects on this computer',
   '%projectPicker_section_recent%': 'Recent',
-  '%projectPicker_toolbar_label_shortNameAndName%': '{shortName} - {fullName}',
+  '%projectPicker_toolbar_label_shortNameAndFullName%': '{shortName} - {fullName}',
   '%projectPicker_toolbar_more_projects%': 'More projects…',
   '%projectPicker_toolbar_no_projects%': 'No projects',
   '%projectPicker_toolbar_select_project%': 'Select project',
-  '%projectPicker_toolbar_trigger_label%': 'Select project, {shortName} - {fullName}',
+  '%projectPicker_toolbar_trigger_label_2%': 'Select project, {shortName}, {fullName}',
   '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Select project, {shortName}',
   '%projectPicker_toolbar_trigger_label_empty%': 'Select project, no projects on this computer',
   '%projectPicker_toolbar_trigger_label_error%': 'Select project, {errorMessage}',
@@ -188,8 +188,8 @@ function resolvePickerStrings(localizedStrings: LanguageStrings): Record<PickerS
       '%projectPicker_section_projects_localOnly%',
     ),
     '%projectPicker_section_recent%': resolve('%projectPicker_section_recent%'),
-    '%projectPicker_toolbar_label_shortNameAndName%': resolve(
-      '%projectPicker_toolbar_label_shortNameAndName%',
+    '%projectPicker_toolbar_label_shortNameAndFullName%': resolve(
+      '%projectPicker_toolbar_label_shortNameAndFullName%',
     ),
     '%projectPicker_toolbar_trigger_label_shortNameOnly%': resolve(
       '%projectPicker_toolbar_trigger_label_shortNameOnly%',
@@ -197,7 +197,7 @@ function resolvePickerStrings(localizedStrings: LanguageStrings): Record<PickerS
     '%projectPicker_toolbar_more_projects%': resolve('%projectPicker_toolbar_more_projects%'),
     '%projectPicker_toolbar_no_projects%': resolve('%projectPicker_toolbar_no_projects%'),
     '%projectPicker_toolbar_select_project%': resolve('%projectPicker_toolbar_select_project%'),
-    '%projectPicker_toolbar_trigger_label%': resolve('%projectPicker_toolbar_trigger_label%'),
+    '%projectPicker_toolbar_trigger_label_2%': resolve('%projectPicker_toolbar_trigger_label_2%'),
     '%projectPicker_toolbar_trigger_label_empty%': resolve(
       '%projectPicker_toolbar_trigger_label_empty%',
     ),
@@ -242,23 +242,24 @@ function ProjectSelectorLabel({
     );
   }
 
+  const template = strings['%projectPicker_toolbar_label_shortNameAndFullName%'];
+  const hasFullName = hasDistinctFullName({ shortName, fullName });
+  const { isFullNameFirst, separator } = parseProjectNameTemplate(template);
+
   return (
     <ToolbarCompoundLabel
-      // The short name identifies the project, so it leads and is the field that survives the
-      // narrowest step; the full name is the one that clips and then drops. The joined form comes
-      // from a format string rather than concatenation so a locale can reorder the pair, and so the
-      // visible text and the tooltip can never disagree about that order.
+      // The short name identifies the project, so it is the field that survives the narrowest step
+      // and the full name is the one that clips and then drops — a property of the data, not of the
+      // wording. Which one READS first, and what sits between them, come from the same format
+      // string that builds the tooltip, so a locale can reorder the pair and the visible text and
+      // the tooltip cannot disagree about that order.
       primary={shortName}
-      secondary={hasDistinctFullName({ shortName, fullName }) ? fullName : undefined}
-      separator={PROJECT_NAME_SEPARATOR}
+      secondary={hasFullName ? fullName : undefined}
+      secondaryFirst={isFullNameFirst}
+      separator={separator}
       showSecondary={!isAtMinimum}
       fullText={
-        hasDistinctFullName({ shortName, fullName })
-          ? formatReplacementString(strings['%projectPicker_toolbar_label_shortNameAndName%'], {
-              shortName,
-              fullName,
-            })
-          : shortName
+        hasFullName ? formatReplacementString(template, { shortName, fullName }) : shortName
       }
     />
   );
@@ -467,7 +468,7 @@ function ToolbarProjectSelector({
         ? placeholder
         : strings['%projectPicker_toolbar_trigger_label_empty%'];
     return hasDistinctFullName(displayedProject)
-      ? formatReplacementString(strings['%projectPicker_toolbar_trigger_label%'], {
+      ? formatReplacementString(strings['%projectPicker_toolbar_trigger_label_2%'], {
           shortName: displayedProject.shortName,
           fullName: displayedProject.fullName,
         })

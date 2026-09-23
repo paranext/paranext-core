@@ -30,7 +30,7 @@ import {
 } from 'platform-bible-react';
 import type { ProjectMetadata } from '@papi/core';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
+import { formatTimeSpan, getErrorMessage, normalizeFullName } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
@@ -115,7 +115,11 @@ export type SortConfig = {
 export type LocalProjectInfo = {
   projectId: string;
   isPublished: boolean;
-  fullName: string;
+  /**
+   * Absent when the project has no full name. The Full Name column renders it beside a separate
+   * short-name column, so mirroring `name` in would print the same text twice across two columns.
+   */
+  fullName?: string;
   name: string;
   language: string;
 };
@@ -129,7 +133,7 @@ export function metadataToLocalProjectInfo(data: ProjectMetadata): LocalProjectI
   return {
     projectId: data.id,
     isPublished: data.isPublished ?? false,
-    fullName: data.fullName ?? data.name ?? data.id,
+    fullName: normalizeFullName(data.fullName),
     name: data.name ?? data.id,
     language: data.language ?? '',
   };
@@ -138,7 +142,8 @@ export function metadataToLocalProjectInfo(data: ProjectMetadata): LocalProjectI
 export type MergedProjectInfo = {
   projectId: string;
   name: string;
-  fullName: string;
+  /** Absent when the project has no full name. See {@link LocalProjectInfo.fullName}. */
+  fullName?: string;
   language: string;
   isPublished: boolean;
   isSendReceivable: boolean;
@@ -377,7 +382,7 @@ export function Home({
     const textFilteredProjects = mergedProjectInfo.filter((project) => {
       const filter = textFilter.toLowerCase();
       return (
-        project.fullName.toLowerCase().includes(filter) ||
+        (project.fullName ?? '').toLowerCase().includes(filter) ||
         project.name.toLowerCase().includes(filter) ||
         project.language.toLowerCase().includes(filter)
       );
@@ -393,14 +398,19 @@ export function Home({
             return sortConfig.direction === 'ascending' ? 1 : -1;
           }
           return 0;
-        case 'fullName':
-          if (a.fullName < b.fullName) {
+        case 'fullName': {
+          // A project with no full name sorts as the empty string, so the nameless rows group
+          // together at one end rather than sorting by a name the column does not show.
+          const aFullName = a.fullName ?? '';
+          const bFullName = b.fullName ?? '';
+          if (aFullName < bFullName) {
             return sortConfig.direction === 'ascending' ? -1 : 1;
           }
-          if (a.fullName > b.fullName) {
+          if (aFullName > bFullName) {
             return sortConfig.direction === 'ascending' ? 1 : -1;
           }
           return 0;
+        }
         case 'language':
           if (a.language < b.language) {
             return sortConfig.direction === 'ascending' ? -1 : 1;

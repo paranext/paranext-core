@@ -76,7 +76,7 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
   {
     file: 'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx',
     contains: 'row.rowKey',
-    reason: 'cmdk search haystack — five fields concatenated for matching, never rendered',
+    reason: 'cmdk search haystack — three fields concatenated for matching, never rendered',
   },
   {
     file: 'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx',
@@ -90,8 +90,20 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
   },
   {
     file: 'extensions/src/platform-get-resources/src/home.component.tsx',
-    contains: 'project.fullName.toLowerCase().includes(filter)',
+    contains: "(project.fullName ?? '').toLowerCase().includes(filter)",
     reason: 'search predicate — matches on either name, renders neither',
+  },
+  {
+    file: 'extensions/src/platform-get-resources/src/home.component.tsx',
+    contains: "const aFullName = a.fullName ?? ''",
+    reason:
+      'sort key — substitutes the empty string for an absent full name so the column orders; renders nothing',
+  },
+  {
+    file: 'extensions/src/platform-get-resources/src/home.component.tsx',
+    contains: "const bFullName = b.fullName ?? ''",
+    reason:
+      'sort key — substitutes the empty string for an absent full name so the column orders; renders nothing',
   },
   {
     file: 'extensions/src/platform-get-resources/src/get-resources.component.tsx',
@@ -104,6 +116,20 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
     reason: 'React list key — never rendered as text',
   },
 
+  // ---- The helper's decision hoisted to a local, so its name is off the line it governs ----
+  {
+    file: 'src/renderer/components/platform-bible-toolbar.tsx',
+    contains: 'secondary={hasFullName ? fullName : undefined}',
+    reason:
+      '`hasFullName` is `hasDistinctFullName` hoisted two lines above — the helper makes the decision, the ternary only fills the slot',
+  },
+  {
+    file: 'src/renderer/components/platform-bible-toolbar.tsx',
+    contains: 'hasFullName ? formatReplacementString(template',
+    reason:
+      'joins through the localized format string (the documented toolbar exception) under the hoisted `hasDistinctFullName` decision',
+  },
+
   // ---- Data shaping: choosing which field populates a slot, not composing a label ----
   {
     file: 'src/shared/models/project-lookup.service-model.ts',
@@ -111,19 +137,10 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
     reason: 'metadata merge between two sources — no display involved',
   },
   {
-    file: 'extensions/src/platform-get-resources/src/home.component.tsx',
-    contains: 'fullName: data.fullName ?? data.name ?? data.id',
-    reason: 'resource adapter — fills the full-name slot; the label itself is composed downstream',
-  },
-  {
     file: 'extensions/src/platform-get-resources/src/get-local-non-dbl-resources.utils.ts',
-    contains: 'fullName: m.fullName ?? m.name ?? m.id',
-    reason: 'resource adapter — fills the full-name slot; the label itself is composed downstream',
-  },
-  {
-    file: 'extensions/src/platform-scripture-editor/src/downloaded-resources.utils.ts',
-    contains: 'fullName: data.fullName ?? data.name ?? data.id',
-    reason: 'resource adapter — fills the full-name slot; the label itself is composed downstream',
+    contains: "fullName: normalizeFullName(m.fullName) ?? ''",
+    reason:
+      'narrows an absent full name to the empty string because `DblResourceData.fullName` is a required wire field — mirrors nothing and composes no label',
   },
   {
     file: 'extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.component.tsx',
@@ -147,12 +164,10 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
 
   // ---- DBL resource names: a `name`/`displayName`/`fullName` triple, not a project short name ----
   // These carry resource metadata rather than the `platform.name`/`platform.fullName` project
-  // settings the helper is typed for. Resource labels a user reads nonetheless lead with the short
-  // name like every other label: the two sites that composed one — `getRefLabel` (the Model Text
-  // tab and the third-column resource tabs) and Team Layout's `formatResourceDisplayName` — call
-  // `formatProjectName` with `displayName` in the `shortName` slot, so they are adopted rather than
-  // exempt. The entry left below fills a long-name slot the UI renders after the short name, so it
-  // composes no label and has no order to get wrong.
+  // settings the helper is typed for, but a resource label a user reads leads with the short name
+  // like every other label. A site that COMPOSES such a label calls `formatProjectName` with
+  // `displayName` in the `shortName` slot rather than earning an exemption here; only a site that
+  // fills a long-name SLOT the UI joins downstream belongs in this section.
   {
     file: 'extensions/src/platform-scripture-editor/src/scripture-text-grid/view-options-long-name.utils.ts',
     contains: 'fullName === reference.name',

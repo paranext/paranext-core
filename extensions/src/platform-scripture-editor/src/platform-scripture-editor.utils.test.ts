@@ -3580,15 +3580,6 @@ describe('getTabTitleProjectName', () => {
     expect(await getTabTitleProjectName(papi, 'project-1')).toBe('WEB');
   });
 
-  it('reads the short name from the project data provider', async () => {
-    const { papi, mockGet, mockGetSetting } = papiWithSettings({ 'platform.name': 'WEB' });
-
-    await getTabTitleProjectName(papi, 'project-1');
-
-    expect(mockGet).toHaveBeenCalledWith('platform.base', 'project-1');
-    expect(mockGetSetting).toHaveBeenCalledWith('platform.name');
-  });
-
   it('falls back to the project id when the project has no short name', async () => {
     const { papi } = papiWithSettings({});
 

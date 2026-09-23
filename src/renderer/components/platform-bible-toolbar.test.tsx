@@ -51,7 +51,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%projectPicker_toolbar_more_projects%': 'Test more projects',
       '%projectPicker_toolbar_no_projects%': 'Test no projects',
       '%projectPicker_toolbar_select_project%': 'Test select a project',
-      '%projectPicker_toolbar_trigger_label%': 'Test select a project, {shortName} - {fullName}',
+      '%projectPicker_toolbar_trigger_label_2%': 'Test select a project, {shortName} - {fullName}',
       '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
       '%projectPicker_toolbar_trigger_label_empty%': 'Test select a project, no projects',
       '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Test select a project, {shortName}',
@@ -1333,7 +1333,13 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   });
 });
 
+/** The real signature of the mocked localization hook, for typing an override of it. */
+type UseLocalizedStrings = typeof import('@renderer/hooks/papi-hooks').useLocalizedStrings;
+
 describe('PlatformBibleToolbar project selector label', () => {
+  /** The module factory's `useLocalizedStrings`, captured the first time a test overrides it. */
+  let defaultLocalizedStrings: UseLocalizedStrings | undefined;
+
   // `clearAllMocks()` clears call history but does not reset `mockReturnValue`, so restore the
   // module factory's default picker data explicitly to prevent a per-test `mockReturnValue` from
   // leaking. A per-test `mockReturnValueOnce` still takes priority over this.
@@ -1371,6 +1377,40 @@ describe('PlatformBibleToolbar project selector label', () => {
     const trigger = screen.getByTestId('project-picker-value');
     expect(trigger).toHaveTextContent('TP');
     expect(trigger).not.toHaveTextContent('Test Project');
+  });
+
+  // Restores the module factory's localized strings after a test swaps in a different template;
+  // `clearAllMocks()` clears call history but leaves an implementation override in place.
+  afterEach(async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const mocked = vi.mocked(useLocalizedStrings);
+    if (defaultLocalizedStrings) mocked.mockImplementation(defaultLocalizedStrings);
+  });
+
+  it('follows a locale that reorders the pair, instead of a hardcoded order', async () => {
+    // The point of driving the visible label from the format string: the joined tooltip and the two
+    // visible fields come from ONE string, so they cannot disagree about order or punctuation.
+    // Fails if the label goes back to a literal short-name/separator/full-name sequence.
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const mocked = vi.mocked(useLocalizedStrings);
+    const original = mocked.getMockImplementation();
+    if (!original) throw new Error('useLocalizedStrings is not mocked');
+    defaultLocalizedStrings ??= original;
+    // Wraps rather than replaces, so every other picker string keeps the factory's value and this
+    // test pins the one key it is about. Mutates the returned tuple in place rather than rebuilding
+    // it, which keeps the hook's exact tuple type instead of widening to an array.
+    mocked.mockImplementation((...args) => {
+      const result = original(...args);
+      result[0] = {
+        ...result[0],
+        '%projectPicker_toolbar_label_shortNameAndFullName%': '{fullName} / {shortName}',
+      };
+      return result;
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Test Project / TP');
   });
 
   it('keeps the project name and short name readable as one string', () => {

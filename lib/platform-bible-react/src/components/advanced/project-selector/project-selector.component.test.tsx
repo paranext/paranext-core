@@ -988,7 +988,7 @@ describe('ProjectSelector — trigger label id casing', () => {
         localizedStrings={HARNESS_STRINGS}
       />,
     );
-    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    const trigger = screen.getByRole('combobox', { name: 'Project: ABC' });
     expect(trigger).toHaveTextContent('ABC');
     expect(trigger).not.toHaveTextContent('Select a project');
   });
@@ -1005,7 +1005,7 @@ describe('ProjectSelector — trigger label id casing', () => {
         localizedStrings={HARNESS_STRINGS}
       />,
     );
-    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    const trigger = screen.getByRole('combobox', { name: 'Project: ABC' });
     expect(trigger).toHaveTextContent('ABC');
     expect(trigger).not.toHaveTextContent('Select a project');
   });
@@ -1021,7 +1021,7 @@ describe('ProjectSelector — trigger label id casing', () => {
         localizedStrings={HARNESS_STRINGS}
       />,
     );
-    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    const trigger = screen.getByRole('combobox', { name: 'Project: 2 ABC, DEF' });
     expect(trigger).toHaveTextContent('ABC, DEF');
     expect(trigger).not.toHaveTextContent('Select a project');
   });
@@ -1051,7 +1051,7 @@ describe('ProjectSelector — indicator meaning', () => {
   it("surfaces the indicator's meaning on hover, since the glyph itself is decorative", async () => {
     const user = setupUser();
     renderWithIndicator();
-    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.click(screen.getByRole('combobox', { name: 'Project: P1' }));
 
     await user.hover(screen.getByText('A read-only project'));
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Read-only');
@@ -1060,7 +1060,7 @@ describe('ProjectSelector — indicator meaning', () => {
   it('opens no tooltip for a row the indicator label skips', async () => {
     const user = setupUser();
     renderWithIndicator();
-    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.click(screen.getByRole('combobox', { name: 'Project: P1' }));
 
     await user.hover(screen.getByText('An editable project'));
     expect(screen.queryByRole('tooltip')).toBeNull();
@@ -1153,8 +1153,9 @@ describe('ProjectSelector — trigger accessible name', () => {
     render(<ProjectSelectorHarness initialSelected={undefined} />);
 
     // The placeholder is the trigger text here, and naming the button "Project: Select a project"
-    // would read as a selection that does not exist.
-    expect(screen.getByRole('combobox', { name: /^Project/ })).toBeInTheDocument();
+    // would read as a selection that does not exist. Matched exactly: a prefix match would accept
+    // the very name this asserts against.
+    expect(screen.getByRole('combobox', { name: 'Project' })).toBeInTheDocument();
   });
 
   it('leaves the accessible name to the consumer when it supplies renderTriggerLabel', () => {
@@ -1171,7 +1172,8 @@ describe('ProjectSelector — trigger accessible name', () => {
     );
 
     // The label node is arbitrary, so the component has no trigger text to derive a name from; the
-    // Simple-mode toolbar composes its own `ariaLabel` for exactly this reason.
-    expect(screen.getByRole('combobox', { name: /^Project/ })).toBeInTheDocument();
+    // Simple-mode toolbar composes its own `ariaLabel` for exactly this reason. Matched exactly: a
+    // prefix match would accept an appended selection this asserts is absent.
+    expect(screen.getByRole('combobox', { name: 'Project' })).toBeInTheDocument();
   });
 });

@@ -4705,8 +4705,13 @@ export type ProjectNames = {
  * the user entered. Callers that render the two names in separate slots (a muted second line, a
  * toolbar label's secondary field) use this rather than repeating the rule.
  *
+ * Blank is absent, on the same terms as {@link normalizeFullName}: a name of spaces is present but
+ * invisible, so treating it as distinct would render a dangling separator. Applying the rule here
+ * rather than asking every caller to pre-normalize is what keeps {@link formatProjectName} safe for
+ * a raw value — including one arriving from outside the repo through a public prop.
+ *
  * @param names The project's short and optional full name.
- * @returns `true` when the full name is present, non-empty, and different from the short name.
+ * @returns `true` when the full name is present, non-blank, and different from the short name.
  */
 export declare function hasDistinctFullName(names: ProjectNames): boolean;
 /**
@@ -4718,15 +4723,19 @@ export declare function hasDistinctFullName(names: ProjectNames): boolean;
  *
  * Not localized: it joins two proper nouns rather than translatable prose.
  *
- * Bidi caveat: the hyphen is direction-neutral. A caller that renders the two names in separate
- * elements gets the surrounding element's direction for free, but {@link formatProjectName} returns
- * one text node, so a right-to-left name inside a left-to-right container (or the reverse) can put
- * the separator on the visually wrong side. A caller that renders the joined string as an element's
- * whole text — a tooltip line, a trigger label — should set `dir="auto"` on that element. A caller
- * that interpolates it into a longer sentence cannot: `dir="auto"` there reads the direction of the
- * sentence's first strong character, not the name's, so isolating it needs a `<bdi>` around the
- * name rather than an attribute on the sentence. An `aria-label` carries no direction at all, so
- * the caveat does not reach it.
+ * Bidi caveat: the hyphen is direction-neutral, so it sits wherever the surrounding run puts it.
+ * Which remedy a caller needs depends on how the joined name reaches the screen:
+ *
+ * - **The joined string is an element's whole text** (a tooltip line, a trigger label): set
+ *   `dir="auto"` on that element.
+ * - **The two names are separate elements**: each gets its own direction only when it is a
+ *   block-level or flex-item box. Plain inline spans do NOT isolate — they join the surrounding run
+ *   like any other inline text — so an inline pair needs `dir="auto"` per name as well.
+ * - **The joined string is interpolated into a longer sentence** (a subtitle, a notification): an
+ *   attribute cannot help, because `dir="auto"` reads the direction of the SENTENCE's first strong
+ *   character rather than the name's. Wrap the name with {@link isolateBidi} before interpolating,
+ *   which is the character-level form of HTML's `<bdi>` and travels inside the string.
+ * - **An `aria-label`**: carries no direction at all, so the caveat does not reach it.
  */
 export declare const PROJECT_NAME_SEPARATOR = " - ";
 /**

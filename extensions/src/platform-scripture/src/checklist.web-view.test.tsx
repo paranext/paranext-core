@@ -220,7 +220,13 @@ function makeProps(onStateChange?: (key: string, value: unknown) => void): WebVi
 
 afterEach(() => {
   vi.clearAllMocks();
+  // Every hoisted fixture, not just the service: a test that leaves `mockProjects` or
+  // `mockRecentProjects` populated makes the next one pass on state it never set up, so the suite's
+  // result depends on file order.
   mockChecklistService.value = undefined;
+  mockRecentProjects.value = undefined;
+  mockProjects.value = [];
+  mockOpenTabs.value = [];
 });
 
 describe('ChecklistWebView recently-opened-projects wiring', () => {

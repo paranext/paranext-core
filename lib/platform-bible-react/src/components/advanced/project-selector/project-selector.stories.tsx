@@ -96,32 +96,38 @@ type Story = StoryObj<typeof ProjectSelector>;
 
 // #region project (single)
 
+/**
+ * Projects that have no full name: `fullName` is omitted, not mirrored from `shortName`.
+ * `hasDistinctFullName` collapses each row to a single line either way, but omitting is what a
+ * consumer should build — mirroring claims a full name the project does not have, and every surface
+ * then has to un-claim it.
+ */
+const shortOnlyProjects: ProjectSelectorProject[] = sampleProjects.map((p) => ({
+  id: p.id,
+  shortName: p.shortName,
+}));
+
+/** The short-name-only selector, parameterized over the one thing the two stories differ in. */
+function ShortNameTriggerLabelStory({ openTabs }: { openTabs: ProjectSelectorOpenTab[] }) {
+  const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+  return (
+    <div className="tw:w-80">
+      <ProjectSelector
+        mode="project"
+        projects={shortOnlyProjects}
+        openTabs={openTabs}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        localizedStrings={{ buttonPlaceholder: 'Select a project', ariaLabel: 'Project' }}
+        triggerLabelFormat="shortName"
+        buttonClassName="tw:w-full"
+      />
+    </div>
+  );
+}
+
 export const ShortNameTriggerLabel: Story = {
-  render: () => {
-    // Fixtures for projects that have no full name: `fullName` is omitted, not mirrored from
-    // `shortName`. `hasDistinctFullName` collapses each row to a single line either way, but
-    // omitting is what a consumer should build — mirroring claims a full name the project does
-    // not have, and every surface then has to un-claim it.
-    const shortOnlyProjects: ProjectSelectorProject[] = sampleProjects.map((p) => ({
-      id: p.id,
-      shortName: p.shortName,
-    }));
-    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
-    return (
-      <div className="tw:w-80">
-        <ProjectSelector
-          mode="project"
-          projects={shortOnlyProjects}
-          openTabs={sampleOpenTabs}
-          selection={{ projectId }}
-          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
-          localizedStrings={{ buttonPlaceholder: 'Select a project', ariaLabel: 'Project' }}
-          triggerLabelFormat="shortName"
-          buttonClassName="tw:w-full"
-        />
-      </div>
-    );
-  },
+  render: () => <ShortNameTriggerLabelStory openTabs={sampleOpenTabs} />,
   parameters: {
     docs: {
       description: {
@@ -133,30 +139,9 @@ export const ShortNameTriggerLabel: Story = {
 };
 
 export const ShortNameTriggerLabelNoScrollGroups: Story = {
-  render: () => {
-    // Same no-full-name fixtures as `ShortNameTriggerLabel`, but with `openTabs={[]}`.
-    // No project is open in any scroll group, so the right-side scroll-group chips are
-    // suppressed and every row renders in muted text (the "not open anywhere" state).
-    const shortOnlyProjects: ProjectSelectorProject[] = sampleProjects.map((p) => ({
-      id: p.id,
-      shortName: p.shortName,
-    }));
-    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
-    return (
-      <div className="tw:w-80">
-        <ProjectSelector
-          mode="project"
-          projects={shortOnlyProjects}
-          openTabs={[]}
-          selection={{ projectId }}
-          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
-          localizedStrings={{ buttonPlaceholder: 'Select a project', ariaLabel: 'Project' }}
-          triggerLabelFormat="shortName"
-          buttonClassName="tw:w-full"
-        />
-      </div>
-    );
-  },
+  // No project is open in any scroll group, so the right-side scroll-group chips are suppressed and
+  // every row renders in muted text (the "not open anywhere" state).
+  render: () => <ShortNameTriggerLabelStory openTabs={[]} />,
   parameters: {
     docs: {
       description: {

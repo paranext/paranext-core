@@ -1,6 +1,12 @@
 # ProjectSelector's accessible name and read-only marking belong in the library
 
-**Deferred from PR #2801** (PT-4549 — migrate the titlebar picker onto `ProjectSelector`).
+**Status: partially implemented.** The accessible-name half landed in PR #2822 (PT-4550) —
+`ProjectSelector` now composes `"{ariaLabel}: {selection}"` itself, so a consumer passing a
+control-only name no longer hides the selected project from screen readers. The read-only marking
+half is still open, and the rest of this document describes it.
+
+**Originally deferred from PR #2801** (PT-4549 — migrate the titlebar picker onto
+`ProjectSelector`).
 
 Both items come from @katherinejensen00's review of #2801 (findings 18 and 19), which offered the
 deferral explicitly: *"If you'd rather defer, please file the ticket and record it as a consequence

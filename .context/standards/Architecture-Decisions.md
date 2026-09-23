@@ -4602,13 +4602,28 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   helper's `shortName` slot. Sites that merely fill a long-name slot the UI renders after the short
   name compose no label and keep their own separator — View Options joins with an em dash. The
   Simple-mode toolbar is the one surface that composes the pair from a localized format string
-  (`%projectPicker_toolbar_label_shortNameAndName%` and the trigger's `%..._trigger_label%`) rather
+  (`%projectPicker_toolbar_label_shortNameAndFullName%` and the trigger's `%..._trigger_label_2%`) rather
   than calling `formatProjectName`: its label and its accessible name are already localized
   sentences, and a locale that needs to reorder or re-punctuate the pair can only do so in the
   string. It is an exempted sweep site, and the English strings render the same order the helper
   does, so the two cannot disagree about which name leads. `ProjectItem`, the renderer picker's row
   type, is optional-`fullName` like its three siblings, so the "More projects" dialog leaves the
   full-name column empty rather than repeating the short name in it.
+
+  The toolbar's long-name-first strings shipped on `main` before this change landed, so they are
+  retired rather than edited: `%projectPicker_toolbar_label_nameAndShortName%`,
+  `%..._label_shortNameOnly%` and `%..._trigger_label%` keep their shipped values and carry
+  `deprecationInfo` in `metadata.json`, and the short-name-first wording lives in new keys. An
+  in-place edit would have been invisible to a downstream consumer or a translator working from an
+  older export. The new spoken trigger name also separates the pair with a comma rather than a
+  hyphen, which several screen readers announce as "dash".
+
+  A surface that composes the pair from a format string must drive its VISIBLE label from that same
+  string, not only its tooltip. The toolbar renders the two names as separate nodes so each can
+  shrink independently, and reads the order and separator off the template with
+  `parseProjectNameTemplate`. Hardcoding the visible order beside a localizable joined form is the
+  failure this guards against: a locale that reorders the string would make the label and its own
+  tooltip disagree.
 
 ## adr-project-selector-consumer-driven-groupings: ProjectSelector groupings are consumer-supplied descriptors over an untyped `customData` bag
 
@@ -4740,14 +4755,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   added without adding a prop — and it should carry the API-surface TSDoc and localized-key
   conventions the stable barrel expects, rather than bundling them into a capability change.
 
-  Two known sharp edges are deliberately being carried on `experimental` rather than fixed at the
-  point they were found, on the strength of that freedom, and should be settled before promotion:
-  `ariaLabel` REPLACES the trigger's visible label in the accessible-name computation (so every
-  consumer passing a control-only name, as its TSDoc instructs, hides the selected project from
-  screen readers — the titlebar composes the whole name at its own call site instead); and
-  read-only is consumer-derived through `renderProjectIndicator`, which leaves the row tooltip
-  unable to explain the padlock to sighted pointer users. Both are written up in
+  Two sharp edges were found at this point and written up in
   [`.context/designs/PT-4549-followup-projectselector-accessible-name.md`](../designs/PT-4549-followup-projectselector-accessible-name.md).
+  The first — `ariaLabel` REPLACING the trigger's visible label in the accessible-name computation,
+  so every consumer passing a control-only name hid the selected project from screen readers — was
+  fixed in the library under PT-4550: the component composes `"{ariaLabel}: {selection}"` itself, so
+  its consumers no longer each have to. The second is still deliberately carried on `experimental`
+  and should be settled before promotion: read-only is consumer-derived through
+  `renderProjectIndicator`, which leaves the row tooltip unable to explain the padlock to sighted
+  pointer users.
 
 ## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
 

@@ -356,11 +356,14 @@ function ResourceRow({
               className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm"
               onPointerEnter={onPointerEnter}
               onPointerLeave={onPointerLeave}
+              // The resource label is a joined short/full name in one text node, so it carries its
+              // own direction rather than inheriting the dialog's.
+              dir="auto"
             >
               {displayName}
             </span>
           </TooltipTrigger>
-          <TooltipContent>{displayName}</TooltipContent>
+          <TooltipContent dir="auto">{displayName}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>
@@ -841,6 +844,8 @@ export function TeamLayoutDialogContent({
                             className="tw:truncate"
                             onPointerEnter={onModelTextLabelPointerEnter}
                             onPointerLeave={onModelTextLabelPointerLeave}
+                            // Joined resource name as one text node — see `ResourceRow`.
+                            dir="auto"
                           >
                             {modelTextLabel}
                           </span>

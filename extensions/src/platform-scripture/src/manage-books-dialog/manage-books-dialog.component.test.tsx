@@ -267,19 +267,36 @@ describe('ManageBooksDialog header subtitle', () => {
   /** The subtitle is the only line reading "{n} books in …"; it renders once projects have loaded. */
   const subtitle = () => screen.findByText(/books in/i);
 
+  /**
+   * The subtitle's text with the bidi isolates stripped. The name is interpolated into a sentence,
+   * so it travels wrapped in `isolateBidi`; these assertions are about the name's ORDER and
+   * punctuation, and the isolates are pinned separately below.
+   */
+  const subtitleText = async () =>
+    ((await subtitle()).textContent ?? '').replaceAll('\u2068', '').replaceAll('\u2069', '');
+
   it('leads the project label with the short name', async () => {
     render(dialog({ loadProjects: () => withNames('WEB', 'World English Bible') }));
 
     // Asserted as one ordered string rather than two `toContain`s: the point of the shared helper is
     // the ORDER, and a long-name-first label contains both names just as happily.
-    expect(await subtitle()).toHaveTextContent('books in WEB - World English Bible');
+    expect(await subtitleText()).toContain('books in WEB - World English Bible');
+  });
+
+  it('isolates the project name so it cannot reorder the sentence around it', async () => {
+    render(dialog({ loadProjects: () => withNames('WEB', 'World English Bible') }));
+
+    // A right-to-left name dropped bare into this template pulls the surrounding punctuation into
+    // its own directional run. `dir="auto"` cannot fix an interpolated name — it reads the
+    // SENTENCE's first strong character — so the isolate has to travel inside the string.
+    expect((await subtitle()).textContent).toContain('\u2068WEB - World English Bible\u2069');
   });
 
   it('shows the short name alone when the project carries no full name', async () => {
     render(dialog({ loadProjects: () => withNames('WEB') }));
 
     // No dangling separator — `formatProjectName` drops it along with the absent field.
-    expect(await subtitle()).toHaveTextContent(/books in WEB \u22c5/);
+    expect(await subtitleText()).toMatch(/books in WEB \u22c5/);
   });
 
   it('does not repeat a full name that equals the short name', async () => {
@@ -288,10 +305,10 @@ describe('ManageBooksDialog header subtitle', () => {
     // The `fullName === shortName` de-dup, asserted at the consumer rather than only in the helper's
     // units: a consumer that stopped routing through the helper would render "WEB - WEB" while the
     // helper's own tests stayed green.
-    const line = await subtitle();
-    expect(line).not.toHaveTextContent('WEB - WEB');
+    const text = await subtitleText();
+    expect(text).not.toContain('WEB - WEB');
     // Positive control — without it this passes just as happily against a subtitle that never
     // rendered a project label at all.
-    expect(line).toHaveTextContent(/books in WEB \u22c5/);
+    expect(text).toMatch(/books in WEB \u22c5/);
   });
 });

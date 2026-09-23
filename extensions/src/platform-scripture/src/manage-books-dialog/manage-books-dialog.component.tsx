@@ -52,7 +52,11 @@ import {
   ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
-import { formatProjectName, makeProjectSelectorCustomData } from 'platform-bible-utils';
+import {
+  formatProjectName,
+  isolateBidi,
+  makeProjectSelectorCustomData,
+} from 'platform-bible-utils';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
   BookGridGroupBy,
@@ -1629,7 +1633,11 @@ export function ManageBooksDialog({
   // …). Falls back to the no-versification template when the versification setting is absent.
   // Project label leads with the short name — the field that identifies a project to a Paratext
   // user — and appends the full name only when it carries information the short name does not.
-  const projectDisplayName = formatProjectName(project);
+  // Isolated because it is interpolated into a sentence: a right-to-left name dropped bare into a
+  // left-to-right template pulls the surrounding punctuation into its own directional run. An
+  // element attribute cannot fix this — `dir="auto"` on the sentence reads the SENTENCE's first
+  // strong character — so the isolate has to travel in the string itself.
+  const projectDisplayName = isolateBidi(formatProjectName(project));
   const subtitleTemplate = versification
     ? t('%manageBooks_header_subtitle%', '{0} books in {1} ⋅ {2} Versification')
     : t('%manageBooks_header_subtitleNoVersification%', '{0} books in {1}');

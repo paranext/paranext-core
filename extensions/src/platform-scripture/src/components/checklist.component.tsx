@@ -262,7 +262,9 @@ function ColumnHeaderWithTooltip({
             {shortName}
           </span>
         </TooltipTrigger>
-        <TooltipContent>{displayName}</TooltipContent>
+        {/* `dir="auto"`: the tooltip is the joined `shortName - fullName` as one text node, so it
+            needs the name's own direction rather than the container's. */}
+        <TooltipContent dir="auto">{displayName}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

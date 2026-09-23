@@ -40,9 +40,14 @@ export type ProjectInfo = {
   projectName: string;
   /**
    * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
-   * popover rows. Sourced from the `platform.fullName` project setting. When absent or equal to
-   * `projectName`, the row falls back to a single-line layout (matching the `ProjectSelector`
-   * de-dup rule for `fullName === shortName`).
+   * popover rows. Omit it for a project that has no distinct full name; when it is absent, blank or
+   * equal to `projectName`, the row falls back to a single-line layout (the `hasDistinctFullName`
+   * rule the `ProjectSelector` applies).
+   *
+   * Source it from project metadata (`getMetadataForAllProjects`), NOT from a
+   * `getSetting('platform.fullName')` read: that setting cannot express "no full name" — it
+   * defaults to a localized `%project_full_name_missing%` placeholder, which would render here as a
+   * second name the project does not have.
    */
   projectFullName?: string;
 };

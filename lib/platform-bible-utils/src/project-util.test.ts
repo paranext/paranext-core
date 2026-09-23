@@ -35,6 +35,14 @@ describe('hasDistinctFullName', () => {
     expect(hasDistinctFullName({ shortName: 'arb', fullName: '' })).toBe(false);
   });
 
+  it('is false when the full name is only whitespace', () => {
+    // A blank name is present but invisible, so calling it distinct renders a dangling separator.
+    // Applied here rather than left to each caller: `fullName` reaches this through public props an
+    // external consumer fills, so the un-normalized path is reachable from outside the repo.
+    expect(hasDistinctFullName({ shortName: 'arb', fullName: '   ' })).toBe(false);
+    expect(hasDistinctFullName({ shortName: 'arb', fullName: '\t\n' })).toBe(false);
+  });
+
   it('is false when the two names are identical', () => {
     expect(hasDistinctFullName({ shortName: 'WEB', fullName: 'WEB' })).toBe(false);
   });
@@ -57,6 +65,18 @@ describe('formatProjectName', () => {
     expect(formatProjectName({ shortName: 'WEB', fullName: 'WEB' })).toBe('WEB');
     expect(formatProjectName({ shortName: 'WEB', fullName: '' })).toBe('WEB');
     expect(formatProjectName({ shortName: 'WEB' })).toBe('WEB');
+  });
+
+  it('emits no dangling separator for a raw whitespace-only full name', () => {
+    expect(formatProjectName({ shortName: 'ABC', fullName: '  ' })).toBe('ABC');
+  });
+
+  it('keeps space inside a real full name, which is the project\u2019s own data', () => {
+    // `normalizeFullName` narrows rather than edits, so the pair is only dropped when it is blank
+    // throughout \u2014 never trimmed down to a shorter name than the project actually carries.
+    expect(formatProjectName({ shortName: 'WEB', fullName: ' World English Bible ' })).toBe(
+      'WEB -  World English Bible ',
+    );
   });
 });
 
@@ -125,6 +145,10 @@ describe('normalizeFullName', () => {
     // silently reintroduces the per-consumer drift they exist to prevent.
     expect(hasDistinctFullName({ shortName: 'WEB', fullName: normalizeFullName('') })).toBe(false);
     expect(hasDistinctFullName({ shortName: 'WEB', fullName: '' })).toBe(false);
+    expect(hasDistinctFullName({ shortName: 'WEB', fullName: normalizeFullName('   ') })).toBe(
+      false,
+    );
+    expect(hasDistinctFullName({ shortName: 'WEB', fullName: '   ' })).toBe(false);
   });
 });
 

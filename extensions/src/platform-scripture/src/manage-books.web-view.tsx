@@ -109,8 +109,11 @@ type ProjectListResult = {
     isResource: boolean;
     /**
      * Long human-readable name (e.g. "English Standard Version 2016"). Returned on the list so the
-     * frontend does not have to fetch `platform.fullName` per project. Empty when unset — fall back
-     * to the short `name`.
+     * frontend does not have to fetch `platform.fullName` per project.
+     *
+     * Empty when unset. Readers narrow it with `normalizeFullName` and leave the full name absent
+     * rather than falling back to the short `name` — mirroring claims a full name the project does
+     * not have.
      */
     fullName: string;
     /**
