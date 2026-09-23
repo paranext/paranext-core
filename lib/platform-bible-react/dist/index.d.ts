@@ -700,93 +700,6 @@ export declare function localizeOrFallback(key: LocalizeKey, localizedStrings: L
  */
 export declare function ConflictNoteCard({ comment, localizedStrings, availableActions, resolvedResolution, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
 /**
- * Attribute a content-zoom-eligible element carries to mark it as one zoom area. Its value is the
- * zoom area id; an empty value marks the view's `main` area. Mirrors `CONTENT_ZOOM_ROOT_ATTRIBUTE`
- * in paranext-core's `src/shared/models/web-view.model.ts`. This library cannot import that module
- * (it lives under core's `src/shared`, outside this package's reach), and `@papi/core` publishes
- * the constant as a type-only declaration whose value is not importable at runtime, so the literal
- * is duplicated here; a platform test compares the two constants so they cannot drift silently.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare const CONTENT_ZOOM_ROOT_ATTRIBUTE = "data-platform-content-zoom-root";
-/**
- * Attribute the platform's pop-up components put, next to {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, on
- * pop-up content opened from a zoom area. It tells the platform the element is pop-up content that
- * follows an area's zoom, not a pane of its own. Mirrors `CONTENT_ZOOM_POPUP_ATTRIBUTE` in
- * paranext-core's `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare const CONTENT_ZOOM_POPUP_ATTRIBUTE = "data-platform-content-zoom-popup";
-/**
- * Prefix of the CSS custom properties the platform sets on a web view's root element, one per zoom
- * area, holding that area's zoom factor (`--platform-content-zoom-main`, …). Mirrors
- * `CONTENT_ZOOM_CSS_VARIABLE_PREFIX` in paranext-core's `src/shared/models/web-view.model.ts`; a
- * platform test keeps the two equal.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = "--platform-content-zoom-";
-/**
- * CSS custom property holding the Settings default zoom factor, the fallback for an area without a
- * variable of its own. Mirrors `CONTENT_ZOOM_DEFAULT_CSS_VARIABLE` in paranext-core's
- * `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = "--platform-content-zoom-default";
-/**
- * Id of the view's unnamed main zoom area, the fallback used when {@link useContentZoomArea} reports
- * the empty string. Mirrors `MAIN_CONTENT_ZOOM_AREA` in paranext-core's
- * `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare const MAIN_CONTENT_ZOOM_AREA_ID = "main";
-/**
- * Props for {@link ContentZoomAreaProvider}.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export type ContentZoomAreaProviderProps = {
-	/**
-	 * Id of the zoom area the wrapped content belongs to, with the same rules as
-	 * `ContentZoomRootProps.area`. Omit it for the view's main area.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	area?: string;
-	/**
-	 * The content that belongs to the area.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	children?: React$1.ReactNode;
-};
-/**
- * Tells pop-ups rendered inside it which zoom area they belong to, without marking any element
- * itself. `ContentZoomRoot` already does this for everything rendered inside it; use this provider
- * for a pop-up that belongs to an area but is rendered outside that area's element — for example a
- * popover the view renders beside its content and anchors to a position in the text.
- *
- * Popovers and dropdown menus from this library that open inside an area are scaled with that
- * area's zoom and cap their own width and height to the pane, scrolling their content if it doesn't
- * fit; tooltips are scaled with the area's zoom too but cap only their width, so a tooltip taller
- * than the available space is clipped at the pane's edge. Dropdown sub-menu content does not follow
- * an area yet.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare function ContentZoomAreaProvider({ area, children }: ContentZoomAreaProviderProps): import("react/jsx-runtime").JSX.Element;
-/**
- * The zoom area the calling component is rendered in: `''` for the view's main area, the area id
- * for a named area, or `undefined` outside every `ContentZoomRoot` and `ContentZoomAreaProvider`.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare function useContentZoomArea(): string | undefined;
-/**
  * Props for {@link ContentZoomRoot}.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
@@ -816,12 +729,8 @@ export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLDivElement> & {
  * found inside another marked element is ignored. Keep toolbars, dividers and headers outside the
  * marked element so they are not scaled along with the content.
  *
- * Popovers and dropdown menus from this library that open from inside the element follow its zoom
- * and cap their own width and height to the pane, scrolling their content if it doesn't fit;
- * tooltips follow the zoom too but cap only their width, so a tooltip taller than the available
- * space is clipped at the pane's edge. Dropdown sub-menu content does not follow an area yet. A
- * pop-up rendered outside the element (beside the content, anchored to a position in it) belongs to
- * the area only when wrapped in {@link ContentZoomAreaProvider}.
+ * Pop-ups opened from inside stay at interface scale; anchor them to live positions
+ * (`useLivePopoverAnchor`) so they open beside zoomed content.
  *
  * This component renders a plain `div` in normal flow and applies no classes of its own — the
  * caller supplies whatever layout classes its parent expects.
@@ -862,6 +771,17 @@ export declare const ContentZoomRoot: import("react").ForwardRefExoticComponent<
 	 */
 	area?: string;
 } & import("react").RefAttributes<HTMLDivElement>>;
+/**
+ * Attribute a content-zoom-eligible element carries to mark it as one zoom area. Its value is the
+ * zoom area id; an empty value marks the view's `main` area. Mirrors `CONTENT_ZOOM_ROOT_ATTRIBUTE`
+ * in paranext-core's `src/shared/models/web-view.model.ts`. This library cannot import that module
+ * (it lives under core's `src/shared`, outside this package's reach), and `@papi/core` publishes
+ * the constant as a type-only declaration whose value is not importable at runtime, so the literal
+ * is duplicated here; a platform test compares the two constants so they cannot drift silently.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_ROOT_ATTRIBUTE = "data-platform-content-zoom-root";
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
