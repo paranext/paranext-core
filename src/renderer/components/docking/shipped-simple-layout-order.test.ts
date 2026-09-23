@@ -279,14 +279,18 @@ describe('shipped Simple-mode Column 3 order', () => {
     ]);
   });
 
-  it("lists the Simple Project menu's TOOLS section in the same order as the third column", () => {
+  /**
+   * TOOLS follows the Simple design's order rather than the tabs' order (the served order is pinned
+   * in `menu-data.service-host.scripture-editor-menu.test.ts`), so this compares the two as sets.
+   */
+  it('gives every third-column tab a TOOLS item in the Simple Project menu, and no item a missing tab', () => {
     const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
     const mappedTabs = simpleToolsCommands().map((command) => TAB_FOR_COMMAND[command]);
-    // TAB_FOR_COMMAND[command] is undefined for an unmapped command, and a missing layout slot is
-    // also undefined, so the two could compare equal below for the wrong reason. Guard each mapped
-    // entry first so an unmapped command fails here instead.
+    // An unmapped command maps to undefined; fail on it here rather than as an unexplained set
+    // mismatch below
     mappedTabs.forEach((tab) => expect(tab).toBeDefined());
-    expect(mappedTabs).toEqual(columnWebViewTypes(merged, 2));
+    expect(mappedTabs).toHaveLength(new Set(mappedTabs).size);
+    expect(new Set(mappedTabs)).toEqual(new Set(columnWebViewTypes(merged, 2)));
   });
 
   it('the real supplement leaves nothing Simple-mode-only behind in a power-mode merge', () => {

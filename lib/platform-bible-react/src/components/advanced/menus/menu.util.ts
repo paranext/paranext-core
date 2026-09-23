@@ -89,6 +89,8 @@ export type MenuSection = {
   columnKey: string;
   /** The column's localized label */
   label: string;
+  /** Whether the section is shown without its label as a heading; see `isHeaderHidden` */
+  isHeaderHidden: boolean;
 };
 
 /**
@@ -109,5 +111,9 @@ export function getMenuSectionsWithItems(menuData: Localized<MultiColumnMenu>): 
         isGroupUnderColumnOrSubMenu(groupKey, group, columnKey),
       ),
     )
-    .map(({ columnKey, column }) => ({ columnKey, label: column.label }));
+    .map(({ columnKey, column }) => ({
+      columnKey,
+      label: column.label,
+      isHeaderHidden: column.isHeaderHidden ?? false,
+    }));
 }
