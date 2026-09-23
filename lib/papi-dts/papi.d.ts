@@ -14047,16 +14047,6 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    */
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
   /**
-   * Parses the CSS `zoom` inline on an iframe element. Anything that is not a positive finite number
-   * — including the empty string written to clear the zoom, or no iframe at all — means unscaled.
-   *
-   * Shared by {@link getWebViewIframeZoom} and {@link translateCoordinates} so the two read the zoom
-   * the same way.
-   *
-   * @experimental This function is unstable and may change or disappear without notice
-   */
-  export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): number;
-  /**
    * Reads the CSS `zoom` on a WebView's host `<iframe>` element, if any.
    *
    * A zoomed iframe's own `getBoundingClientRect()` is unchanged — only its inner viewport shrinks or
