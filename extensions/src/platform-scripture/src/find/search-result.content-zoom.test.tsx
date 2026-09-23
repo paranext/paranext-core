@@ -78,26 +78,60 @@ describe('SearchResult content zoom', () => {
   });
 
   it('leaves the loading message at interface size', () => {
-    const { getByText } = renderCard({ usjReaderWriter: undefined });
+    const { getByText, getByRole } = renderCard({ usjReaderWriter: undefined });
     expect(getByText('Loading verse text…').closest(MARKER)).toBeNull();
+    // Positive control: the snippet next to the reference is still marked while the verse loads.
+    expect(getByRole('button', { name: 'Genesis 1:1' }).nextElementSibling).toHaveAttribute(
+      CONTENT_ZOOM_ROOT_ATTRIBUTE,
+      '',
+    );
   });
 
-  it('marks the replace preview text but not its arrow icon', () => {
+  // Each row lists every marker in DOM order: the header snippet first, then the verse context (arrow
+  // only) and the preview. Inline embeds the whole preview, highlights included, in one div marker;
+  // block marks each of its two lines with its own before and after context.
+  it.each([
+    {
+      layout: 'arrow',
+      marked: [
+        ['SPAN', 'beginning'],
+        ['SPAN', 'In the beginning God created'],
+        ['SPAN', 'beginning'],
+        ['SPAN', 'start'],
+      ],
+    },
+    {
+      layout: 'inline',
+      marked: [
+        ['SPAN', 'beginning'],
+        ['DIV', 'In the beginningstart God created'],
+      ],
+    },
+    {
+      layout: 'block',
+      marked: [
+        ['SPAN', 'beginning'],
+        ['SPAN', 'In the beginning God created'],
+        ['SPAN', 'In the start God created'],
+      ],
+    },
+  ] as const)('marks the $layout replace preview text but not its icons', ({ layout, marked }) => {
     const { container } = renderCard({
       isReplaceMode: true,
       replaceConfig: { term: 'start', preserveCase: false },
       previewOptions: {
-        layout: 'arrow',
+        layout,
         highlightShape: 'rounded',
         color: 'red-green',
         monospace: false,
         showInvisible: false,
       },
     });
-    const markedTexts = [...container.querySelectorAll(MARKER)].map((m) => m.textContent);
-    expect(markedTexts).toEqual(expect.arrayContaining(['beginning', 'start']));
+    const markers = [...container.querySelectorAll(MARKER)];
+    expect(markers.map((m) => [m.tagName, m.textContent])).toEqual(marked);
     container.querySelectorAll('svg').forEach((icon) => expect(icon.closest(MARKER)).toBeNull());
-    container.querySelectorAll(MARKER).forEach((marker) => {
+    // No marker nests in another, so the inline layout's highlight spans stay unmarked.
+    markers.forEach((marker) => {
       expect(marker.parentElement?.closest(MARKER)).toBeNull();
     });
   });
