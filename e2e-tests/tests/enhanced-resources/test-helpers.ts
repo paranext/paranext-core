@@ -30,6 +30,15 @@ export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptu
 export const SCRIPTURE_TEXT_GRID_TAB_TITLE = /^Text Collection$/;
 export const SCRIPTURE_TEXT_GRID_FRAME_SELECTOR = 'iframe[title="Text Collection"]';
 
+/**
+ * The admin project setting the Text Collection grid builds its cells from: its
+ * `isInTextCollection`-flagged items seed the per-user overlay (`initializeTextCollectionOverlay`)
+ * and are what the grid renders (`useTextCollectionSources`). `platformScripture.modelTexts` is not
+ * part of the text collection, so seeding it shows nothing.
+ */
+const REFERENCED_PROJECTS_AND_RESOURCES_SETTING =
+  'platformScripture.referencedProjectsAndResources';
+
 /** Narrow PAPI slice used by Scripture Text Grid e2e helpers. */
 export type ScriptureTextGridPapiWindow = {
   papi: {
@@ -68,7 +77,7 @@ export type FlaggedResourceItem = {
 
 type ScriptureTextGridRestorePayload = {
   projectId: string;
-  modelTexts: unknown;
+  referencedProjectsAndResources: unknown;
 };
 
 /** Module-scoped restore payload set by `flagResourcesAndOpenScriptureTextGrid`. */
@@ -107,8 +116,12 @@ export async function discoverAdminTextConnectionProject(
 }
 
 /**
- * Flag resources text-collection, seed the overlay, and open the Scripture Text Grid web view.
- * Restores the project's pre-test settings in a `finally` block.
+ * Write `items` as the project's `platformScripture.referencedProjectsAndResources` list, reset the
+ * current user's text-collection overlay and cell order, re-initialize the overlay from that list,
+ * and open the Scripture Text Grid web view bound to the project.
+ *
+ * Remembers the list's previous value for {@link restoreScriptureTextGridProjectSettings}, and
+ * writes it back itself if any step here throws.
  */
 export async function flagResourcesAndOpenScriptureTextGrid(
   page: Page,
@@ -116,7 +129,7 @@ export async function flagResourcesAndOpenScriptureTextGrid(
   items: FlaggedResourceItem[],
 ): Promise<void> {
   scriptureTextGridRestorePayload = await page.evaluate(
-    async ({ testProjectId, modelItems, webViewType }) => {
+    async ({ testProjectId, referencedItems, webViewType, settingKey }) => {
       // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
       // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
       const { papi } = window as unknown as ScriptureTextGridPapiWindow;
@@ -124,12 +137,12 @@ export async function flagResourcesAndOpenScriptureTextGrid(
         'platformScripture.textConnectionSettings',
         testProjectId,
       );
-      const originalModelTexts = await pdp.getSetting('platformScripture.modelTexts');
+      const originalReferenced = await pdp.getSetting(settingKey);
 
       try {
-        await pdp.setSetting('platformScripture.modelTexts', {
+        await pdp.setSetting(settingKey, {
           dataVersion: '1.1.0',
-          items: modelItems,
+          items: referencedItems,
         });
         await pdp.resetTextCollectionOverlay();
         await pdp.resetCellOrder();
@@ -138,26 +151,35 @@ export async function flagResourcesAndOpenScriptureTextGrid(
           existingId: '?',
           projectId: testProjectId,
         });
-        return { projectId: testProjectId, modelTexts: originalModelTexts };
+        return { projectId: testProjectId, referencedProjectsAndResources: originalReferenced };
       } catch (error) {
-        await pdp.setSetting('platformScripture.modelTexts', originalModelTexts);
+        await pdp.setSetting(settingKey, originalReferenced);
         await pdp.resetTextCollectionOverlay();
         await pdp.resetCellOrder();
         throw error;
       }
     },
-    { testProjectId: projectId, modelItems: items, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE },
+    {
+      testProjectId: projectId,
+      referencedItems: items,
+      webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      settingKey: REFERENCED_PROJECTS_AND_RESOURCES_SETTING,
+    },
   );
 }
 
-/** Best-effort restore for specs that mutate modelTexts. */
+/**
+ * Best-effort restore after {@link flagResourcesAndOpenScriptureTextGrid}: writes back the project's
+ * previous `platformScripture.referencedProjectsAndResources` list and resets the current user's
+ * text-collection overlay and cell order.
+ */
 export async function restoreScriptureTextGridProjectSettings(page: Page): Promise<void> {
   const restore = scriptureTextGridRestorePayload;
   if (!restore) return;
 
   await page
     .evaluate(
-      async ({ payload, webViewType }) => {
+      async ({ payload, webViewType, settingKey }) => {
         // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
         // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
         const { papi } = window as unknown as ScriptureTextGridPapiWindow;
@@ -165,7 +187,7 @@ export async function restoreScriptureTextGridProjectSettings(page: Page): Promi
           'platformScripture.textConnectionSettings',
           payload.projectId,
         );
-        await pdp.setSetting('platformScripture.modelTexts', payload.modelTexts);
+        await pdp.setSetting(settingKey, payload.referencedProjectsAndResources);
         await pdp.resetTextCollectionOverlay();
         await pdp.resetCellOrder();
         await papi.webViews.openWebView(webViewType, undefined, {
@@ -173,7 +195,11 @@ export async function restoreScriptureTextGridProjectSettings(page: Page): Promi
           projectId: payload.projectId,
         });
       },
-      { payload: restore, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE },
+      {
+        payload: restore,
+        webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+        settingKey: REFERENCED_PROJECTS_AND_RESOURCES_SETTING,
+      },
     )
     .catch(() => {
       // Ignore — cleanup is best-effort.
@@ -208,7 +234,7 @@ export type ScriptureTextGrid = {
  *
  * @param projectId The project to bind the grid to. Required whenever the grid is opened fresh (no
  *   editor is open for `useTextCollectionProjectId` to fall back to) — pass the same id used to
- *   seed the model texts, or the grid renders empty.
+ *   seed its referenced projects and resources, or the grid renders empty.
  */
 export async function openScriptureTextGrid(
   page: Page,
