@@ -23,10 +23,8 @@ export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
  *
  * Shared by {@link getWebViewIframeZoom} and {@link translateCoordinates} so the two read the zoom
  * the same way.
- *
- * @experimental This function is unstable and may change or disappear without notice
  */
-export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): number {
+function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): number {
   const zoom = Number(iframe?.style.zoom);
   return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
 }
