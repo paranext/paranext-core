@@ -52,7 +52,7 @@ describe('dictionary content zoom', () => {
     expect(marked).toEqual(['בְּרֵאשִׁית']);
   });
 
-  it('marks the title lemma, the gloss and the definition, and no headings or controls', () => {
+  it('marks the title lemma and glosses, the sense gloss and the definition, and no headings or controls', () => {
     const { container, getAllByRole } = render(
       <DictionaryEntryDisplay
         localizedStrings={{
@@ -67,11 +67,17 @@ describe('dictionary content zoom', () => {
       />,
     );
     const marked = [...container.querySelectorAll(MARKER)].map((m) => m.textContent);
-    expect(marked).toEqual(['בְּרֵאשִׁית', 'beginning', 'The first part of a period of time']);
+    expect(marked).toEqual([
+      'בְּרֵאשִׁית',
+      'beginning',
+      'beginning',
+      'The first part of a period of time',
+    ]);
     container
       .querySelectorAll('h3')
       .forEach((heading) => expect(heading.closest(MARKER)).toBeNull());
-    getAllByRole('button').forEach((button) => expect(button.querySelector('h3')).toBeNull());
+    // Sense cards are buttons that hold markers; no button may sit inside one.
+    getAllByRole('button').forEach((button) => expect(button.closest(MARKER)).toBeNull());
     container.querySelectorAll(MARKER).forEach((marker) => {
       expect(marker.parentElement?.closest(MARKER)).toBeNull();
     });
