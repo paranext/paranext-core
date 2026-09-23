@@ -104,6 +104,7 @@ import {
 import {
   AnnotationActionHandler,
   EditorDecorations,
+  EditorMessageInsertTextualNoteAtSelection,
   EditorMessageSetAnnotation,
   EditorWebViewMessage,
   ScriptureEditorViewType,
@@ -184,12 +185,15 @@ import {
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
+  INSERT_CONTEXT_MENU_STRING_KEYS,
   markerMenuItemsToResolvedPaletteItems,
+  NOTE_INSERT_CONFIG,
   resolvePaletteItemStrings,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  shouldSkipNoteInsert,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
@@ -282,10 +286,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
-  '%webView_platformScriptureEditor_insertCommentAtSelection%',
-  '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
-  '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%',
-  '%webView_platformScriptureEditor_insertEndnoteAtSelection%',
+  ...INSERT_CONTEXT_MENU_STRING_KEYS,
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -1597,57 +1598,38 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked, commentPopoverAnchor]);
 
   /**
-   * Inserts a footnote at the current selection. Shared by the "Insert footnote" context-menu item,
-   * the Ctrl+T keyboard shortcut, and the top-menu
-   * `platformScriptureEditor.insertFootnoteAtSelection` command (via the `webViewMessageListener`
-   * effect below), so the version-history commit + `insertMarker` behavior stays identical across
-   * every entry point.
+   * Inserts a textual note (footnote, cross-reference, or endnote) at the current selection, driven
+   * by {@link NOTE_INSERT_CONFIG}. Shared by each kind's context-menu item, the top-menu command
+   * (via the `webViewMessageListener` effect below), and — for footnote/cross-reference — the
+   * Ctrl+T/Ctrl+Shift+T keyboard shortcuts, so the read-only guard, the version-history commit, and
+   * `insertMarker` behavior stay identical across every entry point for every kind.
+   *
+   * Checks read-only BEFORE the version-history snapshot: a read-only top-menu click (which reaches
+   * this with no prior gate — the menu item itself has no enablement) must not write a forced,
+   * empty version-history commit. No user-visible notice for that case here — left to a separate
+   * PR.
    */
-  const insertFootnoteAtCurrentSelection = useCallback(async () => {
-    // Commits a snapshot of the project to the version history. Best-effort: see
-    // `commitVersionHistorySnapshot`, which owns the ERROR_UNIMPLEMENTED handling shared with
-    // the cross-reference and character-marker-removal paths.
-    await commitVersionHistorySnapshot(
-      projectId,
-      localizedStrings['%versionHistoryCommit_beforeInsertFootnote%'],
-      'inserting footnote',
-    );
+  const insertNoteAtCurrentSelection = useCallback(
+    async (kind: EditorMessageInsertTextualNoteAtSelection['method']) => {
+      const { marker, commitMessageKey, editDescription } = NOTE_INSERT_CONFIG[kind];
+      if (shouldSkipNoteInsert(!!editorRef.current, isReadOnlyEffective)) {
+        logger.debug(`Not ${editDescription}: no mounted editor or read-only`);
+        return;
+      }
 
-    editorRef.current?.insertMarker('f');
-  }, [projectId, localizedStrings]);
+      // Commits a snapshot of the project to the version history. Best-effort: see
+      // `commitVersionHistorySnapshot`, which owns the ERROR_UNIMPLEMENTED handling shared with
+      // the character-marker-removal path.
+      await commitVersionHistorySnapshot(
+        projectId,
+        localizedStrings[commitMessageKey],
+        editDescription,
+      );
 
-  /**
-   * Inserts a cross-reference at the current selection. Shared by the "Insert cross-reference"
-   * context-menu item, the Ctrl+Shift+T keyboard shortcut, and the top-menu
-   * `platformScriptureEditor.insertCrossReferenceAtSelection` command (via the
-   * `webViewMessageListener` effect below).
-   */
-  const insertCrossReferenceAtCurrentSelection = useCallback(async () => {
-    // Commits a snapshot of the project to the version history — see the footnote helper above.
-    await commitVersionHistorySnapshot(
-      projectId,
-      localizedStrings['%versionHistoryCommit_beforeInsertCrossReference%'],
-      'inserting cross-reference',
-    );
-
-    editorRef.current?.insertMarker('x');
-  }, [projectId, localizedStrings]);
-
-  /**
-   * Inserts an endnote at the current selection. Shared by the "Insert end note" context-menu item
-   * and the top-menu `platformScriptureEditor.insertEndnoteAtSelection` command (via the
-   * `webViewMessageListener` effect below). No keyboard shortcut, matching Paratext 9.
-   */
-  const insertEndnoteAtCurrentSelection = useCallback(async () => {
-    // Commits a snapshot of the project to the version history — see the footnote helper above.
-    await commitVersionHistorySnapshot(
-      projectId,
-      localizedStrings['%versionHistoryCommit_beforeInsertEndnote%'],
-      'inserting endnote',
-    );
-
-    editorRef.current?.insertMarker('fe');
-  }, [projectId, localizedStrings]);
+      editorRef.current?.insertMarker(marker);
+    },
+    [projectId, localizedStrings, isReadOnlyEffective],
+  );
 
   const options = useMemo<EditorOptions>(
     () => ({
@@ -1665,16 +1647,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         localizedStrings,
         {
           insertFootnote: runInsertFromContextMenu(
-            insertFootnoteAtCurrentSelection,
-            'inserting footnote',
+            () => insertNoteAtCurrentSelection('insertFootnoteAtSelection'),
+            NOTE_INSERT_CONFIG.insertFootnoteAtSelection.editDescription,
           ),
           insertCrossReference: runInsertFromContextMenu(
-            insertCrossReferenceAtCurrentSelection,
-            'inserting cross-reference',
+            () => insertNoteAtCurrentSelection('insertCrossReferenceAtSelection'),
+            NOTE_INSERT_CONFIG.insertCrossReferenceAtSelection.editDescription,
           ),
           insertEndnote: runInsertFromContextMenu(
-            insertEndnoteAtCurrentSelection,
-            'inserting endnote',
+            () => insertNoteAtCurrentSelection('insertEndnoteAtSelection'),
+            NOTE_INSERT_CONFIG.insertEndnoteAtSelection.editDescription,
           ),
           insertComment: insertCommentAtCurrentSelection,
         },
@@ -1693,9 +1675,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       markerSettleDelayMs,
       localizedStrings,
       insertCommentAtCurrentSelection,
-      insertFootnoteAtCurrentSelection,
-      insertCrossReferenceAtCurrentSelection,
-      insertEndnoteAtCurrentSelection,
+      insertNoteAtCurrentSelection,
     ],
   );
 
@@ -1762,13 +1742,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         case 'insertFootnoteAtSelection':
         case 'insertCrossReferenceAtSelection':
         case 'insertEndnoteAtSelection': {
-          const insertByMethod = {
-            insertFootnoteAtSelection: insertFootnoteAtCurrentSelection,
-            insertCrossReferenceAtSelection: insertCrossReferenceAtCurrentSelection,
-            insertEndnoteAtSelection: insertEndnoteAtCurrentSelection,
-          };
           await logInsertRejection(
-            insertByMethod[editorMessage.method](),
+            insertNoteAtCurrentSelection(editorMessage.method),
             `handling ${editorMessage.method}`,
           );
           break;
@@ -1947,9 +1922,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [
     insertCommentAtCurrentSelection,
-    insertFootnoteAtCurrentSelection,
-    insertCrossReferenceAtCurrentSelection,
-    insertEndnoteAtCurrentSelection,
+    insertNoteAtCurrentSelection,
     scrRef,
     setScrRefWithScroll,
     requestScrollToRange,
@@ -2468,12 +2441,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // Both are async and this handler is not, so surface a rejection instead of dropping it as
         // an unhandled promise: the user pressed a key and must not be left with no marker and no
         // explanation.
-        const isCrossReference = event.shiftKey;
+        const method = event.shiftKey
+          ? 'insertCrossReferenceAtSelection'
+          : 'insertFootnoteAtSelection';
         logInsertRejection(
-          isCrossReference
-            ? insertCrossReferenceAtCurrentSelection()
-            : insertFootnoteAtCurrentSelection(),
-          `inserting ${isCrossReference ? 'cross-reference' : 'footnote'} from keyboard shortcut`,
+          insertNoteAtCurrentSelection(method),
+          `${NOTE_INSERT_CONFIG[method].editDescription} from keyboard shortcut`,
         );
       }
     };
@@ -2487,8 +2460,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [
     insertCommentAtCurrentSelection,
-    insertFootnoteAtCurrentSelection,
-    insertCrossReferenceAtCurrentSelection,
+    insertNoteAtCurrentSelection,
     showMarkersMenu,
     showInlineMarkersMenu,
     isMac,
