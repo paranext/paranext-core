@@ -654,8 +654,9 @@ function resolveIdentityState(webViewId: WebViewId): IdentityState | undefined {
  * - **No identity at all** (`id` is `undefined` — a project id this pane's kind cannot resolve, for
  *   instance) — nothing this window could seed the pane with either way, so whatever levels it
  *   already holds are left exactly as they are.
- * - **The stamp matches the pane's identity** — nothing to do. Whatever the pane holds, seeded here
- *   or chosen by the user since, belongs to what the pane shows.
+ * - **The stamp matches the pane's identity** — whatever the pane holds, seeded here or chosen by the
+ *   user since, belongs to what the pane shows and is kept. Only the areas it holds no level for
+ *   are filled from what memory remembers, and the pane is written only when that adds one.
  * - **No stamp, and the pane already has something of its own for the identity it shows RIGHT NOW** —
  *   a committed level (the levels key is never written empty, so holding it at all means the pane
  *   has a level to keep — a newly opened pane, one restored from a layout written before its levels
@@ -701,7 +702,21 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
   // left exactly as they are, re-point or not, since nothing here could replace them anyway. See
   // "No identity at all" above.
   if (!id) return;
-  if (storedStamp === stamp) return; // "The stamp matches the pane's identity" above.
+  if (storedStamp === stamp) {
+    if (!memoryLoaded) return;
+    const filled: Levels = { ...getOwnLevels(definition) };
+    let added = false;
+    Object.entries(settledMemoryLevelsFor(id)).forEach(([areaId, level]) => {
+      if (filled[areaId] !== undefined) return;
+      filled[areaId] = level;
+      added = true;
+    });
+    if (!added) return;
+    deps.updateDefinition(webViewId, {
+      state: { ...definition.state, [CONTENT_ZOOM_LEVELS_STATE_KEY]: filled },
+    });
+    return;
+  }
   const hasOwnLevels = Boolean(
     definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state,
   );
