@@ -18,14 +18,15 @@ test('a promise that settles before the timeout yields its value and leaves no t
 });
 
 test('a promise still pending at the timeout yields timedOut exactly when the time runs out', async () => {
-  let outcome: unknown;
-  raceWithTimeout(new Promise(() => {}), 500).then((result) => {
-    outcome = result;
+  let settled = false;
+  const racePromise = raceWithTimeout(new Promise(() => {}), 500).finally(() => {
+    settled = true;
   });
   await vi.advanceTimersByTimeAsync(499);
-  expect(outcome).toBeUndefined();
+  expect(settled).toBe(false);
   await vi.advanceTimersByTimeAsync(1);
-  expect(outcome).toEqual({ timedOut: true });
+  expect(settled).toBe(true);
+  await expect(racePromise).resolves.toEqual({ timedOut: true });
 });
 
 test('a rejection before the timeout propagates and leaves no timer behind', async () => {

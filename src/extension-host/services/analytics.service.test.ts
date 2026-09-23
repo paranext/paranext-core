@@ -326,13 +326,11 @@ test('a failing provider send is caught and logged at debug, without initialize 
 test('a provider send that throws synchronously is logged at error with the error message, without initialize or trackEvent throwing', async () => {
   vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
   vi.doMock('@extension-host/services/analytics-providers/console-analytics.provider', () => ({
-    ConsoleAnalyticsProvider: class {
-      constructor(private readonly environment: string) {}
-
-      send(): Promise<void> {
-        throw new Error(`sync boom (${this.environment})`);
-      }
-    },
+    ConsoleAnalyticsProvider: vi.fn().mockImplementation((environment: string) => ({
+      send: () => {
+        throw new Error(`sync boom (${environment})`);
+      },
+    })),
   }));
 
   const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
