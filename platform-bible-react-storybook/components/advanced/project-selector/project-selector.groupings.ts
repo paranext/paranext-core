@@ -1,4 +1,5 @@
 import { PROJECT_SELECTOR_CUSTOM_DATA_KEYS } from 'platform-bible-utils';
+import { isResolvedLocalizedValue } from '@/utils/localization.util';
 import {
   DEFAULT_SELECTED_SECTION_HEADING,
   DEFAULT_UNSELECTED_SECTION_HEADING,
@@ -56,14 +57,20 @@ export type ProjectSelectorStringLookup = Readonly<Record<`%${string}%`, unknown
 
 /**
  * Read one `%projectSelector_*%` entry out of a {@link ProjectSelectorStringLookup}. Returns
- * `undefined` for a missing or non-string value so the caller's own English fallback applies.
+ * `undefined` for a missing, non-string, or unresolved value so the caller's own English fallback
+ * applies.
+ *
+ * {@link isResolvedLocalizedValue} decides what counts as resolved — the one predicate the picker
+ * uses everywhere, so a grouping label read straight off the returned object is judged the same way
+ * as a field that goes through the `localizedStrings` merge.
  */
 export function readProjectSelectorString(
   strings: ProjectSelectorStringLookup,
   key: ProjectSelectorLocalizedStringKey,
 ): string | undefined {
   const value = strings[key];
-  return typeof value === 'string' ? value : undefined;
+  if (typeof value !== 'string' || !isResolvedLocalizedValue(value)) return undefined;
+  return value;
 }
 
 /**

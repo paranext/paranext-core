@@ -24,6 +24,7 @@ import {
 import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
+import { resolveLocalizedString } from '@/utils/localization.util';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -241,7 +242,83 @@ export const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalized
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): Required<ProjectSelectorLocalizedStrings> {
-  return { ...PROJECT_SELECTOR_DEFAULT_STRINGS, ...partial };
+  const given = partial ?? {};
+  // Resolved field by field rather than by spreading `partial` over the defaults, because a spread
+  // cannot tell "the caller did not set this" from "the caller set it to something unusable":
+  // `buildProjectSelectorLocalizedStrings` emits a property for EVERY field, and a present-but-
+  // `undefined` property overwrites the default just as a real value would. What counts as usable
+  // is `resolveLocalizedString`'s to decide — see `isResolvedLocalizedValue` for the three states
+  // it rejects.
+  //
+  // Written out one field at a time on purpose. The `Required<…>` return type then makes a missing
+  // or misspelled field a compile error, which a key-loop or an `Object.fromEntries` round-trip
+  // both erase.
+  return {
+    // The one field where an empty string is meaningful: it is a deliberate "no accessible name
+    // here; the visible text or a labelling ancestor names this control", so it passes through
+    // rather than falling back. Matches `RecentSearches`. Whitespace-only is not that opt-out.
+    ariaLabel:
+      given.ariaLabel === ''
+        ? ''
+        : resolveLocalizedString(given.ariaLabel, PROJECT_SELECTOR_DEFAULT_STRINGS.ariaLabel),
+    buttonPlaceholder: resolveLocalizedString(
+      given.buttonPlaceholder,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.buttonPlaceholder,
+    ),
+    commandEmptyMessage: resolveLocalizedString(
+      given.commandEmptyMessage,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.commandEmptyMessage,
+    ),
+    searchPlaceholder: resolveLocalizedString(
+      given.searchPlaceholder,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.searchPlaceholder,
+    ),
+    groupByAriaLabel: resolveLocalizedString(
+      given.groupByAriaLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.groupByAriaLabel,
+    ),
+    groupSectionLabel: resolveLocalizedString(
+      given.groupSectionLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.groupSectionLabel,
+    ),
+    groupByNone: resolveLocalizedString(
+      given.groupByNone,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.groupByNone,
+    ),
+    openTabsSectionHeading: resolveLocalizedString(
+      given.openTabsSectionHeading,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.openTabsSectionHeading,
+    ),
+    otherProjectsSectionHeading: resolveLocalizedString(
+      given.otherProjectsSectionHeading,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.otherProjectsSectionHeading,
+    ),
+    autoOpenTabsGroupingLabel: resolveLocalizedString(
+      given.autoOpenTabsGroupingLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.autoOpenTabsGroupingLabel,
+    ),
+    autoSelectionGroupingLabel: resolveLocalizedString(
+      given.autoSelectionGroupingLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.autoSelectionGroupingLabel,
+    ),
+    autoSelectionSelectedSectionHeading: resolveLocalizedString(
+      given.autoSelectionSelectedSectionHeading,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.autoSelectionSelectedSectionHeading,
+    ),
+    autoSelectionUnselectedSectionHeading: resolveLocalizedString(
+      given.autoSelectionUnselectedSectionHeading,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.autoSelectionUnselectedSectionHeading,
+    ),
+    boundButClosedTooltip: resolveLocalizedString(
+      given.boundButClosedTooltip,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.boundButClosedTooltip,
+    ),
+    openButtonLabel: resolveLocalizedString(
+      given.openButtonLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.openButtonLabel,
+    ),
+    clearAll: resolveLocalizedString(given.clearAll, PROJECT_SELECTOR_DEFAULT_STRINGS.clearAll),
+  };
 }
 
 /**
@@ -857,7 +934,12 @@ function resolveDefaultActiveGrouping(
 export function ProjectSelector(props: ProjectSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const strings = resolveStrings(props.localizedStrings);
+  // Memoized on the prop's identity, which is all a component can key on. Note it does NOT hold on
+  // the unresolved path: `useLocalizedStrings` rebuilds its seed object in the render body and
+  // returns it on every platform-error render, so the prop is a fresh object each time and this
+  // recomputes. That is affordable — the work is a handful of anchored regex tests — but do not
+  // read this memo as a guarantee.
+  const strings = useMemo(() => resolveStrings(props.localizedStrings), [props.localizedStrings]);
   // Effective grouping list:
   //
   // - When the caller passes `availableGroupings` (even `[]`), it is taken LITERALLY. This is the
