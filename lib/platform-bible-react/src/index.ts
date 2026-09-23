@@ -75,20 +75,9 @@ export type {
 } from './components/advanced/comment-list/conflict-note-card.types';
 export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
 export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
-export {
-  ContentZoomAreaProvider,
-  ContentZoomRoot,
-  CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
-  CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
-  CONTENT_ZOOM_POPUP_ATTRIBUTE,
-  CONTENT_ZOOM_ROOT_ATTRIBUTE,
-  MAIN_CONTENT_ZOOM_AREA_ID,
-  useContentZoomArea,
-} from './components/advanced/content-zoom-root.component';
-export type {
-  ContentZoomAreaProviderProps,
-  ContentZoomRootProps,
-} from './components/advanced/content-zoom-root.component';
+export { ContentZoomRoot } from './components/advanced/content-zoom-root.component';
+export type { ContentZoomRootProps } from './components/advanced/content-zoom-root.component';
+export { CONTENT_ZOOM_ROOT_ATTRIBUTE } from './context/content-zoom-text.context';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
