@@ -54,7 +54,7 @@ export function mergeWithCommonProperties(
 ): Record<string, unknown> {
   if (!callerProperties) return { ...commonProperties };
   Object.keys(callerProperties)
-    .filter((key) => key in commonProperties)
+    .filter((key) => Object.hasOwn(commonProperties, key))
     .forEach((key) => {
       logger.debug(`Analytics: caller property '${key}' overrides the common property`);
     });
