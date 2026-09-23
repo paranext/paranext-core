@@ -391,24 +391,56 @@ export type PropertyJsonPath =
  * - {@link UsjClosingAttributeMarkerLocation} - attribute markers are just properties in JSON, plus
  *   they are in the same situation as {@link UsjClosingMarkerLocation} as detailed above.
  *
- * Every USFM position has exactly one location, and producers should emit only that one. `offset`
- * has a meaning only on text ({@link UsjTextContentLocation}), so a gap between content items is
- * never a container path plus a content index, and never the root path `$` plus one:
+ * Every USFM position has exactly one canonical location, and producers should emit only that one.
+ * Following are clarifications on some tricky positions. In each example, the USFM is the whole
+ * document and `|` marks the position.
  *
- * 1. A gap immediately in front of a marker object is that marker's {@link UsjMarkerLocation} (at its
- *    backslash).
- * 2. An offset at a token's length addresses the character AFTER that token when that character has no
- *    other location of its own — the space after a marker name, or a line's newline. For text that
- *    is `offset: length`; for a marker name, `['marker']` at `propertyOffset: marker.length`; for a
- *    closing marker, `closingMarkerOffset` at the closing marker's length. So the caret inside an
- *    empty `\b` paragraph is its `['marker']` at `propertyOffset: 1`, and the end of a paragraph
- *    that ends in a note is the note's `closingMarkerOffset: 3` (the newline after `\f*`).
- * 3. The end of the document is one past the final newline, expressed on the last token: rule 2's form
- *    plus one (`propertyOffset: marker.length + 1` when the document ends in an empty paragraph,
- *    text `offset: length + 1` when it ends in text).
- * 4. A root point between two top-level blocks is the start of the next block (rule 1).
+ * - A position immediately in front of a marker. It is that marker's {@link UsjMarkerLocation}, at its
+ *   backslash, even where it also follows the end of other content.
  *
- * {@link IUsjReaderWriter.usfmVerseLocationToUsjDocumentLocation} produces exactly these.
+ *       \p In the beginning\f + \ft a note\f*|\v 2 God said
+ *
+ *   `{ jsonPath: "$.content[0].content[2]" }`
+ * - A position between two top-level blocks rather than inside either one. It is the start of the
+ *   next block, the same as any position in front of a marker.
+ *
+ *       \p God said
+ *       |\b
+ *
+ *   `{ jsonPath: "$.content[1]" }`
+ * - The end of a line. The newline that ends a line has no location of its own, so it is expressed on
+ *   the line's last token as an offset at that token's length: a text `offset` at the string's
+ *   length, or a `closingMarkerOffset` at the closing marker's length.
+ *
+ *       \p In the beginning|
+ *       \p God said
+ *
+ *   `{ jsonPath: "$.content[0].content[0]", offset: 16 }`
+ *
+ *       \p In the beginning\f + \ft a note\f*|
+ *       \p God said
+ *
+ *   `{ jsonPath: "$.content[0].content[1]", closingMarkerOffset: 3 }`
+ * - Inside a paragraph that has no content. The only thing after its marker name is the newline, so
+ *   the position is the marker name's `propertyOffset` at the name's length.
+ *
+ *       \b|
+ *       \p God said
+ *
+ *   `{ jsonPath: "$.content[0]['marker']", propertyOffset: 1 }`
+ * - The end of the document. It is one past the document's final newline, so it is the end of the
+ *   last line (above) plus one.
+ *
+ *       \p God said
+ *       \b
+ *       |
+ *
+ *   `{ jsonPath: "$.content[1]['marker']", propertyOffset: 2 }`
+ *
+ *       \p God said
+ *       |
+ *
+ *   `{ jsonPath: "$.content[0].content[0]", offset: 9 }`
  *
  * To see many examples of the same point represented by both USFM and USJ locations, go to
  * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
