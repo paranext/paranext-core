@@ -925,6 +925,27 @@ describe('web-view-content-zoom.service', () => {
     expect(cssVar(iframeFor('editor-4'), '--platform-content-zoom-footnotes')).toBe('0.9');
   });
 
+  it('fills the remembered areas a pane stamped for its current identity lacks, on its first area report', async () => {
+    settings[MEMORY] = {
+      'editor:PROJ-A:main': 1.5,
+      'editor:PROJ-A:footnotes': 0.7,
+    };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    // Restored with a level of its own for the footnotes only, stamped for the project it shows.
+    definitions.set('editor-4s', {
+      id: 'editor-4s',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: zoomState({ footnotes: 0.9 }),
+    });
+    setContentZoomAreas('editor-4s', ['main', 'footnotes']);
+    expect(cssVar(iframeFor('editor-4s'), '--platform-content-zoom-main')).toBe('1.5');
+    // Control: the pane's own level still outranks what memory remembers for that area.
+    expect(cssVar(iframeFor('editor-4s'), '--platform-content-zoom-footnotes')).toBe('0.9');
+    expect(definitions.get('editor-4s')?.state).toEqual(zoomState({ main: 1.5, footnotes: 0.9 }));
+  });
+
   it('seeds a declared pane on an empty first report, and its first non-empty report keeps that seed without rewriting it', async () => {
     settings[MEMORY] = { 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 };
     __setContentZoomDepsForTesting({});
