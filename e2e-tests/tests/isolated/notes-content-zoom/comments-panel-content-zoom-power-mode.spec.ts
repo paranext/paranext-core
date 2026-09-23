@@ -22,7 +22,7 @@
  * `npm run test:e2e:isolated notes-content-zoom`
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { areaBox, ctrlWheel } from '../../../fixtures/content-zoom-helpers';
+import { ctrlWheel } from '../../../fixtures/content-zoom-helpers';
 import { waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
 import {
   type CommentTestProject,
@@ -67,7 +67,7 @@ test.describe('Comments panel content zoom in Power mode', () => {
     test.slow();
 
     await waitForHomeTab(mainPage);
-    await createCommentThreads(project, ['GEN 1:1'], ['Power tab-menu marker']);
+    const [threadId] = await createCommentThreads(project, ['GEN 1:1'], ['Power tab-menu marker']);
     await openCommentListPanel(project.projectId);
     const panelId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_PANEL_WEBVIEW_TYPE);
     const panelFrame = await getEditorFrame(mainPage, panelId);
@@ -78,7 +78,8 @@ test.describe('Comments panel content zoom in Power mode', () => {
     await expect.poll(() => readFactor(panelFrame, '')).toBe(1);
 
     await test.step('the wheel establishes a non-default baseline', async () => {
-      const box = await areaBox(panelFrame, '');
+      const box = await panelFrame.locator(`[role="option"][id="${threadId}"]`).boundingBox();
+      if (!box) throw new Error('Comment card not found');
       await ctrlWheel(mainPage, box, -120);
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1.1);
     });

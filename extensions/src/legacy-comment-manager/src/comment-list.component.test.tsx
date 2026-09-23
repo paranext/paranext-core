@@ -278,48 +278,75 @@ describe('CommentListPanel sticky header', () => {
   });
 });
 
-describe('CommentListPanel content zoom area', () => {
-  it('exposes exactly one content zoom marker', () => {
-    const { container } = renderPanel();
-    expect(container.querySelectorAll('[data-platform-content-zoom-root]')).toHaveLength(1);
+const ZOOM_MARKER = '[data-platform-content-zoom-root]';
+
+const ZOOM_TEST_THREAD = {
+  id: 'zoom-thread',
+  comments: [
+    {
+      id: 'zoom-comment',
+      user: 'Alice Ann',
+      date: '2024-01-01T00:00:00.000Z',
+      contents: '<p>ZOOM BODY</p>',
+      deleted: false,
+      hideInTextWindow: false,
+      language: 'en',
+      isRead: true,
+      startPosition: 0,
+      selectedText: 'SNIPPET',
+      thread: 'zoom-thread',
+      verseRef: 'GEN 1:1',
+    },
+  ],
+  status: 'Todo' as const,
+  type: 'Normal' as const,
+  modifiedDate: '2024-01-01T00:00:00.000Z',
+  verseRef: 'GEN 1:1',
+  isSpellingNote: false,
+  isBTNote: false,
+  isConsultantNote: false,
+  isRead: true,
+};
+
+describe('CommentListPanel content zoom text', () => {
+  it('marks the comment text, and nothing that is not project text', () => {
+    const { container } = renderPanel({ threads: [ZOOM_TEST_THREAD] });
+    const marked = Array.from(container.querySelectorAll(ZOOM_MARKER));
+    expect(marked.map((element) => element.textContent)).toEqual(['SNIPPET', 'ZOOM BODY']);
+    marked.forEach((element) => {
+      expect(element.getAttribute('data-platform-content-zoom-root')).toBe('');
+      expect(element.querySelector('button')).toBeNull();
+    });
   });
 
-  it("marks it as the view's main area (empty attribute value)", () => {
-    const { container } = renderPanel();
-    const marker = container.querySelector('[data-platform-content-zoom-root]');
-    expect(marker?.getAttribute('data-platform-content-zoom-root')).toBe('');
+  it('does not mark the list container itself', () => {
+    const { container } = renderPanel({ threads: [ZOOM_TEST_THREAD] });
+    const list = container.querySelector('.tw\\:flex-1.tw\\:overflow-auto');
+    expect(list).not.toBeNull();
+    expect(list?.hasAttribute('data-platform-content-zoom-root')).toBe(false);
   });
 
-  it("keeps the list container's layout classes", () => {
-    const { container } = renderPanel();
-    const marker = container.querySelector('[data-platform-content-zoom-root]');
-    expect(marker?.className).toContain('tw:flex-1');
-    expect(marker?.className).toContain('tw:overflow-auto');
+  it('leaves the filter toolbar and the sync-blocked notice unmarked', () => {
+    const { container } = renderPanel({ threads: [ZOOM_TEST_THREAD], isSyncBlocked: true });
+    const marked = Array.from(container.querySelectorAll(ZOOM_MARKER));
+    const markedHolds = (element: Element) => marked.some((m) => m.contains(element));
+    expect(markedHolds(screen.getByTestId('comment-scope-filter'))).toBe(false);
+    expect(markedHolds(screen.getByRole('status'))).toBe(false);
   });
 
-  it('leaves the filter toolbar outside the zoom area', () => {
-    const { container } = renderPanel();
-    const marker = container.querySelector('[data-platform-content-zoom-root]');
-    expect(marker?.contains(screen.getByTestId('comment-scope-filter'))).toBe(false);
+  it('marks nothing in the empty state (a UI string, not project text)', () => {
+    expect(renderPanel({ threads: [] }).container.querySelectorAll(ZOOM_MARKER)).toHaveLength(0);
   });
 
-  it('leaves the sync-blocked notice outside the zoom area', () => {
-    const { container } = renderPanel({ isSyncBlocked: true });
-    const marker = container.querySelector('[data-platform-content-zoom-root]');
-    expect(marker?.contains(screen.getByRole('status'))).toBe(false);
+  it('marks no loading skeleton', () => {
+    expect(renderPanel({ isLoading: true }).container.querySelectorAll(ZOOM_MARKER)).toHaveLength(
+      0,
+    );
   });
 
-  it('keeps the empty-state message inside the zoom area', () => {
-    const { container } = renderPanel({ threads: [] });
-    const marker = container.querySelector('[data-platform-content-zoom-root]');
-    expect(marker?.textContent).toBe(EN_STRINGS['%no_comments%']);
-  });
-
-  it('keeps loading skeletons inside the zoom area', () => {
-    const { container } = renderPanel({ isLoading: true });
-    const marker = container.querySelector('[data-platform-content-zoom-root]');
-    // `Skeleton` always emits `data-slot="skeleton"` (a deterministic attribute), so the count
-    // asserted here is exact rather than "at least one" — the component renders 10.
-    expect(marker?.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(10);
+  it('marks nothing while the current user is unavailable', () => {
+    expect(
+      renderPanel({ currentUserNameUnavailable: true }).container.querySelectorAll(ZOOM_MARKER),
+    ).toHaveLength(0);
   });
 });
