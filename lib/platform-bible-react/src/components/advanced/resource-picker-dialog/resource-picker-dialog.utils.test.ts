@@ -4,6 +4,7 @@ import { DblResourceData, ResourceType } from 'platform-bible-utils';
 import {
   buildLanguageFilterOptions,
   matchesResourceType,
+  partitionFilterSelection,
   useProgressiveList,
 } from './resource-picker-dialog.utils';
 import {
@@ -360,5 +361,30 @@ describe('buildLanguageFilterOptions', () => {
     // The one-directional assertion above passes even if the filter lets extra languages through.
     // Comparing both directions is what makes "no offered language can dead-end" checkable.
     expect([...labels].sort()).toEqual([...withScripture].sort());
+  });
+});
+
+describe('partitionFilterSelection', () => {
+  const entries = [
+    { value: 'Amharic', label: 'Amharic' },
+    { value: 'Nepali', label: 'Nepali' },
+  ];
+
+  it('splits a selection into the values the options offer and the ones they do not', () => {
+    expect(partitionFilterSelection(['Coptic', 'Nepali', 'Syriac'], entries)).toEqual({
+      offered: ['Nepali'],
+      held: ['Coptic', 'Syriac'],
+    });
+  });
+
+  it('holds nothing when every selected value is on offer', () => {
+    expect(partitionFilterSelection(['Amharic'], entries)).toEqual({
+      offered: ['Amharic'],
+      held: [],
+    });
+  });
+
+  it('holds the whole selection when nothing is on offer', () => {
+    expect(partitionFilterSelection(['Coptic'], [])).toEqual({ offered: [], held: ['Coptic'] });
   });
 });

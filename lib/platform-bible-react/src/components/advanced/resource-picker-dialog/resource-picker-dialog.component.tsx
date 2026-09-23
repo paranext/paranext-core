@@ -16,6 +16,7 @@ import { Spinner } from '@/components/basics/spinner.component';
 import {
   buildLanguageFilterOptions,
   matchesResourceType,
+  partitionFilterSelection,
   useProgressiveList,
 } from './resource-picker-dialog.utils';
 
@@ -358,19 +359,22 @@ export default function ResourcePickerDialog({
   );
 
   /**
-   * The selection with any language the filter no longer offers dropped.
+   * The selection split into the languages the filter offers and the ones it is holding.
    *
-   * A language picked under one `resourceType` survives in state when the prop changes, but its row
-   * is gone from the options, so there is nothing left to un-toggle — and this dialog does not
-   * enable the combo box's clear-all button. Filtering the rows on the raw selection would strand
-   * the user on an empty list with no way back.
-   *
-   * This is also what the combo box is handed as its selection, so the next toggle rebuilds the
-   * selection from the offered languages and the stranded entry drops out of state for good.
+   * A language picked under one `resourceType` or catalogue survives in state when either changes,
+   * but its row is gone from the options, so there is nothing left to un-toggle — and this dialog
+   * does not enable the combo box's clear-all button. Filtering the rows on the raw selection would
+   * strand the user on an empty list with no way back, so only `effectiveLanguages` filters rows or
+   * reaches the combo box. Held languages are written back on every change and apply again once the
+   * options offer them.
    */
-  const effectiveLanguages = useMemo(
-    () => selectedLanguages.filter((language) => languageOptions.some((o) => o.value === language)),
+  const { offered: effectiveLanguages, held: heldLanguages } = useMemo(
+    () => partitionFilterSelection(selectedLanguages, languageOptions),
     [selectedLanguages, languageOptions],
+  );
+  const handleLanguagesChange = useCallback(
+    (languages: string[]) => setSelectedLanguages([...heldLanguages, ...languages]),
+    [heldLanguages],
   );
 
   const filteredResources = useMemo(
@@ -459,10 +463,13 @@ export default function ResourcePickerDialog({
     // Reads "Any language" whenever the selection is not narrowing anything, so the trigger and the
     // "Clear filters" affordance never disagree about whether a filter is in effect.
     if (!isLanguageFiltered) return anyLanguageText;
-    if (effectiveLanguages.length === 1) {
-      const matchingType = languageOptions.find((type) => type.value === effectiveLanguages[0]);
-      if (matchingType) return matchingType.label;
-    }
+    // `effectiveLanguages` only holds values the options offer, so the lookup always finds one; the
+    // fallback is there for the type checker.
+    if (effectiveLanguages.length === 1)
+      return (
+        languageOptions.find((option) => option.value === effectiveLanguages[0])?.label ??
+        effectiveLanguages[0]
+      );
     return formatReplacementString(
       localizeString(localizedStrings, '%resourcePicker_language_filter_multipleSelected%'),
       {
@@ -543,7 +550,7 @@ export default function ResourcePickerDialog({
         <MultiSelectComboBox
           entries={languageOptions}
           selected={effectiveLanguages}
-          onChange={setSelectedLanguages}
+          onChange={handleLanguagesChange}
           customSelectedText={customLanguageSelectText}
           placeholder={anyLanguageText}
           searchPlaceholder={languageSearchPlaceholder}

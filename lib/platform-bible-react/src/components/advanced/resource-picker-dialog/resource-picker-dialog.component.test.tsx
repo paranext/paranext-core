@@ -6,6 +6,7 @@ import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
 import {
+  MANY_LANGUAGE_INSTALLED_LANGUAGES,
   MANY_LANGUAGE_RESOURCES,
   SAMPLE_RESOURCES,
   SAMPLE_SELECTED_IDS,
@@ -422,6 +423,26 @@ describe('ResourcePickerDialog', () => {
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
   });
 
+  // Hiding a selection is not the same as discarding it. A language the catalog stops offering is
+  // held, so a later change to the languages still on offer does not quietly drop it, and it applies
+  // again once the catalog offers it.
+  it('keeps a hidden language selected through a change to the languages still on offer', () => {
+    const { rerender } = renderDialogForRerender({ selectedResourceIds: [] });
+
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('Spanish') }));
+
+    rerender({ allResources: SAMPLE_RESOURCES.filter((r) => r.bestLanguageName === 'English') });
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('English') }));
+
+    rerender({ allResources: SAMPLE_RESOURCES });
+
+    // Spanish and English are both in effect: the Spanish row is back, and Greek stays filtered out.
+    expect(screen.getByText('RVR60')).toBeInTheDocument();
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+    expect(screen.queryByText('UBS-SLR')).not.toBeInTheDocument();
+  });
+
   // The button lives inside the region it removes, so without a deliberate move focus falls to
   // `<body>` and a keyboard user restarts from the top of the dialog.
   it('moves focus to the search box when Clear filters removes itself', () => {
@@ -692,7 +713,9 @@ describe('ResourcePickerDialog', () => {
       fireEvent.click(languageTrigger());
       const reopened = toggleLanguageFilter();
 
-      expect(reopened.indexOf(targetLabel)).toBeLessThan(optionsBefore.length - 1);
+      // Starred (installed) languages lead, so the selection lands directly after them. An exact
+      // index also fails if the row went missing, which `indexOf`'s -1 would otherwise satisfy.
+      expect(reopened.indexOf(targetLabel)).toBe(MANY_LANGUAGE_INSTALLED_LANGUAGES.length);
     });
   });
 });

@@ -6192,8 +6192,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Context:** `MultiSelectComboBox` built its dropdown search placeholder in code as
   `` `Search ${placeholder.toLowerCase()}...` ``. That is English sentence-building — it assumes the
   noun can be lowercased, that the verb precedes it, and that a placeholder is a noun at all — and
-  `toLowerCase()` is wrong in any locale with different casing rules. The same component defaulted
-  its empty-list message to the hardcoded English `'No entries found'`.
+  `toLowerCase()` is wrong in any locale with different casing rules. Its empty-list message was an
+  optional prop that several callers never passed, so those dropdowns showed the component's
+  English default.
 - **Decision:** A component in `platform-bible-react` never composes user-facing text from other
   user-facing text. Each string is a separate prop the caller supplies already localized
   (`searchPlaceholder`, `commandEmptyMessage`), which makes the localization contract part of the
@@ -6206,7 +6207,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** Adding a user-facing string to a shared component means touching every caller,
   including the ones in extensions; the compiler does not enforce it for optional props, so the
   review question "did every call site get a real string?" is the check. This is what pulled two
-  extensions into PT-4430's diff, and it is the intended cost.
+  extensions into PT-4430's diff, and it is the intended cost. The existing English defaults on
+  `MultiSelectComboBox` (`commandEmptyMessage`, `selectAllText`, `clearAllText`) were kept on
+  purpose: they are fallbacks, not composed text, and removing them would break callers outside the
+  repo. A caller should still never rely on one.
 - **Source:** PT-4430 (from bug PT-4135); PR #2746 review.
 
 ## adr-shared-list-scope-predicate: One predicate decides which resources are "in play" for a filtered list
@@ -6222,19 +6226,30 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** The scope is one exported predicate (`matchesResourceType`, exported from
   `platform-bible-react/experimental`), and each surface derives its rows, its filter options and its
   result count from a single type-scoped list built with it. An empty array means "nothing is
-  filtering", so a multi-select with no selection reads naturally. A filter selection that the
-  options no longer offer is derived away rather than reset, so narrowing the type filter cannot
-  strand a persisted language selection on an empty grid.
+  filtering", so a multi-select with no selection reads naturally. A selected value that the
+  options no longer offer is held: it is hidden from the filter and ignored by the rows, so narrowing
+  the type filter cannot strand a persisted language selection on an empty grid, but it stays in
+  the saved selection — every change is written back as held values plus the new visible ones — and
+  applies again once the options offer it. `partitionFilterSelection` (same export) is the one
+  definition of that split.
 - **Alternatives:** Leave each surface to scope its own list — rejected: that is the bug, and the
   two definitions drifted apart within one component. Reset the language selection when the type
   filter changes — rejected: in Get Resources that selection is persisted web view state seeded from
-  installed resources, so a reset destroys a user's choice on a transient type change. Pass the raw
+  installed resources, so a reset destroys a user's choice on a transient type change. Drop a
+  hidden value the next time the selection changes — rejected: it is the same loss by a different
+  route, and it makes the result depend on the path the user took: widening the type filter first
+  brings the language back, while toggling any other language first loses it. Pass the raw
   `string[]` selection into the predicate — rejected: it would widen the signature to `string`, and
   narrowing the persisted state against the canonical type list also drops values retired from it.
 - **Consequences:** A new surface with a resource list gets the scoping by using the predicate and
   deriving from one list; the invariant is stated in the predicate's own TSDoc and testable at the
   helper. Any future filter dimension on these lists must join the same scoped list rather than
-  filtering the raw catalogue, or the dead end returns by another route.
+  filtering the raw catalogue, or the dead end returns by another route. Holding hidden values
+  means a user who widens the type filter can see the grid narrow to a language they picked earlier
+  and cannot currently see in the filter; that is the intended trade, since it was their choice. The
+  explicit "Clear filters" action in the resource picker clears held values too. A type the build no
+  longer offers is not held: that value is invalid rather than hidden, so Get Resources narrows it
+  away against its canonical type list.
 
 ## adr-shared-option-list-affordances-opt-in: New visual affordances on shared option-list components ship opt-in
 

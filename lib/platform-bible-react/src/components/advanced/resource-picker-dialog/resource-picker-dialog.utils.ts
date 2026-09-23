@@ -64,6 +64,35 @@ export function buildLanguageFilterOptions(
 }
 
 /**
+ * Splits a filter selection into the values its options currently offer and the ones they do not.
+ *
+ * A resource list's filter options narrow with the rest of the view — the type filter, a reloaded
+ * catalogue — so a selection can name a value that is not on offer right now. Hand the filter only
+ * `offered`: filtering rows on a held value would empty the list, and `Filter` labels a badge by
+ * looking its value up in the options, so a held value would render as an X with no label.
+ *
+ * Held values are hidden, not discarded. Write a change back as `[...held, ...next]` so choosing a
+ * visible value does not drop them, and they apply again once the options offer them. This is what
+ * keeps a transient change of scope from destroying a saved selection; see
+ * `adr-shared-list-scope-predicate`.
+ *
+ * @param selected The full selection, as saved.
+ * @param entries The filter's current options.
+ * @returns `offered` — the selected values `entries` contains, in selection order; `held` — the
+ *   rest.
+ */
+export function partitionFilterSelection(
+  selected: string[],
+  entries: MultiSelectComboBoxEntry[],
+): { offered: string[]; held: string[] } {
+  const offeredValues = new Set(entries.map((entry) => entry.value));
+  const offered: string[] = [];
+  const held: string[] = [];
+  selected.forEach((value) => (offeredValues.has(value) ? offered : held).push(value));
+  return { offered, held };
+}
+
+/**
  * Tracks how many items from a large list should be visible, expanding the count as the user
  * scrolls a sentinel element into view.
  *
