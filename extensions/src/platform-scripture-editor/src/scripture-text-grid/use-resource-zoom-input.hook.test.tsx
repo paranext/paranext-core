@@ -123,21 +123,93 @@ describe('useResourceZoomInput', () => {
   it('removes every listener it installed when the component unmounts', () => {
     // The container's own wheel listener, plus the six the reader installs to track
     // physically-held modifier keys (window keydown/keyup/pointerdown/pointermove/blur, document
-    // visibilitychange). Every one of them is asserted, because an unremoved listener outlives the
-    // grid silently — and so does a removal whose capture flag does not match the registration's,
-    // which is why each expectation carries the flag the reader registered with.
+    // visibilitychange). A listener comes off only when the removal names the SAME function with
+    // the same capture flag as the registration; any other function, or a mismatched flag, is a
+    // silent no-op that leaves it attached for the life of the window. So each registration is
+    // captured as it happens and its exact reference is what the removal must carry.
+    // Spied per target, each installed before render: the container's listener goes through the
+    // element prototype (the container does not exist until render), while the window and document
+    // are spied on themselves.
+    const spies = {
+      element: {
+        add: vi.spyOn(Element.prototype, 'addEventListener'),
+        remove: vi.spyOn(Element.prototype, 'removeEventListener'),
+      },
+      window: {
+        add: vi.spyOn(window, 'addEventListener'),
+        remove: vi.spyOn(window, 'removeEventListener'),
+      },
+      document: {
+        add: vi.spyOn(document, 'addEventListener'),
+        remove: vi.spyOn(document, 'removeEventListener'),
+      },
+    };
     const { getByTestId, unmount } = render(<Harness handlers={handlers} />);
     const container = getByTestId('grid');
-    const containerRemoveSpy = vi.spyOn(container, 'removeEventListener');
-    const windowRemoveSpy = vi.spyOn(window, 'removeEventListener');
-    const documentRemoveSpy = vi.spyOn(document, 'removeEventListener');
+
+    const isCapture = (options: unknown): boolean =>
+      options === true ||
+      (typeof options === 'object' && !!options && 'capture' in options && !!options.capture);
+    // React installs wheel listeners of its own on elements it manages; the hook's is the one on
+    // the container registered in capture phase and non-passive, which is what lets it cancel page
+    // zoom.
+    const isHookWheel = (context: unknown, options: unknown): boolean =>
+      context === container &&
+      typeof options === 'object' &&
+      !!options &&
+      'passive' in options &&
+      options.passive === false;
+    type Expected = {
+      on: keyof typeof spies;
+      type: string;
+      capture: boolean;
+      isOurs?: (context: unknown, options: unknown) => boolean;
+    };
+    const expected: Expected[] = [
+      { on: 'element', type: 'wheel', capture: true, isOurs: isHookWheel },
+      { on: 'window', type: 'keydown', capture: true },
+      { on: 'window', type: 'keyup', capture: true },
+      { on: 'window', type: 'pointerdown', capture: true },
+      { on: 'window', type: 'pointermove', capture: true },
+      { on: 'window', type: 'blur', capture: false },
+      { on: 'document', type: 'visibilitychange', capture: false },
+    ];
+    const registrations = expected.map(({ on, type, capture, isOurs }) => {
+      const { add } = spies[on];
+      const matches = add.mock.calls
+        .map(([addedType, listener, options], index) => ({
+          addedType,
+          listener,
+          options,
+          context: add.mock.contexts[index],
+        }))
+        .filter(
+          ({ addedType, options, context }) =>
+            addedType === type &&
+            isCapture(options) === capture &&
+            (!isOurs || isOurs(context, options)),
+        );
+      return { on, type, capture, matches };
+    });
+    // Exactly one registration of each, so the reference captured below is unambiguous.
+    expect(registrations.map(({ type, matches }) => [type, matches.length])).toEqual(
+      expected.map(({ type }) => [type, 1]),
+    );
+
     unmount();
-    expect(containerRemoveSpy).toHaveBeenCalledWith('wheel', expect.any(Function), true);
-    expect(windowRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
-    expect(windowRemoveSpy).toHaveBeenCalledWith('keyup', expect.any(Function), true);
-    expect(windowRemoveSpy).toHaveBeenCalledWith('pointerdown', expect.any(Function), true);
-    expect(windowRemoveSpy).toHaveBeenCalledWith('pointermove', expect.any(Function), true);
-    expect(windowRemoveSpy).toHaveBeenCalledWith('blur', expect.any(Function));
-    expect(documentRemoveSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+
+    const leftAttached = registrations
+      .filter(({ on, type, capture, matches: [{ listener, context }] }) => {
+        const { remove } = spies[on];
+        return !remove.mock.calls.some(
+          ([removedType, removedListener, options], index) =>
+            remove.mock.contexts[index] === context &&
+            removedType === type &&
+            removedListener === listener &&
+            isCapture(options) === capture,
+        );
+      })
+      .map(({ type }) => type);
+    expect(leftAttached).toEqual([]);
   });
 });
