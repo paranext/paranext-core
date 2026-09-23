@@ -21,6 +21,7 @@ import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditorLocalizedStrings,
 } from './footnote-editor.types';
+import { editableView } from './footnote-editor.fixtures';
 
 // cmdk (Command/CommandInput, used by the inline MarkerMenu popover) instantiates a
 // ResizeObserver on mount and schedules scrollTo; jsdom ships neither. No-op stubs are sufficient
@@ -58,6 +59,7 @@ beforeAll(() => {
 const {
   mockEditorRefHolder,
   mockGetMarkerMenuItems,
+  mockRegisterOptions,
   mockRegisterOnUsjChange,
   mockRegisterOnStateChange,
 } = vi.hoisted(() => ({
@@ -68,6 +70,9 @@ const {
     current: {} as EditorRef,
   },
   mockGetMarkerMenuItems: vi.fn(),
+  // Records the `options` the stubbed `Editorial` was handed, so a test can assert what this
+  // component decided to pass down rather than what its caller supplied.
+  mockRegisterOptions: vi.fn(),
   // Records the `onUsjChange` the stubbed `Editorial` was handed, so a test can fire the editor
   // change the real editor would have: that is what evaluates note-type switchability, and so what
   // enables the note-type dropdown.
@@ -89,8 +94,13 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
     getMarkerMenuItems: mockGetMarkerMenuItems,
     Editorial: forwardRef<
       EditorRef,
-      { onUsjChange?: (usj: unknown) => void; onStateChange?: (state: unknown) => void }
-    >(({ onUsjChange, onStateChange }, ref) => {
+      {
+        options?: unknown;
+        onUsjChange?: (usj: unknown) => void;
+        onStateChange?: (state: unknown) => void;
+      }
+    >(({ options, onUsjChange, onStateChange }, ref) => {
+      mockRegisterOptions(options);
       mockRegisterOnUsjChange(onUsjChange);
       mockRegisterOnStateChange(onStateChange);
       useImperativeHandle(ref, () => mockEditorRefHolder.current);
@@ -108,6 +118,7 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
 // behavior — any earlier test that exercised the same path leaks its calls into later ones.
 beforeEach(() => {
   mockGetMarkerMenuItems.mockClear();
+  mockRegisterOptions.mockClear();
 });
 
 function buildLocalizedStrings(): FootnoteEditorLocalizedStrings {
@@ -275,6 +286,17 @@ describe('FootnoteEditor width lock', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('FootnoteEditor context menu', () => {
+  it('hands its editor no context-menu container, so the menu stays at interface scale', () => {
+    renderFootnoteEditor({ view: editableView });
+
+    const passedOptions: unknown = mockRegisterOptions.mock.calls.at(-1)?.[0];
+    // Positive control: this component always sets `hasExternalUI`, so the options really arrived.
+    expect(passedOptions).toHaveProperty('hasExternalUI', true);
+    expect(passedOptions).not.toHaveProperty('contextMenuContainer');
   });
 });
 

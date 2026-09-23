@@ -460,6 +460,25 @@ declare module 'papi-shared-types' {
      */
     'platform.webViewContentZoomMemory': { [key: string]: number };
     /**
+     * Which web view types mark at least one content-zoom area, keyed by web view type. An absent
+     * key means the platform has no evidence yet that the type marks any area. Written by the
+     * platform the first time a pane of a type reports an area (the record only ever gains `true`
+     * entries; a type recorded `true` is never downgraded); read when a pane opens, before its
+     * content loads, so the platform knows whether to scale the whole view at the Settings default
+     * or to wait for the areas the view is about to mark. Without it every newly opened pane would
+     * show at the wrong scale for a moment. Local to this machine, and self-correcting in the
+     * `false`→`true` direction: a type that starts marking an area is re-recorded on its next
+     * open.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.webViewContentZoomMemory`. Deliberately separate from that key, which holds the
+     * user's remembered levels: this one is a capability cache, and clearing the user's levels must
+     * not clear it.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomTypesWithAreas': { [webViewType: string]: boolean };
+    /**
      * The zoom factor that applies to the entire application, including menus and toolbars (shown
      * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
      * from Settings and by the `platform.zoomIn` and `platform.zoomOut` commands; no keyboard

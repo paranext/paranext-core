@@ -1907,6 +1907,67 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-editor-context-menu-follows-its-area-via-a-container: The editor library renders its context menu into an element the host supplies
+
+- **Date:** 2026-09-18
+- **Status:** Withdrawn (2026-09-23). The option this entry relies on, `EditorOptions.contextMenuContainer`,
+  is not part of the editor library: as of 2026-09-23 it is no longer pursued
+  (paranext/scripture-editors#17, to be closed unmerged), so no host hands the editor a container and
+  its right-click menu stays at interface scale. The entry is kept below as the record of what was
+  considered.
+- **Context:** The Scripture editor's right-click menu is drawn by `ContextMenuPlugin` in
+  `paranext/scripture-editors`, not by our `ContextMenuContent`. It portalled hand-built markup to
+  `document.body`, outside every zoom area, so at 200 % it stayed at interface scale beside text
+  twice its size — at the text pane and inside the footnote editor pop-up alike.
+- **Decision:** the library takes an optional `EditorOptions.contextMenuContainer?: () =>
+  HTMLElement | undefined` getter. It calls that getter once, inside its own `contextmenu`
+  handler, and stores the returned element in state — never during render. Inside that element the
+  menu inherits the area's CSS `zoom`; it divides its viewport coordinates by
+  `Element.currentCSSZoom`, clamps to the container's rect narrowed by every clipping ancestor and
+  the viewport, and caps its height to that box. Every host that mounts the editor inside a zoom
+  area supplies that area's `ContentZoomRoot` element: the editor web view for the text pane, the
+  Model Text panel, the Bible Texts / Commentaries panel, and the Enhanced Resources web view for
+  its scripture pane. `FootnoteEditor` overrides the container with its own root, because the web
+  view's value would otherwise flow through `FootnoteEditor`'s own `...editorOptions` spread and
+  bind the pop-up's menu against the text pane's box instead of the pop-up's own.
+- **Alternatives:**
+  - stamping `data-platform-content-zoom-root` + `data-platform-content-zoom-popup` on the
+    portalled element, as our own pop-ups do — rejected: it puts our attribute names and
+    `--platform-content-zoom-*` variable names inside a library that also serves Scribe and the
+    PERF demos, where `currentCSSZoom` is a standard property that needs no convention;
+  - a generic attribute bag the host fills in — the positioning still lives in the library, keyed
+    off an attribute it does not understand;
+  - positioning the menu from here — the plugin owns the `contextmenu` event and the clamp, and
+    the host cannot see the menu's measured size;
+  - dropping the menu's hard-coded 14px font and 200px width — measured irrelevant: CSS `zoom`
+    scales `px` lengths, so those already scale; changing them would restyle the menu at 100 %.
+- **Consequences:**
+  - the library gains no knowledge of this platform; the only shared vocabulary is a standard DOM
+    property;
+  - a fixed-position menu is not clipped by a scrolling ancestor, so staying inside the pane is
+    computed rather than inherited — the clipping-ancestor walk is load-bearing in split layouts;
+  - resolving the container lazily, inside the `contextmenu` handler, rather than reading it during
+    render is load-bearing, not incidental: an earlier shape that called the host's getter during
+    render made React Compiler abandon optimizing the whole component
+    (`react-hooks/preserve-manual-memoization`). The getter shape also lets both hosts pass a
+    stable `useCallback`, or a plain ref read, with no `useState` and no memo churn of their own;
+  - the capped menu's outer element gets `overflowY: auto` while the inner `<ul>` still carries
+    `editor.css`'s own `max-height: 200px; overflow-y: scroll`; a short pane at zoom 200 % or more
+    with a full menu can bind both constraints at once, producing two nested scroll regions with
+    only one visible scrollbar (`scrollbar-width: none` hides the inner one). Left as is:
+    collapsing the two caps would mean changing the library's own stylesheet for every host, and
+    the menu was usable in hand checks at 200 %. Revisit if a user reports a menu that will not
+    scroll to its last item;
+  - the fix reaches core through the `platform-yalc` pin, so the behaviour lives in
+    `scripture-editors` and core holds only the call sites;
+  - a host that mounts the editor inside a zoom area and does not supply its area's element leaves
+    its right-click menu at interface size against `document.body`, with no other signal, so each
+    host's tests pin its wiring. `scripture-text-grid`'s `resource-cell-view` is not a host of this
+    kind: it zooms its cells itself and intercepts `onContextMenuCapture` with its own menu — the
+    grid web view always supplies the labels that enable it, and only a story or test renders a cell
+    without them — so the editor's menu never opens there.
+- **Source:** PT-4713.
+
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
 - **Formerly:** ADR-0012
@@ -4593,6 +4654,54 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   their portaled content with the area and a pop-up flag and cap their size by the zoom factor.
   The platform bootstrap never counts flagged content as a pane or anchors the indicator on it.
   `ContentZoomAreaProvider` covers pop-ups rendered outside the area element.
+
+  A pop-up the platform itself draws outside the web view — the command palette, popover and
+  context menu requested through `papi.overlays`, portalled by `OverlayHost` into the renderer's
+  own document rather than into the requesting pane's iframe — takes the same rule by a different
+  route: it cannot see the pane's `--platform-content-zoom-<area>` custom property, since that
+  property lives on the requesting iframe's own document, so `OverlayHost` reads the requesting
+  pane's scale directly from the content-zoom service (`getContentZoomScaleForWebView`) and passes
+  it down to `OverlayCommandPalette`, `OverlayPopover` and `OverlayContextMenu` as a plain prop.
+  The request carries no area, so the scale is that of the pane's active area — the one last clicked
+  or focused. That is the area the user is working in when they open a pop-up by click or key, and
+  it can differ from the opener's area for a pop-up opened by hover in a pane with several areas.
+  Each applies it as CSS `zoom`, capped by the space Radix reports available divided by the scale —
+  the same shape as the library's own cap. The popover and command palette combine that cap with the
+  size cap actually in force via `min()` once zoomed — the caller's `maxWidth`/`maxHeight` when one
+  was supplied, the component's own default otherwise, so a zoomed pop-up keeps its default bound
+  rather than losing it; the context menu takes no caller size cap at all.
+
+  **Where the `zoom` goes, and why it is not on the Radix content element.** For a pop-up that draws
+  an arrow, the zoom and all the sizing go on a wrapper div *inside* `Popover.Content`, with
+  `Popover.Arrow` left outside that wrapper as a direct child of the content. Radix requires the
+  arrow to be a content descendant and positions it by writing an inline pixel offset on it; inside
+  a zoomed element the browser reads that offset as a pre-zoom length and scales it a second time,
+  so the arrow lands at `offset × scale` instead of `offset` — and where the true offset is small,
+  the doubled value trips floating-ui's arrow clamp and collapses onto the content's own corner.
+  Radix's own placement of the pop-up is unaffected, because the popper wrapper it positions sits
+  outside the content element entirely. CSS `zoom` on a child still grows its parent's layout box,
+  so the pop-up still scales with the pane.
+
+  **The inner wrapper owns sizing, and it owns all of it.** The shared `PopoverContent` supplies a
+  fixed `tw:w-72` width, `tw:flex tw:flex-col tw:gap-2.5` layout and `tw:p-2.5` padding, and a
+  pop-up's content renderers return fragments — so their children were direct flex items of that
+  element. Moving the content inward moves it out of reach of every one of those, which is a
+  behaviour change at interface scale and not only when zoomed. So the wrapper must take over the
+  width, the flex layout and the padding together, with `width: 'auto'` and `tw:p-0` on
+  `Popover.Content` so the fixed class cannot reassert itself over the wrapper. Splitting them —
+  taking the padding inward and leaving the width and gap behind — silently resizes and respaces
+  the pop-up at every scale. Taking them inward also makes them scale with the content, which is
+  what following the pane's zoom means.
+
+  Anything Radix positions with an inline pixel offset inside a zoomed element has this defect. At
+  the time of writing the arrow is the only such element in the platform's own overlays: the context
+  menu draws no arrow, and its sub-menu content portals out of the zoomed subtree.
+
+  `OverlayHost` is deliberately the one place that depends on the content-zoom
+  service: `OverlayContextMenu` is part of the generated extension-facing declaration bundle, and an
+  import of the service from there would publish it — including its test-only seams — to extension
+  authors. A command palette shown centred, with no anchor position, is not anchored to any pane's
+  content and stays at interface scale, as does a modal dialog.
 - **Alternatives:**
   - per-call-site `ContentZoomRoot` wraps with a `zoomArea` prop threaded through the comment
     list (repeated at every site, easy to forget);
@@ -4604,9 +4713,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     and three recording the components that do not follow an area yet;
   - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
     (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
-    when first opened from zoomed content;
-  - a pop-up portaled into a container inside another area inherits that container's zoom.
-- **Source:** PT-4634.
+    when first opened from zoomed content. The Scripture editor's right-click menu is not one of
+    these — it is drawn by the editor library and stays at interface scale; see
+    `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn);
+  - a pop-up portaled into a container inside another area inherits that container's zoom;
+  - a command palette blocks the window's input while open, so the pane it was drawn for cannot
+    change underneath it; a popover and a context menu do not block input, so a zoom chord pressed
+    while one is open re-scales the pane behind it and the overlay keeps the level it was drawn at
+    until it closes — accepted, not a bug to be fixed later.
+- **Source:** PT-4634; the outside-the-web-view extension (`papi.overlays` command palette,
+  popover, context menu) by PT-4712.
 
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
@@ -5480,6 +5596,67 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts). Premise
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
+
+## adr-resource-panes-name-their-zoom-areas: The Text Collection grid and the Bible Texts / Commentaries / Model Text panels each name their own zoom area, because they share one project identity; Enhanced Resources retires its private zoom
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** PT-4582/PT-4583 extended `adr-zoom-composition`'s per-pane content zoom to the
+  Resources views: the Text Collection grid, the Bible Texts / Commentaries / Model Text panels, and
+  the Enhanced Resources viewer. `memoryIdentityFor`
+  (`src/renderer/services/web-view-content-zoom.service.ts`) keys a pane's remembered level on its
+  web-view definition's `projectId` (normalized) paired with a `ContentZoomKind`
+  (`'editor' | 'resource' | 'notes'`, `src/shared/models/content-zoom.model.ts`). For the Text
+  Collection grid and for the Bible Texts, Commentaries and Model Text panels, that `projectId` is
+  the *container* project — the resource actually on screen (`selectedRef.projectId` in
+  `resource-text-panel.component.tsx`) never reaches the definition — so all four resolve to the
+  same kind and the same identity; with the unnamed `main` area they would all read and remember one
+  shared zoom level, and zooming one would silently change the others. PT-4582's own ticket
+  description assumed the opposite — that the definition carried the displayed resource's project —
+  which the code does not do. Separately, the Enhanced Resources viewer already carried its own zoom
+  control — `scripturePaneZoom`, a font-size multiplier driven by its own `window` `keydown` handler
+  for the same Ctrl+`=`/`-`/`0` chords the platform mechanism claims, with its menu items living in
+  the toolbar outside every pane — that the new mechanism had to either absorb or retire. The two
+  handlers collided rather than one shadowing the other: both were registered bubble-phase on
+  `window` and neither stopped propagation, so a single keypress drove the private font-size
+  multiplier *and* the platform's content zoom.
+- **Decision:**
+  - The four resource views each name their own `ContentZoomRoot` area — `text-collection`
+    (`scripture-text-grid.web-view.tsx`), `bible-texts` and `commentaries` (both
+    `resource-text-panel.component.tsx`, selected by `resourceType`), and `model-text`
+    (`model-text-panel.component.tsx`) — so their remembered levels stay apart from each other
+    although kind and identity are identical for all four.
+  - Enhanced Resources marks three areas rather than one: an unnamed area around
+    `EnhancedScripturePane`, `entries` around its tab set, and `footnotes` in the footnotes pane's
+    resizable panel (`enhanced-resource.web-view.tsx`, `footnotes-pane.component.tsx`). Its body is
+    genuinely three independently resizable panes; a single area would remove the user's existing
+    ability to enlarge just the Bible text relative to the other two. Its private `scripturePaneZoom`
+    is deleted outright rather than migrated — state, prop chain, toolbar menu items, their localized
+    strings, and the keyboard-catalog entries for the retired handler all go — and the platform
+    mechanism covers all three panes from a clean start.
+- **Alternatives:**
+  - Adding per-view values to `ContentZoomKind` (one kind per resource panel) instead of naming
+    areas — rejected: it reads tidier at each call site, but edits a core model file for no
+    behavioral gain over an area id, and a new kind would be needed for every future resource-panel-
+    shaped view.
+  - Carrying Enhanced Resources' stored `scripturePaneZoom` value into the scripture pane's area at
+    startup — rejected: it would require the view to write state the platform now owns and seeds,
+    against the "views do not build their own zoom stacks" rule in `adr-zoom-composition`.
+- **Consequences:** `adr-zoom-composition`'s statement that the Text Collection grid's per-resource
+  zoom "stays" holds unchanged: it nests inside the grid's own `text-collection` area and multiplies
+  with it, and this work only wraps that area — it does not touch the per-resource mechanism. The
+  grid's own wheel/pinch handling (`use-resource-zoom-input.hook.ts`) now reads notches and pinches
+  through `createContentZoomWheelReader` from `platform-bible-utils`, while the platform's injected
+  bootstrap (`web-view-content-zoom.bootstrap-script.ts`) keeps its own separate copy of the same
+  notch/pinch reading for chrome-driven chords; `web-view-content-zoom.wheel-parity.test.ts` pins
+  both copies to identical totals over the same Ctrl-held wheel sequences, so their step arithmetic
+  cannot silently drift apart. It does not compare their physical-modifier tracking (a held Control
+  or ⌘, a pointer event reporting Ctrl, clearing on blur), which is what tells a macOS mouse notch
+  from a trackpad pinch. Enhanced Resources has no leftover zoom fallback that could fall out of
+  step with the platform mechanism. The Scripture editor's right-click menu stays at interface scale in
+  every one of these panes; see `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn).
+- **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
+  PT-4583 (Enhanced Resources viewer).
 
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
@@ -7052,6 +7229,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   reaches a view from behind a cover.
   **Revisit** if a second platform-injected shortcut appears
   — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
+- **Amended 2026-09-19 (PT-4582/PT-4583):** four statements above no longer hold. Enhanced
+  Resources' own `keydown` handler for its scripture-pane zoom — named above as what answers the
+  chords — is gone; the view now answers through the three areas it marks (`main`, `entries`,
+  `footnotes`), the same mechanism as the Scripture editor and the comment list, not a handler of
+  its own. The list of views above also omitted two more that now answer the same way: the Text
+  Collection grid marks `text-collection`, and the Bible Texts, Commentaries and Model Text resource
+  panels mark `bible-texts`, `commentaries` and `model-text` respectively. The Text Collection is
+  therefore no longer an example of a pane "whose own pane zoom is wheel and menu only" — Ctrl+`0`
+  with the grid focused now changes its pane level too. A view that marks no area at all, such as
+  Home or an inventory, still ignores the chords, which remains an accurate example of the cost
+  described above. And the forward reference to "the Text Collection grid in PT-4582, Enhanced
+  Resources in PT-4583" is resolved: both landed together in this same work.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
   chord ownership), epic PT-4575.
 
@@ -7472,7 +7661,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   custom property per area (`--platform-content-zoom-<areaId>`, falling back to
   `--platform-content-zoom-default`). **Zoom areas are a platform capability**: a view marks one or
   more non-nested areas and the platform owns the targeting (focus, then pointer, then last active
-  area), the per-area state, the memory and the indicator. Views do not build their own zoom stacks.
+  area, except that the chords stay on the last active area rather than trust a caret the view
+  itself just moved), the per-area state, the memory and the indicator. Views do not build their
+  own zoom stacks.
 - **Alternatives:** (a) **A font-size cascade on the content root** — rejected: it does not reach the
   editor's rendered scripture, which sets its own sizes (PT-4167), so the one view the feature exists
   for would not scale. (b) **`transform: scale`** — rejected: it breaks hit-testing, so clicks and
@@ -7492,5 +7683,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pane's own area around it and leaves it in place; moving it onto the platform mechanism is not
   scheduled. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view carries a
   private zoom any more.
+
+  The whole-iframe fallback applies as soon as a pane loads and is dropped the moment the view
+  reports an area, and which view types mark areas is remembered per type so the decision is right
+  before the content loads from the second open onwards. The first-ever open of a marking type on a
+  machine still shows one frame-scaled moment: only the view can say whether it marks an area, and
+  it can only say so after it has drawn. A type recorded as marking areas is not moved back by a
+  pane of that type reporting none, so a view that stops marking areas keeps its panes unscaled
+  until the record is cleared.
 - **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
-  recorded here by PT-4580.
+  recorded here by PT-4580; the chord-targeting exception added by PT-4711; the immediate fallback
+  and the per-type expectation added by PT-4714.

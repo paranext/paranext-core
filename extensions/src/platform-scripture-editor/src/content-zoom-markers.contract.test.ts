@@ -36,6 +36,13 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
     );
   });
 
+  it('hands the editor no context-menu container, so its right-click menu stays at interface scale', () => {
+    // Positive control: the editor options are still built in this file.
+    expect(source).toContain('const options = useMemo<EditorOptions>(');
+    expect(source).not.toContain('contextMenuContainer');
+    expect(source).not.toContain('editorZoomRootRef');
+  });
+
   it('puts the three popovers rendered beside the editor in the text area', () => {
     // The markers menu, footnote editor and comment editor popovers sit beside the editor in the
     // tree, outside its ContentZoomRoot, so they name the text area through the provider and zoom

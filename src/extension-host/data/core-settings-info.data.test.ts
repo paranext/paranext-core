@@ -144,6 +144,37 @@ describe('content zoom settings', () => {
     await expect(validate(42, {}, {})).resolves.toBe(false);
     /* eslint-enable no-null/no-null */
   });
+
+  it('contributes a hidden web view content zoom area-types setting', () => {
+    const group = groups[0];
+    expect(group.properties['platform.webViewContentZoomTypesWithAreas']).toMatchObject({
+      default: {},
+      isHidden: true,
+    });
+  });
+
+  it('accepts an object of booleans for the area-types setting', async () => {
+    const validate = coreSettingsValidators['platform.webViewContentZoomTypesWithAreas'];
+    if (!validate) throw new Error('validator missing');
+    await expect(validate({ 'platformScriptureEditor.react': true }, {}, {})).resolves.toBe(true);
+    await expect(validate({}, {}, {})).resolves.toBe(true);
+  });
+
+  it('rejects a non-object or a non-boolean value for the area-types setting', async () => {
+    const validate = coreSettingsValidators['platform.webViewContentZoomTypesWithAreas'];
+    if (!validate) throw new Error('validator missing');
+    // @ts-expect-error ts(2345) - intentional bad input
+    await expect(validate([], {}, {})).resolves.toBe(false);
+    // @ts-expect-error ts(2345) - intentional bad input
+    await expect(validate(undefined, {}, {})).resolves.toBe(false);
+    // `null` is the only input that reaches the guard's own null branch — `undefined` is rejected
+    // one line earlier by the `typeof !== 'object'` arm, and `typeof null` is `'object'`.
+    // @ts-expect-error ts(2345) - intentional bad input
+    // eslint-disable-next-line no-null/no-null -- intentionally testing null rejection at runtime
+    await expect(validate(null, {}, {})).resolves.toBe(false);
+    // @ts-expect-error ts(2322) - intentional bad input
+    await expect(validate({ 'some.view': 1 }, {}, {})).resolves.toBe(false);
+  });
 });
 
 describe('settings layout', () => {
@@ -198,6 +229,7 @@ describe('settings layout', () => {
       'platform.zoomFactor',
       'platform.webViewContentZoom',
       'platform.webViewContentZoomMemory',
+      'platform.webViewContentZoomTypesWithAreas',
       'platform.ptxUtilsMementoData',
       'platform.paratextDataLastRegistryDataCachedTimes',
       'platform.interfaceMode',
