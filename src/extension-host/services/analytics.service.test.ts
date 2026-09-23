@@ -448,6 +448,18 @@ test('a caller property with the same name as a common property wins', async () 
   expect(fullEvent).not.toContain('"app_version":"0.6.0"');
 });
 
+test('a caller property named analytics_environment cannot overwrite the resolved environment', async () => {
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent } = await import('@extension-host/services/analytics.service');
+  trackEvent('app_launch', { analytics_environment: 'production' });
+  await initialize();
+  const fullEvent = findFullEventLog('Test');
+  // Positive control: enrichment ran and the event reached the provider.
+  expect(fullEvent).toContain('"app_version":"0.6.0"');
+  expect(fullEvent).toContain('"analytics_environment":"test"');
+  expect(fullEvent).not.toContain('"analytics_environment":"production"');
+});
+
 test('when PostHog is disabled both environments use the console provider', async () => {
   mocks.get.mockResolvedValue({
     getInternetSettings: vi.fn().mockResolvedValue({ selectedServer: 'Production' }),
