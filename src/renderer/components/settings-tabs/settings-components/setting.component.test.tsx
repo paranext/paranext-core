@@ -43,6 +43,7 @@ const ZOOM_STRINGS = {
   '%settings_platform_webViewContentZoom_increase%': 'Increase default zoom',
   '%settings_platform_webViewContentZoom_decrease%': 'Decrease default zoom',
   '%settings_platform_webViewContentZoom_reset%': 'Reset default zoom',
+  '%settings_zoomStepper_percentInput%': 'Percentage',
 };
 
 // The error block renders two localized labels; the tests that assert an error is (still) on screen
@@ -53,6 +54,12 @@ const ERROR_STRINGS = {
   '%settings_errorMessages_invalidValue%': 'Invalid value',
   '%settings_errorMessages_notWritableYet%': 'Setting not writable yet',
 };
+
+/** The stepper's percentage field, which shows the factor as a whole percentage. */
+const percentField = () => screen.getByRole('textbox', { name: 'Percentage' });
+
+/** Matches a displayed percentage; `\s` covers the narrow no-break space production puts before `%`. */
+const showsPercent = (percent: number) => new RegExp(`^${percent}\\s%$`, 'u');
 
 // Props shared by every case below; only settingKey/setting/label (and `disabled`) differ per test,
 // so each spreads this and passes just those (same idea as the renderPanel helper in
@@ -352,10 +359,9 @@ describe('a setting with no writer', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Increase default zoom' }));
-    // The readout is `aria-live`, so a jump here is announced to a screen-reader user as a change
-    // that was never written.
-    expect(screen.getByText('120 %')).toBeInTheDocument();
-    expect(screen.queryByText('130 %')).toBeNull();
+    // A jump here would be a percentage shown (and, after a press, announced) that was never written.
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+    expect(percentField()).toBeDisabled();
   });
 });
 
@@ -371,7 +377,7 @@ describe('platform.webViewContentZoom stepper', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
   });
 
-  it('renders the zoom stepper instead of a text box', () => {
+  it('renders the zoom stepper instead of a decimal text box', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([ZOOM_STRINGS, false]);
     render(
       <Setting
@@ -382,8 +388,9 @@ describe('platform.webViewContentZoom stepper', () => {
         label="Tab content default zoom"
       />,
     );
-    expect(screen.getByText('120 %')).toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Tab content default zoom' })).toBeInTheDocument();
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+    expect(screen.queryByDisplayValue('1.2')).toBeNull();
   });
 
   it('writes the stepped factor through setSetting', async () => {
