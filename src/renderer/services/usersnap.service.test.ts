@@ -109,7 +109,9 @@ describe('initializeUsersnapApi load/init timeout/race logic', () => {
     await initPromise;
 
     expect(spaceApi.init).toHaveBeenCalledTimes(1);
-    expect(spaceApi.init).toHaveBeenCalledWith(expect.objectContaining({ nativeScreenshot: true }));
+    expect(spaceApi.init).toHaveBeenCalledWith(
+      expect.objectContaining({ nativeScreenshot: true, collectGeoLocation: 'none' }),
+    );
     expect(spaceApi.destroy).not.toHaveBeenCalled();
   });
 

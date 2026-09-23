@@ -8,7 +8,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { loadSpace, type InitOptions, type SpaceApi } from '@usersnap/browser';
-import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
+import { AsyncVariable, getErrorMessage, type LocalizeKey } from 'platform-bible-utils';
 
 /**
  * Milliseconds to wait for Usersnap's `loadSpace` + `init` to finish before giving up.
@@ -18,11 +18,13 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
 export const USERSNAP_INIT_TIMEOUT_MS = 5 * 1000;
 
 /** Shown when a configured feedback form cannot be reached, e.g. because Usersnap failed to load */
-const FEEDBACK_UNAVAILABLE_MESSAGE_KEY = '%mainMenu_feedback_unavailable%';
+const FEEDBACK_UNAVAILABLE_MESSAGE_KEY = '%mainMenu_feedback_unavailable%' satisfies LocalizeKey;
 /** Shown when this build has no Usersnap keys, so there are no feedback forms to open */
-const FEEDBACK_NOT_CONFIGURED_MESSAGE_KEY = '%mainMenu_feedback_notConfigured%';
+const FEEDBACK_NOT_CONFIGURED_MESSAGE_KEY =
+  '%mainMenu_feedback_notConfigured%' satisfies LocalizeKey;
 /** Shown when the Usersnap widget throws while opening a configured form */
-const FEEDBACK_FAILED_TO_OPEN_MESSAGE_KEY = '%mainMenu_feedback_failed_to_open%';
+const FEEDBACK_FAILED_TO_OPEN_MESSAGE_KEY =
+  '%mainMenu_feedback_failed_to_open%' satisfies LocalizeKey;
 
 /** Global UserSnap API instance service */
 
@@ -36,6 +38,10 @@ let shadowRootObserver: MutationObserver | undefined;
  * Applies custom styles to the open form's buttons in the Usersnap widget's shadow root. Runs on
  * every change to the shadow root, so it must be idempotent: the changes it makes itself trigger it
  * again and must then find nothing left to do.
+ *
+ * The selectors match the widget's English button labels. The Usersnap space is configured with
+ * English as its only locale; if another locale is ever enabled there, these selectors must
+ * follow.
  */
 function findAndStyleUsersnapShadowRoots(): void {
   try {
