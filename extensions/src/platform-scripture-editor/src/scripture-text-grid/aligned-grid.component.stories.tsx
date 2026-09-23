@@ -170,7 +170,7 @@ const withMissingVerseAndPoetry: StubVerse[] = [
 export const ThreeTranslations: Story = {
   render: () => (
     <div style={GRID_BOX_STYLE}>
-      <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
+      <AlignedGrid scrRef={scrRef} isViewVisible ariaLabel="Text Collection">
         <StubColumn label="GRK" verses={versePerRow} />
         <StubColumn label="NRSV" verses={withBridgedVerses} />
         <StubColumn label="CPB" verses={withMissingVerseAndPoetry} />
@@ -183,7 +183,7 @@ export const ThreeTranslations: Story = {
 export const WithRightToLeftColumn: Story = {
   render: () => (
     <div style={GRID_BOX_STYLE}>
-      <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
+      <AlignedGrid scrRef={scrRef} isViewVisible ariaLabel="Text Collection">
         <StubColumn label="WEB" verses={versePerRow} />
         <StubColumn
           label="עברית"
@@ -210,7 +210,7 @@ export const WithRightToLeftColumn: Story = {
 export const MixedZoom: Story = {
   render: () => (
     <div style={GRID_BOX_STYLE}>
-      <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
+      <AlignedGrid scrRef={scrRef} isViewVisible ariaLabel="Text Collection">
         <StubColumn label="GRK" verses={versePerRow} zoomFactor={1.5} />
         <StubColumn label="NRSV" verses={withBridgedVerses} />
         <StubColumn label="CPB" verses={withMissingVerseAndPoetry} />
@@ -227,7 +227,7 @@ export const MixedZoom: Story = {
 export const ColumnWithNothingToShow: Story = {
   render: () => (
     <div style={GRID_BOX_STYLE}>
-      <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
+      <AlignedGrid scrRef={scrRef} isViewVisible ariaLabel="Text Collection">
         <StubColumn label="GRK" verses={versePerRow} />
         <StubColumn label="CPB" verses={[]} placeholder="Resource is loading…" />
         <StubColumn label="NRSV" verses={withBridgedVerses} />
@@ -243,7 +243,7 @@ export const ColumnWithNothingToShow: Story = {
 export const ManyColumnsScrollSideways: Story = {
   render: () => (
     <div style={GRID_BOX_STYLE}>
-      <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
+      <AlignedGrid scrRef={scrRef} isViewVisible ariaLabel="Text Collection">
         {['GRK', 'NRSV', 'CPB', 'WEB', 'KJV', 'ESV'].map((label) => (
           <StubColumn key={label} label={label} verses={versePerRow} />
         ))}

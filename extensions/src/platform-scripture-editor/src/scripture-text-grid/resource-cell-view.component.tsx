@@ -476,10 +476,15 @@ export function ResourceCellView({
             ref={contentRef}
             data-cell-content
             className={`tw:flex-1 ${contentOverflowClass}`}
-            style={contentStyle}
             dir={textDirection}
           >
-            <div data-cell-pad className="tw:p-2">
+            {/* The factor lands here rather than on the content box above, because that box is the
+                scroll port a chapter cell scrolls to a verse (`useReferenceScroll`). That controller
+                turns the target's viewport rect into a `scrollTop` for the port, and CSS `zoom` on
+                the port itself puts those two in different coordinate spaces — the port then moves
+                by the zoom factor too far. The aligned grid keeps the same invariant by riding its
+                factor down to the verse blocks (`ALIGNED_ZOOM_PROPERTY`) instead of the port. */}
+            <div data-cell-pad className="tw:p-2" style={contentStyle}>
               {stateContent}
             </div>
           </div>

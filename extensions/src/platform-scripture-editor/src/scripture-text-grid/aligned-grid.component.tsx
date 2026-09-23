@@ -1,5 +1,5 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useStylesheet, useViewVisibility } from 'platform-bible-react';
+import { useStylesheet } from 'platform-bible-react';
 import { Children, useRef, type ReactNode } from 'react';
 import { ALIGNED_GRID_CLASS, ALIGNED_GRID_STYLESHEET } from './aligned-grid.styles';
 import { findVerseBlockForVerse } from './reference-scroll.utils';
@@ -17,6 +17,11 @@ export type AlignedGridProps = {
   children: ReactNode;
   /** The scroll-group reference this grid follows. */
   scrRef: SerializedVerseRef;
+  /**
+   * Whether the web view this grid lives in is showing. Taken as a prop rather than subscribed to
+   * here, so the web view holds one `IntersectionObserver` for the whole tree.
+   */
+  isViewVisible: boolean;
   /** Accessible name for the grid region. */
   ariaLabel?: string;
 };
@@ -36,7 +41,7 @@ export type AlignedGridProps = {
  * reader select and copy a passage down it. Screen-reader users correlate columns by the verse
  * number the editor renders at the start of every block.
  */
-export function AlignedGrid({ children, scrRef, ariaLabel }: AlignedGridProps) {
+export function AlignedGrid({ children, scrRef, isViewVisible, ariaLabel }: AlignedGridProps) {
   // React's ref API requires `null` as the initial value for DOM refs.
   // eslint-disable-next-line no-null/no-null
   const portRef = useRef<HTMLDivElement>(null);
@@ -47,7 +52,6 @@ export function AlignedGrid({ children, scrRef, ariaLabel }: AlignedGridProps) {
 
   // Only injected while this view is mounted; the rules are what make the layout work.
   useStylesheet(ALIGNED_GRID_STYLESHEET);
-  const isViewVisible = useViewVisibility();
   // The block-verse layout's anchor: one placed element per verse, which this root's row rules
   // position. A chapter cell scrolls itself against the inline layout's marker spans instead.
   useReferenceScroll(portRef, scrRef, isViewVisible, findVerseBlockForVerse);

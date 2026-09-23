@@ -8,8 +8,14 @@ import {
   measureRange,
 } from 'platform-bible-react';
 
-/** The offset in pixels from the top of the window to scroll to show the verse number */
-const VERSE_NUMBER_SCROLL_OFFSET = 80;
+/**
+ * The offset in pixels from the top of the window to scroll to show the verse number.
+ *
+ * Shared rather than restated so every view that lands on a reference frames it the same way: the
+ * Scripture editor, the model text panel, the reference panels and the Text Collection's chapter
+ * surfaces all leave this much of the preceding verse showing above the target.
+ */
+export const VERSE_NUMBER_SCROLL_OFFSET = 80;
 
 /**
  * How far below the scroll viewport's top edge a scrolled-to range's first line lands, before

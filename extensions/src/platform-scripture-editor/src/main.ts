@@ -1071,11 +1071,12 @@ function createResourceTextPanelProvider(
       currentResourceTextPanelProjectIds.delete(webViewType);
       // Re-read every call so mode changes are picked up at open/replace/restore time.
       const interfaceMode = await papi.settings.get('platform.interfaceMode');
-      // Deliberately leaves `scrollGroupScrRef` alone rather than pinning it to 0 the way the
-      // editor and the Text Collection do. These panels inherit whatever the saved layout carries,
-      // and an absent value resolves to scroll group 0 (`use-scroll-group-scr-ref.hook.ts`), so in
-      // simple mode they do follow the shared reference. Pinning would additionally overwrite a
-      // power-mode user's explicit choice of a different group.
+      // Deliberately leaves `scrollGroupScrRef` alone rather than pinning it to 0 in simple mode
+      // the way the editor and the Text Collection do. These panels inherit whatever the saved
+      // layout carries, and an absent value resolves to scroll group 0
+      // (`use-scroll-group-scr-ref.hook.ts`), so a saved layout that names no group does follow the
+      // shared reference in simple mode. A saved layout that names a different group keeps it,
+      // which is the behavior pinning would take away.
       return {
         ...savedWebView,
         title,

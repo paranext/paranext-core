@@ -3888,6 +3888,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
+
 ## adr-one-reference-scroll-hook-parameterized-by-verse-anchor: The Text Collection has one reference-scroll controller, parameterized by how a verse is found
 
 - **Date:** 2026-09-16
@@ -3896,14 +3897,25 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   column, the single-resource full-width view — rendered a whole chapter and never scrolled to the
   scroll group's verse (PT-4543, duplicate PT-4170). Verse mode needs no scroll, because
   `sliceUsjToVerse` has already reduced the cell to the reference's verse. Two candidate
-  implementations already existed: the aligned grid's controller (`use-reference-scroll.hook.ts`,
-  added by PT-4184/#2781) and an older settle loop in `resource-text-panel.component.tsx`. The two
+  implementations already existed: the aligned grid's controller (added by PT-4184/#2781 as
+  `use-aligned-reference-scroll.hook.ts`, renamed here to `use-reference-scroll.hook.ts`) and an older settle loop in `resource-text-panel.component.tsx`. The two
   layouts expose different verse anchors: the editor's block-verse layout wraps each verse in a
   placed element carrying `data-verse-start`, and is emitted only under `BLOCK_VERSE_VIEW_MODE`,
   while the inline layout emits a bare `span[data-marker="v"][data-number]`.
-- **Decision:** One hook serves both layouts, with the verse lookup injected as a
-  `VerseTargetFinder`, plus an `isEnabled` flag so a view that is scrolled by an ancestor can keep
-  the hook call unconditional while reading no geometry. The port math is shared without a
+- **Decision:** One hook serves both layouts, with the two things the layouts disagree on injected:
+  the verse lookup as a `VerseTargetFinder`, and the "can the reader already see it" test as a
+  `TargetVisibilityTest`. The aligned grid takes both defaults — `findVerseBlockForVerse` and
+  `isBlockInPortView`, whose any-part-showing rule is right for a whole verse block. A chapter cell
+  passes `findVerseMarkerForVerse` and `isMarkerFullyInPortView`, because its target is a
+  zero-content `\v` marker span: any-part-showing would count a marker clipped at the bottom edge as
+  visible while the reader sees a verse number and none of its verse, and the
+  leave-a-visible-verse-alone rule would then decline to scroll. An earlier form of this change
+  forked `isBlockInPortView` on target height instead, which silently gave the Grid view containment
+  semantics too — a change to a view this work does not own, and one that contradicted the first
+  rule in `useReferenceScroll`'s own docstring. Injecting keeps each layout's answer at its own call
+  site; `aligned-grid.component.tsx` is unchanged, so the Grid view keeps exactly the behavior
+  PT-4184/#2781 reviewed. Plus an `isEnabled` flag so a view that is scrolled by an ancestor can
+  keep the hook call unconditional while reading no geometry. The port math is shared without a
   per-layout branch because `getFirstVisibleY` looks the resource-name header up *inside* the port:
   a chapter cell's header is the port's sibling and so contributes nothing, while the aligned grid's
   sticky headers are descendants of its port and are counted.
@@ -3920,10 +3932,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** Adding a third Text Collection layout means writing a finder, not a scroll
   controller. The header-outside-the-port adjacency is now load-bearing — moving
   `[data-cell-header]` inside `[data-cell-content]` would offset every chapter-mode scroll by the
-  header's height, so a test in `reference-scroll.utils.test.ts` pins it. The reference panel still
+  header's height. Two tests pin it: `reference-scroll.utils.test.ts` covers the port math for a
+  header outside the port, and `resource-cell-view.component.test.tsx` asserts the rendered cell
+  really does keep `[data-cell-header]` out of `[data-cell-content]` — the arithmetic alone would
+  stay green if the markup moved. The reference panel still
   runs the older settle loop; converging it onto this hook is deliberately deferred rather than
   widening this change into a file #2781 does not touch. Revisit if a layout ever needs a genuinely
-  different scroll *policy* rather than a different anchor.
+  different scroll *policy* rather than a different anchor or visibility test.
 - **Source:** PT-4543, stacked on PT-4184/#2781.
 
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild

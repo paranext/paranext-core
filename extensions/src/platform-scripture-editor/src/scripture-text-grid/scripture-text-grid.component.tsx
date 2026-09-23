@@ -247,7 +247,7 @@ export function ScriptureTextGrid({
         <div role="status" aria-live="polite" className="tw:sr-only">
           {reorderAnnouncement}
         </div>
-        <AlignedGrid scrRef={scrRef} ariaLabel={ariaLabel}>
+        <AlignedGrid scrRef={scrRef} isViewVisible={isViewVisible} ariaLabel={ariaLabel}>
           {resources.map((resource) => (
             <ResourceColumn
               key={resource.resourceId}
@@ -294,7 +294,14 @@ export function ScriptureTextGrid({
         data-resource-id={onlyResource.resourceId}
         className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:overflow-hidden"
       >
-        <div className="tw:flex tw:min-h-0 tw:flex-1">
+        {/* `[&>*]:flex-1` reaches the cell's own root, which is a shrink-to-fit item on this row's
+            main axis and takes no `className` of its own. Without it the header band and a short
+            `[data-cell-placeholder]` hug the inline start at the message's width instead of
+            spanning the pane; prose hides it, so it shows only in the downloading/unavailable/
+            failed/empty states. The height chain above is what makes the cell's content box a
+            scroll port, so it must stay a row: stretching on the cross axis is what gives the cell
+            its height. */}
+        <div className="tw:flex tw:min-h-0 tw:flex-1 tw:[&>*]:flex-1">
           <ResourceCell
             resourceRef={onlyResource}
             scrRef={scrRef}

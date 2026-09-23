@@ -4,8 +4,10 @@ import {
   findVerseBlockForVerse,
   findVerseMarkerForVerse,
   isBlockInPortView,
+  isMarkerFullyInPortView,
   scrollPortToBlock,
 } from './reference-scroll.utils';
+import { parseVerseRange } from './verse-display.utils';
 
 /**
  * Builds a grid port holding one column per resource, each described as the verse ranges it
@@ -226,11 +228,89 @@ describe('isBlockInPortView', () => {
     expect(isBlockInPortView(port, block)).toBe(false);
   });
 
+  // The aligned grid's rule is any-part-showing, so both cases below are SHOWING here and NOT
+  // showing under the chapter cell's rule (see the `isMarkerFullyInPortView` block). Pinned as a
+  // pair so the one difference between the two layouts' predicates stays visible.
+  it('counts a block clipped by the port bottom edge as showing', () => {
+    // 20px of a 40px block is on screen; the reader can see that verse.
+    const { port, block } = buildPortWithBlock(280, 40);
+
+    expect(isBlockInPortView(port, block)).toBe(true);
+  });
+
+  it('counts a block partly covered by the sticky header as showing', () => {
+    // Its lower 30px are readable below the 20px header.
+    const { port, block } = buildPortWithBlock(10, 40);
+
+    expect(isBlockInPortView(port, block)).toBe(true);
+  });
+
   it('counts a block taller than the port as showing while the reader is inside it', () => {
     // Scrolling this one back to the top would fight a reader who is part-way through a long verse.
     const { port, block } = buildPortWithBlock(-200, 900);
 
     expect(isBlockInPortView(port, block)).toBe(true);
+  });
+});
+
+describe('scrollPortToBlock lead-in', () => {
+  it('parks the target flush at the top when no lead-in is asked for', () => {
+    // The aligned grid's default: its verse blocks carry their own padding, so the rect top is
+    // already the padding edge and a further offset would double it.
+    const { port, block } = buildPortWithBlock(120, 40);
+    port.scrollTop = 0;
+
+    scrollPortToBlock(port, block);
+
+    expect(port.scrollTop).toBe(100); // 120 - the 20px header
+  });
+
+  it('leaves the asked-for room above the target', () => {
+    // A chapter cell passes `VERSE_NUMBER_SCROLL_OFFSET` so the reader keeps a little of the
+    // preceding verse, matching the editor and the reference panels.
+    const { port, block } = buildPortWithBlock(120, 40);
+    port.scrollTop = 0;
+
+    scrollPortToBlock(port, block, 30);
+
+    expect(port.scrollTop).toBe(70);
+  });
+});
+
+describe('isMarkerFullyInPortView', () => {
+  it('counts a marker fully inside the port as showing', () => {
+    const { port, block } = buildPortWithBlock(100, 40);
+
+    expect(isMarkerFullyInPortView(port, block)).toBe(true);
+  });
+
+  it('counts a marker clipped by the port bottom edge as NOT showing', () => {
+    // The aligned rule calls this showing. A verse marker's text follows after it, so a clipped
+    // marker means the reader sees a verse number and none of its verse.
+    const { port, block } = buildPortWithBlock(280, 40);
+
+    expect(isMarkerFullyInPortView(port, block)).toBe(false);
+    expect(isBlockInPortView(port, block)).toBe(true);
+  });
+
+  it('counts a marker partly covered by the sticky header as NOT showing', () => {
+    const { port, block } = buildPortWithBlock(10, 40);
+
+    expect(isMarkerFullyInPortView(port, block)).toBe(false);
+    expect(isBlockInPortView(port, block)).toBe(true);
+  });
+
+  it('counts a marker scrolled past above as not showing', () => {
+    const { port, block } = buildPortWithBlock(-80, 40);
+
+    expect(isMarkerFullyInPortView(port, block)).toBe(false);
+  });
+
+  it('falls back to any-part-showing for a target taller than the port', () => {
+    // It can never fit, so demanding containment would call it hidden forever and scroll for it.
+    const { port, block } = buildPortWithBlock(-200, 900);
+
+    expect(isMarkerFullyInPortView(port, block)).toBe(true);
   });
 });
 
@@ -282,11 +362,11 @@ describe('port math with a chapter cell, whose header is outside the port', () =
     // A verse marker is one line and its verse text follows AFTER it, so a marker hanging off the
     // bottom edge means the reader can see a verse number and none of its verse. Counting that as
     // showing would make the leave-a-visible-verse-alone rule decline to scroll, and the reference
-    // move would appear to do nothing. A whole verse BLOCK taller than the port is the opposite
-    // case and is still counted as showing — see the aligned tests above.
+    // move would appear to do nothing. The aligned grid's whole verse block is the opposite case,
+    // which is why that layout keeps `isBlockInPortView` — see the aligned tests above.
     const { port, marker } = buildChapterPortWithMarker(290, 20);
 
-    expect(isBlockInPortView(port, marker)).toBe(false);
+    expect(isMarkerFullyInPortView(port, marker)).toBe(false);
   });
 
   it('scrolls a marker to the top of the port with no header allowance', () => {
@@ -296,5 +376,107 @@ describe('port math with a chapter cell, whose header is outside the port', () =
 
     // The marker's own top, not the top less a header that is not in this port.
     expect(port.scrollTop).toBe(100);
+  });
+});
+
+/**
+ * The verse a finder's result stands for, however that layout spells it.
+ *
+ * @param element A verse block or a verse marker.
+ * @returns The verse it starts at, or `undefined` when nothing was found.
+ */
+function resolvedVerse(element: HTMLElement | undefined): number | undefined {
+  if (!element) return undefined;
+  if (element.dataset.verseStart !== undefined) return Number(element.dataset.verseStart);
+  return parseVerseRange(element.dataset.number ?? '').start;
+}
+
+// Grid and Chapter are two view modes of ONE web view, toggled against the same reference, so the
+// two finders must never disagree about which verse a reference belongs to. They are written out
+// separately (different selectors, different start extraction, and only the block layout has a row
+// bound), and the `describe` blocks above test each in isolation — nothing there would catch the
+// two drifting apart. This pins them against each other, the way `aligned-grid.styles.test.ts` pins
+// the duplicated `MAX_ALIGNED_VERSE_ROWS`. If a rule changes in one finder, change both and update
+// this table.
+//
+// Each case gives the SAME passage in both layouts' own spelling, because they do not spell a verse
+// the same way. `data-verse-start` decides a grid row, so it is always an integer (the generated
+// rules are `grid-row-start:N`, and `isPlacedBlock` drops anything else); the inline layout's
+// `data-number` is the raw `\v` number, so it carries sub-verse letters and bridges verbatim.
+//
+// What this pins is which VERSE a reference resolves to, not which element wins — the layouts
+// return different kinds of element, and a tie-break that picks `3b` over `3a` still answers
+// "verse 3". Element choice is covered by each finder's own tests above.
+describe('the two finders resolve a reference to the same verse', () => {
+  const cases: {
+    why: string;
+    blocks: string[];
+    markers: string[];
+    verseNum: number;
+    expected: number;
+  }[] = [
+    {
+      why: 'a verse that starts a block',
+      blocks: ['1', '2', '3'],
+      markers: ['1', '2', '3'],
+      verseNum: 2,
+      expected: 2,
+    },
+    {
+      why: 'the second half of a bridge',
+      blocks: ['1', '4-5', '6'],
+      markers: ['1', '4-5', '6'],
+      verseNum: 5,
+      expected: 4,
+    },
+    {
+      why: 'a verse missing from this versification',
+      blocks: ['1', '2', '4'],
+      markers: ['1', '2', '4'],
+      verseNum: 3,
+      expected: 2,
+    },
+    {
+      // Both sub-verses start at verse 3, so the block layout lands two blocks on one row — the
+      // overlap tracked as PT-4559. Either way the REFERENCE still resolves to verse 3.
+      why: 'a sub-verse, where the earlier one wins',
+      blocks: ['2', '3', '3'],
+      markers: ['2', '3a', '3b'],
+      verseNum: 3,
+      expected: 3,
+    },
+    {
+      why: 'a reference above the first verse',
+      blocks: ['1', '2', '3'],
+      markers: ['1', '2', '3'],
+      verseNum: 0,
+      expected: 1,
+    },
+    {
+      why: 'a reference past the last verse',
+      blocks: ['1', '2', '3'],
+      markers: ['1', '2', '3'],
+      verseNum: 99,
+      expected: 3,
+    },
+    {
+      why: 'a malformed reference',
+      blocks: ['1', '2', '3'],
+      markers: ['1', '2', '3'],
+      verseNum: Number.NaN,
+      expected: 1,
+    },
+  ];
+
+  cases.forEach(({ why, blocks, markers, verseNum, expected }) => {
+    it(`agrees on ${why}`, () => {
+      const fromBlocks = resolvedVerse(findVerseBlockForVerse(buildPort([blocks]), verseNum));
+      const fromMarkers = resolvedVerse(
+        findVerseMarkerForVerse(buildChapterPort(markers), verseNum),
+      );
+
+      expect(fromBlocks).toBe(expected);
+      expect(fromMarkers).toBe(expected);
+    });
   });
 });
