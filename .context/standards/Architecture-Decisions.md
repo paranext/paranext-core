@@ -7414,9 +7414,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   resolves the pane's *active* area rather than the area holding the caret; the bootstrap's
   `pointerdown`/`focusin` tracking re-converges the two, except while a click's own answering refocus
   into another area is being suppressed — that one move is held off so the clicked area stays the
-  target, and a Tab or a typed key ends the suppression — making the caret's area the active one — so
-  a deliberate focus move or the user working where the caret is retargets zoom at once; a modifier
-  pressed on its own or a zoom chord does not end it. The
+  target, and a Tab or any other key ends the suppression — making the caret's area the active one — so
+  a deliberate focus move or the user working where the caret is — typing, a shortcut such as Ctrl+C,
+  an arrow key — retargets zoom at once; a modifier pressed on its own or a zoom chord does not end it. The
   window-chrome listener also stands down behind the three full-screen overlays that bypass
   `OverlayHost` (connection lost, workspace updating, first run), not only behind a modal dialog:
   the level is persisted, so a zoom made behind one of those would outlive it. The in-view bootstrap
