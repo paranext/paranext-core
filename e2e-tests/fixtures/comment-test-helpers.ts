@@ -729,10 +729,13 @@ export async function openCommentListPanelUntilVisible(
   // and poll for its content before deciding whether to retry.
   /* eslint-disable no-await-in-loop */
   for (let attempt = 0; attempt < attempts; attempt++) {
-    await openCommentListPanel(projectId);
-    await clickCommentsTab(mainPage, panelId);
-    const timeout = attempt < attempts - 1 ? 20_000 : 90_000;
+    const canRetry = attempt < attempts - 1;
+    const timeout = canRetry ? 20_000 : 90_000;
     try {
+      await openCommentListPanel(projectId);
+      // A tab click blocked by the workspace-updating overlay fails fast on an attempt that can
+      // still retry; the last attempt keeps the helper's default action timeout.
+      await clickCommentsTab(mainPage, panelId, canRetry ? 5_000 : undefined);
       await mainPage
         .locator(`iframe[data-web-view-id="${panelId}"]`)
         .waitFor({ state: 'attached', timeout });
