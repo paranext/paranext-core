@@ -294,7 +294,7 @@ test('an event fired after initialize has already resolved is stamped and flushe
   expect(fullEventLog).toContain('"count":2');
 });
 
-test('a failing provider send is caught and logged, without initialize or trackEvent throwing', async () => {
+test('a failing provider send is caught and logged at debug, without initialize or trackEvent throwing', async () => {
   vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
   vi.doMock('@extension-host/services/analytics-providers/console-analytics.provider', () => ({
     ConsoleAnalyticsProvider: class {
@@ -316,7 +316,8 @@ test('a failing provider send is caught and logged, without initialize or trackE
     setTimeout(resolve, 0);
   });
 
-  expect(mocks.error).toHaveBeenCalledWith(expect.stringContaining('boom'));
+  expect(mocks.debug).toHaveBeenCalledWith(expect.stringContaining('boom'));
+  expect(mocks.error).not.toHaveBeenCalled();
 });
 
 test('trackEvent drops a non-serializable property and warns immediately, but still sends the rest of the event', async () => {
@@ -485,7 +486,7 @@ test('when PostHog is enabled, a PostHog provider per environment is constructed
   expect(findSentLog('Test')).toBeUndefined();
 });
 
-test('a PostHog provider rejection is logged and the service keeps accepting events', async () => {
+test('a PostHog provider rejection is logged at debug only (the provider owns the warning) and the service keeps accepting events', async () => {
   mocks.isPostHogEnabled.mockReturnValue(true);
   mocks.posthogSend.mockRejectedValueOnce(new Error('offline'));
   vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
@@ -495,12 +496,57 @@ test('a PostHog provider rejection is logged and the service keeps accepting eve
   trackEvent('app_launch');
   await initialize();
   await flushPending();
-  expect(mocks.error).toHaveBeenCalledWith(
+  expect(mocks.debug).toHaveBeenCalledWith(
     expect.stringContaining("failed to send event 'app_launch'"),
   );
+  expect(mocks.error).not.toHaveBeenCalled();
+  expect(mocks.warn).not.toHaveBeenCalled();
   trackEvent('second');
   await flushPending();
   expect(mocks.posthogSend).toHaveBeenCalledTimes(2);
+});
+
+test('an event whose routing fails does not stop later events from reaching the provider', async () => {
+  mocks.isPostHogEnabled.mockReturnValue(true);
+  // Choosing the providers happens after enrichment, outside its catch, so a throw here rejects
+  // the routing step itself.
+  mocks.isPostHogEnabled.mockImplementationOnce(() => {
+    throw new Error('config unreadable');
+  });
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent, flushPending } = await import(
+    '@extension-host/services/analytics.service'
+  );
+  trackEvent('first');
+  await expect(initialize()).resolves.toBeUndefined();
+  expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining("'first'"));
+  trackEvent('second');
+  await flushPending();
+  expect(mocks.posthogSend).toHaveBeenCalledWith(expect.objectContaining({ name: 'second' }));
+});
+
+test('shutdown does not wait more than the shutdown budget for an event still being enriched', async () => {
+  mocks.isPostHogEnabled.mockReturnValue(true);
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent, shutdown } = await import(
+    '@extension-host/services/analytics.service'
+  );
+  trackEvent('app_launch');
+  await initialize();
+  mocks.getCommonProperties.mockImplementation(() => new Promise(() => {}));
+  trackEvent('stuck');
+
+  vi.useFakeTimers();
+  let settled = false;
+  const shutdownPromise = shutdown().finally(() => {
+    settled = true;
+  });
+  await vi.advanceTimersByTimeAsync(999);
+  expect(settled).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(settled).toBe(true);
+  await shutdownPromise;
+  expect(mocks.posthogShutdown).toHaveBeenCalledTimes(2);
 });
 
 test('shutdown asks every constructed provider to shut down and never rejects', async () => {
