@@ -5,9 +5,12 @@
  * Each regex requires the first frame to be `document.createElement` inside the renderer bundle
  * (our monkey-patch) and then inspects ONLY the frame directly after it, which is the caller.
  *
- * Note that sourceURLs can't have spaces in them, so we explicitly test for a space before the
- * source so bad actors can't put these special words into their sourceURL
+ * The check reads stack-trace text, not the call site itself. Code that controls how its own frame
+ * prints can still imitate an allowed caller: a function whose name contains a newline, or a script
+ * with a forged `//# sourceURL`, can make its frame read like the Usersnap widget's.
  */
+
+// TODO(PT-4767): replace the stack-text check with a call-site check
 
 /** First frame of the stack: our `document.createElement` patch inside the dev renderer bundle */
 const DEV_CREATE_ELEMENT_FRAME = String.raw`^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+`;
@@ -58,8 +61,8 @@ const RENDERER_SCRIPT_REGEX_PACKAGED = new RegExp(
  *   https://resources.usersnap.com/widget-assets/js/chunks/<digits>/<word>.js:<line>:<column>`
  *
  * The anonymous form must end its line right after `:<line>:<column>`. A function whose name looks
- * like the Usersnap URL still prints its real location as ` (<location>)` after that name, so it
- * does not end the line there.
+ * like the Usersnap URL still prints its real location as ` (<location>)` after that name, so a
+ * single-line name cannot end the line there. A name containing a newline can (see PT-4767).
  */
 /* In development, safe errors look like this (named caller frame):
 Error

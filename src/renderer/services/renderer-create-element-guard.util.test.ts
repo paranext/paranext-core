@@ -95,7 +95,7 @@ describe.each([
       ).toBe(false);
     });
 
-    test('rejects a caller whose function name imitates an anonymous Usersnap frame', () => {
+    test('rejects a caller whose single-line function name imitates an anonymous Usersnap frame', () => {
       const stackTrace = stack(
         createElementFrame,
         `at ${USERSNAP_CHUNK}:3:122681 (about:srcdoc:1:1)`,
