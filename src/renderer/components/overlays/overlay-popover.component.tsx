@@ -218,9 +218,10 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
-        // PopoverContent must not carry a fixed width or padding — the shared class's `tw:w-72`
-        // and `tw:p-2.5` are stripped here so the inner wrapper below owns width, padding and
-        // layout instead.
+        // PopoverContent must not carry a fixed width or padding, so the inner wrapper below owns
+        // width, padding and layout instead. `tw:p-0` strips the shared class's `tw:p-2.5` padding
+        // only; the shared `tw:w-72` survives the class merge and is overridden by the inline
+        // `width: 'auto'` in `style` below — removing that would bring the fixed width back.
         className="tw:p-0"
         side={side}
         align="start"
