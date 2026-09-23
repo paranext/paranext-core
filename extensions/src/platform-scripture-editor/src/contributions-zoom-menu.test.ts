@@ -30,7 +30,7 @@ const ZOOM_COMMANDS = {
 const zoomItems = items.filter((item) => item.group === ZOOM_GROUP);
 
 describe('platform-scripture-editor zoom menu contribution', () => {
-  it('declares a Zoom column of its own, between Options and Tools, labelled and marked experimental', () => {
+  it('declares a Zoom column of its own, between Options and Tools, labeled and marked experimental', () => {
     const columnsByKey: Record<string, { label: string; order: number; isExperimental?: boolean }> =
       columns;
     const zoomColumn = columnsByKey[ZOOM_COLUMN];

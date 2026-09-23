@@ -274,7 +274,7 @@ test.describe('Bible Texts panel content zoom', () => {
 
     let afterWheel = afterCtrlPlus;
     await test.step('Ctrl+wheel over the marked area changes the same variable', async () => {
-      // Aimed at the area's own centre: `areaBox` clips the area to the pane, so the wheel lands
+      // Aimed at the area's own center: `areaBox` clips the area to the pane, so the wheel lands
       // inside the pane however tall the area has grown.
       const box = await areaBox(bibleTextsFrame, BIBLE_TEXTS_AREA_ID);
       await ctrlWheel(mainPage, box, -120);

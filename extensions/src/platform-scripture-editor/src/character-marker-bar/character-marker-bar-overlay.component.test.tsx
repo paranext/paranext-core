@@ -656,11 +656,11 @@ describe('CharacterMarkerBarOverlay', () => {
     Object.defineProperty(zoomed, 'currentCSSZoom', { value: 2 });
 
     await putCaretInParagraph(unzoomed);
-    // 16px baseline - 16px icon centre = 0.
+    // 16px baseline - 16px icon center = 0.
     expect(barContainer().style.top).toBe(`${TWO_PARAGRAPH_LINE_TOP}px`);
 
     await putCaretInParagraph(zoomed);
-    // Same computed metrics, but zoomed: 32px baseline - 16px icon centre = +16. Reusing the cached
+    // Same computed metrics, but zoomed: 32px baseline - 16px icon center = +16. Reusing the cached
     // unzoomed offset would leave it at +0.
     expect(barContainer().style.top).toBe(`${TWO_PARAGRAPH_LINE_TOP + 16}px`);
   });

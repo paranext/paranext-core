@@ -18,7 +18,7 @@ export const CONTENT_ZOOM_MEMORY_SETTING = 'platform.webViewContentZoomMemory';
 export const INDICATOR_SELECTOR = '#platform-content-zoom-indicator';
 
 /**
- * Ctrl+wheel over the centre of `box` (main-frame-relative coordinates, as {@link areaBox} returns).
+ * Ctrl+wheel over the center of `box` (main-frame-relative coordinates, as {@link areaBox} returns).
  * `deltaY: -120` zooms in, `+120` zooms out (`web-view-content-zoom.bootstrap-script.ts`'s
  * `onWheel`: `e.deltaY < 0` is zoom-in). Does not itself wait for the effect — callers poll the
  * resulting factor, never a bare timeout, since geometry inside a zoomed frame moves and a fixed
@@ -56,7 +56,7 @@ export async function readIndicatorText(frame: Frame): Promise<string | undefine
 
 /**
  * A box to aim a pointer gesture at one zoom area: the first element marked with that area id
- * (several elements may share one id), clipped to the web view's frame so its centre lies on screen
+ * (several elements may share one id), clipped to the web view's frame so its center lies on screen
  * even when the marked text is taller than the pane. Main-frame-relative.
  */
 export async function areaBox(
@@ -147,7 +147,7 @@ export async function waitForPopupAnimations(popup: Locator): Promise<void> {
       element
         .getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
-        // A cancelled animation rejects `finished`; it no longer transforms the box either.
+        // A canceled animation rejects `finished`; it no longer transforms the box either.
         .map((animation) => animation.finished.catch(() => undefined)),
     );
   });
