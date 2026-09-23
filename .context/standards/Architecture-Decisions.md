@@ -321,43 +321,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   of the implementing branch, which surfaced and fixed a startup-path regression (analytics
   initialization briefly gated extension-host activation) before merge.
 
-## adr-analytics-posthog-transport: PostHog transport behind the analytics seam; keys in one config module; common properties enriched in the service; anonymous per-launch identity
+## adr-analytics-posthog-transport: Where common properties and vendor keys live in the analytics seam
 
 - **Date:** 2026-09-23
 - **Status:** Accepted
-- **Context:** PT-4729 asked for a minimal, working pipeline from Platform.Bible to PostHog for
-  Sprint 91, sending only product version and OS, with usage tracking and consent deferred. The
-  team had already chosen PostHog (PT-4340) and installed `posthog-node` (PT-4356). The pipeline
-  had to be the durable one later tickets extend, not a spike.
-- **Decision:** `PostHogAnalyticsProvider` implements the existing `AnalyticsProvider` seam in the
-  extension host using `posthog-node`'s `captureImmediate`, one client per analytics environment.
-  Project keys and the EU host live only in `analytics.config.ts`, which also owns the enabled
-  rule: packaged production builds, or `PT_ANALYTICS_POSTHOG=true` in development. Both slots use
-  the Test project key until PT-4401. Common properties (`app_version`, `os_platform`,
-  `os_release`, `os_arch`, `analytics_environment`) are added by the service before routing, not by the
-  provider, so they survive a vendor swap; PT-4359 extends that function. Identity is a random UUID
-  per process from `analytics-identity.ts`, events are flagged `$process_person_profile: false`,
-  and GeoIP is disabled; PT-4367 replaces the identity function. The service gained `shutdown()`,
-  called first in the extension host's graceful shutdown; its wait for in-flight routing and each
-  provider's flush are each bounded to 1 s. `posthog-node` resolves `captureImmediate` even when
-  the request fails and reports the failure only through the client's `'error'` event, so the
-  provider listens for that event for the duration of each send and turns it into a rejection;
-  the provider logs the one warn line, and the service logs the rejection at debug only.
+- **Context:** PT-4729 (epic PT-1797) stood up a minimal PostHog pipeline for Sprint 91 on top of
+  the vendor choice made in PT-4340 and the account set up in PT-4356; see those tickets for the
+  scope negotiation and rationale.
+- **Decision:** Common properties are added by `analytics.service.ts` before routing, not inside
+  `PostHogAnalyticsProvider`, so they survive a future vendor swap — see the doc comment on
+  `getCommonProperties()` for what's included and why.
 - **Alternatives:** `posthog-js` in the renderer for autocaptured properties — rejected: autocapture
   is usage tracking the ticket forbids, the browser SDK reports Chromium's version not the app's,
   and it would bypass the abstraction. Properties at the `app_launch` call site — rejected: every
   future event would have to repeat them. Properties inside the provider — rejected: lost on a
   vendor swap. Persisted installation id — deferred to PT-4367 by product decision.
-- **Consequences:** Packaged builds now make outbound HTTPS calls to `eu.i.posthog.com` from the
-  extension host; Node `fetch` ignores the C# proxy settings, so users behind a corporate proxy
-  fail to report (logged at warn). No offline queue or cross-restart retry yet
-  (PT-4373/PT-4374); a failed send is dropped after one warn line naming the event only. The SDK
-  does retry a request internally (`fetchRetryCount` 3, 3 s apart, 10 s request timeout), so a
-  failed send settles only after roughly 9 to 49 s; harmless for fire-and-forget. A debug `sent`
-  line means only that the SDK reported no error; the PostHog dashboard is the proof of delivery.
-  Hard-coding the Test key is an
-  accepted, temporary exception to the no-secrets rule because PostHog project keys are write-only
-  client keys designed to ship in apps; the Production key must never be committed.
+- **Consequences:** Hard-coding the Test key in `analytics.config.ts` is an accepted, temporary
+  exception to the no-secrets rule (write-only client key; the Production key must never be
+  committed) — see the comment there for the rationale rather than restating it here.
 - **Source:** PT-4729 (epic PT-1797); design
   `PRDs/analytics/2026-09-23-pt-4729-posthog-provider-design.md`.
 
