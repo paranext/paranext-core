@@ -2,22 +2,22 @@ import os from 'os';
 import { appService } from '@shared/services/app.service';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 
 const UNKNOWN_VERSION = 'unknown';
 
-let cachedAppVersion: string | undefined;
+const getCachedAppVersion = createCachedInitializer(
+  async () => (await appService.getAppInfo()).version,
+);
 
 /**
- * Resolves the running app's version string via main's AppService. Cached after the first success.
- * A failure is not cached: the app service registers early in startup but analytics can run even
- * earlier, so the next event gets another chance.
+ * Resolves the running app's version string via main's AppService. Cached after the first success,
+ * and concurrent lookups share one request. A failure is not cached: the app service registers
+ * early in startup but analytics can run even earlier, so the next event gets another chance.
  */
 async function getAppVersion(): Promise<string> {
-  if (cachedAppVersion) return cachedAppVersion;
   try {
-    const { version } = await appService.getAppInfo();
-    cachedAppVersion = version;
-    return version;
+    return await getCachedAppVersion();
   } catch (error) {
     logger.debug(`Analytics: could not resolve the app version: ${getErrorMessage(error)}`);
     return UNKNOWN_VERSION;
