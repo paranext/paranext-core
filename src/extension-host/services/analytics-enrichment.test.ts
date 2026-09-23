@@ -58,6 +58,14 @@ test('a failed version lookup is retried on the next event rather than caching "
   expect(mocks.getAppInfo).toHaveBeenCalledTimes(2);
 });
 
+test('two lookups in flight at once share one app service call', async () => {
+  const { getCommonProperties } = await import('@extension-host/services/analytics-enrichment');
+  const [first, second] = await Promise.all([getCommonProperties(), getCommonProperties()]);
+  expect(first.app_version).toBe('0.6.0-alpha.1+42');
+  expect(second.app_version).toBe('0.6.0-alpha.1+42');
+  expect(mocks.getAppInfo).toHaveBeenCalledTimes(1);
+});
+
 test('caller properties win over common properties on a name collision, and the collision is logged at debug', async () => {
   const { mergeWithCommonProperties } = await import(
     '@extension-host/services/analytics-enrichment'
