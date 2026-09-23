@@ -19,7 +19,6 @@ import {
 } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
-import type { SettingTypes } from 'papi-shared-types';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
 // only `papi`, so this package must never become a runtime import here (see the note at the top of
 // this file). `USJ_VERSION` is used solely under `typeof`, so `import type` keeps it erased.
@@ -1151,6 +1150,10 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
+ * holds nothing the user wrote. A translation project with editing switched off still syncs: its
+ * Scripture text is locked, but the user can still add comments to it.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
@@ -1165,7 +1168,7 @@ export async function syncOnProjectSwitch(
     );
   }
 
-  if (outgoingProjectId) {
+  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
     try {
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
         outgoingProjectId,
@@ -1214,13 +1217,13 @@ export async function finalizeProjectSwitch(
   // tab within it.
   syncOnProjectSwitch(papi, projectId, undefined);
   if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
-    // The rebuilt Simple layout stamps `projectId` onto the tabs of the static layout, but the Text
-    // Collection is merged in afterwards from the default-layout supplement, which carries none — so
-    // this is the one Column 3 panel that arrives unbound from a mode switch and would otherwise
-    // seed itself from `ActiveEditorProjectId` and keep whatever it first saw. Ordered before
-    // `applyForProject` for the same reason the editor-column switch is: the re-point settles its
-    // content before the shared layout picks which tab to front. It swallows its own failures, so
-    // no try/catch here.
+    // Normally a no-op: `runProjectBoundSimpleSwitch` (`src/renderer/services/
+    // web-view.service-shard.ts`) bakes `projectId` into every merged supplement tab with
+    // `applyProjectIdToTabs` before this runs, so the Text Collection arrives already bound and
+    // the call returns at its skip guard. Kept as a safety net for a caller that skips the bake.
+    // Ordered before `applyForProject` for the same reason the editor-column switch is: a re-point
+    // settles its content before the shared layout picks which tab to front. It swallows its own
+    // failures, so no try/catch here.
     await updateRelatedTextCollectionPanel(papi, projectId);
     await applyForProject?.(projectId);
   }
@@ -1274,8 +1277,8 @@ async function isProjectPublished(papi: typeof PapiBackend, projectId: string): 
  * re-pointed. Find is NOT here: it needs the id of the editor web view the switch produces, so it
  * is re-pointed separately by {@link updateRelatedFindPanel} once that editor exists.
  *
- * The Text Collection is the one panel that declines to follow a published resource (see
- * `isProjectPublished`): a resource has no collection of its own.
+ * The Text Collection is the one panel that declines to follow a published resource; see
+ * {@link updateRelatedTextCollectionPanel}.
  *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
@@ -1285,7 +1288,7 @@ export async function openOrUpdateRelatedPanels(
   projectId: string,
 ): Promise<void> {
   // Started first so the settings round trip overlaps the four panel commands below instead of
-  // adding to the switch's latency; it never rejects.
+  // adding to the switch's latency.
   const isPublishedPromise = isProjectPublished(papi, projectId);
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
@@ -1316,7 +1319,7 @@ export async function openOrUpdateRelatedPanels(
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
   }
   // Not wrapped like the four above: this one swallows its own failures (see its TSDoc).
-  if (!(await isPublishedPromise)) await updateRelatedTextCollectionPanel(papi, projectId);
+  await updateRelatedTextCollectionPanel(papi, projectId, isPublishedPromise);
 }
 
 /**
@@ -1379,8 +1382,11 @@ export function resolveGridProviderProjectId(
  * `ActiveEditorProjectId` and keeps that project from then on (see
  * `resolveTextCollectionProjectId`), so only a re-point moves it.
  *
- * Three deliberate constraints:
+ * Four deliberate constraints:
  *
+ * - Never follows a published resource (see `isProjectPublished`): a resource has no collection of
+ *   its own, so following it would cost a reload, and the in-memory state it drops, for an empty
+ *   panel. The rule lives here rather than in a caller so every re-point path applies it.
  * - Never creates a panel when none is open. The Text Collection has no open command and no menu
  *   entry: its only open path is the default-layout supplement, which puts it in Column 3 from
  *   startup. So "not open" means the tab was closed in Power mode or the
@@ -1408,10 +1414,14 @@ export function resolveGridProviderProjectId(
  *
  * @param papi The instance of papi to read web view definitions with and request the reload from
  * @param projectId The id of the project whose text collection the panel should show
+ * @param isPublishedPromise Whether `projectId` is a published resource. A caller that already
+ *   started this read passes it in so the round trip overlaps its own work; otherwise it starts
+ *   here, alongside the open-web-view read.
  */
 export async function updateRelatedTextCollectionPanel(
   papi: typeof PapiBackend,
   projectId: string,
+  isPublishedPromise: Promise<boolean> = isProjectPublished(papi, projectId),
 ): Promise<void> {
   let existingPanel: SavedWebViewDefinition | undefined;
   try {
@@ -1436,6 +1446,8 @@ export async function updateRelatedTextCollectionPanel(
       normalizeProjectId(existingPanel.projectId) === normalizeProjectId(projectId))
   )
     return;
+
+  if (await isPublishedPromise) return;
 
   try {
     // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
@@ -1478,28 +1490,30 @@ export async function updateRelatedTextCollectionPanel(
  * read-only project or a published resource because searching is a read (see
  * `adr-find-follows-editor-to-read-only`).
  *
- * Hidden case: in Simple mode Find's tab is usually inactive when this runs, which is fine — the
- * re-point reloads the iframe and Find's render is data-driven, so it is correct whenever the tab
- * is next shown. The reload does abandon any search already running and restart it (a known gap,
- * tracked as PT-4418).
+ * Only Simple mode re-points Find. The mode is read here, fresh, rather than taken from the caller:
+ * a project switch can run long enough for the user to change mode mid-way, and reloading Power
+ * mode's Find onto the switched project would be wrong.
+ *
+ * Hidden case: in Simple mode Find's tab is usually inactive when this runs. The reload remounts
+ * Find, whose render is data-driven, so it shows the right project when next shown. But a Find that
+ * restores a previous search runs it immediately, hidden or not, and the auto-search held back by
+ * `useRunWhenVisible` runs again when the tab is shown, so the search, and the clearing of results
+ * it starts with, happens twice. A known gap, tracked as PT-4418.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
  *
- * @param papi The instance of papi to send the command
- * @param interfaceMode The current `platform.interfaceMode`. Only Simple mode re-points Find.
+ * @param papi The instance of papi to read the interface mode with and send the command
  * @param projectId The id of the project Find should search from now on
  * @param editorWebViewId Id of the editor web view the switch produced
  */
 export async function updateRelatedFindPanel(
   papi: typeof PapiBackend,
-  interfaceMode: SettingTypes['platform.interfaceMode'],
   projectId: string,
   editorWebViewId: string | undefined,
 ): Promise<void> {
-  if (interfaceMode !== 'simple') return;
-
   try {
+    if ((await papi.settings.get('platform.interfaceMode')) !== 'simple') return;
     await papi.commands.sendCommand(
       'platformScripture.updateFindProject',
       projectId,

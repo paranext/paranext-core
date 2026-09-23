@@ -34,6 +34,11 @@ export type FindBookScope = {
  * that has them finds the scope intact. Searching the narrowed list keeps the search and the
  * checkbox list in agreement.
  *
+ * That holds only while the picker is untouched. A picker edit — including Select all and Clear all
+ * — commits the visible set, so books hidden because the current project lacks them are dropped
+ * from the saved list. That is deliberate: those actions act on the whole scope, so Clear all
+ * really clears it.
+ *
  * `availableBookIds` is `undefined` — not `[]` — while the project's book list is still loading, so
  * "don't know yet" cannot be read as "this project has no books". An empty result is an unrunnable
  * query per `isFindQueryValid`, which is what the panel should say.
