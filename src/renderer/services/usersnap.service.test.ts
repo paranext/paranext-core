@@ -109,6 +109,7 @@ describe('initializeUsersnapApi load/init timeout/race logic', () => {
     await initPromise;
 
     expect(spaceApi.init).toHaveBeenCalledTimes(1);
+    expect(spaceApi.init).toHaveBeenCalledWith(expect.objectContaining({ nativeScreenshot: true }));
     expect(spaceApi.destroy).not.toHaveBeenCalled();
   });
 
@@ -208,7 +209,7 @@ describe('close-button styling of the open form', () => {
       if (!call) throw new Error(`No '${eventName}' handler registered`);
       return call[1];
     };
-    return { open: getHandler('open'), close: getHandler('close') };
+    return { open: getHandler('open'), close: getHandler('close'), spaceApi };
   }
 
   /**
@@ -332,6 +333,23 @@ describe('close-button styling of the open form', () => {
     const disconnectCallCount = disconnectSpy.mock.calls.length;
     disconnectSpy.mockRestore();
     expect(disconnectCallCount).toBe(1);
+  });
+
+  it('report form: the added close button closes the open form', async () => {
+    const { open, spaceApi } = await initializeAndGetFormHandlers();
+    const widgetApi = { open: vi.fn(), close: vi.fn() };
+    spaceApi.show.mockResolvedValue(widgetApi);
+    const shadowRoot = addUsersnapWidget();
+
+    open({ apiKey: REPORT_ISSUE_KEY });
+    await vi.advanceTimersByTimeAsync(200);
+    shadowRoot
+      .querySelector<HTMLButtonElement>('button[aria-label="Close feedback form"]')
+      ?.dispatchEvent(new MouseEvent('click'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(spaceApi.show).toHaveBeenCalledWith(REPORT_ISSUE_KEY);
+    expect(widgetApi.close).toHaveBeenCalledTimes(1);
   });
 
   it('report form: adds only one close button when the widget re-renders after styling', async () => {
