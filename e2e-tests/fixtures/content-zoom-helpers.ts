@@ -1,10 +1,6 @@
 /**
- * Helpers shared by the three content-zoom e2e specs that import this module —
- * `tests/isolated/notes-content-zoom/comment-list-content-zoom.spec.ts`,
- * `tests/isolated/notes-content-zoom/comments-panel-content-zoom.spec.ts`, and
- * `tests/isolated/scripture-editor/content-zoom.spec.ts`: the wheel gesture every one of them
- * drives, the memory-setting reader every one of them polls, and the indicator/zoom-area selectors
- * every one of them reads.
+ * Helpers shared by the content-zoom e2e specs: the wheel gesture, the memory-setting reader, the
+ * indicator/zoom-area selectors, and the text measurements they share.
  */
 import { type Frame, type Locator, type Page, expect } from '@playwright/test';
 import { CONTENT_ZOOM_COMMANDS, readFactor, sendCommandWithId } from './scripture-editor-helpers';
@@ -79,6 +75,29 @@ export async function areaBox(
   const bottom = Math.min(box.y + box.height, pane.y + pane.height);
   if (right <= left || bottom <= top) throw new Error(`Zoom area "${areaId}" is not on screen`);
   return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Height of the line box holding the first visible character inside `element`, in the frame's
+ * (zoomed) pixels. Under CSS `zoom` z a single line box grows by z, whereas a block of wrapped text
+ * also loses width to the zoom, wraps onto ~z× as many lines, and grows by ~z² — so a zoom-ratio
+ * assertion measures a line box, never the block.
+ */
+export async function firstLineBoxHeight(element: Locator): Promise<number> {
+  return element.evaluate((root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const offset = (node.textContent ?? '').search(/\S/u);
+      if (offset >= 0) {
+        const range = document.createRange();
+        range.setStart(node, offset);
+        range.setEnd(node, offset + 1);
+        const rect = range.getClientRects()[0];
+        if (rect && rect.height > 0) return rect.height;
+      }
+    }
+    throw new Error('No rendered text inside the element');
+  });
 }
 
 /**

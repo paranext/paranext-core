@@ -208,7 +208,7 @@ test.describe('Enhanced Resources content zoom', () => {
       .locator('[data-testid^="dictionary-entry-"]:not([data-testid^="dictionary-entry-detail-"])')
       .first();
     // A click must land on marked entry text to aim the next chord at `entries`: the panel itself
-    // is no longer an area, so a click on a gap or a control keeps the last-used area.
+    // is not an area; a click on a gap or control keeps the last-used area.
     const entryText = entryRow.locator('[data-platform-content-zoom-root="entries"]').first();
     const footnotesList = frame.locator(
       '[data-platform-content-zoom-root="footnotes"] [role="listbox"]',

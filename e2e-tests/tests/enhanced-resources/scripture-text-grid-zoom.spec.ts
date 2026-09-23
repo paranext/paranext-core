@@ -42,7 +42,7 @@
 import type { Frame, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady, waitForOpenWebViewIdByType } from '../../fixtures/helpers';
-import { ctrlWheel } from '../../fixtures/content-zoom-helpers';
+import { ctrlWheel, firstLineBoxHeight } from '../../fixtures/content-zoom-helpers';
 import { getEditorFrame, readFactor } from '../../fixtures/scripture-editor-helpers';
 import {
   closeAllNonHomeDockTabs,
@@ -372,8 +372,9 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
 
     const gripBefore = await grip.boundingBox();
     const kebabBefore = await kebab.boundingBox();
-    const textBefore = await text.boundingBox();
-    if (!gripBefore || !kebabBefore || !textBefore) throw new Error('Grip, kebab or text missing');
+    // One line box, not the text block: wrapped text grows by ~z² under CSS `zoom` z, a line by z.
+    const textLineBefore = await firstLineBoxHeight(text);
+    if (!gripBefore || !kebabBefore) throw new Error('Grip or kebab missing');
 
     // Five steps up from the default: each Ctrl+= is one 10 % step.
     /* eslint-disable no-await-in-loop */
@@ -387,9 +388,9 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
 
     const gripAfter = await grip.boundingBox();
     const kebabAfter = await kebab.boundingBox();
-    const textAfter = await text.boundingBox();
-    if (!gripAfter || !kebabAfter || !textAfter) throw new Error('Grip, kebab or text lost');
-    expect(textAfter.height / textBefore.height).toBeCloseTo(
+    const textLineAfter = await firstLineBoxHeight(text);
+    if (!gripAfter || !kebabAfter) throw new Error('Grip or kebab lost');
+    expect(textLineAfter / textLineBefore).toBeCloseTo(
       (settingsDefault + 0.5) / settingsDefault,
       1,
     );
