@@ -494,7 +494,9 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
  * returned to the latest `defaultStateValue`, and changing the `stateKey` will use the latest
  * `defaultStateValue`. However, if `defaultStateValue` is changed while a state is
  * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
- * updated to the new `defaultStateValue`.
+ * updated to the new `defaultStateValue`. A state value showing `defaultStateValue` keeps that same
+ * object across updates to other keys of the web view state, but still pass a stable default
+ * (module-level or memoized) if the value is used in an effect's dependency list.
  *
  * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
  *
