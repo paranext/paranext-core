@@ -19,6 +19,8 @@ import { CLEAR_EDITOR_COMMAND } from 'lexical';
 import { ContentEditable } from '@/components/advanced/editor/editor-ui/content-editable';
 import { ToolbarPlugin } from '@/components/advanced/editor/plugins/toolbar/toolbar-plugin';
 import { FontFormatToolbarPlugin } from '@/components/advanced/editor/plugins/toolbar/font-format-toolbar-plugin';
+// CUSTOM: Content-zoom text marker for the content-editable wrapper below
+import { useContentZoomTextProps } from '@/context/content-zoom-text.context';
 
 function ClearEditorBridge({ onClear }: { onClear?: (clearFn: () => void) => void }) {
   const [editor] = useLexicalComposerContext();
@@ -45,6 +47,8 @@ export function Plugins({
   onClear?: (clearFn: () => void) => void;
   actions?: ReactNode;
 }) {
+  // CUSTOM: Read the content-zoom text marker spread onto the content-editable wrapper below
+  const contentZoomTextProps = useContentZoomTextProps();
   const [, setFloatingAnchorElem] = useState<HTMLDivElement | undefined>(undefined);
 
   const onRef = (_floatingAnchorElem: HTMLDivElement) => {
@@ -77,7 +81,16 @@ export function Plugins({
       <div className="tw:relative">
         <RichTextPlugin
           contentEditable={
-            <div ref={onRef}>
+            // CUSTOM: Spread the content-zoom text marker onto the content-editable wrapper so text
+            // typed into a comment zooms like the saved note beside it, while the format toolbar
+            // above and the actions below keep interface scale. It marks nothing outside a
+            // ContentZoomTextProvider (the Scripture editor's comment pop-up has none).
+            <div
+              ref={onRef}
+              // The hook returns only the content-zoom marker attribute, or nothing.
+              // eslint-disable-next-line react/jsx-props-no-spreading
+              {...contentZoomTextProps}
+            >
               <ContentEditable placeholder={placeholder} />
             </div>
           }

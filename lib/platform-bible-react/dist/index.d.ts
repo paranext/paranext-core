@@ -704,12 +704,12 @@ export declare function ConflictNoteCard({ comment, localizedStrings, availableA
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLDivElement> & {
+export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLElement> & {
 	/**
-	 * Id of the zoom area this element wraps: lower-case letters, digits and hyphens, starting with a
-	 * letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit this
-	 * prop for the view's main area. A view with several independently zoomable panes gives each its
-	 * own id — the Scripture editor uses `footnotes` for its footnotes pane.
+	 * Id of the zoom area this element belongs to: lower-case letters, digits and hyphens, starting
+	 * with a letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit
+	 * this prop for the view's main area. A view with several independently zoomable panes gives each
+	 * its own id — the Scripture editor uses `footnotes` for its footnotes pane.
 	 *
 	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
 	 * a warning once.
@@ -717,52 +717,64 @@ export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLDivElement> & {
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	area?: string;
+	/**
+	 * Element to render: `'div'` (the default) or `'span'`. Use `'span'` inside phrasing content — a
+	 * `<p>`, a heading, or a table cell's inline text — where a `div` is not allowed.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	as?: "div" | "span";
 };
 /**
- * Marks one independently zoomable content area within a web view.
+ * Marks an element that renders project text — scripture, note bodies, result snippets, resource
+ * text in its own font — so the platform scales it with the pane's content zoom.
  *
- * The platform scales a marked area in response to Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel, and the tab
- * context menu; it remembers the chosen level per area and shows the zoom indicator. The view
- * itself writes nothing else to make zoom work.
+ * Mark the text, not the region around it. Buttons, inputs, filters, headers, badges, card frames
+ * and pop-ups stay outside every marked element and keep interface scale. Several elements may
+ * share one area id and zoom together, so a card, list or table view marks each text element with
+ * the same id; flowing, editor-like text keeps one marker around the text body. Areas must not nest
+ * — a marked element found inside another marked element is ignored.
  *
- * Several elements may share one area id and zoom together. Areas must not nest — a marked element
- * found inside another marked element is ignored. Keep toolbars, dividers and headers outside the
- * marked element so they are not scaled along with the content.
+ * The platform scales marked elements on Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel and the tab context menu,
+ * remembers the level per area and shows the zoom indicator; the view writes nothing else. A view
+ * that marks no area gets no content zoom unless the platform declares its web view type zoomable.
+ * Your view is zoomable only while at least one element carrying `data-platform-content-zoom-root`
+ * is rendered: the tab menu's zoom items, Ctrl/⌘ + `+`/`-`/`0` and Ctrl/⌘+wheel appear and act only
+ * then. If your view shows nothing to zoom for a while (before a search, while loading), render an
+ * empty marked element so the controls stay available.
  *
  * Pop-ups opened from inside stay at interface scale; anchor them to live positions
  * (`useLivePopoverAnchor`) so they open beside zoomed content.
  *
- * This component renders a plain `div` in normal flow and applies no classes of its own — the
- * caller supplies whatever layout classes its parent expects.
+ * Renders a `div` by default and a `span` with `as="span"`, in normal flow, with no classes of its
+ * own — the caller supplies whatever layout classes its parent expects. Library components that
+ * render project text mark it themselves inside a `ContentZoomTextProvider`; do not wrap such a
+ * provider's subtree in a `ContentZoomRoot`.
  *
  * Measurement caveat: inside a zoomed area, `getBoundingClientRect()` reports zoomed pixels, while
  * `getComputedStyle(el).fontSize` does not reflect the zoom factor. To read the factor itself, look
  * up the `--platform-content-zoom-<areaId>` custom property (`--platform-content-zoom-main` for the
  * unnamed area, `--platform-content-zoom-default` as a fallback) on the view's `documentElement`.
  *
- * A view that marks no area gets no content zoom unless the platform declares its web view type
- * zoomable. Your view is zoomable only while at least one element carrying
- * `data-platform-content-zoom-root` is rendered: the tab menu's zoom items, Ctrl/⌘ + `+`/`-`/`0`
- * and Ctrl/⌘+wheel appear and act only then. If your view shows nothing to zoom for a while (before
- * a search, while loading), render an empty marked element so the controls stay available.
- *
  * @example
  *
  * ```tsx
- * <Toolbar />
- * <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
- *   <EditorContent />
- * </ContentZoomRoot>
+ * <li>
+ *   <Button onClick={goToVerse}>{verseRef}</Button>
+ *   <ContentZoomRoot as="span" className="scripture-font">
+ *     {snippet}
+ *   </ContentZoomRoot>
+ * </li>;
  * ```
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare const ContentZoomRoot: import("react").ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & {
+export declare const ContentZoomRoot: import("react").ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLElement> & {
 	/**
-	 * Id of the zoom area this element wraps: lower-case letters, digits and hyphens, starting with a
-	 * letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit this
-	 * prop for the view's main area. A view with several independently zoomable panes gives each its
-	 * own id — the Scripture editor uses `footnotes` for its footnotes pane.
+	 * Id of the zoom area this element belongs to: lower-case letters, digits and hyphens, starting
+	 * with a letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit
+	 * this prop for the view's main area. A view with several independently zoomable panes gives each
+	 * its own id — the Scripture editor uses `footnotes` for its footnotes pane.
 	 *
 	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
 	 * a warning once.
@@ -770,7 +782,14 @@ export declare const ContentZoomRoot: import("react").ForwardRefExoticComponent<
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	area?: string;
-} & import("react").RefAttributes<HTMLDivElement>>;
+	/**
+	 * Element to render: `'div'` (the default) or `'span'`. Use `'span'` inside phrasing content — a
+	 * `<p>`, a heading, or a table cell's inline text — where a `div` is not allowed.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	as?: "div" | "span";
+} & import("react").RefAttributes<HTMLElement>>;
 /**
  * Attribute a content-zoom-eligible element carries to mark it as one zoom area. Its value is the
  * zoom area id; an empty value marks the view's `main` area. Mirrors `CONTENT_ZOOM_ROOT_ATTRIBUTE`
@@ -782,6 +801,51 @@ export declare const ContentZoomRoot: import("react").ForwardRefExoticComponent<
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare const CONTENT_ZOOM_ROOT_ATTRIBUTE = "data-platform-content-zoom-root";
+/**
+ * Props for {@link ContentZoomTextProvider}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomTextProviderProps = {
+	/**
+	 * Id of the zoom area the project text inside belongs to, with the same rules as
+	 * `ContentZoomRootProps.area`. Omit it for the view's main area.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	area?: string;
+	/**
+	 * The subtree whose library components mark the project text they render.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	children: React$1.ReactNode;
+};
+/**
+ * Opts the library components inside it into marking the project text they render — a comment's
+ * scripture snippet, body, conflict diff and composer, for example — so that text scales with the
+ * pane's content zoom while the components' buttons, badges and frames keep interface scale.
+ * Outside a provider those components mark nothing.
+ *
+ * The provider marks no element itself. Do not also wrap its subtree in a `ContentZoomRoot`: a
+ * marked element found inside another marked element is ignored.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function ContentZoomTextProvider({ area, children }: ContentZoomTextProviderProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The props a component spreads onto the existing element that renders project text inline. Inside
+ * a {@link ContentZoomTextProvider} the props carry `data-platform-content-zoom-root` set to the
+ * provider's area (`''` for the main area); outside one they are empty. Spread them onto the text
+ * element itself rather than adding a wrapper, and never onto pop-up content or an element that
+ * contains another marked element.
+ *
+ * @returns The marker attribute inside a provider; an empty object outside one
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function useContentZoomTextProps(): {
+	"data-platform-content-zoom-root"?: string;
+};
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;

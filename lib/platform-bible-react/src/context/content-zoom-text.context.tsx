@@ -55,10 +55,10 @@ export function ContentZoomTextProvider({ area, children }: ContentZoomTextProvi
 
 /**
  * The props a component spreads onto the existing element that renders project text inline. Inside
- * a {@link ContentZoomTextProvider} that is `data-platform-content-zoom-root` set to the provider's
- * area (`''` for the main area); outside one it is `{}`. Spread it onto the text element itself
- * rather than adding a wrapper, and never onto pop-up content or an element that contains another
- * marked element.
+ * a {@link ContentZoomTextProvider} the props carry `data-platform-content-zoom-root` set to the
+ * provider's area (`''` for the main area); outside one they are empty. Spread them onto the text
+ * element itself rather than adding a wrapper, and never onto pop-up content or an element that
+ * contains another marked element.
  *
  * @returns The marker attribute inside a provider; an empty object outside one
  * @experimental This export is unstable and may change shape or disappear without notice
