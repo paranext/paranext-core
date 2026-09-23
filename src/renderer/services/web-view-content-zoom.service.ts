@@ -1204,11 +1204,13 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
       pendingOwnLevelWrites.delete(webViewId);
       return false;
     }
-    if (!pendingWriteForCurrentIdentity(definition)) {
+    const current = pendingWriteForCurrentIdentity(definition);
+    if (!current) {
       pendingOwnLevelWrites.delete(webViewId);
       return true;
     }
-    const currentStamp = commitStampFor(definition);
+    // The stamp the write was chosen under is, by that check, the stamp a commit carries now.
+    const currentStamp = current.identity;
     const { levels } = pending;
     const state: Record<string, unknown> = { ...(definition.state ?? {}) };
     // The identity stamp lives exactly as long as the levels it belongs to: a pane that has levels
@@ -1487,8 +1489,9 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
 }
 
 /**
- * The Settings-default subscription. A function of its own so initialization can start it without
- * waiting on it; its body and its callback are what they have always been.
+ * Subscribes to the Settings default: each value it delivers replaces the cached default and
+ * re-pushes every open pane. Initialization starts it without waiting on it; a failure to subscribe
+ * is logged, not thrown.
  */
 async function subscribeToDefault(): Promise<void> {
   try {
@@ -1505,7 +1508,11 @@ async function subscribeToDefault(): Promise<void> {
   }
 }
 
-/** The memory subscription, a function of its own for the same reason as {@link subscribeToDefault}. */
+/**
+ * Subscribes to the memory setting: each record it delivers replaces the cached memory and brings
+ * every open pane in line with it ({@link syncSiblingsFromMemory}). Started without waiting on it,
+ * like {@link subscribeToDefault}; a failure to subscribe is logged, not thrown.
+ */
 async function subscribeToMemory(): Promise<void> {
   try {
     await deps.settings.subscribe('platform.webViewContentZoomMemory', (value) => {
