@@ -17,6 +17,7 @@ import {
   ZOOM_STEP,
 } from '@shared/models/content-zoom.model';
 import { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
+import { MODIFIER_KEYS } from 'platform-bible-utils';
 import { isValidContentZoomAreaId, isValidZoomFactor } from '@shared/utils/content-zoom.util';
 
 const INDICATOR_ID = 'platform-content-zoom-indicator';
@@ -133,6 +134,7 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       codes,
     })),
   );
+  const modifierKeys = JSON.stringify([...MODIFIER_KEYS]);
   return `
   (() => {
     const webViewId = ${id};
@@ -319,17 +321,20 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     // is not suppressed, but nothing was spent either, and the gesture still protects the next
     // change into a different area. A Tab ends the gesture outright: the focus move that follows it
     // is one the user asked for, not the view's answer to the click, and a user who clicks a
-    // footnote row and immediately Tabs toward the text means the text. Only Tab, not any key - a
-    // zoom chord pressed inside the window is exactly what the protection is for.
+    // footnote row and immediately Tabs toward the text means the text. Typing ends it too, since
+    // a user typing where the view put the caret is working there. A zoom chord does not end it -
+    // a chord pressed inside the window is exactly what the protection is for - and neither does a
+    // modifier pressed on its own, which is how a keyboard sends the first half of every chord.
     let pointerArea;
     let pointerTime = 0;
     // Whether the element holding focus is one the VIEW focused rather than one the user chose.
     // Set when a pointer gesture's answering focus change is suppressed below - the view moving the
     // caret out of the area the user just clicked, which is what selecting a footnote row does.
-    // Cleared by a focus change the platform accepts, or by Tab - never by a pointer down: a click
-    // is not itself a focus move, and a click that moves no caret (a non-focusable element) must
-    // leave the caret exactly where the view put it rather than hand the chords back to it. The
-    // chords consult this flag; the wheel does not, since it reads the pointer and never the caret.
+    // Cleared by a focus change the platform accepts, by Tab, or by typing - never by a pointer
+    // down: a click is not itself a focus move, and a click that moves no caret (a non-focusable
+    // element) must leave the caret exactly where the view put it rather than hand the chords back
+    // to it. The chords consult this flag; the wheel does not, since it reads the pointer and never
+    // the caret.
     let viewMovedFocus = false;
     const onPointerDown = (e) => {
       const areaId = areaOf(e.target);
@@ -360,8 +365,19 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       viewMovedFocus = false;
       setActive(areaId);
     };
+    // The platform's MODIFIER_KEYS, baked in as the chords are below: every key that is not typed
+    // input on its own, lock keys and AltGraph included, so no half-pressed chord ends the gesture.
+    const MODIFIER_KEYS = ${modifierKeys};
     const onGestureKeyDown = (e) => {
-      if (e.key === 'Tab') { pointerArea = undefined; viewMovedFocus = false; }
+      if (e.key === 'Tab') { pointerArea = undefined; viewMovedFocus = false; return; }
+      // hasModifier and chordFor are the chord listener's own tests, declared with it below.
+      if (MODIFIER_KEYS.indexOf(e.key) !== -1 || (hasModifier(e) && chordFor(e))) return;
+      pointerArea = undefined;
+      if (!viewMovedFocus) return;
+      // The focus change the click suppressed takes effect now: the caret the user is typing at
+      // names the active area, the way an accepted focus change would have.
+      viewMovedFocus = false;
+      setActive(areaOf(document.activeElement));
     };
     window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('focusin', onFocusIn, true);
