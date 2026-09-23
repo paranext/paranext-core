@@ -175,7 +175,9 @@ function sanitizeProperties(
       }
       sanitized[key] = value;
     } catch (error) {
-      logger.warn(`Analytics: dropping non-serializable property '${key}': ${String(error)}`);
+      logger.warn(
+        `Analytics: dropping non-serializable property '${key}': ${getErrorMessage(error)}`,
+      );
     }
   });
 
@@ -217,10 +219,10 @@ function flushQueue(environment: AnalyticsEnvironment): void {
       // Debug, not warn: the provider owns the one user-visible line per failed event. The
       // rejection itself stays meaningful as the seam a retrying queue will hook into.
       provider.send(event).catch((error) => {
-        logger.debug(`Analytics: failed to send event '${event.name}': ${String(error)}`);
+        logger.debug(`Analytics: failed to send event '${event.name}': ${getErrorMessage(error)}`);
       });
     } catch (error) {
-      logger.error(`Analytics: failed to send event '${event.name}': ${String(error)}`);
+      logger.error(`Analytics: failed to send event '${event.name}': ${getErrorMessage(error)}`);
     }
   });
 }
