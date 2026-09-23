@@ -49,7 +49,8 @@ describe('isEditorContextMenuOpenFor', () => {
 
   it('returns false for null/undefined (editor not yet mounted)', () => {
     expect(isEditorContextMenuOpenFor(undefined)).toBe(false);
-    // eslint-disable-next-line no-null/no-null -- exercising the null branch explicitly
+    // Exercises the null branch explicitly, alongside undefined above.
+    // eslint-disable-next-line no-null/no-null
     expect(isEditorContextMenuOpenFor(null)).toBe(false);
   });
 });
