@@ -102,7 +102,8 @@ describe('content zoom markers (Text Collection grid)', () => {
     expect(wheelHandlers).toEqual([]);
   });
 
-  it('never reads the retired per-resource zoom state, so a level saved by an earlier version is ignored', () => {
+  it('has no source that reads the retired per-resource zoom state key', () => {
+    // A static sweep, not a mount: with no reader left, a level saved under this key has no effect.
     // Positive control: the sweep sees the web view's other state keys, spelled the same way.
     expect(grid).toContain("useWebViewState<ResourceCollectionViewMode>('viewMode'");
     const readers = gridSources
