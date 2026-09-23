@@ -395,8 +395,8 @@ export const NOTE_INSERT_CONFIG: Record<
  * Whether a note-insert callback should skip the version-history snapshot and the marker insert
  * entirely, checked BEFORE either runs: with no mounted editor, or a read-only one (which already
  * folds in a sync freeze), an insert can never land, and skipping ahead of the snapshot is what
- * stops a read-only top-menu click from writing a forced, empty version-history commit. No
- * user-visible notice for the read-only case here — left to a separate PR.
+ * stops a read-only top-menu click from writing a forced, empty version-history commit. The refusal
+ * is silent to the user.
  */
 export function shouldSkipNoteInsert(hasEditor: boolean, isReadOnlyEffective: boolean): boolean {
   return !hasEditor || isReadOnlyEffective;
