@@ -192,34 +192,39 @@ test('a client that cannot be constructed rejects the send with a single warn an
   expect(mocks.debug).toHaveBeenCalledWith(expect.stringContaining('unusable'));
 });
 
-test('shutdown flushes the client with the shutdown timeout and resolves', async () => {
+test('shutdown flushes the client with the time it is given and resolves', async () => {
   const provider = await makeProvider();
   await provider.send({ name: 'app_launch', timestamp: 1700000000000, environment: 'test' });
-  await provider.shutdown();
-  expect(mocks.clientShutdown).toHaveBeenCalledWith(1000);
+  await provider.shutdown(400);
+  expect(mocks.clientShutdown).toHaveBeenCalledWith(400);
 });
 
 test('shutdown before any send is a no-op that resolves', async () => {
   const provider = await makeProvider();
-  await expect(provider.shutdown()).resolves.toBeUndefined();
+  await expect(provider.shutdown(400)).resolves.toBeUndefined();
   expect(mocks.clientShutdown).not.toHaveBeenCalled();
 });
 
-test('a client shutdown that hangs is abandoned after the timeout with a warning, and shutdown still resolves', async () => {
+test('a client shutdown that hangs is abandoned when the time it was given runs out, with a warning, and shutdown still resolves', async () => {
   vi.useFakeTimers();
   mocks.clientShutdown.mockImplementation(() => new Promise(() => {}));
   const provider = await makeProvider();
   await provider.send({ name: 'app_launch', timestamp: 1700000000000, environment: 'test' });
-  const shutdownPromise = provider.shutdown();
-  await vi.advanceTimersByTimeAsync(1000);
+  let settled = false;
+  const shutdownPromise = provider.shutdown(400).finally(() => {
+    settled = true;
+  });
+  await vi.advanceTimersByTimeAsync(399);
+  expect(settled).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
   await expect(shutdownPromise).resolves.toBeUndefined();
-  expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('shutdown'));
+  expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('exceeded 400 ms'));
 });
 
 test('a client shutdown that rejects is logged and swallowed', async () => {
   mocks.clientShutdown.mockRejectedValue(new Error('socket closed'));
   const provider = await makeProvider();
   await provider.send({ name: 'app_launch', timestamp: 1700000000000, environment: 'test' });
-  await expect(provider.shutdown()).resolves.toBeUndefined();
+  await expect(provider.shutdown(400)).resolves.toBeUndefined();
   expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('socket closed'));
 });

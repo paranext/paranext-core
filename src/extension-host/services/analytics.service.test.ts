@@ -526,7 +526,7 @@ test('an event whose routing fails does not stop later events from reaching the 
   expect(mocks.posthogSend).toHaveBeenCalledWith(expect.objectContaining({ name: 'second' }));
 });
 
-test('shutdown does not wait more than the shutdown budget for an event still being enriched', async () => {
+test('shutdown settles within one shared 500 ms budget when routing and every provider shutdown hang', async () => {
   mocks.isPostHogEnabled.mockReturnValue(true);
   vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
   const { initialize, trackEvent, shutdown } = await import(
@@ -536,18 +536,53 @@ test('shutdown does not wait more than the shutdown budget for an event still be
   await initialize();
   mocks.getCommonProperties.mockImplementation(() => new Promise(() => {}));
   trackEvent('stuck');
+  // A provider that honours its time limit: it gives up once the time it was handed runs out.
+  mocks.posthogShutdown.mockImplementation(
+    (timeoutMs: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, timeoutMs);
+      }),
+  );
 
   vi.useFakeTimers();
   let settled = false;
   const shutdownPromise = shutdown().finally(() => {
     settled = true;
   });
-  await vi.advanceTimersByTimeAsync(999);
+  await vi.advanceTimersByTimeAsync(499);
   expect(settled).toBe(false);
-  await vi.advanceTimersByTimeAsync(1);
+  // The routing wait uses the whole budget, so the providers are handed 0 ms. A zero-delay timer
+  // fires 1 ms later (as in Node), so everything has settled 1 ms past the budget; two separate
+  // 500 ms waits would still be running.
+  await vi.advanceTimersByTimeAsync(2);
   expect(settled).toBe(true);
   await shutdownPromise;
   expect(mocks.posthogShutdown).toHaveBeenCalledTimes(2);
+  expect(mocks.posthogShutdown).toHaveBeenCalledWith(0);
+});
+
+test('providers are given only the time left in the budget after the routing wait', async () => {
+  mocks.isPostHogEnabled.mockReturnValue(true);
+  vi.stubEnv('PT_ANALYTICS_TEST_OVERRIDE', 'true');
+  const { initialize, trackEvent, shutdown } = await import(
+    '@extension-host/services/analytics.service'
+  );
+  trackEvent('app_launch');
+  await initialize();
+
+  vi.useFakeTimers();
+  mocks.getCommonProperties.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        setTimeout(() => resolve({ app_version: '0.6.0' }), 200);
+      }),
+  );
+  trackEvent('slow');
+  const shutdownPromise = shutdown();
+  await vi.advanceTimersByTimeAsync(200);
+  await shutdownPromise;
+  expect(mocks.posthogShutdown).toHaveBeenCalledTimes(2);
+  expect(mocks.posthogShutdown).toHaveBeenCalledWith(300);
 });
 
 test('shutdown asks every constructed provider to shut down and never rejects', async () => {
