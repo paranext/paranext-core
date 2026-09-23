@@ -58,6 +58,15 @@ describe('content zoom markers (Enhanced Resources)', () => {
     expect(webView).not.toContain('<ContentZoomRoot area="entries"');
   });
 
+  it('renders the semantic domain dialog outside the entries provider', () => {
+    // The dialog renders hook consumers, and React context would reach them through the portal if
+    // it were mounted inside the provider.
+    const providerCloseIndex = webView.indexOf('</ContentZoomTextProvider>');
+    const dialogIndex = webView.indexOf('<SemanticDomainViewer');
+    expect(providerCloseIndex).toBeGreaterThan(-1);
+    expect(dialogIndex).toBeGreaterThan(providerCloseIndex);
+  });
+
   it('marks entry text in each component that renders it', () => {
     [
       'components/dictionary-tab/dictionary-display-item.component.tsx',

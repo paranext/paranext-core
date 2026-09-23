@@ -24,6 +24,7 @@ import {
 import {
   ctrlWheel,
   expectPopupBesideTriggerAndInsideFrame,
+  firstLineBoxHeight,
   INDICATOR_SELECTOR,
   readContentZoomMemory,
   readIndicatorText,
@@ -228,10 +229,11 @@ test.describe('comment list content zoom', () => {
       });
       const readToggle = card.getByRole('button', { name: /^Mark as (read|unread)$/ });
       const cardBoxBefore = await card.boundingBox();
-      const bodyBoxBefore = await body.boundingBox();
+      // One line box, not the body block: wrapped text grows by ~z² under CSS `zoom` z, a line by z.
+      const bodyLineBefore = await firstLineBoxHeight(body);
       const toggleBoxBefore = await readToggle.boundingBox();
-      if (!cardBoxBefore || !bodyBoxBefore || !toggleBoxBefore)
-        throw new Error('Comment card, body or read toggle not found');
+      if (!cardBoxBefore || !toggleBoxBefore)
+        throw new Error('Comment card or read toggle not found');
 
       // Aimed at the first card: the list is taller than the pane, and the wheel resolves to the
       // list's only area wherever inside the card it lands.
@@ -239,10 +241,10 @@ test.describe('comment list content zoom', () => {
       await expect.poll(() => readFactor(listFrame, '')).toBe(1.1);
 
       await zoomAreaTo(mainPage, listFrame, listId, 'main', 2);
-      const bodyBoxZoomed = await body.boundingBox();
+      const bodyLineZoomed = await firstLineBoxHeight(body);
       const toggleBoxZoomed = await readToggle.boundingBox();
-      if (!bodyBoxZoomed || !toggleBoxZoomed) throw new Error('Body or read toggle lost at 200 %');
-      expect(bodyBoxZoomed.height / bodyBoxBefore.height).toBeCloseTo(2, 1);
+      if (!toggleBoxZoomed) throw new Error('Read toggle lost at 200 %');
+      expect(bodyLineZoomed / bodyLineBefore).toBeCloseTo(2, 1);
       // The card's own button stays at interface size: only the comment text scales, not the card.
       expect(Math.abs(toggleBoxZoomed.height - toggleBoxBefore.height)).toBeLessThanOrEqual(1);
       expect(Math.abs(toggleBoxZoomed.width - toggleBoxBefore.width)).toBeLessThanOrEqual(1);

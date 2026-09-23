@@ -8045,9 +8045,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     marker.
   - In a view with several areas, a click or wheel over an unmarked control or gap targets the area
     used last, because the bootstrap resolves the area from the nearest marked ancestor.
-  - Text rendered at a fixed size beside zoomed text but inside its geometry needs converting: the
-    Simple-mode gutter reservation divides by the area's factor, and the character-marker bar's
-    baseline probe takes the paragraph's `currentCSSZoom`.
+  - Fixed-size geometry measured against, or reserved inside, zoomed text needs converting (the
+    editor's gutter reservation and the character-marker bar's baseline probe are the examples):
+    the Simple-mode gutter reservation divides by the area's factor, and the baseline probe takes
+    the paragraph's `currentCSSZoom`.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
 
 ## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas

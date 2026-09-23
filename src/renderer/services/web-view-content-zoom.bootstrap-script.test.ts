@@ -1748,6 +1748,43 @@ describe('content-zoom bootstrap script', () => {
     expect(badge.style.right).toBe('');
   });
 
+  it('anchors the indicator to the visible part of an area, not to a marker scrolled out of its list', async () => {
+    install(
+      'wv-clipped',
+      '<div id="list" style="overflow-y:auto">' +
+        '<div data-platform-content-zoom-root="comments" id="above">one</div>' +
+        '<div data-platform-content-zoom-root="comments" id="visible">two</div>' +
+        '</div>',
+    );
+    const box = (top: number, left: number, bottom: number, right: number): DOMRect => ({
+      top,
+      left,
+      bottom,
+      right,
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(byId('list'), 'getBoundingClientRect').mockReturnValue(box(100, 0, 400, 500));
+    // Scrolled up out of the list: its box ends above the list's top edge.
+    vi.spyOn(byId('above'), 'getBoundingClientRect').mockReturnValue(box(-200, 0, 50, 500));
+    vi.spyOn(byId('visible'), 'getBoundingClientRect').mockReturnValue(box(150, 0, 300, 480));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+
+    api.showIndicator('comments', '120 %');
+    await nextFrame();
+    const badge = byId('platform-content-zoom-indicator');
+    // 12 px below the visible marker's top, 16 px in from its right edge.
+    expect(badge.style.top).toBe('162px');
+    expect(badge.style.right).toBe(`${window.innerWidth - 480 + 16}px`);
+  });
+
   it('shows a transient indicator on the named area', () => {
     install('wv-8', TWO_AREAS);
     // The bootstrap script defines this global; the double underscore marks it as an internal

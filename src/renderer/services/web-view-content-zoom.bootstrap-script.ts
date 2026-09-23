@@ -748,15 +748,56 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       const style = window.getComputedStyle ? window.getComputedStyle(element) : undefined;
       return style && style.direction === 'rtl' ? 'rtl' : 'ltr';
     };
-    // Top inline-end corner of the union of one area's elements, in viewport pixels: top-right for
-    // an LTR area, top-left for an RTL one.
+    // An element's box clipped to its nearest ancestor that clips overflow - or, with none below the
+    // body, to the viewport - so a marker scrolled out of its own list cannot stretch the union
+    // above that list and over another pane. The body and the root are not taken as clippers: their
+    // overflow belongs to the viewport, and their own boxes span the whole document. Clippers found
+    // on one walk are remembered in the maps for the rest of the same placement, since the markers
+    // of one area usually share their scroll container.
+    const CLIPPING_OVERFLOW = ['auto', 'scroll', 'hidden', 'clip'];
+    const clipsOverflow = (element) => {
+      const style = window.getComputedStyle(element);
+      return CLIPPING_OVERFLOW.includes(style.overflowY) || CLIPPING_OVERFLOW.includes(style.overflowX);
+    };
+    const nearestClipper = (element, clipperOf) => {
+      const walked = [];
+      let clipper = null;
+      let node = element.parentElement;
+      while (node && node !== document.body && node !== document.documentElement) {
+        if (clipperOf.has(node)) { clipper = clipperOf.get(node); break; }
+        walked.push(node);
+        if (clipsOverflow(node)) { clipper = node; break; }
+        node = node.parentElement;
+      }
+      walked.forEach((visited) => clipperOf.set(visited, clipper));
+      return clipper;
+    };
+    const visibleRectOf = (element, clipperOf, boundsOf) => {
+      const rect = element.getBoundingClientRect();
+      const clipper = nearestClipper(element, clipperOf);
+      if (!boundsOf.has(clipper)) {
+        boundsOf.set(clipper, clipper
+          ? clipper.getBoundingClientRect()
+          : { top: 0, left: 0, right: window.innerWidth, bottom: window.innerHeight });
+      }
+      const bounds = boundsOf.get(clipper);
+      const top = Math.max(rect.top, bounds.top);
+      const left = Math.max(rect.left, bounds.left);
+      const right = Math.min(rect.right, bounds.right);
+      const bottom = Math.min(rect.bottom, bounds.bottom);
+      return right > left && bottom > top ? { top, left, right } : undefined;
+    };
+    // Top inline-end corner of the union of the visible parts of one area's elements, in viewport
+    // pixels: top-right for an LTR area, top-left for an RTL one.
     const cornerOf = (areaId) => {
       let top = Infinity; let left = Infinity; let right = -Infinity; let anchor;
+      const clipperOf = new Map();
+      const boundsOf = new Map();
       document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
         if (idOf(element) !== areaId) return;
         if (!anchor) anchor = element;
-        const rect = element.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) return;
+        const rect = visibleRectOf(element, clipperOf, boundsOf);
+        if (!rect) return;
         top = Math.min(top, rect.top); left = Math.min(left, rect.left); right = Math.max(right, rect.right);
       });
       const rtl = directionOf(anchor || document.documentElement) === 'rtl';
