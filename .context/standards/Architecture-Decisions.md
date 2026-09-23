@@ -5880,7 +5880,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pointer event overruling it, and clearing on blur — so neither their step arithmetic nor their
   modifier tracking can silently drift apart. The two copies are still two copies: making the reader
   one source (one self-contained core the utility wraps and the bootstrap splices in through `?raw`)
-  is deferred to a ticket. Not compared: `visibilitychange` clearing, and the per-event versus
+  is not needed: the utilities copy is deleted (see the amendment of 2026-09-23 below). Not compared: `visibilitychange` clearing, and the per-event versus
   per-frame clamp split the test documents. Enhanced Resources has no leftover zoom fallback that
   could fall out of step with the platform mechanism. The retired `scripturePaneZoom` web-view-state
   key is left behind, unread and unpruned, in every web-view definition saved before this change
