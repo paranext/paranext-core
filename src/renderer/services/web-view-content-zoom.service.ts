@@ -899,7 +899,7 @@ export function pushContentZoom(
  * the bootstrap only calls the parent when its area LIST changes and keeps that list inside the
  * iframe. Whether those areas survive the replacement is decided by the liveness probe at the end
  * of the wait ({@link startStaleAreaGrace}). In the ordinary case a fresh report has already
- * cancelled the wait. Content that never reports again (`allowScripts: false` content, an in-place
+ * canceled the wait. Content that never reports again (`allowScripts: false` content, an in-place
  * navigation the platform never injected into, `about:blank`, or a host that tore its own bootstrap
  * down) has its predecessor's areas dropped.
  *
