@@ -21,6 +21,8 @@ export const USERSNAP_INIT_TIMEOUT_MS = 5 * 1000;
 const FEEDBACK_UNAVAILABLE_MESSAGE_KEY = '%mainMenu_feedback_unavailable%';
 /** Shown when this build has no Usersnap keys, so there are no feedback forms to open */
 const FEEDBACK_NOT_CONFIGURED_MESSAGE_KEY = '%mainMenu_feedback_notConfigured%';
+/** Shown when the Usersnap widget throws while opening a configured form */
+const FEEDBACK_FAILED_TO_OPEN_MESSAGE_KEY = '%mainMenu_feedback_failed_to_open%';
 
 /** Global UserSnap API instance service */
 
@@ -244,7 +246,9 @@ export async function initializeUsersnapApi() {
 
 export async function openUsersnapForm(apiKey: string) {
   if (!USERSNAP_SPACE_API_KEY || !apiKey) {
-    logger.warn('Cannot open Usersnap form: this build has no Usersnap space key or project key');
+    logger.info(
+      `Cannot open Usersnap form: this build has no Usersnap ${USERSNAP_SPACE_API_KEY ? 'project' : 'space'} key`,
+    );
     await notificationService.send({
       message: FEEDBACK_NOT_CONFIGURED_MESSAGE_KEY,
       severity: 'warning',
@@ -268,7 +272,7 @@ export async function openUsersnapForm(apiKey: string) {
   } catch (error) {
     logger.warn(`Failed to open Usersnap widget: ${error}`);
     await notificationService.send({
-      message: '%mainMenu_feedback_failed_to_open%',
+      message: FEEDBACK_FAILED_TO_OPEN_MESSAGE_KEY,
       severity: 'warning',
     });
   }

@@ -6961,9 +6961,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `USERSNAP_SPACE_API_KEY`, `USERSNAP_PROJECT_REPORT_ISSUE_API_KEY` and
   `USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY` constants in `src/shared/data/platform.data.ts` empty, and
   no items in the `platform.helpFeedback` menu group (`src/extension-host/data/menu.data.json`).
-  As of 2026-09-24, Paratext 10's `repo-patches/paranext-core.patch` (in the `paratext-10-studio`
-  repo) sets the keys
-  and re-adds the two items, `platform.usersnapSubmitIdea` and `platform.usersnapReportIssue`. The
+  Paratext 10's `repo-patches/paranext-core.patch` (in the `paratext-10-studio` repo) sets the keys
+  and re-adds the two items, `platform.usersnapSubmitIdea` and `platform.usersnapReportIssue`; as of
+  2026-09-24 that patch change is paratext-10-studio PR #194, open and stacked on paranext-core
+  PR #2855. The
   main-process display-media handler that serves the widget's native screenshot is registered only
   when the space key is set (`registerDisplayMediaRequestHandler` in
   `src/main/services/display-media-request.util.ts`), and it serves only the window's top frame
