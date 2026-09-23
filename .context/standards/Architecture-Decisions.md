@@ -3130,7 +3130,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
   no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
   (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
-  manual footnotes pane: Show footnotes opens it and it stays open. The Edit flyout's ids are not
+  manual footnotes pane: Show footnotes opens it and it stays open. Per-pane zoom
+(`platform.webViewContentZoomIn`/`Out`/`Reset`) is Power-only for a structural reason rather than a
+product one: every item in the Options column is Power-only, and a column is served whenever ANY of
+its items is visible, so a single ungated item there puts the whole Options column — heading and all
+— back into Simple. Simple reaches zoom from the tab menu, which core's `defaultWebViewTabMenu`
+serves in every mode. Anything added to a Power-only column needs `hiddenInterfaceModes` even when
+the command itself is harmless in Simple. The Edit flyout's ids are not
   registered commands, and `KeyboardShortcutEntry.command` is typed to registered commands, so
   those items cannot show a shortcut hint even though Ctrl+Z, Ctrl+Y and the clipboard chords work
   in the editor.
