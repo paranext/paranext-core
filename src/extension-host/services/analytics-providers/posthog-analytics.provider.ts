@@ -17,9 +17,12 @@ export const POSTHOG_SHUTDOWN_TIMEOUT_MS = 1000;
 
 /**
  * Sends analytics events to a PostHog project. One instance per analytics environment, bound to
- * that environment's project key. Events are transmitted one at a time with `captureImmediate`, so
- * a failure surfaces to the caller as a rejection instead of sitting in a batch queue that the
- * short shutdown window may never flush.
+ * that environment's project key. Events are transmitted one at a time with `captureImmediate`
+ * instead of sitting in a batch queue that the short shutdown window may never flush. The SDK
+ * swallows transport errors and emits them as an `'error'` event, so `send` listens for that event
+ * and turns it into a rejection, which the caller sees exactly like any other failure. The SDK
+ * retries a failed request itself before giving up, so a failing send settles only after tens of
+ * seconds.
  *
  * Privacy posture: GeoIP enrichment is disabled at the client, every event is flagged as anonymous
  * so PostHog builds no person profile, and nothing about the event content is logged above debug.
@@ -47,18 +50,32 @@ export class PostHogAnalyticsProvider implements AnalyticsProvider {
     }
 
     const client = this.getClient();
+    // posthog-node resolves captureImmediate even when the request fails (offline, proxy, 4xx,
+    // 5xx): it reports the failure only through the client's 'error' event. The listener is
+    // attached per send and attributes any error it sees to this event, which is sound while only
+    // one event is ever in flight per client.
+    let transportError: { error: unknown } | undefined;
+    const unsubscribe = client.on('error', (error: unknown) => {
+      transportError ??= { error };
+    });
     try {
-      await client.captureImmediate({
-        distinctId: getDistinctId(),
-        event: event.name,
-        properties: { ...event.properties, $process_person_profile: false },
-        timestamp: new Date(event.timestamp),
-      });
+      try {
+        await client.captureImmediate({
+          distinctId: getDistinctId(),
+          event: event.name,
+          properties: { ...event.properties, $process_person_profile: false },
+          timestamp: new Date(event.timestamp),
+        });
+      } finally {
+        unsubscribe();
+      }
+      if (transportError) throw transportError.error;
       logger.debug(`Analytics: sent '${event.name}' to PostHog (${this.environment})`);
     } catch (error) {
-      // Name only: properties are caller-supplied and must not reach a persistent log.
+      // Name only: properties are caller-supplied and must not reach a persistent log. The SDK's
+      // fetch errors carry only the HTTP status and request byte length, never the payload.
       logger.warn(
-        `Analytics: PostHog rejected '${event.name}' (${this.environment}): ${getErrorMessage(error)}`,
+        `Analytics: PostHog failed to send '${event.name}' (${this.environment}): ${getErrorMessage(error)}`,
       );
       throw error;
     }

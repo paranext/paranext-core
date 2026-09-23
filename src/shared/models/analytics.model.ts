@@ -38,7 +38,8 @@ export interface AnalyticsProvider {
    * @throws Implementations may reject. Callers are expected to catch both a rejection and a
    *   synchronous throw and log-and-drop the event on failure — see `flushQueue` in
    *   `src/extension-host/services/analytics.service.ts` — so an implementation does not need to
-   *   guarantee it never throws.
+   *   guarantee it never throws. The caller logs a rejection only at debug level, so an
+   *   implementation that wants a failure seen logs its own warning before rejecting.
    */
   send(event: AnalyticsEvent): Promise<void>;
   /**
