@@ -391,6 +391,25 @@ export type PropertyJsonPath =
  * - {@link UsjClosingAttributeMarkerLocation} - attribute markers are just properties in JSON, plus
  *   they are in the same situation as {@link UsjClosingMarkerLocation} as detailed above.
  *
+ * Every USFM position has exactly one location, and producers should emit only that one. `offset`
+ * has a meaning only on text ({@link UsjTextContentLocation}), so a gap between content items is
+ * never a container path plus a content index, and never the root path `$` plus one:
+ *
+ * 1. A gap immediately in front of a marker object is that marker's {@link UsjMarkerLocation} (at its
+ *    backslash).
+ * 2. An offset at a token's length addresses the character AFTER that token when that character has no
+ *    other location of its own — the space after a marker name, or a line's newline. For text that
+ *    is `offset: length`; for a marker name, `['marker']` at `propertyOffset: marker.length`; for a
+ *    closing marker, `closingMarkerOffset` at the closing marker's length. So the caret inside an
+ *    empty `\b` paragraph is its `['marker']` at `propertyOffset: 1`, and the end of a paragraph
+ *    that ends in a note is the note's `closingMarkerOffset: 3` (the newline after `\f*`).
+ * 3. The end of the document is one past the final newline, expressed on the last token: rule 2's form
+ *    plus one (`propertyOffset: marker.length + 1` when the document ends in an empty paragraph,
+ *    text `offset: length + 1` when it ends in text).
+ * 4. A root point between two top-level blocks is the start of the next block (rule 1).
+ *
+ * {@link IUsjReaderWriter.usfmVerseLocationToUsjDocumentLocation} produces exactly these.
+ *
  * To see many examples of the same point represented by both USFM and USJ locations, go to
  * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
  */
@@ -424,7 +443,9 @@ export type UsjClosingMarkerLocation = {
   jsonPath: ContentJsonPath;
   /**
    * The character index in the closing marker representation where this location is pointing. The
-   * location is at this offset within the closing marker representation.
+   * location is at this offset within the closing marker representation. At the representation's
+   * length it is the character after the closing marker when that character has no other location
+   * (see {@link UsjDocumentLocation}).
    */
   closingMarkerOffset: number;
 };
@@ -441,7 +462,11 @@ export type UsjTextContentLocation = {
   jsonPath: ContentJsonPath;
   /**
    * The character index in the text content string where this location is pointing. The location is
-   * at this offset within the text content string.
+   * at this offset within the text content string. At the string's length it is the character after
+   * the text when that character has no other location (see {@link UsjDocumentLocation}).
+   *
+   * `offset` means an index into a text content string only: `jsonPath` names that string, never
+   * the marker object or `Usj` containing it.
    */
   offset: number;
 };
@@ -461,7 +486,9 @@ export type UsjPropertyValueLocation = {
   jsonPath: PropertyJsonPath;
   /**
    * The character index in the property's value string where this location is pointing. The
-   * location is at this offset within the property's value string.
+   * location is at this offset within the property's value string. At the value's length it is the
+   * character after the value when that character has no other location — for `marker`, the space
+   * or newline after the marker name (see {@link UsjDocumentLocation}).
    */
   propertyOffset: number;
 };

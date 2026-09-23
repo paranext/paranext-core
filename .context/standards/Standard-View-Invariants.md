@@ -177,6 +177,27 @@ position model drops the run's extra spaces exactly where serialization does, fr
 definition. The editor's position functions therefore take its view options; pass the view the
 editor is running, never a default.
 
+**A position has one spelling.** Every USFM position has exactly ONE `UsjDocumentLocation`, and
+the editor emits only that one; `UsjReaderWriter.usfmVerseLocationToUsjDocumentLocation` is the
+oracle. `offset` means an index into text only, so a caret with no text beside it is never a
+container plus a content index and never `$` plus one:
+
+1. A gap in front of a marker object is that marker's location (`{ jsonPath: <item> }`).
+2. The character after a token with no other home — the space after a marker name, a line's newline
+   — is addressed on that token at its length: text `offset: length`, `['marker']` at
+   `propertyOffset: marker.length` (inside an empty `\b`), `closingMarkerOffset` at the closer's
+   length (a paragraph ending in a note is `\f*` at 3).
+3. The end of the document is one past the final newline, on the last token: rule 2's form plus one.
+   A text offset one past its string's end is therefore legitimate — it is the document end — and
+   the comment-insertion guard brings it onto the text's end (`withDocumentEndOnText`) rather than
+   treating it as a contract violation.
+4. A root point between two blocks is the start of the next block.
+
+The editor still accepts the older container-and-index shapes from a host. The full rule set, with
+the one shape that has no distinct answer (an `optbreak` ending a line), is on the location model
+(`usj-reader-writer.model.ts`) and in the editor repo's invariants. Rationale:
+`adr-usj-locations-have-one-spelling` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
+
 **`ContentJsonPath` and `PropertyJsonPath` must be widened in lock-step across both repos.**
 `platform-bible-utils` (`src/scripture/usj-reader-writer.model.ts`) and the editor's
 `@eten-tech-foundation/scripture-utilities`

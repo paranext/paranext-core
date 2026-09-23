@@ -5490,6 +5490,39 @@ step, no automation. Just a record.
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
 
+## adr-usj-locations-have-one-spelling: Every USFM position has one USJ location, and the editor emits only that one
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** `UsjDocumentLocation` gives `offset` a meaning only on a text content string, but the
+  platform editor reported a caret with no text beside it — in front of a marker, inside an empty
+  paragraph, at a paragraph's or the document's end — as a container plus a content index
+  (`{ jsonPath: "$.content[2]", offset: 0 }`) or the root plus one (`{ jsonPath: "$", offset: 3 }`).
+  No host resolver is specified to read those shapes; `UsjReaderWriter` never produces them, and a
+  consumer walking from the container's path measured the whole container instead of a gap.
+- **Decision:** Every USFM position has exactly one USJ location, and `UsjReaderWriter`'s
+  `usfmVerseLocationToUsjDocumentLocation` is the oracle for which: a gap in front of a marker object
+  is that marker's location; the character after a token with no other home (the space after a
+  marker name, a line's newline) is addressed on that token at its length (text `offset: length`,
+  `['marker']` at the marker's length, `closingMarkerOffset` at the closer's length); the end of the
+  document is one past the final newline, on the last token (that form plus one); a root point
+  between blocks is the next block's start. The editor emits only these, and keeps accepting the
+  older container-and-index shapes, resolving each as the location of the gap it names.
+- **Alternatives:** **Keep emitting container-and-index as an editor-only convention** — rejected:
+  it is a second spelling of positions `UsjReaderWriter` already names, so every host would need its
+  own translation. **Define the document end as its own shape** (the root with no offset) —
+  rejected: the root location already means the document's start, and the end has a USFM index the
+  existing forms can address.
+- **Consequences:** A text offset one past its string's end is legitimate — it is the document end —
+  so host checks that treat any offset past a node as a contract violation must allow exactly that
+  one (`withDocumentEndOnText` in `platform-scripture-editor.utils.ts`). `UsjReaderWriter` itself is
+  unchanged: it accepts offsets past a token's end without bounds checks. One shape has no distinct
+  answer: an `optbreak` ending a line, where every byte after it maps to the optbreak's own marker
+  location. The rules are written on the location model in both repos and in each repo's Standard
+  View invariants.
+- **Source:** PT-3683 (decision comment 19735); scripture-editors PR paranext/scripture-editors#11,
+  paranext-core PR #2823.
+
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
 - **Date:** 2026-08-27
