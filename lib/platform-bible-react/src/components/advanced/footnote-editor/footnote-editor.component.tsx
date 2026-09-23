@@ -421,6 +421,8 @@ export default function FootnoteEditor({
   useEffect(() => {
     // This needs to be run when the marker menu closes to move the focus back to the editor.
     // The editor shouldn't be focused, however, when the markers menu is first being shown.
+    // TODO(PT-4766): route this through focusNoteText instead, so this hand-off lands the caret
+    // inside the note's text the same way the caller and note-type dropdowns do.
     if (!showMarkersMenu) editorRef.current?.focus();
   }, [noteType, showMarkersMenu]);
 
