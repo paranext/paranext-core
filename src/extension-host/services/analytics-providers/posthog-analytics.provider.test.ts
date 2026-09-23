@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   captureImmediate: vi.fn(),
   clientShutdown: vi.fn(),
+  clientOn: vi.fn(),
+  unsubscribeError: vi.fn(),
   PostHog: vi.fn(),
   getDistinctId: vi.fn(),
   debug: vi.fn(),
@@ -37,7 +39,9 @@ beforeEach(() => {
   mocks.PostHog.mockImplementation(() => ({
     captureImmediate: mocks.captureImmediate,
     shutdown: mocks.clientShutdown,
+    on: mocks.clientOn,
   }));
+  mocks.clientOn.mockReturnValue(mocks.unsubscribeError);
   mocks.captureImmediate.mockResolvedValue(undefined);
   mocks.clientShutdown.mockResolvedValue(undefined);
   mocks.getDistinctId.mockReturnValue('11111111-2222-4333-8444-555555555555');
@@ -126,6 +130,50 @@ test('a failed transmission rejects (so the service can log-and-drop) without th
     .map(([message]) => String(message))
     .join('\n');
   expect(allLogged).not.toContain('do-not-log-me');
+});
+
+test('a transport error the SDK swallows and emits as an error event rejects the send with one warn naming the event, and no success line', async () => {
+  // posthog-node resolves captureImmediate even when the request fails, reporting the failure
+  // only through its 'error' event.
+  mocks.captureImmediate.mockImplementation(async () => {
+    const errorListeners = mocks.clientOn.mock.calls
+      .filter(([eventName]) => eventName === 'error')
+      .map(([, listener]) => listener);
+    errorListeners.forEach((listener) =>
+      listener(new Error('PostHogFetchNetworkError: fetch failed')),
+    );
+  });
+  const provider = await makeProvider();
+  const sendPromise = provider.send({
+    name: 'app_launch',
+    properties: { os_platform: 'linux', secret_looking: 'do-not-log-me' },
+    timestamp: 1700000000000,
+    environment: 'test',
+  });
+  await expect(sendPromise).rejects.toThrow('fetch failed');
+  expect(mocks.warn).toHaveBeenCalledTimes(1);
+  expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining("'app_launch'"));
+  const allLogged = [
+    ...mocks.warn.mock.calls,
+    ...mocks.error.mock.calls,
+    ...mocks.info.mock.calls,
+    ...mocks.debug.mock.calls,
+  ]
+    .map(([message]) => String(message))
+    .join('\n');
+  expect(allLogged).not.toContain('do-not-log-me');
+  expect(allLogged).not.toContain('linux');
+  expect(mocks.debug).not.toHaveBeenCalledWith(expect.stringContaining('sent'));
+  expect(mocks.unsubscribeError).toHaveBeenCalledTimes(1);
+});
+
+test('a successful send listens for the SDK error event only for the duration of that send', async () => {
+  const provider = await makeProvider();
+  await provider.send({ name: 'app_launch', timestamp: 1700000000000, environment: 'test' });
+  expect(mocks.clientOn).toHaveBeenCalledWith('error', expect.any(Function));
+  expect(mocks.unsubscribeError).toHaveBeenCalledTimes(1);
+  expect(mocks.debug).toHaveBeenCalledWith(expect.stringContaining("sent 'app_launch'"));
+  expect(mocks.warn).not.toHaveBeenCalled();
 });
 
 test('a client that cannot be constructed rejects the send with a single warn and does not retry construction on every send', async () => {
