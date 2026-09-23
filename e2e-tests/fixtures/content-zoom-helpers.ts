@@ -63,11 +63,7 @@ export async function areaBox(
   frame: Frame,
   areaId: string,
 ): Promise<{ x: number; y: number; width: number; height: number }> {
-  const box = await frame
-    .locator(
-      `[data-platform-content-zoom-root="${areaId}"]:not([data-platform-content-zoom-popup])`,
-    )
-    .boundingBox();
+  const box = await frame.locator(`[data-platform-content-zoom-root="${areaId}"]`).boundingBox();
   if (!box) throw new Error(`Zoom area "${areaId}" has no bounding box`);
   return box;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONTENT_ZOOM_ROOT_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import * as webViewModel from '@shared/models/web-view.model';
 import { isValidContentZoomAreaId } from '@shared/utils/content-zoom.util';
 import {
   CONTENT_ZOOM_COMMANDS,
@@ -16,6 +17,7 @@ import {
   getContentZoomDeclaration,
   getContentZoomKind,
 } from './content-zoom.model';
+import * as contentZoomModel from './content-zoom.model';
 
 describe('content-zoom.model', () => {
   it('declares every first-party zoomable web view type with its kind and default area', () => {
@@ -80,5 +82,13 @@ describe('content-zoom.model', () => {
 
   it('keeps the library marker attribute equal to the platform constant', () => {
     expect(LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe(CONTENT_ZOOM_ROOT_ATTRIBUTE);
+  });
+
+  it('publishes no pop-up attribute: pop-ups are never marked as zoomed content', () => {
+    // Positive controls: the area marker is published from both modules.
+    expect(webViewModel).toHaveProperty('CONTENT_ZOOM_ROOT_ATTRIBUTE');
+    expect(contentZoomModel).toHaveProperty('CONTENT_ZOOM_ROOT_ATTRIBUTE');
+    expect(webViewModel).not.toHaveProperty('CONTENT_ZOOM_POPUP_ATTRIBUTE');
+    expect(contentZoomModel).not.toHaveProperty('CONTENT_ZOOM_POPUP_ATTRIBUTE');
   });
 });

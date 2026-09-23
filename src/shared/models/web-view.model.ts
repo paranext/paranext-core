@@ -381,22 +381,6 @@ export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
 export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
 
 /**
- * Attribute that marks an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} as pop-up content
- * opened from that zoom area (a popover, menu or tooltip portaled out of the area element) rather
- * than a pane. The platform scales such an element with its area but never reports it as an area of
- * its own and never places the zoom indicator on it. `platform-bible-react`'s `PopoverContent`,
- * `DropdownMenuContent` and `TooltipContent` set it automatically; `SelectContent`,
- * `ContextMenuContent`, `MenubarContent` and `DropdownMenuSubContent` do not yet.
- *
- * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
- * that marks its own pop-up content writes the literal `'data-platform-content-zoom-popup'` itself
- * and keeps it equal to this constant.
- *
- * @experimental This constant is unstable and may change or disappear without notice
- */
-export const CONTENT_ZOOM_POPUP_ATTRIBUTE = 'data-platform-content-zoom-popup';
-
-/**
  * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
  * zoom area, with that area's effective factor (own level, else the Settings default):
  * `--platform-content-zoom-main`, `--platform-content-zoom-<area>`, …
