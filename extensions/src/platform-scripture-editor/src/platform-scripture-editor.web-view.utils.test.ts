@@ -14,11 +14,14 @@ import {
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
+  INSERT_CONTEXT_MENU_STRING_KEYS,
   markerMenuItemsToResolvedPaletteItems,
+  NOTE_INSERT_CONFIG,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  shouldSkipNoteInsert,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
   type FootnotesPaneAutoVisibilityInput,
@@ -550,6 +553,48 @@ describe('parseCallerSequenceSetting', () => {
   });
 });
 
+describe('NOTE_INSERT_CONFIG', () => {
+  // Per-kind, not aggregate: a table iterated in bulk can't tell a cross-wired entry (e.g. the
+  // endnote kind reusing the footnote's marker or commit-message key) from a correct one. Each
+  // case pins its OWN kind's fields against the other two kinds' values, so a swap fails here.
+  it.each([
+    ['insertFootnoteAtSelection', 'f', '%versionHistoryCommit_beforeInsertFootnote%'],
+    ['insertCrossReferenceAtSelection', 'x', '%versionHistoryCommit_beforeInsertCrossReference%'],
+    ['insertEndnoteAtSelection', 'fe', '%versionHistoryCommit_beforeInsertEndnote%'],
+  ] as const)(
+    '%s maps to marker %s and commit-message key %s',
+    (kind, marker, commitMessageKey) => {
+      expect(NOTE_INSERT_CONFIG[kind].marker).toBe(marker);
+      expect(NOTE_INSERT_CONFIG[kind].commitMessageKey).toBe(commitMessageKey);
+    },
+  );
+
+  it('gives each kind a distinct marker, commit-message key, and edit description', () => {
+    const kinds = Object.keys(NOTE_INSERT_CONFIG) as (keyof typeof NOTE_INSERT_CONFIG)[];
+    const markers = kinds.map((kind) => NOTE_INSERT_CONFIG[kind].marker);
+    const commitMessageKeys = kinds.map((kind) => NOTE_INSERT_CONFIG[kind].commitMessageKey);
+    const editDescriptions = kinds.map((kind) => NOTE_INSERT_CONFIG[kind].editDescription);
+
+    expect(new Set(markers).size).toBe(kinds.length);
+    expect(new Set(commitMessageKeys).size).toBe(kinds.length);
+    expect(new Set(editDescriptions).size).toBe(kinds.length);
+  });
+});
+
+describe('shouldSkipNoteInsert', () => {
+  it('skips when there is no mounted editor', () => {
+    expect(shouldSkipNoteInsert(false, false)).toBe(true);
+  });
+
+  it('skips when the editor is read-only', () => {
+    expect(shouldSkipNoteInsert(true, true)).toBe(true);
+  });
+
+  it('does not skip with a mounted, writable editor', () => {
+    expect(shouldSkipNoteInsert(true, false)).toBe(false);
+  });
+});
+
 describe('createInsertContextMenuItems', () => {
   // Parity contract: the context menu must offer exactly the Insert-menu inserts, in menu order.
   // Read the Insert menu straight from the contribution so a menus.json change without a
@@ -567,7 +612,12 @@ describe('createInsertContextMenuItems', () => {
       .filter(([, group]) => group.column === 'platformScriptureEditor.insert')
       .map(([name, group]): [string, number] => [name, group.order]),
   );
-  const insertMenuItems: { label: string; group: string; order: number }[] = topMenuItems
+  const insertMenuItems: {
+    label: string;
+    group: string;
+    order: number;
+    hiddenInterfaceModes?: string[];
+  }[] = topMenuItems
     .filter((item: { group: string }) => insertGroupOrders.has(item.group))
     .sort(
       (a: { group: string; order: number }, b: { group: string; order: number }) =>
@@ -594,13 +644,27 @@ describe('createInsertContextMenuItems', () => {
     expect(items.map((i) => i.title)).toEqual(insertMenuItems.map((i) => `LOC:${i.label}`));
   });
 
+  // The builder and the web view's localized-strings list must ask for the SAME keys — a key
+  // present in one and not the other resolves to `undefined` and renders a blank row. Asserting
+  // against the exported list (rather than the menus.json labels above) catches that drift
+  // directly: every title this builder can produce must resolve through one of these keys.
+  it('resolves every title through a key in INSERT_CONTEXT_MENU_STRING_KEYS', () => {
+    const keyedStrings = Object.fromEntries(
+      INSERT_CONTEXT_MENU_STRING_KEYS.map((key) => [key, key]),
+    );
+    const items = createInsertContextMenuItems(keyedStrings, makeActions(), ENABLED);
+    items.forEach((item) => {
+      expect(INSERT_CONTEXT_MENU_STRING_KEYS).toContain(item.title);
+    });
+  });
+
   // createInsertContextMenuItems takes no interface-mode input, so it cannot honor a per-mode
   // hide: an Insert-column item hidden from Simple mode's top menu would still show up here. The
   // parity test above compares labels/order only and would pass vacuously in that case, so pin the
   // gap directly rather than leaving it latent.
   it('has no Insert-column item declaring hiddenInterfaceModes, since the builder cannot honor it', () => {
     const itemsWithHiddenModes = insertMenuItems.filter(
-      (item: { hiddenInterfaceModes?: string[] }) => item.hiddenInterfaceModes?.length,
+      (item) => item.hiddenInterfaceModes?.length,
     );
     expect(itemsWithHiddenModes).toEqual([]);
   });
