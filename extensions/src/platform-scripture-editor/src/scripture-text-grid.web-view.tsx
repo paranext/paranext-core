@@ -3,7 +3,6 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
-  ContentZoomRoot,
   EmptyState,
   Popover,
   PopoverContent,
@@ -603,11 +602,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           empty (a DBL ref resolves to a cell only once the cached list loads). The
           `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
 
-          Named as its own zoom area ("text-collection") so its remembered level is kept apart from
-          this project's other resource panes, which resolve to the same kind/identity pair and
-          would otherwise all read one remembered level. The View Options row above stays outside so
-          it keeps its size while the grid scales. */}
-      <ContentZoomRoot area="text-collection" className="tw:flex-1 tw:overflow-hidden">
+          The body itself is not a zoom area: each cell marks its own verse text as the
+          "text-collection" area, so the cells' name labels, reorder grips and zoom kebabs, the
+          chapter-context chrome and the empty and error states keep interface scale. The cells use
+          their own area id so the grid's remembered level is kept apart from this project's other
+          resource panes, which resolve to the same kind/identity pair and would otherwise all read
+          one remembered level. */}
+      <div className="tw:flex-1 tw:overflow-hidden">
         {gridBodyState === 'catalogError' && (
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
             <RetryableErrorView
@@ -651,7 +652,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             getReorderAnnouncement={getReorderAnnouncement}
           />
         )}
-      </ContentZoomRoot>
+      </div>
     </div>
   );
 };

@@ -260,7 +260,9 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     // upward for the next one.
     const settingsDefault = await readSettingsDefaultZoom(mainPage);
     await firstCell.focus();
-    await expect.poll(() => readFocusedAreaId(frame)).toBe('text-collection');
+    // The focused cell wrapper sits outside every text marker (each cell marks only its verse
+    // text), so the chord resolves to the view's only area by the bootstrap's fallback.
+    await expect.poll(() => readFocusedAreaId(frame)).toBeUndefined();
     await mainPage.keyboard.press('Control+0');
     await expect.poll(() => readFactor(frame, 'text-collection')).toBe(settingsDefault);
 
@@ -289,7 +291,9 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
 
     await test.step('Ctrl+= with the grid focused changes the pane level', async () => {
       await firstCell.focus();
-      await expect.poll(() => readFocusedAreaId(frame)).toBe('text-collection');
+      // The focused cell wrapper sits outside every text marker (each cell marks only its verse
+      // text), so the chord resolves to the view's only area by the bootstrap's fallback.
+      await expect.poll(() => readFocusedAreaId(frame)).toBeUndefined();
       await mainPage.keyboard.press('Control+=');
       await expect
         .poll(() => readFactor(frame, 'text-collection'))
@@ -299,17 +303,20 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     await test.step('a pane reset (Ctrl+0) leaves zoomByResourceId intact', async () => {
       const beforeReset = await readZoomByResourceId(mainPage, webViewId);
       await firstCell.focus();
-      await expect.poll(() => readFocusedAreaId(frame)).toBe('text-collection');
+      // The focused cell wrapper sits outside every text marker (each cell marks only its verse
+      // text), so the chord resolves to the view's only area by the bootstrap's fallback.
+      await expect.poll(() => readFocusedAreaId(frame)).toBeUndefined();
       await mainPage.keyboard.press('Control+0');
       await expect.poll(() => readFactor(frame, 'text-collection')).toBe(settingsDefault);
       expect(await readZoomByResourceId(mainPage, webViewId)).toEqual(beforeReset);
     });
 
     await test.step('a resource cell’s own zoom style reflects its stored per-resource factor, independently of the pane', async () => {
-      // Two independently falsifiable signals in place of a combined bounding-rect ratio: the pane
-      // factor and the per-resource factor both scale a stretched, overflow-auto flex item
-      // (`resource-cell-view.component.tsx`'s content wrapper), whose OUTER box the flex parent
-      // fixes — zooming its content scrolls it inside that box rather than growing the box itself.
+      // Two independently falsifiable signals in place of a combined bounding-rect ratio: the two
+      // factors nest and multiply — the pane's `text-collection` marker is a stretched,
+      // overflow-auto flex item that wraps the element carrying the per-resource zoom
+      // (`resource-cell-view.component.tsx`), and the flex parent fixes the marker's OUTER box, so
+      // zooming the content scrolls it inside that box rather than growing the box itself.
       const resourceFactorBefore =
         (await readZoomByResourceId(mainPage, webViewId))[resourceId] ?? 1;
 
@@ -332,5 +339,64 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
       );
       expect(await readFactor(frame, 'text-collection')).toBe(settingsDefault);
     });
+  });
+
+  test('the pane zoom grows the verse text while the reorder grip and zoom kebab keep their size', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
+    const stg = await openScriptureTextGrid(mainPage);
+    const webViewId = await waitForOpenWebViewIdByType(mainPage, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+    const frame = await getEditorFrame(mainPage, webViewId);
+
+    // Chapter view: its cells carry the header band with the grip and the kebab.
+    await stg.switchToChapterView();
+    await expect(stg.cellDraggable.first()).toBeVisible({ timeout: 15_000 });
+    const firstCell = stg.cellDraggable.first();
+    const grip = firstCell.locator('[data-reorder-handle-id]');
+    const kebab = firstCell.locator('button[aria-haspopup="menu"]').first();
+    const text = firstCell
+      .locator('[data-platform-content-zoom-root="text-collection"] > div')
+      .first();
+
+    const settingsDefault = await readSettingsDefaultZoom(mainPage);
+    await firstCell.focus();
+    await mainPage.keyboard.press('Control+0');
+    await expect.poll(() => readFactor(frame, 'text-collection')).toBe(settingsDefault);
+
+    const gripBefore = await grip.boundingBox();
+    const kebabBefore = await kebab.boundingBox();
+    const textBefore = await text.boundingBox();
+    if (!gripBefore || !kebabBefore || !textBefore) throw new Error('Grip, kebab or text missing');
+
+    // Five steps up from the default: each Ctrl+= is one 10 % step.
+    /* eslint-disable no-await-in-loop */
+    for (let step = 1; step <= 5; step += 1) {
+      await mainPage.keyboard.press('Control+=');
+      await expect
+        .poll(() => readFactor(frame, 'text-collection'))
+        .toBeCloseTo(settingsDefault + step / 10, 5);
+    }
+    /* eslint-enable no-await-in-loop */
+
+    const gripAfter = await grip.boundingBox();
+    const kebabAfter = await kebab.boundingBox();
+    const textAfter = await text.boundingBox();
+    if (!gripAfter || !kebabAfter || !textAfter) throw new Error('Grip, kebab or text lost');
+    expect(textAfter.height / textBefore.height).toBeCloseTo(
+      (settingsDefault + 0.5) / settingsDefault,
+      1,
+    );
+    expect(Math.abs(gripAfter.height - gripBefore.height)).toBeLessThanOrEqual(1);
+    expect(Math.abs(kebabAfter.height - kebabBefore.height)).toBeLessThanOrEqual(1);
+
+    await mainPage.keyboard.press('Control+0');
+    await expect.poll(() => readFactor(frame, 'text-collection')).toBe(settingsDefault);
   });
 });
