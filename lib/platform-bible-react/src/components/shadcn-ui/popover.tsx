@@ -149,9 +149,11 @@ function PopoverContent({
           // available, divided by the area's zoom factor, so a tall zoomed popover stays inside the
           // pane vertically too (same unzoomed-vs-zoomed pixel reason as the width cap above). The
           // box scrolls, so content that cannot shrink to the capped size stays inside it instead of
-          // painting past its edges. Nothing portals into a PopoverContent (the portal-container
-          // provider's consumers target dialog and dropdown-menu contents), so the scroll box clips
-          // no nested pop-up.
+          // painting past its edges. That makes this element a clipping ancestor for anything
+          // rendered inside it: the editor's right-click menu portals into the footnote editor's
+          // root, a descendant, and stays inside this box only because the editor library clamps
+          // the menu against its clipping ancestors. A nested pop-up that does not do that would
+          // be clipped here.
           // CUSTOM: Falls back to 100vh until Radix's size middleware publishes the real available
           // height, so the measuring pass gets a real cap instead of an invalid var() computing to none
           zoomArea !== undefined &&
