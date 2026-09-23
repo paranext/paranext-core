@@ -365,12 +365,11 @@ async function open(
       projectSwitchWillStartEmitter.emit({ switchId });
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
-      // Skip outgoing S/R for read-only viewers — no local changes are possible.
+      // Fire-and-forget: runs concurrently with openWebView below. It skips the outgoing S/R only
+      // for a published resource — a read-only editor can still hold new comments.
       // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
       // require tracking a dirty flag in the editor controller, which doesn't exist yet).
-      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
-      // Fire-and-forget: runs concurrently with openWebView below.
-      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
+      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoing?.projectId);
     }
 
     const emitDidFinish = () => {
@@ -444,7 +443,7 @@ async function open(
     // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find waits
     // until here because it is the one panel that needs the id of the editor this call just
     // created. No Simple-mode check here — it owns its own mode guard.
-    await updateRelatedFindPanel(papi, interfaceMode, projectForWebView.projectId, openedWebViewId);
+    await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
 
     return openedWebViewId;
   }

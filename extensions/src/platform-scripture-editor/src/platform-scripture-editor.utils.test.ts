@@ -2324,18 +2324,69 @@ describe('startDefaultProjectPicker', () => {
 
 // #endregion startDefaultProjectPicker
 
+/**
+ * The two project settings a helper could consult to classify a project. `platform.isPublished` is
+ * the one that tells a translation project from a published resource; `platform.isEditable` is a
+ * project-wide switch on editing the Scripture text.
+ */
+type ProjectKind = { isEditable: boolean; isPublished: boolean };
+
+const EDITABLE_PROJECT: ProjectKind = { isEditable: true, isPublished: false };
+/** A translation project with editing switched off (`Editable=F`). */
+const READ_ONLY_PROJECT: ProjectKind = { isEditable: false, isPublished: false };
+const PUBLISHED_RESOURCE: ProjectKind = { isEditable: false, isPublished: true };
+
+/**
+ * A `papi.projectDataProviders.get` mock whose `platform.base` PDP reports each project's kind:
+ * `projectKind` unless `setProjectKind` overrides it for that id. Both settings are always
+ * supplied, so a helper that consulted the wrong one gets a real answer rather than an `undefined`
+ * that happens to be falsy.
+ */
+function createProjectKindMocks(projectKind: ProjectKind) {
+  // Per-project kinds, so a test can give two projects different answers and pin which one a
+  // helper classifies.
+  const projectKindsByProjectId = new Map<string, ProjectKind>();
+  const setProjectKind = (projectId: string, kind: ProjectKind) => {
+    projectKindsByProjectId.set(projectId, kind);
+  };
+  // `Promise<unknown>`, not the inferred `Promise<boolean>`, so a test can override a reading with
+  // a value outside the setting's contract.
+  const mockGetSetting = vi.fn(async (projectId: string, key: string): Promise<unknown> => {
+    const kind = projectKindsByProjectId.get(projectId) ?? projectKind;
+    if (key === 'platform.isEditable') return kind.isEditable;
+    if (key === 'platform.isPublished') return kind.isPublished;
+    throw new Error(`unexpected setting ${key}`);
+  });
+  const mockProjectDataProvidersGet = vi.fn(async (_interface: string, projectId: string) => ({
+    getSetting: (key: string) => mockGetSetting(projectId, key),
+  }));
+  /**
+   * Replaces only the `platform.isPublished` reading, leaving `platform.isEditable` as the project
+   * kind reports it, so a helper that read the wrong setting still gets a real answer.
+   */
+  const overrideIsPublished = (reading: () => Promise<unknown>) => {
+    const kindReading = mockGetSetting.getMockImplementation();
+    mockGetSetting.mockImplementation(async (projectId, key) =>
+      key === 'platform.isPublished' ? reading() : kindReading?.(projectId, key),
+    );
+  };
+  return { mockGetSetting, mockProjectDataProvidersGet, setProjectKind, overrideIsPublished };
+}
+
 // #region syncOnProjectSwitch
 
-function createSyncMockPapi() {
+function createSyncMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
+  const { mockProjectDataProvidersGet, setProjectKind } = createProjectKindMocks(projectKind);
   // Must cast since the mock only includes the papi properties used by syncOnProjectSwitch.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
+    projectDataProviders: { get: mockProjectDataProvidersGet },
     logger: { warn: mockWarn },
   } as unknown as typeof PapiBackend;
-  return { papi, mockSendCommand, mockWarn };
+  return { papi, mockSendCommand, mockWarn, mockProjectDataProvidersGet, setProjectKind };
 }
 
 describe('syncOnProjectSwitch', () => {
@@ -2428,6 +2479,42 @@ describe('syncOnProjectSwitch', () => {
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
   });
+
+  it('still syncs an outgoing translation project with editing switched off', async () => {
+    // `Editable=F` locks the Scripture text, not comments, so the project can hold new work.
+    const { papi, mockSendCommand } = createSyncMockPapi(READ_ONLY_PROJECT);
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-outgoing',
+    ]);
+  });
+
+  it('skips the outgoing sync for a published resource but still syncs the incoming project', async () => {
+    const { papi, mockSendCommand, setProjectKind } = createSyncMockPapi();
+    // Classifies the outgoing project, not the incoming one.
+    setProjectKind('proj-outgoing', PUBLISHED_RESOURCE);
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['paratextBibleSendReceive.syncProjects', ['proj-incoming']],
+    ]);
+  });
+
+  it('syncs the outgoing project when its kind cannot be read', async () => {
+    // A resource is not synced by Send/Receive anyway, so failing open costs nothing, whereas
+    // failing closed would leave a translation project's new comments unsent.
+    const { papi, mockSendCommand, mockProjectDataProvidersGet } = createSyncMockPapi();
+    mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-outgoing',
+    ]);
+  });
 });
 
 // #endregion syncOnProjectSwitch
@@ -2436,7 +2523,8 @@ describe('syncOnProjectSwitch', () => {
 
 const GRID_WEBVIEW_ID = 'text-collection-1';
 
-function createFinalizeMockPapi() {
+function createFinalizeMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
+  const { mockProjectDataProvidersGet } = createProjectKindMocks(projectKind);
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
   const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
@@ -2465,6 +2553,7 @@ function createFinalizeMockPapi() {
   const papi = {
     commands: { sendCommand: mockSendCommand },
     dataProviders: { get: mockDataProvidersGet },
+    projectDataProviders: { get: mockProjectDataProvidersGet },
     settings: { get: mockSettingsGet },
     webViews: {
       getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
@@ -2511,9 +2600,9 @@ describe('finalizeProjectSwitch', () => {
     expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
   });
 
-  it('re-points the Text Collection, which the rebuilt Simple layout leaves unbound', async () => {
-    // On the mode-switch path buildSimpleLayoutForProject stamps projectId onto the static
-    // layout's tabs, but the Text Collection is merged in afterwards from the supplement with none.
+  it('re-points a Text Collection that arrives without a project', async () => {
+    // The renderer normally bakes the project into the grid's tab before this runs; this is the
+    // safety net for a caller that skips the bake.
     const { papi, mockReloadWebView } = createFinalizeMockPapi();
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
@@ -2523,6 +2612,15 @@ describe('finalizeProjectSwitch', () => {
       GRID_WEBVIEW_ID,
       { projectId: 'proj-1', bringToFront: false },
     );
+  });
+
+  it('does not re-point the Text Collection at a published resource', async () => {
+    // The same rule as the editor-column switch, applied through the same function.
+    const { papi, mockReloadWebView } = createFinalizeMockPapi(PUBLISHED_RESOURCE);
+
+    await finalizeProjectSwitch(papi, 'resource-1', undefined);
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
   });
 
   it('re-points the Text Collection before the shared layout picks the front tab', async () => {
@@ -3333,25 +3431,13 @@ describe('formatEditorTitle', () => {
 // #region updateRelatedTextCollectionPanel
 
 /**
- * The two project settings a Column 3 helper could consult. `platform.isPublished` is the one that
- * tells a translation project from a published resource; `platform.isEditable` is a project-wide
- * switch on editing the Scripture text.
- */
-type ProjectKind = { isEditable: boolean; isPublished: boolean };
-
-const EDITABLE_PROJECT: ProjectKind = { isEditable: true, isPublished: false };
-/** A translation project with editing switched off (`Editable=F`). */
-const READ_ONLY_PROJECT: ProjectKind = { isEditable: false, isPublished: false };
-const PUBLISHED_RESOURCE: ProjectKind = { isEditable: false, isPublished: true };
-
-/**
  * Mock papi exposing the webViews reads/writes the Column 3 re-point helpers use, a `sendCommand`
- * spy for the command-driven panels, and a `platform.base` PDP reporting `projectKind`.
+ * spy for the command-driven panels, a `platform.base` PDP reporting `projectKind` (see
+ * {@link createProjectKindMocks}), and a settings service reporting Simple mode.
  *
  * @param openDefs Definitions `getAllOpenWebViewDefinitions` should report as open.
  * @param projectKind What a project's `platform.base` PDP reports unless `setProjectKind` overrides
- *   it for that id. Both settings are always supplied, so a helper that consulted the wrong one
- *   gets a real answer rather than an `undefined` that happens to be falsy.
+ *   it for that id.
  */
 function createRelatedPanelsMockPapi(
   openDefs: Array<Partial<SavedWebViewDefinition>> = [],
@@ -3363,21 +3449,8 @@ function createRelatedPanelsMockPapi(
   // reported as an error.
   const mockReloadWebView = vi.fn().mockResolvedValue(GRID_WEBVIEW_ID);
   const mockOpenWebView = vi.fn().mockResolvedValue(undefined);
-  // Per-project kinds, so a test can give the grid's current project and the incoming project
-  // different answers and pin which one the gate classifies.
-  const projectKindsByProjectId = new Map<string, ProjectKind>();
-  const setProjectKind = (projectId: string, kind: ProjectKind) => {
-    projectKindsByProjectId.set(projectId, kind);
-  };
-  const mockGetSetting = vi.fn(async (projectId: string, key: string) => {
-    const kind = projectKindsByProjectId.get(projectId) ?? projectKind;
-    if (key === 'platform.isEditable') return kind.isEditable;
-    if (key === 'platform.isPublished') return kind.isPublished;
-    throw new Error(`unexpected setting ${key}`);
-  });
-  const mockProjectDataProvidersGet = vi.fn(async (_interface: string, projectId: string) => ({
-    getSetting: (key: string) => mockGetSetting(projectId, key),
-  }));
+  const mockSettingsGet = vi.fn().mockResolvedValue('simple');
+  const projectKindMocks = createProjectKindMocks(projectKind);
   const mockWarn = vi.fn();
   const mockError = vi.fn();
   // Must cast since the mock only includes the papi properties these helpers use.
@@ -3389,7 +3462,8 @@ function createRelatedPanelsMockPapi(
       reloadWebView: mockReloadWebView,
       openWebView: mockOpenWebView,
     },
-    projectDataProviders: { get: mockProjectDataProvidersGet },
+    projectDataProviders: { get: projectKindMocks.mockProjectDataProvidersGet },
+    settings: { get: mockSettingsGet },
     logger: { warn: mockWarn, error: mockError },
   } as unknown as typeof PapiBackend;
   return {
@@ -3398,9 +3472,8 @@ function createRelatedPanelsMockPapi(
     mockGetAllOpenWebViewDefinitions,
     mockReloadWebView,
     mockOpenWebView,
-    mockGetSetting,
-    mockProjectDataProvidersGet,
-    setProjectKind,
+    mockSettingsGet,
+    ...projectKindMocks,
     mockWarn,
     mockError,
   };
@@ -3519,6 +3592,88 @@ describe('updateRelatedTextCollectionPanel', () => {
     // open is unknown rather than empty.
     expect(mockError).toHaveBeenCalledWith(expect.stringContaining('could not establish'));
   });
+
+  it('does not follow a published resource', async () => {
+    // A published resource has no text collection of its own, so re-pointing the grid at it would
+    // cost a reload for an empty panel.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(
+      [gridDef('proj-a')],
+      PUBLISHED_RESOURCE,
+    );
+
+    await updateRelatedTextCollectionPanel(papi, 'resource-1');
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('follows a translation project with editing switched off', async () => {
+    // `Editable=F` does not make a project a published resource.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(
+      [gridDef('proj-a')],
+      READ_ONLY_PROJECT,
+    );
+
+    await updateRelatedTextCollectionPanel(papi, 'read-only-proj');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('read-only-proj'));
+  });
+
+  it('classifies the incoming project, not the one the panel already shows', async () => {
+    const { papi, mockReloadWebView, setProjectKind } = createRelatedPanelsMockPapi([
+      gridDef('proj-a'),
+    ]);
+    setProjectKind('proj-a', PUBLISHED_RESOURCE);
+    setProjectKind('proj-b', EDITABLE_PROJECT);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
+  });
+
+  it('uses the published reading a caller already started instead of reading again', async () => {
+    const { papi, mockReloadWebView, mockProjectDataProvidersGet } = createRelatedPanelsMockPapi([
+      gridDef('proj-a'),
+    ]);
+
+    await updateRelatedTextCollectionPanel(papi, 'resource-1', Promise.resolve(true));
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(mockProjectDataProvidersGet).not.toHaveBeenCalled();
+  });
+
+  it('treats a project whose provider cannot be reached as a translation project and says so', async () => {
+    // `platform.isPublished` defaults to false, and following is recoverable (the next switch
+    // re-points again), whereas staying would leave the grid silently on the outgoing project.
+    const { papi, mockReloadWebView, mockProjectDataProvidersGet, mockWarn } =
+      createRelatedPanelsMockPapi([gridDef('proj-a')], PUBLISHED_RESOURCE);
+    mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('pdp unavailable'));
+  });
+
+  it.each([
+    ['rejects', () => Promise.reject(new Error('setting read failed'))],
+    ['resolves undefined', async () => undefined],
+    // A truthy non-boolean too: a provider that answers outside the setting's contract must not be
+    // read as "published", which a coercion to boolean would do.
+    ['resolves a truthy non-boolean', async () => 'no'],
+  ])('follows a project whose isPublished read %s', async (_label, reading) => {
+    // Only an explicit `true` withholds the panel; anything else is a project to follow. The
+    // project is otherwise a published resource, so a gate that read `platform.isEditable`
+    // instead would withhold the panel and fail here.
+    const { papi, mockReloadWebView, overrideIsPublished } = createRelatedPanelsMockPapi(
+      [gridDef('proj-a')],
+      PUBLISHED_RESOURCE,
+    );
+    overrideIsPublished(reading);
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
+  });
 });
 
 // #endregion updateRelatedTextCollectionPanel
@@ -3551,18 +3706,6 @@ describe('openOrUpdateRelatedPanels', () => {
     expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('read-only-proj'));
   });
 
-  it('classifies the incoming project, not the one the panel already shows', async () => {
-    const { papi, mockReloadWebView, setProjectKind } = createRelatedPanelsMockPapi([
-      gridDef('proj-a'),
-    ]);
-    setProjectKind('proj-a', PUBLISHED_RESOURCE);
-    setProjectKind('proj-b', EDITABLE_PROJECT);
-
-    await openOrUpdateRelatedPanels(papi, 'proj-b');
-
-    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
-  });
-
   it('leaves the Text Collection alone for a published resource but still re-points the rest', async () => {
     // A published resource has no text collection of its own, so re-pointing the grid at it would
     // cost a reload for an empty panel. The command-driven panels follow the editor either way.
@@ -3580,50 +3723,6 @@ describe('openOrUpdateRelatedPanels', () => {
       ['platformScriptureEditor.openResourceText', 'ScriptureResource', 'resource-1'],
       ['legacyCommentManager.openCommentListPanel', 'resource-1'],
     ]);
-  });
-
-  it('treats a project whose kind cannot be read as a translation project and says so', async () => {
-    // `platform.isPublished` defaults to false, and following is recoverable (the next switch
-    // re-points again), whereas staying would leave the grid silently on the outgoing project.
-    const { papi, mockReloadWebView, mockProjectDataProvidersGet, mockWarn } =
-      createRelatedPanelsMockPapi([gridDef('proj-a')]);
-    mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
-
-    await expect(openOrUpdateRelatedPanels(papi, 'proj-b')).resolves.toBeUndefined();
-
-    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
-    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('pdp unavailable'));
-  });
-
-  it('treats a project whose setting read rejects as a translation project and says so', async () => {
-    // The setting read is the other half of the same never-rejects contract: this path has no
-    // try/catch of its own at the call site.
-    const { papi, mockReloadWebView, mockGetSetting, mockWarn } = createRelatedPanelsMockPapi([
-      gridDef('proj-a'),
-    ]);
-    mockGetSetting.mockRejectedValue(new Error('setting read failed'));
-
-    await expect(openOrUpdateRelatedPanels(papi, 'proj-b')).resolves.toBeUndefined();
-
-    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
-    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('setting read failed'));
-  });
-
-  it.each([
-    ['undefined', undefined],
-    // A truthy non-boolean too: a provider that answers outside the setting's contract must not be
-    // read as "published", which a coercion to boolean would do.
-    ['a truthy non-boolean', 'no'],
-  ])('follows a project whose isPublished read resolves %s', async (_label, reading) => {
-    // Only an explicit `true` withholds the panel; anything else is a project to follow.
-    const { papi, mockReloadWebView, mockGetSetting } = createRelatedPanelsMockPapi([
-      gridDef('proj-a'),
-    ]);
-    mockGetSetting.mockResolvedValue(reading);
-
-    await openOrUpdateRelatedPanels(papi, 'proj-b');
-
-    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
   });
 
   it('still re-points the Text Collection when an earlier panel fails', async () => {
@@ -3673,19 +3772,23 @@ describe('updateRelatedFindPanel', () => {
     ['a published resource', PUBLISHED_RESOURCE],
   ])('re-points Find at %s with the new editor id', async (_label, projectKind) => {
     // Find follows the editor onto every project kind, because searching is a read. The cases are
-    // identical by design: parameterizing by project kind is what makes adding a kind gate fail here.
+    // identical by design: parameterizing by project kind makes a kind gate added inside
+    // `updateRelatedFindPanel` fail here. A gate added at its call site in `main.ts` would not.
     const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], projectKind);
 
-    await updateRelatedFindPanel(papi, 'simple', 'proj-b', 'editor-2');
+    await updateRelatedFindPanel(papi, 'proj-b', 'editor-2');
 
     expect(mockSendCommand).toHaveBeenCalledWith(FIND_COMMAND, 'proj-b', 'editor-2');
   });
 
   it('does nothing in Power mode, where Find is a panel the user points themselves', async () => {
-    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
+    // Read at call time: a long switch can end after the user has already moved to Power mode.
+    const { papi, mockSendCommand, mockSettingsGet } = createRelatedPanelsMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
 
-    await updateRelatedFindPanel(papi, 'power', 'proj-b', 'editor-2');
+    await updateRelatedFindPanel(papi, 'proj-b', 'editor-2');
 
+    expect(mockSettingsGet).toHaveBeenCalledWith('platform.interfaceMode');
     expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
@@ -3693,10 +3796,17 @@ describe('updateRelatedFindPanel', () => {
     const { papi, mockSendCommand, mockWarn } = createRelatedPanelsMockPapi();
     mockSendCommand.mockRejectedValue(new Error('find is down'));
 
-    await expect(
-      updateRelatedFindPanel(papi, 'simple', 'proj-b', 'editor-2'),
-    ).resolves.toBeUndefined();
+    await expect(updateRelatedFindPanel(papi, 'proj-b', 'editor-2')).resolves.toBeUndefined();
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('find is down'));
+  });
+
+  it('resolves without re-pointing when the interface mode cannot be read', async () => {
+    const { papi, mockSendCommand, mockSettingsGet, mockWarn } = createRelatedPanelsMockPapi();
+    mockSettingsGet.mockRejectedValue(new Error('settings are down'));
+
+    await expect(updateRelatedFindPanel(papi, 'proj-b', 'editor-2')).resolves.toBeUndefined();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('settings are down'));
   });
 });
 

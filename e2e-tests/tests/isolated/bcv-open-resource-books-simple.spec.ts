@@ -14,7 +14,10 @@ import {
   setReferencedProjectsAndResources,
   type CommentTestProject,
 } from '../../fixtures/comment-test-helpers';
-import { openScriptureEditor } from '../../fixtures/simple-mode-columns.page';
+import {
+  openSimpleModeEditor,
+  SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE,
+} from '../../fixtures/simple-mode-columns.page';
 
 /**
  * End-to-end proof that the top toolbar's book/chapter/verse control reaches a book that exists
@@ -72,17 +75,13 @@ const GENESIS_ITEM = bookItemSelector('Genesis', 'GEN');
 const DIMMED_BOOK_CLASS_PATTERN = /tw:text-muted-foreground\/50/;
 
 /**
- * `webViewType`s of the fixed Column 2 scripture-editor slot and Column 3 Bible-texts panel in the
- * simple layout (`src/renderer/components/docking/simple-layout.data.ts`). Every materialization of
- * a baked layout mints each web view a fresh id (`mintFreshWebViewIds` in
+ * `webViewType` of the fixed Column 3 Bible-texts panel in the simple layout
+ * (`src/renderer/components/docking/simple-layout.data.ts`). Every materialization of a baked
+ * layout mints each web view a fresh id (`mintFreshWebViewIds` in
  * `src/renderer/components/docking/mint-web-view-ids.util.ts`), so a slot can only be identified by
- * type — its id is read live via {@link waitForOpenWebViewIdByType}.
- *
- * The Scripture editor slot must be in the dock state before `openScriptureEditor` is called —
- * simple mode routes the open to that slot as a tab replacement, which fails outright if the target
- * tab is not there yet.
+ * type — its id is read live via {@link waitForOpenWebViewIdByType}. The Column 2 editor slot's type
+ * is {@link SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE}.
  */
-const SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 
 // DEV_NOISY=false keeps the test-only extensions and their tabs out of the layout, so the only web
@@ -137,9 +136,17 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
   });
 
   test.afterAll(() => {
-    cleanupCommentTestProject(targetProject);
-    cleanupCommentTestProject(resourceProject);
-    restoreRecentProjects?.();
+    // Each step on its own: a project folder Windows still holds open makes its delete throw, which
+    // must skip neither the other delete nor the recent-projects restore.
+    try {
+      try {
+        cleanupCommentTestProject(targetProject);
+      } finally {
+        cleanupCommentTestProject(resourceProject);
+      }
+    } finally {
+      restoreRecentProjects?.();
+    }
   });
 
   test('offers a book from an open resource, greyed, and navigates to it', async ({ mainPage }) => {
@@ -171,7 +178,7 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
 
     // ── Phase 1: only the Revelation-less project is open ──────────────────────────────────────
     await waitForPapiMethodRegistered('command:platformScriptureEditor.openScriptureEditor');
-    const editorId = await openScriptureEditor(targetProject.projectId);
+    const editorId = await openSimpleModeEditor(targetProject.projectId);
     await expect(mainPage.locator(`iframe[data-web-view-id="${editorId}"]`)).toBeAttached({
       timeout: 60_000,
     });
