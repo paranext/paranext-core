@@ -1060,7 +1060,7 @@ describe('useOpenProjectBookIds', () => {
         expect(acquisitionsFor('closes')).toHaveLength(1);
       });
 
-      test('an id that flaps inside the delay and then stays costs one fan-out per window', async () => {
+      test('an id that flaps inside the delay and then stays costs one fan-out per retry delay', async () => {
         openTwoResourceProjects();
         neverServe('closes');
 
@@ -1069,12 +1069,12 @@ describe('useOpenProjectBookIds', () => {
         expect(acquisitionsFor('closes')).toHaveLength(1);
 
         // Three departures and rejoins in the first second: each rejoin reuses the failed entry
-        // (no fan-out) and re-arms one timer for the remainder of the window.
+        // (no fan-out) and re-arms one timer for the remainder of the delay.
         for (let flap = 0; flap < 3; flap += 1) {
           // Sequential on purpose: each rejoin must settle before the next departure, as live events do.
           // eslint-disable-next-line no-await-in-loop
           await leaveAndRejoin('closesView', 'closes');
-          // Same: the clock has to move between flaps so they land at distinct times inside the window.
+          // Same: the clock has to move between flaps so they land at distinct times inside the delay.
           // eslint-disable-next-line no-await-in-loop
           await advance(100);
         }
@@ -1089,7 +1089,7 @@ describe('useOpenProjectBookIds', () => {
         expect(acquisitionsFor('closes')).toHaveLength(2);
       });
 
-      test('a cached provider that failed once and then subscribed fine is not discarded after the delay', async () => {
+      test('a cached provider that failed once and then delivered books is not discarded after the delay', async () => {
         openTwoResourceProjects();
         let subscribeAttempts = 0;
         const flakyProvider = {
@@ -1210,6 +1210,11 @@ describe('useOpenProjectBookIds', () => {
             if (!deliver) throw new Error('the subscription is not live yet');
             deliver(readFailure);
           },
+          /** A real value arriving through the same, already failed, subscription. */
+          deliverBooks: (flags: string) => {
+            if (!deliver) throw new Error('the subscription is not live yet');
+            deliver(flags);
+          },
         };
         let lookups = 0;
         getProjectDataProvider.mockImplementation(async (_projectInterface, id) => {
@@ -1237,7 +1242,9 @@ describe('useOpenProjectBookIds', () => {
           // A subscription whose read has not failed yet is still live at this point.
           expect(unsubscriberFor('closes')).toHaveBeenCalledTimes(failBeforeSettling ? 1 : 0);
           if (!failBeforeSettling) {
-            unreadable.failRead();
+            await act(async () => {
+              unreadable.failRead();
+            });
             await flush();
           }
           expect(result.current).toEqual(['GEN']);
@@ -1252,6 +1259,92 @@ describe('useOpenProjectBookIds', () => {
           expect(result.current).toEqual(['GEN', 'REV']);
         },
       );
+
+      test('a value arriving through a subscription whose read already failed is ignored', async () => {
+        openTwoResourceProjects();
+        const unreadable = serveUnreadableProviderThenServe('closes', false);
+
+        const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        await act(async () => {
+          unreadable.failRead();
+        });
+        await flush();
+        expect(result.current).toEqual(['GEN']);
+
+        // The failure handler has released this subscription and armed a retry; a value that still
+        // comes through it must not report books nobody is subscribed for, nor clear the stamp and
+        // leave the project without a live subscription.
+        await act(async () => {
+          unreadable.deliverBooks(booksPresentFlags(66));
+        });
+        await flush();
+        expect(result.current).toEqual(['GEN']);
+
+        await advance(FAILED_PROVIDER_LOOKUP_RETRY_MS);
+        await flush();
+        expect(acquisitionsFor('closes')).toHaveLength(2);
+        expect(result.current).toEqual(['GEN', 'REV']);
+      });
+
+      test('a provider re-delivering the same books keeps the returned list', async () => {
+        openTwoResourceProjects();
+        let redeliver: ((value: string) => void) | undefined;
+        const provider = {
+          subscribeSetting: vi.fn(async (_key: string, callback: (value: string) => void) => {
+            redeliver = callback;
+            callback(booksPresentFlags(66));
+            return unsubscriberFor('closes');
+          }),
+        };
+        getProjectDataProvider.mockImplementation(async (_projectInterface, projectId) =>
+          projectId === 'stays' ? pdpWithBooks(booksPresentFlags(1), 'stays') : provider,
+        );
+
+        const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+        await flush();
+        expect(result.current).toEqual(['GEN', 'REV']);
+        const listBefore = result.current;
+
+        // An update event carrying the same books: a fresh array with equal contents. A consumer
+        // memoized on the list must see the same array, not an equal one.
+        await act(async () => {
+          redeliver?.(booksPresentFlags(66));
+        });
+        await flush();
+        expect(result.current).toBe(listBefore);
+      });
+
+      test("the returned list keeps its identity when only the active project's own books change", async () => {
+        vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+          webViewDefinition('staysView', { projectId: 'stays' }),
+          webViewDefinition('activeView', { projectId: 'active' }),
+        ]);
+        let redeliverActive: ((value: string) => void) | undefined;
+        const activeProvider = {
+          subscribeSetting: vi.fn(async (_key: string, callback: (value: string) => void) => {
+            redeliverActive = callback;
+            callback(booksPresentFlags(66));
+            return unsubscriberFor('active');
+          }),
+        };
+        getProjectDataProvider.mockImplementation(async (_projectInterface, projectId) =>
+          projectId === 'stays' ? pdpWithBooks(booksPresentFlags(1), 'stays') : activeProvider,
+        );
+
+        const { result } = renderHook(() => useOpenProjectBookIds('active'));
+        await flush();
+        expect(result.current).toEqual(['GEN']);
+        const listBefore = result.current;
+
+        // The active project's books are excluded from the union, so a change to them leaves the
+        // union as it was; a consumer memoized on the list must not be invalidated.
+        await act(async () => {
+          redeliverActive?.(booksPresentFlags(66, 65));
+        });
+        await flush();
+        expect(result.current).toBe(listBefore);
+      });
 
       test("a superseded subscription's late success does not clear the stamp its replacement set", async () => {
         openTwoResourceProjects();

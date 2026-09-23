@@ -4833,8 +4833,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   late-registering factory or a mid-session resource install produces, so no message text is
   treated as a permanent verdict. The attempts are not capped: an id that never resolves costs one
   fan-out per delay for as long as its view stays open, which after rule (1) is a handful of
-  requests, and the lookup service logs an empty answer to a single-project query at debug rather
-  than warn so the cadence does not fill the production log. A real value delivered by the
+  requests, and the lookup service logs an empty answer to a query that names one project at debug
+  rather than warn, so a project the platform does not know costs no production log line per
+  attempt. A setting read that throws still warns per attempt, from the data-provider service: a
+  project that exists and cannot be read is a genuine anomaly, and in-tree base providers answer a
+  setting they do not store with its contributed default rather than a failure, so that path is
+  not reached by a provider that merely lacks `booksPresent`. A real value delivered by the
   subscription clears the stamp (not the subscribe resolving, which proves only that the listener
   attached), and a member that cannot report contributes no books rather than its previous list.
   `useOpenProjectBookIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the
@@ -4880,8 +4884,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   open loses its books from the list mid-interaction, accepted over showing books that cannot be
   navigated to. A subscription that dies without reporting a failure (a provider whose network
   object is disposed by an extension host restart while the subscription stays registered
-  locally) is not covered by the timer; as of 2026-09-24 it is carried as item C3 in PT-4592's
-  layer-1 carryover section.
+  locally) is not covered by the timer; as of 2026-09-24 it is tracked on PT-4592.
   The flap sources that exposed this are tracked as PT-4592 (a panel republishing its navigable
   project ids while its reference list resolves transiently empty) and PT-4743 (one installed
   resource yielding two picker rows under two project id spellings). Revisit rule (2) if a

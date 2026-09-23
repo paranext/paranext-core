@@ -18,7 +18,7 @@ import {
 } from 'platform-bible-utils/experimental';
 import { Canon } from '@sillsdev/scripture';
 import { useDeferredDockLayoutRead } from '@renderer/hooks/use-deferred-dock-layout-read.hook';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** Canon order for the returned union, so consumers can group by section without re-sorting. */
 const CANON_BOOK_IDS = Canon.allBookIds;
@@ -265,8 +265,11 @@ async function subscribeToBooksPresent(
     let settingReadFailed = false;
     const unsubscribe = await pdp.subscribeSetting('platformScripture.booksPresent', (value) => {
       // The callback runs with the current value as soon as the first read lands, so it can still
-      // arrive around teardown; this skips the pointless state update.
-      if (subscription.isDisposed) return;
+      // arrive around teardown; this skips the pointless state update. Once this attempt's read has
+      // failed, the failure handler owns the project: it has released this subscription and armed a
+      // retry, so a value that still arrives through it must neither clear the stamp nor report
+      // books nobody is subscribed for.
+      if (subscription.isDisposed || settingReadFailed) return;
       if (isPlatformError(value)) {
         logger.debug(
           `Open project books: ${projectId} reported an error for booksPresent: ${getErrorMessage(value)}`,
@@ -487,11 +490,12 @@ export function useOpenProjectBookIds(
     providers: new Map<string, ProviderCacheEntry>(),
     subscriptions: new Map<string, BooksPresentSubscription>(),
     reportBooks: (projectId, bookIds) => {
-      // Same list again (a project that keeps failing reports the empty list once per retry for as
-      // long as it stays open; a provider re-delivers the same books on a rejoin): keep the previous
-      // state so nothing downstream re-renders. The lists are short, so a deep compare is cheap.
+      // The shared empty list again (a project that keeps failing reports it once per retry for as
+      // long as it stays open): keep the previous state so the host does not re-render for nothing.
+      // Only the shared constant can match by reference; a provider re-delivering an equal list is
+      // caught where it is observable, by the union compare in the returned memo.
       setBookIdsByProjectId((previous) =>
-        deepEqual(previous[projectId], bookIds) ? previous : { ...previous, [projectId]: bookIds },
+        previous[projectId] === bookIds ? previous : { ...previous, [projectId]: bookIds },
       );
     },
   }));
@@ -507,7 +511,7 @@ export function useOpenProjectBookIds(
     });
 
     if (projectIds.length === 0) {
-      setBookIdsByProjectId({});
+      setBookIdsByProjectId((previous) => (Object.keys(previous).length === 0 ? previous : {}));
       return;
     }
 
@@ -547,6 +551,11 @@ export function useOpenProjectBookIds(
     [host],
   );
 
+  // The last list handed out, so a re-render that leaves the union unchanged (a provider
+  // re-delivering the same books, or the active project's own books moving, which the union
+  // excludes) returns the same array and a consumer memoized on it holds. The lists are short, so
+  // the deep compare is cheap.
+  const lastUnion = useRef<string[]>(EMPTY_IDS);
   return useMemo(() => {
     const openIds = new Set(openProjectIds);
     const books = new Set<string>();
@@ -565,8 +574,10 @@ export function useOpenProjectBookIds(
       if (projectId === activeProjectId) return;
       bookIds.forEach((bookId) => books.add(bookId));
     });
-    if (books.size === 0) return EMPTY_IDS;
-    return CANON_BOOK_IDS.filter((bookId) => books.has(bookId));
+    const union =
+      books.size === 0 ? EMPTY_IDS : CANON_BOOK_IDS.filter((bookId) => books.has(bookId));
+    if (!deepEqual(lastUnion.current, union)) lastUnion.current = union;
+    return lastUnion.current;
   }, [bookIdsByProjectId, openProjectIds, activeProjectId]);
 }
 

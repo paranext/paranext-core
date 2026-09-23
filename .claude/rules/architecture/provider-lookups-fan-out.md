@@ -68,7 +68,9 @@ a full delay, an id that flaps inside the delay still costs one fan-out per retr
 unmounting or disabling cancels a pending retry, a retry that fails again leaves the returned list
 untouched, a provider that failed to subscribe is looked up afresh after the delay and one that then
 delivered books is kept, a provider whose setting cannot be read is released and looked up afresh
-whether the failure lands before or after its subscribe settles, a late failure from a superseded
+whether the failure lands before or after its subscribe settles, a value arriving through a
+subscription whose read already failed is ignored, a provider re-delivering the same books keeps the
+returned list's identity, a late failure from a superseded
 subscription does not mark the provider its replacement subscribed to and a late success does not
 clear the stamp its replacement set, a member that cannot report contributes no books rather than
 its old list, two joins during one in-flight lookup share it, a member that leaves before its provider
