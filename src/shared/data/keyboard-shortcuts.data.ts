@@ -225,72 +225,58 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/renderer/components/overlays/overlay-connection-lost.component.tsx'],
   },
   {
-    id: 'zoom-in',
-    purpose: 'Zoom in',
-    category: 'Zoom',
-    context: 'Main process (global)',
-    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
-    locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
-  },
-  {
-    id: 'zoom-out',
-    purpose: 'Zoom out',
-    category: 'Zoom',
-    context: 'Main process (global)',
-    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
-    locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
-  },
-  {
-    id: 'reset-zoom',
-    purpose: 'Reset zoom to default',
-    category: 'Zoom',
-    context: 'Main process (global)',
-    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
-    locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
-  },
-  {
     id: 'content-zoom-in',
-    purpose: 'Zoom the content of the pane in by one step (10 %)',
+    purpose:
+      'Zoom the focused zoom area of the pane in by 10 % (the area containing keyboard focus, else the area last used)',
     category: 'Zoom',
     context:
-      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
-    // The handler also accepts `=` (the unshifted key sharing the `+` cap), the numpad `+` key, and
-    // Ctrl+Shift+`=` — the `+` key itself on US/UK layouts — so the published `Ctrl++` is literally the working chord.
-    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
-    // branches that claim this chord are removed.
-    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
+    // The macOS View menu binds ⌘= (what it renders) and, through a hidden duplicate item, ⇧⌘= —
+    // which is how a Mac reports ⌘+. The in-view and window-chrome handlers also accept `=`, the
+    // numpad `+`, and any Shift state.
+    keys: { macOS: '⌘=', windows: 'Ctrl++', linux: 'Ctrl++' },
     locations: [
+      'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
+      'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
   },
   {
     id: 'content-zoom-out',
-    purpose: 'Zoom the content of the pane out by one step (10 %)',
+    purpose: 'Zoom the focused zoom area of the pane out by 10 %',
     category: 'Zoom',
     context:
-      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
-    // The handler also accepts the numpad `-` key.
-    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
-    // branches that claim this chord are removed.
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
+    // The handler also accepts the numpad `-` key. Shift is accepted too, which is what puts this
+    // chord within reach on AZERTY and Czech layouts, where the top-row key is shifted.
     keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
     locations: [
+      'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
+      'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
   },
   {
     id: 'content-zoom-reset',
-    purpose: 'Return the content of the pane to the default zoom from Settings',
+    purpose:
+      'Return the focused zoom area of the pane to the default zoom set in Settings (not to 100 %)',
     category: 'Zoom',
     context:
-      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
-    // The handler also accepts the numpad `0` key.
-    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
-    // branches that claim this chord are removed.
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
+    // The handler also accepts the numpad `0` key while NumLock is on; with NumLock off that key
+    // reports itself as Insert and is left to Chromium's legacy Copy chord. Shift is accepted too,
+    // which is what puts this chord within reach on AZERTY and Czech layouts, where the top-row key
+    // is shifted.
     keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
     locations: [
+      'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
+      'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
   },
@@ -524,18 +510,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⇧⌘L', windows: 'Ctrl+Shift+L', linux: 'Ctrl+Shift+L' },
     locations: [
       'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
-    ],
-  },
-  {
-    id: 'scripture-toggle-project-structure-lock',
-    purpose: 'Lock or unlock the structure for everyone on the project',
-    category: 'Editing',
-    context: 'Scripture editor web view (Simple mode, users who can change project settings)',
-    // Does nothing while the lock state failed to load. The handler also accepts ⌃ for ⌘ on macOS,
-    // and Meta for Ctrl on Windows/Linux.
-    keys: { macOS: '⌥⇧⌘L', windows: 'Ctrl+Shift+Alt+L', linux: 'Ctrl+Alt+Shift+L' },
-    locations: [
-      'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
+      'extensions/src/platform-scripture-editor/src/use-structure-protection-state.hook.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {
@@ -817,8 +793,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // Not a shortcut the app registers: the browser raises `contextmenu` at the focused tab, which
     // the tab title forwards into the menu's trigger. macOS has no Menu key and no Shift+F10
     // equivalent for this, so the menu is reached there by right-clicking (or Control-clicking) the
-    // tab. Power mode only — Simple mode offers no tab menu.
-    context: 'Renderer (focused tab, Power mode)',
+    // tab. Forwarded whenever the tab has menu items, which holds in both interface modes — Simple
+    // mode's menu is narrowed to the content-zoom group.
+    context: 'Renderer (focused tab, Power or Simple mode)',
     keys: { macOS: '— (no equivalent)', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
     locations: ['src/renderer/components/docking/platform-tab-title.component.tsx'],
   },

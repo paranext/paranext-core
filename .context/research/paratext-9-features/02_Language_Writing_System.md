@@ -4,7 +4,7 @@
 **Focus**: Keyboards, fonts, locale data, Unicode handling  
 **User Roles**: All users (configuration by administrators)  
 **Manual Chapters**: 4 (Keyboarding)  
-**Last Updated**: 2026-01-22
+**Last Updated**: 2026-09-15
 
 ---
 
@@ -130,7 +130,9 @@ Language and writing system features enable Paratext to support the world's lang
 - Graphite font rendering (SIL Graphite)
 - Per-project font assignment
 - Font feature configuration
-- Font size and zoom controls
+- Per-project font size (the project-wide text size set here; the per-pane display zoom is a separate control — see 1.18 Pane Zoom)
+
+> **Not the same as zoom.** This dialog sets the project's font and font *size*, a property of the project that travels with it. Scaling what one pane shows on screen is a separate feature — ≡ Tab > View > Zoom, remembered per pane and per project — catalogued as **1.18 Pane Zoom** in `01_Translation_Workspace.md`.
 
 **Sources**:
 
@@ -181,7 +183,7 @@ Language and writing system features enable Paratext to support the world's lang
 **HelpData Items**:
 - ID: `1af5d594-c397-4cc4-be27-5e88759c6d27` - "How do I change the font used for my project?"
 - ID: `0b4bf85c-5cc8-428c-960c-f610f1796ad6` - "How do I choose font features for Graphite fonts?"
-- ID: `7e6a26d9-899a-4a6f-b3b8-aca642044750` - "How do I change the size at which a text is displayed?"
+- ID: `7e6a26d9-899a-4a6f-b3b8-aca642044750` - "How do I change the size at which a text is displayed?" (display size — see 1.18 Pane Zoom)
 - ID: `63426c4c-a463-4718-b80e-fc875c0e8507` - "Guide: Project > Project settings > Language settings: Font"
 - Dialogs: `LanguageSettingsForm_tabFont`, `LanguageSettingsForm_tabGraphite`
 

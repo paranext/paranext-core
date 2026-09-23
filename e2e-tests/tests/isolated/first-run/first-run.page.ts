@@ -3,8 +3,10 @@ import type { Locator, Page } from '@playwright/test';
 /**
  * Page-object helpers for the first-run wizard dialog.
  *
- * All helpers scope queries inside the full-screen `role="dialog"` (the Radix `DialogContent`) so
- * they cannot accidentally match content in the aria-hidden app behind the overlay.
+ * All helpers scope queries inside `[data-testid="first-run-dialog"]` — the wizard's own Radix
+ * `DialogContent` — rather than a bare `role="dialog"` locator: the onboarding tour opens its own
+ * dialog the instant the wizard unmounts, and a role-based locator would match that dialog too,
+ * hanging {@link FirstRunPage.waitForDismissed} forever instead of observing the wizard close.
  *
  * Button-label notes (from `assets/localization/en.json`):
  *
@@ -15,11 +17,11 @@ import type { Locator, Page } from '@playwright/test';
  * - "Save and restart" — the Identify step's own primary action (Next is hidden on that step)
  */
 export class FirstRunPage {
-  /** Locator for the full-screen first-run dialog. */
+  /** Locator for the first-run wizard's own dialog content. */
   readonly dialog: Locator;
 
-  constructor(private readonly page: Page) {
-    this.dialog = page.getByRole('dialog');
+  constructor(page: Page) {
+    this.dialog = page.getByTestId('first-run-dialog');
   }
 
   /**

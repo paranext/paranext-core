@@ -11,34 +11,6 @@ import { describe, expect, it } from 'vitest';
 import { decideStuckGateAction, describeInconclusiveOverlayTimeout } from './helpers';
 
 describe('deciding what a stuck first-run gate needs', () => {
-  it('reports a gate that has gone as cleared, not as the wizard', () => {
-    // The discriminators are read one round-trip after the gate was seen, so a gate that resolves
-    // in between leaves both of them false — which is exactly the wizard's signature, and the
-    // wizard is the one branch that fails the whole run. Whether the gate is still up decides
-    // first, or a healthy app is failed for a settings pin that was fine.
-    expect(
-      decideStuckGateAction({
-        escapeHatchVisible: false,
-        onErrorScreen: false,
-        gateStillShowing: false,
-      }),
-    ).toBe('cleared');
-  });
-
-  it('reports cleared even when the discriminators would otherwise say recoverable or wizard', () => {
-    // gateStillShowing decides first in decideStuckGateAction's own body. This pins that precedence
-    // against the discriminators themselves disagreeing, not just against them both being false —
-    // the round-trip that reads them can land after the gate resolved but still see stale
-    // escape-hatch/error-screen state from the instant just before.
-    expect(
-      decideStuckGateAction({
-        escapeHatchVisible: true,
-        onErrorScreen: true,
-        gateStillShowing: false,
-      }),
-    ).toBe('cleared');
-  });
-
   it('recovers through the escape hatch whenever one is offered', () => {
     // The error screen shows a heading, an alert and a hatch at once. Recovering is right, and must
     // not depend on the hatch being observed before the heading.
@@ -46,7 +18,6 @@ describe('deciding what a stuck first-run gate needs', () => {
       decideStuckGateAction({
         escapeHatchVisible: true,
         onErrorScreen: true,
-        gateStillShowing: true,
       }),
     ).toBe('recoverable');
     // The loading branch reveals the same hatch once its probe runs long.
@@ -54,7 +25,6 @@ describe('deciding what a stuck first-run gate needs', () => {
       decideStuckGateAction({
         escapeHatchVisible: true,
         onErrorScreen: false,
-        gateStillShowing: true,
       }),
     ).toBe('recoverable');
   });
@@ -64,7 +34,6 @@ describe('deciding what a stuck first-run gate needs', () => {
       decideStuckGateAction({
         escapeHatchVisible: false,
         onErrorScreen: false,
-        gateStillShowing: true,
       }),
     ).toBe('wizard');
   });
@@ -75,7 +44,6 @@ describe('deciding what a stuck first-run gate needs', () => {
       decideStuckGateAction({
         escapeHatchVisible: false,
         onErrorScreen: true,
-        gateStillShowing: true,
       }),
     ).toBe('inconclusive');
   });

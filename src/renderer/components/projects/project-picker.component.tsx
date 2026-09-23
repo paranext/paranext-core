@@ -11,8 +11,9 @@ import {
   TooltipTrigger,
   useListbox,
 } from 'platform-bible-react';
-import { Z_INDEX_TOOLTIP } from 'platform-bible-react/experimental';
 import { CheckIcon } from 'lucide-react';
+import LabelledGlyph from '@renderer/components/projects/labelled-glyph.component';
+import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { RefObject, useMemo, useState } from 'react';
 
 export type ProjectItem = {
@@ -23,6 +24,13 @@ export type ProjectItem = {
   language?: string;
   /** Full localized language name shown as a tooltip over {@link language} (e.g. "English"). */
   languageDisplayName?: string;
+  /**
+   * Whether the project accepts edits. `false` marks a read-only project, which consumers surface
+   * with a read-only affordance. Absent means editable — the registered default for
+   * `platform.isEditable` is true, so a factory that leaves the metadata field unset must not be
+   * treated as read-only.
+   */
+  isEditable?: boolean;
 };
 
 /** Localization string keys used by {@link ProjectPicker}. */
@@ -33,6 +41,7 @@ export const PROJECT_PICKER_STRING_KEYS = Object.freeze([
   '%projectPicker_search_placeholder%',
   '%projectPicker_no_results%',
   '%projectPicker_current_project_label%',
+  '%projectPicker_readOnly_label%',
 ] as const);
 
 export type ProjectPickerLocalizedStrings = {
@@ -83,6 +92,7 @@ function ProjectSection({
   projects,
   currentProjectId,
   currentProjectLabel,
+  readOnlyLabel,
   onSelect,
   onFocusOption,
 }: {
@@ -90,6 +100,7 @@ function ProjectSection({
   projects: ProjectItem[];
   currentProjectId: string | undefined;
   currentProjectLabel: string;
+  readOnlyLabel: string;
   onSelect: (projectId: string) => void;
   onFocusOption: (id: string) => void;
 }) {
@@ -119,31 +130,61 @@ function ProjectSection({
           }}
           onFocus={() => onFocusOption(p.id)}
         >
-          {/* Column 1 — short name, right-aligned */}
-          <div className="tw:flex tw:items-center tw:justify-end tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
-            {p.id === currentProjectId && (
-              <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-label={currentProjectLabel} />
-            )}
-            {p.shortName}
+          {/* Column 1 — short name. Starts at the leading edge, as it does in the titlebar
+              `ProjectSelector` popover and in `ResourcePickerDialog`; see the picker row layout
+              entry in `.context/standards/Architecture-Decisions.md`. */}
+          <div className="tw:flex tw:min-w-0 tw:items-center tw:justify-start tw:gap-1 tw:pe-2 tw:text-sm tw:font-medium">
+            {/* Both glyph slots are fixed-width and rendered for every row, empty or not, so every
+                short name starts at the same offset. Rendering them conditionally would leave the
+                leading edge of the one column this list aligns on ragged. `ProjectSelector`
+                reserves its indicator slot the same way. */}
+            <span className="tw:flex tw:h-3 tw:w-3 tw:shrink-0 tw:items-center tw:justify-center">
+              {p.id === currentProjectId && (
+                <LabelledGlyph label={currentProjectLabel} showNativeTitle>
+                  <CheckIcon className="tw:h-3 tw:w-3" aria-hidden />
+                </LabelledGlyph>
+              )}
+            </span>
+            <span className="tw:flex tw:h-3 tw:w-3 tw:shrink-0 tw:items-center tw:justify-center">
+              {/* Rows here are plain listbox options rather than tooltip triggers, so the native
+                  hover label is safe to show and matches the check mark beside it. */}
+              {p.isEditable === false && (
+                <ReadOnlyIndicator label={readOnlyLabel} showNativeTitle />
+              )}
+            </span>
+            <span className="tw:truncate" title={p.shortName}>
+              {p.shortName}
+            </span>
           </div>
-          {/* Column 2 — full name */}
-          <div className="tw:px-3 tw:text-sm">{p.fullName}</div>
-          {/* Column 3 — language tag with tooltip */}
-          <div className="tw:text-right tw:text-sm tw:text-muted-foreground">
+          {/* Column 2 — full name. Truncates rather than widening the row; the native hover label
+              keeps the clipped text reachable. */}
+          <div className="tw:min-w-0 tw:truncate tw:px-3 tw:text-sm" title={p.fullName}>
+            {p.fullName}
+          </div>
+          {/* Column 3 — language tag. Floored and truncating like the two columns before it: its
+              min-content contribution is a whole unbreakable word, so a track that could not shrink
+              would satisfy itself by crushing the short name and full name instead — and
+              `overflow-x-hidden` on the scroll container means there is no longer a scrollbar to
+              recover them with. `language` is a BCP-47 tag by convention only, and nothing enforces
+              it, so it can be long enough to clip.
+
+              Both branches keep the clipped tag itself reachable, per invariant 4 of
+              `.claude/rules/ux/picker-row-layout.md`. The tooltip branch carries the tag alongside
+              its display name rather than the display name alone — a different string does not
+              recover the one that was clipped. The plain branch uses a native `title`, safe here
+              because these rows are listbox options rather than tooltip triggers, as for the two
+              columns before it. */}
+          <div className="tw:min-w-0 tw:truncate tw:text-end tw:text-sm tw:text-muted-foreground">
             {p.language &&
               (p.languageDisplayName ? (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="tw:cursor-default">{p.language}</span>
-                    </TooltipTrigger>
-                    <TooltipContent style={{ zIndex: Z_INDEX_TOOLTIP }}>
-                      {p.languageDisplayName}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="tw:cursor-default">{p.language}</span>
+                  </TooltipTrigger>
+                  <TooltipContent>{`${p.language} — ${p.languageDisplayName}`}</TooltipContent>
+                </Tooltip>
               ) : (
-                p.language
+                <span title={p.language}>{p.language}</span>
               ))}
           </div>
         </div>
@@ -197,6 +238,7 @@ export default function ProjectPicker({
     localizedStrings,
     '%projectPicker_current_project_label%',
   );
+  const readOnlyLabel = localizeString(localizedStrings, '%projectPicker_readOnly_label%');
 
   const listboxOptions = useMemo(
     () => [...sortedRecent, ...filteredAll].map((p) => ({ id: p.id })),
@@ -209,7 +251,10 @@ export default function ProjectPicker({
   });
 
   return (
-    <>
+    // One provider for the whole list rather than one per row: the language cells are the only
+    // tooltip triggers here, and a provider per row is a fresh delay/timer context each, so
+    // moving between two rows never counts as "already open" for the skip-delay behavior.
+    <TooltipProvider>
       <DialogHeader className="tw:px-4 tw:pt-4">
         <DialogTitle>{titleText}</DialogTitle>
       </DialogHeader>
@@ -221,7 +266,11 @@ export default function ProjectPicker({
           isFullWidth
         />
       </div>
-      <div className="tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
+      {/* `overflow-x-hidden` is explicit: asking only for `overflow-y: auto` leaves the other axis
+          computing from `visible` to `auto`, which is what turns a long name into a horizontal
+          scrollbar. See the picker row layout entry in
+          `.context/standards/Architecture-Decisions.md`. */}
+      <div className="tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:px-4 tw:pb-4">
         {isLoading && (
           <p className="tw:py-8 tw:text-center">
             <Spinner />
@@ -241,13 +290,17 @@ export default function ProjectPicker({
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             ref={listboxRef as RefObject<HTMLDivElement>}
             onKeyDown={handleKeyDown}
-            className="tw:grid tw:grid-cols-[auto_1fr_auto]"
+            // Every text track carries a `0` minimum. A bare `auto`/`1fr` track floors at its
+            // content's minimum width, so a single long unbroken name widens the grid past the
+            // dialog instead of truncating inside it.
+            className="tw:grid tw:grid-cols-[minmax(0,auto)_minmax(0,1fr)_minmax(0,auto)]"
           >
             <ProjectSection
               label={recentLabel}
               projects={sortedRecent}
               currentProjectId={currentProject?.id}
               currentProjectLabel={currentProjectLabel}
+              readOnlyLabel={readOnlyLabel}
               onSelect={onSelect}
               onFocusOption={focusOption}
             />
@@ -256,12 +309,13 @@ export default function ProjectPicker({
               projects={filteredAll}
               currentProjectId={currentProject?.id}
               currentProjectLabel={currentProjectLabel}
+              readOnlyLabel={readOnlyLabel}
               onSelect={onSelect}
               onFocusOption={focusOption}
             />
           </div>
         )}
       </div>
-    </>
+    </TooltipProvider>
   );
 }

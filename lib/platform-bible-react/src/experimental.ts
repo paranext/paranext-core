@@ -14,6 +14,7 @@ import './index.css';
 // The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
 export {
   default as ProjectSelector,
+  type ProjectSelectorProps,
   type ProjectSelectorProject,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
@@ -21,9 +22,12 @@ export {
   type ProjectSelectorLocalizedStrings,
   type ProjectSelectorLocalizedStringKey,
   type ProjectSelectorStringLookup,
+  type ProjectSelectorFooterAction,
+  type ProjectSelectorIndicator,
   type BuiltInGroupingStrings,
   type SelectionGroupingStrings,
   PROJECT_SELECTOR_STRING_KEYS,
+  PROJECT_SELECTOR_DEFAULT_STRINGS,
   NO_GROUPING,
   buildProjectSelectorLocalizedStrings,
   buildBuiltInGroupingStrings,
@@ -45,6 +49,7 @@ export {
   getResourcePickerBodyState,
   type ResourcePickerBodyState,
 } from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
+export { focusResourcePickerOnOpen } from './components/advanced/resource-picker-dialog/resource-picker-dialog.utils';
 export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
 export {
   getAvailableBookIds,

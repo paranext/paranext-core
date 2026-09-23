@@ -50,6 +50,7 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
+  ContentZoomRoot,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
@@ -125,10 +126,7 @@ import {
   type ManageBooksDisabledReason,
 } from './book-not-available-view.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
-import {
-  ShareLayoutButton,
-  SHARE_LAYOUT_BUTTON_STRING_KEYS,
-} from './share-layout-button.component';
+import { TeamLayoutButton, TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
@@ -237,7 +235,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
   ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
-  ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
+  ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
@@ -3839,15 +3837,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         endAreaChildren={
           <>
             {/* This container is flex-row-reverse, so StructureProtectionButton must come first
-            in JSX order to render visually after (to the right of) ShareLayoutButton. */}
+            in JSX order to render visually after (to the right of) TeamLayoutButton. */}
             <StructureProtectionButton
               projectId={projectId}
               localizedStrings={localizedStrings}
               className="tw:h-8"
             />
-            {/* Share Layout is only available in 10 Simple right now. Later it will be made available in 10 Power too. */}
+            {/* Team layout is only available in 10 Simple right now. Later it will be made available in
+                10 Power too — note the team USFM structure lock it edits is itself unenforced in Power
+                mode (`useStructureProtectionState`), so opening it there needs a decision about what
+                that lock means. */}
             {!isPowerMode && (
-              <ShareLayoutButton
+              <TeamLayoutButton
                 projectId={projectId}
                 localizedStrings={localizedStrings}
                 className="tw:h-8"
@@ -3860,9 +3861,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
-      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
+      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
+          The Scripture text zoom area: the toolbar and the footnotes-pane divider live outside it,
+          in the surrounding layout; the editor and everything it renders inline (including the
+          Simple-mode character-marker bar) scale with the text. Content that portals out of it
+          (menus, pop-ups) is not inside the area. */}
       <InPortal node={editorPortalNode}>
-        <PortalContents>{renderEditor()}</PortalContents>
+        <PortalContents>
+          <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+            {renderEditor()}
+          </ContentZoomRoot>
+        </PortalContents>
       </InPortal>
       <div
         ref={editorContainerRef}
@@ -3981,19 +3990,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }}
         />
         <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
-          <FootnoteEditor
-            classNameForEditor="scripture-font"
-            noteOps={editingNoteOps.current}
-            noteKey={editingNoteKey.current}
-            onClose={onFootnoteEditorClose}
-            onNoteEdit={onFootnoteEditorNoteEdit}
-            scrRef={scrRef}
-            editorOptions={options}
-            defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
-            localizedStrings={localizedStrings}
-            parentEditorRef={editorRef}
-            markerPalette={footnoteMarkerPalette}
-          />
+          {/* This popover is portaled to document.body, a separate subtree from the text area, so
+              this second `main`-area marker is not nested under the editor's: a note edited in
+              place follows the text's zoom level. */}
+          <ContentZoomRoot>
+            <FootnoteEditor
+              classNameForEditor="scripture-font"
+              noteOps={editingNoteOps.current}
+              noteKey={editingNoteKey.current}
+              onClose={onFootnoteEditorClose}
+              onNoteEdit={onFootnoteEditorNoteEdit}
+              scrRef={scrRef}
+              editorOptions={options}
+              defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+              localizedStrings={localizedStrings}
+              parentEditorRef={editorRef}
+              markerPalette={footnoteMarkerPalette}
+            />
+          </ContentZoomRoot>
         </PopoverContent>
       </Popover>
       {/** Comment editor for creating new comment threads */}

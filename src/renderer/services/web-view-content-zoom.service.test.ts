@@ -23,6 +23,7 @@ import {
   __setContentZoomDepsForTesting,
   adjustContentZoom,
   applyContentZoomForWebView,
+  canContentZoomActOnActiveTarget,
   forgetContentZoom,
   getInitialContentZoomForWebView,
   initializeContentZoomService,
@@ -83,6 +84,7 @@ describe('web-view-content-zoom.service', () => {
   let iframe: HTMLIFrameElement;
   const showIndicator = vi.fn();
   let lastFocused: string | undefined;
+  let windowInputBlocked = false;
   /** One iframe per pane, since the production `getIframe` is keyed by web view id. */
   const iframes = new Map<string, HTMLIFrameElement>();
   function iframeFor(webViewId: string): HTMLIFrameElement {
@@ -107,6 +109,7 @@ describe('web-view-content-zoom.service', () => {
     showIndicator.mockClear();
     vi.mocked(logger.warn).mockClear();
     lastFocused = undefined;
+    windowInputBlocked = false;
     document.body.innerHTML = '';
     iframes.clear();
     iframe = iframeFor('editor-1');
@@ -126,6 +129,7 @@ describe('web-view-content-zoom.service', () => {
         return () => false;
       },
       getLastFocusedTabId: () => lastFocused,
+      isWindowInputBlocked: () => windowInputBlocked,
       settings: {
         get: async (key: string) => settings[key],
         set: settingsSet,
@@ -154,6 +158,13 @@ describe('web-view-content-zoom.service', () => {
     expect(resolveContentZoomTarget(undefined)).toBeUndefined();
   });
 
+  it('lets a blocked window stop only the no-id path; an explicitly targeted pane still resolves', () => {
+    lastFocused = 'editor-1';
+    windowInputBlocked = true;
+    expect(resolveContentZoomTarget('editor-1')).toBe('editor-1');
+    expect(resolveContentZoomTarget(undefined)).toBeUndefined();
+  });
+
   it('resolves the area: explicit and known → itself; unknown → nothing; none given → active, else first', () => {
     expect(resolveContentZoomArea('editor-1', 'footnotes')).toBe('footnotes');
     expect(resolveContentZoomArea('editor-1', 'sidebar')).toBeUndefined();
@@ -162,6 +173,17 @@ describe('web-view-content-zoom.service', () => {
     expect(resolveContentZoomArea('editor-1', undefined)).toBe('footnotes');
     setContentZoomAreas('editor-1', []);
     expect(resolveContentZoomArea('editor-1', undefined)).toBeUndefined();
+  });
+
+  it('answers whether a request carrying no ids has both a pane and an area to act on', () => {
+    expect(canContentZoomActOnActiveTarget()).toBe(false);
+    lastFocused = 'editor-1';
+    expect(canContentZoomActOnActiveTarget()).toBe(true);
+    setContentZoomAreas('editor-1', []);
+    expect(canContentZoomActOnActiveTarget()).toBe(false);
+    setContentZoomAreas('editor-1', ['main']);
+    windowInputBlocked = true;
+    expect(canContentZoomActOnActiveTarget()).toBe(false);
   });
 
   it('zooms one area in from the default, writes state and memory for that area, pushes its variable and shows the indicator there', async () => {
@@ -823,6 +845,19 @@ describe('web-view-content-zoom.service', () => {
 
   it('does nothing for an unknown web view', async () => {
     await adjustContentZoom('nope', 1);
+    expect(updateDefinition).not.toHaveBeenCalled();
+    expect(showIndicator).not.toHaveBeenCalled();
+  });
+
+  it("still acts on an explicitly targeted pane while the window's input is blocked, and on none without an id", async () => {
+    windowInputBlocked = true;
+    await adjustContentZoom('editor-1', 1);
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
+    expect(showIndicator).toHaveBeenCalledTimes(1);
+    updateDefinition.mockClear();
+    showIndicator.mockClear();
+    lastFocused = 'editor-1';
+    await adjustContentZoom(undefined, 1);
     expect(updateDefinition).not.toHaveBeenCalled();
     expect(showIndicator).not.toHaveBeenCalled();
   });
@@ -1507,6 +1542,67 @@ describe('web-view-content-zoom.service', () => {
       definitions.delete('editor-1');
       applyContentZoomForWebView('editor-1');
       expect(iframe.style.zoom).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a content replacement whose bootstrap never runs loses the previous content's areas", async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('1.3');
+    vi.useFakeTimers();
+    try {
+      // Simulates a document whose bootstrap never ran (or tore itself down): the string-keyed form
+      // avoids both a type assertion and the member-access underscore the bootstrap contract owns.
+      Reflect.deleteProperty(iframe.contentWindow ?? {}, '__platformContentZoom');
+      applyContentZoomForWebView('editor-1');
+      vi.advanceTimersByTime(1000);
+      expect(resolveContentZoomArea('editor-1', undefined)).toBeUndefined();
+      expect(iframe.style.zoom).toBe('1.3');
+      updateDefinition.mockClear();
+      settingsSet.mockClear();
+      await adjustContentZoom('editor-1', 1); // content-root gate: no area, so this is a no-op
+      expect(updateDefinition).not.toHaveBeenCalled();
+      expect(settingsSet).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a reload whose bootstrap runs keeps the pane's areas", async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('editor-1'); // __platformContentZoom stays in place, as for a real reload
+      vi.advanceTimersByTime(1000);
+      expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
+      expect(iframe.style.zoom).toBe('');
+      expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a report inside the grace still cancels it', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('editor-1');
+      vi.advanceTimersByTime(500);
+      setContentZoomAreas('editor-1', ['main']); // the reloaded content's own report, mid-grace
+      vi.advanceTimersByTime(600);
+      expect(iframe.style.zoom).toBe('');
+      expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
     } finally {
       vi.useRealTimers();
     }

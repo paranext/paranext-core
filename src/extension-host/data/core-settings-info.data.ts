@@ -11,6 +11,16 @@ export const platformSettings: SettingsContribution = [
     label: '%settings_platform_group1_label_alternative%',
     description: '%settings_platform_group1_description%',
     properties: {
+      'platform.interfaceLanguage': {
+        label: '%settings_platform_interfaceLanguage_label%',
+        description: '%settings_platform_interfaceLanguage_description%',
+        default: ['en'],
+      },
+      'platform.zoomFactor': {
+        label: '%settings_platform_zoomFactor_label_2%',
+        description: '%settings_platform_zoomFactor_description%',
+        default: DEFAULT_ZOOM_FACTOR,
+      },
       'platform.webViewContentZoom': {
         label: '%settings_platform_webViewContentZoom_label%',
         description: '%settings_platform_webViewContentZoom_description%',
@@ -20,11 +30,6 @@ export const platformSettings: SettingsContribution = [
         label: '%settings_platform_webViewContentZoomMemory_label%',
         default: {},
         isHidden: true,
-      },
-      'platform.interfaceLanguage': {
-        label: '%settings_platform_interfaceLanguage_label%',
-        description: '%settings_platform_interfaceLanguage_description%',
-        default: ['en'],
       },
       'platform.ptxUtilsMementoData': {
         label: '%settings_platform_ptxUtilsMementoData_label%',
@@ -36,20 +41,14 @@ export const platformSettings: SettingsContribution = [
         default: {},
         isHidden: true,
       },
-      'platform.requestTimeout': {
-        label: '%settings_platform_requestTimeout_label%',
-        description: '%settings_platform_requestTimeout_description%',
-        default: 30,
-      },
-      'platform.zoomFactor': {
-        label: '%settings_platform_zoomFactor_label_2%',
-        description: '%settings_platform_zoomFactor_description%',
-        default: DEFAULT_ZOOM_FACTOR,
-      },
+      // Hidden because the Simple/Power toggle lives in the profile popover
+      // (user-profile-popover.component.tsx), which the toolbar renders in both modes; a
+      // Settings entry for the same value would be a second, redundant switch.
       'platform.interfaceMode': {
         label: '%settings_platform_interfaceMode_label%',
         description: '%settings_platform_interfaceMode_description%',
         default: 'simple',
+        isHidden: true,
       },
       'platform.firstRunComplete': {
         label: '%settings_platform_firstRunComplete_label%',
@@ -60,6 +59,19 @@ export const platformSettings: SettingsContribution = [
         label: '%settings_platform_syncOnStartup_label%',
         default: true,
         isHidden: true,
+      },
+    },
+  },
+  // Settings a support person adjusts when helping a user troubleshoot, rather than settings a
+  // translator changes as part of day-to-day work.
+  {
+    label: '%settings_platform_supporter_group_label%',
+    description: '%settings_platform_supporter_group_description%',
+    properties: {
+      'platform.requestTimeout': {
+        label: '%settings_platform_requestTimeout_label%',
+        description: '%settings_platform_requestTimeout_description%',
+        default: 30,
       },
       'platform.showRegistrationReminderOnStartup': {
         label: '%settings_platform_showRegistrationReminderOnStartup_label%',

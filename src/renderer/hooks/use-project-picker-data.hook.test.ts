@@ -311,7 +311,11 @@ describe('useProjectPickerData', () => {
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
       metadataList([
         { id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1', isEditable: true },
-        { id: 'proj-r2', fullName: 'Full proj-r2', name: 'Short proj-r2', isEditable: true },
+        // Read-only, and deliberately still in the recent-ids list: a project the user can open but
+        // not edit is still a project they can reach, so the hook must keep it in the recents
+        // section and carry its `isEditable` through for the surface to mark. The hook itself
+        // marks nothing — that is the picker's job.
+        { id: 'proj-r2', fullName: 'Full proj-r2', name: 'Short proj-r2', isEditable: false },
       ]) as never,
     );
 
@@ -324,15 +328,21 @@ describe('useProjectPickerData', () => {
       id: 'proj-r1',
       fullName: 'Full proj-r1',
       shortName: 'Short proj-r1',
+      isEditable: true,
     });
     expect(result.current.recentProjects[1]).toMatchObject({
       id: 'proj-r2',
       fullName: 'Full proj-r2',
       shortName: 'Short proj-r2',
+      isEditable: false,
     });
   });
 
-  it('excludes non-editable projects from allProjects', async () => {
+  it('includes non-editable projects in allProjects, carrying isEditable through', async () => {
+    // Recent-ids default (empty, from beforeEach) is left as-is rather than overridden with an
+    // inline `[]` literal: useData's mockImplementation re-runs every render, so a fresh array
+    // literal there would give rawRecentIds a new identity each time and defeat the hook's
+    // referential-stability guard, looping the hook forever instead of settling.
     const { projectLookupService } = await importMocks();
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
       metadataList([
@@ -344,9 +354,8 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
 
     await settle(result);
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.allProjects).toHaveLength(1);
-    expect(result.current.allProjects[0].id).toBe('editable');
+    expect(result.current.allProjects.map((p) => p.id)).toEqual(['editable', 'readonly']);
+    expect(result.current.allProjects.map((p) => p.isEditable)).toEqual([true, false]);
   });
 
   it('fetches metadata once per refresh, shared across all three sections', async () => {
@@ -397,16 +406,16 @@ describe('useProjectPickerData', () => {
     });
   });
 
-  it('treats projects with missing isEditable as editable, matching the registered default', async () => {
+  it('surfaces a project with no isEditable metadata as editable, matching the registered default', async () => {
     const { projectLookupService, useData } = await importMocks();
     vi.mocked(useData).mockImplementation(() => ({
       RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_R1, vi.fn(), false]),
     }));
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
       metadataList([
-        // isEditable omitted on both: the registered default for platform.isEditable is true, so
-        // a factory that leaves the optional metadata field unset must not have its projects
-        // silently dropped from either list.
+        // isEditable omitted: the registered default for platform.isEditable is true, so a factory
+        // that leaves the optional metadata field unset must surface as editable rather than
+        // undefined — consumers gate a read-only affordance on `isEditable === false`.
         { id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1' },
         { id: 'proj-other', fullName: 'Full proj-other', name: 'Short proj-other' },
         { id: 'readonly', fullName: 'Full readonly', name: 'Short readonly', isEditable: false },
@@ -416,9 +425,9 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
 
     await settle(result);
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.recentProjects.map((p) => p.id)).toEqual(['proj-r1']);
-    expect(result.current.allProjects.map((p) => p.id)).toEqual(['proj-other']);
+    expect(result.current.recentProjects.map((p) => p.isEditable)).toEqual([true]);
+    expect(result.current.allProjects.map((p) => p.id)).toEqual(['proj-other', 'readonly']);
+    expect(result.current.allProjects.map((p) => p.isEditable)).toEqual([true, false]);
   });
 
   it('excludes recent projects from allProjects', async () => {

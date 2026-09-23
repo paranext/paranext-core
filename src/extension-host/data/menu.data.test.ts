@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
+import {
+  CONTENT_ZOOM_COMMANDS,
+  CONTENT_ZOOM_TAB_MENU_GROUP,
+} from '@shared/models/content-zoom.model';
+import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
 import menuDataObject from './menu.data.json';
 
 // Real shipped localization files drive these tests so a menu label that has no translation fails
@@ -126,5 +131,64 @@ describe('Every menu label and tooltip is localized', () => {
   // carry no such exemption, so they are all expected to be translated.
   test.each(itemKeys)('%s resolves in Spanish', (_, key) => {
     expect(es[key]).toBeTruthy();
+  });
+});
+
+describe('defaultWebViewTabMenu zoom group', () => {
+  test('declares platform.tabZoom as a non-extensible, experimental group ordered before platform.tabWindow', () => {
+    const { groups } = menuDataObject.defaultWebViewTabMenu;
+    expect(groups['platform.tabZoom']).toEqual({
+      order: 50,
+      isExtensible: false,
+      isExperimental: true,
+    });
+    expect(groups['platform.tabZoom'].order).toBeLessThan(groups['platform.tabWindow'].order);
+  });
+
+  test('orders the zoom items zoom in, zoom out, reset zoom, wired to the shared command names', () => {
+    const zoomItems = menuDataObject.defaultWebViewTabMenu.items
+      .filter((item) => item.group === 'platform.tabZoom')
+      .sort((a, b) => a.order - b.order);
+
+    expect(zoomItems.map((item) => item.command)).toEqual([
+      CONTENT_ZOOM_COMMANDS.in,
+      CONTENT_ZOOM_COMMANDS.out,
+      CONTENT_ZOOM_COMMANDS.reset,
+    ]);
+    expect(zoomItems.map((item) => item.order)).toEqual([100, 200, 300]);
+  });
+
+  test('labels each zoom item with its localization key and a non-empty localizeNotes', () => {
+    const zoomItems = menuDataObject.defaultWebViewTabMenu.items
+      .filter((item) => item.group === 'platform.tabZoom')
+      .sort((a, b) => a.order - b.order);
+
+    expect(zoomItems.map((item) => item.label)).toEqual([
+      '%tab_contextMenu_zoomIn%',
+      '%tab_contextMenu_zoomOut%',
+      '%tab_contextMenu_resetZoom%',
+    ]);
+    zoomItems.forEach((item) => {
+      expect(item.localizeNotes).toBeTruthy();
+    });
+  });
+
+  test('carries no isExperimental marker on any tab-menu item', () => {
+    // The menuItem $def in menus.model.ts declares no `isExperimental` property and sets
+    // `unevaluatedProperties: false`, so an item-level marker would fail schema validation.
+    // Experimental-ness for the tab menu is carried by the group, as platform.tabWindow already does.
+    menuDataObject.defaultWebViewTabMenu.items.forEach((item) => {
+      expect(item).not.toHaveProperty('isExperimental');
+    });
+  });
+
+  test('still validates as a menu document with no duplicate group or item orders', () => {
+    expect(() => new MenuDocumentCombiner(menuDataObject)).not.toThrow();
+  });
+
+  test('pins the shared model constant to the group this file actually defines', () => {
+    // Cross-check against the shipped data: if this file's group name ever drifts from the shared
+    // model's constant, this is what catches it.
+    expect(menuDataObject.defaultWebViewTabMenu.groups[CONTENT_ZOOM_TAB_MENU_GROUP]).toBeDefined();
   });
 });

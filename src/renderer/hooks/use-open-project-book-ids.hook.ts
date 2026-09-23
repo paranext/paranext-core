@@ -8,7 +8,9 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { logger } from '@shared/services/logger.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { useEvent } from 'platform-bible-react';
-import { getErrorMessage, isPlatformError, UnsubscriberAsyncList } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import type { UnsubscriberAsync } from 'platform-bible-utils';
+import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import {
   getBookIdsFromBooksPresent,
   isNavigableProjectIds,
@@ -28,6 +30,39 @@ const EMPTY_IDS: string[] = [];
  * collide into the same key — a space would let {'A B'} and {'A', 'B'} agree.
  */
 const SEPARATOR = '\u0000';
+
+type BaseProjectDataProvider =
+  ProjectDataProviderInterfaces[typeof PROJECT_INTERFACE_PLATFORM_BASE];
+
+/**
+ * How long a project whose provider could not be reached is left alone before a rejoin looks it up
+ * again. Long enough that an id flapping many times a second costs one fan-out per window rather
+ * than one per flap; short enough that a project a factory begins serving later in the session (a
+ * slow startup, a resource installed mid-session, an extension host restart) is picked up without
+ * reloading the window. The same delay applies whatever the failure was: the lookup service cannot
+ * tell "no such project" from "no factory has answered yet" reliably enough to treat them apart.
+ */
+export const FAILED_PROVIDER_LOOKUP_RETRY_MS = 30_000;
+
+/** A cached provider lookup, and when (if ever) it failed so a rejoin can know whether to retry. */
+type ProviderCacheEntry = {
+  provider: Promise<BaseProjectDataProvider | undefined>;
+  failedAt: number | undefined;
+};
+
+/** The books a project reports, handed back to the hook by {@link subscribeToBooksPresent}. */
+type ReportBooks = (projectId: string, bookIds: string[]) => void;
+
+/**
+ * One project's live `booksPresent` subscription, from the moment its id joins the open set until
+ * it leaves. `dispose` is safe at any stage: before the provider resolves, before the subscription
+ * settles, or after it is live.
+ */
+type BooksPresentSubscription = {
+  isDisposed: boolean;
+  unsubscribe: UnsubscriberAsync | undefined;
+  dispose: () => void;
+};
 
 /**
  * Project ids reachable from this window's open web views: each view's own `projectId`, plus any it
@@ -75,6 +110,133 @@ function getOpenProjectIds(): string[] {
 }
 
 /**
+ * The `platform.base` provider for `projectId`, looked up at most once per hook instance while the
+ * answer holds. The cache holds the promise, not the value, so concurrent joins of one id share a
+ * single lookup (see the hook body for why a repeat lookup is so expensive). A lookup that failed,
+ * or whose provider later failed to subscribe (see {@link markProviderFailed}), is kept for
+ * {@link FAILED_PROVIDER_LOOKUP_RETRY_MS} and then looked up afresh on the next join.
+ */
+function getBaseProjectDataProvider(
+  cache: Map<string, ProviderCacheEntry>,
+  projectId: string,
+): ProviderCacheEntry {
+  const cached = cache.get(projectId);
+  if (cached && !hasRetryDelayPassed(cached)) return cached;
+  const entry: ProviderCacheEntry = { provider: Promise.resolve(undefined), failedAt: undefined };
+  entry.provider = lookUpBaseProjectDataProvider(projectId, () => markProviderFailed(entry));
+  cache.set(projectId, entry);
+  return entry;
+}
+
+function hasRetryDelayPassed(entry: ProviderCacheEntry): boolean {
+  return (
+    entry.failedAt !== undefined && Date.now() - entry.failedAt >= FAILED_PROVIDER_LOOKUP_RETRY_MS
+  );
+}
+
+/**
+ * Records that a cached provider is not usable — its lookup failed, or it was reached but could not
+ * be subscribed to (its network object may have been disposed since, as an extension host restart
+ * does) — so a join after {@link FAILED_PROVIDER_LOOKUP_RETRY_MS} looks the project up again instead
+ * of reusing the dead entry. Stamps the entry the failure belongs to, not whichever entry the cache
+ * holds for the project by then: a late rejection from a superseded provider must not mark its
+ * replacement.
+ */
+function markProviderFailed(entry: ProviderCacheEntry): void {
+  // Timed from the FIRST failure. A dead provider fails again on every rejoin inside the delay,
+  // and restamping it each time would let a flapping id push its own retry out for ever.
+  if (entry.failedAt === undefined) entry.failedAt = Date.now();
+}
+
+/**
+ * One uncached lookup; `undefined` when it yields no provider. Never rejects. Calls `onFailure`
+ * before returning `undefined`, so the caller can time its retry from the failure.
+ */
+async function lookUpBaseProjectDataProvider(
+  projectId: string,
+  onFailure: () => void,
+): Promise<BaseProjectDataProvider | undefined> {
+  try {
+    return await papiFrontendProjectDataProviderService.get(
+      PROJECT_INTERFACE_PLATFORM_BASE,
+      projectId,
+    );
+  } catch (e) {
+    onFailure();
+    logger.debug(
+      `Open project books: could not look up a platform.base provider for ${projectId}: ${getErrorMessage(e)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Releases a live subscription, reporting rather than throwing. The unsubscriber is a round trip to
+ * the provider, which may be gone by the time the project leaves; a rejection here must not become
+ * an unhandled rejection in the renderer, and a `false` result (nothing was unsubscribed) is worth
+ * a line in the log.
+ */
+async function releaseBooksPresentSubscription(
+  subscription: BooksPresentSubscription,
+  projectId: string,
+): Promise<void> {
+  const { unsubscribe } = subscription;
+  if (!unsubscribe) return;
+  subscription.unsubscribe = undefined;
+  try {
+    if (!(await unsubscribe()))
+      logger.debug(`Open project books: booksPresent for ${projectId} did not unsubscribe`);
+  } catch (e) {
+    logger.debug(
+      `Open project books: unsubscribing booksPresent for ${projectId} failed: ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+/**
+ * Opens `projectId`'s `booksPresent` subscription into `subscription`, honoring a `dispose` that
+ * lands at any point along the way. Never rejects: a project whose provider or setting cannot be
+ * reached contributes no books, and says so at debug level.
+ */
+async function subscribeToBooksPresent(
+  subscription: BooksPresentSubscription,
+  projectId: string,
+  providers: Map<string, ProviderCacheEntry>,
+  reportBooks: ReportBooks,
+): Promise<void> {
+  const entry = getBaseProjectDataProvider(providers, projectId);
+  try {
+    const pdp = await entry.provider;
+    if (!pdp || subscription.isDisposed) return;
+    const unsubscribe = await pdp.subscribeSetting('platformScripture.booksPresent', (value) => {
+      // subscribeSetting invokes its callback with the current value as soon as it subscribes, so a
+      // callback can still land around teardown; this skips the pointless state update.
+      if (subscription.isDisposed) return;
+      if (isPlatformError(value)) {
+        logger.debug(
+          `Open project books: ${projectId} reported an error for booksPresent: ${getErrorMessage(value)}`,
+        );
+        reportBooks(projectId, EMPTY_IDS);
+        return;
+      }
+      reportBooks(projectId, getBookIdsFromBooksPresent(value));
+    });
+    subscription.unsubscribe = unsubscribe;
+    // Disposed while the subscription was settling: release it now that it exists.
+    if (subscription.isDisposed) await releaseBooksPresentSubscription(subscription, projectId);
+  } catch (e) {
+    // The provider was reached but its subscription failed. A provider without `booksPresent`
+    // contributes nothing, which keeps this forward-compatible with resource providers that gain the
+    // setting later; a provider whose network object is gone is retried after the delay like a
+    // failed lookup.
+    markProviderFailed(entry);
+    logger.debug(
+      `Open project books: could not subscribe to booksPresent for ${projectId}: ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+/**
  * The open project ids as a single comparable value. Sorted, because set equality rather than order
  * is what matters.
  */
@@ -98,9 +260,10 @@ function readOpenProjectIdsKey(): string {
  * The flow, so the stages below can be checked against a whole: a web view event requests a
  * DEFERRED read of the dock layout (deferred because the close event is emitted before the dock has
  * adopted the new layout) → the read lands in state as a membership KEY covering every open project
- * → a change in membership rebuilds the per-project `booksPresent` subscriptions → their values are
- * unioned in canon order, with the active project's books left out of the union during RENDER, so a
- * prop change lands in the same commit. Each stage has its own note where it is declared.
+ * → a change in membership is diffed into per-project `booksPresent` subscriptions to open and to
+ * close, with the projects that stayed left untouched → their values are unioned in canon order,
+ * with the active project's books left out of the union during RENDER, so a prop change lands in
+ * the same commit. Each stage has its own note where it is declared.
  *
  * @param activeProjectId The project whose books are already offered, excluded from the result. It
  *   may still be subscribed to — only the result excludes it (see {@link getOpenProjectIds}).
@@ -173,56 +336,79 @@ export function useOpenProjectBookIds(
   // the map is cleared in full once the open set becomes empty.
   const [bookIdsByProjectId, setBookIdsByProjectId] = useState<Record<string, string[]>>({});
 
+  // Both maps live for the life of the hook, not of one membership: a membership change is acted on
+  // as a DIFF (subscribe the ids that joined, unsubscribe the ids that left) and never touches the
+  // projects that stayed. Every data provider lookup runs a project-metadata query that fans out to
+  // every PDP factory in every process, and the layering factories in the extension host fan out
+  // again to the C# factories — so resolving a provider again for a project that merely stayed open,
+  // or for one that leaves and rejoins, is what turns a flapping membership (a panel republishing
+  // its navigable project ids in a loop) into a request storm that starves the backends.
+  //
+  // A resolved provider is kept per project id for as long as the hook lives. A failed one is kept
+  // for `FAILED_PROVIDER_LOOKUP_RETRY_MS` and then looked up afresh on the next join, so a flapping
+  // id costs one fan-out per window while a project a factory starts serving later is still picked
+  // up — see `getBaseProjectDataProvider`. Both maps are bounded by the number of distinct projects
+  // a session opens, like `bookIdsByProjectId` above.
+  //
+  // Built once through a state initializer: `useRef(new Map())` would construct and discard a Map
+  // on every render. The state is never set; only the Map's contents change.
+  const [providersByProjectId] = useState(() => new Map<string, ProviderCacheEntry>());
+  const [subscriptionsByProjectId] = useState(() => new Map<string, BooksPresentSubscription>());
+
+  // Stable for the life of the hook, so a subscription opened under one render reports into the
+  // same state as one opened under a later render.
+  const reportBooks = useCallback<ReportBooks>((projectId, bookIds) => {
+    setBookIdsByProjectId((previous) => ({ ...previous, [projectId]: bookIds }));
+  }, []);
+
   useEffect(() => {
     const projectIds = openProjectIds;
-    if (projectIds.length === 0) {
-      setBookIdsByProjectId({});
-      return undefined;
-    }
+    const subscriptions = subscriptionsByProjectId;
 
-    // Guards only the setBookIdsByProjectId calls below: subscribeSetting invokes its callback with
-    // the current value as soon as it subscribes, so a callback can still land around teardown, and
-    // this flag skips the resulting pointless state update after unmount. Unsubscription itself is
-    // handled by `unsubscribers` sealing once runAllUnsubscribers starts, below.
-    let disposed = false;
-    const unsubscribers = new UnsubscriberAsyncList('Open project book ids');
-
-    projectIds.forEach((projectId) => {
-      papiFrontendProjectDataProviderService
-        .get(PROJECT_INTERFACE_PLATFORM_BASE, projectId)
-        .then((pdp) =>
-          pdp.subscribeSetting('platformScripture.booksPresent', (value) => {
-            if (disposed) return;
-            if (isPlatformError(value)) {
-              logger.debug(
-                `Open project books: ${projectId} reported an error for booksPresent: ${getErrorMessage(value)}`,
-              );
-              setBookIdsByProjectId((previous) => ({ ...previous, [projectId]: EMPTY_IDS }));
-              return;
-            }
-            setBookIdsByProjectId((previous) => ({
-              ...previous,
-              [projectId]: getBookIdsFromBooksPresent(value),
-            }));
-          }),
-        )
-        .then((unsubscribe) => unsubscribers.add(unsubscribe))
-        .catch((e) => {
-          // A provider that cannot serve booksPresent contributes nothing, which is also what makes
-          // this forward-compatible with resource providers that gain the setting later.
-          logger.debug(
-            `Open project books: no booksPresent for ${projectId}: ${getErrorMessage(e)}`,
-          );
-        });
+    subscriptions.forEach((subscription, projectId) => {
+      if (projectIds.includes(projectId)) return;
+      subscription.dispose();
+      subscriptions.delete(projectId);
     });
 
-    return () => {
-      disposed = true;
-      unsubscribers.runAllUnsubscribers();
-    };
+    if (projectIds.length === 0) {
+      setBookIdsByProjectId({});
+      return;
+    }
+
+    projectIds.forEach((projectId) => {
+      if (subscriptions.has(projectId)) return;
+
+      const subscription: BooksPresentSubscription = {
+        isDisposed: false,
+        unsubscribe: undefined,
+        dispose: () => {
+          subscription.isDisposed = true;
+          // Not awaited: releasing is a network round trip the effect must not wait on, and the
+          // helper never rejects. A subscription still settling is released the moment it lands, in
+          // subscribeToBooksPresent.
+          releaseBooksPresentSubscription(subscription, projectId);
+        },
+      };
+      subscriptions.set(projectId, subscription);
+      // Not awaited: the effect must not wait on network round trips, and the helper never rejects.
+      subscribeToBooksPresent(subscription, projectId, providersByProjectId, reportBooks);
+    });
     // `openProjectIds` is membership-stable (see its definition), so an unrelated web view event
-    // cannot rebuild every subscription here.
-  }, [openProjectIds]);
+    // cannot reach the diff above at all. The other dependencies never change identity.
+  }, [openProjectIds, reportBooks, providersByProjectId, subscriptionsByProjectId]);
+
+  // Unmount tears down whatever is still subscribed. The membership effect above deliberately
+  // returns no cleanup: React runs an effect's cleanup before every re-run, which is exactly the
+  // tear-down-everything-on-every-change this hook must not do.
+  useEffect(
+    () => () => {
+      subscriptionsByProjectId.forEach((subscription) => subscription.dispose());
+      subscriptionsByProjectId.clear();
+    },
+    // Never changes identity, so this cleanup runs on unmount only.
+    [subscriptionsByProjectId],
+  );
 
   return useMemo(() => {
     const openIds = new Set(openProjectIds);

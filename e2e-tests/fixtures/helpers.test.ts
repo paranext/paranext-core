@@ -5,16 +5,29 @@
  * `assertDeclaredWindowSize` takes only `evaluate`, not the full Playwright `Page`, so these drive
  * it directly with a stub instead of a real browser connection.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDeclaredWindowSize,
   ASSERT_INTERFACE_MODE_TIMEOUT_MS,
   DEFAULT_WINDOW_SIZE,
   isLocalizedAboutMenuItem,
   isPopoverTriggerExpanded,
+  killProcessTree,
   LAUNCH_PHASE_TIMEOUT_MS,
-  resolveRaceLeg,
 } from './helpers';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+/** A {@link killProcessTree} `deps` bundle whose calls are all spies a test can assert on. */
+function killProcessTreeDeps() {
+  return {
+    isPidAlive: vi.fn().mockReturnValue(true),
+    execFileSync: vi.fn(),
+    kill: vi.fn().mockReturnValue(true),
+  };
+}
 
 /** A stub whose `evaluate` resolves to the given window size, whatever function is passed in. */
 function pageReporting(size: { width: number; height: number }): {
@@ -108,48 +121,75 @@ describe('isLocalizedAboutMenuItem', () => {
   });
 });
 
-describe('resolveRaceLeg', () => {
-  // Playwright's real TargetClosedError never sets `this.name`, so a fixture for it has to be a
-  // distinctly-named subclass — matching `error.name` here would pass even if resolveRaceLeg
-  // regressed to checking the wrong property.
-  class TargetClosedError extends Error {}
+describe('killProcessTree', () => {
+  describe('on win32', () => {
+    it('walks the whole tree with taskkill when the pid is alive', () => {
+      const deps = killProcessTreeDeps();
 
-  it('reports a plain timeout as inconclusive', () => {
-    const timeoutError = new Error('locator.waitFor: Timeout 5000ms exceeded.');
-    timeoutError.name = 'TimeoutError';
+      killProcessTree(4242, 'SIGKILL', 'win32', deps);
 
-    expect(resolveRaceLeg(timeoutError)).toBe('inconclusive');
+      expect(deps.isPidAlive).toHaveBeenCalledExactlyOnceWith(4242);
+      expect(deps.execFileSync).toHaveBeenCalledExactlyOnceWith(
+        'taskkill',
+        ['/pid', '4242', '/t', '/f'],
+        { stdio: 'pipe', timeout: 10_000 },
+      );
+      expect(deps.kill).not.toHaveBeenCalled();
+    });
+
+    it('does not call taskkill when the pid is not alive', () => {
+      const deps = killProcessTreeDeps();
+      deps.isPidAlive.mockReturnValue(false);
+
+      killProcessTree(4242, 'SIGKILL', 'win32', deps);
+
+      expect(deps.execFileSync).not.toHaveBeenCalled();
+    });
+
+    it('warns, but does not throw, when taskkill itself fails', () => {
+      const deps = killProcessTreeDeps();
+      deps.execFileSync.mockImplementation(() => {
+        throw new Error('no such process');
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      expect(() => killProcessTree(4242, 'SIGKILL', 'win32', deps)).not.toThrow();
+
+      expect(warnSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('no such process'));
+    });
   });
 
-  it('does not match on error.name alone — TargetClosedError never sets it', () => {
-    // Guards the exact regression this function was rewritten to avoid: a real TargetClosedError
-    // reports `.name === "Error"` (inherited from Error.prototype), so a fixture that only sets
-    // `.name` to the string "TargetClosedError" without being that class must NOT match either —
-    // otherwise the test would pass for the wrong reason.
-    const lookalike = new Error('Target page, context or browser has been closed');
-    lookalike.name = 'TargetClosedError';
+  describe('on POSIX (darwin/linux)', () => {
+    it('signals the process group first, and never falls back when that succeeds', () => {
+      const deps = killProcessTreeDeps();
 
-    expect(resolveRaceLeg(lookalike)).toBe('inconclusive');
-  });
+      killProcessTree(4242, 'SIGKILL', 'linux', deps);
 
-  it('rethrows a TargetClosedError instead of collapsing it to inconclusive', () => {
-    const closedError = new TargetClosedError('Target page, context or browser has been closed');
+      expect(deps.kill).toHaveBeenCalledExactlyOnceWith(-4242, 'SIGKILL');
+      expect(deps.execFileSync).not.toHaveBeenCalled();
+      expect(deps.isPidAlive).not.toHaveBeenCalled();
+    });
 
-    expect(() => resolveRaceLeg(closedError)).toThrow(/page, its context, or the browser closed/);
-  });
+    it('falls back to the bare pid when the group signal throws', () => {
+      const deps = killProcessTreeDeps();
+      deps.kill.mockImplementationOnce(() => {
+        throw new Error('ESRCH');
+      });
 
-  it('attaches the original error as the cause of the rethrow', () => {
-    const closedError = new TargetClosedError('Target page, context or browser has been closed');
+      killProcessTree(4242, 'SIGKILL', 'darwin', deps);
 
-    let caught: unknown;
-    try {
-      resolveRaceLeg(closedError);
-    } catch (err) {
-      caught = err;
-    }
+      expect(deps.kill).toHaveBeenNthCalledWith(1, -4242, 'SIGKILL');
+      expect(deps.kill).toHaveBeenNthCalledWith(2, 4242, 'SIGKILL');
+    });
 
-    expect(caught).toBeInstanceOf(Error);
-    const cause = caught instanceof Error ? caught.cause : undefined;
-    expect(cause).toBe(closedError);
+    it('does not throw when both the group and bare-pid signals fail', () => {
+      const deps = killProcessTreeDeps();
+      deps.kill.mockImplementation(() => {
+        throw new Error('ESRCH');
+      });
+
+      expect(() => killProcessTree(4242, 'SIGKILL', 'linux', deps)).not.toThrow();
+      expect(deps.kill).toHaveBeenCalledTimes(2);
+    });
   });
 });

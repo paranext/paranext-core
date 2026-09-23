@@ -173,6 +173,55 @@ export const NarrowRailTrigger: Story = {
   },
 };
 
+export const CompoundTriggerLabelWithFooterAction: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    const [dialogOpenCount, setDialogOpenCount] = useState(0);
+    return (
+      <div className="tw:flex tw:flex-col tw:gap-2">
+        <ProjectSelector
+          mode="project"
+          projects={sampleProjects}
+          openTabs={sampleOpenTabs}
+          selection={{ projectId }}
+          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+          localizedStrings={{ ariaLabel: 'Project' }}
+          // A two-part label: short name leading, full name trailing in muted text. The callback
+          // owns the WHOLE trigger, including the nothing-selected case, which is why it has to
+          // answer `undefined` itself rather than falling back to `buttonPlaceholder`.
+          renderTriggerLabel={(selected) =>
+            selected ? (
+              <span className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-1">
+                <span className="tw:truncate tw:font-medium">{selected.shortName}</span>
+                <span className="tw:min-w-0 tw:truncate tw:text-xs tw:opacity-60">
+                  {selected.fullName}
+                </span>
+              </span>
+            ) : (
+              'Select a project'
+            )
+          }
+          footerAction={{
+            label: 'More projects…',
+            onSelect: () => setDialogOpenCount((n) => n + 1),
+          }}
+        />
+        <p className="tw:text-xs tw:opacity-60">
+          &ldquo;More projects…&rdquo; selected {dialogOpenCount.toString()} time(s)
+        </p>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`renderTriggerLabel` and `footerAction` together, as the titlebar project picker combines them: the trigger renders a compound short-name/full-name label instead of the derived string, and a footer row below the last section opens a different surface (here, just a counter standing in for a "More projects…" dialog). The footer separator is a plain rule with `alwaysRender` so it survives an active search query, and it renders only when a section above it has rows.',
+      },
+    },
+  },
+};
+
 // #endregion
 
 // #region project-multi
@@ -749,14 +798,31 @@ export const ProjectAndResourceIndicators: Story = {
           buttonPlaceholder: 'Select a project or resource',
           ariaLabel: 'Project or resource',
         }}
-        renderProjectIndicator={(project) =>
-          typeof project.customData?.type === 'string' &&
-          project.customData.type.endsWith('Resource') ? (
-            <BookOpen className="tw:h-3 tw:w-3 tw:opacity-60" aria-label="Resource" role="img" />
-          ) : (
-            <FileText className="tw:h-3 tw:w-3 tw:opacity-60" aria-label="Project" role="img" />
-          )
-        }
+        renderProjectIndicator={(project) => {
+          const type = project.customData?.type;
+          const Icon = type === 'ScriptureResource' ? BookOpen : FileText;
+          const typeName = project.customData?.typeName;
+          // A row whose project carries no type still needs a name for its glyph — the fixture's
+          // uncategorized entry exercises that path.
+          const typeLabel =
+            (typeof typeName === 'string' ? typeName : undefined) ??
+            (typeof type === 'string' ? type : undefined) ??
+            'Uncategorized';
+          // The glyph is the only visual carrier of "project or resource", so give it an
+          // accessible name of its own instead of hiding it from assistive tech.
+          //
+          // No native `title`: a selector row is itself a tooltip trigger, so a `title` inside one
+          // opens the browser's default tooltip on top of the app's. `label` is the way in — the
+          // selector puts it in the row tooltip, which is the sighted-user half of the same job.
+          return {
+            node: (
+              <span role="img" aria-label={typeLabel}>
+                <Icon className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+              </span>
+            ),
+            label: typeLabel,
+          };
+        }}
       />
     );
   },
@@ -764,7 +830,7 @@ export const ProjectAndResourceIndicators: Story = {
     docs: {
       description: {
         story:
-          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `customData.type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories): a book icon for the two resource types, a document icon for everything else.\n\nThe selector renders whatever node the caller returns, verbatim. It adds no accessible name of its own, because only the caller knows what its glyph means.\n\nSo the icons here are labelled: nothing else in the row says whether it is a project or a resource, and an unlabelled icon would put that distinction out of reach of a screen reader. Use `aria-hidden` instead only where the row text already carries the same information.",
+          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `customData.type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon specifically for the `ScriptureResource` type, a document icon for everything else. The selector renders whatever node the caller returns and cannot know what a glyph means, so naming it is the caller's job: each icon here sits in a `role=\"img\"` wrapper labelled with the project's type, which is what a screen reader announces. The hover half goes through the returned `label` rather than a native `title`, because the row is already a tooltip trigger and a `title` inside one opens a second tooltip over the first.",
       },
     },
   },

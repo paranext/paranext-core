@@ -240,6 +240,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   cost this adds is a second Home configuration to keep working, which is what the entry warned
   about; it is accepted because the alternative is a project picker whose "more" leads to a list of
   things that are not projects.
+- **Amended 2026-09-21 (PT-4549, `ProjectSelector` migration):** the data-driven gate this entry
+  described is gone. The picker is now a `ProjectSelector` whose trigger stays reachable with an
+  empty list, and the affordance is its `footerAction` row rather than a bare `<button>` inside a
+  `SelectContent` that only mounted alongside items — so a user with no local project metadata can
+  reach Home through it after all. The controlled-`open` state that closed the dropdown by hand is
+  gone with it: `ProjectSelector` closes its own popover when the footer row is activated.
 
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
@@ -704,6 +710,62 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   and only partly covered is skipped without notification — be reported to the user.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
+
+## adr-closed-source-command-doc-altitude: Command docs for closed-source-backed PAPI commands describe caller-visible guarantees, not the current implementer's mechanism
+
+- **Date:** 2026-09-05
+- **Status:** Accepted
+- **Context:** PR #2771 (PT-4483) fixed `paratextBibleSendReceive.syncProjects`'s doc comments (the
+  C# stub's XML doc and `src/@types/paratext-bible-send-receive/index.d.ts`'s TSDoc), which had
+  drifted from the real Paratext 10 Studio implementation — a closed-source patch
+  (`paratext-10-studio` `repo-patches/paranext-core.patch`, `SyncProjectsCore`). A first draft of the
+  fix encoded Studio's specific first-sync mechanism directly (an initial batch of 5 projects, then
+  one at a time, stopping once a non-Observer role is found), verified against the actual patch
+  source. Code review (Reviewable, `katherinejensen00`, with direct access to that patch) found the
+  new text itself over-generalized: for accounts with five or fewer shared projects, or accounts
+  where the user has no editable role on any of them, the described "stops early, rather than
+  syncing the whole account" claim doesn't hold — the whole account downloads regardless, just via a
+  different path through the same mechanism. Fixing that specific overgeneralization in place would
+  still have left the doc asserting Studio's tunable constants (batch size, the role check) as part
+  of the command's contract — constants this repo cannot verify, cannot test against (the stub
+  throws/no-ops; no core test exercises the real logic), and has no way to detect drifting the next
+  time Studio's patch is regenerated (`save-repo-patches`).
+- **Decision:** Doc comments for a command whose real implementation is closed-source or otherwise
+  swappable (today: anything backed by `paratext-bible-send-receive`, i.e. any command whose
+  `@throws` documents a `PlatformUnimplementedException` for builds that don't implement it, naming
+  the current implementer only as an example) describe caller-visible **guarantees** only — what a
+  caller may rely on and must not assume — never the current implementer's specific mechanism or
+  tuning constants. Concretely, `syncProjects`'s zero-local-projects case now reads "an
+  implementation is expected to try to make at least one project available for the current user to
+  work in, if the account has one — but may stop short of downloading every shared project in the
+  account, trading completeness for performance. Callers MUST NOT assume every shared project is
+  present locally once this resolves," replacing the batch/role-check description. Promoted to a
+  standing rule: `.claude/rules/architecture/closed-source-command-docs.md`.
+- **Alternatives:**
+  - **Encode the known implementation for convenience** (what the first draft did) — rejected:
+    useful once, but ties this repo's doc to a private repo's tunable constants with no verification
+    path and no drift signal; exactly what produced the overgeneralization this decision responds
+    to.
+  - **Keep it vague, point readers to the other repo** — rejected: readers of this repo (including a
+    future AI agent) might not have access to or knowledge of the actual implementation(s); a bare
+    pointer elsewhere is unactionable for them and doesn't tell a caller what it can safely assume.
+  - **Leave the pre-PR wording**, which understated the behavior — rejected: it was the original bug
+    this PR fixed (claimed the no-ID form only ever syncs already-local projects, when a true first
+    sync can and should also acquire the account's first project).
+- **Consequences:** This doc can no longer be invalidated by a Studio-side regeneration of
+  `repo-patches/paranext-core.patch` that changes a tuning constant, since it no longer asserts one.
+  The tradeoff is genuinely less specific information in-repo for someone who wants to reason
+  precisely about first-sync latency or batching — that detail now only exists in the Studio patch
+  itself, which the rule file points to. If a future need arises to expose implementation-specific
+  timing/behavior to core (e.g. for a startup-performance budget), it should be surfaced through an
+  explicit signal (a return value, an event) rather than encoded into a doc comment describing a
+  different implementation's internals. Upstreamed 2026-09-18 via
+  `paratext-bible-internal-extensions#200` (merged), closing the drift-on-re-sync risk this decision
+  flagged. That review round also surfaced a real (if narrow) bug in the underlying implementation —
+  `seenConnectedIds` not seeded before the connected-resource scan, causing a double-sync when a
+  primary project is also connected to another primary in the same call — tracked separately as
+  PT-4602 (open as of 2026-09-21), since it's a code fix in the Studio patch, not a doc fix.
+- **Source:** PT-4483, review of #2771.
 
 ## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
 
@@ -3916,6 +3978,50 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-paste-inserts-only-what-was-pasted: A paste never invents or deletes a paragraph marker
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** In Standard view markers are literal text, so a whole-paragraph copy carries the
+  paragraph's own `\p ` literal. Pasting one at an existing paragraph's content start therefore puts
+  two paragraph-marker occurrences on the line. An earlier build (scripture-editors, PT-4201)
+  resolved that by dropping the HOST paragraph's glyph — `$withoutRedundantOwnPrefix` — so pasting
+  `\q1 asdf` at `\p ‖fdsa` produced a single `\q1 asdffdsa` paragraph with the `\p` gone and the
+  host's own content re-tagged. It was added to un-skip a copy→paste round-trip test whose target is
+  an empty `\p` scaffold, and the "stray empty paragraph" it removed was that scaffold; it was never
+  recorded or reviewed as a product decision. Keeping it out of TYPED input then required a paste
+  provenance apparatus (a per-commit armed flag plus a set of pended node keys, to carry "this
+  rebuild came from a paste" across a deferred settle), which in turn let the read-only settle and
+  the mutating rebuild disagree about a deferred paste's shape.
+- **Decision:** A paste inserts what was pasted and nothing else. It never deletes a marker the user
+  did not select, and it never invents one they did not paste. Two paragraph markers in a row is what
+  the bytes say, and the line splits — leaving an empty predecessor — exactly as typing the same
+  bytes does. This matches Paratext 9, whose `NormalizeTokenUsfm` (`ParatextData/UsfmToken.cs`)
+  writes a line break before a Paragraph token whenever the output already has content and the
+  tokens are not already carrying their own whitespace (its legacy USFM-2.0-conversion mode skips
+  this) — exactly the two-markers-in-a-row case here. The corollary is the injection half: a
+  multi-line paste replays each line break as a paragraph split, and the engine injects a marker
+  prefix onto every fresh split paragraph so it is not read as marker-deleted — that injection is
+  now skipped when the paragraph's own text already opens with a paragraph-marker literal.
+- **Alternatives:** Keep the dedup only for an EMPTY host paragraph — rejected: the shape is not
+  produced by any gesture in this app (Enter opens the marker palette rather than creating an empty
+  paragraph), P9 keeps the empty paragraph anyway, and it would have preserved the whole provenance
+  apparatus for a case nobody reaches. Keep the dedup and fix the settle divergence instead —
+  rejected: it fixes the symmetry of a rule that should not exist.
+- **Consequences:** pasting a whole-paragraph copy at a paragraph's content start now leaves an empty
+  paragraph ahead of the pasted one, which is a visible change and the P9-parity shape. Round-trip
+  tests that seeded an empty host and expected the paste to swallow it now assert the host and strip
+  it. `isPasteRebuild`, `Tier2Context.pasteRebuildArmed` and `pastePendedKeys` are gone, so the
+  read-only settle (`$settledUsj`) and the mutating rebuild call `$buildParaFragment` with identical
+  arguments and can no longer disagree — Invariant IV holds by construction rather than by
+  bookkeeping. Removing the dedup also surfaced a defect it had masked: every `\b` in a pasted
+  document gained an empty `\p` in front of it (16 in the 2sa fixture), because a blank-line marker
+  carries neither content nor a separator and so never resolved the injected prefix away — closed by
+  the same injection-skip rule above (`$suppliesOwnParaMarker` in `markerEditDeletion.utils.ts`):
+  `\b`'s own text is nothing but the marker literal, so it qualifies via that rule's end-of-run case.
+- **Source:** `/code-review` of scripture-editors #13 + paranext-core #2656, and the follow-up
+  triage with the epic lead.
+
 ## adr-per-project-selection-collapses-scroll-groups: Per-project consumers collapse multi-scroll-group projects themselves
 
 - **Date:** 2026-09-14
@@ -3989,6 +4095,44 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
+
+## adr-per-web-view-state-lives-in-the-definition: Per-web-view state lives in the web view definition; user defaults and cross-instance memory live in settings
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Per-pane content zoom (epic PT-4575) needs three different lifetimes for one number:
+  the level the pane on screen is at now, the level to hand the next pane of the same project and
+  kind, and the user's default for panes that have never been zoomed. The platform already has a
+  home for the first — a web view's own `state` inside its `SavedWebViewDefinition`, written through
+  `updateWebViewDefinition` and read back in a view with `useWebViewState`. That store is the one the
+  dock layout serializes, so it survives a restart and travels with the tab when the tab moves to
+  another window (`adr-web-view-ids-are-unique-from-birth`, `adr-durable-window-ids`). An April
+  prototype of this feature (PR #2211) instead kept a `Record<webViewId, factor>` inside a renderer
+  zoom service and mirrored it into a hidden setting, making the pane's own level a second copy that
+  had to be reconciled with the definition on every open, move, reload and close.
+- **Decision:** Per-web-view state of any kind lives in that web view's `SavedWebViewDefinition.state`,
+  written with `updateWebViewDefinition`. State that must outlive a single pane — a user-level
+  default, or "what this project's editor was last set to" — lives in **user settings**: a visible
+  setting for the default the user controls, a hidden one for the memory. Services keep no parallel
+  store keyed by web view id. Content zoom is the first feature written to the rule: the pane's own
+  levels are `platform.contentZoomLevels` in the definition state, the default and the per-project
+  memory are `platform.webViewContentZoom` and `platform.webViewContentZoomMemory`
+  (`src/renderer/services/web-view-content-zoom.service.ts`).
+- **Alternatives:** (a) **A per-view service with its own hidden `Record` store** — the April
+  content-zoom prototype, PR #2211 — rejected: two stores for one value, and the one that is not the
+  definition has to be taught by hand about every lifecycle event the definition gets for free.
+  (b) **Everything in settings, keyed by web view id** — rejected: ids are minted per pane and never
+  reused, so such a setting grows without bound and needs a pruning story; that cost is accepted only
+  for the memory setting, which is keyed by project and kind rather than by pane, and even there,
+  whether to prune at all is decided in PT-4585. (c) **Everything in the definition, nothing in settings** —
+  rejected: a level that dies with its pane cannot answer "the same zoom next time I open this
+  project", which is what Paratext 9 does (`ParatextBase/DefaultZoomMemento.cs`).
+- **Consequences:** Per-pane state travels through restart, window move and layout share for free, and
+  a feature that wants it writes no storage code. In exchange, definition state is semi-public — it
+  is visible in a shared layout and readable by the view itself — so nothing sensitive belongs there,
+  and every key needs a name that cannot collide, hence the `platform.`-prefixed key. **Revisit** if a
+  per-pane value ever grows larger than a layout file should reasonably carry.
+- **Source:** PT-4576 (PR #2803) and PT-4580, epic PT-4575; the rejected alternative is PR #2211.
 
 ## adr-per-window-focus-ring-keys-off-broadcast-window-id: A per-window focus ring keys off a main-broadcast window id, not local DOM focus
 
@@ -4211,6 +4355,52 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   lives in the hosts.
 - **Source:** PT-4433 (NN5d, Sprint 89 Simple Quality), resource-picker dead-ends.
 
+## adr-picker-row-truncates-never-scrolls: A picker row truncates and starts its short name at the leading edge; it never scrolls horizontally
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** Platform.Bible has several project/resource pickers that list the same three things —
+  a short name, a full name and a language — and each had made its own layout decisions. Two of Ian
+  NN-3.3's four defects were the result. `ResourcePickerDialog` laid its rows out in an `auto`
+  table whose short-name cell was `whitespace-nowrap`, inside a container asking only for
+  `overflow-y: auto`; CSS computes the unspecified axis from `visible` to `auto`, so one long
+  resource name widened the table and produced a horizontal scrollbar that pushed the language
+  column off the right edge. Measured in the running app at a 560px dialog: `scrollWidth` 782
+  against `clientWidth` 514. Separately, the "Select project" dialog right-aligned its short name
+  while `ResourcePickerDialog` and the titlebar `ProjectSelector` both left-aligned theirs, so the
+  same list of the same projects read differently depending on how the user got there. Neither is
+  interesting on its own; what makes them worth recording is that a third picker added later would
+  have picked its own answer again.
+- **Decision:** One layout contract for every picker row — **truncate, never scroll**; **truncation
+  must not hide anything**; **the short name starts at the leading edge**. Stated as invariants
+  rather than as one picker's mechanism, because the three surfaces are a table, a CSS grid and a
+  cmdk list and each reaches them a different way: `ResourcePickerDialog` fixes its columns with a
+  `colgroup` rather than per-cell widths (its section-heading rows span all columns and cannot carry
+  them), `ProjectPicker` floors its grid tracks at `minmax(0,…)`, and `ProjectSelector` inherits
+  `overflow-x: hidden` from the shared `CommandList`.
+
+  The invariants are written out, with what each one rules out and how to test it, in
+  [`.claude/rules/ux/picker-row-layout.md`](../../.claude/rules/ux/picker-row-layout.md) — that is
+  the copy to follow and to keep current. This entry keeps the reasoning and the history; restating
+  the rule in both places would guarantee that one of them eventually describes a superseded
+  version.
+- **Alternatives:** **Wrap long names onto a second line** — rejected: it makes row heights ragged
+  in a list whose whole job is fast visual scanning, and the language column still has to go
+  somewhere. **Allow horizontal scrolling with a scroll affordance** — rejected: a name being long
+  is not a reason to hide a column the user never asked to lose, and the PRD is explicit that
+  "horizontal scroll is always bad". **Express the alignment through WI-24's shared project-name
+  helper**, as PT-4551 proposed — rejected because that helper formats a name *string*
+  (short-name-first, de-duplication) and alignment is layout; it has no place to put this.
+- **Consequences:** A new picker follows this entry rather than re-deriving an answer, and the
+  guard against regression is per-surface: the layout half is pinned in a real browser by the
+  `LongNamesDoNotScrollHorizontally` story (jsdom reports `scrollWidth` and `clientWidth` as 0, so
+  it cannot see this class of defect at all), and the hover-label and alignment halves by jsdom
+  tests. Because the contract is written here and not carried by shared code, a picker that ignores
+  it fails no test until someone adds one — **revisit** and extract shared row components if a
+  fourth surface appears, at which point the duplication would outweigh the coupling.
+- **Source:** PT-4551 (Ian NN-3.3 (a) and (d)), with the overflow mechanism measured in the running
+  app rather than inferred.
+
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26
@@ -4400,6 +4590,29 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   out-of-repo consumer (e.g. Paratext 10 Studio) must absorb at once.
 - **Source:** PR #2673 (project-selector groupings).
 
+## adr-project-selector-footer-action-is-data: `footerAction` is a data prop, not a render prop
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** The titlebar picker needs a "More projects…" affordance below the list.
+  `customSections` partitions rows and cannot express an action that opens a different surface.
+  cmdk 1.1.1 constrains how such a row can be built: navigation runs through `getValidItems()`,
+  which queries only inside `CommandList`, so a row rendered outside it is mouse-only — the
+  accessibility gap the bare `<button>` this work replaced.
+- **Decision:** `footerAction` is a **data** prop — `{ label, onSelect }` — not a render prop. The
+  selector owns the markup: a `forceMount` `CommandItem` inside `CommandList`, with an explicit
+  stable `value` and an `alwaysRender` separator.
+- **Alternatives considered:**
+  - **A render prop returning a `ReactNode`.** Rejected: it lets a consumer hand back a bare
+    `<button>`, reproducing the exact defect the prop exists to remove, and it cannot be enforced
+    by review at every future call site.
+  - **Rendering the action outside `CommandList`.** Rejected as mouse-only, for the same
+    `getValidItems()` reason the context describes.
+- **Consequences:** Callers cannot style the row or put arbitrary content in it; a future need for
+  that is a reason to widen the data shape, not to switch to a render prop. `forceMount` keeps the
+  row out of cmdk's registered-item set, so `CommandEmpty` still renders on an empty list — the two
+  behaviors are coupled and must be asserted together.
+
 ## adr-project-selector-per-bucket-row-order: A grouping descriptor owns its bucket's row order, via an optional comparator
 
 - **Date:** 2026-09-19
@@ -4468,10 +4681,164 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   added without adding a prop — and it should carry the API-surface TSDoc and localized-key
   conventions the stable barrel expects, rather than bundling them into a capability change.
 
+  Two known sharp edges are deliberately being carried on `experimental` rather than fixed at the
+  point they were found, on the strength of that freedom, and should be settled before promotion:
+  `ariaLabel` REPLACES the trigger's visible label in the accessible-name computation (so every
+  consumer passing a control-only name, as its TSDoc instructs, hides the selected project from
+  screen readers — the titlebar composes the whole name at its own call site instead); and
+  read-only is consumer-derived through `renderProjectIndicator`, which leaves the row tooltip
+  unable to explain the padlock to sighted pointer users. Both are written up in
+  [`.context/designs/PT-4549-followup-projectselector-accessible-name.md`](../designs/PT-4549-followup-projectselector-accessible-name.md).
+
+## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** `projectDataProviders.get(projectInterface, projectId)` looks cheap at the call site
+  and is not. It runs `projectLookupService.getMetadataForProject`, which waits for a matching PDP
+  factory and then asks EVERY registered factory for `getAvailableProjects`
+  (`src/shared/models/project-lookup.service-model.ts`, `internalGetMetadata`); each layering
+  factory in the extension host answers that by asking every other factory again, so one renderer
+  lookup reaches the C# factories several times over. PT-4597 showed what that costs when a
+  consumer treats it as free: the Simple-mode toolbar's `useOpenProjectBookIds` tore down and
+  rebuilt every `booksPresent` subscription on any change to the set of open project ids, resolving
+  a provider per open project each time. A resource panel republishing its navigable project ids in
+  a loop (~15 writes/s) turned that into ~20,000 lookups and ~52,000 extension-host-to-C# requests
+  in three minutes; .NET stopped answering, the extension host's socket to main died, and the app
+  hung. The PT-4501 late-unsubscriber throttle (#2772) had already fixed one flapping input to the
+  same hook, which shows that fixing inputs one at a time does not close the class.
+- **Decision:** Two rules, one at each end. (1) A **reactive consumer** whose inputs can change
+  repeatedly — a hook or effect keyed on the set of open web views, a selection, a setting that
+  another surface writes — acts on the **diff** of that set: it acquires only what joined, releases
+  only what left, and keeps resolved providers (and failed lookups) for its own lifetime so a
+  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, or a
+  provider that could not be subscribed to, is kept for a bounded delay (30 seconds in the hook)
+  and then looked up afresh on the next join, whatever the failure was: the lookup service's
+  `No project found` is also what a late-registering factory or a mid-session resource install
+  produces, so no message text is treated as a permanent verdict. `useOpenProjectBookIds`
+  (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the reference implementation; the
+  scroll-group service's `ensureVersificationSubscribed` is the older in-tree instance and evicts
+  immediately on failure, which suits a module-level cache with few callers. (2)
+  The **lookup service stays a broadcast** with no cache of its own for now: which factories serve
+  which project changes as factories register, as resources install, and as layering factories
+  come and go, and a stale answer there is a correctness bug for every caller, not a performance
+  one. The cost of a lookup is therefore the consumer's to bound.
+- **Alternatives:** (a) **Cache or coalesce inside `projectLookupService`** — deferred, not
+  rejected: an in-flight de-duplication (identical concurrent queries share one fan-out) is safe
+  and would help every caller, but a value cache needs invalidation on factory register/unregister
+  and on project install, which the lookup service cannot observe completely today. Worth doing as
+  platform work under its own ticket; it does not remove rule (1), because a rebuild-everything
+  consumer still pays a subscription round trip per member per change. (b) **Debounce the
+  consumer's input** — hides a flap but keeps the per-member cost, and delays legitimate updates by
+  the debounce window; a diff costs nothing when the set is unchanged, so it needs no delay.
+  (c) **Read `booksPresent` through one aggregating service** instead of a provider per project —
+  a larger redesign that would still have to answer where that service gets its providers from.
+- **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
+  `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
+  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup failed is
+  retried the next time it joins after the delay, so a project the backend begins serving later in
+  the session is picked up within that delay plus one membership change, never sooner; a
+  consumer that needs it sooner would subscribe to project-list or factory-registration events and
+  evict on those instead. The flap sources that exposed this are tracked as
+  PT-4592 (a panel republishing its navigable project ids while its reference list resolves
+  transiently empty) and PT-4743 (one installed resource yielding two picker rows under two project
+  id spellings). Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is
+  restated for agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
+
+## adr-pt9-interlinear-selected-reads: Publish the size limit and allow callers to select individual files or all at once
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** `adr-pt9-legacy-data-as-parsed-models` bounded `getPt9InterlinearData` with an
+  aggregate size cap so one response could not cross the transport's message limit and tear down the
+  C# connection. A real project reached that cap: a 36-book Swahili glossing project totals 74.7 MiB
+  of interlinear files against a 50 MiB cap set as a generous safe limit, so every read was refused
+  and the project could not be imported at all. Measured, its files serialize to 54.1 MiB -
+  comfortably inside the 100 MiB transport limit - so the cap, which bounds source bytes as a proxy
+  for serialized size, was what refused it rather than the limit it stands in for. The manifest
+  shared the cap, so the project could not even be listed.
+- **Decision:** Set the ceiling from measurement, and bound one response rather than the project.
+  (0) **The ceiling is raised to 80 MiB:** measured across that project's 38 files, the response
+  serializes to 0.72x the on-disk XML in aggregate and never above 0.76x for any single file of
+  consequence, because the indentation and close tags PT9 writes outweigh the attribute keys the
+  parsed shape emits. 80 MiB stays a generous safe limit on those numbers: a full response lands
+  near 58 MiB, the ceiling holds even if the serialized form were as large as the source - a third
+  more than anything measured - and a response at that worst case is still 20 MiB inside the
+  transport's 100 MiB limit. (1) **Selection by request parameter:** `getPt9InterlinearData` takes
+  an optional selector of manifest paths. Reading a scoped part of a project by request parameter,
+  rather than the whole of it, is what the platform's chapter and book getters already do, though
+  they take a `VerseRef` domain key; the in-repo precedent for an optional selector object is
+  `GetCommentThreads(CommentThreadSelector)`, which this one deliberately differs from - a sealed
+  record with `JsonUnmappedMemberHandling.Disallow` rather than a lenient mutable class whose
+  converter ignores unmapped members. A project of any size is read a group of files at a time, and
+  the groups reassemble to exactly what one unselected read would return, except `setups` and
+  `hasAssociatedLexicalProject`, which repeat on every response; take them from any one. (2) **The
+  manifest is not capped:** it carries one fixed-length digest per file however large the file is,
+  and it is what a caller selects with, so a project too large to read at once must still be able to
+  list what it holds. (3) **The manifest
+  describes its files and carries the ceiling:** each entry carries `sizeBytes` and, for a book
+  file, the `glossLanguage`/`bookId` its root element declares, so a caller can group its reads and
+  name the books it must leave out before transferring anything, and the manifest carries the
+  ceiling those sizes are measured against as a top-level field. (4) **Silent absence is always an
+  error:** a selector naming an unknown path, or naming no paths, fails with INVALID_ARGUMENT rather
+  than serving a payload that a caller importing file by file would record as a book holding no
+  data.
+- **Alternatives:** (a) **Raise the ceiling and stop there** - rejected: the measurement justifies a
+  raise, and the project that forced this now fits under it, but a ceiling of any value refuses the
+  project after next. Raising it without selection buys one project. (b) **Fix the transport
+  instead** - measure the serialized response before it is written and fail the one request,
+  removing the connection-teardown failure mode for every provider. Still the right platform fix and
+  still unaddressed; it raises the ceiling but does not remove it, so selection is needed either
+  way. (c) **A more compact payload encoding** - measured: 70% of the book payload is repeated JSON
+  key names, so tuple encoding plus interned identifiers would cut 46.5 MiB to roughly 13 MiB. A
+  large constant-factor win, but it is an optimization with its own contract break; it does not make
+  project size irrelevant, and it can land later on its own evidence. (d) **Documenting the ceiling
+  in prose only** - rejected because a types-only declaration offers no constant to import, so every
+  consumer would carry a copy that can silently stop matching what is enforced. (e) **Serving it
+  from a sibling getter, or on every manifest entry** - rejected: a second call to correlate, or a
+  platform constant repeated per file, where one top-level field on the response that already
+  carries the sizes costs neither.
+- **Consequences:** Project size stops deciding whether the book corpus can be imported. The project
+  that forced this now fits in a single read, so selection is what makes size irrelevant in general
+  rather than what rescues this one project. Selection is per file, though, so `Lexicon.xml` and
+  `WordAnalyses.xml` - single per-project files that grow with the corpus and cannot be split -
+  remain bounded by the ceiling; a project whose analyses file alone passes it has that data
+  unreadable through this interface until reads can be finer than a file. A consumer must now read
+  the manifest before the data, which was already the change-detection path. The uncapped manifest's
+  cost scales with the corpus rather than with any ceiling, so the request timeout is its effective
+  bound. The setups file is deliberately not charged to the cap - it is served whatever the
+  selection and is never a manifest key, so charging it would refuse a selection a caller had sized
+  correctly.
+
+  Each selected read re-runs the file scan, so reading a project one file at a time repeats that
+  scan once per file. Measured on a real project it is a low-single-digit share of import time -
+  parsing and transferring the files dominate - so the scan is deliberately not cached: the gain
+  would not pay for a cache whose invalidation had to track Send/Receive.
+
+  The ceiling is arithmetic over the transport's message limit, so that limit is declared as
+  `MAX_WEBSOCKET_PAYLOAD_BYTES` in `src/shared/data/rpc.model.ts` and passed as `maxPayload` to the
+  WebSocket server. That pins the server's receive path, which is the hop a C# data provider
+  response crosses and the one this ceiling is measured against; the extension host's own client
+  still takes the `ws` package default on its receive, so the other half remains on a library value.
+  At 80 MiB a response may inflate 1.25x its on-disk size before crossing the limit, where the 50
+  MiB cap allowed 2.0x, so the margin is thinner than it was and neither number can be changed
+  without re-checking the other.
+
+  The selector addresses files by manifest path, so it assumes a book and gloss language keep that
+  path between the manifest poll and the read that follows it. PT9's own writer always nests a book
+  file under `Interlinear_<lang>/`, so this holds in practice; the contract a consumer is given is
+  to rebuild `paths` from a fresh manifest rather than replay a stored list.
+- **Source:** PR #2838. The over-cap project described in Context, imported against the
+  projectInterface `adr-pt9-legacy-data-as-parsed-models` introduced in PR #2707; every byte figure
+  here is a measurement taken against that project's files.
+
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
 - **Date:** 2026-08-25
-- **Status:** Accepted
+- **Status:** Accepted; decision (2) and the size-cap consequence superseded in part by
+  `adr-pt9-interlinear-selected-reads`, which keeps the polled hashed manifest but enriches its
+  entries, removes the cap from the manifest, and bounds a data read by a caller-chosen selection
+  rather than by the whole project. Everything else here stands.
 - **Context:** Importing Paratext 9 interlinear data into a Platform.Bible extension requires core
   to expose project-folder files extensions cannot otherwise reach (extensions have no filesystem
   access, and `ExtensionData` is confined to its own store). PT9 keeps this data in per-language
@@ -5345,11 +5712,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
-## adr-share-layout-renders-without-a-catalog: Share Layout always renders, and states what it cannot show
+## adr-share-layout-renders-without-a-catalog: The Team layout dialog always renders, and states what it cannot show
 
 - **Date:** 2026-09-03
 - **Status:** Accepted
-- **Context:** `ShareLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
+- **Context:** `TeamLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
   Confirm writes that snapshot back over `platformScripture.referencedProjectsAndResources`. Every
   input to that snapshot is indistinguishable from a legitimate empty value while it is in flight: a
   project setting resolves to its `defaultValue` (`createUseDataHook`), the personal lists are
@@ -5361,21 +5728,43 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   to do with DBL) out of reach, and on a core build with no DBL credentials the dialog would then
   never open at all, because `notConfigured` is the normal state there.
 - **Decision:** The dialog blocks on **delivery**, not on success. It renders a spinner until
-  `canWrite`, all three project settings, both personal lists and the catalog have each settled once
+  `canWrite`, all four project settings (`referencedProjectsAndResources`, `modelTexts`,
+  `sharedLayoutDefaultTab` and the team structure lock `structureProtected`), both personal lists
+  and the catalog have each settled once
   — and then it always renders, whatever the catalog said. References it cannot classify stay in
   `otherResources` (round-tripped unchanged by Confirm, as before) and are **counted out loud** in a
   notice above the tabs, carrying a retry only when the reason is recoverable. The settle gate
   latches on the FIRST settle, so a retry driven from inside the mounted dialog cannot unmount the
   body and discard the admin's in-progress edits.
+
+  The gate **is** the snapshot: the latch captures every value the body mounts from into one state
+  object, and the body is rendered from that object rather than from the live memos beside it. So
+  the props the body mounted with and the values Confirm reference-compares its result against are
+  the same objects by construction. Read live at render time they would agree only by timing — the
+  latching effect and the render it triggers happen to flush in one turn — and a delivery landing in
+  that window would make every untouched field fail its comparison and write.
+
+  One exception re-opens the snapshot: a catalog arriving after the body mounted, while the admin
+  has edited nothing. Without a catalog both tab lists mount EMPTY (every saved `dblResource` is
+  unclassifiable), so a dialog that promises a review of what is about to be shared shows nothing at
+  all, and the retry cannot fix it. That case re-captures the seed and remounts the body. A body
+  with edits in it is never re-seeded — a remount discards them — so it keeps the mount-time
+  partition, and the hidden-resource count is pinned to that partition rather than recomputed live,
+  or the caveat would vanish the moment the catalog landed and leave the empty lists reading as the
+  truth.
 - **Alternatives:** **Keep blocking on a failed catalog** — rejected: it makes a transient provider
   registration (~10s of background retries) hide unrelated settings, and a retry landing after the
   body mounted cannot fix a snapshot anyway, which is what the delivery gate already handles.
   **Render with no catalog and say nothing** — rejected: that is the dead end this epic exists to
   remove, under a heading that promises a review of what is about to be shared.
-- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate, or it
-  reintroduces the erasure. A surface that cannot show part of its own subject should say how much
-  it is hiding rather than rendering a short list silently.
-- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13).
+- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate AND
+  to the latched seed, or it reintroduces the erasure — a field compared against a live value
+  instead of the seed writes whenever that value moves under an open dialog, which is reachable
+  from a catalog retry, another admin's write, or an S/R delivery. A surface that cannot show part
+  of its own subject should say how much it is hiding rather than rendering a short list silently,
+  and a caveat about what a snapshot omits has to be pinned to that snapshot, not recomputed from
+  data the snapshot is no longer following.
+- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13); PT-4557 review round 4 (A-1 to A-4).
 
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 
@@ -5448,6 +5837,46 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   as a local literal — and is now bound to a shared constant; see
   `adr-window-min-width-shared-constant`.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## adr-simple-mode-tab-menu-offers-zoom-only: Simple mode's tab menu is the platform's own contributed menu, narrowed to the content-zoom group
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Simple mode had no tab menu at all, because every item the platform's tab menu could
+  offer — floating, moving to another window — is a no-op there: floating targets a second window
+  Simple mode does not have, and moving reaches windows Simple mode does not expose. Content zoom is
+  the first per-tab action that is meaningful in both modes: zooming a tab's content behaves
+  identically whether or not a second window exists. The menu converter flattens contributed groups
+  into one list with separators, and a converted item no longer says which group it came from, so
+  narrowing a menu to one group has to happen on the contributed menu before conversion, not after.
+- **Decision:** Both interface modes read the same contributed tab menu. Simple mode narrows it to
+  the `platform.tabZoom` group before conversion; items in that group are shown disabled on a tab
+  whose web view marks no zoom area, read from the content-zoom resolver at the moment the menu
+  opens. A tab hosting no web view gets no menu at all in either mode. The menu renders only once the
+  interface mode is known, so a tab never briefly shows the wrong mode's menu before the setting
+  resolves.
+- **Alternatives:** **Keep Simple mode menu-less and rely on chords alone** — rejected: a keyboard
+  shortcut with no menu entry is not discoverable, and content zoom is meant to be found by browsing
+  the tab menu. **Disable items by area presence at the contribution level** — rejected: whether a
+  view marks a zoom area is a signal that only resolves asynchronously, well after the menu contract
+  is declared, so it cannot gate what the contribution itself offers. **A per-item
+  `hiddenInterfaceModes` field** — rejected: that mechanism hides individual items, but the need here
+  is to restrict an entire menu to one group, which a per-item hide cannot express without listing
+  every other item's id.
+- **Consequences:** Simple mode now pays one contributed-menu read per tab at mount, the same
+  mount-time cost Power mode already paid. The tab menu is reachable only where a tab bar is visible,
+  which in Simple mode is Column 3 alone — so the editor pane, which has no visible tab bar, needs
+  its own entry point to content zoom; that entry point is the editor's own hamburger menu, delivered
+  together with the editor's zoom areas. Product narrowed PT-4578's scope on 2026-09-16: the tab-menu
+  route to content zoom is required only where Simple mode already has a visible, interactive tab bar
+  — Column 3 — not on the editor's own tab, whose hamburger menu is its sole entry point instead. The
+  headless Column 1/2 tab bars keep their existing `pointer-events: none`; this feature does not make
+  them interactive to reach that parity. The disabled state is a snapshot taken when the menu opens,
+  not a subscription: a zoom area that arrives while the menu is up leaves the items greyed until the
+  menu is closed and reopened. That bounds the cost to a menu left open across a pane's first
+  moments, and it is why the items are greyed rather than hidden — the shape of the menu does not
+  change under the pointer.
+- **Source:** PT-4578 (PR #2821), epic PT-4575.
 
 ## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
@@ -6028,6 +6457,68 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
   a manual pass rather than by automation.
 
+## adr-team-lock-lives-in-the-team-layout-dialog: The team-wide USFM structure lock is staged in the Team layout dialog, not toggled from the toolbar
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** The editor toolbar carried two adjacent lock buttons: a personal structure-protection
+  toggle (`Lock`/`LockOpen`, Ctrl/Cmd+Shift+L) and, for admins only, a team-wide one
+  (`Shield`/`ShieldOff`, Ctrl/Cmd+Alt+Shift+L) wired straight to
+  `platformScripture.structureProtected`. Two near-identical icon buttons whose only difference is
+  *whose* structure they lock is not a distinction a toolbar can make. Putting the team-wide lock in
+  the Team layout dialog instead was the original design intent — raised by Sebastian in a comment on
+  the design document — which did not carry into the implementation design, so the toolbar pair got
+  built. PT-4557's NTH-2 then proposed resolving the ambiguity a different way: one button for
+  translators plus a popover for admins.
+- **Decision:** The team-wide lock moves out of the toolbar entirely and becomes a switch in the Team
+  layout dialog's middle column, staged and saved with the rest of the layout — restoring the
+  original intent, approved by the product owner. The toolbar keeps the personal toggle alone. The
+  NTH-2 admin popover was built first and then abandoned: it reproduced the ambiguity it was meant to
+  remove — a control that *looks* like the personal toggle beside it but changes a setting for
+  everyone — and it applied on click, so a team-wide change had no review step. Two rules follow.
+  (1) **Structure protection is a Simple-mode feature end to end.** `isProtectionActive` is
+  `interfaceMode === 'simple'`, so in Power mode the lock is unenforced and the toolbar renders no
+  toggle — and the dialog's only opener is itself Simple-mode-gated, so the lock is authored and
+  enforced in the same mode. The toolbar's admin button was likewise Simple-only before this PR, so
+  removing it takes nothing away from Power mode. Opening the dialog in Power mode is noted as future
+  work at its call site; whoever does that must decide what the lock means there, since the setting
+  has no effect in Power mode today. (2) **Staged, not
+  immediate.** The lock joins the dialog's other settings behind Save, so an admin sees what they are
+  about to change for the team before it happens — and Cancel must discard it.
+- **Alternatives:** **(a) The NTH-2 admin popover on the toolbar** — built, then rejected: see above.
+  **(b) Keep the second toolbar button as it was** — rejected: two look-alike icon buttons whose only
+  difference is scope, with no review step on the team-wide one. **(c) Write the lock immediately on
+  toggle while staging everything else in the same dialog** — rejected: the Applying Changes
+  guideline forbids interleaving immediate- and explicit-apply controls as siblings, and the one
+  control that reaches every translator is the worst place to break that rule. **(d) Put it in
+  project settings instead** — rejected: it is a statement about what the team's editor does, which
+  is what the Team layout dialog is for; splitting it out would leave an admin setting the team's
+  layout in one place and the team's editing rules in another.
+- **Consequences:** The lock now has exactly one control in the whole app, so this dialog's failure
+  modes are its failure modes: a refused write must not be reported as a save, and a setting that
+  could not be READ must not be written back (its `false` fallback would unlock structure for every
+  translator on the project). Both are handled in `team-layout.dialog.tsx` and pinned by tests. Three
+  localization keys for the retired project-wide toolbar toggle were deprecated with no successor.
+  An admin opening the dialog only to flip the lock must not publish anything else: `handleConfirm`
+  writes each setting only when its own field changed, because on a project that has never shared a
+  layout the resource lists are seeded from the admin's *personal* selections — compared against
+  the seed the body was MOUNTED with, not the wrapper's live memos, which a catalog retry from
+  inside the open dialog re-identities. Two further consequences of that write path: a field whose
+  setter is momentarily `undefined` (its data provider unresolved, a window the mount gate is
+  deliberately latched across) counts as a FAILED save rather than a skipped one; and the four
+  writes are independent and non-atomic, so they are gathered with `allSettled` and the failure
+  message states that the save may be partial and that the dialog's values are the intended end
+  state, rather than promising a rollback that does not happen. And because the lock
+  is now saved as part of the team layout, it joins `readLayoutSignature`
+  (`shared-layout-receiver.model.ts`): every setting that dialog writes must be fingerprinted there,
+  or an admin who changes only that setting produces an identical signature and the team is never
+  notified — worst of all for the lock, the one change that REMOVES a capability from them. One question is still
+  open: the modal shell renders a ✕ that resolves the dialog with `undefined`, discarding the staged
+  edits silently, which a staged-commit dialog should not offer beside Cancel — whether to remove it
+  or make it behave as Cancel is with the product owner. Tracked separately from PT-4557, which
+  this entry closes, in `~/Desktop/PT-4557-followup-close-button-discards-staged-edits.md`.
+- **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25; round 3 A1, A2, A3).
+
 ## adr-theme-hosted-in-main: The theme service is hosted in main, and each window caches the current theme
 
 - **Date:** 2026-08-07
@@ -6373,6 +6864,82 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   determination AND the text to reproduce, not a relaxation of the gate.
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
+
+## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
+
+- **Date:** 2026-09-15
+- **Status:** Accepted (narrows `adr-app-global-shortcuts-in-main`; refines `adr-per-web-view-ctrl-f-for-find`)
+- **Context:** Content zoom (epic PT-4575) is scoped to one **pane**, and a pane may hold several
+  independently zoomable areas — the Scripture editor's text and its footnotes list. Acting on the
+  right one needs the id of the web view the user is in and the area holding the caret or the
+  pointer. The main process, which claimed Ctrl+`+`/`-`/`0` in its `before-input-event` handler for
+  app-wide zoom, has neither: it can name the focused window, not the focused tab, and it cannot see
+  which element inside an `about:srcdoc` iframe has focus. `adr-per-web-view-ctrl-f-for-find` already
+  settled this shape of problem for Ctrl+F by moving the listener into the view and holding it in one
+  shared hook — but that hook is extension code every view has to mount, and content zoom has to work
+  for views that know nothing about it, including plain-HTML ones.
+- **Decision:** The chords are handled inside each web view by the **platform's own injected
+  bootstrap** (`getContentZoomBootstrapScript` in
+  `src/renderer/services/web-view-content-zoom.bootstrap-script.ts`), appended to the script the
+  renderer already injects into every non-URL web view. It targets the area holding keyboard focus,
+  else the area under the pointer for the wheel, else the pane's last active area, and acts with the
+  pane's own id. This is `adr-per-web-view-ctrl-f-for-find`'s shared hook taken one step further: the
+  shared handler is platform-injected, so a view opts in by marking **content**, not by mounting
+  code. The bootstrap prefers in-process functions the window's web-view shard binds on the iframe's
+  `window` and falls back to the three PAPI commands `platform.webViewContentZoomIn` / `…Out` /
+  `…Reset`, which keeps `adr-renderer-registers-no-names` intact — the names are registered by the
+  router, not by the renderer — and keeps a wheel burst off the network. Main gave up the chords in
+  PT-4577 (PR #2821): the three Windows/Linux `before-input-event` zoom branches were deleted,
+  `platform.zoomIn` and `platform.zoomOut` stay as commands with no default chord, macOS binds
+  explicit View-menu items carrying ⌘=/⌘-/⌘0 in place of the native `zoomIn`/`zoomOut`/`resetZoom`
+  roles, and a renderer top-document `keydown` listener covers the case where keyboard focus is on
+  window chrome — the tab bar, the reference box, a toolbar button — where no iframe sees the key at
+  all. The three chord copies — the window-chrome listener, the in-view bootstrap and the macOS
+  View-menu accelerators — are all built from one table, `CONTENT_ZOOM_CHORDS` in
+  `src/shared/models/content-zoom.model.ts`; the bootstrap gets it serialized into the script it
+  injects, the same way the injected stylesheet's rule template travels there. The View menu carries
+  a hidden ⇧⌘= duplicate so ⌘+, which is what a Mac reports for that chord, reaches the menu path
+  too.
+- **Alternatives:** (a) **Keep it in main and route to the focused window** — rejected: main knows the
+  window, not the pane and not the area; the same objection `adr-per-web-view-ctrl-f-for-find`
+  records. (b) **A renderer window-level listener that forwards keys into the right iframe** —
+  rejected as the general mechanism: it is focus-blind, since the renderer cannot see which element
+  inside a sandboxed iframe holds the caret, and it adds a hop to keep in sync. It survives only as
+  the narrow window-chrome case above, where there is no iframe to ask. (c) **A shared React hook
+  every view mounts**, as Find does — rejected here: it would make zoom an opt-in for *code* rather
+  than for *content*, it would repeat the coverage gap that decision already names, and plain-HTML
+  views could not opt in at all.
+- **Consequences:** A view that marks no zoom area ignores the chords entirely — the bootstrap does
+  not even register its wheel listener while a pane has no areas — and the platform scales such a view
+  whole at the Settings default instead. On Windows and Linux this is what a user notices first:
+  Ctrl+`+`, Ctrl+`-` and Ctrl+`0` now do nothing anywhere except a view that answers them itself —
+  today the Scripture editor, through the zoom areas it marks, and Enhanced Resources, through the
+  keydown handler it has always had for its own scripture-pane zoom
+  (`extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx`). Main
+  no longer claims those chords, nothing replaces them, and a pane with no marked area deliberately
+  leaves the keystroke to whoever else may want it rather than swallowing it for no effect. So a user
+  on Notes, or on the Text Collection — whose own pane zoom is wheel and menu only — presses Ctrl+0
+  and nothing happens. That is the intended cost of scoping zoom to a pane rather than to the window,
+  and it shrinks as views adopt the mechanism (the Text Collection grid in PT-4582, Enhanced
+  Resources in PT-4583). The bootstrap listens in the **bubble** phase on purpose, so
+  a view that owns Ctrl+wheel for a sub-region keeps precedence by stopping propagation in the capture
+  phase; the Text Collection grid's per-resource zoom does exactly that
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts`).
+  On macOS the chord arrives through the menu accelerator rather than through the iframe, so it
+  resolves the pane's *active* area rather than the area holding the caret; the bootstrap's
+  `pointerdown`/`focusin` tracking re-converges the two, except while a click's own answering refocus
+  into another area is being suppressed — that one move is held off so the clicked area stays the
+  target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once. The
+  window-chrome listener also stands down behind the three full-screen overlays that bypass
+  `OverlayHost` (connection lost, workspace updating, first run), not only behind a modal dialog:
+  the level is persisted, so a zoom made behind one of those would outlive it. The in-view bootstrap
+  needs no gate of its own, because all three of those covers are Radix modal dialogs: each takes
+  keyboard focus out of the web views while it is up and hands it back when it goes, so no chord
+  reaches a view from behind a cover.
+  **Revisit** if a second platform-injected shortcut appears
+  — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
+- **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
+  chord ownership), epic PT-4575.
 
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
@@ -6769,3 +7336,47 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
   adding the ordering tests in `z-index.test.tsx` and this decision record.
+
+## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Platform.Bible had one scaling control — the app-wide Electron zoom behind the
+  `platform.zoomFactor` setting, which scales the chrome along with everything else — plus a
+  project-level font size the editor's Standard view honours, plus two private per-view zooms that
+  grew where the platform had nothing to offer (the Text Collection grid's per-resource factor, and
+  the Enhanced Resources viewer's own handler). Adding a per-pane zoom on top of that raises two
+  questions at once: what the layers multiply out to on screen, and what the new layer is implemented
+  with. Spikes S1 and S2 of the epic's investigation measured the candidates on the real Scripture
+  editor.
+- **Decision:** On screen a pane shows **Electron zoom × project font size × content zoom** — the
+  content zoom of the area, its own level if it has one, otherwise the Settings default — with the
+  Text Collection's per-resource factor multiplying inside the grid's area. Content zoom composes
+  with the project font size and never replaces or resets it: it scales whatever base size the area
+  already has, and reset returns to the Settings default, not to the project font size. It is
+  implemented as CSS `zoom` on each element carrying `data-platform-content-zoom-root`, driven by a
+  custom property per area (`--platform-content-zoom-<areaId>`, falling back to
+  `--platform-content-zoom-default`). **Zoom areas are a platform capability**: a view marks one or
+  more non-nested areas and the platform owns the targeting (focus, then pointer, then last active
+  area), the per-area state, the memory and the indicator. Views do not build their own zoom stacks.
+- **Alternatives:** (a) **A font-size cascade on the content root** — rejected: it does not reach the
+  editor's rendered scripture, which sets its own sizes (PT-4167), so the one view the feature exists
+  for would not scale. (b) **`transform: scale`** — rejected: it breaks hit-testing, so clicks and
+  caret placement land off-target, which S1 reproduced. (c) **Scaling the whole `<iframe>` for every
+  view** — rejected for adapted views: it scales the view's own toolbar with its content, which is
+  exactly what NN-1 forbids; it is kept only as the fallback for a view that marks no area, and for
+  URL views, where nothing can be injected. (d) **Letting each view implement its own zoom**, as the
+  grid and Enhanced Resources already had to — rejected: four near-copies of clamping, stepping,
+  storage and indicator, with no shared memory and no consistent chord.
+- **Consequences:** A view opts in with one attribute and gets targeting, state, memory, the indicator
+  and the chords for free; the cost is the CSS `zoom` measurement mismatch — inside an area
+  `getBoundingClientRect` is in zoomed pixels while `getComputedStyle(...).fontSize` is not — which
+  every consumer of both has to handle by reading the area's variable (documented in
+  `Extension-Development-Guide.md` and `Component-Builder-Patterns.md`). The Text Collection grid's
+  per-resource zoom predates this decision and stays, nesting inside the grid's own area and
+  multiplying with it: it is the documented exception, not a precedent, and PT-4582 marks the grid
+  pane's own area around it and leaves it in place; moving it onto the platform mechanism is not
+  scheduled. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view carries a
+  private zoom any more.
+- **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
+  recorded here by PT-4580.
