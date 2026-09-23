@@ -5893,6 +5893,19 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   marks its whole body. Each cell marks only its own text with the `text-collection` area
   (`resource-cell-view.component.tsx`), and that marker wraps the per-resource zoom rather than
   carrying it, so the two still multiply. The area names in the Decision are unchanged.
+- **Amended 2026-09-23 (Text Collection per-column zoom removed):** the Text Collection grid no
+  longer has a zoom of its own. Its right-click zoom items, the chapter-view kebab, its
+  Ctrl/⌘+wheel handling and the per-resource levels it stored in web-view state
+  (`scriptureTextGrid.zoomByResourceId`) are gone; the stored levels are dropped, not migrated, and
+  the key is left unread in web-view definitions saved before the change. So the Consequences'
+  "the Text Collection grid's per-resource zoom 'stays' … nests inside the grid's own
+  `text-collection` area and multiplies with it", and the amendment above's "that marker wraps the
+  per-resource zoom … so the two still multiply", no longer hold: the `text-collection` marker wraps
+  each cell's text directly, and the pane's content zoom alone sizes it. The wheel-reader sentences
+  are moot as well: `createContentZoomWheelReader` (`platform-bible-utils`) and
+  `web-view-content-zoom.wheel-parity.test.ts` are gone with the per-column zoom, so the bootstrap's
+  inlined reader is the only one and there is no second copy left to single-source. The area names
+  in the Decision are unchanged.
 
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
@@ -7637,6 +7650,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   and is not declared, stays inert.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
   chord ownership), epic PT-4575.
+- **Amended 2026-09-23 (Text Collection per-column zoom removed):** the Consequences' example of a
+  view that owns Ctrl+wheel for a sub-region — "the Text Collection grid's per-resource zoom does
+  exactly that (`…/use-resource-zoom-input.hook.ts`)" — no longer exists. The grid registers no
+  wheel listener, so the platform's bubble-phase listener handles Ctrl+wheel over its cells. The
+  bubble phase is still what keeps precedence for any view that does claim a sub-region.
 
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
@@ -8069,6 +8087,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     the Simple-mode gutter reservation divides by the area's factor, and the baseline probe takes
     the paragraph's `currentCSSZoom`.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
+- **Amended 2026-09-23 (Text Collection per-column zoom removed):** the Consequences' example of
+  a view with its own zoom — "the Text Collection's per-resource factor" — is gone; no view carries
+  a zoom of its own now. The rule itself stands: an inline `zoom` on a marker replaces the
+  platform's rule, so any such zoom belongs on an element inside the marker.
 
 ## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas
 
@@ -8134,3 +8156,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   PT-4582 marks the grid pane's own area around the per-resource zoom no longer holds: the Text
   Collection grid marks each cell's own text with the `text-collection` area, wrapping the
   per-resource zoom, not the pane body. The composition formula itself is unchanged.
+- **Amended 2026-09-23 (Text Collection per-column zoom removed):** the Decision's "with the Text
+  Collection's per-resource factor multiplying inside the grid's area" and the Consequences' "The
+  Text Collection grid's per-resource zoom predates this decision and stays … it is the documented
+  exception, not a precedent" no longer hold. The grid's per-resource zoom is removed; its
+  `text-collection` area is sized by content zoom alone, so no view carries a private zoom any more
+  (Enhanced Resources' was retired by `adr-resource-panes-name-their-zoom-areas`). The composition
+  formula, CSS `zoom` on marked areas and zoom areas as a platform capability stand.
