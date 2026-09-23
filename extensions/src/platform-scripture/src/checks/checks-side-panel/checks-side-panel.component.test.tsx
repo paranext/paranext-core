@@ -133,8 +133,17 @@ function getGroupByTrigger(): HTMLElement {
   return menuTriggers[0];
 }
 
+/**
+ * The project selector's trigger, matched on the leading group label alone: once a project is
+ * selected the trigger names it too (`"<group label>: <project>"`), so the whole accessible name
+ * moves with the selection while the label that identifies the control does not.
+ */
+function getProjectSelectorTrigger(): HTMLElement {
+  return screen.getByRole('combobox', { name: new RegExp(`^${PROJECT_SELECTOR_LABEL_KEY}`) });
+}
+
 async function openGroupByMenu(user: ReturnType<typeof setupUser>) {
-  await user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL_KEY }));
+  await user.click(getProjectSelectorTrigger());
   await user.click(getGroupByTrigger());
 }
 
