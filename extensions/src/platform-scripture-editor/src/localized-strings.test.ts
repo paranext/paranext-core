@@ -275,8 +275,9 @@ describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) =>
   });
 });
 
-// The Text Collection cell's zoom menu is gone; content zoom alone sizes the cell text. Shipped keys
-// are immutable, so the four menu strings keep their values and are marked deprecated instead.
+// The Text Collection cell has no zoom menu of its own; content zoom alone sizes the cell text.
+// Shipped keys are immutable, so the four strings such a menu used keep their values and are marked
+// deprecated rather than deleted.
 describe('retired Text Collection per-column zoom strings', () => {
   const retiredKeys = [
     '%webView_scriptureTextGrid_cell_zoomIn%',
