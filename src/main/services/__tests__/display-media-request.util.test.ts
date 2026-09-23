@@ -7,24 +7,19 @@ import {
   registerDisplayMediaRequestHandler,
   selectDisplayMediaSource,
 } from '@main/services/display-media-request.util';
+import { logger } from '@shared/services/logger.service';
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
-/** Builds a window's top frame, which is its own `top` and has no parent */
+/** Builds a window's top frame, which has no parent */
 function createTopFrame(): DisplayMediaRequestFrame {
-  const topFrame: DisplayMediaRequestFrame = {
-    url: 'http://localhost:1212/index.html',
-    parent: null,
-    top: null,
-  };
-  topFrame.top = topFrame;
-  return topFrame;
+  return { url: 'http://localhost:1212/index.html', parent: null };
 }
 
 function createChildFrame(parent: DisplayMediaRequestFrame, url: string): DisplayMediaRequestFrame {
-  return { url, parent, top: parent.top };
+  return { url, parent };
 }
 
 describe('selectDisplayMediaSource', () => {
@@ -56,6 +51,18 @@ describe('selectDisplayMediaSource', () => {
   it('denies a request whose frame is gone', () => {
     expect(selectDisplayMediaSource(null)).toBeUndefined();
     expect(selectDisplayMediaSource(undefined)).toBeUndefined();
+  });
+
+  it('logs each denial at info', () => {
+    vi.mocked(logger.info).mockClear();
+
+    selectDisplayMediaSource(createChildFrame(createTopFrame(), 'about:srcdoc'));
+    selectDisplayMediaSource(null);
+
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("from 'about:srcdoc'"));
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('the requesting frame is gone'),
+    );
   });
 });
 

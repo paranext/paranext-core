@@ -14,7 +14,6 @@ import { logger } from '@shared/services/logger.service';
 export type DisplayMediaRequestFrame = {
   url: string;
   parent: DisplayMediaRequestFrame | null;
-  top: DisplayMediaRequestFrame | null;
 };
 
 /**
@@ -28,12 +27,12 @@ export function selectDisplayMediaSource<TFrame extends DisplayMediaRequestFrame
   frame: TFrame | null | undefined,
 ): TFrame | undefined {
   if (!frame) {
-    logger.debug('Denied display-media request: the requesting frame is gone');
+    logger.info('Denied display-media request: the requesting frame is gone');
     return undefined;
   }
 
-  if (frame.parent || frame.top !== frame) {
-    logger.debug(
+  if (frame.parent) {
+    logger.info(
       `Denied display-media request from '${frame.url}': only a window's top frame may capture it`,
     );
     return undefined;
