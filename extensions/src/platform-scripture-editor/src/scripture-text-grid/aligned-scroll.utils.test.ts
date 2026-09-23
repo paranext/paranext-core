@@ -57,6 +57,25 @@ describe('findVerseBlockForVerse', () => {
     expect(findVerseBlockForVerse(port, 0)?.dataset.verseNumber).toBe('1');
   });
 
+  it('lands on the lowest verse, not the first column, for verse 0 when columns start apart', () => {
+    // A commentary covering only 10-12 sits left of a full text. Document order puts its verse 10
+    // first, but the top of the passage is the full text's verse 1.
+    const port = buildPort([
+      ['10', '11', '12'],
+      ['1', '2', '10'],
+    ]);
+    const found = findVerseBlockForVerse(port, 0);
+
+    expect(found?.dataset.verseNumber).toBe('1');
+    expect(found?.dataset.column).toBe('1');
+  });
+
+  it('lands on the lowest verse for a malformed (non-finite) reference', () => {
+    const port = buildPort([['10'], ['1']]);
+
+    expect(findVerseBlockForVerse(port, Number.NaN)?.dataset.verseNumber).toBe('1');
+  });
+
   it('prefers an exact start in a later column over an earlier column`s nearer-but-lower block', () => {
     // Column 0 lacks verse 3; column 1 has it. The exact hit wins regardless of document order.
     const port = buildPort([

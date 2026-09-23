@@ -217,7 +217,7 @@ step, no automation. Just a record.
   views: that wrapper is a subgrid box, and `zoom` scales the used value of the lengths inside it,
   which would include the shared row tracks it inherits.
 
-  Two decisions follow from the row model rather than from taste, so they are recorded here:
+  Three decisions follow from the row model rather than from taste, so they are recorded here:
 
   - **Everything between verse blocks is hidden**, not section headings alone: the rule suppresses
     every non-verse-block child of the editor root, so chapter descriptions and intro material
@@ -231,17 +231,23 @@ step, no automation. Just a record.
     semantics would need a row-major DOM, which the one-editor-per-column requirement rules out;
     verse numbers rendered at the start of each block are what let a screen-reader user correlate
     columns. Flagged for AT validation with the rest of this surface.
+  - **A reference scrolls flush under the sticky header**, with no context above it. The Scripture
+    editor deliberately leaves `VERSE_NUMBER_SCROLL_OFFSET` (80px, `editor-dom.util.ts`) above the
+    verse, so in Simple mode the two surfaces land the same reference differently — on purpose; do
+    not "fix" either to match the other. Flush-to-top shows the whole aligned row with every column
+    starting at the same verse boundary, which is what the grid is for, and spends none of a short
+    port on preceding verses (80px is a quarter of a ~300px chapter cell). The cost is that poetry
+    or a continued sentence starts mid-thought. The Text Collection's chapter surfaces follow the
+    same answer (PT-4543). Agreed in review of #2781, 2026-09-23.
 
-  The editor this depends on is **not** the one the manifests pin. `BLOCK_VERSE_VIEW_MODE` and the
-  `verse-block` DOM exist only in the editor built from `scripture-editors`' `platform-yalc` branch,
-  which `dev-packages.json` names and `postinstall` -> `link-dev-packages` yalc-links over
-  `node_modules`; that branch is how Platform.Bible consumes the editor at all, rather than from npm
-  releases (the branch's own README says so). The `~0.8.15` pins in both manifests are the registry
-  floor npm resolves before the link replaces it — raising them to a version that is not published
-  would break `npm install`. Any path that skips the link (`npm ci --ignore-scripts`,
-  `npm run editor:unlink`) gets an editor without the mode, and this view then renders empty
-  columns; `upstream-editor-contract.test.ts` fails by name in that case rather than leaving it to
-  be diagnosed from the layout.
+  `BLOCK_VERSE_VIEW_MODE` and the `verse-block` DOM exist only in the editor built from
+  `scripture-editors`' `platform-yalc` branch, which `dev-packages.json` names and
+  `stage-dev-packages` builds into `dev-packages/staging/platform-editor`, the `file:` dependency both
+  manifests declare (`adr-dev-packages-staged-file-deps`). There is no registry version to bump for
+  it. A tree whose staged editor is stale or was never built — `npm ci --ignore-scripts` without
+  `npm run stage-dev-packages` first — gets an editor without the mode, and this view then renders
+  empty columns; `upstream-editor-contract.test.ts` fails by name in that case rather than leaving
+  it to be diagnosed from the layout.
 - **Source:** PT-4184, building on PT-4304's subgrid-chain proof and extending it to the editor's own
   wrappers.
 
