@@ -13,16 +13,16 @@
  *   directly so an upstream `overflow` fails loudly rather than as a subtle misrender).
  * - The `::before` exclusion is a float with non-zero width.
  * - Line 1 starts after the reserved name area; line 2 starts back at the row's flush inline edge.
- * - Every row's line-1 start agrees within 1px, including after one row is zoomed — the
- *   zoom-compensation contract.
+ * - Every row's line-1 start agrees within 1px across rows AT THE SAME ZOOM.
+ * - Zooming one row leaves its exclusion the same rendered width — the `--stg-zoom` compensation.
+ *   Line-1 starts are NOT expected to agree across different zooms: the paragraph's own
+ *   `text-indent` lives inside the zoomed subtree and is deliberately not compensated, because
+ *   compensating it would fight the marker indents the float approach exists to preserve.
  *
  * Honest runnability: requires a running Platform.Bible instance with 2+ resources flagged and
  * visible in the Text Collection, in verse view, at a reference where both have text. Skipped in CI
  * (no real resource fixtures); run locally after opening the app with
  * --remote-debugging-port=9223.
- *
- * Note: `scripture-text-grid-zoom.spec.ts` still queries `[role="gridcell"]`, but the component
- * renders `role="listitem"` — that spec looks stale. This one uses `listitem`.
  */
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
@@ -127,11 +127,52 @@ test.describe('Text Collection verse row', () => {
       }
     });
 
-    // Every row's first line starts on the same column — the alignment a content-sized name breaks.
+    // Every row's first line starts on the same column at a common zoom — the alignment a
+    // content-sized name breaks.
     const firstLineStarts = geometries
       .map((geometry) => geometry.lineStarts[0])
       .filter((start) => start !== undefined);
     const spread = Math.max(...firstLineStarts) - Math.min(...firstLineStarts);
     expect(spread).toBeLessThanOrEqual(1);
+  });
+
+  test('keeps the reserved width constant when one row is zoomed', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
+    const stg = await openScriptureTextGrid(mainPage);
+
+    const rows = stg.frame.locator('[role="listitem"]');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+
+    /** The `::before` exclusion's rendered width for each row, in device pixels. */
+    const exclusionWidths = async () =>
+      stg.frame.evaluate(() =>
+        [...document.querySelectorAll('[role="listitem"] .editor-input')].map((editorInput) =>
+          Math.round(parseFloat(getComputedStyle(editorInput, '::before').width) || 0),
+        ),
+      );
+
+    const before = await exclusionWidths();
+    expect(before.length).toBeGreaterThan(1);
+
+    // Verse rows have no zoom kebab (that lives in the chapter header band), so drive zoom through
+    // the right-click menu, which the cell wrapper exposes in both view modes.
+    await rows.first().click({ button: 'right' });
+    await stg.frame.getByRole('menuitem', { name: /^Zoom In$/i }).click();
+    await expect(rows.first().locator('[style*="zoom"]')).toHaveCount(1, { timeout: 5_000 });
+
+    const after = await exclusionWidths();
+    // The exclusion divides by `--stg-zoom`, so its RENDERED width must not move when the row
+    // zooms: that is what keeps the reserved space matching the unzoomed name beside it. Without
+    // the compensation this row's exclusion would grow with the zoom factor.
+    expect(after[0]).toBeGreaterThan(0);
+    expect(Math.abs(after[0] - before[0])).toBeLessThanOrEqual(1);
+    // The untouched row is unaffected either way.
+    expect(Math.abs(after[1] - before[1])).toBeLessThanOrEqual(1);
   });
 });

@@ -10,6 +10,10 @@ import {
   ZOOM_OPTIONS_KEY,
   ZOOM_OUT_KEY,
 } from './resource-cell-view.component';
+// The verse-row layout rules this component's inline name display depends on. The real app loads
+// them through `scripture-text-grid.web-view.scss`; Storybook does not, and copying them here would
+// let the stories drift from the stylesheet they are meant to demonstrate.
+import '../_scripture-text-grid-verse.scss';
 
 /**
  * One cell of the Scripture Text Grid: a single resource's focused chapter. In the app the
@@ -103,11 +107,12 @@ function SampleVerse({ rtl = false }: { rtl?: boolean }) {
  * The verse row's shape comes from a float generated inside `.editor-input`, so a stand-in must
  * carry the real class chain — `SampleVerse` renders a bare `<div><p>` and cannot show it.
  *
- * These rules mirror `_editor.scss` and `_scripture-text-grid-verse.scss`, which Storybook does not
- * compile into this story. They are a copy and can drift; the e2e geometry spec is what checks the
- * real cascade.
+ * Only the editor's own wrapper styles are reproduced here; the `.stg-*` rules come from the real
+ * stylesheet via the side-effect import above, so the story cannot drift from what ships. The
+ * editor half stays inlined for the same reason the sibling editor stories inline it — the full
+ * `editor.css` references toolbar SVGs by absolute URL that the css-loader cannot resolve.
  */
-const VERSE_ROW_STYLE = `
+const EDITOR_SHIM_STYLE = `
   .editor-container { color: inherit; position: relative; line-height: 20px; text-align: start; }
   .editor-input { min-height: 150px; font-size: 15px; position: relative; tab-size: 1; outline: 0; padding: 15px 10px; flex: auto; }
   .editor-input > p { direction: inherit; margin-top: 0; margin-bottom: 0; line-height: 1.5; }
@@ -115,16 +120,6 @@ const VERSE_ROW_STYLE = `
   .text-spacing .usfm_q1 { text-indent: -10vw; }
   .text-spacing[dir='ltr'] .usfm_q1 { margin-left: 15vw; }
   .text-spacing[dir='rtl'] .usfm_q1 { margin-right: 15vw; }
-
-  .stg-verse-row { --stg-name-reserve: 6.5rem; padding-block: 0.5rem; }
-  .stg-verse-name { inset-inline-start: 0.5rem; inset-block-start: 0.5rem; inline-size: 6rem; }
-  .stg-verse-grip { inset-inline-start: calc(0.5rem + 6rem - 1.5rem); inset-block-start: 0.25rem; }
-  .stg-verse-content .editor-input::before {
-    content: ''; float: inline-start;
-    inline-size: calc(var(--stg-name-reserve) / var(--stg-zoom, 1)); block-size: 1px;
-  }
-  .stg-verse-content .editor-input { min-block-size: 0; }
-  .stg-verse-name-reserve { padding-inline-start: calc(var(--stg-name-reserve) / var(--stg-zoom, 1)); }
 `;
 
 /** Stand-in for the read-only `Editorial` carrying the class chain the verse rules are scoped on. */
@@ -156,11 +151,11 @@ function SampleEditorial({
   );
 }
 
-/** Wraps a verse-row story with the stylesheet rules Storybook does not compile. */
+/** Wraps a verse-row story with the editor wrapper styles Storybook does not otherwise load. */
 function VerseRowBox({ children, width }: { children: React.ReactNode; width?: string }) {
   return (
     <>
-      <style>{VERSE_ROW_STYLE}</style>
+      <style>{EDITOR_SHIM_STYLE}</style>
       <CellBox width={width}>{children}</CellBox>
     </>
   );
@@ -318,14 +313,13 @@ export const VerseRightToLeft: Story = {
 };
 
 /**
- * Verse mode, inline name beside a longer verse — line 1 starts after the hanging name and later
- * lines tuck beneath it at the row's flush inline edge (the PT9 wrap-around shape). The exclusion
- * that shortens line 1 is generated inside `.editor-input`, so this only reproduces faithfully with
- * an editor stand-in carrying that class; see `SampleEditorial`.
+ * The wrap-around shape in a narrow pane, where the verse wraps several times: every line after the
+ * first returns to the row's flush inline edge, so the reserved name area costs width on line 1
+ * only. `VerseWrapAround` shows the same shape at the default column width.
  */
 export const VerseInlineWrapping: Story = {
   render: () => (
-    <CellBox>
+    <VerseRowBox width="200px">
       <ResourceCellView
         state="ready"
         label="NIV"
@@ -333,15 +327,10 @@ export const VerseInlineWrapping: Story = {
         localizedStrings={localizedStrings}
         nameDisplay="inline"
         editor={
-          <div style={{ fontFamily: 'serif', lineHeight: 1.7 }}>
-            <p style={{ margin: 0 }}>
-              <sup>3</sup> Blessed are the poor in spirit, for theirs is the kingdom of heaven, and
-              great is their reward in the days to come.
-            </p>
-          </div>
+          <SampleEditorial text="Blessed are the poor in spirit, for theirs is the kingdom of heaven, and great is their reward in the days to come." />
         }
       />
-    </CellBox>
+    </VerseRowBox>
   ),
 };
 
@@ -1076,6 +1065,77 @@ export const VerseZoomedPlaceholder: Story = {
         nameDisplay="inline"
         zoomFactor={2}
         editor={undefined}
+      />
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * The name as the row's disclosure control, collapsed. It is a real button — Tab reaches it, Enter
+ * and Space activate it, and it carries the row's accessible name and `aria-expanded`. Built on the
+ * shared `Button` so its focus ring matches the reorder grip and every other control in the view;
+ * tab to it to compare.
+ */
+export const VerseDisclosureCollapsed: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial />}
+        onDisclosureActivate={() => {}}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded={false}
+        disclosureControlsId="chapter-context-panel"
+      />
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * The same control while its chapter-context panel is open. `aria-expanded` flips to true and
+ * `aria-controls` points at the panel; in the grid the row behind it also takes the open-row tint,
+ * which is what ties the panel back to the row that owns it.
+ */
+export const VerseDisclosureExpanded: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial />}
+        onDisclosureActivate={() => {}}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded
+        disclosureControlsId="chapter-context-panel"
+      />
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * A long name in the disclosure control: it truncates inside the fixed name area exactly as the
+ * presentational label does, and the tooltip reveals the full name only when actually clipped.
+ */
+export const VerseDisclosureLongName: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="Berean Standard Bible 2024"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial />}
+        onDisclosureActivate={() => {}}
+        disclosureAccessibleName="Berean Standard Bible 2024, MAT 5:3"
+        isDisclosureExpanded={false}
       />
     </VerseRowBox>
   ),

@@ -440,7 +440,11 @@ export function ScriptureTextGrid({
                 : undefined
             }
             onDrop={onReorder ? () => handleReorderDrop(resource.resourceId) : undefined}
-            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${activate ? ' tw:cursor-pointer tw:transition-colors tw:hover:bg-accent/50 tw:aria-expanded:bg-accent' : ''}${onReorder && dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
+            // The open-row tint is driven by `isOpen` rather than an `aria-expanded:` variant: that
+            // attribute lives on the name control inside the cell, and the variant only matches the
+            // element carrying it. The focus ring lives on that control too, so the row declares
+            // none.
+            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col${activate ? ' tw:cursor-pointer tw:transition-colors tw:hover:bg-muted' : ''}${activate && isOpen ? ' tw:bg-muted/50' : ''}${onReorder && dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
           >
             <ResourceCell
               resourceRef={resource}

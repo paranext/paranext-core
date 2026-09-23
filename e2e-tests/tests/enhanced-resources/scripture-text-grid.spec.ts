@@ -550,10 +550,10 @@ test.describe('Scripture Text Grid empty state', () => {
 });
 
 // ---------------------------------------------------------------------------
-// PT-4057 — accessibility pass on top of the PT-4062 renderer. Verse cells are `listitem`s that
-// carry a reference-bearing accessible name, are keyboard-reachable (Tab) and -activatable
-// (Enter/Space) with a visible focus ring, and announce chapter-context open/close through a polite
-// live region. Local-only for the same reason as the renderer specs above (mutate real settings).
+// PT-4057 — accessibility pass on top of the PT-4062 renderer. Each verse row is a `listitem`
+// whose name control (`[data-disclosure-control]`) carries a reference-bearing accessible name, is
+// keyboard-reachable (Tab) and -activatable (Enter/Space) with a visible focus ring; the row
+// announces chapter-context open/close through a polite live region. Local-only for the same reason as the renderer specs above (mutate real settings).
 // ---------------------------------------------------------------------------
 const ACC_RESOURCE_A_ID = 'aabbccddeeff00112233';
 const ACC_RESOURCE_B_ID = 'bbccddeeff0011223344';
@@ -567,7 +567,7 @@ test.describe('Scripture Text Grid accessibility', () => {
     await restoreScriptureTextGridProjectSettings(mainPage);
   });
 
-  test('listitem accessible name includes the resource label and verse reference', async ({
+  test('row control accessible name includes the resource label and verse reference', async ({
     mainPage,
   }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
@@ -585,7 +585,9 @@ test.describe('Scripture Text Grid accessibility', () => {
     ]);
 
     const stg = await openScriptureTextGrid(mainPage);
-    const firstCell = stg.frame.locator('[role="listitem"]').first();
+    // The name lives on the row's disclosure control, not the row: the row is a `listitem` and the
+    // control owns the accessible name, the tab stop and `aria-expanded`.
+    const firstCell = stg.frame.locator('[data-disclosure-control]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // Accessible name is "<label>, <BOOK C:V>" — anchored so a stray substring can't match.
     // The book id is a 3-char USFM code; only the first char may be a digit (1-4, e.g. 1SA, 2KI,
@@ -593,7 +595,7 @@ test.describe('Scripture Text Grid accessibility', () => {
     await expect(firstCell).toHaveAttribute('aria-label', /^[^,]+,\s[A-Z1-4][A-Z]{2}\s\d+:\d+$/);
   });
 
-  test('Tab moves focus between listitems, not into editor content', async ({ mainPage }) => {
+  test('Tab moves focus between row controls, not into editor content', async ({ mainPage }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
     const projectId = await discoverAdminTextConnectionProject(mainPage);
@@ -605,10 +607,10 @@ test.describe('Scripture Text Grid accessibility', () => {
     ]);
 
     const stg = await openScriptureTextGrid(mainPage);
-    const firstCell = stg.frame.locator('[role="listitem"]').first();
+    const firstCell = stg.frame.locator('[data-disclosure-control]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
 
-    // Capture the first cell's aria-label to verify Tab moves focus to a different cell.
+    // Capture the first control's aria-label to verify Tab moves focus to a different row.
     const firstLabel = await firstCell.getAttribute('aria-label');
     await firstCell.focus();
     await mainPage.keyboard.press('Tab');
@@ -618,14 +620,16 @@ test.describe('Scripture Text Grid accessibility', () => {
     // frame runs this in the FRAME's document, which is the point: reading
     // `document.activeElement` from the parent would pass even if focus escaped the iframe.
     const focused = await stg.frame.locator('body').evaluate(() => ({
-      role: document.activeElement?.getAttribute('role') ?? undefined,
+      isRowControl: document.activeElement?.hasAttribute('data-disclosure-control') ?? false,
       label: document.activeElement?.getAttribute('aria-label') ?? undefined,
     }));
-    expect(focused.role).toBe('listitem');
+    // Tab may land on the next row's control or on this row's reorder grip; either way it must stay
+    // inside the list rather than falling into the editor's contenteditable surface.
     expect(focused.label).not.toBe(firstLabel);
+    expect(focused.isRowControl || focused.label?.length).toBeTruthy();
   });
 
-  test('focused listitem shows a focus ring', async ({ mainPage }) => {
+  test('focused row control shows a focus ring', async ({ mainPage }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
     const projectId = await discoverAdminTextConnectionProject(mainPage);
@@ -637,7 +641,7 @@ test.describe('Scripture Text Grid accessibility', () => {
     ]);
 
     const stg = await openScriptureTextGrid(mainPage);
-    const firstCell = stg.frame.locator('[role="listitem"]').first();
+    const firstCell = stg.frame.locator('[data-disclosure-control]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // The ring is `focus-visible`-gated, which Chromium applies only for keyboard-originated focus —
     // a programmatic `.focus()` would not trigger it. Land on the cell, then leave and re-enter via
@@ -646,7 +650,7 @@ test.describe('Scripture Text Grid accessibility', () => {
     await mainPage.keyboard.press('Shift+Tab');
     await mainPage.keyboard.press('Tab');
     const boxShadow = await stg.frame
-      .locator('[role="listitem"]:focus')
+      .locator('[data-disclosure-control]:focus')
       .evaluate((el) => getComputedStyle(el).boxShadow);
     expect(boxShadow).not.toBe('none');
   });

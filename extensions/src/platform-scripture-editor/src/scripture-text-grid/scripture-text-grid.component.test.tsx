@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import * as React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
 import { ResourceCellView } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
@@ -174,7 +175,24 @@ beforeEach(() => {
 });
 
 describe('ScriptureTextGrid', () => {
-  it('renders one listitem per resource in effective-list order', () => {
+  it('names each row in effective-list order, on the control that carries the name', () => {
+    // `onChapterContextChange` is what production always passes, so the name lives on each row's
+    // disclosure control rather than the row. Asserting without it would exercise a shape that
+    // never ships.
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onChapterContextChange={vi.fn()}
+        cellAccessibleNameTemplate="{resourceName}, {reference}"
+      />,
+    );
+    expect(
+      resources.map((resource) => getDisclosure(resource.resourceId).getAttribute('aria-label')),
+    ).toEqual(['WEB, MAT 5:3', 'KJV, MAT 5:3', 'עברית, MAT 5:3']);
+  });
+  it('names the row itself when no disclosure control exists to carry the name', () => {
     render(
       <ScriptureTextGrid
         resources={resources}
@@ -183,6 +201,7 @@ describe('ScriptureTextGrid', () => {
         cellAccessibleNameTemplate="{resourceName}, {reference}"
       />,
     );
+    // Without a control the row must still be named, or the list announces unnamed items.
     expect(screen.getAllByRole('listitem').map((c) => c.getAttribute('aria-label'))).toEqual([
       'WEB, MAT 5:3',
       'KJV, MAT 5:3',
@@ -195,15 +214,14 @@ describe('ScriptureTextGrid', () => {
         resources={resources}
         scrRef={{ ...scrRef, verseNum: 0 }}
         setScrRef={setScrRef}
+        onChapterContextChange={vi.fn()}
         cellAccessibleNameTemplate="{resourceName}, {reference}"
       />,
     );
     // Cells fall forward to verse 1, so announcing "5:0" would contradict the rendered verse number.
-    expect(screen.getAllByRole('listitem').map((c) => c.getAttribute('aria-label'))).toEqual([
-      'WEB, MAT 5:1',
-      'KJV, MAT 5:1',
-      'עברית, MAT 5:1',
-    ]);
+    expect(
+      resources.map((resource) => getDisclosure(resource.resourceId).getAttribute('aria-label')),
+    ).toEqual(['WEB, MAT 5:1', 'KJV, MAT 5:1', 'עברית, MAT 5:1']);
   });
   it('feeds the same scrRef to every cell', () => {
     render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
@@ -541,6 +559,32 @@ describe('ScriptureTextGrid — chapter-context toggle', () => {
       resources.map((resource) => getDisclosure(resource.resourceId).getAttribute('aria-expanded')),
     ).toEqual(['false', 'true', 'false']);
   });
+  it('tints the open row so the panel is visibly tied to the row that owns it', () => {
+    const { rerender } = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    const rowFor = (resourceId: string) =>
+      document.querySelector<HTMLElement>(`[data-resource-id="${resourceId}"]`);
+    // Positive control: the class is absent while closed, so the assertion below is not vacuous.
+    expect(rowFor('r-b')?.className).not.toContain('tw:bg-muted/50');
+
+    rerender(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    expect(rowFor('r-b')?.className).toContain('tw:bg-muted/50');
+    expect(rowFor('r-a')?.className).not.toContain('tw:bg-muted/50');
+  });
   it('points aria-controls at the open panel, and drops it when closed', () => {
     const { rerender } = render(
       <ScriptureTextGrid
@@ -569,7 +613,8 @@ describe('ScriptureTextGrid — chapter-context toggle', () => {
       expect(getDisclosure(resource.resourceId)).not.toHaveAttribute('aria-controls');
     });
   });
-  it('toggles from the keyboard the same way as from a click', () => {
+  it('toggles from the keyboard, via Enter and Space on the focused control', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onChapterContextClose = vi.fn();
     render(
       <ScriptureTextGrid
@@ -581,9 +626,12 @@ describe('ScriptureTextGrid — chapter-context toggle', () => {
         onChapterContextClose={onChapterContextClose}
       />,
     );
-    // A native button activates on both Enter and Space without a key handler of its own.
-    fireEvent.click(getDisclosure('r-b'));
-    fireEvent.click(getDisclosure('r-b'));
+    // The control is a native button, so it activates on both keys with no key handler of our own —
+    // this drives them for real rather than standing in with a click.
+    getDisclosure('r-b').focus();
+    await user.keyboard('{Enter}');
+    expect(onChapterContextClose).toHaveBeenCalledTimes(1);
+    await user.keyboard(' ');
     expect(onChapterContextClose).toHaveBeenCalledTimes(2);
   });
   it('ignores a click that ends a text selection, so copying does not toggle the split', () => {

@@ -152,13 +152,6 @@ function ZoomItemsShared({
 }
 
 /**
- * The resource short-name/abbreviation, in the standout resource color (`tw:text-primary`). Single
- * line; a tooltip reveals the full name only when the text is actually clipped (same manual-`open`
- * pattern as the `ProjectRowView` row in `project-selector.component.tsx`). `aria-hidden` because
- * the enclosing gridcell already exposes the name via `aria-label`, so the visible copy is not
- * announced twice.
- */
-/**
  * Compile-time exhaustiveness check for the cell-state chain below: every state that does NOT
  * render a placeholder must be `'ready'`. Adding a `ResourceCellState` member without giving it a
  * branch fails to compile here instead of silently rendering "Download failed".
@@ -170,28 +163,53 @@ function assertStateIsReady(state: 'ready'): 'ready' {
   return state;
 }
 
-function ResourceNameLabel({ label, className }: { label: string; className?: string }) {
-  // Show the tooltip only when the label text is actually clipped (same manual-`open` pattern
-  // shared with `ProjectRowView` in `project-selector.component.tsx`).
-  const { ref, open, onPointerEnter, onPointerLeave } = useTruncationTooltip<HTMLSpanElement>();
+/** The class chain both name presentations share, so a change to one cannot skip the other. */
+const RESOURCE_NAME_CLASS = 'tw:truncate tw:font-medium tw:text-primary';
 
+/**
+ * The truncation-tooltip shell both name presentations share: the tooltip reveals the full name
+ * only when the text is actually clipped (same manual-`open` pattern as the `ProjectRowView` row in
+ * `project-selector.component.tsx`).
+ */
+function ResourceNameTooltip({
+  label,
+  open,
+  children,
+}: {
+  label: string;
+  open: boolean;
+  children: ReactNode;
+}) {
   return (
     <TooltipProvider>
       <Tooltip open={open}>
-        <TooltipTrigger asChild>
-          <span
-            ref={ref}
-            aria-hidden
-            onPointerEnter={onPointerEnter}
-            onPointerLeave={onPointerLeave}
-            className={`tw:truncate tw:font-medium tw:text-primary ${className ?? ''}`}
-          >
-            {label}
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+/**
+ * The resource short-name, presentational. `aria-hidden` because the enclosing row exposes the name
+ * via `aria-label` when there is no control to carry it, so the visible copy is not announced
+ * twice.
+ */
+function ResourceNameLabel({ label, className }: { label: string; className?: string }) {
+  const { ref, open, onPointerEnter, onPointerLeave } = useTruncationTooltip<HTMLSpanElement>();
+
+  return (
+    <ResourceNameTooltip label={label} open={open}>
+      <span
+        ref={ref}
+        aria-hidden
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        className={`${RESOURCE_NAME_CLASS} ${className ?? ''}`}
+      >
+        {label}
+      </span>
+    </ResourceNameTooltip>
   );
 }
 
@@ -200,8 +218,11 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
  *
  * It is a sibling of the verse content rather than a wrapper around it: the row already contains
  * interactive descendants (the reorder grip, and the editor's contenteditable surface), and a
- * control that enclosed them would nest interactive content inside a button. So the name is the
- * accessible control and the row's own click handler is a pointer-only convenience on top of it.
+ * control that enclosed them would nest interactive content inside a button.
+ *
+ * Built on the shared `Button` so its focus ring matches every other control in the view; the size
+ * and padding are overridden because this control is a hanging name, not a button-shaped
+ * affordance.
  */
 function ResourceNameDisclosure({
   label,
@@ -221,34 +242,31 @@ function ResourceNameDisclosure({
   const { ref, open, onPointerEnter, onPointerLeave } = useTruncationTooltip<HTMLButtonElement>();
 
   return (
-    <TooltipProvider>
-      <Tooltip open={open}>
-        <TooltipTrigger asChild>
-          <button
-            ref={ref}
-            type="button"
-            // Marks this as the row's focus target for the grid's focus-restore effects, which must
-            // not land on the reorder grip or the zoom kebab.
-            data-disclosure-control=""
-            aria-label={accessibleName}
-            aria-expanded={isExpanded}
-            // Only while the panel exists: a dangling idref is an ARIA error.
-            aria-controls={isExpanded ? controlsId : undefined}
-            onPointerEnter={onPointerEnter}
-            onPointerLeave={onPointerLeave}
-            // The enclosing row also toggles on click; without this the pair would double-toggle.
-            onClick={(event) => {
-              event.stopPropagation();
-              onActivate();
-            }}
-            className={`tw:truncate tw:text-start tw:font-medium tw:text-primary tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring ${className ?? ''}`}
-          >
-            {label}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <ResourceNameTooltip label={label} open={open}>
+      <Button
+        ref={ref}
+        type="button"
+        variant="link"
+        size="sm"
+        // Marks this as the row's focus target for the grid's focus-restore effects, which must
+        // not land on the reorder grip or the zoom kebab.
+        data-disclosure-control=""
+        aria-label={accessibleName}
+        aria-expanded={isExpanded}
+        // Only while the panel exists: a dangling idref is an ARIA error.
+        aria-controls={isExpanded ? controlsId : undefined}
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        // The enclosing row also toggles on click; without this the pair would double-toggle.
+        onClick={(event) => {
+          event.stopPropagation();
+          onActivate();
+        }}
+        className={`tw:h-auto tw:justify-start tw:p-0 tw:no-underline tw:hover:no-underline ${RESOURCE_NAME_CLASS} ${className ?? ''}`}
+      >
+        {label}
+      </Button>
+    </ResourceNameTooltip>
   );
 }
 

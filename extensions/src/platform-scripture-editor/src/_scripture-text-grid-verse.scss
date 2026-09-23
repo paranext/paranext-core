@@ -1,5 +1,8 @@
 // Verse-row layout for the Text Collection.
 //
+// The `stg-` class prefix and the `--stg-*` custom properties below stand for "scripture text
+// grid", this web view's component directory.
+//
 // The row hangs a fixed-width name at the inline-start and reserves the same width on line 1 of the
 // verse text with a generated float, so line 2+ tuck beneath the name. Three facts this depends on:
 //
@@ -20,20 +23,31 @@
 // inside the text's own flow.
 
 .stg-verse-row {
-  --stg-name-reserve: 6.5rem; // 6rem name + 0.5rem gap
+  // The two numbers this layout is built from. Everything else below is derived, so changing the
+  // name's width or the gap after it cannot leave the exclusion or the grip behind.
+  --stg-name-width: 6rem;
+  --stg-name-gap: 0.5rem;
+  // What line 1 of the verse text has to clear: the name plus the gap after it.
+  --stg-name-reserve: calc(var(--stg-name-width) + var(--stg-name-gap));
+  --stg-grip-size: 1.5rem;
   padding-block: 0.5rem;
 }
 
 .stg-verse-name {
-  inset-inline-start: 0.5rem;
+  inset-inline-start: var(--stg-name-gap);
   inset-block-start: 0.5rem;
   // Fixed, NOT a max-width: an exact width is what makes rows align with each other.
-  inline-size: 6rem;
+  inline-size: var(--stg-name-width);
 }
 
 .stg-verse-grip {
-  // Inline-end of the reserved name area, vertically aligned with the name's first line.
-  inset-inline-start: calc(0.5rem + 6rem - 1.5rem);
+  // Inline-end of the reserved name area, vertically aligned with the name's first line. Sitting
+  // inside that area rather than beside it is what makes the grip cost no row width, which is the
+  // point of the whole layout — but it means the grip overlays the last `--stg-grip-size` of the
+  // name. Accepted: it is revealed only on hover/focus, empty space for a name short enough to fit,
+  // and for one long enough to truncate the tooltip still gives the full name. Reserving a separate
+  // lane for the grip would instead cost every row that width to spare the few that truncate.
+  inset-inline-start: calc(var(--stg-name-gap) + var(--stg-name-width) - var(--stg-grip-size));
   inset-block-start: 0.25rem;
 }
 
