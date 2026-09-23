@@ -685,14 +685,6 @@ global.webViewComponent = function CommentListWebView({
     scrollToTarget,
   });
 
-  // Clears the scroll-padding this view applies before a scroll (see
-  // applyStickyHeaderScrollPadding) so a stale value never outlives this component.
-  useEffect(() => {
-    return () => {
-      document.documentElement.style.scrollPaddingTop = '';
-    };
-  }, []);
-
   /**
    * Target for the deferred scroll `trySelectThread` performs — read by
    * `scrollSelectedThreadIntoView` at run time rather than closed over, so a request made while the
