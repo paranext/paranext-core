@@ -8,6 +8,8 @@ import { ContentZoomTextProvider } from '@/context/content-zoom-text.context';
 import { CommentItem } from './comment-item.component';
 import { CommentThread } from './comment-thread.component';
 import { DiffHtml } from './conflict-diff';
+import { ConflictNoteCard } from './conflict-note-card.component';
+import { verseTextConflictComment } from './comment-sample.data';
 
 const MARKER = '[data-platform-content-zoom-root]';
 
@@ -133,6 +135,37 @@ describe('comment cards mark their project text only inside a ContentZoomTextPro
     const marked = container.querySelectorAll(MARKER);
     expect(marked).toHaveLength(1);
     expect(marked[0].textContent).toBe('town village');
+  });
+
+  it('marks a resolved conflict’s result text, and not the no-result notice', () => {
+    const { container, unmount } = render(
+      withProvider(
+        <ConflictNoteCard
+          comment={verseTextConflictComment}
+          localizedStrings={{}}
+          availableActions="none"
+          resolvedResolution="reject"
+        />,
+      ),
+    );
+    const marked = container.querySelectorAll(MARKER);
+    expect(marked).toHaveLength(1);
+    expect(marked[0].textContent).toBe(verseTextConflictComment.rejectedResultText);
+    unmount();
+
+    const { container: emptyContainer } = render(
+      withProvider(
+        <ConflictNoteCard
+          comment={{ ...verseTextConflictComment, rejectedResultText: '' }}
+          localizedStrings={{ '%conflict_note_no_result%': 'NO RESULT' }}
+          availableActions="none"
+          resolvedResolution="reject"
+        />,
+      ),
+    );
+    // Positive control: the notice is on screen, so the empty marker list below means it is unmarked.
+    expect(screen.getByText('NO RESULT')).toBeInTheDocument();
+    expect(emptyContainer.querySelectorAll(MARKER)).toHaveLength(0);
   });
 
   it('marks nothing without a provider', async () => {
