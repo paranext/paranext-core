@@ -4027,9 +4027,9 @@ export declare function isBlockMarker(marker: string): boolean;
 export declare function isCharacterMarker(marker: string): boolean;
 /**
  * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
- * operations enforce. Both the platform's own per-pane zoom and the Text Collection grid's
- * per-resource zoom scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these
- * from here rather than keeping their own copy.
+ * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both
+ * scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these from here rather
+ * than keeping their own copy.
  */
 /**
  * Smallest allowed zoom factor.
@@ -4918,84 +4918,6 @@ export type EffectiveStructureProtectionInputs = {
  * the user's own preference governs (defaulting to on when never set).
  */
 export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
-/**
- * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
- * a trackpad pinch. Both the platform's per-pane zoom and the Text Collection grid's per-resource
- * zoom read a wheel this way; the platform's copy is inlined in its injected bootstrap script,
- * which imports nothing, and a parity test keeps the two in step.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export type ContentZoomWheelReader = {
-	/**
-	 * How many zoom steps `event` means: positive zooms IN, negative zooms OUT, 0 means the event's
-	 * travel has not yet crossed a step boundary. `scopeId` is whatever opaque string the caller uses
-	 * to key its own zoomable region — a pane's zoom area for the platform, a resource id for the
-	 * Text Collection grid — and the reader resets its accumulated travel whenever it changes.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	read(event: WheelEvent, scopeId: string): number;
-	/**
-	 * Removes every listener the reader installed to track physically-held modifier keys. A reader
-	 * with no window to listen on (see {@link ContentZoomWheelReaderOptions.window}) has nothing to
-	 * remove.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	dispose(): void;
-};
-/**
- * Options for {@link createContentZoomWheelReader}.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export type ContentZoomWheelReaderOptions = {
-	/**
-	 * Largest number of steps one event may ask for. Default: the platform's 0.5–3.0 zoom range
-	 * expressed in units of the effective {@link ContentZoomWheelReaderOptions.zoomStep} (25 at the
-	 * default step of 0.1) — so overriding `zoomStep` scales this default with it.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	maxSteps?: number;
-	/**
-	 * Zoom step the pinch calibration is derived from. Default 0.1. Must be a positive, finite
-	 * number; the reader does not validate it, and a zero or negative step yields a meaningless
-	 * calibration.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	zoomStep?: number;
-	/**
-	 * Window the modifier listeners attach to. Default `globalThis.window`; tests pass jsdom's. When
-	 * neither exists (a reader created outside a DOM, such as under Node) the reader still reads
-	 * notch and pinch counts from the events it is handed — it just cannot tell a synthesized pinch
-	 * from a real one held down by a physically-pressed Ctrl or Cmd key.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	window?: Window;
-};
-/**
- * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
- * a trackpad pinch — see {@link ContentZoomWheelReader} for the full contract.
- *
- * Constructing a reader is itself a side effect: it immediately installs six listeners that track
- * physically-held modifier keys — `keydown`, `keyup`, `pointerdown`, `pointermove` and `blur` on
- * the window, and `visibilitychange` on its document — and they stay installed until
- * {@link ContentZoomWheelReader.dispose} is called. So construct the reader inside an effect and
- * call `dispose()` in that effect's cleanup, never during render or in `useMemo`, which have no
- * cleanup to call it from and run twice under React's StrictMode. A reader with no window to listen
- * on (see {@link ContentZoomWheelReaderOptions.window}) installs nothing.
- *
- * @param options Optional overrides for the step cap, the zoom step the pinch calibration is
- *   derived from, and the window the modifier listeners attach to
- * @returns A reader whose `read` turns wheel events into zoom steps and whose `dispose` removes the
- *   listeners construction installed
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare function createContentZoomWheelReader(options?: ContentZoomWheelReaderOptions): ContentZoomWheelReader;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
