@@ -4981,6 +4981,18 @@ export type ContentZoomWheelReaderOptions = {
  * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
  * a trackpad pinch — see {@link ContentZoomWheelReader} for the full contract.
  *
+ * Constructing a reader is itself a side effect: it immediately installs six listeners that track
+ * physically-held modifier keys — `keydown`, `keyup`, `pointerdown`, `pointermove` and `blur` on
+ * the window, and `visibilitychange` on its document — and they stay installed until
+ * {@link ContentZoomWheelReader.dispose} is called. So construct the reader inside an effect and
+ * call `dispose()` in that effect's cleanup, never during render or in `useMemo`, which have no
+ * cleanup to call it from and run twice under React's StrictMode. A reader with no window to listen
+ * on (see {@link ContentZoomWheelReaderOptions.window}) installs nothing.
+ *
+ * @param options Optional overrides for the step cap, the zoom step the pinch calibration is
+ *   derived from, and the window the modifier listeners attach to
+ * @returns A reader whose `read` turns wheel events into zoom steps and whose `dispose` removes the
+ *   listeners construction installed
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function createContentZoomWheelReader(options?: ContentZoomWheelReaderOptions): ContentZoomWheelReader;
