@@ -106,10 +106,9 @@ function escapeClosingTags(jsSourceLiteral: string): string {
  * JavaScript run inside every non-URL web view (appended to the platform's import script). It
  * discovers the view's zoom areas, tracks the active one, turns Ctrl/⌘+`+`/`-`/`0` and Ctrl/⌘+wheel
  * into content-zoom actions for THIS web view and one of its areas, and provides the on-area
- * indicator. Bubble phase on purpose: a view that owns Ctrl+wheel for a sub-region (the Text
- * Collection grid's per-resource zoom) stops propagation in capture phase and this listener never
- * sees the event. A view that is not zoomable (it reports no area, and the shard passes no declared
- * area) ignores the input.
+ * indicator. Bubble phase on purpose: a view that owns Ctrl+wheel for a sub-region stops
+ * propagation in capture phase and this listener never sees the event. A view that is not zoomable
+ * (it reports no area, and the shard passes no declared area) ignores the input.
  *
  * @param webViewId The web view this script runs in
  * @param declaredArea The default area core declares for the view's web view type

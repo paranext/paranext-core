@@ -2,11 +2,8 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
 import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import { X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ResourceCell, GridResource } from './resource-cell.component';
-import type { ZoomMenuLabels } from './resource-cell-view.component';
-import { useResourceZoomInput } from './use-resource-zoom-input.hook';
-import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { resolveDisplayVerseNum } from './verse-display.utils';
 import { moveId } from '../scripture-text-grid-order.utils';
 
@@ -40,10 +37,6 @@ type ScriptureTextGridProps = {
    * When omitted, the accessible name falls back to the resource label alone.
    */
   cellAccessibleNameTemplate?: string;
-  /** Per-resource zoom controller; when omitted the grid renders without zoom. */
-  zoom?: ResourceZoomController;
-  /** Localized labels for the zoom menus; passed through to each ResourceCell. */
-  zoomMenuLabels?: ZoomMenuLabels;
   /**
    * Fired after a drag-and-drop or keyboard move with the new visible id sequence; omit to disable
    * reorder. Reorder applies to both views: the chapter view (side-by-side columns) and the verse
@@ -73,8 +66,8 @@ type ScriptureTextGridProps = {
  * panel beside the list showing that resource's full chapter. When the panel closes, focus returns
  * to the listitem that opened it (WCAG 2.4.3).
  *
- * Each resource container carries `data-resource-id` and the outer container carries `gridRef` so
- * `useResourceZoomInput` can wire wheel-zoom and resolve which resource an event targets.
+ * Each resource container carries `data-resource-id`, so an element inside a cell can be traced
+ * back to its resource; the outer container carries `gridRef`, which focus restoration searches.
  */
 export function ScriptureTextGrid({
   resources,
@@ -87,8 +80,6 @@ export function ScriptureTextGrid({
   onChapterContextClose,
   closeChapterContextLabel,
   cellAccessibleNameTemplate,
-  zoom,
-  zoomMenuLabels,
   onReorder,
   getReorderHandleLabel,
   reorderHint,
@@ -181,30 +172,12 @@ export function ScriptureTextGrid({
     gridRef.current?.querySelector<HTMLElement>(`[data-resource-id="${resourceId}"]`)?.focus();
   }, [chapterContext]);
 
-  const resourceIds = useMemo(() => resources.map((r) => r.resourceId), [resources]);
-
-  // Drop zoom entries for resources removed from the list so the map never orphans entries.
-  // Skip pruning while the list is empty: during source loading the parent temporarily passes
-  // resources=[], which would wipe all persisted zoom data before any cell renders (data loss).
-  useEffect(() => {
-    if (resourceIds.length === 0) return;
-    zoom?.pruneToResourceIds(resourceIds);
-  }, [zoom, resourceIds]);
-
-  // `zoom?.adjustZoom` is a stable identity across renders (the controller is memoized upstream, and
-  // `undefined` is constant), so the wheel listener isn't torn down and re-attached each render.
-  useResourceZoomInput({
-    containerRef: gridRef,
-    adjustZoom: zoom?.adjustZoom,
-  });
-
   // Single resource: render it as a full-width whole chapter — almost the standalone resource
   // viewer, minus its resource-selector dropdown (the web view header's View Options button covers
   // adding more texts). No verse-cell list chrome and no chapter-context split; the whole chapter is
   // already shown.
   //
-  // `gridRef` is attached here so `useResourceZoomInput` has a non-null container; `data-resource-id`
-  // lets the hook identify the resource from any event target inside the cell, and
+  // `data-resource-id` identifies the resource from any element inside the cell, and
   // `data-project-id` lets a focused element be traced back to the resource holding the caret.
   const [onlyResource] = resources;
   if (resources.length === 1 && onlyResource) {
@@ -222,8 +195,6 @@ export function ScriptureTextGrid({
           scrRef={scrRef}
           setScrRef={setScrRef}
           viewMode="chapter"
-          zoom={zoom}
-          zoomMenuLabels={zoomMenuLabels}
         />
       </div>
     );
@@ -303,8 +274,6 @@ export function ScriptureTextGrid({
               scrRef={scrRef}
               setScrRef={setScrRef}
               viewMode="chapter"
-              zoom={zoom}
-              zoomMenuLabels={zoomMenuLabels}
               showDragHandle={onReorder ? true : undefined}
               reorderHandleLabel={
                 onReorder && getReorderHandleLabel
@@ -424,8 +393,6 @@ export function ScriptureTextGrid({
               scrRef={scrRef}
               setScrRef={setScrRef}
               viewMode={viewMode}
-              zoom={zoom}
-              zoomMenuLabels={zoomMenuLabels}
               showDragHandle={onReorder ? true : undefined}
               reorderHandleLabel={
                 onReorder && getReorderHandleLabel
@@ -445,7 +412,7 @@ export function ScriptureTextGrid({
   );
 
   // `gridRef` wraps the whole return (both the verse column and, when open, the chapter-context
-  // panel) so `useResourceZoomInput` sees wheel events over either side.
+  // panel) so focus restoration searches both sides.
   if (!chapterContext) {
     return (
       <div ref={gridRef} className="tw:h-full tw:min-h-0">
@@ -486,8 +453,6 @@ export function ScriptureTextGrid({
                 scrRef={scrRef}
                 setScrRef={setScrRef}
                 viewMode="chapter"
-                zoom={zoom}
-                zoomMenuLabels={zoomMenuLabels}
               />
             </div>
           </div>

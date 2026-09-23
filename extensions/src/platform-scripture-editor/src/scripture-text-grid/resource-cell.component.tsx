@@ -3,23 +3,11 @@ import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import { useExtraValidMarkers } from 'platform-bible-react';
-import {
-  getErrorMessage,
-  isPlatformError,
-  LocalizeKey,
-  MAX_ZOOM_FACTOR,
-  MIN_ZOOM_FACTOR,
-} from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
-import {
-  RESOURCE_CELL_STRING_KEYS,
-  ResourceCellView,
-  type ZoomMenuLabels,
-} from './resource-cell-view.component';
-import { DEFAULT_ZOOM_FACTOR } from './resource-zoom.utils';
-import type { ResourceZoomController } from './use-resource-zoom.hook';
+import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
 import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 
@@ -39,10 +27,6 @@ type ResourceCellProps = {
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
   viewMode?: 'chapter' | 'verse';
-  /** Per-resource zoom controller; when omitted the cell renders without zoom surfaces. */
-  zoom?: ResourceZoomController;
-  /** Localized zoom menu copy, passed straight to the view. */
-  zoomMenuLabels?: ZoomMenuLabels;
   /**
    * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
    * parent).
@@ -68,8 +52,6 @@ export function ResourceCell({
   scrRef,
   setScrRef,
   viewMode = 'chapter',
-  zoom,
-  zoomMenuLabels,
   showDragHandle,
   reorderHandleLabel,
   reorderHint,
@@ -132,26 +114,6 @@ export function ResourceCell({
           }),
     [resourceRef.projectId, usjPossiblyError, isLoading, scrRef.book],
   );
-
-  // #region Zoom — computed here so the callbacks and bound-state are available for the view's
-  // kebab dropdown and the right-click zoom menu rendered by ResourceCellView.
-  const zoomFactor = zoom ? zoom.getZoom(resourceRef.resourceId) : undefined;
-  const canZoomIn = zoomFactor === undefined || zoomFactor < MAX_ZOOM_FACTOR;
-  const canZoomOut = zoomFactor === undefined || zoomFactor > MIN_ZOOM_FACTOR;
-  const canReset = zoomFactor !== undefined && zoomFactor !== DEFAULT_ZOOM_FACTOR;
-  const handleZoomIn = useCallback(
-    () => zoom?.adjustZoom(resourceRef.resourceId, 1),
-    [zoom, resourceRef.resourceId],
-  );
-  const handleZoomOut = useCallback(
-    () => zoom?.adjustZoom(resourceRef.resourceId, -1),
-    [zoom, resourceRef.resourceId],
-  );
-  const handleResetZoom = useCallback(
-    () => zoom?.resetZoom(resourceRef.resourceId),
-    [zoom, resourceRef.resourceId],
-  );
-  // #endregion
 
   // #region Editor
   // EditorRef requires null initial value per React ref convention
@@ -241,14 +203,6 @@ export function ResourceCell({
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
-      zoomFactor={zoomFactor}
-      canZoomIn={canZoomIn}
-      canZoomOut={canZoomOut}
-      canReset={canReset}
-      onZoomIn={handleZoomIn}
-      onZoomOut={handleZoomOut}
-      onResetZoom={handleResetZoom}
-      zoomMenuLabels={zoom && state !== 'unavailable' ? zoomMenuLabels : undefined}
       showDragHandle={showDragHandle}
       reorderHandleId={resourceRef.resourceId}
       reorderHandleLabel={reorderHandleLabel}

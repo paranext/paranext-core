@@ -66,14 +66,6 @@ import { toGridResources } from './scripture-text-grid/grid-resources.utils';
 import { getGridBodyState } from './scripture-text-grid/grid-body-state.utils';
 import { isNonDblResource } from './resource-reference.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
-import { useResourceZoom } from './scripture-text-grid/use-resource-zoom.hook';
-import {
-  ZOOM_IN_KEY,
-  ZOOM_OUT_KEY,
-  RESET_ZOOM_KEY,
-  ZOOM_OPTIONS_KEY,
-  type ZoomMenuLabels,
-} from './scripture-text-grid/resource-cell-view.component';
 
 // The tab's visible title, hover tooltip, and accessible name. The title/tooltip themselves are
 // resolved and set by scriptureTextGridWebViewProvider in main.ts (not by this web view); this key
@@ -109,10 +101,6 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   CELL_ACCESSIBLE_NAME_KEY,
   ARIA_OPENED_KEY,
   ARIA_CLOSED_KEY,
-  ZOOM_IN_KEY,
-  ZOOM_OUT_KEY,
-  RESET_ZOOM_KEY,
-  ZOOM_OPTIONS_KEY,
   REORDER_ANNOUNCEMENT_KEY,
   REORDER_HANDLE_KEY,
   REORDER_HINT_KEY,
@@ -152,17 +140,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   useWebViewState,
 }: WebViewProps) {
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
-
-  const zoom = useResourceZoom(useWebViewState);
-  const zoomMenuLabels = useMemo<ZoomMenuLabels>(
-    () => ({
-      zoomIn: localizedStrings[ZOOM_IN_KEY],
-      zoomOut: localizedStrings[ZOOM_OUT_KEY],
-      reset: localizedStrings[RESET_ZOOM_KEY],
-      options: localizedStrings[ZOOM_OPTIONS_KEY],
-    }),
-    [localizedStrings],
-  );
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
@@ -603,11 +580,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
 
           The body itself is not a zoom area: each cell marks its own verse text as the
-          "text-collection" area, so the cells' name labels, reorder grips and zoom kebabs, the
-          chapter-context chrome and the empty and error states keep interface scale. The cells use
-          their own area id so the grid's remembered level is kept apart from this project's other
-          resource panes, which resolve to the same kind/identity pair and would otherwise all read
-          one remembered level. */}
+          "text-collection" area, so the cells' name labels and reorder grips, the chapter-context
+          chrome and the empty and error states keep interface scale. The cells use their own area
+          id so the grid's remembered level is kept apart from this project's other resource panes,
+          which resolve to the same kind/identity pair and would otherwise all read one remembered
+          level. */}
       <div className="tw:flex-1 tw:overflow-hidden">
         {gridBodyState === 'catalogError' && (
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
@@ -639,8 +616,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             scrRef={scrRef}
             setScrRef={setScrRef}
             viewMode={viewMode}
-            zoom={zoom}
-            zoomMenuLabels={zoomMenuLabels}
             chapterContext={chapterContext}
             onChapterContextChange={handleChapterContextChange}
             onChapterContextClose={handleCloseChapterContext}
