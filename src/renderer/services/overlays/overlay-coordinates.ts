@@ -21,9 +21,8 @@ export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
  * Parses the CSS `zoom` inline on an iframe element. Anything that is not a positive finite number
  * — including the empty string written to clear the zoom, or no iframe at all — means unscaled.
  *
- * Exported so {@link getWebViewIframeZoom} and the content zoom service's own iframe-zoom fallback
- * (which reads its iframe through its own test-only seam, not {@link getWebViewIframe}) share one
- * parse instead of drifting apart.
+ * Shared by {@link getWebViewIframeZoom} and {@link translateCoordinates} so the two read the zoom
+ * the same way.
  *
  * @experimental This function is unstable and may change or disappear without notice
  */
@@ -43,9 +42,7 @@ export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): n
  * unlike computed style, is defined for this non-standard property in every environment the
  * renderer runs in).
  *
- * This does not cover per-area zoom — a pane that marks zoom areas carries no whole-iframe `zoom`
- * and this always answers `1` for it. For the scale a pane's content is actually drawn at, use
- * `getContentZoomScaleForWebView` in `web-view-content-zoom.service` instead.
+ * A pane that marks zoom areas carries no whole-iframe `zoom`, so this answers `1` for it.
  *
  * @param webViewId The webViewId of the iframe
  * @returns The scale factor the iframe's contents are rendered at

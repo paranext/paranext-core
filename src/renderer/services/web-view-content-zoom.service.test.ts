@@ -6,13 +6,7 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 vi.mock('@shared/services/settings.service', () => ({ settingsService: {} }));
 vi.mock('@shared/services/localization.service', () => ({ localizationService: {} }));
-// The real parseIframeZoom is kept, since getContentZoomScaleForWebView calls it directly (not
-// through the mocked getWebViewIframe).
-vi.mock('@renderer/services/overlays/overlay-coordinates', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@renderer/services/overlays/overlay-coordinates')>();
-  return { getWebViewIframe: vi.fn(), parseIframeZoom: actual.parseIframeZoom };
-});
+vi.mock('@renderer/services/overlays/overlay-coordinates', () => ({ getWebViewIframe: vi.fn() }));
 
 // Import types and the service under test after the mocks above are established.
 // eslint-disable-next-line import/first
@@ -33,7 +27,6 @@ import {
   applyContentZoomForWebView,
   canContentZoomActOnActiveTarget,
   forgetContentZoom,
-  getContentZoomScaleForWebView,
   getInitialContentZoomForWebView,
   initializeContentZoomService,
   isContentZoomable,
@@ -2354,18 +2347,6 @@ describe('web-view-content-zoom.service', () => {
     definitionReadThrows = true;
     expect(isContentZoomable('ext-1')).toBe(true);
     expect(isContentZoomable('editor-1')).toBe(false); // declared, but its type cannot be read now
-  });
-
-  it('reports the content scale a pane draws at: its resolved area level, else its frame zoom', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', ['main', 'footnotes']);
-    await adjustContentZoom('editor-1', 1, 'footnotes');
-    // No area asked for, so the pane's active area answers - the first area until one is set.
-    expect(getContentZoomScaleForWebView('editor-1')).toBe(1.3);
-    setContentZoomActiveArea('editor-1', 'footnotes');
-    expect(getContentZoomScaleForWebView('editor-1')).toBeCloseTo(adjustZoomFactor(1.3, 1), 5);
   });
 
   it('drops the areas of content whose bootstrap never runs again, once the wait after its load runs out', async () => {

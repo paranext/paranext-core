@@ -11209,30 +11209,6 @@ declare module 'renderer/services/overlays/overlay-store' {
     },
   ): boolean;
 }
-declare module 'renderer/components/overlays/overlay-content-zoom.util' {
-  import { CSSProperties } from 'react';
-  /** The Radix primitives whose content the platform draws for a web view. */
-  type ZoomablePrimitive = 'popover' | 'dropdown-menu';
-  /**
-   * The style that draws a platform overlay at the scale of the pane that asked for it.
-   *
-   * `zoom` goes inside the popper wrapper Radix positions — on the Radix `Content` element, or on an
-   * inner wrapper when an arrow must stay unzoomed — never on the wrapper itself: the wrapper stays
-   * in unzoomed viewport pixels, so Radix keeps measuring the drawn size and placing it correctly.
-   * The available-space variables Radix publishes are in those same unzoomed pixels, so dividing them
-   * by the scale is what keeps a zoomed pop-up inside the window rather than letting it grow past the
-   * edge.
-   *
-   * A scale of 1 - or anything that is not a usable positive number - contributes nothing at all, so
-   * an overlay from an unzoomed pane is drawn at interface scale.
-   *
-   * @experimental This function is unstable and may change or disappear without notice
-   */
-  export function contentZoomOverlayStyle(
-    scale: number,
-    primitive: ZoomablePrimitive,
-  ): CSSProperties;
-}
 declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
   import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
@@ -11316,13 +11292,6 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
       x: number;
       y: number;
     };
-    /**
-     * The scale the requesting pane draws its content at. The menu is drawn at the same scale, so it
-     * matches the text it belongs to. 1 leaves the rendered output exactly as it is.
-     *
-     * @experimental This field is unstable and may change or disappear without notice
-     */
-    contentScale?: number;
     /** Called when the user selects a menu item */
     onSelect: (result: OverlayContextMenuResult) => void;
     /** Called when the menu is dismissed without a selection */
@@ -11339,7 +11308,6 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
   export function OverlayContextMenuPresentational({
     items,
     position,
-    contentScale,
     onSelect,
     onDismiss,
   }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
@@ -11350,14 +11318,6 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
         type: 'contextMenu';
       }
     >;
-    /**
-     * The requesting pane's content scale, read and supplied by `OverlayHost` — see
-     * {@link OverlayContextMenuPresentationalProps.contentScale}. Undefined draws at interface scale,
-     * matching the presentational component's own default.
-     *
-     * @experimental This field is unstable and may change or disappear without notice
-     */
-    contentScale?: number;
   };
   /**
    * Production context menu component. Resolves LocalizeKey values in menu items via
@@ -11370,7 +11330,6 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
    */
   export function OverlayContextMenu({
     overlay,
-    contentScale,
   }: OverlayContextMenuProps): import('react/jsx-runtime').JSX.Element;
 }
 declare module 'renderer/services/overlays/overlay.service-model' {
@@ -11618,9 +11577,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * menu data, renders the menu, and auto-executes the selected command. Returns the command string
      * that was executed, or undefined if dismissed.
      *
-     * The menu is drawn at the content zoom of the requesting WebView's pane — of its active area,
-     * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
-     * in and nothing to compensate for.
+     * The menu is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+     * at.
      *
      * @param webViewType The webViewType to look up in the menu data service
      * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
@@ -11646,9 +11604,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
      * {@link dismissPopover} to close it programmatically.
      *
-     * The popover is drawn at the content zoom of the requesting WebView's pane — of its active area,
-     * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
-     * in and nothing to compensate for.
+     * The popover is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+     * at.
      *
      * @param request The popover anchor, content, and behavioral options
      * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
@@ -11696,10 +11653,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * the palette is shown, so all filtering — the palette's own search box and text forwarded via
      * {@link updateCommandPalette} — matches against the text the user actually sees.
      *
-     * A palette shown at an anchor is drawn at the content zoom of the requesting WebView's pane — of
-     * its active area, for a pane with several zoom areas; there is nothing to opt in and nothing to
-     * compensate for. A palette shown without an anchor is centred in the window, belongs to no
-     * pane's content, and stays at interface scale.
+     * The palette is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+     * at.
      *
      * @param request The items, optional anchor position, and display options
      * @param webViewId The ID of the WebView requesting the command palette
@@ -14095,9 +14050,8 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    * Parses the CSS `zoom` inline on an iframe element. Anything that is not a positive finite number
    * — including the empty string written to clear the zoom, or no iframe at all — means unscaled.
    *
-   * Exported so {@link getWebViewIframeZoom} and the content zoom service's own iframe-zoom fallback
-   * (which reads its iframe through its own test-only seam, not {@link getWebViewIframe}) share one
-   * parse instead of drifting apart.
+   * Shared by {@link getWebViewIframeZoom} and {@link translateCoordinates} so the two read the zoom
+   * the same way.
    *
    * @experimental This function is unstable and may change or disappear without notice
    */
@@ -14113,9 +14067,7 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    * unlike computed style, is defined for this non-standard property in every environment the
    * renderer runs in).
    *
-   * This does not cover per-area zoom — a pane that marks zoom areas carries no whole-iframe `zoom`
-   * and this always answers `1` for it. For the scale a pane's content is actually drawn at, use
-   * `getContentZoomScaleForWebView` in `web-view-content-zoom.service` instead.
+   * A pane that marks zoom areas carries no whole-iframe `zoom`, so this answers `1` for it.
    *
    * @param webViewId The webViewId of the iframe
    * @returns The scale factor the iframe's contents are rendered at
