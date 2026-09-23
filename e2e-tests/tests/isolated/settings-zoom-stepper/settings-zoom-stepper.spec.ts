@@ -176,6 +176,41 @@ async function expectEveryCardInsidePanel(panel: Locator, view: string): Promise
   });
 }
 
+/** `true` once the stepper's percentage-and-reset group sits below its − and + group. */
+async function isWrapped(stepper: Locator): Promise<boolean> {
+  const groups = stepper.locator('[data-slot="button-group"]');
+  const steps = await groups.nth(0).boundingBox();
+  const field = await groups.nth(1).boundingBox();
+  if (!steps || !field) throw new Error('A stepper button group has no layout box');
+  return field.y >= steps.y + steps.height - ROUNDING_TOLERANCE_PX;
+}
+
+/** Narrows `panel` step by step until `stepper` wraps onto two rows. */
+async function narrowUntilWrapped(
+  page: Page,
+  panel: Locator,
+  stepper: Locator,
+  stepsLeft = MAX_NARROWING_STEPS,
+): Promise<void> {
+  if (await isWrapped(stepper)) return;
+  if (stepsLeft === 0) throw new Error('The zoom stepper never wrapped while narrowing the pane');
+  await dragPanelRightEdgeLeft(page, panel, NARROWING_STEP_PX);
+  await narrowUntilWrapped(page, panel, stepper, stepsLeft - 1);
+}
+
+/** Asserts `inner` lies horizontally within `outer`. */
+async function expectInside(inner: Locator, outer: Locator, what: string): Promise<void> {
+  const innerBox = await inner.boundingBox();
+  const outerBox = await outer.boundingBox();
+  if (!innerBox || !outerBox) throw new Error(`${what}: no layout box`);
+  expect(innerBox.x, `${what} starts outside`).toBeGreaterThanOrEqual(
+    outerBox.x - ROUNDING_TOLERANCE_PX,
+  );
+  expect(innerBox.x + innerBox.width, `${what} is cut off`).toBeLessThanOrEqual(
+    outerBox.x + outerBox.width + ROUNDING_TOLERANCE_PX,
+  );
+}
+
 test.describe('Settings layout and zoom steppers', () => {
   let project: CommentTestProject;
 
@@ -258,6 +293,82 @@ test.describe('Settings layout and zoom steppers', () => {
         body: await projectPanel.screenshot(),
         contentType: 'image/png',
       });
+    });
+  });
+
+  test('the zoom stepper wraps, takes a typed percentage, and edits Interface scaling', async ({
+    mainPage,
+  }) => {
+    test.slow();
+    await waitForHomeTab(mainPage);
+    await openSettings(mainPage);
+    const panel = settingsPanel(mainPage, 'Settings');
+    const contentZoom = panel.getByRole('group', { name: 'Tab content default zoom', exact: true });
+    const interfaceScaling = panel.getByRole('group', { name: 'Interface scaling', exact: true });
+    await expect(contentZoom).toBeVisible({ timeout: 30_000 });
+    const contentZoomField = contentZoom.getByRole('textbox', { name: 'Percentage', exact: true });
+
+    await test.step('a narrow pane wraps the stepper into two rows with nothing cut off', async () => {
+      // Positive control: at the default width the two groups share one row.
+      expect(await isWrapped(contentZoom)).toBe(false);
+      await narrowUntilWrapped(mainPage, panel, contentZoom);
+      // `has` resolves inside each card, so the inner locator must not carry the panel's own chain.
+      const card = panel.locator('.card', {
+        has: mainPage.getByRole('group', { name: 'Tab content default zoom', exact: true }),
+      });
+      const controls: [Locator, string][] = [
+        [
+          contentZoom.getByRole('button', { name: 'Decrease default zoom', exact: true }),
+          'Decrease',
+        ],
+        [
+          contentZoom.getByRole('button', { name: 'Increase default zoom', exact: true }),
+          'Increase',
+        ],
+        [contentZoomField, 'Percentage field'],
+        [contentZoom.getByRole('button', { name: 'Reset default zoom', exact: true }), 'Reset'],
+      ];
+      await Promise.all(
+        controls.map(async ([control, what]) => {
+          await expect(control).toBeVisible();
+          await expectInside(control, card, `${what} (card)`);
+          await expectInside(control, panel, `${what} (pane)`);
+        }),
+      );
+    });
+
+    await test.step('typing 137 and Enter stores 1.37', async () => {
+      await contentZoomField.fill('137');
+      await contentZoomField.press('Enter');
+      await expect.poll(() => readSetting(mainPage, CONTENT_ZOOM_SETTING)).toBe(1.37);
+      await expect(contentZoomField).toHaveValue(/^137\s%$/u);
+    });
+
+    await test.step('Escape abandons an edit', async () => {
+      await contentZoomField.fill('250');
+      await contentZoomField.press('Escape');
+      await expect(contentZoomField).toHaveValue(/^137\s%$/u);
+      // Stepping afterwards proves 250 was never committed: + steps from 137 % to the next 10 %
+      // mark, 150 %, where a committed 250 % would have stepped to 260 %.
+      await contentZoom.getByRole('button', { name: 'Increase default zoom', exact: true }).click();
+      await expect.poll(() => readSetting(mainPage, CONTENT_ZOOM_SETTING)).toBe(1.5);
+    });
+
+    await test.step('Interface scaling shows 100 % and + writes 1.1', async () => {
+      const scalingField = interfaceScaling.getByRole('textbox', {
+        name: 'Percentage',
+        exact: true,
+      });
+      await expect(scalingField).toHaveValue(/^100\s%$/u);
+      await interfaceScaling
+        .getByRole('button', { name: 'Increase interface scaling', exact: true })
+        .click();
+      await expect.poll(() => readSetting(mainPage, INTERFACE_SCALING_SETTING)).toBe(1.1);
+      await expect(scalingField).toHaveValue(/^110\s%$/u);
+      await interfaceScaling
+        .getByRole('button', { name: 'Reset interface scaling', exact: true })
+        .click();
+      await expect.poll(() => readSetting(mainPage, INTERFACE_SCALING_SETTING)).toBe(1);
     });
   });
 });
