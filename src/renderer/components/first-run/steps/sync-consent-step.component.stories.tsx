@@ -9,7 +9,7 @@ const meta: Meta<typeof SyncConsentStep> = {
   args: {
     onNext: fn(),
     // Supplied by the wizard shell once the step asks for it, so present in every story.
-    onSkip: fn(),
+    onDeclineSync: fn(),
     // Resolves immediately so the story shows the Sync button in its resting state.
     onSync: fn().mockResolvedValue(undefined),
   },
@@ -43,7 +43,7 @@ export const Syncing: Story = {
 /** "Sync" failed: the error shows above the buttons, and "Don't sync yet" is offered again. */
 export const SyncFailed: Story = {
   args: {
-    onSync: () => Promise.reject(new Error('Could not reach the Send/Receive server.')),
+    onSync: () => Promise.reject(new Error('Sync could not reach the server.')),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
