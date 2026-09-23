@@ -42,7 +42,7 @@ import { startBookChapterControlServiceRouter } from '@main/services/book-chapte
 import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
-import { selectDisplayMediaSource } from '@main/services/display-media-request.util';
+import { registerDisplayMediaRequestHandler } from '@main/services/display-media-request.util';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
@@ -212,6 +212,7 @@ import {
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
   THEME_STATE_QUERY_PARAMETER,
+  USERSNAP_SPACE_API_KEY,
   WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
   WINDOW_ID,
 } from '@shared/data/platform.data';
@@ -2352,13 +2353,10 @@ async function main() {
         },
       );
 
-      // Usersnap's native screenshot asks for a display-media stream. Serve the requesting window's
-      // own top frame without showing an OS screen picker. Only a window's top frame may capture
-      // it; web views and any other iframe are denied (see `selectDisplayMediaSource`).
-      session.defaultSession.setDisplayMediaRequestHandler((request, respond) => {
-        const source = selectDisplayMediaSource(request.frame);
-        respond(source ? { video: source } : {});
-      });
+      // Usersnap's native screenshot asks for a display-media stream. When Usersnap is configured,
+      // serve the requesting window's own top frame without showing an OS screen picker; web views
+      // and any other iframe are denied (see `selectDisplayMediaSource`).
+      registerDisplayMediaRequestHandler(session.defaultSession, USERSNAP_SPACE_API_KEY);
 
       // Install Chromium devtools extensions once (not per-window)
       if (isDebug) {

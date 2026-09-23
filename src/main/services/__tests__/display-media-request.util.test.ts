@@ -3,6 +3,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   type DisplayMediaRequestFrame,
+  type DisplayMediaRequestSession,
+  registerDisplayMediaRequestHandler,
   selectDisplayMediaSource,
 } from '@main/services/display-media-request.util';
 
@@ -54,5 +56,44 @@ describe('selectDisplayMediaSource', () => {
   it('denies a request whose frame is gone', () => {
     expect(selectDisplayMediaSource(null)).toBeUndefined();
     expect(selectDisplayMediaSource(undefined)).toBeUndefined();
+  });
+});
+
+describe('registerDisplayMediaRequestHandler', () => {
+  function createSession() {
+    const setDisplayMediaRequestHandler =
+      vi.fn<
+        DisplayMediaRequestSession<DisplayMediaRequestFrame>['setDisplayMediaRequestHandler']
+      >();
+    return { session: { setDisplayMediaRequestHandler }, setDisplayMediaRequestHandler };
+  }
+
+  it('registers nothing when Usersnap has no space key', () => {
+    const { session, setDisplayMediaRequestHandler } = createSession();
+
+    expect(registerDisplayMediaRequestHandler(session, '')).toBe(false);
+    expect(setDisplayMediaRequestHandler).not.toHaveBeenCalled();
+  });
+
+  it('registers one handler when Usersnap has a space key', () => {
+    const { session, setDisplayMediaRequestHandler } = createSession();
+
+    expect(registerDisplayMediaRequestHandler(session, 'space-key')).toBe(true);
+    expect(setDisplayMediaRequestHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves the top frame and denies an iframe through the registered handler', () => {
+    const { session, setDisplayMediaRequestHandler } = createSession();
+    registerDisplayMediaRequestHandler(session, 'space-key');
+    const handler = setDisplayMediaRequestHandler.mock.calls[0][0];
+    const topFrame = createTopFrame();
+    const webViewFrame = createChildFrame(topFrame, 'about:srcdoc');
+    const respond = vi.fn();
+
+    handler({ frame: topFrame }, respond);
+    handler({ frame: webViewFrame }, respond);
+
+    expect(respond).toHaveBeenNthCalledWith(1, { video: topFrame });
+    expect(respond).toHaveBeenNthCalledWith(2, {});
   });
 });

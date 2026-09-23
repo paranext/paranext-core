@@ -41,3 +41,42 @@ export function selectDisplayMediaSource<TFrame extends DisplayMediaRequestFrame
 
   return frame;
 }
+
+/**
+ * The part of Electron's `Session` that registers a display-media request handler. `TFrame` is
+ * inferred from the request's frame only: Electron's `respond` also accepts a non-frame video
+ * source, which is not a {@link DisplayMediaRequestFrame}.
+ */
+export type DisplayMediaRequestSession<TFrame extends DisplayMediaRequestFrame> = {
+  setDisplayMediaRequestHandler(
+    handler: (
+      request: { frame: TFrame | null },
+      respond: (streams: { video?: NoInfer<TFrame> }) => void,
+    ) => void,
+  ): void;
+};
+
+/**
+ * Registers the display-media request handler that serves Usersnap's native screenshot, but only
+ * when Usersnap is configured. Without a space key nothing can ask for a capture legitimately, so
+ * the session keeps Electron's default, which denies every display-media request.
+ *
+ * @param session The session whose display-media requests to answer
+ * @param spaceApiKey The Usersnap space key; empty when this build has no Usersnap integration
+ * @returns `true` if a handler was registered, `false` if not
+ */
+export function registerDisplayMediaRequestHandler<TFrame extends DisplayMediaRequestFrame>(
+  session: DisplayMediaRequestSession<TFrame>,
+  spaceApiKey: string,
+): boolean {
+  if (!spaceApiKey) {
+    logger.info('No display-media request handler registered: Usersnap is not configured');
+    return false;
+  }
+
+  session.setDisplayMediaRequestHandler((request, respond) => {
+    const source = selectDisplayMediaSource(request.frame);
+    respond(source ? { video: source } : {});
+  });
+  return true;
+}
