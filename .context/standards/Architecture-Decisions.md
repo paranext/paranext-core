@@ -338,7 +338,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   provider, so they survive a vendor swap; PT-4359 extends that function. Identity is a random UUID
   per process from `analytics-identity.ts`, events are flagged `$process_person_profile: false`,
   and GeoIP is disabled; PT-4367 replaces the identity function. The service gained `shutdown()`,
-  called first in the extension host's graceful shutdown, bounded to 1 s by the provider.
+  called first in the extension host's graceful shutdown; its wait for in-flight routing and each
+  provider's flush are each bounded to 1 s. `posthog-node` resolves `captureImmediate` even when
+  the request fails and reports the failure only through the client's `'error'` event, so the
+  provider listens for that event for the duration of each send and turns it into a rejection;
+  the provider logs the one warn line, and the service logs the rejection at debug only.
 - **Alternatives:** `posthog-js` in the renderer for autocaptured properties — rejected: autocapture
   is usage tracking the ticket forbids, the browser SDK reports Chromium's version not the app's,
   and it would bypass the abstraction. Properties at the `app_launch` call site — rejected: every
@@ -346,8 +350,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   vendor swap. Persisted installation id — deferred to PT-4367 by product decision.
 - **Consequences:** Packaged builds now make outbound HTTPS calls to `eu.i.posthog.com` from the
   extension host; Node `fetch` ignores the C# proxy settings, so users behind a corporate proxy
-  silently fail to report (logged at warn). No retry or offline queue yet (PT-4373/PT-4374); a
-  failed send is dropped after one warn line naming the event only. Hard-coding the Test key is an
+  fail to report (logged at warn). No offline queue or cross-restart retry yet
+  (PT-4373/PT-4374); a failed send is dropped after one warn line naming the event only. The SDK
+  does retry a request internally (`fetchRetryCount` 3, 3 s apart, 10 s request timeout), so a
+  failed send settles only after roughly 9 to 49 s; harmless for fire-and-forget. A debug `sent`
+  line means only that the SDK reported no error; the PostHog dashboard is the proof of delivery.
+  Hard-coding the Test key is an
   accepted, temporary exception to the no-secrets rule because PostHog project keys are write-only
   client keys designed to ship in apps; the Production key must never be committed.
 - **Source:** PT-4729 (epic PT-1797); design

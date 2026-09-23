@@ -41,6 +41,12 @@ const INTERNET_SETTINGS_DATA_PROVIDER_ID = 'paratextRegistration.internetSetting
  */
 const ENVIRONMENT_RESOLUTION_TIMEOUT_MS = 30_000;
 
+/**
+ * How long `shutdown()` waits for in-flight routing before shutting the providers down anyway. The
+ * extension host's whole graceful shutdown budget is about 1.5 s.
+ */
+const ANALYTICS_SHUTDOWN_TIMEOUT_MS = 1000;
+
 const queues: {
   test: AnalyticsEvent[];
   production: AnalyticsEvent[];
@@ -204,8 +210,10 @@ function flushQueue(environment: AnalyticsEnvironment): void {
   // time, so a failure can be retried instead of silently lost.
   drainQueue(queues[environment], (event) => {
     try {
+      // Debug, not warn: the provider owns the one user-visible line per failed event. The
+      // rejection itself stays meaningful as the seam a retrying queue will hook into.
       provider.send(event).catch((error) => {
-        logger.error(`Analytics: failed to send event '${event.name}': ${String(error)}`);
+        logger.debug(`Analytics: failed to send event '${event.name}': ${String(error)}`);
       });
     } catch (error) {
       logger.error(`Analytics: failed to send event '${event.name}': ${String(error)}`);
@@ -240,12 +248,21 @@ function routeEvent(
   unresolvedEvent: UnresolvedAnalyticsEvent,
   environment: AnalyticsEnvironment,
 ): void {
-  routingChain = routingChain.then(() => enrichAndFlush(unresolvedEvent, environment));
+  // The catch keeps the chain resolved, so one event failing to route can never skip every event
+  // routed after it.
+  routingChain = routingChain
+    .then(() => enrichAndFlush(unresolvedEvent, environment))
+    .catch((error) => {
+      logger.warn(
+        `Analytics: failed to route event '${unresolvedEvent.name}': ${getErrorMessage(error)}`,
+      );
+    });
 }
 
 /**
- * Resolves once every event routed so far has been handed to its provider. Exists for tests and for
- * shutdown; production code paths never need to await routing.
+ * Resolves once every event routed so far has been handed to its provider. Never rejects. Awaited
+ * by `initialize()` (so its caller knows the startup backlog has been handed off), by `shutdown()`
+ * within its time budget, and by tests; `trackEvent()` never awaits it.
  */
 export function flushPending(): Promise<void> {
   return routingChain;
@@ -297,12 +314,22 @@ export function trackEvent(name: string, properties?: Record<string, unknown>): 
 
 /**
  * Flushes and releases every provider that was created. Called from the extension host's graceful
- * shutdown path, which has only about 1.5 s in total, so providers bound their own flush time and
- * this never rejects.
+ * shutdown path, which has only about 1.5 s in total, so the wait for in-flight routing is bounded
+ * here, providers bound their own flush time, and this never rejects.
  */
 export async function shutdown(): Promise<void> {
+  // No providers means no event has finished enrichment yet. An event still mid-enrichment at this
+  // point is intentionally abandoned: waiting for it could eat the whole shutdown budget.
   if (!providers) return;
-  await flushPending();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ANALYTICS_SHUTDOWN_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([flushPending(), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   await Promise.all(
     Object.values(providers).map(async (provider) => {
       try {
