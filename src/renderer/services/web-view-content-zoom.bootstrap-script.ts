@@ -321,8 +321,9 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     // is not suppressed, but nothing was spent either, and the gesture still protects the next
     // change into a different area. A Tab ends the gesture outright: the focus move that follows it
     // is one the user asked for, not the view's answer to the click, and a user who clicks a
-    // footnote row and immediately Tabs toward the text means the text. Typing ends it too, since
-    // a user typing where the view put the caret is working there. A zoom chord does not end it -
+    // footnote row and immediately Tabs toward the text means the text. Any other key ends it too
+    // (typing, a shortcut such as Ctrl+C, an arrow key), since a user using the keyboard where the
+    // view put the caret is working there. A zoom chord does not end it -
     // a chord pressed inside the window is exactly what the protection is for - and neither does a
     // modifier pressed on its own, which is how a keyboard sends the first half of every chord.
     let pointerArea;
@@ -330,7 +331,8 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     // Whether the element holding focus is one the VIEW focused rather than one the user chose.
     // Set when a pointer gesture's answering focus change is suppressed below - the view moving the
     // caret out of the area the user just clicked, which is what selecting a footnote row does.
-    // Cleared by a focus change the platform accepts, by Tab, or by typing - never by a pointer
+    // Cleared by a focus change the platform accepts, by Tab, or by any other key that is not a lone
+    // modifier or a zoom chord - never by a pointer
     // down: a click is not itself a focus move, and a click that moves no caret (a non-focusable
     // element) must leave the caret exactly where the view put it rather than hand the chords back
     // to it. The chords consult this flag; the wheel does not, since it reads the pointer and never
@@ -374,7 +376,7 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       if (MODIFIER_KEYS.indexOf(e.key) !== -1 || (hasModifier(e) && chordFor(e))) return;
       pointerArea = undefined;
       if (!viewMovedFocus) return;
-      // The focus change the click suppressed takes effect now: the caret the user is typing at
+      // The focus change the click suppressed takes effect now: the caret the user is working at
       // names the active area, the way an accepted focus change would have.
       viewMovedFocus = false;
       setActive(areaOf(document.activeElement));
