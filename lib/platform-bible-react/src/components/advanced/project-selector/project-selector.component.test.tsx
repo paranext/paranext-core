@@ -555,9 +555,9 @@ describe('renderProjectIndicator', () => {
         selection={{ projectId: 'p1' }}
         onChangeSelection={() => {}}
         localizedStrings={{ ariaLabel: 'Project' }}
-        renderProjectIndicator={(project) => (
-          <span data-testid={`indicator-${project.customData?.type}`} aria-label="Type" />
-        )}
+        renderProjectIndicator={(project) => ({
+          node: <span data-testid={`indicator-${project.customData?.type}`} aria-hidden />,
+        })}
       />,
     );
     await user.click(screen.getByRole('combobox', { name: /^Project/ }));
@@ -578,9 +578,9 @@ describe('renderProjectIndicator', () => {
         // The natural shape of a "mark only the resources" renderer. Keying the column on what it
         // returned per row would indent R1's label one glyph further than P1's.
         renderProjectIndicator={(project) =>
-          project.customData?.type === 'ScriptureResource' ? (
-            <span data-testid="indicator-resource" aria-label="Resource" />
-          ) : undefined
+          project.customData?.type === 'ScriptureResource'
+            ? { node: <span data-testid="indicator-resource" />, label: 'Resource' }
+            : undefined
         }
       />,
     );
@@ -964,6 +964,106 @@ describe('footerAction', () => {
     await user.click(await screen.findByTestId('project-selector-footer-action'));
 
     await waitFor(() => expect(screen.queryByTestId('project-selector-footer-action')).toBeNull());
+  });
+});
+
+describe('ProjectSelector — trigger label id casing', () => {
+  // The rows fold case when deciding what is selected (canonical ids are uppercase GUIDs from the
+  // .NET data provider, while the open-tabs hook lowercases them). The trigger has to fold it the
+  // same way, or a mixed-case caller gets a row marked selected above a trigger still showing its
+  // placeholder.
+  const UPPER_PROJECTS = [
+    { id: 'ABC123', shortName: 'ABC', fullName: 'Project ABC' },
+    { id: 'DEF456', shortName: 'DEF', fullName: 'Project DEF' },
+  ];
+
+  it('names the project when the selection id differs in case from the list', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={UPPER_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: 'abc123' }}
+        onChangeSelection={() => {}}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ABC');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+
+  it('names the project in projectScrollGroup mode too', () => {
+    render(
+      <ProjectSelector
+        mode="projectScrollGroup"
+        projects={UPPER_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: 'abc123', scrollGroupId: undefined }}
+        onChangeSelection={() => {}}
+        onOpenProjectInGroup={() => {}}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ABC');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+
+  it('names every selected project in project-multi mode', () => {
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={UPPER_PROJECTS}
+        openTabs={[]}
+        selection={{ pairs: [{ projectId: 'abc123' }, { projectId: 'def456' }] }}
+        onChangeSelection={() => {}}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('ABC, DEF');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+});
+
+describe('ProjectSelector — indicator meaning', () => {
+  const INDICATOR_PROJECTS: ProjectSelectorProject[] = [
+    { id: 'p1', shortName: 'P1', fullName: 'An editable project' },
+    { id: 'p2', shortName: 'P2', fullName: 'A read-only project' },
+  ];
+
+  const renderWithIndicator = () =>
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={INDICATOR_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        localizedStrings={HARNESS_STRINGS}
+        renderProjectIndicator={(project) =>
+          project.id === 'p2' ? { node: <span>🔒</span>, label: 'Read-only' } : undefined
+        }
+      />,
+    );
+
+  it("surfaces the indicator's meaning on hover, since the glyph itself is decorative", async () => {
+    const user = setupUser();
+    renderWithIndicator();
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+    await user.hover(screen.getByText('A read-only project'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Read-only');
+  });
+
+  it('opens no tooltip for a row the indicator label skips', async () => {
+    const user = setupUser();
+    renderWithIndicator();
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+    await user.hover(screen.getByText('An editable project'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });
 

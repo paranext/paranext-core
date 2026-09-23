@@ -5691,15 +5691,15 @@ declare module 'papi-shared-types' {
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
     /**
-     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
-     * and Linux, Ctrl+`=` / Ctrl+`+` invoke this until PT-4577 hands those chords to per-pane
-     * content zoom (`platform.webViewContentZoomIn`).
+     * Increase the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomIn`.
      */
     'platform.zoomIn': () => Promise<void>;
     /**
-     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
-     * and Linux, Ctrl+`-` invokes this until PT-4577 hands that chord to per-pane content zoom
-     * (`platform.webViewContentZoomOut`).
+     * Decrease the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomOut`.
      */
     'platform.zoomOut': () => Promise<void>;
     /**
@@ -6028,8 +6028,8 @@ declare module 'papi-shared-types' {
     /**
      * The zoom factor that applies to the entire application, including menus and toolbars (shown
      * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
-     * from Settings, by the `platform.zoomIn` / `platform.zoomOut` commands, and by the
-     * application's own zoom keyboard shortcuts; per-pane content zoom is
+     * from Settings and by the `platform.zoomIn` and `platform.zoomOut` commands; no keyboard
+     * shortcut changes it — the zoom chords drive per-pane content zoom, which is
      * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
@@ -8644,6 +8644,34 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
      */
     dialogRole?: 'dialog' | 'alertdialog';
     /**
+     * Whether this dialog's own `Component` renders a `DialogTitle`.
+     *
+     * When it does, the modal shell must not also render its fallback title: Radix derives the id
+     * from the `Dialog.Root` context, so a second title reuses the same id. The duplicate id is a
+     * `duplicate-id-aria` accessibility violation, and `aria-labelledby` resolves to whichever
+     * element comes first in document order — the shell's generic text, not the component's specific,
+     * localized text.
+     *
+     * Independent of {@link providesOwnDescription} on purpose: a dialog that renders a title but no
+     * description (or the reverse) still needs the shell's fallback for the half it omits, and a
+     * single combined flag would make it choose between a duplicate id and no accessible description
+     * at all.
+     *
+     * Defaults to `false`, which keeps the fallback title for dialogs that render none.
+     */
+    providesOwnTitle?: boolean;
+    /**
+     * Whether this dialog's own `Component` renders a `DialogDescription`.
+     *
+     * The description half of {@link providesOwnTitle}, with the same duplicate-id consequence. Set it
+     * only when the component renders a description for EVERY state it can be opened in — a
+     * description that renders conditionally (from an optional `prompt`, say) leaves the dialog with
+     * no description at all whenever the value is absent, because the shell's fallback is gone.
+     *
+     * Defaults to `false`, which keeps the fallback description for dialogs that render none.
+     */
+    providesOwnDescription?: boolean;
+    /**
      * The function used to load the dialog into the dock layout. Default uses the `Component` field
      * and passes in the `DialogProps`
      */
@@ -11110,6 +11138,13 @@ declare module 'renderer/services/overlays/overlay-store' {
   export function subscribe(listener: () => void): () => void;
   /** Get a specific overlay by id, or undefined if not found */
   export function getOverlayById(id: string): OverlayEntry | undefined;
+  /**
+   * Determine whether at least one active overlay has the given type
+   *
+   * @param type The overlay type to check for (e.g. 'modalDialog')
+   * @returns True if an overlay of that type is currently active; false otherwise
+   */
+  export function hasOverlayOfType(type: OverlayEntry['type']): boolean;
   /**
    * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
    * accepts, since a newer overlay always renders over an older one.

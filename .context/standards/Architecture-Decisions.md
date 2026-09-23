@@ -3978,6 +3978,50 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-paste-inserts-only-what-was-pasted: A paste never invents or deletes a paragraph marker
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** In Standard view markers are literal text, so a whole-paragraph copy carries the
+  paragraph's own `\p ` literal. Pasting one at an existing paragraph's content start therefore puts
+  two paragraph-marker occurrences on the line. An earlier build (scripture-editors, PT-4201)
+  resolved that by dropping the HOST paragraph's glyph — `$withoutRedundantOwnPrefix` — so pasting
+  `\q1 asdf` at `\p ‖fdsa` produced a single `\q1 asdffdsa` paragraph with the `\p` gone and the
+  host's own content re-tagged. It was added to un-skip a copy→paste round-trip test whose target is
+  an empty `\p` scaffold, and the "stray empty paragraph" it removed was that scaffold; it was never
+  recorded or reviewed as a product decision. Keeping it out of TYPED input then required a paste
+  provenance apparatus (a per-commit armed flag plus a set of pended node keys, to carry "this
+  rebuild came from a paste" across a deferred settle), which in turn let the read-only settle and
+  the mutating rebuild disagree about a deferred paste's shape.
+- **Decision:** A paste inserts what was pasted and nothing else. It never deletes a marker the user
+  did not select, and it never invents one they did not paste. Two paragraph markers in a row is what
+  the bytes say, and the line splits — leaving an empty predecessor — exactly as typing the same
+  bytes does. This matches Paratext 9, whose `NormalizeTokenUsfm` (`ParatextData/UsfmToken.cs`)
+  writes a line break before a Paragraph token whenever the output already has content and the
+  tokens are not already carrying their own whitespace (its legacy USFM-2.0-conversion mode skips
+  this) — exactly the two-markers-in-a-row case here. The corollary is the injection half: a
+  multi-line paste replays each line break as a paragraph split, and the engine injects a marker
+  prefix onto every fresh split paragraph so it is not read as marker-deleted — that injection is
+  now skipped when the paragraph's own text already opens with a paragraph-marker literal.
+- **Alternatives:** Keep the dedup only for an EMPTY host paragraph — rejected: the shape is not
+  produced by any gesture in this app (Enter opens the marker palette rather than creating an empty
+  paragraph), P9 keeps the empty paragraph anyway, and it would have preserved the whole provenance
+  apparatus for a case nobody reaches. Keep the dedup and fix the settle divergence instead —
+  rejected: it fixes the symmetry of a rule that should not exist.
+- **Consequences:** pasting a whole-paragraph copy at a paragraph's content start now leaves an empty
+  paragraph ahead of the pasted one, which is a visible change and the P9-parity shape. Round-trip
+  tests that seeded an empty host and expected the paste to swallow it now assert the host and strip
+  it. `isPasteRebuild`, `Tier2Context.pasteRebuildArmed` and `pastePendedKeys` are gone, so the
+  read-only settle (`$settledUsj`) and the mutating rebuild call `$buildParaFragment` with identical
+  arguments and can no longer disagree — Invariant IV holds by construction rather than by
+  bookkeeping. Removing the dedup also surfaced a defect it had masked: every `\b` in a pasted
+  document gained an empty `\p` in front of it (16 in the 2sa fixture), because a blank-line marker
+  carries neither content nor a separator and so never resolved the injected prefix away — closed by
+  the same injection-skip rule above (`$suppliesOwnParaMarker` in `markerEditDeletion.utils.ts`):
+  `\b`'s own text is nothing but the marker literal, so it qualifies via that rule's end-of-run case.
+- **Source:** `/code-review` of scripture-editors #13 + paranext-core #2656, and the follow-up
+  triage with the epic lead.
+
 ## adr-per-project-selection-collapses-scroll-groups: Per-project consumers collapse multi-scroll-group projects themselves
 
 - **Date:** 2026-09-14
@@ -4051,6 +4095,44 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
+
+## adr-per-web-view-state-lives-in-the-definition: Per-web-view state lives in the web view definition; user defaults and cross-instance memory live in settings
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Per-pane content zoom (epic PT-4575) needs three different lifetimes for one number:
+  the level the pane on screen is at now, the level to hand the next pane of the same project and
+  kind, and the user's default for panes that have never been zoomed. The platform already has a
+  home for the first — a web view's own `state` inside its `SavedWebViewDefinition`, written through
+  `updateWebViewDefinition` and read back in a view with `useWebViewState`. That store is the one the
+  dock layout serializes, so it survives a restart and travels with the tab when the tab moves to
+  another window (`adr-web-view-ids-are-unique-from-birth`, `adr-durable-window-ids`). An April
+  prototype of this feature (PR #2211) instead kept a `Record<webViewId, factor>` inside a renderer
+  zoom service and mirrored it into a hidden setting, making the pane's own level a second copy that
+  had to be reconciled with the definition on every open, move, reload and close.
+- **Decision:** Per-web-view state of any kind lives in that web view's `SavedWebViewDefinition.state`,
+  written with `updateWebViewDefinition`. State that must outlive a single pane — a user-level
+  default, or "what this project's editor was last set to" — lives in **user settings**: a visible
+  setting for the default the user controls, a hidden one for the memory. Services keep no parallel
+  store keyed by web view id. Content zoom is the first feature written to the rule: the pane's own
+  levels are `platform.contentZoomLevels` in the definition state, the default and the per-project
+  memory are `platform.webViewContentZoom` and `platform.webViewContentZoomMemory`
+  (`src/renderer/services/web-view-content-zoom.service.ts`).
+- **Alternatives:** (a) **A per-view service with its own hidden `Record` store** — the April
+  content-zoom prototype, PR #2211 — rejected: two stores for one value, and the one that is not the
+  definition has to be taught by hand about every lifecycle event the definition gets for free.
+  (b) **Everything in settings, keyed by web view id** — rejected: ids are minted per pane and never
+  reused, so such a setting grows without bound and needs a pruning story; that cost is accepted only
+  for the memory setting, which is keyed by project and kind rather than by pane, and even there,
+  whether to prune at all is decided in PT-4585. (c) **Everything in the definition, nothing in settings** —
+  rejected: a level that dies with its pane cannot answer "the same zoom next time I open this
+  project", which is what Paratext 9 does (`ParatextBase/DefaultZoomMemento.cs`).
+- **Consequences:** Per-pane state travels through restart, window move and layout share for free, and
+  a feature that wants it writes no storage code. In exchange, definition state is semi-public — it
+  is visible in a shared layout and readable by the view itself — so nothing sensitive belongs there,
+  and every key needs a name that cannot collide, hence the `platform.`-prefixed key. **Revisit** if a
+  per-pane value ever grows larger than a layout file should reasonably carry.
+- **Source:** PT-4576 (PR #2803) and PT-4580, epic PT-4575; the rejected alternative is PR #2211.
 
 ## adr-per-window-focus-ring-keys-off-broadcast-window-id: A per-window focus ring keys off a main-broadcast window id, not local DOM focus
 
@@ -4272,6 +4354,52 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   legitimate result — the hook stays deliberately generic about that, and the `status` branching
   lives in the hosts.
 - **Source:** PT-4433 (NN5d, Sprint 89 Simple Quality), resource-picker dead-ends.
+
+## adr-picker-row-truncates-never-scrolls: A picker row truncates and starts its short name at the leading edge; it never scrolls horizontally
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** Platform.Bible has several project/resource pickers that list the same three things —
+  a short name, a full name and a language — and each had made its own layout decisions. Two of Ian
+  NN-3.3's four defects were the result. `ResourcePickerDialog` laid its rows out in an `auto`
+  table whose short-name cell was `whitespace-nowrap`, inside a container asking only for
+  `overflow-y: auto`; CSS computes the unspecified axis from `visible` to `auto`, so one long
+  resource name widened the table and produced a horizontal scrollbar that pushed the language
+  column off the right edge. Measured in the running app at a 560px dialog: `scrollWidth` 782
+  against `clientWidth` 514. Separately, the "Select project" dialog right-aligned its short name
+  while `ResourcePickerDialog` and the titlebar `ProjectSelector` both left-aligned theirs, so the
+  same list of the same projects read differently depending on how the user got there. Neither is
+  interesting on its own; what makes them worth recording is that a third picker added later would
+  have picked its own answer again.
+- **Decision:** One layout contract for every picker row — **truncate, never scroll**; **truncation
+  must not hide anything**; **the short name starts at the leading edge**. Stated as invariants
+  rather than as one picker's mechanism, because the three surfaces are a table, a CSS grid and a
+  cmdk list and each reaches them a different way: `ResourcePickerDialog` fixes its columns with a
+  `colgroup` rather than per-cell widths (its section-heading rows span all columns and cannot carry
+  them), `ProjectPicker` floors its grid tracks at `minmax(0,…)`, and `ProjectSelector` inherits
+  `overflow-x: hidden` from the shared `CommandList`.
+
+  The invariants are written out, with what each one rules out and how to test it, in
+  [`.claude/rules/ux/picker-row-layout.md`](../../.claude/rules/ux/picker-row-layout.md) — that is
+  the copy to follow and to keep current. This entry keeps the reasoning and the history; restating
+  the rule in both places would guarantee that one of them eventually describes a superseded
+  version.
+- **Alternatives:** **Wrap long names onto a second line** — rejected: it makes row heights ragged
+  in a list whose whole job is fast visual scanning, and the language column still has to go
+  somewhere. **Allow horizontal scrolling with a scroll affordance** — rejected: a name being long
+  is not a reason to hide a column the user never asked to lose, and the PRD is explicit that
+  "horizontal scroll is always bad". **Express the alignment through WI-24's shared project-name
+  helper**, as PT-4551 proposed — rejected because that helper formats a name *string*
+  (short-name-first, de-duplication) and alignment is layout; it has no place to put this.
+- **Consequences:** A new picker follows this entry rather than re-deriving an answer, and the
+  guard against regression is per-surface: the layout half is pinned in a real browser by the
+  `LongNamesDoNotScrollHorizontally` story (jsdom reports `scrollWidth` and `clientWidth` as 0, so
+  it cannot see this class of defect at all), and the hover-label and alignment halves by jsdom
+  tests. Because the contract is written here and not carried by shared code, a picker that ignores
+  it fails no test until someone adds one — **revisit** and extract shared row components if a
+  fourth surface appears, at which point the duplication would outweigh the coupling.
+- **Source:** PT-4551 (Ian NN-3.3 (a) and (d)), with the overflow mechanism measured in the running
+  app rather than inferred.
 
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
@@ -5769,6 +5897,46 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `adr-window-min-width-shared-constant`.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
 
+## adr-simple-mode-tab-menu-offers-zoom-only: Simple mode's tab menu is the platform's own contributed menu, narrowed to the content-zoom group
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Simple mode had no tab menu at all, because every item the platform's tab menu could
+  offer — floating, moving to another window — is a no-op there: floating targets a second window
+  Simple mode does not have, and moving reaches windows Simple mode does not expose. Content zoom is
+  the first per-tab action that is meaningful in both modes: zooming a tab's content behaves
+  identically whether or not a second window exists. The menu converter flattens contributed groups
+  into one list with separators, and a converted item no longer says which group it came from, so
+  narrowing a menu to one group has to happen on the contributed menu before conversion, not after.
+- **Decision:** Both interface modes read the same contributed tab menu. Simple mode narrows it to
+  the `platform.tabZoom` group before conversion; items in that group are shown disabled on a tab
+  whose web view marks no zoom area, read from the content-zoom resolver at the moment the menu
+  opens. A tab hosting no web view gets no menu at all in either mode. The menu renders only once the
+  interface mode is known, so a tab never briefly shows the wrong mode's menu before the setting
+  resolves.
+- **Alternatives:** **Keep Simple mode menu-less and rely on chords alone** — rejected: a keyboard
+  shortcut with no menu entry is not discoverable, and content zoom is meant to be found by browsing
+  the tab menu. **Disable items by area presence at the contribution level** — rejected: whether a
+  view marks a zoom area is a signal that only resolves asynchronously, well after the menu contract
+  is declared, so it cannot gate what the contribution itself offers. **A per-item
+  `hiddenInterfaceModes` field** — rejected: that mechanism hides individual items, but the need here
+  is to restrict an entire menu to one group, which a per-item hide cannot express without listing
+  every other item's id.
+- **Consequences:** Simple mode now pays one contributed-menu read per tab at mount, the same
+  mount-time cost Power mode already paid. The tab menu is reachable only where a tab bar is visible,
+  which in Simple mode is Column 3 alone — so the editor pane, which has no visible tab bar, needs
+  its own entry point to content zoom; that entry point is the editor's own hamburger menu, delivered
+  together with the editor's zoom areas. Product narrowed PT-4578's scope on 2026-09-16: the tab-menu
+  route to content zoom is required only where Simple mode already has a visible, interactive tab bar
+  — Column 3 — not on the editor's own tab, whose hamburger menu is its sole entry point instead. The
+  headless Column 1/2 tab bars keep their existing `pointer-events: none`; this feature does not make
+  them interactive to reach that parity. The disabled state is a snapshot taken when the menu opens,
+  not a subscription: a zoom area that arrives while the menu is up leaves the items greyed until the
+  menu is closed and reopened. That bounds the cost to a menu left open across a pane's first
+  moments, and it is why the items are greyed rather than hidden — the shape of the menu does not
+  change under the pointer.
+- **Source:** PT-4578 (PR #2821), epic PT-4575.
+
 ## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
 - **Formerly:** ADR-0019
@@ -6756,6 +6924,82 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
 
+## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
+
+- **Date:** 2026-09-15
+- **Status:** Accepted (narrows `adr-app-global-shortcuts-in-main`; refines `adr-per-web-view-ctrl-f-for-find`)
+- **Context:** Content zoom (epic PT-4575) is scoped to one **pane**, and a pane may hold several
+  independently zoomable areas — the Scripture editor's text and its footnotes list. Acting on the
+  right one needs the id of the web view the user is in and the area holding the caret or the
+  pointer. The main process, which claimed Ctrl+`+`/`-`/`0` in its `before-input-event` handler for
+  app-wide zoom, has neither: it can name the focused window, not the focused tab, and it cannot see
+  which element inside an `about:srcdoc` iframe has focus. `adr-per-web-view-ctrl-f-for-find` already
+  settled this shape of problem for Ctrl+F by moving the listener into the view and holding it in one
+  shared hook — but that hook is extension code every view has to mount, and content zoom has to work
+  for views that know nothing about it, including plain-HTML ones.
+- **Decision:** The chords are handled inside each web view by the **platform's own injected
+  bootstrap** (`getContentZoomBootstrapScript` in
+  `src/renderer/services/web-view-content-zoom.bootstrap-script.ts`), appended to the script the
+  renderer already injects into every non-URL web view. It targets the area holding keyboard focus,
+  else the area under the pointer for the wheel, else the pane's last active area, and acts with the
+  pane's own id. This is `adr-per-web-view-ctrl-f-for-find`'s shared hook taken one step further: the
+  shared handler is platform-injected, so a view opts in by marking **content**, not by mounting
+  code. The bootstrap prefers in-process functions the window's web-view shard binds on the iframe's
+  `window` and falls back to the three PAPI commands `platform.webViewContentZoomIn` / `…Out` /
+  `…Reset`, which keeps `adr-renderer-registers-no-names` intact — the names are registered by the
+  router, not by the renderer — and keeps a wheel burst off the network. Main gave up the chords in
+  PT-4577 (PR #2821): the three Windows/Linux `before-input-event` zoom branches were deleted,
+  `platform.zoomIn` and `platform.zoomOut` stay as commands with no default chord, macOS binds
+  explicit View-menu items carrying ⌘=/⌘-/⌘0 in place of the native `zoomIn`/`zoomOut`/`resetZoom`
+  roles, and a renderer top-document `keydown` listener covers the case where keyboard focus is on
+  window chrome — the tab bar, the reference box, a toolbar button — where no iframe sees the key at
+  all. The three chord copies — the window-chrome listener, the in-view bootstrap and the macOS
+  View-menu accelerators — are all built from one table, `CONTENT_ZOOM_CHORDS` in
+  `src/shared/models/content-zoom.model.ts`; the bootstrap gets it serialized into the script it
+  injects, the same way the injected stylesheet's rule template travels there. The View menu carries
+  a hidden ⇧⌘= duplicate so ⌘+, which is what a Mac reports for that chord, reaches the menu path
+  too.
+- **Alternatives:** (a) **Keep it in main and route to the focused window** — rejected: main knows the
+  window, not the pane and not the area; the same objection `adr-per-web-view-ctrl-f-for-find`
+  records. (b) **A renderer window-level listener that forwards keys into the right iframe** —
+  rejected as the general mechanism: it is focus-blind, since the renderer cannot see which element
+  inside a sandboxed iframe holds the caret, and it adds a hop to keep in sync. It survives only as
+  the narrow window-chrome case above, where there is no iframe to ask. (c) **A shared React hook
+  every view mounts**, as Find does — rejected here: it would make zoom an opt-in for *code* rather
+  than for *content*, it would repeat the coverage gap that decision already names, and plain-HTML
+  views could not opt in at all.
+- **Consequences:** A view that marks no zoom area ignores the chords entirely — the bootstrap does
+  not even register its wheel listener while a pane has no areas — and the platform scales such a view
+  whole at the Settings default instead. On Windows and Linux this is what a user notices first:
+  Ctrl+`+`, Ctrl+`-` and Ctrl+`0` now do nothing anywhere except a view that answers them itself —
+  today the Scripture editor, through the zoom areas it marks, and Enhanced Resources, through the
+  keydown handler it has always had for its own scripture-pane zoom
+  (`extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx`). Main
+  no longer claims those chords, nothing replaces them, and a pane with no marked area deliberately
+  leaves the keystroke to whoever else may want it rather than swallowing it for no effect. So a user
+  on Notes, or on the Text Collection — whose own pane zoom is wheel and menu only — presses Ctrl+0
+  and nothing happens. That is the intended cost of scoping zoom to a pane rather than to the window,
+  and it shrinks as views adopt the mechanism (the Text Collection grid in PT-4582, Enhanced
+  Resources in PT-4583). The bootstrap listens in the **bubble** phase on purpose, so
+  a view that owns Ctrl+wheel for a sub-region keeps precedence by stopping propagation in the capture
+  phase; the Text Collection grid's per-resource zoom does exactly that
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts`).
+  On macOS the chord arrives through the menu accelerator rather than through the iframe, so it
+  resolves the pane's *active* area rather than the area holding the caret; the bootstrap's
+  `pointerdown`/`focusin` tracking re-converges the two, except while a click's own answering refocus
+  into another area is being suppressed — that one move is held off so the clicked area stays the
+  target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once. The
+  window-chrome listener also stands down behind the three full-screen overlays that bypass
+  `OverlayHost` (connection lost, workspace updating, first run), not only behind a modal dialog:
+  the level is persisted, so a zoom made behind one of those would outlive it. The in-view bootstrap
+  needs no gate of its own, because all three of those covers are Radix modal dialogs: each takes
+  keyboard focus out of the web views while it is up and hands it back when it goes, so no chord
+  reaches a view from behind a cover.
+  **Revisit** if a second platform-injected shortcut appears
+  — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
+- **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
+  chord ownership), epic PT-4575.
+
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
 - **Date:** 2026-08-27
@@ -7151,3 +7395,47 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
   adding the ordering tests in `z-index.test.tsx` and this decision record.
+
+## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Platform.Bible had one scaling control — the app-wide Electron zoom behind the
+  `platform.zoomFactor` setting, which scales the chrome along with everything else — plus a
+  project-level font size the editor's Standard view honours, plus two private per-view zooms that
+  grew where the platform had nothing to offer (the Text Collection grid's per-resource factor, and
+  the Enhanced Resources viewer's own handler). Adding a per-pane zoom on top of that raises two
+  questions at once: what the layers multiply out to on screen, and what the new layer is implemented
+  with. Spikes S1 and S2 of the epic's investigation measured the candidates on the real Scripture
+  editor.
+- **Decision:** On screen a pane shows **Electron zoom × project font size × content zoom** — the
+  content zoom of the area, its own level if it has one, otherwise the Settings default — with the
+  Text Collection's per-resource factor multiplying inside the grid's area. Content zoom composes
+  with the project font size and never replaces or resets it: it scales whatever base size the area
+  already has, and reset returns to the Settings default, not to the project font size. It is
+  implemented as CSS `zoom` on each element carrying `data-platform-content-zoom-root`, driven by a
+  custom property per area (`--platform-content-zoom-<areaId>`, falling back to
+  `--platform-content-zoom-default`). **Zoom areas are a platform capability**: a view marks one or
+  more non-nested areas and the platform owns the targeting (focus, then pointer, then last active
+  area), the per-area state, the memory and the indicator. Views do not build their own zoom stacks.
+- **Alternatives:** (a) **A font-size cascade on the content root** — rejected: it does not reach the
+  editor's rendered scripture, which sets its own sizes (PT-4167), so the one view the feature exists
+  for would not scale. (b) **`transform: scale`** — rejected: it breaks hit-testing, so clicks and
+  caret placement land off-target, which S1 reproduced. (c) **Scaling the whole `<iframe>` for every
+  view** — rejected for adapted views: it scales the view's own toolbar with its content, which is
+  exactly what NN-1 forbids; it is kept only as the fallback for a view that marks no area, and for
+  URL views, where nothing can be injected. (d) **Letting each view implement its own zoom**, as the
+  grid and Enhanced Resources already had to — rejected: four near-copies of clamping, stepping,
+  storage and indicator, with no shared memory and no consistent chord.
+- **Consequences:** A view opts in with one attribute and gets targeting, state, memory, the indicator
+  and the chords for free; the cost is the CSS `zoom` measurement mismatch — inside an area
+  `getBoundingClientRect` is in zoomed pixels while `getComputedStyle(...).fontSize` is not — which
+  every consumer of both has to handle by reading the area's variable (documented in
+  `Extension-Development-Guide.md` and `Component-Builder-Patterns.md`). The Text Collection grid's
+  per-resource zoom predates this decision and stays, nesting inside the grid's own area and
+  multiplying with it: it is the documented exception, not a precedent, and PT-4582 marks the grid
+  pane's own area around it and leaves it in place; moving it onto the platform mechanism is not
+  scheduled. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view carries a
+  private zoom any more.
+- **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
+  recorded here by PT-4580.

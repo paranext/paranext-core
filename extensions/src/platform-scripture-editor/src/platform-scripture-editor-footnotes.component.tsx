@@ -1,6 +1,7 @@
 import { PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
+  ContentZoomRoot,
   FootnoteList,
   ResizableHandle,
   ResizablePanel,
@@ -279,7 +280,9 @@ export function FootnotesLayout({
           minSize={footnotesPaneMinPercent}
           maxSize={footnotesPaneMaxPercent}
         >
-          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+          {/* Footnotes zoom area: the pane's own padding (on the ResizablePanel above) and its
+              resize handle stay outside so they keep their size while the list content scales. */}
+          <ContentZoomRoot area="footnotes" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
             <FootnoteList
               classNameForItems="scripture-font"
               listId={footnoteListKey}
@@ -295,7 +298,7 @@ export function FootnotesLayout({
               selectionRequest={selectedFootnote}
               onFootnoteSelected={handleFootnoteSelected}
             />
-          </div>
+          </ContentZoomRoot>
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

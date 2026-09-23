@@ -75,6 +75,11 @@ export type {
 } from './components/advanced/comment-list/conflict-note-card.types';
 export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
 export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
+export {
+  ContentZoomRoot,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+} from './components/advanced/content-zoom-root.component';
+export type { ContentZoomRootProps } from './components/advanced/content-zoom-root.component';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
@@ -397,6 +402,8 @@ export {
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
+  Z_INDEX_NESTED_MODAL,
 } from './components/z-index';
 
 // Tooltip delay

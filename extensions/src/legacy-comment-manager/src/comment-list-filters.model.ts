@@ -1,4 +1,3 @@
-import { logger } from '@papi/frontend';
 import type {
   LegacyCommentThreadSelector,
   CommentPreset,
@@ -10,6 +9,18 @@ import type {
 import type { LocalizeKey } from 'platform-bible-utils';
 
 export type { CommentPreset, CommentFilters, ScopeFilter, LegacyCommentFilters, LegacyScopeFilter };
+
+/**
+ * Sink for a diagnostic this module emits while resolving untrusted filter input (see
+ * {@link presetFromLegacyAxes}). Injected by the caller rather than logged directly, because this
+ * module is reachable from the extension's backend entry point (`main.ts` imports
+ * {@link presetToLabelKey} and {@link scopeFilterToLabelKey} for its menu contributions) as well as
+ * from the web views. `@papi/frontend` is a webpack external the extension host's `require` shim
+ * rejects, so importing a logger here fails the whole extension's activation — see
+ * `extension-host-import-boundary.test.ts`, which pins that boundary. Every caller that can reach
+ * the legacy mapping runs in a web view and passes `logger.warn` from `@papi/frontend`.
+ */
+export type WarnFn = (message: string) => void;
 
 // Filter constants, types, and the selector mapping — shared between the presentational panel (which
 // renders the filter toolbar) and the web view (which uses the values to build its comment-thread
@@ -240,10 +251,11 @@ const LEGACY_AXES_TO_PRESET: Partial<Record<string, CommentPreset>> = {
  * Any other combination with no counterpart at all — e.g. `assignment: 'team'`/`'unassigned'`
  * (dropped entirely by the new model), `type: 'comments'` (no preset excludes conflicts), or a mix
  * of active axes the table doesn't recognize — widens to `'all'` rather than throw or guess which
- * axis to drop. Either fallback logs, naming the combination: this is the direction nobody notices
- * without one, since a silent widen just shows extra rows rather than failing loudly.
+ * axis to drop. Either fallback reports through `warn`, naming the combination: this is the
+ * direction nobody notices without one, since a silent widen just shows extra rows rather than
+ * failing loudly. See {@link WarnFn} for why the sink is injected instead of logged here.
  */
-function presetFromLegacyAxes(legacy: LegacyCommentFilters): CommentPreset {
+function presetFromLegacyAxes(legacy: LegacyCommentFilters, warn: WarnFn): CommentPreset {
   const key = [
     legacy.resolved ?? 'all',
     legacy.read ?? 'all',
@@ -255,7 +267,7 @@ function presetFromLegacyAxes(legacy: LegacyCommentFilters): CommentPreset {
   if (exactMatch) return exactMatch;
 
   if (legacy.type === 'conflicts') {
-    logger.warn(
+    warn(
       `Legacy comment filter combination "${key}" has no exact preset match; narrowing to ` +
         `'conflict' (dropping the other axis) rather than widening to 'all' (which would also ` +
         `drop the conflict constraint).`,
@@ -263,9 +275,7 @@ function presetFromLegacyAxes(legacy: LegacyCommentFilters): CommentPreset {
     return 'conflict';
   }
 
-  logger.warn(
-    `Legacy comment filter combination "${key}" has no matching preset; widening to 'all'.`,
-  );
+  warn(`Legacy comment filter combination "${key}" has no matching preset; widening to 'all'.`);
   return DEFAULT_COMMENT_FILTERS.preset;
 }
 
@@ -295,13 +305,15 @@ function isNewCommentFiltersShape(
  * so both kinds of untrusted input are handled here rather than repeated at each call site:
  *
  * - The deprecated {@link LegacyCommentFilters} four-axis shape (detected by the absence of a `preset`
- *   key) is mapped onto its matching preset via {@link presetFromLegacyAxes}.
+ *   key) is mapped onto its matching preset via {@link presetFromLegacyAxes}, which reports an
+ *   inexact mapping through `warn` (see {@link WarnFn}).
  * - A `preset` this build doesn't recognize — from a newer build, or a malformed value crossing the
  *   command/message bus — resolves to the default rather than reaching
  *   {@link buildCommentThreadSelector}, whose exhaustiveness guard throws on an unhandled preset.
  */
 export function applyFilterOverrides(
-  overrides?: Partial<CommentFilters> | LegacyCommentFilters,
+  overrides: Partial<CommentFilters> | LegacyCommentFilters | undefined,
+  warn: WarnFn,
 ): CommentFilters {
   if (!overrides) return { ...DEFAULT_COMMENT_FILTERS };
 
@@ -314,7 +326,7 @@ export function applyFilterOverrides(
     return { preset: resolvedPreset };
   }
 
-  return { preset: presetFromLegacyAxes(overrides) };
+  return { preset: presetFromLegacyAxes(overrides, warn) };
 }
 
 /**

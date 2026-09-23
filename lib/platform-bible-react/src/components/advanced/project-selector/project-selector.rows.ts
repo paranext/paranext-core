@@ -277,6 +277,14 @@ function collectOpenTabsByProject(
   return map;
 }
 
+/**
+ * Whether a (project, scroll group) pair is in the selection.
+ *
+ * Project ids are compared normalized, for the same reason `computeRows` normalizes the
+ * single-selection id: a caller whose selection came from a different source than its project list
+ * spells the same project in a different case, and comparing raw would leave every row unchecked
+ * while the trigger — which folds — named the project correctly.
+ */
 function pairIsSelected(
   pairs: readonly ProjectSelectorProjectPair[],
   projectId: string,

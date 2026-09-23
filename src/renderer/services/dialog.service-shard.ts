@@ -94,6 +94,16 @@ export function hasDialogRequest(id: string) {
 }
 
 /**
+ * Determine whether any dialog request is currently unresolved, regardless of id
+ *
+ * @returns True if at least one dialog request is unresolved; false otherwise
+ * @internal function; not exposed on papi
+ */
+export function hasAnyDialogRequest() {
+  return dialogRequests.size > 0;
+}
+
+/**
  * Resolve a dialog request. Synchronously resolves, then asynchronously closes the dialog
  *
  * @param id The id of the dialog whose request to reject
@@ -248,6 +258,8 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
       ...localizedOptions,
       isDialog: true as const,
       role: dialogDef.dialogRole ?? 'dialog',
+      providesOwnTitle: dialogDef.providesOwnTitle ?? false,
+      providesOwnDescription: dialogDef.providesOwnDescription ?? false,
       initialSize: dialogDef.initialSize,
       submitDialog: (data: DialogTypes[DialogTabType]['responseType']) => {
         if (!modalOverlayId) {

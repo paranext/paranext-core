@@ -12,7 +12,7 @@ import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyCommen
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -699,6 +699,83 @@ export declare function localizeOrFallback(key: LocalizeKey, localizedStrings: L
  * conflict.
  */
 export declare function ConflictNoteCard({ comment, localizedStrings, availableActions, resolvedResolution, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Attribute a content-zoom-eligible element carries to mark it as one zoom area. Its value is the
+ * zoom area id; an empty value marks the view's `main` area. Mirrors `CONTENT_ZOOM_ROOT_ATTRIBUTE`
+ * in paranext-core's `src/shared/models/web-view.model.ts`. This library cannot import that module
+ * (it lives under core's `src/shared`, outside this package's reach), and `@papi/core` publishes
+ * the constant as a type-only declaration whose value is not importable at runtime, so the literal
+ * is duplicated here; a platform test compares the two constants so they cannot drift silently.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_ROOT_ATTRIBUTE = "data-platform-content-zoom-root";
+/**
+ * Props for {@link ContentZoomRoot}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLDivElement> & {
+	/**
+	 * Id of the zoom area this element wraps: lower-case letters, digits and hyphens, starting with a
+	 * letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit this
+	 * prop for the view's main area. A view with several independently zoomable panes gives each its
+	 * own id — the Scripture editor uses `footnotes` for its footnotes pane.
+	 *
+	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
+	 * a warning once.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	area?: string;
+};
+/**
+ * Marks one independently zoomable content area within a web view.
+ *
+ * The platform scales a marked area in response to Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel, and the tab
+ * context menu; it remembers the chosen level per area and shows the zoom indicator. The view
+ * itself writes nothing else to make zoom work.
+ *
+ * Several elements may share one area id and zoom together. Areas must not nest — a marked element
+ * found inside another marked element is ignored. Keep toolbars, dividers and headers outside the
+ * marked element so they are not scaled along with the content.
+ *
+ * This component renders a plain `div` in normal flow and applies no classes of its own — the
+ * caller supplies whatever layout classes its parent expects.
+ *
+ * Measurement caveat: inside a zoomed area, `getBoundingClientRect()` reports zoomed pixels, while
+ * `getComputedStyle(el).fontSize` does not reflect the zoom factor. To read the factor itself, look
+ * up the `--platform-content-zoom-<areaId>` custom property (`--platform-content-zoom-main` for the
+ * unnamed area, `--platform-content-zoom-default` as a fallback) on the view's `documentElement`.
+ *
+ * A view that marks no area at all is scaled as a whole at the Settings default zoom level and gets
+ * no per-pane zoom control.
+ *
+ * @example
+ *
+ * ```tsx
+ * <Toolbar />
+ * <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+ *   <EditorContent />
+ * </ContentZoomRoot>
+ * ```
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const ContentZoomRoot: import("react").ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & {
+	/**
+	 * Id of the zoom area this element wraps: lower-case letters, digits and hyphens, starting with a
+	 * letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit this
+	 * prop for the view's main area. A view with several independently zoomable panes gives each its
+	 * own id — the Scripture editor uses `footnotes` for its footnotes pane.
+	 *
+	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
+	 * a warning once.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	area?: string;
+} & import("react").RefAttributes<HTMLDivElement>>;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -3102,6 +3179,11 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
 	 * overlay styling than the default.
 	 */
 	overlayClassName?: string;
+	/**
+	 * Inline styles for the backdrop (`DialogOverlay`). Needed for anything the overlay sets inline —
+	 * notably `zIndex`, which an `overlayClassName` cannot override.
+	 */
+	overlayStyle?: React$1.CSSProperties;
 	showCloseButton?: boolean;
 };
 /**
@@ -3111,7 +3193,7 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare function DialogContent({ className, children, showCloseButton, overlayClassName, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DialogContent({ className, children, showCloseButton, overlayClassName, overlayStyle, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Container for the dialog's header area. Stacks title and description vertically.
  *
@@ -4302,6 +4384,32 @@ export declare const Z_INDEX_OVERLAY = 400;
 export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
+/**
+ * Z-index for the backdrop behind a modal opened FROM another modal — a picker that takes the
+ * screen over the dialog that launched it.
+ *
+ * A nested modal cannot reuse {@link Z_INDEX_MODAL_BACKDROP}: at 450 the inner backdrop paints below
+ * the host dialog's own content at {@link Z_INDEX_MODAL}, so it dims the app behind the host but not
+ * the host itself — while Radix's dismissable layer still makes the host inert. The host then looks
+ * live and swallows every click, which is the opposite of what a backdrop is for.
+ *
+ * Must stay above {@link Z_INDEX_MODAL} and below {@link Z_INDEX_NESTED_MODAL}. Pinned by
+ * `z-index.test.tsx`.
+ */
+export declare const Z_INDEX_NESTED_MODAL_BACKDROP = 510;
+/**
+ * Z-index for the content of a modal opened FROM another modal. See
+ * {@link Z_INDEX_NESTED_MODAL_BACKDROP} for why the nested case needs a tier of its own.
+ *
+ * Must stay above {@link Z_INDEX_NESTED_MODAL_BACKDROP} and below `Z_INDEX_TOOLTIP`, so a tooltip
+ * triggered from inside the nested modal — its close button carries one — still renders over it.
+ * Pinned by `z-index.test.tsx`.
+ *
+ * Deliberately absent from the SCSS twin in `src/renderer/styles/_vars.scss`, which stops at
+ * `$z-index--modal`: no SCSS-styled surface renders a nested modal, and a constant nothing consumes
+ * is one more thing to drift. Add it there if one ever does.
+ */
+export declare const Z_INDEX_NESTED_MODAL = 520;
 /**
  * Z-index for the one-shot onboarding tour spotlight. Sits above {@link Z_INDEX_ABOVE_DOCK},
  * {@link Z_INDEX_ABOVE_POPOVER} and `Z_INDEX_TOOLTIP` so it can spotlight toolbar buttons and

@@ -3,7 +3,7 @@
 import { DblResourceData, LanguageStrings, LocalizeKey, ResourceType, ScrollGroupId } from 'platform-bible-utils';
 import { ALL_BOOK_IDS, ForwardedPaletteKeyEvent, PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import React$1 from 'react';
-import { MouseEventHandler, MutableRefObject, ReactNode } from 'react';
+import { MouseEventHandler, MutableRefObject, ReactNode, RefObject } from 'react';
 
 type ClassValue = ClassArray | ClassDictionary | string | number | bigint | null | boolean | undefined;
 type ClassDictionary = Record<string, any>;
@@ -328,6 +328,33 @@ export declare function buildSelectionGroupingStrings(strings: ProjectSelectorSt
  * as data rather than a render prop on purpose: the selector owns the markup so the row stays
  * keyboard-reachable, which a caller-rendered `<button>` would not be.
  */
+/**
+ * What {@link ProjectSelectorProps.renderProjectIndicator} returns for a row: the glyph, and
+ * optionally what it means.
+ *
+ * One value rather than a glyph prop and a label prop, so the two cannot drift: a label with no
+ * glyph would describe an icon that is not on screen, and there is nothing in a two-prop shape to
+ * stop that. Returning `undefined` for a row means no indicator, and the column stays reserved for
+ * it either way.
+ */
+export type ProjectSelectorIndicator = {
+	/** The glyph to render in the row's indicator slot. */
+	node: React$1.ReactNode;
+	/**
+	 * The glyph's meaning as text, surfaced in the row tooltip. Supply it whenever the glyph carries
+	 * meaning a sighted user cannot otherwise get from the row.
+	 *
+	 * The rows are already tooltip triggers, so a caller cannot give the glyph its own hover label
+	 * without opening a second tooltip over the row's — this is the way in.
+	 *
+	 * **Only supply this when {@link node} already names itself** — with `role="img"` and an
+	 * `aria-label`, or equivalent. The tooltip line is the sighted-user half and is rendered
+	 * `aria-hidden`, because Radix wires an open tooltip as the row's `aria-describedby` and a glyph
+	 * that names itself would otherwise be announced twice per row. A `node` that is itself
+	 * `aria-hidden` paired with a `label` leaves the indicator silent at both ends.
+	 */
+	label?: string;
+};
 export type ProjectSelectorFooterAction = {
 	/** Localized row label. */
 	label: string;
@@ -494,7 +521,7 @@ type CommonProps = {
 	 * pure, cheap, and free of hooks — the row count changes as the user filters, and a hook called
 	 * here would change the selector's hook count between renders and throw.
 	 */
-	renderProjectIndicator?: (project: ProjectSelectorProject) => React$1.ReactNode;
+	renderProjectIndicator?: (project: ProjectSelectorProject) => ProjectSelectorIndicator | undefined;
 	/**
 	 * An action row pinned below every section, with a separator above it whenever the list has rows
 	 * to divide it from. Use it for an affordance that opens a different surface — the sections
@@ -589,6 +616,7 @@ export declare function ProjectSelector(props: ProjectSelectorProps): import("re
  */
 export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_title%",
+	"%resourcePicker_description%",
 	"%resourcePicker_section_already_selected%",
 	"%resourcePicker_section_installed%",
 	"%resourcePicker_section_available_to_download%",
@@ -666,6 +694,15 @@ export interface ResourcePickerDialogProps {
 	allowDeselect?: boolean;
 	/** Called when the user clicks a resource row to select it */
 	onSelect: (resource: DblResourceData) => void;
+	/**
+	 * Ref to the search input, for a host that decides where focus lands when the dialog opens.
+	 *
+	 * Without it a host can only order its JSX and hope: the picker disables its search box whenever
+	 * there is nothing to filter, so "render the close button last so focus lands on search" silently
+	 * lands on whatever is tabbable instead — the Retry button, or the close button itself. A host
+	 * holding this ref can state the intent directly and stay correct when the box is disabled.
+	 */
+	searchInputRef?: React$1.RefObject<HTMLInputElement | null>;
 }
 /**
  * Which of the picker body's mutually exclusive states to render.
@@ -711,7 +748,28 @@ export declare function getResourcePickerBodyState(input: {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Puts opening focus where a `ResourcePickerDialog` host wants it, from the host's
+ * `DialogContent`'s `onOpenAutoFocus`.
+ *
+ * A dialog focuses its first tabbable element on open, which for an embedded picker is whatever the
+ * host renders first — typically a close button, so a keyboard user starts on "leave" rather than
+ * on the search they came to do. Ordering the JSX is not enough on its own: the picker disables its
+ * search box whenever there is nothing to filter, and focus then falls through to Retry or to the
+ * close button anyway.
+ *
+ * This lives beside the picker rather than at each host because the disabled condition is the
+ * picker's own state. A host that re-derived it would go stale the moment that condition changed.
+ * The picker re-claims focus itself once the box becomes enabled, so a host that opens the picker
+ * mid-fetch does not strand the user on the shell.
+ *
+ * @param event The `onOpenAutoFocus` event. Prevented whenever this function places focus itself.
+ * @param searchInput The picker's search box, from the ref passed as `searchInputRef`.
+ * @param content The host's own dialog content, used when there is nothing to type into. Escape and
+ *   the screen-reader announcement both still work from there.
+ */
+export declare function focusResourcePickerOnOpen(event: Event, searchInput: HTMLInputElement | null | undefined, content: HTMLElement | null | undefined): void;
 /**
  * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
  *

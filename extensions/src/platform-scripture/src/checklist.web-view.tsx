@@ -17,8 +17,8 @@ import {
   makeSelectionGrouping,
   type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
-  type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
+  type ProjectSelectorProjectPair,
   type ScopeWithRange,
 } from 'platform-bible-react/experimental';
 import {
