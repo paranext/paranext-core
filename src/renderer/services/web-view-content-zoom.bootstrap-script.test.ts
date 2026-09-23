@@ -272,6 +272,47 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-tab-hands-back', 'main');
   });
 
+  it('hands the chords and the active area back to the caret once the user types there', () => {
+    const { bound } = install('wv-typing-hands-back', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // Typing in the text the view put the caret in is the user working there. The chord that
+    // follows arrives the way a keyboard sends it: the modifier on its own first, then the key.
+    key({ key: 'a' }, byId('verse'));
+    key({ key: 'Control', ctrlKey: true }, byId('verse'));
+    key({ key: '0', ctrlKey: true }, byId('verse'));
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-typing-hands-back', 'main');
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+      'wv-typing-hands-back',
+      'main',
+    );
+  });
+
+  it('keeps the clicked area through modifiers pressed on their own and through the chords themselves', () => {
+    const { bound } = install('wv-modifiers-keep', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // Every key the platform counts as a modifier, pressed on its own the way a keyboard sends the
+    // first half of a chord: none of them is typing.
+    ['Shift', 'Alt', 'AltGraph', 'Control', 'Meta', 'CapsLock', 'NumLock'].forEach((modifier) => {
+      key({ key: modifier }, byId('verse'));
+    });
+    // Ctrl+Shift+= as separate keydowns, then the same chord again: the first chord must not end
+    // the hold that decides where the second one lands.
+    key({ key: 'Control', ctrlKey: true }, byId('verse'));
+    key({ key: 'Shift', ctrlKey: true, shiftKey: true }, byId('verse'));
+    key({ key: '+', code: 'Equal', ctrlKey: true, shiftKey: true }, byId('verse'));
+    key({ key: '+', code: 'Equal', ctrlKey: true, shiftKey: true }, byId('verse'));
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([
+      ['wv-modifiers-keep', 1, 'footnotes'],
+      ['wv-modifiers-keep', 1, 'footnotes'],
+    ]);
+  });
+
   it('a click outside every zoom area does not hand the chords back to a caret the view moved', () => {
     const { bound } = install('wv-toolbar-click', TWO_AREAS);
     byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
