@@ -1,6 +1,7 @@
 import { getWebViewIframe } from '@renderer/services/overlays/overlay-coordinates';
 import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_IDENTITY_STATE_KEY,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
   ContentZoomKind,
   DEFAULT_ZOOM_FACTOR,
@@ -84,11 +85,11 @@ function warnShardDepsNotConfigured(): void {
 const productionDeps: ContentZoomDeps = {
   getIframe: getWebViewIframe,
   // The six functions below come from the renderer's web-view and window shards, plus the
-  // window-input-blocked util. Importing a shard here directly would create an import cycle, since
-  // both shards import this module, and `isWindowInputBlocked` travels the same seam so this
-  // module's whole window-scoped surface is composed in one place. The renderer's composition root
-  // injects its own functions through `initializeContentZoomService`; these stubs cover the window
-  // between module load and that call.
+  // window-input-blocked util. Importing a shard here directly would create an import cycle, since both
+  // shards import this module, and `isWindowInputBlocked` travels the same seam so this module's
+  // whole window-scoped surface is composed in one place. The renderer's composition root injects
+  // its own functions through `initializeContentZoomService`; these stubs cover the window between
+  // module load and that call.
   getDefinition: () => {
     warnShardDepsNotConfigured();
     return undefined;
@@ -211,8 +212,21 @@ const flushMemoryWritesDebounced = debounce(flushMemoryWrites, MEMORY_WRITE_DEBO
  */
 const OWN_LEVEL_WRITE_DEBOUNCE_MS = 250;
 
-/** Levels given to a pane in this window but not yet written into its definition, by pane id. */
-const pendingOwnLevels = new Map<WebViewId, Levels>();
+/**
+ * A pane's levels given in this window but not yet written into its definition, paired with the
+ * identity stamp ({@link identityStampFor}) the pane showed when the write was chosen — `undefined`
+ * when the pane had no resolvable identity at that moment, which is a fact about the write, not the
+ * absence of one: a pending write with no resolvable identity still has an entry here, and only a
+ * pane with NO entry at all has nothing pending. Kept as one record (set whole in
+ * {@link setOwnLevels}, cleared whole everywhere it is cleared) so {@link seedFromMemory} and
+ * {@link commitOwnLevels} can each tell a pending write chosen for the pane's CURRENT identity from
+ * one that predates a re-point the pane's own definition stamp never caught up to, because no
+ * commit for it had landed yet either.
+ */
+const pendingOwnLevelWrites = new Map<
+  WebViewId,
+  { levels: Levels; identity: string | undefined }
+>();
 
 /** The open burst window per pane: while one is running, a further edit is deferred into it. */
 const ownLevelWriteTimers = new Map<WebViewId, ReturnType<typeof setTimeout>>();
@@ -253,7 +267,7 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   unknownAreasLoggedByWebViewId.clear();
   ownLevelWriteTimers.forEach((timer) => clearTimeout(timer));
   ownLevelWriteTimers.clear();
-  pendingOwnLevels.clear();
+  pendingOwnLevelWrites.clear();
   pendingMemoryWrites.clear();
   givenUpMemoryWrites.clear();
   memoryFlushFailures = 0;
@@ -310,12 +324,29 @@ function getOwnLevels(definition: Pick<SavedWebViewDefinition, 'state'> | undefi
   return out;
 }
 
-/** The pane's own levels, with a write this window has not committed yet taking precedence. */
+/**
+ * The pane's own levels, with a write this window has not committed yet taking precedence — but
+ * only when that write was chosen for the identity the pane resolves to right now
+ * ({@link memoryIdentityFor}). A pending write chosen for another identity, or for none when the
+ * pane now resolves one (or the reverse), belongs to a project the pane no longer shows: returning
+ * it here would leak that stale level into whatever reads this function, including
+ * {@link syncSiblingsFromMemory}, which would then re-record it as the CURRENT identity's own. The
+ * committed levels are returned instead, until {@link commitOwnLevels} or a fresh area report
+ * resolves the mismatch.
+ */
 function effectiveOwnLevels(
-  definition: Pick<SavedWebViewDefinition, 'id' | 'state'> | undefined,
+  definition:
+    | Pick<SavedWebViewDefinition, 'id' | 'state' | 'webViewType' | 'projectId'>
+    | undefined,
 ): Levels {
   if (!definition) return {};
-  return pendingOwnLevels.get(definition.id) ?? getOwnLevels(definition);
+  const pending = pendingOwnLevelWrites.get(definition.id);
+  if (pending) {
+    const currentId = memoryIdentityFor(definition);
+    const currentStamp = currentId ? identityStampFor(currentId) : undefined;
+    if (pending.identity === currentStamp) return pending.levels;
+  }
+  return getOwnLevels(definition);
 }
 
 /**
@@ -510,33 +541,191 @@ function isContentZoomBootstrapAlive(webViewId: WebViewId): boolean {
   }
 }
 
+/** The value stored under {@link CONTENT_ZOOM_IDENTITY_STATE_KEY} for one pane's identity. */
+function identityStampFor(id: MemoryIdentity): string {
+  return `${id.kind}:${id.identity}`;
+}
+
+/** The identity a pane's state is stamped with, or `undefined` for a pane with no stamp. */
+function storedIdentityStamp(
+  definition: Pick<SavedWebViewDefinition, 'state'>,
+): string | undefined {
+  const value = definition.state?.[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** The identity bits {@link seedFromMemory} and {@link reseedIfIdentityChanged} both need. */
+type IdentityState = {
+  definition: SavedWebViewDefinition;
+  id: MemoryIdentity | undefined;
+  /** `identityStampFor(id)`, or `undefined` when `id` is. */
+  stamp: string | undefined;
+  storedStamp: string | undefined;
+};
+
 /**
- * Seeds a newly opened pane's own levels from every area {@link cachedMemory} remembers for its kind
- * and identity, so the areas its bootstrap is about to report start at the level the user chose
- * last time instead of the Settings default. Merged per area, with the same precedence
- * {@link getInitialContentZoomForWebView} bakes into the pane's head: a level the pane's own state
- * already holds wins, and memory fills only the areas the state lacks. Seeding per area rather than
- * per pane is what lets a pane restored with one area's level still pick the other areas up — the
- * push that follows writes an inline property for every reported area, which outranks the baked
- * `:root` value, so an area missing from the state would otherwise be forced to the default.
+ * Resolves a pane's definition, its current memory identity and stamp, and the stamp already stored
+ * in its state — the four values {@link reseedIfIdentityChanged} reads to decide whether to re-seed,
+ * and {@link seedFromMemory} reads again to actually do it. Computed once here and passed through
+ * ({@link reseedIfIdentityChanged} → `seedFromMemory`) rather than twice, since neither the
+ * definition read nor the identity lookup has any reason to disagree with itself a moment later.
  */
-function seedFromMemoryOnFirstReport(webViewId: WebViewId): void {
+function resolveIdentityState(webViewId: WebViewId): IdentityState | undefined {
   const definition = deps.getDefinition(webViewId);
-  if (!definition) return;
-  // TODO(PT-4582): a pane re-pointed to another project keeps these levels; stamp the seeded
-  // identity and re-seed on mismatch.
-  if (pendingOwnLevels.has(webViewId)) return;
+  if (!definition) return undefined;
   const id = memoryIdentityFor(definition);
+  return {
+    definition,
+    id,
+    stamp: id ? identityStampFor(id) : undefined,
+    storedStamp: storedIdentityStamp(definition),
+  };
+}
+
+/**
+ * Gives a pane the levels {@link cachedMemory} remembers for the kind and identity it shows NOW, and
+ * stamps that identity into its state ({@link CONTENT_ZOOM_IDENTITY_STATE_KEY}) so a later change of
+ * identity can be told from a pane that still shows what its levels belong to. The stamp
+ * accompanies the levels: a pane that ends up with none carries neither, here and in
+ * {@link commitOwnLevels} — which is also why `hasOwnLevels` below is read from committed state
+ * alone, never from a write still sitting in {@link pendingOwnLevelWrites}: that write's own commit
+ * adds the stamp together with the levels it carries, so counting a merely pending one here too
+ * would risk stamping a pane ahead of a level it does not actually have yet.
+ *
+ * Decided by the identity, the stamp, and any pending write:
+ *
+ * - **No identity at all** (`id` is `undefined` — a project id this pane's kind cannot resolve, for
+ *   instance) — nothing this window could seed the pane with either way, so whatever levels it
+ *   already holds are left exactly as they are.
+ * - **The stamp matches the pane's identity** — nothing to do. Whatever the pane holds, seeded here
+ *   or chosen by the user since, belongs to what the pane shows.
+ * - **No stamp, and the pane already has something of its own for the identity it shows RIGHT NOW** —
+ *   a committed level (the levels key is never written empty, so holding it at all means the pane
+ *   has a level to keep — a newly opened pane, one restored from a layout written before its levels
+ *   were stamped, or one whose only own-level commit so far has failed) is merged with whatever
+ *   memory remembers for the areas its own state lacks — the same state → memory → default
+ *   precedence the "Otherwise" branch below applies to a pane with nothing of its own — and
+ *   stamped. A level held only as a still-pending, uncommitted write chosen for this same identity
+ *   ({@link pendingOwnLevelWrites}) is left untouched instead (the pending write keeps its open
+ *   burst timer too) and gets its stamp together with its levels once a later commit finally lands:
+ *   there is no committed stamp yet to say it changed FROM anything, and merging into it here would
+ *   race the very commit that is about to land.
+ * - **Otherwise — a genuinely fresh pane with nothing of its own at all, OR the stamp names another
+ *   identity, OR a pending write was chosen for one** — either the pane has never had anything
+ *   seeded or committed, or it was re-pointed at another project through the same web view id
+ *   (`reloadWebView`, with the view's own `getWebViewDefinition` spreading its previous saved state
+ *   onto the new definition) after its levels were stamped, or it was re-pointed before its first
+ *   commit ever landed, so no stamp exists to show the change but the level still pending belongs
+ *   to a project the pane no longer shows. Whatever the pane holds is replaced by what memory
+ *   remembers for the identity it shows now, and removed entirely when it remembers nothing, so the
+ *   pane follows the Settings default rather than the previous project's level — and any pending
+ *   write still standing is dropped along with it, together with the open burst-write timer it was
+ *   sitting in, so the identity's own next edit still gets the "first edit of a burst is written at
+ *   once" guarantee instead of waiting out a window that belonged to another identity. The one
+ *   exception is a pending write already chosen for the identity being seeded NOW — the pane's own
+ *   not-yet- committed edit for what it already shows — which is kept rather than overwritten by
+ *   what memory remembers, the same way the previous case keeps one. A drop here is a courtesy, not
+ *   the only guard: a pending write that reaches {@link commitOwnLevels} before this function gets
+ *   the chance — the debounce timer firing on its own, `forgetContentZoom`, or the unload flush —
+ *   is checked and dropped there too, rather than being stamped with whatever identity the pane
+ *   shows at commit time. This whole case is skipped while {@link memoryLoaded} is still `false`: an
+ *   unread {@link cachedMemory} is `{}` by construction, not evidence that nothing is remembered,
+ *   and trusting it here would drop a restored pane's levels for nothing to replace them with. Left
+ *   alone, the pane keeps its stale stamp (or stale pending write) until its next fresh first-area
+ *   report re-seeds it from scratch ({@link setContentZoomAreas}) — a definition update alone does
+ *   not re-run this check, since {@link reseedIfIdentityChanged} returns early for a pane with no
+ *   stored stamp.
+ */
+function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void {
+  const resolved = precomputed ?? resolveIdentityState(webViewId);
+  if (!resolved) return;
+  const { definition, id, stamp, storedStamp } = resolved;
+  // No identity to seed from or check the stamp against: whatever levels the pane already holds are
+  // left exactly as they are, re-point or not, since nothing here could replace them anyway. See
+  // "No identity at all" above.
   if (!id) return;
-  const existing = getOwnLevels(definition);
-  const seeded: Levels = { ...existing };
-  Object.entries(collectMemoryLevelsFor(cachedMemory, id)).forEach(([areaId, level]) => {
-    if (seeded[areaId] === undefined) seeded[areaId] = level;
-  });
-  if (Object.keys(seeded).length === Object.keys(existing).length) return;
-  deps.updateDefinition(definition.id, {
-    state: { ...(definition.state ?? {}), [CONTENT_ZOOM_LEVELS_STATE_KEY]: seeded },
-  });
+  if (storedStamp === stamp) return; // "The stamp matches the pane's identity" above.
+  const hasOwnLevels = Boolean(
+    definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state,
+  );
+  // Read once and reused by both checks below: neither the `hasOwnLevels` return nor the
+  // `memoryLoaded` return touches this map, so a pane whose pending write already names `stamp` is
+  // the same fact whichever of the two paths asks it.
+  const pendingWrite = pendingOwnLevelWrites.get(webViewId);
+  const pendingWriteMatchesStamp = pendingWrite !== undefined && pendingWrite.identity === stamp;
+  if (storedStamp === undefined) {
+    if (hasOwnLevels) {
+      // An unread `cachedMemory` is `{}` by construction, not evidence that nothing is remembered
+      // (same reasoning as the `!memoryLoaded` guard below): merging it in here would stamp the
+      // pane as reconciled with this identity before memory ever had a chance to contribute
+      // anything, and no later report would revisit it once "The stamp matches the pane's
+      // identity" starts short-circuiting this function on every future call.
+      if (!memoryLoaded) return;
+      // Committed-levels half of "no stamp, and the pane already has something of its own" above:
+      // fill only the areas its own state lacks, exactly as state → memory → default precedence
+      // works everywhere else (getInitialContentZoomForWebView).
+      const merged: Levels = { ...getOwnLevels(definition) };
+      Object.entries(settledMemoryLevelsFor(id)).forEach(([areaId, level]) => {
+        if (merged[areaId] === undefined) merged[areaId] = level;
+      });
+      deps.updateDefinition(webViewId, {
+        state: {
+          ...definition.state,
+          [CONTENT_ZOOM_LEVELS_STATE_KEY]: merged,
+          [CONTENT_ZOOM_IDENTITY_STATE_KEY]: stamp,
+        },
+      });
+      return;
+    }
+    if (pendingWriteMatchesStamp) return; // same case, pending-write half.
+    // Either a genuinely brand-new pane with nothing of its own, committed or pending, or a pending
+    // write that predates a re-point. Both fall through below exactly like a stamped re-point does.
+  }
+  // "Otherwise" above -- including its one exception, a pending write already chosen for the
+  // identity being seeded NOW, which is kept rather than overwritten by what memory remembers. When
+  // `storedStamp` was undefined, this was already ruled out just above; it is only still live here
+  // for a pane whose stamp names a different identity.
+  if (!memoryLoaded) return;
+  if (pendingWriteMatchesStamp) return;
+  pendingOwnLevelWrites.delete(webViewId);
+  const ownLevelTimer = ownLevelWriteTimers.get(webViewId);
+  if (ownLevelTimer !== undefined) {
+    clearTimeout(ownLevelTimer);
+    ownLevelWriteTimers.delete(webViewId);
+  }
+  const state: Record<string, unknown> = { ...(definition.state ?? {}) };
+  const levels = settledMemoryLevelsFor(id);
+  if (Object.keys(levels).length === 0) {
+    // Nothing to give this pane and nothing it may keep: a re-pointed pane's old levels and stamp
+    // go, and a pane that had neither is left exactly as it was rather than written to.
+    if (!hasOwnLevels) return;
+    delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+    delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+  } else {
+    state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+    state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
+  }
+  deps.updateDefinition(webViewId, { state });
+}
+
+/**
+ * The definition-update half of {@link seedFromMemory}: a pane whose stamp no longer names what it
+ * shows is re-seeded, and nothing else is touched.
+ *
+ * A pane with no stamp is deliberately left to its next area report. An update arrives for every
+ * write to a definition, including the platform's own: a reset removes a pane's levels and its
+ * stamp together, and the memory edit that goes with it is still in its debounce window when that
+ * update comes back, so seeding an unstamped pane here would hand the level the user just gave up
+ * straight back from {@link cachedMemory} — and take it away again when the memory write's own echo
+ * arrives.
+ */
+function reseedIfIdentityChanged(webViewId: WebViewId): void {
+  const resolved = resolveIdentityState(webViewId);
+  if (!resolved) return;
+  // The only check that is load-bearing here: `seedFromMemory` re-checks `!id` and
+  // `stamp === storedStamp` itself, so re-checking them before delegating would only repeat them.
+  if (resolved.storedStamp === undefined) return;
+  seedFromMemory(webViewId, resolved);
 }
 
 /**
@@ -554,7 +743,7 @@ export function setContentZoomAreas(webViewId: WebViewId, areaIds: ContentZoomAr
   if (valid.length > 0) clearFallbackGrace(webViewId);
   else startFallbackGrace(webViewId);
   if ((previous === undefined || previous.length === 0) && valid.length > 0)
-    seedFromMemoryOnFirstReport(webViewId);
+    seedFromMemory(webViewId);
   areasByWebViewId.set(webViewId, valid);
   pushContentZoom(webViewId);
 }
@@ -572,7 +761,11 @@ export function setContentZoomActiveArea(webViewId: WebViewId, areaId: ContentZo
  * or moved — and the definition the levels belong to commonly outlives it. On a genuine close there
  * is no definition left to write them into, and {@link commitOwnLevels} drops the pending levels
  * itself. If the definition is still there but that write fails, the levels stay pending — this
- * function does not clear them — for the next edit of the pane or the unload flush to retry.
+ * function does not clear them — for the next edit of the pane or the unload flush to retry. A
+ * third outcome belongs to {@link commitOwnLevels} alone: a pending write whose recorded identity no
+ * longer matches what the pane resolves to now is dropped outright rather than committed, since the
+ * pane has moved on to another project (or to none) since the write was chosen, and writing the old
+ * level now would misattribute it.
  */
 export function forgetContentZoom(webViewId: WebViewId): void {
   const timer = ownLevelWriteTimers.get(webViewId);
@@ -606,10 +799,10 @@ export function pushContentZoom(
 ): void {
   const iframe = deps.getIframe(webViewId);
   if (!iframe) return;
-  // Only a non-URL pane that runs scripts bakes the real default into its head, and that bake
-  // awaits the same read that fills `cachedDefault`, so this fallback can never outrank a baked
-  // value. A pane that bakes none — a URL pane, or one opened with `allowScripts: false` — has no
-  // baked value for this to outrank.
+  // Only a non-URL pane with scripting allowed bakes the real default into its head — a pane opened
+  // with `allowScripts: false` bakes nothing, same as it never runs the bootstrap — and that bake
+  // awaits the same read that fills `cachedDefault`, so this fallback can never outrank a value
+  // that pane actually baked.
   const defaultZoom = cachedDefault ?? DEFAULT_ZOOM_FACTOR;
   const root = iframe.contentDocument?.documentElement;
   root?.style.setProperty(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE, String(defaultZoom));
@@ -758,6 +951,29 @@ function collectMemoryLevelsFor(memory: MemoryRecord, id: MemoryIdentity): Level
   return levels;
 }
 
+/**
+ * {@link collectMemoryLevelsFor}, minus any area this window has an unresolved memory write of its
+ * own for: one still pending in {@link pendingMemoryWrites} whose value disagrees with what
+ * {@link cachedMemory} holds — a debounced local edit {@link cachedMemory} has not caught up with yet
+ * — or one this window gave up on ({@link givenUpMemoryWrites}) whose superseded value is still what
+ * {@link cachedMemory} holds. {@link syncSiblingsFromMemory} applies the identical per-key check
+ * while patching a sibling; {@link seedFromMemory} needs the same guard on the areas it reads before
+ * writing a pane's state wholesale, so a re-seed reached while this window's own delete is still in
+ * flight cannot read `cachedMemory`'s stale, not-yet-overwritten value back as "still remembered".
+ */
+function settledMemoryLevelsFor(id: MemoryIdentity): Levels {
+  const levels: Levels = {};
+  Object.entries(cachedMemory).forEach(([key, remembered]) => {
+    const parsed = parseContentZoomMemoryKey(key);
+    if (!parsed || parsed.kind !== id.kind || parsed.identity !== id.identity) return;
+    if (pendingMemoryWrites.has(key) && pendingMemoryWrites.get(key) !== remembered) return;
+    const givenUp = givenUpMemoryWrites.get(key);
+    if (givenUp && remembered === givenUp.superseded) return;
+    levels[parsed.areaId] = remembered;
+  });
+  return levels;
+}
+
 function memoryKeyFor(
   definition: Pick<SavedWebViewDefinition, 'webViewType' | 'projectId' | 'state'>,
   areaId: ContentZoomAreaId,
@@ -871,9 +1087,9 @@ async function flushMemoryWrites(): Promise<void> {
   }
   memoryFlushFailures = 0;
   clearStoredMemoryWrites(flushing);
-  // `pendingMemoryWrites` is the echo guard as well as the retry queue, so dropping these keys would
-  // leave the next emission of the level this window failed to replace looking like news and undo
-  // the user's zoom. Each key that no newer edit has re-pended is recorded instead.
+  // `pendingMemoryWrites` is the echo guard as well as the retry queue, so dropping these keys
+  // would leave the next emission of the level this window failed to replace looking like news
+  // and undo the user's zoom. Each key that no newer edit has re-pended is recorded instead.
   flushing.forEach((_level, key) => {
     if (pendingMemoryWrites.has(key)) return;
     givenUpMemoryWrites.set(key, { superseded: cachedMemory[key] });
@@ -895,8 +1111,8 @@ function writeMemory(
 ): void {
   const key = memoryKeyFor(definition, areaId);
   if (!key) return;
-  // A new edit supersedes a given-up one whichever way it goes, so the record of that older attempt
-  // has nothing left to protect.
+  // A new edit supersedes a given-up one whichever way it goes, so the record of that older
+  // attempt has nothing left to protect.
   givenUpMemoryWrites.delete(key);
   pendingMemoryWrites.set(key, level);
   // A rejection here only ever means a test reset canceled this write; nothing else awaits it.
@@ -922,25 +1138,55 @@ export async function __flushContentZoomWritesForTesting(): Promise<void> {
  * with the level the user chose. {@link effectiveOwnLevels} reads them meanwhile, so the pane goes
  * on showing that level while its definition lags behind it.
  *
+ * Commits only under the identity the write was chosen for. The pane's CURRENT identity is compared
+ * against the identity the pending write was recorded with (see {@link pendingOwnLevelWrites}), and
+ * any mismatch drops the write instead of committing it — a transition between two resolvable
+ * identities, a write chosen with no identity whose pane has since resolved one, or a write chosen
+ * under a resolvable identity whose pane has since become unable to resolve one: in every case the
+ * pane has moved on since the write was chosen (a re-point {@link reseedIfIdentityChanged} has not
+ * yet caught, because no stamp existed for it to compare against), and writing the old level now
+ * would misattribute it to whatever identity — or lack of one — is current. The pane is left to
+ * re-seed itself from its next fresh area report, which reads what the identity it shows now
+ * actually remembers. The one case that is not a mismatch is a write chosen with no identity whose
+ * pane still has none: nothing about the pane has changed, so it commits exactly as it always did.
+ *
  * A failure anywhere in here — the definition read included, which throws once the dock layout is
  * gone — is logged and reported as `false` rather than left to propagate: this runs from a burst's
  * debounce timer and from the `beforeunload` flush, where a throw would either have no handler at
  * all or would stop the memory flush that runs right after it.
  */
 function commitOwnLevels(webViewId: WebViewId): boolean {
-  const levels = pendingOwnLevels.get(webViewId);
-  if (!levels) return true;
+  const pending = pendingOwnLevelWrites.get(webViewId);
+  if (!pending) return true;
   try {
     const definition = deps.getDefinition(webViewId);
     if (!definition) {
       // The pane is gone, so there is no definition left to write the levels into and no later
       // attempt that could find one; keeping them pending would only hold a closed pane's entry.
-      pendingOwnLevels.delete(webViewId);
+      pendingOwnLevelWrites.delete(webViewId);
       return false;
     }
+    const currentId = memoryIdentityFor(definition);
+    const currentStamp = currentId ? identityStampFor(currentId) : undefined;
+    if (pending.identity !== currentStamp) {
+      pendingOwnLevelWrites.delete(webViewId);
+      return true;
+    }
+    const { levels } = pending;
     const state: Record<string, unknown> = { ...(definition.state ?? {}) };
-    if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
-    else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+    // The identity stamp lives exactly as long as the levels it belongs to: a pane that has levels
+    // always says which project they were chosen for, and a pane that gives them up keeps no stamp
+    // that a later re-point would judge the next project's levels against — a stamp with no levels
+    // behind it would tell `seedFromMemory` this pane is already reconciled with its identity and
+    // stop it from ever restoring a level a sibling remembers for that same, still-current identity.
+    if (Object.keys(levels).length === 0) {
+      delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+      delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+    } else {
+      state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+      if (currentStamp !== undefined) state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = currentStamp;
+      else delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+    }
     if (!deps.updateDefinition(webViewId, { state })) return false;
   } catch (e) {
     logger.warn(
@@ -948,7 +1194,7 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
     );
     return false;
   }
-  pendingOwnLevels.delete(webViewId);
+  pendingOwnLevelWrites.delete(webViewId);
   return true;
 }
 
@@ -958,9 +1204,18 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
  * storage — and every further edit inside {@link OWN_LEVEL_WRITE_DEBOUNCE_MS} of it is deferred into
  * the open window and written once when it closes. Reads go through {@link effectiveOwnLevels}
  * meanwhile, so what the pane shows is always the newest level.
+ *
+ * Also records the pane's identity right now alongside the levels (see
+ * {@link pendingOwnLevelWrites}), so a later {@link seedFromMemory} or {@link commitOwnLevels} call
+ * can tell this write apart from one that predates a re-point.
  */
 function setOwnLevels(webViewId: WebViewId, levels: Levels): boolean {
-  pendingOwnLevels.set(webViewId, levels);
+  const currentDefinition = deps.getDefinition(webViewId);
+  const currentId = currentDefinition ? memoryIdentityFor(currentDefinition) : undefined;
+  pendingOwnLevelWrites.set(webViewId, {
+    levels,
+    identity: currentId ? identityStampFor(currentId) : undefined,
+  });
   if (ownLevelWriteTimers.has(webViewId)) return true;
   if (!commitOwnLevels(webViewId)) return false;
   ownLevelWriteTimers.set(
@@ -977,7 +1232,7 @@ function setOwnLevels(webViewId: WebViewId, levels: Levels): boolean {
 function flushOwnLevelWrites(): void {
   ownLevelWriteTimers.forEach((timer) => clearTimeout(timer));
   ownLevelWriteTimers.clear();
-  [...pendingOwnLevels.keys()].forEach((webViewId) => commitOwnLevels(webViewId));
+  [...pendingOwnLevelWrites.keys()].forEach((webViewId) => commitOwnLevels(webViewId));
 }
 
 /** Sets or deletes one area's level among the pane's levels. */
@@ -1058,12 +1313,22 @@ export async function resetContentZoom(
  * State → memory → default, per area. Used by the shard to bake a pane's initial variables into its
  * head. Memory contributes every area remembered for this pane's kind and identity that the state
  * does not already hold.
+ *
+ * Honors the identity stamp the same way {@link seedFromMemory} does: a stored stamp naming another
+ * identity means the pane's own levels belong to a project it no longer shows (a reused web view id
+ * re-pointed before this bake runs, ahead of the dock update that would re-seed it) — they are
+ * skipped entirely rather than baked, and memory for the identity shown now fills every area
+ * instead. No stamp at all is the ordinary not-yet-stamped case and leaves the own levels standing,
+ * merged with memory exactly as usual.
  */
 export async function getInitialContentZoomForWebView(
   webView: Pick<SavedWebViewDefinition, 'id' | 'webViewType' | 'projectId' | 'state'>,
 ): Promise<{ defaultZoom: number; levels: Levels }> {
-  const levels: Levels = { ...effectiveOwnLevels(webView) };
   const id = memoryIdentityFor(webView);
+  const storedStamp = storedIdentityStamp(webView);
+  const ownLevelsStale =
+    storedStamp !== undefined && storedStamp !== (id ? identityStampFor(id) : undefined);
+  const levels: Levels = ownLevelsStale ? {} : { ...effectiveOwnLevels(webView) };
   if (id) {
     // Initialization pre-warms the cache and the memory subscription keeps it current, so opening
     // a pane does not wait on a settings round trip — except a pane opened before that first read
@@ -1125,6 +1390,19 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       // One read and one write per pane: every write reconciles the whole dock layout, so a pane
       // whose two areas both moved must not cost two of them.
       const current = deps.getDefinition(definition.id) ?? definition;
+      const currentStamp = storedIdentityStamp(current);
+      if (currentStamp !== undefined && currentStamp !== identityStampFor(id)) {
+        // This pane's stamp names a different project than the one this delta is for — its own
+        // re-seed is owed first (missed because memory hadn't loaded, or because this ran before
+        // onDidUpdateWebView registered), not a patch of another project's level onto it.
+        reseedIfIdentityChanged(definition.id);
+        // The re-seed's outcome is not visible from here — it may be a deliberate no-op, e.g. a
+        // pending own-level write already chosen for this identity outranking memory — so this
+        // pane's catch-up is unconfirmed. Leave the delta owed rather than letting the walk's
+        // record advance past whatever it still owes this pane.
+        everyPaneTookItsUpdate = false;
+        return;
+      }
       const levels: Levels = { ...effectiveOwnLevels(current) };
       let changed = false;
       areas.forEach((areaId) => {
@@ -1138,8 +1416,8 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
         if (pendingMemoryWrites.has(key) && pendingMemoryWrites.get(key) !== remembered) return;
         const givenUp = givenUpMemoryWrites.get(key);
         if (givenUp) {
-          // The level this window failed to replace is still what the setting holds; it is not news,
-          // and applying it would undo the zoom the user chose.
+          // The level this window failed to replace is still what the setting holds; it is not
+          // news, and applying it would undo the zoom the user chose.
           if (remembered === givenUp.superseded) return;
           givenUpMemoryWrites.delete(key);
         }
@@ -1148,10 +1426,17 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
         else levels[areaId] = remembered;
         changed = true;
       });
-      // A pane whose levels have not reached its definition yet is written even when this delta asks
-      // for nothing new: those levels are what the pane shows and they still owe a write, so the
-      // change that memory delivers next is also this pane's next chance to store them.
-      if (!changed && !pendingOwnLevels.has(definition.id)) return;
+      // A pane with an own-level write still pending for the identity it shows RIGHT NOW is written
+      // even when this delta asks for nothing new: those are the levels it actually shows and they
+      // still owe a write, so the change that memory delivers next is also this pane's next chance
+      // to store them. A pending write recorded for another identity does not count — it predates a
+      // re-point this pane's stamp has not caught up to yet, and forcing it through here would
+      // misattribute a stale project's level to the identity memory just delivered a change for.
+      const pendingForCurrentIdentity = pendingOwnLevelWrites.get(definition.id);
+      const owesAWrite =
+        pendingForCurrentIdentity !== undefined &&
+        pendingForCurrentIdentity.identity === identityStampFor(id);
+      if (!changed && !owesAWrite) return;
       // The sibling shows the level whether or not the write reached its definition, for the same
       // reason the acting pane does: the push reads `effectiveOwnLevels`, and a level that did not
       // get stored stays pending there for the next write to carry.
@@ -1166,52 +1451,6 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
     }
   });
   return everyPaneTookItsUpdate;
-}
-
-/**
- * The Settings-default subscription. A function of its own so initialization can start it without
- * waiting on it; its body and its callback are what they have always been.
- */
-async function subscribeToDefault(): Promise<void> {
-  try {
-    await deps.settings.subscribe('platform.webViewContentZoom', (value) => {
-      if (isPlatformError(value)) {
-        logger.warn(`Content zoom: error reading the default: ${getErrorMessage(value)}`);
-        return;
-      }
-      cachedDefault = asNumber(value);
-      repushAllPanes();
-    });
-  } catch (e) {
-    logger.warn(`Content zoom: could not subscribe to the default. ${getErrorMessage(e)}`);
-  }
-}
-
-/** The memory subscription, a function of its own for the same reason as {@link subscribeToDefault}. */
-async function subscribeToMemory(): Promise<void> {
-  try {
-    await deps.settings.subscribe('platform.webViewContentZoomMemory', (value) => {
-      if (isPlatformError(value)) {
-        logger.warn(`Content zoom: error reading memory: ${getErrorMessage(value)}`);
-        return;
-      }
-      const memory = asMemory(value);
-      const previousMemory = lastSyncedMemory;
-      cachedMemory = memory;
-      memoryLoaded = true;
-      try {
-        // Only a walk in which every pane took its update may advance the record the next delta
-        // is computed against: a pane whose write did not land is retried against the same delta
-        // on the next memory change, because the deletion half of the delta exists nowhere else.
-        // A throw leaves the record where it was for the same reason.
-        if (syncSiblingsFromMemory(memory, previousMemory)) lastSyncedMemory = memory;
-      } catch (e) {
-        logger.warn(`Content zoom: could not bring sibling panes in line. ${getErrorMessage(e)}`);
-      }
-    });
-  } catch (e) {
-    logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
-  }
 }
 
 /**
@@ -1256,7 +1495,22 @@ export function initializeContentZoomService(
       // loop and every later subscriber misses the update — the cost of this one reaches well past
       // zoom, which is why it is guarded even though the read only fails during teardown.
       try {
-        if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
+        if (!deps.getDefinition(webView.id)) return;
+        // This is where a pane's identity changes: a view re-pointed at another project keeps its
+        // web view id and updates its definition, so the levels it carries over are checked against
+        // that new identity before they are pushed. The write a re-seed makes comes back through
+        // this same event, where the stamp it just wrote ends the round. The re-seed carries its own
+        // guard, like `commitOwnLevels` and `repushAllPanes`: a throwing re-seed write must not skip
+        // the push below, which keeps the pane's variables current even when its own identity check
+        // could not be stored.
+        try {
+          reseedIfIdentityChanged(webView.id);
+        } catch (e) {
+          logger.warn(
+            `Content zoom: could not re-seed web view ${webView.id}. ${getErrorMessage(e)}`,
+          );
+        }
+        pushContentZoom(webView.id);
       } catch (e) {
         logger.warn(
           `Content zoom: could not push the update for web view ${webView.id}. ${getErrorMessage(e)}`,
@@ -1275,10 +1529,52 @@ export function initializeContentZoomService(
       };
       window.addEventListener('beforeunload', beforeUnloadListener);
     }
-    // Started, not awaited. A settings subscription delivers the current value immediately, so a
-    // callback may run before the reads below resolve; that only ever fills a cache from the fresher
-    // value, which is what a pane opening meanwhile should seed from.
-    const subscriptions = Promise.all([subscribeToDefault(), subscribeToMemory()]);
+    // Started, not awaited — a subscription delivers its current value immediately, so a callback
+    // may run before the reads below resolve; that only ever fills a cache from a value at least as
+    // fresh as what the read would carry.
+    const subscriptions = Promise.all([
+      (async () => {
+        try {
+          await deps.settings.subscribe('platform.webViewContentZoom', (value) => {
+            if (isPlatformError(value)) {
+              logger.warn(`Content zoom: error reading the default: ${getErrorMessage(value)}`);
+              return;
+            }
+            cachedDefault = asNumber(value);
+            repushAllPanes();
+          });
+        } catch (e) {
+          logger.warn(`Content zoom: could not subscribe to the default. ${getErrorMessage(e)}`);
+        }
+      })(),
+      (async () => {
+        try {
+          await deps.settings.subscribe('platform.webViewContentZoomMemory', (value) => {
+            if (isPlatformError(value)) {
+              logger.warn(`Content zoom: error reading memory: ${getErrorMessage(value)}`);
+              return;
+            }
+            const memory = asMemory(value);
+            const previousMemory = lastSyncedMemory;
+            cachedMemory = memory;
+            memoryLoaded = true;
+            try {
+              // Only a walk in which every pane took its update may advance the record the next
+              // delta is computed against: a pane whose write did not land is retried against the
+              // same delta on the next memory change, because the deletion half of the delta exists
+              // nowhere else. A throw leaves the record where it was for the same reason.
+              if (syncSiblingsFromMemory(memory, previousMemory)) lastSyncedMemory = memory;
+            } catch (e) {
+              logger.warn(
+                `Content zoom: could not bring sibling panes in line. ${getErrorMessage(e)}`,
+              );
+            }
+          });
+        } catch (e) {
+          logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
+        }
+      })(),
+    ]);
     // The first pane's head variables need both, and neither read depends on the other.
     // Pre-warming memory here is also what keeps `getInitialContentZoomForWebView` off the
     // settings round trip when a read fails: without it, every eligible pane retries it.

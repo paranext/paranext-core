@@ -8,6 +8,7 @@ import papi from '@papi/frontend';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
+import { useViewVisibility } from 'platform-bible-react';
 import type { LegacyCommentThread } from 'platform-bible-utils';
 import { saveDrafts } from './comment-draft-store';
 import type { StoredFilterSelection } from './comment-filter-store';
@@ -21,6 +22,12 @@ import {
   LegacyScopeFilter,
   ScopeFilter,
 } from './comment-list-filters.model';
+import type { CommentListScrollTarget } from './comment-list-scroll.utils';
+
+/** One call the web view made to the (mocked) `useBcvSyncScroll` hook. */
+type BcvSyncScrollCall = {
+  scrollToTarget: (target: NonNullable<CommentListScrollTarget>, behavior: ScrollBehavior) => void;
+};
 
 // vi.mock factories are hoisted above imports, so anything they close over must be created via
 // vi.hoisted to avoid a temporal-dead-zone reference.
@@ -66,11 +73,16 @@ const mocks = vi.hoisted(() => {
    * re-subscribing; a new reference means it would tear down and re-establish the subscription.
    */
   const commentThreadSelectorLog: LegacyCommentThreadSelector[] = [];
+  // Every call the web view made to useBcvSyncScroll, most recent last — lets a test reach the web
+  // view's real `scrollToTarget` callback directly (see the mock below) instead of driving the real
+  // hook's sync-scroll conditions just to exercise the DOM work that callback owns.
+  const bcvSyncScrollCalls: BcvSyncScrollCall[] = [];
   return {
     panelPropsLog,
     bcvSyncScroll,
     commentThreadSelectorLog,
     commentThreadsFixture,
+    bcvSyncScrollCalls,
   };
 });
 
@@ -107,27 +119,42 @@ vi.mock('@papi/frontend/react', () => ({
 }));
 
 // Only what the web view module reads at load or render time; the pieces these tests exercise
-// (message handling, filter state) live in the web view itself and its local utils, which are real
-vi.mock('platform-bible-react', () => ({
-  COMMENT_LIST_ELEMENT_ID: 'comment-list',
-  COMMENT_LIST_STRING_KEYS: [],
-  CONFLICT_NOTE_STRING_KEYS: [],
-  getCommentThreadElementId: (threadId: string) => `comment-thread-${threadId}`,
-  Sonner: () => undefined,
-  sonner: { error: vi.fn(), warning: vi.fn(), info: vi.fn() },
-  usePromise: vi.fn((_factory: unknown, defaultValue: unknown) => [defaultValue, false]),
-  useTabIconSelection: vi.fn(() => undefined),
-  useViewVisibility: vi.fn(() => true),
-}));
+// (message handling, filter state) live in the web view itself and its local utils, which are real.
+// useRunWhenVisible is the one exception: the hidden-view tests below assert against ITS behavior
+// (the deferred-scroll catch-up), so it comes through from the real module via `importOriginal`
+// rather than being replaced — a hand-written stand-in would test the wiring against a copy of the
+// hook instead of the hook itself.
+vi.mock('platform-bible-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('platform-bible-react')>();
+
+  return {
+    COMMENT_LIST_ELEMENT_ID: 'comment-list',
+    COMMENT_LIST_STRING_KEYS: [],
+    CONFLICT_NOTE_STRING_KEYS: [],
+    getCommentThreadElementId: (threadId: string) => `comment-thread-${threadId}`,
+    Sonner: () => undefined,
+    sonner: { error: vi.fn(), warning: vi.fn(), info: vi.fn() },
+    usePromise: vi.fn((_factory: unknown, defaultValue: unknown) => [defaultValue, false]),
+    useRunWhenVisible: actual.useRunWhenVisible,
+    useTabIconSelection: vi.fn(() => undefined),
+    useViewVisibility: vi.fn(() => true),
+  };
+});
 
 vi.mock('./use-bcv-sync-scroll.hook', () => ({
-  useBcvSyncScroll: () => mocks.bcvSyncScroll,
+  useBcvSyncScroll: (call: BcvSyncScrollCall) => {
+    mocks.bcvSyncScrollCalls.push(call);
+    return mocks.bcvSyncScroll;
+  },
 }));
 
 // The panel is presentation; recording the props it is handed is how these tests observe which
 // filters the web view actually has applied
 vi.mock('./comment-list.component', () => ({
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS: [],
+  // The real value (comment-list.component.tsx): the web view looks this id up by exact string, so
+  // the sticky-header test below needs it to match.
+  COMMENT_LIST_STICKY_HEADER_ELEMENT_ID: 'comment-list-sticky-header',
   CommentListPanel: ({
     isLoading,
     threads,
@@ -268,7 +295,9 @@ function renderCommentListWebView(
   stateSeed: Record<string, unknown> = {},
 ) {
   const CommentListWebView = globalThis.webViewComponent;
-  render(
+  // Returned so a test that needs to force a re-render (e.g. to pick up a changed
+  // useViewVisibility mock return value) can call `rerender` with the same element.
+  return render(
     <CommentListWebView
       webViewType="legacyCommentManager.commentList"
       id="comment-list-1"
@@ -311,8 +340,51 @@ function dispatchSetFilters(message: {
   window.dispatchEvent(new MessageEvent('message', { data: { method: 'setFilters', ...message } }));
 }
 
+function dispatchSelectThread(threadId: string) {
+  window.dispatchEvent(new MessageEvent('message', { data: { method: 'selectThread', threadId } }));
+}
+
+/**
+ * Mounts a thread element matching the mocked `getCommentThreadElementId` (`comment-thread-<id>`),
+ * with `scrollIntoView` stubbed on the instance (jsdom implements neither layout nor
+ * `scrollIntoView`). Returns the stub and a `remove` cleanup a test should call once done.
+ */
+function mountThreadElement(threadId: string) {
+  const threadElement = document.createElement('div');
+  threadElement.id = `comment-thread-${threadId}`;
+  const scrollIntoView = vi.fn();
+  threadElement.scrollIntoView = scrollIntoView;
+  document.body.appendChild(threadElement);
+  return { scrollIntoView, remove: () => document.body.removeChild(threadElement) };
+}
+
 function latestPanelProps() {
   return mocks.panelPropsLog[mocks.panelPropsLog.length - 1];
+}
+
+/** The web view's own `scrollToTarget` from its most recent `useBcvSyncScroll` call. */
+function latestScrollToTarget() {
+  const call = mocks.bcvSyncScrollCalls[mocks.bcvSyncScrollCalls.length - 1];
+  if (!call) throw new Error('test setup: useBcvSyncScroll was never called');
+  return call.scrollToTarget;
+}
+
+/**
+ * A `DOMRect`-shaped object reporting only the given `height`, for stubbing
+ * `getBoundingClientRect`.
+ */
+function rectOfHeight(height: number): DOMRect {
+  return {
+    height,
+    width: 0,
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: height,
+    toJSON: () => ({}),
+  };
 }
 
 /** Minimal, valid `LegacyCommentThread` fixture builder — only the fields these tests read vary. */
@@ -1334,5 +1406,223 @@ describe('current-user registration-data fetch failure recovery', () => {
       expect(latestPanelProps().currentUserNameUnavailable).toBe(false);
       expect(latestPanelProps().isLoading).toBe(false);
     });
+  });
+});
+
+describe('sticky-header scroll padding', () => {
+  afterEach(() => {
+    cleanup();
+    document.documentElement.style.scrollPaddingTop = '';
+  });
+
+  it("re-reads the sticky header's height on every scroll and pins it as the document's scroll-padding-top", async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    const header = document.createElement('div');
+    header.id = 'comment-list-sticky-header';
+    document.body.appendChild(header);
+    try {
+      const heights = [40, 64];
+      const getBoundingClientRect = vi.spyOn(header, 'getBoundingClientRect');
+      heights.forEach((height) =>
+        getBoundingClientRect.mockImplementationOnce(() => rectOfHeight(height)),
+      );
+
+      // A target that resolves to no DOM element (the mocked getCommentThreadElementId never
+      // matches anything real here) is enough: the sticky-header read runs unconditionally before
+      // scrollToTarget branches on the target type.
+      const scrollToTarget = latestScrollToTarget();
+      scrollToTarget({ type: 'thread', threadId: 'missing-1' }, 'smooth');
+      expect(document.documentElement.style.scrollPaddingTop).toBe(`${heights[0]}px`);
+
+      scrollToTarget({ type: 'thread', threadId: 'missing-2' }, 'smooth');
+      expect(document.documentElement.style.scrollPaddingTop).toBe(`${heights[1]}px`);
+    } finally {
+      document.body.removeChild(header);
+    }
+  });
+
+  it("also re-reads the sticky header's height when selecting a thread via the selectThread message", async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    const header = document.createElement('div');
+    header.id = 'comment-list-sticky-header';
+    document.body.appendChild(header);
+    vi.spyOn(header, 'getBoundingClientRect').mockReturnValue(rectOfHeight(72));
+    const { scrollIntoView, remove } = mountThreadElement('thread-1');
+
+    try {
+      act(() => {
+        dispatchSelectThread('thread-1');
+      });
+
+      expect(document.documentElement.style.scrollPaddingTop).toBe('72px');
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+    } finally {
+      document.body.removeChild(header);
+      remove();
+    }
+  });
+});
+
+describe('trySelectThread and hidden views', () => {
+  afterEach(() => {
+    cleanup();
+    document.documentElement.style.scrollPaddingTop = '';
+    // Every other describe block in this file relies on the default (visible) mock; restore it so
+    // a test order change or a re-run can't leak `false` into an unrelated test.
+    vi.mocked(useViewVisibility).mockReturnValue(true);
+  });
+
+  it('defers the scroll into view while the tab is hidden, then scrolls instantly once it is shown', async () => {
+    vi.mocked(useViewVisibility).mockReturnValue(false);
+    const CommentListWebView = globalThis.webViewComponent;
+    const useWebViewState = makeUseWebViewState({ editorWebViewId: 'editor-1' });
+    const { rerender } = render(
+      <CommentListWebView
+        webViewType="legacyCommentManager.commentList"
+        id="comment-list-1"
+        projectId="project-1"
+        useWebViewState={useWebViewState}
+        useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+        updateWebViewDefinition={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    const { scrollIntoView, remove } = mountThreadElement('thread-1');
+    try {
+      act(() => {
+        dispatchSelectThread('thread-1');
+      });
+
+      // Hidden: rc-dock keeps the pane mounted but display:none, so there is no layout to scroll
+      // within — the scroll must stay pending rather than fire against a pane with no layout.
+      expect(scrollIntoView).not.toHaveBeenCalled();
+
+      vi.mocked(useViewVisibility).mockReturnValue(true);
+      act(() => {
+        rerender(
+          <CommentListWebView
+            webViewType="legacyCommentManager.commentList"
+            id="comment-list-1"
+            projectId="project-1"
+            useWebViewState={useWebViewState}
+            useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+            updateWebViewDefinition={vi.fn()}
+          />,
+        );
+      });
+
+      // The queued request collapses into a single, instant (non-animated) catch-up scroll.
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'instant', block: 'center' });
+    } finally {
+      remove();
+    }
+  });
+
+  it('retries once if the thread element is briefly missing when the deferred scroll first runs', async () => {
+    vi.mocked(useViewVisibility).mockReturnValue(false);
+    const CommentListWebView = globalThis.webViewComponent;
+    const useWebViewState = makeUseWebViewState({ editorWebViewId: 'editor-1' });
+    const { rerender } = render(
+      <CommentListWebView
+        webViewType="legacyCommentManager.commentList"
+        id="comment-list-1"
+        projectId="project-1"
+        useWebViewState={useWebViewState}
+        useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+        updateWebViewDefinition={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    const first = mountThreadElement('thread-1');
+    act(() => {
+      dispatchSelectThread('thread-1');
+    });
+    expect(first.scrollIntoView).not.toHaveBeenCalled();
+
+    // The thread's DOM node disappears right as the tab becomes visible (e.g. a filter re-inserting
+    // it mid-transition), so the first catch-up attempt misses it.
+    first.remove();
+
+    vi.mocked(useViewVisibility).mockReturnValue(true);
+    act(() => {
+      rerender(
+        <CommentListWebView
+          webViewType="legacyCommentManager.commentList"
+          id="comment-list-1"
+          projectId="project-1"
+          useWebViewState={useWebViewState}
+          useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+          updateWebViewDefinition={vi.fn()}
+        />,
+      );
+    });
+
+    // The thread reappears shortly after (the interrupted re-render finishing) — the missed
+    // catch-up must retry rather than being dropped for good.
+    const second = mountThreadElement('thread-1');
+    try {
+      await waitFor(() => expect(second.scrollIntoView).toHaveBeenCalledTimes(1));
+      expect(second.scrollIntoView).toHaveBeenCalledWith({ behavior: 'instant', block: 'center' });
+    } finally {
+      second.remove();
+    }
+  });
+});
+
+describe('trySelectThread identity across visibility flips', () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(useViewVisibility).mockReturnValue(true);
+  });
+
+  it('keeps the window message listener subscribed across a visibility flip alone', async () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+    vi.mocked(useViewVisibility).mockReturnValue(true);
+    const CommentListWebView = globalThis.webViewComponent;
+    const useWebViewState = makeUseWebViewState({ editorWebViewId: 'editor-1' });
+    const { rerender } = render(
+      <CommentListWebView
+        webViewType="legacyCommentManager.commentList"
+        id="comment-list-1"
+        projectId="project-1"
+        useWebViewState={useWebViewState}
+        useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+        updateWebViewDefinition={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    const messageSubscriptionsBefore = addEventListenerSpy.mock.calls.filter(
+      ([eventName]) => eventName === 'message',
+    ).length;
+
+    vi.mocked(useViewVisibility).mockReturnValue(false);
+    act(() => {
+      rerender(
+        <CommentListWebView
+          webViewType="legacyCommentManager.commentList"
+          id="comment-list-1"
+          projectId="project-1"
+          useWebViewState={useWebViewState}
+          useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+          updateWebViewDefinition={vi.fn()}
+        />,
+      );
+    });
+
+    const messageSubscriptionsAfter = addEventListenerSpy.mock.calls.filter(
+      ([eventName]) => eventName === 'message',
+    ).length;
+
+    // A visibility flip alone must not tear down and re-subscribe the message listener — doing so
+    // would also restart the pending-selection retry timer (see the effect below it) on every flip.
+    expect(messageSubscriptionsAfter).toBe(messageSubscriptionsBefore);
   });
 });

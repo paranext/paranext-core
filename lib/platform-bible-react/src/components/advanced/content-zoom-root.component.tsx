@@ -1,16 +1,29 @@
 import { forwardRef, HTMLAttributes } from 'react';
+import {
+  CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
+  CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_POPUP_ATTRIBUTE,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  MAIN_CONTENT_ZOOM_AREA_ID,
+  ContentZoomAreaProvider,
+  useContentZoomArea,
+  type ContentZoomAreaProviderProps,
+} from '@/context/content-zoom-area.context';
 
-/**
- * Attribute a content-zoom-eligible element carries to mark it as one zoom area. Its value is the
- * zoom area id; an empty value marks the view's `main` area. Mirrors `CONTENT_ZOOM_ROOT_ATTRIBUTE`
- * in paranext-core's `src/shared/models/web-view.model.ts`. This library cannot import that module
- * (it lives under core's `src/shared`, outside this package's reach), and `@papi/core` publishes
- * the constant as a type-only declaration whose value is not importable at runtime, so the literal
- * is duplicated here; a platform test compares the two constants so they cannot drift silently.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
+// Re-exported so every pre-move import path (this library's own `index.ts`, and any consumer that
+// imported directly from this module) keeps resolving. The context, the hook and the mirrored
+// constants now live in `@/context/content-zoom-area.context` — the established home for this
+// library's context modules (see `@/context/menu.context`).
+export {
+  CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
+  CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_POPUP_ATTRIBUTE,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  MAIN_CONTENT_ZOOM_AREA_ID,
+  ContentZoomAreaProvider,
+  useContentZoomArea,
+};
+export type { ContentZoomAreaProviderProps };
 
 /**
  * Props for {@link ContentZoomRoot}.
@@ -43,6 +56,13 @@ export type ContentZoomRootProps = HTMLAttributes<HTMLDivElement> & {
  * found inside another marked element is ignored. Keep toolbars, dividers and headers outside the
  * marked element so they are not scaled along with the content.
  *
+ * Popovers and dropdown menus from this library that open from inside the element follow its zoom
+ * and cap their own width and height to the pane, scrolling their content if it doesn't fit;
+ * tooltips follow the zoom too but cap only their width, so a tooltip taller than the available
+ * space is clipped at the pane's edge. Dropdown sub-menu content does not follow an area yet. A
+ * pop-up rendered outside the element (beside the content, anchored to a position in it) belongs to
+ * the area only when wrapped in {@link ContentZoomAreaProvider}.
+ *
  * This component renders a plain `div` in normal flow and applies no classes of its own — the
  * caller supplies whatever layout classes its parent expects.
  *
@@ -68,15 +88,17 @@ export type ContentZoomRootProps = HTMLAttributes<HTMLDivElement> & {
 export const ContentZoomRoot = forwardRef<HTMLDivElement, ContentZoomRootProps>(
   function ContentZoomRoot({ area, ...props }, ref) {
     return (
-      <div
-        ref={ref}
-        // `props` is arbitrary caller-supplied `HTMLAttributes`; enumerating them would defeat the
-        // point of forwarding them.
-        // eslint-disable-next-line react/jsx-props-no-spreading
-        {...props}
-        // Placed after the spread so `area`, not a same-named entry in `props`, always wins.
-        data-platform-content-zoom-root={area ?? ''}
-      />
+      <ContentZoomAreaProvider area={area}>
+        <div
+          ref={ref}
+          // `props` is arbitrary caller-supplied `HTMLAttributes`; enumerating them would defeat the
+          // point of forwarding them.
+          // eslint-disable-next-line react/jsx-props-no-spreading
+          {...props}
+          // Placed after the spread so `area`, not a same-named entry in `props`, always wins.
+          data-platform-content-zoom-root={area ?? ''}
+        />
+      </ContentZoomAreaProvider>
     );
   },
 );

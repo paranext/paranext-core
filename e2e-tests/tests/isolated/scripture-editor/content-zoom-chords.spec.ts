@@ -106,7 +106,7 @@ test.describe('scripture editor content zoom — keyboard chords', () => {
     // Jonah 1 carries footnote callers at verses 1, 6 (twice) and 9
     // (`c-sharp/assets/WEB/32JONengWEBUS.SFM`), so the pane has real rows to put focus on.
     const footnotesList = editorFrame.locator(
-      '[data-platform-content-zoom-root="footnotes"] [role="listbox"]',
+      '[data-platform-content-zoom-root="footnotes"]:not([data-platform-content-zoom-popup]) [role="listbox"]',
     );
     await expect(footnotesList).toBeVisible({ timeout: 20_000 });
     // Keyboard, not a click: clicking a row selects that note, and selecting a note sends the caret

@@ -325,6 +325,22 @@ That is the whole opt-in. The platform then scales the marked element on Ctrl/�
 
 `ContentZoomRoot`, `CONTENT_ZOOM_ROOT_ATTRIBUTE` and the `data-platform-content-zoom-root` contract are **experimental** and may change without notice.
 
+**Pop-ups follow their area.** Popovers, dropdown menus and tooltips from `platform-bible-react`
+that open from inside a `ContentZoomRoot` take that area's zoom level. Popovers and dropdown
+menus also cap their own width and height to the pane's available space and scroll their content
+if it doesn't fit; tooltips cap only width, so a tooltip taller than the available space is
+clipped at the pane's edge. A pop-up your view renders outside the area element — beside the
+content and anchored to a position in it — joins the area only when wrapped in
+`ContentZoomAreaProvider` (pass the same `area` as the root; omit it for the main area). Toolbar
+pop-ups outside every area stay at interface scale. `SelectContent`, `ContextMenuContent`,
+`MenubarContent` and `DropdownMenuSubContent` do not follow an area yet either — they render at
+interface scale even when opened from inside one. `ContentZoomRoot` and `ContentZoomAreaProvider`
+are experimental. A
+pop-up you build without these components can opt in by putting
+`data-platform-content-zoom-root="<area>"` and `data-platform-content-zoom-popup` on its portaled
+content. Those attributes only scale it: such a pop-up gets none of the library's size caps, so it
+must keep itself inside the pane.
+
 ---
 
 ## Contributions

@@ -51,6 +51,11 @@ import { UndoRedoButtons } from '@/components/basics/undo-redo-buttons.component
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
 import { EditorKeyboardShortcuts } from '@/components/basics/editor-keyboard-shortcuts.component';
+import {
+  leftEdgeRect,
+  measureRange,
+  useLivePopoverAnchor,
+} from '@/hooks/use-live-popover-anchor.hook';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
@@ -261,18 +266,20 @@ export default function FootnoteEditor({
   /* eslint-disable no-null/no-null */
   const editorRef = useRef<EditorRef | null>(null);
   const editorParentRef = useRef<HTMLDivElement>(null);
-  const outerBorderRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   /* eslint-enable no-null/no-null */
 
   // Lock the container width to its natural rendered width so content changes (e.g. switching
   // language, undo/redo enabling) don't cause the popover to resize while editing.
-  // useLayoutEffect fires after DOM layout but before paint, so getBoundingClientRect() returns
-  // the natural width. The parent PopoverContent unmounts this component on close, so the effect
-  // re-runs fresh on each open.
+  // useLayoutEffect fires after DOM layout but before paint, so the measured width is the natural
+  // width. The parent PopoverContent unmounts this component on close, so the effect re-runs fresh
+  // on each open. The computed width, not `getBoundingClientRect()`: inside a CSS-`zoom`ed ancestor
+  // (a pop-up opened from zoomed content) client rects report painted pixels, so writing one back
+  // as `style.width` would apply the zoom a second time and make the editor wider than its pop-up.
+  // The computed value is in the element's own CSS pixels and keeps sub-pixel precision.
   useLayoutEffect(() => {
     if (!containerRef.current) return;
-    const { width } = containerRef.current.getBoundingClientRect();
+    const width = parseFloat(getComputedStyle(containerRef.current).width);
     if (width > 0) containerRef.current.style.width = `${width}px`;
   }, []);
 
@@ -291,11 +298,19 @@ export default function FootnoteEditor({
   const hasInitializedEditor = useRef(false);
   const initialNoteOpsJson = useRef('');
 
-  // These control the placement of the inline markers menu by setting the location of the anchor
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
-  const [markersMenuAnchorX, setMarkersMenuAnchorX] = useState<number>();
-  const [markersMenuAnchorY, setMarkersMenuAnchorY] = useState<number>();
-  const [markersMenuAnchorHeight, setMarkersMenuAnchorHeight] = useState<number>();
+
+  /**
+   * The inline markers menu's anchor: a virtual element that reads the zero-width left edge of the
+   * selection the menu opened at, every time the menu is positioned. It is not an element placed
+   * inside this component from client-rect offsets because this component can sit inside a
+   * CSS-`zoom`ed pop-up. There, client rects are painted pixels, and an offset written back as
+   * `top`/`left` is scaled by the zoom a second time. The range's own viewport rect is correct at
+   * any zoom, and reading it live also keeps the menu beside the text when the pop-up moves or
+   * reflows. If the range can no longer be measured (its text was re-rendered away), the last rect
+   * is kept.
+   */
+  const markersMenuAnchor = useLivePopoverAnchor();
 
   const [contextMarker, setContextMarker] = useState<string | undefined>();
 
@@ -668,20 +683,21 @@ export default function FootnoteEditor({
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
-    if (
-      outerBorderRef.current &&
-      inlineMarkerMenuItems.length &&
-      currentSelection &&
-      currentSelection.rangeCount > 0
-    ) {
-      const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
-      const footnoteEditorRect = outerBorderRef.current.getBoundingClientRect();
-      setMarkersMenuAnchorX(selectionRect.left - footnoteEditorRect.left);
-      setMarkersMenuAnchorY(selectionRect.top - footnoteEditorRect.top);
-      setMarkersMenuAnchorHeight(selectionRect.height);
-      setShowMarkersMenu(true);
-    }
-  }, [inlineMarkerMenuItems, outerBorderRef]);
+    if (!inlineMarkerMenuItems.length || !currentSelection || currentSelection.rangeCount === 0)
+      return;
+    // A selection with nothing to anchor to has nowhere to place the menu.
+    const contextElement = editorParentRef.current;
+    if (!contextElement) return;
+    const range = currentSelection.getRangeAt(0).cloneRange();
+    markersMenuAnchor.setSource({
+      measure: () => {
+        const rect = measureRange(range);
+        return rect && leftEdgeRect(rect);
+      },
+      contextElement,
+    });
+    setShowMarkersMenu(true);
+  }, [inlineMarkerMenuItems, markersMenuAnchor]);
 
   /**
    * Always-current {@link runPaletteSessionKey} (assigned below, once it exists). The palette
@@ -1057,8 +1073,12 @@ export default function FootnoteEditor({
 
   return (
     <>
-      <div ref={containerRef} className="footnote-editor tw:grid tw:gap-[12px]">
-        <div className="tw:flex">
+      {/* `max-w-full`: the width lock below is taken before the surrounding pop-up knows how much
+          room the pane has, so the container must still give way to a narrower pop-up. */}
+      <div ref={containerRef} className="footnote-editor tw:grid tw:max-w-full tw:gap-[12px]">
+        {/* Wraps the action buttons onto their own line when a narrow (or zoomed) pop-up has no
+            room for the whole row; `flex-1` keeps them on the first line, right-aligned, otherwise. */}
+        <div className="tw:flex tw:flex-wrap tw:gap-y-2">
           <div className="tw:flex tw:gap-4">
             <FootnoteTypeDropdown
               isTypeSwitchable={isTypeSwitchable}
@@ -1073,7 +1093,7 @@ export default function FootnoteEditor({
               localizedStrings={localizedStrings}
             />
           </div>
-          <div className="tw:flex tw:w-full tw:justify-end">
+          <div className="tw:flex tw:flex-1 tw:justify-end">
             <ButtonGroup>
               <UndoRedoButtons
                 onUndoClick={() => editorRef.current?.undo()}
@@ -1139,23 +1159,9 @@ export default function FootnoteEditor({
           </div>
         </div>
       </div>
-      <div
-        className="tw:absolute"
-        ref={outerBorderRef}
-        style={{ top: 0, left: 0, height: 0, width: 0 }}
-      />
       {/** Inline markers menu components */}
       <Popover open={showMarkersMenu}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: markersMenuAnchorY,
-            left: markersMenuAnchorX,
-            height: markersMenuAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
+        <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
         <PopoverContent
           className="tw:w-[500px] tw:p-0"
           onClick={(event) => {

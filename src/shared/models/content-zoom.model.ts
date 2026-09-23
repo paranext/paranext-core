@@ -4,6 +4,7 @@ import {
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
+  CONTENT_ZOOM_POPUP_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   MAIN_CONTENT_ZOOM_AREA,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -18,6 +19,7 @@ export {
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
+  CONTENT_ZOOM_POPUP_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
 };
 export type { ContentZoomAreaId } from '@shared/models/web-view.model';
@@ -31,6 +33,23 @@ export { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR };
 
 /** Amount one zoom-in / zoom-out step changes a content zoom factor. */
 export const ZOOM_STEP = 0.1;
+
+/**
+ * Web-view definition `state` key holding the kind and identity — `kind:identity`, the first two
+ * segments of the memory key — that the pane's levels under {@link CONTENT_ZOOM_LEVELS_STATE_KEY}
+ * belong to.
+ *
+ * A pane re-pointed at another project keeps its web view id, and the view rebuilds its definition
+ * by spreading its own saved state onto the new project, so the levels arrive at the new project
+ * looking exactly like levels chosen for it. This stamp is what tells the two apart: a pane whose
+ * stamp still names what it shows keeps its levels, and a pane whose stamp names something else is
+ * re-seeded from the memory of the identity it shows now.
+ *
+ * Written and read only by the platform (`web-view-content-zoom.service.ts`). Unlike the levels
+ * key, nothing outside core has a reason to read it, so it is not part of the extension-facing
+ * contract in `web-view.model.ts`.
+ */
+export const CONTENT_ZOOM_IDENTITY_STATE_KEY = 'platform.contentZoomIdentity';
 
 /**
  * Kinds of web view whose content zoom is remembered per project. A view's kind decides the memory

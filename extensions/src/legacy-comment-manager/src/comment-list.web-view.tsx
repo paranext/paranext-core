@@ -11,6 +11,7 @@ import {
   Sonner,
   sonner,
   usePromise,
+  useRunWhenVisible,
   useTabIconSelection,
   useViewVisibility,
   type TabIconUrls,
@@ -40,7 +41,11 @@ import {
   saveFilterSelection,
 } from './comment-filter-store';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
-import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
+import {
+  CommentListPanel,
+  COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+  COMMENT_LIST_STICKY_HEADER_ELEMENT_ID,
+} from './comment-list.component';
 import {
   applyFilterOverrides,
   buildCommentThreadSelector,
@@ -151,6 +156,20 @@ async function withPdp<PDP, T>(
     return defaultValue;
   }
   return action(pdp);
+}
+
+/**
+ * Re-measures the sticky header (`COMMENT_LIST_STICKY_HEADER_ELEMENT_ID`) and pins its live height
+ * as the document's `scroll-padding-top`, so a `scrollIntoView` call lands its target below the
+ * header instead of underneath it. The header's height is not stable — it grows when the
+ * editing-paused notice appears, and the filter toolbar it also contains wraps as the viewport
+ * narrows — so every caller must invoke this immediately before its own `scrollIntoView`, rather
+ * than relying on a padding value set by an earlier scroll.
+ */
+function applyStickyHeaderScrollPadding(): void {
+  const stickyHeader = document.getElementById(COMMENT_LIST_STICKY_HEADER_ELEMENT_ID);
+  if (stickyHeader)
+    document.documentElement.style.scrollPaddingTop = `${stickyHeader.getBoundingClientRect().height}px`;
 }
 
 global.webViewComponent = function CommentListWebView({
@@ -602,11 +621,36 @@ global.webViewComponent = function CommentListWebView({
 
   const isViewVisible = useViewVisibility();
 
+  /**
+   * Mirrors {@link isViewVisible}, read by `trySelectThread` instead of the closed-over value.
+   * `trySelectThread` is captured by the `window` message-listener effect below, which only
+   * re-subscribes when `trySelectThread`'s own identity changes — if `isViewVisible` were a
+   * dependency of `trySelectThread` instead, every visibility flip would both (a) leave a window,
+   * between this component's render and that effect's re-subscription, where the still-attached old
+   * listener's closed-over value can disagree with this ref, and (b) tear down and rebuild the
+   * message listener and restart the pending-selection retry timer on every flip even when nothing
+   * else changed. Updated unconditionally on every render, the same way `useRunWhenVisible`'s own
+   * internal visibility ref is, so the two can never disagree about the current visibility.
+   */
+  const isViewVisibleRef = useRef(isViewVisible);
+  isViewVisibleRef.current = isViewVisible;
+
   // Performs the DOM scroll for a computed sync-scroll target. The hook computes WHERE to scroll;
   // this web view owns the DOM knowledge (both element ids come from platform-bible-react's
   // CommentList).
   const scrollToTarget = useCallback(
     (target: NonNullable<CommentListScrollTarget>, behavior: ScrollBehavior) => {
+      // The sticky header overlays the top of what scrolls here (this view's document scrolls, not
+      // the list container), so a `block: 'start'` scroll would otherwise park the card underneath
+      // it. applyStickyHeaderScrollPadding gives the scroll container that much top padding so the
+      // browser stops the card below the header instead. The height is in the document's own
+      // pixels — the header sits outside the content-zoom root, so neither it nor
+      // `scroll-padding-top` is scaled by the zoom level. Setting the padding on `documentElement`
+      // is correct only while the web-view document itself is the scroller; a future layout that
+      // bounds this view's height (PT-4173) would move the scroller to a bounded container instead,
+      // and this padding would need to move with it.
+      applyStickyHeaderScrollPadding();
+
       if (target.type === 'thread') {
         const threadElement = document.getElementById(getCommentThreadElementId(target.threadId));
         if (threadElement) threadElement.scrollIntoView({ behavior, block: 'start' });
@@ -636,6 +680,59 @@ global.webViewComponent = function CommentListWebView({
     scrollToTarget,
   });
 
+  // Clears the scroll-padding this view applies before a scroll (see
+  // applyStickyHeaderScrollPadding) so a stale value never outlives this component.
+  useEffect(() => {
+    return () => {
+      document.documentElement.style.scrollPaddingTop = '';
+    };
+  }, []);
+
+  /**
+   * Target for the deferred scroll `trySelectThread` performs — read by
+   * `scrollSelectedThreadIntoView` at run time rather than closed over, so a request made while the
+   * view is hidden still resolves against the thread (and behavior) it was made for once the
+   * catch-up runs.
+   */
+  const pendingThreadScrollRef = useRef<{ threadId: string; behavior: ScrollBehavior } | undefined>(
+    undefined,
+  );
+
+  const scrollSelectedThreadIntoView = useCallback((isRetry = false) => {
+    const pending = pendingThreadScrollRef.current;
+    if (!pending) return;
+    const threadElement = document.getElementById(getCommentThreadElementId(pending.threadId));
+    if (!threadElement) {
+      // The catch-up can race a re-render that is still inserting the thread (e.g. a filter change
+      // resolving right as the tab becomes visible) — the element that was found when the thread
+      // was selected can be momentarily gone by the time this runs. Keep the target and retry once
+      // shortly after instead of dropping it for good; only give up once the retry itself misses.
+      if (isRetry) {
+        logger.debug(
+          `Deferred thread scroll: thread element still not found after retry: ${pending.threadId}`,
+        );
+        pendingThreadScrollRef.current = undefined;
+        return;
+      }
+      logger.debug(
+        `Deferred thread scroll: thread element not found: ${pending.threadId}; retrying once`,
+      );
+      setTimeout(() => scrollSelectedThreadIntoView(true), 50);
+      return;
+    }
+    pendingThreadScrollRef.current = undefined;
+    applyStickyHeaderScrollPadding();
+    threadElement.scrollIntoView({ behavior: pending.behavior, block: 'center' });
+  }, []);
+
+  // Hidden case: rc-dock keeps an inactive tab's pane mounted under `display: none`, where both the
+  // header-height read and `scrollIntoView` silently no-op — there is no layout to measure or
+  // scroll within. useRunWhenVisible defers the scroll while hidden, collapsing repeat requests into
+  // the single most recent one (pendingThreadScrollRef), and runs it once the tab is shown; the
+  // 'instant' behavior trySelectThread records for that case (below) makes the catch-up snap into
+  // place instead of animating into a pane the user just switched to.
+  const requestThreadScroll = useRunWhenVisible(isViewVisible, scrollSelectedThreadIntoView);
+
   /**
    * Attempts to scroll to and select a thread by ID. If the thread element doesn't exist yet
    * (likely because data is still loading), queues the thread ID to be processed later.
@@ -649,7 +746,15 @@ global.webViewComponent = function CommentListWebView({
       const threadElement = document.getElementById(getCommentThreadElementId(threadId));
       if (threadElement) {
         setSelectedThreadId(threadId);
-        threadElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // See requestThreadScroll's own comment for the hidden-view rationale: 'smooth' while the
+        // view is already visible, 'instant' recorded up front for the hidden case so the eventual
+        // catch-up doesn't animate. Reads isViewVisibleRef rather than closing over isViewVisible —
+        // see the ref's own doc comment.
+        pendingThreadScrollRef.current = {
+          threadId,
+          behavior: isViewVisibleRef.current ? 'smooth' : 'instant',
+        };
+        requestThreadScroll();
         setPendingThreadIdToSelect(undefined);
         // The editor's caret move for this navigation may deliver its scroll-group change after
         // this point; record the thread's reference so that late change doesn't scroll the list
@@ -674,7 +779,7 @@ global.webViewComponent = function CommentListWebView({
       logger.warn(`Could not find thread element with id: ${threadId}`);
       return false;
     },
-    [recordSelfInitiatedNavigation],
+    [recordSelfInitiatedNavigation, requestThreadScroll],
   );
 
   // Listen for messages from the web view controller

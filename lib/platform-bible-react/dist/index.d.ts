@@ -711,6 +711,82 @@ export declare function ConflictNoteCard({ comment, localizedStrings, availableA
  */
 export declare const CONTENT_ZOOM_ROOT_ATTRIBUTE = "data-platform-content-zoom-root";
 /**
+ * Attribute the platform's pop-up components put, next to {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, on
+ * pop-up content opened from a zoom area. It tells the platform the element is pop-up content that
+ * follows an area's zoom, not a pane of its own. Mirrors `CONTENT_ZOOM_POPUP_ATTRIBUTE` in
+ * paranext-core's `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_POPUP_ATTRIBUTE = "data-platform-content-zoom-popup";
+/**
+ * Prefix of the CSS custom properties the platform sets on a web view's root element, one per zoom
+ * area, holding that area's zoom factor (`--platform-content-zoom-main`, …). Mirrors
+ * `CONTENT_ZOOM_CSS_VARIABLE_PREFIX` in paranext-core's `src/shared/models/web-view.model.ts`; a
+ * platform test keeps the two equal.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = "--platform-content-zoom-";
+/**
+ * CSS custom property holding the Settings default zoom factor, the fallback for an area without a
+ * variable of its own. Mirrors `CONTENT_ZOOM_DEFAULT_CSS_VARIABLE` in paranext-core's
+ * `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = "--platform-content-zoom-default";
+/**
+ * Id of the view's unnamed main zoom area, the fallback used when {@link useContentZoomArea} reports
+ * the empty string. Mirrors `MAIN_CONTENT_ZOOM_AREA` in paranext-core's
+ * `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const MAIN_CONTENT_ZOOM_AREA_ID = "main";
+/**
+ * Props for {@link ContentZoomAreaProvider}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomAreaProviderProps = {
+	/**
+	 * Id of the zoom area the wrapped content belongs to, with the same rules as
+	 * `ContentZoomRootProps.area`. Omit it for the view's main area.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	area?: string;
+	/**
+	 * The content that belongs to the area.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	children?: React$1.ReactNode;
+};
+/**
+ * Tells pop-ups rendered inside it which zoom area they belong to, without marking any element
+ * itself. `ContentZoomRoot` already does this for everything rendered inside it; use this provider
+ * for a pop-up that belongs to an area but is rendered outside that area's element — for example a
+ * popover the view renders beside its content and anchors to a position in the text.
+ *
+ * Popovers and dropdown menus from this library that open inside an area are scaled with that
+ * area's zoom and cap their own width and height to the pane, scrolling their content if it doesn't
+ * fit; tooltips are scaled with the area's zoom too but cap only their width, so a tooltip taller
+ * than the available space is clipped at the pane's edge. Dropdown sub-menu content does not follow
+ * an area yet.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function ContentZoomAreaProvider({ area, children }: ContentZoomAreaProviderProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The zoom area the calling component is rendered in: `''` for the view's main area, the area id
+ * for a named area, or `undefined` outside every `ContentZoomRoot` and `ContentZoomAreaProvider`.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function useContentZoomArea(): string | undefined;
+/**
  * Props for {@link ContentZoomRoot}.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
@@ -739,6 +815,13 @@ export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLDivElement> & {
  * Several elements may share one area id and zoom together. Areas must not nest — a marked element
  * found inside another marked element is ignored. Keep toolbars, dividers and headers outside the
  * marked element so they are not scaled along with the content.
+ *
+ * Popovers and dropdown menus from this library that open from inside the element follow its zoom
+ * and cap their own width and height to the pane, scrolling their content if it doesn't fit;
+ * tooltips follow the zoom too but cap only their width, so a tooltip taller than the available
+ * space is clipped at the pane's edge. Dropdown sub-menu content does not follow an area yet. A
+ * pop-up rendered outside the element (beside the content, anchored to a position in it) belongs to
+ * the area only when wrapped in {@link ContentZoomAreaProvider}.
  *
  * This component renders a plain `div` in normal flow and applies no classes of its own — the
  * caller supplies whatever layout classes its parent expects.
@@ -4093,6 +4176,91 @@ export declare const useViewVisibility: () => boolean;
  *   effect re-firing on every visibility flip.
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
+/**
+ * What a popover is placed against, re-measured every time the popover is positioned.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type LivePopoverAnchorSource = {
+	/**
+	 * Reads the anchor's current viewport rect. Returns `undefined` when the source can no longer be
+	 * measured; the anchor then keeps its last rect.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	measure: () => DOMRect | undefined;
+	/**
+	 * An element of the content the anchor belongs to that stays in the document while the popover is
+	 * open (the editor's root, not a text span the editor may re-render). The popover's positioning
+	 * watches this element's scroll ancestors, its size and its movement while the popover is open.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	contextElement: Element;
+};
+type VirtualAnchorElement = {
+	getBoundingClientRect: () => DOMRect;
+	readonly contextElement: Element | undefined;
+};
+/**
+ * The anchor {@link useLivePopoverAnchor} returns.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type LivePopoverAnchor = {
+	/**
+	 * Pass as `PopoverAnchor`'s `virtualRef`.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	virtualRef: React$1.RefObject<VirtualAnchorElement>;
+	/**
+	 * Points the anchor at a new source. Call it before opening the popover.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	setSource: (source: LivePopoverAnchorSource) => void;
+};
+/**
+ * A popover anchor that follows its text instead of keeping the rect it had when the popover
+ * opened. The popover's own positioning (floating-ui's auto-update, run by Radix while the popover
+ * is open) re-reads the rect on scroll of the text's scroll container, on resize, and when the text
+ * reflows under a zoom change, so the popover stays beside its caller or selection.
+ *
+ * Hidden case: handled by holding the last usable rect. A popover can be open while its pane is
+ * hidden — the Scripture editor's footnote popover survives Escape and an outside click — and a
+ * hidden pane has no layout, so a source measures nothing there. The anchor keeps the last rect it
+ * had rather than collapsing to the pane's corner, and the next frame after the tab is shown
+ * measures again and catches up. Sources report "no measurement" by returning `undefined`; see
+ * {@link measureRange} and {@link measureElement}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function useLivePopoverAnchor(): LivePopoverAnchor;
+/**
+ * The current viewport rect of a text range, or `undefined` when the range no longer lies in
+ * rendered text (its nodes were replaced, so it collapsed to an element boundary that has no box).
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function measureRange(range: Range): DOMRect | undefined;
+/**
+ * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
+ * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function leftEdgeRect(rect: DOMRect): DOMRect;
+/**
+ * The current viewport rect of an element, or `undefined` when the element has no layout at all —
+ * the case when it, or an ancestor, is `display: none`, as inside an inactive rc-dock tab pane.
+ * Matches {@link measureRange}'s rule: an element that IS laid out still returns its box even at
+ * zero width or height (a real, positioned point, such as a collapsed caret's element), because
+ * `getClientRects()` is empty only when nothing was painted, never merely because a box is small.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function measureElement(element: Element): DOMRect | undefined;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */

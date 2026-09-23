@@ -104,7 +104,9 @@ export async function ensureFootnotesVisible(
   frame: Frame,
   webViewId: string,
 ): Promise<void> {
-  const footnotesRoot = frame.locator('[data-platform-content-zoom-root="footnotes"]');
+  const footnotesRoot = frame.locator(
+    '[data-platform-content-zoom-root="footnotes"]:not([data-platform-content-zoom-popup])',
+  );
   if ((await footnotesRoot.count()) === 0) {
     await sendCommandWithId(page, 'platformScriptureEditor.toggleFootnotes', webViewId);
   }
