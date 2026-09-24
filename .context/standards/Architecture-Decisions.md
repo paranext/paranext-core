@@ -321,6 +321,27 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   of the implementing branch, which surfaced and fixed a startup-path regression (analytics
   initialization briefly gated extension-host activation) before merge.
 
+## adr-analytics-posthog-transport: Where common properties and vendor keys live in the analytics seam
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** PT-4729 (epic PT-1797) stood up a minimal PostHog pipeline for Sprint 91 on top of
+  the vendor choice made in PT-4340 and the account set up in PT-4356; see those tickets for the
+  scope negotiation and rationale.
+- **Decision:** Common properties are added by `analytics.service.ts` before routing, not inside
+  `PostHogAnalyticsProvider`, so they survive a future vendor swap — see the doc comment on
+  `getCommonProperties()` for what's included and why.
+- **Alternatives:** `posthog-js` in the renderer for autocaptured properties — rejected: autocapture
+  is usage tracking the ticket forbids, the browser SDK reports Chromium's version not the app's,
+  and it would bypass the abstraction. Properties at the `app_launch` call site — rejected: every
+  future event would have to repeat them. Properties inside the provider — rejected: lost on a
+  vendor swap. Persisted installation id — deferred to PT-4367 by product decision.
+- **Consequences:** Hard-coding the Test key in `analytics.config.ts` is an accepted, temporary
+  exception to the no-secrets rule (write-only client key; the Production key must never be
+  committed) — see the comment there for the rationale rather than restating it here.
+- **Source:** PT-4729 (epic PT-1797); design
+  `PRDs/analytics/2026-09-23-pt-4729-posthog-provider-design.md`.
+
 ## adr-app-global-shortcuts-in-main: App-global keyboard shortcuts go through the main-process `before-input-event` handler
 
 - **Formerly:** ADR-0002

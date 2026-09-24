@@ -7,8 +7,8 @@ import {
 
 /**
  * Analytics provider that logs events instead of transmitting them to a real vendor. This is the
- * implementation to use for unit tests and for most automated E2E runs to avoid swamping a real
- * server-based implementation, so those runs don't inflate real vendor event counts.
+ * implementation to use for unit tests and for most automated E2E runs, so those runs make no calls
+ * to a real vendor's server.
  */
 export class ConsoleAnalyticsProvider implements AnalyticsProvider {
   constructor(private readonly environment: AnalyticsEnvironment) {}
