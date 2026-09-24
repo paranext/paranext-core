@@ -1,4 +1,8 @@
-import { normalizeProjectId, type ScrollGroupId } from 'platform-bible-utils';
+import {
+  compareProjectsByName,
+  normalizeProjectId,
+  type ScrollGroupId,
+} from 'platform-bible-utils';
 
 // #region Types
 
@@ -15,7 +19,11 @@ export type ProjectSelectorMode = 'project' | 'project-multi' | 'projectScrollGr
 export type ProjectSelectorProject = {
   id: string;
   shortName: string;
-  fullName: string;
+  /**
+   * Full name, shown as the row's muted second line. Omit it when the project has none — don't copy
+   * the short name in; the selector already renders a single line when the names match.
+   */
+  fullName?: string;
   /**
    * When `true`, the row for this project is rendered muted, is not selectable, and the
    * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
@@ -176,7 +184,7 @@ export type ProjectRow = {
   rowKey: string;
   projectId: string;
   shortName: string;
-  fullName: string;
+  fullName?: string;
   /**
    * The scroll group this row represents. `undefined` means the row is a project-level row (no
    * chip, or `project` mode chips aggregated in `openGroups`).
@@ -469,7 +477,7 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
   // scrollGroupId. The component scrolls the selected row into view on open,
   // so selected rows do NOT float to the top — users can predict where any
   // project will land after selecting it.
-  const nameCmp = a.shortName.localeCompare(b.shortName, undefined, { sensitivity: 'base' });
+  const nameCmp = compareProjectsByName(a, b);
   if (nameCmp !== 0) return nameCmp;
   // Tie-break: scrollGroupId asc so the same project lists A before B before C.
   const aGroup = a.scrollGroupId ?? Number.POSITIVE_INFINITY;

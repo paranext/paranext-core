@@ -17,7 +17,9 @@ import {
 } from 'react';
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Group, Loader2 } from 'lucide-react';
 import {
+  formatProjectName,
   getLocalizeKeyForScrollGroupId,
+  hasDistinctFullName,
   normalizeProjectId,
   type ScrollGroupId,
 } from 'platform-bible-utils';
@@ -162,7 +164,12 @@ const NARROW_TRIGGER_THRESHOLD_PX = 100;
  * groupings can supply their own localized label without a separate string channel.
  */
 export type ProjectSelectorLocalizedStrings = {
-  /** Trigger `aria-label`. */
+  /**
+   * Names what the trigger selects (e.g. "Project"), NOT the whole accessible name. With something
+   * selected the trigger announces `"{ariaLabel}: {selection}"`, so a consumer passing `"Select
+   * project"` gets "Select project: WEB". Supply the group label alone and let the selection be
+   * appended.
+   */
   ariaLabel?: string;
   /** Trigger fallback text when nothing is selected. */
   buttonPlaceholder?: string;
@@ -703,7 +710,7 @@ function ProjectRowView({
   const rowNode = (
     <CommandItem
       ref={row.isSelected ? selectedRowRef : undefined}
-      value={`${row.rowKey} ${row.shortName} ${row.fullName}`}
+      value={`${row.rowKey} ${row.shortName} ${row.fullName ?? ''}`}
       onSelect={() => {
         if (row.isDisabled) return;
         onClick(row);
@@ -730,18 +737,16 @@ function ProjectRowView({
           below. Each line truncates independently. Tooltip-on-clip still
           works because the wrapping span is what scrollWidth/clientWidth is
           measured on (truncation in EITHER child contributes to overflow).
-          When `fullName` is missing
-          or equal to `shortName` the second line would render the same
-          string the user already sees above (e.g. consumers that fall back
-          `fullName ?? shortName` upstream and forward an unset project
-          fullName). Suppress the muted line in that case so the row reads
-          as a single name. */}
+          The muted second line is suppressed whenever `hasDistinctFullName`
+          says there is nothing distinct to show, so the row reads as a
+          single name rather than repeating it — edit that helper, not this
+          condition, to change what counts as distinct. */}
       <span
         ref={labelRef}
         className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
       >
         <span className="tw:w-full tw:truncate tw:font-medium">{row.shortName}</span>
-        {row.fullName && row.fullName !== row.shortName && (
+        {hasDistinctFullName(row) && (
           <span className="tw:w-full tw:truncate tw:text-xs tw:text-muted-foreground">
             {row.fullName}
           </span>
@@ -777,7 +782,15 @@ function ProjectRowView({
         // different lengths reads as ragged once there are more than two of them.
         className="tw:max-w-md tw:text-start"
       >
-        <div className="tw:font-semibold">{row.fullName}</div>
+        {/* The whole label, not the full name alone: this tooltip doubles as the row's
+            truncation disclosure (`useTruncationTooltip` opens it when EITHER line is clipped), so
+            dropping the short name here would hide the very field a narrow row clipped. */}
+        {/* `dir="auto"` because the joined form is one text node with a direction-neutral
+            separator — see `PROJECT_NAME_SEPARATOR` — so a right-to-left name in a left-to-right
+            container would otherwise put the separator on the visually wrong side. */}
+        <div className="tw:font-semibold" dir="auto">
+          {formatProjectName(row)}
+        </div>
         {!row.isBoundButClosed && row.scrollGroupScrRefLabel && letter && (
           <div className="tw:text-sm">
             {row.scrollGroupScrRefLabel}
@@ -1066,7 +1079,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     if (!needle) return rows;
     return rows.filter(
       (r) =>
-        r.shortName.toLowerCase().includes(needle) || r.fullName.toLowerCase().includes(needle),
+        r.shortName.toLowerCase().includes(needle) ||
+        (r.fullName ?? '').toLowerCase().includes(needle),
     );
   }, [rows, query]);
 
@@ -1195,27 +1209,32 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const renderTriggerLabel = props.mode === 'project' ? props.renderTriggerLabel : undefined;
   const triggerLabelFormat = props.mode === 'project' ? props.triggerLabelFormat : undefined;
 
-  const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
+  const triggerContent = useMemo<{
+    node: ReactNode;
+    title: string;
+    /**
+     * The spoken form of {@link title}, when the two differ. `title` is written for the eye and can
+     * carry punctuation a screen reader reads out as a word; this drops it.
+     */
+    accessibleTitle?: string;
+    hasSelection: boolean;
+  }>(() => {
     switch (props.mode) {
       case 'project': {
         const selected = lookUpProject(props.selection.projectId);
         // An empty title suppresses the tooltip wrapper below — see `renderTriggerLabel`'s TSDoc.
-        if (renderTriggerLabel) return { node: renderTriggerLabel(selected), title: '' };
+        if (renderTriggerLabel)
+          return { node: renderTriggerLabel(selected), title: '', hasSelection: !!selected };
         let text = selected ? selected.shortName : strings.buttonPlaceholder;
-        if (
-          selected &&
-          triggerLabelFormat === 'shortNameAndFullName' &&
-          selected.fullName &&
-          selected.fullName !== selected.shortName
-        )
-          text = `${selected.shortName} - ${selected.fullName}`;
-        return { node: text, title: text };
+        if (selected && triggerLabelFormat === 'shortNameAndFullName')
+          text = formatProjectName(selected);
+        return { node: text, title: text, hasSelection: !!selected };
       }
       case 'project-multi': {
         const { pairs } = props.selection;
         if (pairs.length === 0) {
           const text = strings.buttonPlaceholder;
-          return { node: text, title: text };
+          return { node: text, title: text, hasSelection: false };
         }
         type Tuple = { project: ProjectSelectorProject; scrollGroupId?: ScrollGroupId };
         const tuples: Tuple[] = [];
@@ -1225,7 +1244,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         });
         if (tuples.length === 0) {
           const text = strings.buttonPlaceholder;
-          return { node: text, title: text };
+          return { node: text, title: text, hasSelection: false };
         }
         const items = tuples
           .map(({ project, scrollGroupId }) =>
@@ -1247,23 +1266,31 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             </>
           ),
           title: `${countText} ${items}`,
+          hasSelection: true,
         };
       }
       case 'projectScrollGroup': {
         const selected = lookUpProject(props.selection.projectId);
         if (!selected) {
           const text = strings.buttonPlaceholder;
-          return { node: text, title: text };
+          return { node: text, title: text, hasSelection: false };
         }
         const group = props.selection.scrollGroupId;
         if (group === undefined) {
-          return { node: selected.shortName, title: selected.shortName };
+          return { node: selected.shortName, title: selected.shortName, hasSelection: true };
         }
-        const text = `${selected.shortName} · ${scrollGroupLetterFromMap(group)}`;
-        return { node: text, title: text };
+        const groupLetter = scrollGroupLetterFromMap(group);
+        // The middle dot is a visual separator; a screen reader reads it aloud ("WEB middle dot
+        // A"). A comma is the spoken equivalent — it renders as a pause, not a word.
+        return {
+          node: `${selected.shortName} · ${groupLetter}`,
+          title: `${selected.shortName} · ${groupLetter}`,
+          accessibleTitle: `${selected.shortName}, ${groupLetter}`,
+          hasSelection: true,
+        };
       }
       default:
-        return { node: '', title: '' };
+        return { node: '', title: '', hasSelection: false };
     }
   }, [
     props.mode,
@@ -1329,6 +1356,20 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       ? handleOpenProjectInGroup
       : undefined;
 
+  // `aria-label` REPLACES a button's text content for assistive tech, so a bare group label
+  // ("Project settings") would leave a screen-reader user unable to tell which project is
+  // selected — the one thing the visible trigger is there to say. Name the selection alongside the
+  // group label instead.
+  //
+  // Gated on `hasSelection` rather than on the title being non-empty: with nothing selected the
+  // title is the PLACEHOLDER, and "Project: Select a project" announces a selection that does not
+  // exist. `title` is separately empty when a consumer supplies `renderTriggerLabel` — the label
+  // node is arbitrary then, so the consumer owns naming it, as the Simple-mode toolbar does.
+  const triggerAriaLabel =
+    strings.ariaLabel && triggerContent.hasSelection && triggerContent.title
+      ? `${strings.ariaLabel}: ${triggerContent.accessibleTitle ?? triggerContent.title}`
+      : strings.ariaLabel || undefined;
+
   // The trigger's untruncated label is exposed through the shadcn Tooltip wrapped around the
   // PopoverTrigger below, never through a native `title` attribute: `title` surfaces the
   // browser-default yellow tooltip, inconsistent with the app's shadcn tooltip styling. Keep
@@ -1339,7 +1380,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       variant={props.buttonVariant ?? 'outline'}
       role="combobox"
       aria-expanded={open}
-      aria-label={strings.ariaLabel || undefined}
+      aria-label={triggerAriaLabel}
       disabled={(props.isDisabled ?? false) || (props.isLoading ?? false)}
       className={cn(
         // `tw:shrink!` overrides shadcn Button's base `tw:shrink-0` (which would pin the trigger
@@ -1356,7 +1397,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     >
       <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2 tw:overflow-hidden tw:whitespace-nowrap tw:text-start">
         {typeof triggerContent.node === 'string' ? (
-          <span className="tw:min-w-0 tw:truncate">{triggerContent.node}</span>
+          <span className="tw:min-w-0 tw:truncate" dir="auto">
+            {triggerContent.node}
+          </span>
         ) : (
           triggerContent.node
         )}
@@ -1374,7 +1417,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>{triggerContent.title}</TooltipContent>
+        <TooltipContent dir="auto">{triggerContent.title}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   ) : (

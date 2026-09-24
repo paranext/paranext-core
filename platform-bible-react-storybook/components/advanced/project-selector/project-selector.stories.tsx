@@ -96,6 +96,62 @@ type Story = StoryObj<typeof ProjectSelector>;
 
 // #region project (single)
 
+/**
+ * Projects that have no full name: `fullName` is omitted, not mirrored from `shortName`.
+ * `hasDistinctFullName` collapses each row to a single line either way, but omitting is what a
+ * consumer should build — mirroring claims a full name the project does not have, and every surface
+ * then has to un-claim it.
+ */
+const shortOnlyProjects: ProjectSelectorProject[] = sampleProjects.map((p) => ({
+  id: p.id,
+  shortName: p.shortName,
+}));
+
+/** The short-name-only selector, parameterized over the one thing the two stories differ in. */
+function ShortNameTriggerLabelStory({ openTabs }: { openTabs: ProjectSelectorOpenTab[] }) {
+  const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+  return (
+    <div className="tw:w-80">
+      <ProjectSelector
+        mode="project"
+        projects={shortOnlyProjects}
+        openTabs={openTabs}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        localizedStrings={{ buttonPlaceholder: 'Select a project', ariaLabel: 'Project' }}
+        triggerLabelFormat="shortName"
+        buttonClassName="tw:w-full"
+      />
+    </div>
+  );
+}
+
+export const ShortNameTriggerLabel: Story = {
+  render: () => <ShortNameTriggerLabelStory openTabs={sampleOpenTabs} />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`triggerLabelFormat="shortName"` (the default) renders only the selected project\'s short name in the trigger. This story pairs the format with fixtures that omit `fullName` so the popover rows also collapse to a single line — the trigger and rows both read the short name only. Compare with `WideTriggerLabel` at the same width to see the `{shortName} - {fullName}` variant with distinct names.',
+      },
+    },
+  },
+};
+
+export const ShortNameTriggerLabelNoScrollGroups: Story = {
+  // No project is open in any scroll group, so the right-side scroll-group chips are suppressed and
+  // every row renders in muted text (the "not open anywhere" state).
+  render: () => <ShortNameTriggerLabelStory openTabs={[]} />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Same no-full-name setup as `ShortNameTriggerLabel`, but with no open tabs. The scroll-group chips on the right disappear and every row renders muted (the "not open anywhere" state), yielding the plainest single-line row layout the selector can render.',
+      },
+    },
+  },
+};
+
 export const SingleProject: Story = {
   render: () => {
     const [projectId, setProjectId] = useState<string | undefined>('esvus16');

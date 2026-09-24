@@ -21,8 +21,9 @@ export type ToolbarCompoundLabelProps = {
    */
   separator?: string;
   /**
-   * Render `secondary` before `primary`, for labels that read that way round — a project selector
-   * shows `Translation Project 1 (TP1)`, full name first, short name last.
+   * Render `secondary` before `primary`, for labels that read that way round — a measurement that
+   * reads `12 pt` puts the number (`secondary`) first, even though `primary` (the unit, `pt`) is
+   * still the field that must survive shrinking.
    */
   secondaryFirst?: boolean;
   /** Whether the secondary field is rendered at all. Defaults to `true`. */
@@ -213,7 +214,10 @@ export function ToolbarCompoundLabel({
             {second}
           </span>
         </TooltipTrigger>
-        <TooltipContent>{fullText}</TooltipContent>
+        {/* `dir="auto"` because the tooltip is the joined form as one text node: at the narrowest
+            step it is the only place the secondary field is readable at all, and a separator
+            between two scripts otherwise lands on the visually wrong side. */}
+        <TooltipContent dir="auto">{fullText}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
