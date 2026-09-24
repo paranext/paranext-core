@@ -16,9 +16,11 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import {
+  IRpcLocalClientAcceptor,
   IRpcMethodRegistrar,
   RegisteredRpcMethodDetails,
   RpcClientDisconnectEvent,
+  ServerSocketLike,
 } from '@shared/models/rpc.interface';
 import {
   createEmptyOpenRpc,
@@ -73,7 +75,7 @@ function onServerError(error: unknown): void {
  *
  * Created by the main process on start up when the network service initializes
  */
-export class RpcWebSocketListener implements IRpcMethodRegistrar {
+export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClientAcceptor {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
   /**
    * Event that fires when a connected process goes away, carrying the method names its departure
@@ -95,7 +97,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   private webSocketServer: WebSocketServer | undefined;
   private nextSocketNumber = 1;
   private readonly connectionMutex = new Mutex();
-  private readonly rpcServerBySocket = new Map<WebSocket, RpcServer>();
+  private readonly rpcServerBySocket = new Map<ServerSocketLike, RpcServer>();
   private readonly rpcMethodDetailsByMethodName = new Map<string, RegisteredRpcMethodDetails>();
   private readonly localMethodsByMethodName = new Map<string, InternalRequestHandler>();
   private readonly rpcEventDetailsByEventName = new RpcEventRegistry();
@@ -349,6 +351,21 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
 
   async unregisterEvent(eventName: string): Promise<boolean> {
     return this.rpcEventDetailsByEventName.tryUnregister(this, eventName);
+  }
+
+  /**
+   * Start serving a caller-created socket as a client of main's RPC server. See
+   * {@link IRpcLocalClientAcceptor.acceptLocalClient}.
+   *
+   * @experimental
+   */
+  acceptLocalClient(socket: ServerSocketLike, name: string): void {
+    if (this.connectionStatus !== ConnectionStatus.Connected)
+      throw new Error(
+        `The PAPI network is not accepting clients (status ${this.connectionStatus})`,
+      );
+    this.serveClient(socket, name);
+    logger.info(`PAPI client ${name} connected over a local port`);
   }
 
   generateOpenRpcSchema(): OpenRpc {
@@ -611,19 +628,24 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
 
   private onClientConnect(webSocket: WebSocket): void {
     const socketId = this.nextSocketId;
+    this.serveClient(webSocket, socketId);
+    // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
+    logger.info(`Websocket client ${socketId} connected`);
+  }
+
+  /** Attach an `RpcServer` to a socket and track it until the socket closes */
+  private serveClient(socket: ServerSocketLike, name: string): void {
     const rpcServer = new RpcServer(
-      socketId,
-      webSocket,
+      name,
+      socket,
       this.propagateEvent,
       this.rpcMethodDetailsByMethodName,
       this.rpcEventDetailsByEventName,
       this.announceClientDisconnect,
     );
     rpcServer.connect();
-    this.rpcServerBySocket.set(webSocket, rpcServer);
-    // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
-    logger.info(`Websocket client ${socketId} connected`);
-    webSocket.addEventListener('close', this.onClientDisconnect);
+    this.rpcServerBySocket.set(socket, rpcServer);
+    socket.addEventListener('close', this.onClientDisconnect);
   }
 
   // Run by an RpcServer once it has removed its client's methods from the registry
@@ -643,7 +665,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   private onClientDisconnect(ev: CloseEvent): void {
     // Assert the correct type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const webSocket = ev.target as WebSocket;
+    const webSocket = ev.target as unknown as ServerSocketLike;
     webSocket.removeEventListener('close', this.onClientDisconnect);
     if (!this.rpcServerBySocket.delete(webSocket)) {
       logger.warn('Close called on a websocket, but no rpc server handler was found for it');

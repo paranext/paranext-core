@@ -33,7 +33,13 @@ import {
 } from '@shared/services/shared-store.service';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
-import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
+import {
+  IRpcLocalClientAcceptor,
+  IRpcMethodRegistrar,
+  RpcClientDisconnectEvent,
+  ServerSocketLike,
+} from '@shared/models/rpc.interface';
+import { isServer } from '@shared/utils/internal-util';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -276,6 +282,36 @@ export const shutdown = async () => {
     eventEmittersByEventType.clear();
   });
 };
+
+/**
+ * Whether an RPC handler can serve a caller-created socket. Only main's `RpcWebSocketListener` can;
+ * the client handlers do not implement the method.
+ */
+function isRpcLocalClientAcceptor(
+  handler: IRpcMethodRegistrar,
+): handler is IRpcMethodRegistrar & IRpcLocalClientAcceptor {
+  return 'acceptLocalClient' in handler && typeof handler.acceptLocalClient === 'function';
+}
+
+/**
+ * Serve `socket` as a client of this process's RPC server, under `name`. Main-process only: it is
+ * how a renderer's MessagePort-backed connection joins the same method and event registries as the
+ * websocket clients on port 8876. Throws rather than returning `false` so the caller can put the
+ * reason in front of the client immediately instead of letting its connect attempt time out.
+ *
+ * @param socket The server end of the client's connection
+ * @param name Label for this client in log lines
+ * @throws If this is not the main process, the network service is not initialized, or its handler
+ *   cannot accept local clients
+ * @experimental
+ */
+export function acceptLocalClient(socket: ServerSocketLike, name: string): void {
+  if (!isServer()) throw new Error('Only the main process can accept a local PAPI client');
+  if (!jsonRpc) throw new Error('The PAPI network service is not initialized');
+  if (!isRpcLocalClientAcceptor(jsonRpc))
+    throw new Error('The PAPI network handler in this process cannot accept local clients');
+  jsonRpc.acceptLocalClient(socket, name);
+}
 
 // #endregion
 

@@ -191,3 +191,54 @@ export interface IRpcEventRegistry {
   /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
   unregisterAll(handler: unknown): void;
 }
+
+/**
+ * The subset of a socket the main-process RPC layer touches. Both `ws`'s server-side sockets and
+ * the DOM `WebSocket` type satisfy it structurally, and so does a MessagePort wrapped to look like
+ * one. `RpcServer` and `RpcWebSocketListener` are written against this rather than against
+ * `WebSocket` so that main can serve a client over something other than a TCP socket.
+ *
+ * @experimental
+ */
+export interface ServerSocketLike {
+  /**
+   * 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED, as on `WebSocket.readyState`
+   *
+   * @experimental
+   */
+  readonly readyState: number;
+  /** @experimental */
+  send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
+  /** @experimental */
+  close(code?: number, reason?: string): void;
+  /** @experimental */
+  addEventListener<K extends 'close' | 'error' | 'message'>(
+    type: K,
+    listener: (ev: WebSocketEventMap[K]) => void,
+  ): void;
+  /** @experimental */
+  removeEventListener<K extends 'close' | 'error' | 'message'>(
+    type: K,
+    listener: (ev: WebSocketEventMap[K]) => void,
+  ): void;
+}
+
+/**
+ * An RPC handler that can serve a client whose socket was created by the caller rather than
+ * accepted from the websocket server. Only the process that owns the server (main) implements this;
+ * it is how a renderer's MessagePort-backed connection joins the same registry as the websocket
+ * clients.
+ *
+ * @experimental
+ */
+export interface IRpcLocalClientAcceptor {
+  /**
+   * Start serving `socket` as a client of this process's RPC server.
+   *
+   * @param socket The server end of the client's connection
+   * @param name Label for this client in log lines, in place of the incrementing websocket number
+   * @throws If this handler is not currently accepting clients
+   * @experimental
+   */
+  acceptLocalClient(socket: ServerSocketLike, name: string): void;
+}

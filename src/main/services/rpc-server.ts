@@ -14,6 +14,7 @@ import {
   IRpcEventRegistry,
   IRpcHandler,
   RegisteredRpcMethodDetails,
+  ServerSocketLike,
 } from '@shared/models/rpc.interface';
 import {
   ANNOUNCE_PEER,
@@ -90,7 +91,7 @@ export class RpcServer implements IRpcHandler {
    * permanently leak everything the socket had registered.
    */
   private hasCompletedTeardown = false;
-  private ws: WebSocket | undefined;
+  private ws: ServerSocketLike | undefined;
   private requestId: number = 1;
   /** Only used for logging to differentiate from other RpcServer objects */
   private readonly name: string;
@@ -113,7 +114,7 @@ export class RpcServer implements IRpcHandler {
 
   constructor(
     name: string,
-    webSocket: WebSocket,
+    webSocket: ServerSocketLike,
     propagateEventMethod: PropagateEventMethod,
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
     rpcEventDetailsByEventName: IRpcEventRegistry,
