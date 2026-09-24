@@ -109,29 +109,82 @@ export function createModelTextRestrictionsCache(
     return fetch;
   }
 
-  return {
-    ensureLoaded() {
-      if (known) return Promise.resolve(known);
-      return inFlight ?? startFetch();
-    },
-    async refresh() {
-      if (inFlight) await inFlight;
-      return startFetch();
-    },
-    sync(isLocalStateChanged) {
-      return isLocalStateChanged ? this.refresh() : this.ensureLoaded();
-    },
-    async getWithin(timeoutMs) {
-      if (known) return known;
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<undefined>((resolve) => {
-        timeoutId = setTimeout(() => resolve(undefined), timeoutMs);
-      });
-      try {
-        return await Promise.race([this.ensureLoaded(), timeout]);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    },
-  };
+  function ensureLoaded(): Promise<ModelTextRestrictions | undefined> {
+    if (known) return Promise.resolve(known);
+    return inFlight ?? startFetch();
+  }
+
+  async function refresh(): Promise<ModelTextRestrictions | undefined> {
+    if (inFlight) await inFlight;
+    return startFetch();
+  }
+
+  function sync(isLocalStateChanged: boolean): Promise<ModelTextRestrictions | undefined> {
+    return isLocalStateChanged ? refresh() : ensureLoaded();
+  }
+
+  async function getWithin(timeoutMs: number): Promise<ModelTextRestrictions | undefined> {
+    if (known) return known;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<undefined>((resolve) => {
+      timeoutId = setTimeout(() => resolve(undefined), timeoutMs);
+    });
+    try {
+      return await Promise.race([ensureLoaded(), timeout]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  // Plain closures rather than methods, so a caller may pass one around on its own
+  return { ensureLoaded, refresh, sync, getWithin };
+}
+
+/**
+ * Brings the restrictions up to date after a resource flag sync: afresh when the caller asked for a
+ * refresh or the sync changed a flag — an install shows up as a changed flag, and a newly installed
+ * restricted text is only reported once it is on disk — and otherwise only if none are known yet.
+ *
+ * @param flagSync `isRefreshRequested`: whether the sync was asked to refresh everything it can;
+ *   `isAnyFlagChanged`: whether it changed any resource's flags.
+ */
+export function syncModelTextRestrictionsAfterFlagSync(
+  restrictionsCache: ModelTextRestrictionsCache,
+  flagSync: { isRefreshRequested: boolean; isAnyFlagChanged: boolean },
+): Promise<ModelTextRestrictions | undefined> {
+  return restrictionsCache.sync(flagSync.isRefreshRequested || flagSync.isAnyFlagChanged);
+}
+
+/**
+ * {@link applyModelTextRestrictions} with the cache's restrictions, waiting up to `timeoutMs` for
+ * the first fetch to land so rows served early are not left unrestricted.
+ *
+ * @returns The stamped rows, or `rows` unchanged if no restrictions arrived within the bound.
+ */
+export async function applyModelTextRestrictionsWithin(
+  rows: DblResourceData[],
+  restrictionsCache: ModelTextRestrictionsCache,
+  timeoutMs: number,
+): Promise<DblResourceData[]> {
+  return applyModelTextRestrictions(rows, await restrictionsCache.getWithin(timeoutMs));
+}
+
+/**
+ * {@link applyModelTextRestrictionsToCatalog} with the cache's restrictions, waiting up to
+ * `timeoutMs` for the first fetch to land. The wait runs alongside the catalog read rather than
+ * after it.
+ *
+ * @returns The stamped catalog, or the catalog unchanged if no restrictions arrived within the
+ *   bound.
+ */
+export async function applyModelTextRestrictionsToCatalogWithin(
+  catalog: Promise<DblResourceCatalog>,
+  restrictionsCache: ModelTextRestrictionsCache,
+  timeoutMs: number,
+): Promise<DblResourceCatalog> {
+  const [readCatalog, restrictions] = await Promise.all([
+    catalog,
+    restrictionsCache.getWithin(timeoutMs),
+  ]);
+  return applyModelTextRestrictionsToCatalog(readCatalog, restrictions);
 }

@@ -11,6 +11,7 @@ import { LanguageStrings } from 'platform-bible-utils';
 import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import { CopyrightDetailsDialog } from './copyright-details-dialog.component';
 import {
+  getCopyrightNoticeMessageFormat,
   renderCopyrightNoticeMessage,
   type ShowableCopyrightNotice,
 } from './copyright-notice-message.utils';
@@ -22,18 +23,11 @@ export type CopyrightNoticeBannerProps = {
   onDismiss: () => void;
 };
 
-/** The localized string that words the banner's message for this kind of notice */
-function messageFormatOf(notice: ShowableCopyrightNotice, localizedStrings: LanguageStrings) {
-  return notice.kind === 'restrictedLicense'
-    ? localizedStrings['%platformScripture_copyrightNotice_restrictedLicense_banner%']
-    : localizedStrings['%platformScripture_copyrightNotice_notification_format%'];
-}
-
 /**
  * A dismissible strip across the top of a pane showing a text's copyright notice: either the text's
  * own "Notification:" wording (as Paratext 9 shows for the ESV), or the notice that a traditionally
  * licensed Biblica text is for reference only and may not be used as the basis of a new
- * translation. "More info…" opens the details.
+ * translation. "More info" opens the details.
  *
  * The message is clamped to two lines so it does not push the text far down a narrow pane; "Show
  * more" appears whenever it does not fit.
@@ -49,7 +43,7 @@ export function CopyrightNoticeBanner({
   const messageRef = useRef<HTMLParagraphElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
-  const messageFormat = messageFormatOf(notice, localizedStrings);
+  const messageFormat = getCopyrightNoticeMessageFormat(notice, localizedStrings);
 
   const measureOverflow = useCallback(() => {
     const message = messageRef.current;

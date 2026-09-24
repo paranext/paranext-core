@@ -26,9 +26,10 @@ import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
 import {
-  applyModelTextRestrictions,
-  applyModelTextRestrictionsToCatalog,
+  applyModelTextRestrictionsToCatalogWithin,
+  applyModelTextRestrictionsWithin,
   createModelTextRestrictionsCache,
+  syncModelTextRestrictionsAfterFlagSync,
 } from './model-text-restrictions.utils';
 import { reconcileCachedResources } from './resources-cache.util';
 import tailwindStyles from './tailwind.css?inline';
@@ -300,7 +301,10 @@ function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promis
   if (!syncInFlight) {
     syncInFlight = (async () => {
       const isAnyFlagChanged = await syncFlags(shouldRecomputeUpdateStatus);
-      await modelTextRestrictions.sync(shouldRecomputeUpdateStatus || isAnyFlagChanged);
+      await syncModelTextRestrictionsAfterFlagSync(modelTextRestrictions, {
+        isRefreshRequested: shouldRecomputeUpdateStatus,
+        isAnyFlagChanged,
+      });
     })()
       .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
       .finally(() => {
@@ -362,11 +366,11 @@ async function readCatalog(): Promise<DblResourceCatalog> {
 async function getCachedResources(): Promise<DblResourceCatalog> {
   // Waits, boundedly, for the first restrictions fetch so a picker opened early is not fail-open;
   // after that the restrictions are in memory and this adds nothing.
-  const [catalog, restrictions] = await Promise.all([
+  return applyModelTextRestrictionsToCatalogWithin(
     readCatalog(),
-    modelTextRestrictions.getWithin(MODEL_TEXT_RESTRICTIONS_WAIT_MS),
-  ]);
-  return applyModelTextRestrictionsToCatalog(catalog, restrictions);
+    modelTextRestrictions,
+    MODEL_TEXT_RESTRICTIONS_WAIT_MS,
+  );
 }
 
 /**
@@ -393,9 +397,10 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     const dblCatalog = cachedResources ?? [];
 
     const allMetadata = await getLocalProjectMetadata();
-    return applyModelTextRestrictions(
+    return await applyModelTextRestrictionsWithin(
       buildLocalNonDblResources(allMetadata, dblCatalog),
-      await modelTextRestrictions.getWithin(MODEL_TEXT_RESTRICTIONS_WAIT_MS),
+      modelTextRestrictions,
+      MODEL_TEXT_RESTRICTIONS_WAIT_MS,
     );
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);

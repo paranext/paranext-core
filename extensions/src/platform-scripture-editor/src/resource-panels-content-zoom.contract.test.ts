@@ -84,9 +84,9 @@ describe('content zoom markers (Bible Texts / Commentaries panel)', () => {
     expect(panel).toMatch(/resourceType === 'ScriptureResource' \? 'bible-texts' : 'commentaries'/);
   });
 
-  it('marks the content below the selector, keeping the selector itself fixed', () => {
+  it('marks the content below the selector and copyright notice, keeping both fixed', () => {
     expect(panel).toMatch(
-      /<ResourceSelectorDropdown[\s\S]*?\/> <ContentZoomRoot area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> {renderContent\(\)} <\/ContentZoomRoot>/,
+      /<ResourceSelectorDropdown[\s\S]*?\/> {copyrightNotice} <ContentZoomRoot area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> {renderContent\(\)} <\/ContentZoomRoot>/,
     );
   });
 

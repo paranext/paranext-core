@@ -204,23 +204,6 @@ export const InstalledNotSelectable: Story = {
       'No project is selected, so a resource you choose here will be downloaded to this computer but not added to a text collection.',
   },
 };
-<<<<<<< branch
-
-/**
- * Some rows cannot be picked, e.g. texts whose license prohibits their use as a model or base for a
- * new translation. They stay listed, dimmed with a lock icon, and the reason shows in a tooltip on
- * hover or keyboard focus. The consumer supplies the reason; the one here is sample text.
- */
-export const WithDisabledRows: Story = {
-  args: {
-    getDisabledReason: (resource) =>
-      resource.displayName === 'ESV' || resource.displayName === 'NLT'
-        ? 'Not available for this translation'
-        : undefined,
-  },
-};
-||||||| base
-=======
 
 const LONG_NAME_FULL_NAME =
   'An Extremely Long Resource Full Name That Keeps Going Well Past Any Reasonable Dialog Width';
@@ -421,4 +404,17 @@ export const ManyLanguagesScopedToScripture: Story = {
     });
   },
 };
->>>>>>> main
+
+/**
+ * Some rows cannot be picked, e.g. texts whose license prohibits their use as a model or base for a
+ * new translation. They stay listed, dimmed with a lock icon, and the reason shows in a tooltip on
+ * hover or keyboard focus. The consumer supplies the reason; the one here is sample text.
+ */
+export const WithDisabledRows: Story = {
+  args: {
+    getDisabledReason: (resource) =>
+      resource.displayName === 'ESV' || resource.displayName === 'NLT'
+        ? 'Not available for this translation'
+        : undefined,
+  },
+};
