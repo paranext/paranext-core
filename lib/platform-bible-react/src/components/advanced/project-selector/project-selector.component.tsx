@@ -500,6 +500,12 @@ type CommonProps = {
    * the "no projects" empty state still renders alongside it.
    */
   footerAction?: ProjectSelectorFooterAction;
+  /**
+   * When true and there are no rows at all, activating the trigger runs {@link footerAction}
+   * directly instead of opening a popover that could only offer that one action. Ignored without a
+   * `footerAction`, and once any row exists. Defaults to false.
+   */
+  shouldRunFooterActionWhenEmpty?: boolean;
 };
 
 export type ProjectSelectorProps =
@@ -1130,6 +1136,19 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     return partitionByGrouping(filteredRows, grouping);
   }, [filteredRows, activeGrouping, availableGroupings]);
 
+  const handlePopoverOpenChange = (nextOpen: boolean) => {
+    if (
+      nextOpen &&
+      props.shouldRunFooterActionWhenEmpty &&
+      props.footerAction &&
+      rows.length === 0
+    ) {
+      props.footerAction.onSelect();
+      return;
+    }
+    handleOpenChange(nextOpen);
+  };
+
   const handleOpenProjectInGroup = (row: ProjectRow) => {
     if (row.scrollGroupId === undefined) return;
     if (props.mode === 'projectScrollGroup') {
@@ -1429,7 +1448,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const showGroupByMenu = availableGroupings.length > 1;
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open} onOpenChange={handlePopoverOpenChange}>
       {triggerWithTooltip}
       <PopoverContent
         align="start"

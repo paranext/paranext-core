@@ -9,10 +9,18 @@ import type { EffectiveResourceReferenceListState } from './use-effective-resour
  *   so it carries no control (see `PanelReadinessView`).
  * - `catalogError` — the resource catalog could not be loaded, so a configured item cannot be
  *   resolved; show a message with a retry, which can genuinely re-drive the fetch.
+ * - `registrationRequired` — the catalog is unreachable because the Paratext registration is missing
+ *   or invalid; show a message with no retry, since re-running the fetch cannot change the answer.
  * - `empty` — nothing is configured; show the pick prompt.
  * - `configured` — there is something to display; continue to the downstream branches.
  */
-export type ResourcePanelReadiness = 'loading' | 'error' | 'catalogError' | 'empty' | 'configured';
+export type ResourcePanelReadiness =
+  | 'loading'
+  | 'error'
+  | 'catalogError'
+  | 'registrationRequired'
+  | 'empty'
+  | 'configured';
 
 /** The two independent async sources a panel's readiness is derived from. */
 export type ResourcePanelReadinessInput = {
@@ -30,6 +38,26 @@ export type ResourcePanelReadinessInput = {
   isCatalogReady: boolean;
   /** Whether the catalog fetch failed. Recoverable by re-fetching. */
   hasCatalogError: boolean;
+  /**
+   * Whether the catalog fetch failed specifically because the user's Paratext registration is
+   * missing or invalid.
+   *
+   * Pass it only where a registration is the one thing standing between the user and any resource
+   * at all — the no-project free-resource entry point. With a project open the panel may already
+   * have an installed resource to fall back on, so the retryable catalog error stays the better
+   * answer there.
+   */
+  hasRegistrationError?: boolean;
+  /**
+   * Whether an empty pick prompt is worthless without the catalog — true for the no-project
+   * free-resource entry point, where the ONLY thing the prompt can offer comes from the catalog.
+   *
+   * Ranking `registrationRequired` above `empty` is not enough on its own: `hasRegistrationError`
+   * is false until the fetch actually rejects, and that fetch queues behind the resource provider's
+   * own retry loop, so "nothing configured" is answered long before the catalog's fate is known.
+   * Set this and the panel waits instead of flashing a prompt whose picker would be empty.
+   */
+  needsCatalogBeforeEmpty?: boolean;
   /**
    * How many configured items belong to this panel's resource type. Meaningful only once the
    * catalog has arrived, and not derivable here because filtering needs the catalog and the panel's
@@ -57,6 +85,8 @@ export function getResourcePanelReadiness({
   listState,
   isCatalogReady,
   hasCatalogError,
+  hasRegistrationError,
+  needsCatalogBeforeEmpty,
   matchingCount,
 }: ResourcePanelReadinessInput): ResourcePanelReadiness {
   const listStatus = listState.status;
@@ -68,9 +98,17 @@ export function getResourcePanelReadiness({
   if (listStatus === 'error') return 'error';
   if (listStatus === 'loading') return 'loading';
 
+  // Ranked above `empty` because emptiness is answerable WITHOUT the catalog: a user with nothing
+  // chosen would otherwise get a pick prompt whose picker cannot be populated, and no explanation
+  // of why. Ranked above `catalogError` too, because a retry cannot succeed until the registration
+  // changes.
+  if (hasRegistrationError) return 'registrationRequired';
+
   // Nothing configured at all needs no catalog to be certain, so don't make the user wait for one —
-  // and don't report a catalog failure that cannot affect the answer.
-  if (configuredCount === 0) return 'empty';
+  // and don't report a catalog failure that cannot affect the answer. The exception is an entry
+  // point whose prompt has nothing to offer without the catalog: there, fall through and let the
+  // catalog's own states answer first.
+  if (configuredCount === 0 && !needsCatalogBeforeEmpty) return 'empty';
 
   // Something is configured but the catalog that would resolve it is not coming. Saying so beats
   // spinning on a fetch that already failed.

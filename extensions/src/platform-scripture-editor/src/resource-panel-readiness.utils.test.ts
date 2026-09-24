@@ -119,6 +119,113 @@ describe('getResourcePanelReadiness', () => {
       }),
     ).toBe('error');
   });
+
+  it('reports registrationRequired instead of an empty prompt the picker cannot fill', () => {
+    // Nothing configured answers `empty` without consulting the catalog, so without this rank the
+    // user gets a pick prompt that opens a picker with no rows and no explanation.
+    expect(
+      getResourcePanelReadiness({
+        ...READY,
+        listState: readyWith(0),
+        isCatalogReady: false,
+        hasCatalogError: true,
+        hasRegistrationError: true,
+        matchingCount: 0,
+      }),
+    ).toBe('registrationRequired');
+  });
+
+  it('prefers registrationRequired over a retry that cannot succeed', () => {
+    expect(
+      getResourcePanelReadiness({
+        ...READY,
+        listState: readyWith(1),
+        isCatalogReady: false,
+        hasCatalogError: true,
+        hasRegistrationError: true,
+        matchingCount: 1,
+      }),
+    ).toBe('registrationRequired');
+  });
+
+  it('still prefers the settings error, which is the more fundamental failure', () => {
+    expect(
+      getResourcePanelReadiness({
+        ...READY,
+        listState: { status: 'error' },
+        hasCatalogError: true,
+        hasRegistrationError: true,
+      }),
+    ).toBe('error');
+  });
+
+  it('keeps the retryable catalog error when the failure is not about registration', () => {
+    // Only the registration case is terminal; a transient failure keeps its retry.
+    expect(
+      getResourcePanelReadiness({
+        ...READY,
+        listState: readyWith(1),
+        isCatalogReady: false,
+        hasCatalogError: true,
+        hasRegistrationError: false,
+        matchingCount: 1,
+      }),
+    ).toBe('catalogError');
+  });
+
+  it('waits for the catalog before an empty prompt that has nothing to offer without one', () => {
+    // `hasRegistrationError` is false until the fetch actually rejects, so ranking it above `empty`
+    // cannot cover the fetch window on its own — the prompt would flash first.
+    expect(
+      getResourcePanelReadiness({
+        ...READY,
+        listState: readyWith(0),
+        isCatalogReady: false,
+        hasCatalogError: false,
+        needsCatalogBeforeEmpty: true,
+        matchingCount: 0,
+      }),
+    ).toBe('loading');
+  });
+
+  it('offers a retry rather than a dead prompt when that catalog then fails', () => {
+    expect(
+      getResourcePanelReadiness({
+        ...READY,
+        listState: readyWith(0),
+        isCatalogReady: false,
+        hasCatalogError: true,
+        needsCatalogBeforeEmpty: true,
+        matchingCount: 0,
+      }),
+    ).toBe('catalogError');
+  });
+
+  it('reports empty once the catalog has arrived and still offers nothing', () => {
+    expect(
+      getResourcePanelReadiness({
+        ...READY,
+        listState: readyWith(0),
+        isCatalogReady: true,
+        hasCatalogError: false,
+        needsCatalogBeforeEmpty: true,
+        matchingCount: 0,
+      }),
+    ).toBe('empty');
+  });
+
+  it('still answers empty immediately where the prompt does not need a catalog', () => {
+    // The project-scoped panels keep the original behavior: their prompt is actionable regardless.
+    expect(
+      getResourcePanelReadiness({
+        ...READY,
+        listState: readyWith(0),
+        isCatalogReady: false,
+        hasCatalogError: false,
+        matchingCount: 0,
+      }),
+    ).toBe('empty');
+  });
 });
 
 describe('canPublishResourcePanelProjectIds', () => {

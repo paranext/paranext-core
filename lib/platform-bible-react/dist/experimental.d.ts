@@ -537,6 +537,12 @@ type CommonProps = {
 	 * the "no projects" empty state still renders alongside it.
 	 */
 	footerAction?: ProjectSelectorFooterAction;
+	/**
+	 * When true and there are no rows at all, activating the trigger runs {@link footerAction}
+	 * directly instead of opening a popover that could only offer that one action. Ignored without a
+	 * `footerAction`, and once any row exists. Defaults to false.
+	 */
+	shouldRunFooterActionWhenEmpty?: boolean;
 };
 export type ProjectSelectorProps = (CommonProps & {
 	mode: "project";
@@ -697,6 +703,14 @@ export interface ResourcePickerDialogProps {
 	 */
 	notice?: string;
 	/**
+	 * A button shown with {@link notice}, for something the user can do about what the notice says.
+	 * Ignored without a `notice`. `label` must already be localized.
+	 */
+	noticeAction?: {
+		label: string;
+		onSelect: () => void;
+	};
+	/**
 	 * When false, rows in the "Installed" section are shown but cannot be picked. Use it when the
 	 * caller can act on a resource that still needs installing but has nothing to do with one that is
 	 * already on disk, so an installed row would accept a click and then silently do nothing.
@@ -769,7 +783,7 @@ export declare function getResourcePickerBodyState(input: {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, noticeAction, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Whether a resource belongs to the section of the catalogue currently on display. An undefined
  * `resourceType` means "no type filter", so everything matches, as does an empty array — that is

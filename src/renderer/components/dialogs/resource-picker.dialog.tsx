@@ -20,6 +20,8 @@ import {
 } from '@renderer/components/dialogs/resource-picker.utils';
 import { useCallback, useMemo } from 'react';
 import { sendCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
+import { getErrorMessage } from 'platform-bible-utils';
 
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS, ...RESOURCE_PICKER_NOTICE_STRING_KEYS];
 
@@ -30,9 +32,13 @@ const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS, ...RESOURCE_PICKER_N
 function ResourcePickerDialogWrapper({
   resourceType,
   selectedResourceIds,
+  allowedResourceIds,
   notice,
+  noticeCommandLabel,
+  noticeCommand,
   allowSelectingInstalled,
   submitDialog,
+  cancelDialog,
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -91,9 +97,39 @@ function ResourcePickerDialogWrapper({
   const areDownloadsUnavailable =
     !!dblCatalogFetch && !dblCatalogFetch.didFetchSucceed && !!dblCatalogFetch.isPermanent;
 
+  // Applied HERE rather than inside `ResourcePickerDialog` because the dialog derives its language
+  // filter options and its total count from whatever `allResources` it is handed. Narrowing the
+  // array on the way in keeps all three consistent; narrowing inside the dialog would leave it
+  // offering languages that no longer have a selectable resource and counting rows it will not show.
+  //
+  // Narrows the COMBINED list, so the restriction covers locally-installed non-DBL resources too —
+  // those carry `dblEntryUid === projectId`, which no allowlist entry matches, so a restricted
+  // caller correctly gets none of them.
+  const offeredResources = useMemo(() => {
+    // A missing list means "no restriction"; an empty one means "this caller may offer nothing".
+    if (!allowedResourceIds) return allResources;
+    const allowed = new Set(allowedResourceIds.map((id) => id.toUpperCase()));
+    return allResources.filter((resource) => allowed.has(resource.dblEntryUid.toUpperCase()));
+  }, [allResources, allowedResourceIds]);
+
+  const noticeAction = useMemo(() => {
+    if (!noticeCommandLabel || !noticeCommand) return undefined;
+    return {
+      label: noticeCommandLabel,
+      onSelect: () => {
+        cancelDialog();
+        sendCommand(noticeCommand).catch((e) =>
+          logger.warn(
+            `Resource picker notice command '${noticeCommand}' failed: ${getErrorMessage(e)}`,
+          ),
+        );
+      },
+    };
+  }, [noticeCommandLabel, noticeCommand, cancelDialog]);
+
   return (
     <ResourcePickerDialog
-      allResources={allResources}
+      allResources={offeredResources}
       isResourcesLoading={isResourcesLoading}
       hasResourcesError={hasFailedRecoverably}
       onRetryResources={refetchDblCatalog}
@@ -102,6 +138,7 @@ function ResourcePickerDialogWrapper({
       selectedResourceIds={selectedResourceIds}
       localizedStrings={localizedStrings}
       notice={combinedNotice}
+      noticeAction={noticeAction}
       allowSelectingInstalled={allowSelectingInstalled}
       onSelect={submitDialog}
     />
