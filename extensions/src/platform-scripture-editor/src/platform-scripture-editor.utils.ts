@@ -25,11 +25,10 @@ import type PapiFrontend from '@papi/frontend';
 import type { MarkerContent, Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
-  selectableParagraphMarkers,
-  PROGRAMMATICALLY_APPLIED_MARKERS,
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
+  isParagraphMarker,
   isPlatformError,
   LanguageStrings,
   LocalizeKey,
@@ -535,18 +534,37 @@ export async function convertScriptureRangeToEditorRange(
  */
 export const availableScrollGroupIds = [undefined, ...new Array(5).keys()];
 
+/**
+ * `MarkerType.Paragraph` markers that are never valid to select via a plain paragraph-style retag,
+ * because they are instead applied through dedicated, structure-aware mechanisms.
+ */
+export const PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS: ReadonlySet<string> = new Set(['id', 'c']);
+
+/**
+ * Every USFM paragraph-style marker known to {@link usfmMarkers} that a user can validly choose to
+ * apply via a plain paragraph-style retag. (Excludes
+ * {@link PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS}.)
+ */
+export const selectableParagraphMarkers: readonly string[] = Object.keys(usfmMarkers)
+  .filter(
+    (marker) =>
+      isParagraphMarker(marker) && !PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has(marker),
+  )
+  .sort();
+
 /** {@link selectableParagraphMarkers} as a set, for O(1) membership checks. */
 const selectableParagraphMarkerSet: ReadonlySet<string> = new Set(selectableParagraphMarkers);
 
 /**
- * True when a marker has a real localized title available via {@link getParagraphMarkerTitle} —
- * either because it's offered by the switcher ({@link selectableParagraphMarkers}) or because it's
- * one of {@link PROGRAMMATICALLY_APPLIED_MARKERS} (excluded from the switcher, but still named when
- * it's what the caret/selection is actually on — e.g. "c - Chapter Number" rather than the generic
- * misc fallback or a raw marker echo).
+ * True when a marker has a real (potentially localized) title available via
+ * {@link getParagraphMarkerTitle} (as displayed in tooltips, the Paragraph combo box
+ * trigger/switcher, etc.) Some titles may not be displayed in all possible contexts.
  */
-export function isDisplayableParagraphMarkerTitle(marker: string): boolean {
-  return selectableParagraphMarkerSet.has(marker) || PROGRAMMATICALLY_APPLIED_MARKERS.has(marker);
+export function hasDisplayableParagraphMarkerTitle(marker: string): boolean {
+  return (
+    selectableParagraphMarkerSet.has(marker) ||
+    PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has(marker)
+  );
 }
 
 /**
@@ -560,10 +578,9 @@ export function paragraphMarkerNameKey(marker: string): LocalizeKey {
 
 /**
  * Resolves the localized title for a paragraph marker. Returns `undefined` when no title is
- * available at all ({@link isDisplayableParagraphMarkerTitle} is `false`) — that is, when the marker
- * is outside `usfmMarkers` entirely or is deliberately excluded from both the offered set and the
- * display-only exceptions. Otherwise, returns whatever `localizedStrings` currently has for the
- * marker's key (from the `useLocalizedStrings` hook).
+ * available at all ({@link hasDisplayableParagraphMarkerTitle} is `false`) — when the marker isn't a
+ * paragraph marker in `usfmMarkers` at all. Otherwise, returns whatever `localizedStrings`
+ * currently has for the marker's key (from the `useLocalizedStrings` hook).
  *
  * @param marker Marker code to look up, without its leading backslash (e.g. `p`, not `\p`)
  * @param localizedStrings The localized strings to resolve the title from
@@ -572,7 +589,7 @@ export function getParagraphMarkerTitle(
   marker: string,
   localizedStrings: LanguageStrings,
 ): string | undefined {
-  if (!isDisplayableParagraphMarkerTitle(marker)) return undefined;
+  if (!hasDisplayableParagraphMarkerTitle(marker)) return undefined;
   return localizedStrings[paragraphMarkerNameKey(marker)];
 }
 

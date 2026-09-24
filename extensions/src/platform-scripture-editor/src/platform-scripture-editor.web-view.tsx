@@ -85,8 +85,6 @@ import {
 import {
   ABORTED,
   compareScrRefs,
-  selectableParagraphMarkers,
-  PROGRAMMATICALLY_APPLIED_MARKERS,
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
@@ -167,17 +165,19 @@ import {
   formatEditorTitle,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  hasDisplayableParagraphMarkerTitle,
   isChapterBlank,
-  isDisplayableParagraphMarkerTitle,
   isMissingBookError,
   isMissingBookInfoOnScreen,
   isOverrunProjectIdParse,
   openCommentListAndSelectThreadSafe,
   paragraphMarkerNameKey,
   parseMissingBookError,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   resolveAddChapterNumberClick,
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
@@ -261,10 +261,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // recent-searches labels, and the show-more-books/not-in-project strings that appear once a
   // book outside this project is reachable.
   ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
-  // PROGRAMMATICALLY_APPLIED_MARKERS members are display-only (see isDisplayableParagraphMarkerTitle)
-  // — never offered by the switcher, but their titles still need to be preloaded for the trigger
-  // label / gutter tooltip.
-  ...[...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_MARKERS].map(
+  // Keys for Paragraph style titles (as displayed in tooltips, Paragraph combo box trigger/switcher,
+  // etc.) Some titles may not be displayed in all possible contexts.
+  ...[...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS].map(
     paragraphMarkerNameKey,
   ),
   ...Object.entries(usfmMarkers)
@@ -3829,7 +3828,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Localized name of the current paragraph style, or the generic fallback. Undefined until the
    * localized strings resolve — `ParagraphStyleLabel` renders the marker code alone until then.
    *
-   * Uses `isDisplayableParagraphMarkerTitle`, not `selectableParagraphMarkers.includes`, so `id`
+   * Uses `hasDisplayableParagraphMarkerTitle`, not `selectableParagraphMarkers.includes`, so `id`
    * still reads "id - Book identifier" here even though it's excluded from the switcher menu
    * itself.
    *
@@ -3839,7 +3838,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * membership check stays inline here instead.
    */
   const blockMarkerNameKey: LocalizeKey | undefined =
-    blockMarker && isDisplayableParagraphMarkerTitle(blockMarker)
+    blockMarker && hasDisplayableParagraphMarkerTitle(blockMarker)
       ? paragraphMarkerNameKey(blockMarker)
       : undefined;
   const blockMarkerName = blockMarkerNameKey

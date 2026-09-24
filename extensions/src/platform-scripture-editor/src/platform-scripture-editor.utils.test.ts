@@ -1,11 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
-import {
-  selectableParagraphMarkers,
-  newPlatformError,
-  UsjTextContentLocation,
-} from 'platform-bible-utils';
+import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
@@ -39,10 +35,12 @@ import {
   resolveAddChapterNumberClick,
   isMissingBookError,
   isMissingBookOnScreen,
-  isDisplayableParagraphMarkerTitle,
+  hasDisplayableParagraphMarkerTitle,
   getParagraphMarkerTitle,
   parseMissingBookError,
   resolveResourceContentState,
+  selectableParagraphMarkers,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2732,10 +2730,42 @@ describe('generateParagraphMenuListItems', () => {
   });
 });
 
-describe('isDisplayableParagraphMarkerTitle', () => {
+describe('selectableParagraphMarkers', () => {
+  it('includes every USFM paragraph-style marker that a user can validly apply directly', () => {
+    expect(selectableParagraphMarkers).toContain('li2');
+    expect(selectableParagraphMarkers).toContain('s1');
+    expect(selectableParagraphMarkers).toContain('q'); // bare `q`, distinct from `q1`
+    expect(selectableParagraphMarkers).toContain('q3');
+    expect(selectableParagraphMarkers).toContain('lh');
+    expect(selectableParagraphMarkers).toContain('b');
+    expect(selectableParagraphMarkers).toContain('h'); // Headers category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cl'); // DivisionMarks category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
+  });
+
+  // The confirmed, deliberate exclusions (see the comment on PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS):
+  it('excludes id and c even though isParagraphMarker is true for both', () => {
+    expect(selectableParagraphMarkers).not.toContain('id');
+    expect(selectableParagraphMarkers).not.toContain('c');
+  });
+
+  it('excludes markers that are not paragraph markers', () => {
+    expect(selectableParagraphMarkers).not.toContain('v'); // Character, special-cased by isBlockMarker only
+    expect(selectableParagraphMarkers).not.toContain('nd'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qs'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qac'); // Character
+  });
+
+  it('PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS contains id and c', () => {
+    expect(PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has('id')).toBe(true);
+    expect(PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has('c')).toBe(true);
+  });
+});
+
+describe('hasDisplayableParagraphMarkerTitle', () => {
   it('is true for every marker offered by the switcher', () => {
     expect(
-      selectableParagraphMarkers.every((marker) => isDisplayableParagraphMarkerTitle(marker)),
+      selectableParagraphMarkers.every((marker) => hasDisplayableParagraphMarkerTitle(marker)),
     ).toBe(true);
   });
 
@@ -2746,12 +2776,12 @@ describe('isDisplayableParagraphMarkerTitle', () => {
   it('is true for id and c even though both are excluded from selectableParagraphMarkers', () => {
     expect(selectableParagraphMarkers).not.toContain('id');
     expect(selectableParagraphMarkers).not.toContain('c');
-    expect(isDisplayableParagraphMarkerTitle('id')).toBe(true);
-    expect(isDisplayableParagraphMarkerTitle('c')).toBe(true);
+    expect(hasDisplayableParagraphMarkerTitle('id')).toBe(true);
+    expect(hasDisplayableParagraphMarkerTitle('c')).toBe(true);
   });
 
   it('is false for a marker with no title at all', () => {
-    expect(isDisplayableParagraphMarkerTitle('notamarker')).toBe(false);
+    expect(hasDisplayableParagraphMarkerTitle('notamarker')).toBe(false);
   });
 });
 

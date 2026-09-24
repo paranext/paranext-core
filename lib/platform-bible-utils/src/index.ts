@@ -57,8 +57,7 @@ export {
   usfmMarkers,
   isBlockMarker,
   isCharacterMarker,
-  selectableParagraphMarkers,
-  PROGRAMMATICALLY_APPLIED_MARKERS,
+  isParagraphMarker,
 } from './markers/usfm-markers';
 
 // Enums

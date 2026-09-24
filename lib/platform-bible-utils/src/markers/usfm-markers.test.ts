@@ -1,11 +1,5 @@
 import { MarkerCategoryType, MarkerType } from './usfm-marker.model';
-import {
-  selectableParagraphMarkers,
-  isBlockMarker,
-  isCharacterMarker,
-  usfmMarkers,
-  PROGRAMMATICALLY_APPLIED_MARKERS,
-} from './usfm-markers';
+import { isBlockMarker, isCharacterMarker, isParagraphMarker, usfmMarkers } from './usfm-markers';
 
 describe('isBlockMarker', () => {
   it('treats paragraph-type markers as block markers', () => {
@@ -120,46 +114,41 @@ describe('isCharacterMarker and isBlockMarker invariants', () => {
   });
 });
 
-describe('selectableParagraphMarkers', () => {
-  // No category or context curation: markers from every category — including Lists and most of
-  // Poetry/TitlesHeadings — are included, not just a curated subset.
-  it('includes every paragraph marker regardless of category, not just a curated subset', () => {
-    expect(selectableParagraphMarkers).toContain('li2');
-    expect(selectableParagraphMarkers).toContain('s1');
-    expect(selectableParagraphMarkers).toContain('q'); // bare `q`, distinct from `q1`
-    expect(selectableParagraphMarkers).toContain('q3');
-    expect(selectableParagraphMarkers).toContain('lh');
-    expect(selectableParagraphMarkers).toContain('b');
-    expect(selectableParagraphMarkers).toContain('h'); // Headers category — deliberately not excluded
-    expect(selectableParagraphMarkers).toContain('cl'); // DivisionMarks category — deliberately not excluded
-    expect(selectableParagraphMarkers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
+describe('isParagraphMarker', () => {
+  it('treats paragraph-type markers as paragraph markers regardless of category', () => {
+    expect(isParagraphMarker('p')).toBe(true); // discourse paragraphs
+    expect(isParagraphMarker('ipi')).toBe(true);
+    expect(isParagraphMarker('li2')).toBe(true); // list entry
+    expect(isParagraphMarker('mt')).toBe(true); // book titles
+    expect(isParagraphMarker('mt1')).toBe(true);
+    expect(isParagraphMarker('s')).toBe(true); // section headings
+    expect(isParagraphMarker('s1')).toBe(true); //
+    expect(isParagraphMarker('q')).toBe(true); // poetry lines
+    expect(isParagraphMarker('q3')).toBe(true);
+    expect(isParagraphMarker('lh')).toBe(true); // list heading
+    expect(isParagraphMarker('b')).toBe(true); // line break
+    expect(isParagraphMarker('h')).toBe(true); // page header metadata
+    expect(isParagraphMarker('h1')).toBe(true); // Deprecated
+    expect(isParagraphMarker('cl')).toBe(true); // Publishing metadata
+    expect(isParagraphMarker('cp')).toBe(true); // Published chapter identifier
+    expect(isParagraphMarker('id')).toBe(true); // book identifier
+    expect(isParagraphMarker('c')).toBe(true); // chapter number
+    expect(isParagraphMarker('usfm')).toBe(true); // File metadata
+    expect(isParagraphMarker('ide')).toBe(true); // File metadata
   });
 
-  // The confirmed, deliberate exclusions (see the comment on PROGRAMMATICALLY_APPLIED_MARKERS):
-  it('excludes id and c even though they are MarkerType.Paragraph markers', () => {
-    expect(usfmMarkers.id?.type).toBe(MarkerType.Paragraph);
-    expect(selectableParagraphMarkers).not.toContain('id');
-    expect(usfmMarkers.c?.type).toBe(MarkerType.Paragraph);
-    expect(selectableParagraphMarkers).not.toContain('c');
+  it('does not treat character-style markers as paragraph markers', () => {
+    expect(isParagraphMarker('v')).toBe(false); // Character, special-cased by isBlockMarker only
+    expect(isParagraphMarker('vp')).toBe(false);
+    expect(isParagraphMarker('nd')).toBe(false);
+    expect(isParagraphMarker('qs')).toBe(false);
+    expect(isParagraphMarker('qac')).toBe(false);
+    expect(isParagraphMarker('f')).toBe(false);
+    expect(isParagraphMarker('ca')).toBe(false);
   });
 
-  it('excludes markers that are not MarkerType.Paragraph', () => {
-    expect(selectableParagraphMarkers).not.toContain('v'); // Character, special-cased by isBlockMarker only
-    expect(selectableParagraphMarkers).not.toContain('nd'); // Character
-    expect(selectableParagraphMarkers).not.toContain('qs'); // Character
-    expect(selectableParagraphMarkers).not.toContain('qac'); // Character
-  });
-
-  it('PROGRAMMATICALLY_APPLIED_MARKERS contains id and c', () => {
-    expect(PROGRAMMATICALLY_APPLIED_MARKERS.has('id')).toBe(true);
-    expect(PROGRAMMATICALLY_APPLIED_MARKERS.has('c')).toBe(true);
-  });
-
-  it('contains only MarkerType.Paragraph markers', () => {
-    const nonParagraphMembers = selectableParagraphMarkers.filter(
-      (marker) => usfmMarkers[marker]?.type !== MarkerType.Paragraph,
-    );
-
-    expect(nonParagraphMembers).toEqual([]);
+  it('returns false for empty and unknown markers', () => {
+    expect(isParagraphMarker('')).toBe(false);
+    expect(isParagraphMarker('notamarker')).toBe(false);
   });
 });

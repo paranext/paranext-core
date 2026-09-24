@@ -4026,15 +4026,19 @@ export declare function isBlockMarker(marker: string): boolean;
  */
 export declare function isCharacterMarker(marker: string): boolean;
 /**
- * `MarkerType.Paragraph` markers that are never valid to select via a plain paragraph-style retag,
- * because they are instead applied through dedicated, structure-aware mechanisms.
+ * True when a marker is a paragraph-style marker, including _true_ discourse paragraphs, others
+ * that begin a block of text (poetry lines, blank lines, list entries, etc.) and chapter-level or
+ * book-level identification, metadata, or other such structural markers.
+ *
+ * Paragraph markers are identified by their {@link MarkerType.Paragraph} type in {@link usfmMarkers}
+ * rather than a hand-maintained list.
+ *
+ * @param marker Marker code to check, without its leading backslash (e.g. `p`, not `\p`)
+ * @returns `true` when the marker is a known USFM marker of type {@link MarkerType.Paragraph}.
+ *   `false` for anything else: character markers, note markers (`f`/`fe`/`x`), numbering markers
+ *   (`v`/`va`/`vp`/`ca`), and for empty or unknown marker codes.
  */
-export declare const PROGRAMMATICALLY_APPLIED_MARKERS: ReadonlySet<string>;
-/**
- * Every USFM paragraph-style marker known to {@link usfmMarkers} that a user can validly choose to
- * apply via a plain paragraph-style retag. (Excludes {@link PROGRAMMATICALLY_APPLIED_MARKERS}.)
- */
-export declare const selectableParagraphMarkers: readonly string[];
+export declare function isParagraphMarker(marker: string): boolean;
 /**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *

@@ -8,11 +8,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { selectableParagraphMarkers, LocalizeKey } from 'platform-bible-utils';
+import { LocalizeKey } from 'platform-bible-utils';
 import { findScrollContainer, paraAtPoint } from '../editor-dom.util';
 import {
   getParagraphMarkerTitle,
   paragraphMarkerNameKey,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
+  selectableParagraphMarkers,
 } from '../platform-scripture-editor.utils';
 import { computePosition, extractMarker, TooltipPosition } from './paragraph-marker-tooltip.utils';
 
@@ -83,11 +85,17 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   // component exists to fix, just for paragraphs 2..N of the sweep instead of paragraph 1.
   const lastRevealAtRef = useRef<number | undefined>(undefined);
 
-  const blockMarkerKeys = useMemo<LocalizeKey[]>(
-    () => selectableParagraphMarkers.map(paragraphMarkerNameKey),
+  // Includes PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS ('id', 'c') alongside
+  // selectableParagraphMarkers so their titles are available if the tooltip is able to show them
+  // — see PT-4740.
+  const paragraphMarkerKeys = useMemo<LocalizeKey[]>(
+    () =>
+      [...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS].map(
+        paragraphMarkerNameKey,
+      ),
     [],
   );
-  const [localizedStrings] = useLocalizedStrings(blockMarkerKeys);
+  const [localizedStrings] = useLocalizedStrings(paragraphMarkerKeys);
 
   // Falls back to the last-shown marker while closing (see lastMarkerRef) so the exit animation
   // fades real content instead of an empty box.
