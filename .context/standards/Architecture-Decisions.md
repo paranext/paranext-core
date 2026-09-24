@@ -4825,14 +4825,27 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   repeatedly — a hook or effect keyed on the set of open web views, a selection, a setting that
   another surface writes — acts on the **diff** of that set: it acquires only what joined, releases
   only what left, and keeps resolved providers (and failed lookups) for its own lifetime so a
-  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, or a
-  provider that could not be subscribed to, is kept for a bounded delay (30 seconds in the hook)
-  and then looked up afresh on the next join, whatever the failure was: the lookup service's
-  `No project found` is also what a late-registering factory or a mid-session resource install
-  produces, so no message text is treated as a permanent verdict. `useOpenProjectBookIds`
-  (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the reference implementation; the
-  scroll-group service's `ensureVersificationSubscribed` is the older in-tree instance and evicts
-  immediately on failure, which suits a module-level cache with few callers. (2)
+  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, a provider
+  that could not be subscribed to, or one whose setting could not be read, is kept for a bounded
+  delay (30 seconds in the hook) and then looked up afresh by a timer the failed subscription arms
+  for itself, without waiting for the project to leave and rejoin (leaving cancels the timer),
+  whatever the failure was: the lookup service's `No project found` is also what a
+  late-registering factory or a mid-session resource install produces, so no message text is
+  treated as a permanent verdict. The attempts are not capped: an id that never resolves costs one
+  fan-out per delay for as long as its view stays open, which after rule (1) is a handful of
+  requests, and the lookup service logs an empty answer to a query that names one project at debug
+  rather than warn, so a project the platform does not know costs no production log line per
+  attempt. A setting read that throws still warns per attempt, from the data-provider service: a
+  project that exists and cannot be read is a genuine anomaly, and in-tree base providers answer a
+  setting they do not store with its contributed default rather than a failure, so that path is
+  not reached by a provider that merely lacks `booksPresent`. A real value delivered by the
+  subscription clears the stamp (not the subscribe resolving, which proves only that the listener
+  attached), and a member that cannot report contributes no books rather than its previous list.
+  `useOpenProjectBookIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the
+  reference implementation; the scroll-group service's `ensureVersificationSubscribed` is the
+  older in-tree instance and evicts immediately on failure, so, being pull-driven and re-read on
+  every conversion, it pays a fan-out per conversion for a project that never resolves — a gap
+  outside this decision, not a pattern it endorses. (2)
   The **lookup service stays a broadcast** with no cache of its own for now: which factories serve
   which project changes as factories register, as resources install, and as layering factories
   come and go, and a stale answer there is a correctness bug for every caller, not a performance
@@ -4847,17 +4860,36 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the debounce window; a diff costs nothing when the set is unchanged, so it needs no delay.
   (c) **Read `booksPresent` through one aggregating service** instead of a provider per project —
   a larger redesign that would still have to answer where that service gets its providers from.
+  (d) **One process-level provider cache shared by the toolbar hook and the scroll-group service**
+  — open, not rejected: the two caches key on the same project ids in the same renderer, so a
+  project both consumers hold costs two fan-outs. They differ in shape (the scroll-group cache is
+  pull-driven and re-read on every conversion; the hook's is push-driven and consulted on join or
+  by its retry timer), so a shared cache would have to carry the retry policy of the push-driven
+  consumer. Worth doing when a third consumer appears. (e) **Heal from network events instead of a
+  timer** — `use-project-picker-data.hook.ts` already does this for the same failure mode,
+  refetching on `platform.onDidChangeProjects` and on `object:onDidCreateNetworkObject` filtered
+  to PDP factories, debounced. It costs nothing while idle and heals in about 200 ms. Not chosen
+  for the hook: three more network subscriptions against one timer, and the events miss a C#
+  factory that starts serving an id without a new factory registering. Remains the right shape
+  for a consumer that must heal fast.
 - **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
   `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
-  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup failed is
-  retried the next time it joins after the delay, so a project the backend begins serving later in
-  the session is picked up within that delay plus one membership change, never sooner; a
-  consumer that needs it sooner would subscribe to project-list or factory-registration events and
-  evict on those instead. The flap sources that exposed this are tracked as
-  PT-4592 (a panel republishing its navigable project ids while its reference list resolves
-  transiently empty) and PT-4743 (one installed resource yielding two picker rows under two project
-  id spellings). Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is
-  restated for agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
+  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup,
+  subscribe or setting read failed is retried by a timer after the delay, in place, so a project
+  the backend begins serving later in the session is picked up within one delay of its failure,
+  never sooner; a consumer that needs it sooner takes alternative (e). Reviewers of any
+  `subscribeSetting` consumer should also know that a read failure is a value in the callback, not
+  a rejection, so a catch around the subscribe does not see it. The retry mutates the toolbar's
+  book list on its own cadence, without a user action: a project that fails while the picker is
+  open loses its books from the list mid-interaction, accepted over showing books that cannot be
+  navigated to. A subscription that dies without reporting a failure (a provider whose network
+  object is disposed by an extension host restart while the subscription stays registered
+  locally) is not covered by the timer; as of 2026-09-24 it is tracked on PT-4592.
+  The flap sources that exposed this are tracked as PT-4592 (a panel republishing its navigable
+  project ids while its reference list resolves transiently empty) and PT-4743 (one installed
+  resource yielding two picker rows under two project id spellings). Revisit rule (2) if a
+  platform-level in-flight de-duplication lands. Rule (1) is restated for agents in
+  `.claude/rules/architecture/provider-lookups-fan-out.md`.
 
 ## adr-pt9-interlinear-selected-reads: Publish the size limit and allow callers to select individual files or all at once
 
