@@ -142,7 +142,6 @@ import {
   removeDecorations,
 } from './decorations.util';
 import {
-  focusPaneNoteEditor,
   focusPaneSelectedRow,
   getVerseElement,
   runOnFirstLoad,
@@ -169,6 +168,7 @@ import {
   decideNoteCallerClickAction,
   decideNoteSessionUpdate,
   deepEqualAcrossIframes,
+  findEditorUsjNotes,
   formatEditorTitle,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
@@ -992,12 +992,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Publishes the editor's document to the pane, but only when the NOTES in it differ from what the
    * pane already holds — see {@link shouldPublishPaneDocument} for why, and for the rule itself.
    */
-  const publishLiveEditorUsjIfNotesChanged = useCallback((usj: Usj) => {
+  const publishLiveEditorUsjIfNotesChanged = useCallback((editorUsj: Usj) => {
+    const usj = correctEditorUsjVersion(editorUsj);
     let notes: MarkerObject[] | undefined;
     try {
-      notes = new UsjReaderWriter(usj, {
-        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-      }).findAllNotes();
+      notes = findEditorUsjNotes(usj);
     } catch (e) {
       logger.warn(
         `Could not read the notes out of the editor's document; publishing it to the footnotes ` +
@@ -1046,6 +1045,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const navigateToNoteRef = useRef<(index: number) => void>(() => {});
 
   /**
+   * Document-order index of the note the popover is open on, so closing the popover can park the
+   * caret just past that note. An index rather than a key: a Save replaces the note node, and with
+   * it the key, while its position among the notes stays put.
+   */
+  const popoverNoteIndexRef = useRef<number | undefined>(undefined);
+
+  /**
    * Starts a note-editing session on the footnotes pane's row `index`, taking the shared session
    * over from the popover (the two surfaces are exclusive) and selecting the row so the pane
    * scrolls it into view. Ended through `closeFootnoteEditor`, the single end-of-session path for
@@ -1072,7 +1078,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // editor" — which is what a caller click on an already-open note asks for.
       if (editingNoteKey.current === noteKey && paneEditingIndexRef.current === index) {
         editingNoteSessionRefreshedAt.current = Date.now();
-        focusPaneNoteEditor();
+        paneNoteEditorRef.current?.focus();
         return;
       }
       editingNoteKey.current = noteKey;
@@ -1238,8 +1244,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // editor's built-in default is the same a-z sequence PT9's GetNthCaller falls back to.
       noteCallers: footnoteCallers,
       crossRefCallers,
-      // Registered unconditionally, including for a read-only text: a caller click there still
-      // navigates (reveals the footnotes pane and selects the note) even though it opens no editor.
+      // Registered unconditionally, including for a read-only text: in Standard view a caller click
+      // there still navigates (reveals the footnotes pane and selects the note) even though it
+      // opens no editor.
       // The handler is baked into the caller nodes when the document loads, so every gate it
       // applies — editability, the view's editing surface, the pane's state — is read from a ref at
       // click time; a closure over those values would keep serving whatever they were at load time.
@@ -1306,7 +1313,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // The pane addresses notes by document-order index, which the editor computes exactly at
         // click time; a focus request sent while the pane's data is still mounting is retried
         // when it repopulates.
-        if (decision.showPane) setFootnotesPaneVisible(true);
+        if (decision.showPane) {
+          setFootnotesPaneVisible(true);
+          // The focus request below addresses the LIVE document, and the pane mounts on whatever
+          // document it is handed; seed it now rather than a render later (the reveal effect), or
+          // the request resolves against a list that is missing notes added since the last load.
+          const editorUsj = editorRef.current?.getUsj();
+          if (editorUsj) {
+            publishedPaneNotesRef.current = undefined;
+            setLiveEditorUsj(correctEditorUsjVersion(editorUsj));
+          }
+        }
         const index =
           decision.sendPaneFocusRequest || decision.action === 'open-pane-editor'
             ? getNoteIndex()
@@ -1350,6 +1367,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         editingNoteOps.current = [noteOp];
         editingNoteOpsBaseline.current = noteOp;
         editingNoteSessionRefreshedAt.current = Date.now();
+        popoverNoteIndexRef.current = getNoteIndex();
         // The two surfaces are exclusive: a row editor left open in the pane must go before the
         // popover takes the session over.
         setPaneEditingIndex(undefined);
@@ -1478,6 +1496,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const [editorChapterKey, setEditorChapterKey] = useState<string | undefined>(undefined);
   /**
+   * {@link editorChapterKey}, readable from event handlers. After a chapter change the text and the
+   * footnotes pane keep showing the chapter being left until the new one arrives, and a note picked
+   * in that window belongs to the old chapter while `scrRef` already names the new one.
+   */
+  const editorChapterKeyRef = useRef<string | undefined>(undefined);
+  /**
    * The chapter this render's content subscription is for. `useEditorPdpSync` applies content in
    * the commit of the render that delivered it, so this is the chapter of the content being
    * applied.
@@ -1517,6 +1541,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     publishedPaneNotesRef.current = undefined;
     setLiveEditorUsj(usj);
     clearAnnotationInfo.current();
+    editorChapterKeyRef.current = renderedChapterKeyRef.current;
     setEditorChapterKey(renderedChapterKeyRef.current);
   });
 
@@ -2862,7 +2887,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // remembered from the last time the pane was open say nothing about what it should open onto
     // now.
     publishedPaneNotesRef.current = undefined;
-    setLiveEditorUsj(footnotesPaneRendered ? editorRef.current?.getUsj() : undefined);
+    const editorUsj = footnotesPaneRendered ? editorRef.current?.getUsj() : undefined;
+    setLiveEditorUsj(editorUsj && correctEditorUsjVersion(editorUsj));
   }, [footnotesPaneRendered]);
   // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
   // entire layout phase of each render. If a useLayoutEffect fires during a chapter-change render
@@ -3005,7 +3031,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * computed against; `usjFromPdp` lags it by the save debounce.
    */
   const navigateToNote = useCallback((index: number) => {
-    scrollToNoteCaller(index);
+    // While a new chapter loads, the notes on screen are the old chapter's: the verse of one of them
+    // combined with the new chapter would send the scroll group somewhere the user never asked for.
+    if (editorChapterKeyRef.current !== toBookChapterKey(scrRefRef.current)) return;
+    const noteKey = editorRef.current?.getNoteKey(index);
+    const noteElement = noteKey ? editorRef.current?.getElementByKey(noteKey) : undefined;
+    if (noteElement) scrollToNoteCaller(noteElement);
     editorRef.current?.selectAfterNote(index);
     const noteScrRef = resolveNoteVerseRef(editorRef.current?.getUsj(), index, scrRefRef.current);
     if (!noteScrRef) {
@@ -3066,6 +3097,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const handleFootnoteEditRequested = useCallback(
     (index: number, caretPosition: FootnoteCaretPosition) => {
+      // The old chapter's note, while the new chapter loads (see `navigateToNote`): its session
+      // would only be ended by the load.
+      if (editorChapterKeyRef.current !== toBookChapterKey(scrRefRef.current)) return;
       // A row editor open on another note is ended through the normal close path BEFORE this note
       // is read, as Space on another row does. The row editor stays mounted and simply loads the
       // next note, and a load flushes the outgoing note unsettled: a marker rename still pending
@@ -3145,9 +3179,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Only a move to another element counts (see `FootnotesLayoutProps.onPaneFocusLeft`), so this
    * never fires for the marker palette — which renders outside this iframe and takes focus with it
    * while the user is very much still editing the note.
+   *
+   * The open note's own caller is the exception: pressing it focuses it before its click arrives,
+   * and that click asks to be put back in this very session (see `startPaneNoteEdit`).
    */
-  const handlePaneFocusLeft = useCallback(() => {
+  const handlePaneFocusLeft = useCallback((target: Element) => {
     if (paneEditingIndexRef.current === undefined) return;
+    const openNoteElement = editingNoteKey.current
+      ? editorRef.current?.getElementByKey(editingNoteKey.current)
+      : undefined;
+    if (openNoteElement?.contains(target)) return;
     closeFootnoteEditorRef.current(false);
   }, []);
 
@@ -3367,11 +3408,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * focus, and Lexical's blur processing can null the live selection, at which point `focus()`
    * falls back to selecting the document end — dropping the caret at the bottom of the chapter and
    * scrolling there. The palette paths restore it the same way before they apply.
+   *
+   * @param afterNoteIndex The note to put the caret just past instead, as PT9 does once the user is
+   *   done with a note; the caret the user left in the text may be far from it, and focusing there
+   *   would scroll the note they just edited out of view
    */
-  const returnFocusToScriptureText = useCallback(() => {
-    restoreEditorSelection();
-    editorRef.current?.focus();
-  }, [restoreEditorSelection]);
+  const returnFocusToScriptureText = useCallback(
+    (afterNoteIndex?: number) => {
+      // A close can be driven from outside this web view (a chapter change from another view or a
+      // global shortcut closes an open popover), and web views share one window: focusing here would
+      // pull the caret out of whichever view the user is typing in. `hasFocus`, not the active
+      // element, because the note editor blurs itself as it closes.
+      if (!document.hasFocus()) return;
+      if (afterNoteIndex === undefined) restoreEditorSelection();
+      else editorRef.current?.selectAfterNote(afterNoteIndex);
+      editorRef.current?.focus();
+    },
+    [restoreEditorSelection],
+  );
 
   /** Hides the footnotes pane and returns focus to the text, as PT9's pane close button does. */
   const hideFootnotesPane = useCallback(() => {
@@ -3386,8 +3440,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /** Called by FootnoteEditor's onClose prop (X button or save-then-close). */
   const onFootnoteEditorClose = useCallback(() => {
+    const noteIndex = popoverNoteIndexRef.current;
+    popoverNoteIndexRef.current = undefined;
+    // Cancel on a note inserted for this session deletes it, leaving no note to land after.
+    const discardsNote = editingNoteIsNew.current;
     closeFootnoteEditor(true);
-    returnFocusToScriptureText();
+    returnFocusToScriptureText(discardsNote ? undefined : noteIndex);
   }, [closeFootnoteEditor, returnFocusToScriptureText]);
 
   /**
@@ -3407,16 +3465,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `false` — nothing is discarded, so a note inserted just before navigating stays in the text.
   //
   // Runs in the CLEANUP rather than the body, because ending the session FLUSHES the row editor's
-  // pending apply (see `closeFootnoteEditor`) and that apply schedules a PDP save. By the time
-  // effect BODIES run, every input the save pipeline reads has already moved to the NEW chapter:
-  // `chapterKeyRef` was reassigned during render, and `saveUsjToPdpRawStableRef` was re-pointed to
-  // the new chapter's setter by an effect declared above this one. The flushed note content — the
-  // OLD chapter's — would then be scheduled under the new chapter's key, so
-  // `performDebouncedPdpSave` takes its same-chapter branch: it reads the editor at fire time and
-  // either drops the edits (the new chapter has loaded by then) or writes the old chapter's
-  // document into the new one (it has not). In the cleanup phase none of that has happened yet, and
-  // the debounced save's own chapter-switch flush — a cleanup declared BELOW this one, so it runs
-  // right after it — lands the content through the chapter it was typed in.
+  // pending apply (see `closeFootnoteEditor`) and that apply schedules a PDP save. `chapterKeyRef`
+  // already names the NEW chapter either way (it is reassigned during render), so the save takes
+  // `performDebouncedPdpSave`'s same-chapter branch: it saves whatever the editor shows when it
+  // fires, through `saveUsjToPdpRawStableRef`. That ref is re-pointed to the new chapter's setter by
+  // an effect BODY declared above this one, so from a body the old chapter's note content would be
+  // written into the new chapter's document. In the cleanup phase the ref still holds the OLD
+  // chapter's setter and the editor still shows the old chapter, and the debounced save's own
+  // chapter-switch flush — a cleanup declared BELOW this one, so it runs right after it — saves the
+  // content into the chapter it was typed in.
   //
   // The deps mirror `getChapterKey`'s identity fields exactly, as that flush's do: a versification
   // change re-selects the chapter document just as a chapter switch does, and the session's note
@@ -3586,6 +3643,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         editingNoteOpsBaseline.current = noteOp;
         editingNoteSessionRefreshedAt.current = Date.now();
         editingNoteIsNew.current = true;
+        popoverNoteIndexRef.current = editorRef.current?.getNoteIndex(insertedNodeKey);
         setShowFootnoteEditor(true);
       }
     },
@@ -3673,7 +3731,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // the send completes before the renderer dies — this is deliberately best-effort, matching the
   // reliability of any async work in these events. On plain blur the send proceeds normally.
   useEffect(() => {
-    const flush = () => saveUsjToPdpDebounced.flush();
+    const flush = () => {
+      // A pane row's latest keystrokes are still inside the row editor's own apply debounce, not
+      // yet in the document this save reads.
+      if (paneEditingIndexRef.current !== undefined) paneNoteEditorRef.current?.flushPendingEdits();
+      saveUsjToPdpDebounced.flush();
+    };
     const flushOnBlur = () => {
       // A FOCUSED marker palette is an overlay OUTSIDE this iframe, so opening one blurs this
       // window — a mid-edit save per palette interaction, not a real focus loss. Skip the blur
@@ -3703,6 +3766,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * identity (reads only the stable debouncer) so it never re-triggers the sync effect.
    */
   const flushPendingDebouncedSave = useCallback(() => {
+    // A pane row's latest keystrokes are still inside the row editor's own apply debounce; landing
+    // them first puts them in the save flushed below, as recent typing in the text already is.
+    if (paneEditingIndexRef.current !== undefined) paneNoteEditorRef.current?.flushPendingEdits();
     if (!saveUsjToPdpDebounced.isPending()) return undefined;
     return saveUsjToPdpDebounced.flush();
   }, [saveUsjToPdpDebounced]);
@@ -3809,6 +3875,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // the row editor's own applies too, so the next such comparison is against what the row
             // is showing rather than against the ops it was first loaded with.
             if (decision.reloadRowEditor && noteOp) editingNoteOps.current = [noteOp];
+            // The row editor's own apply keeps the array's identity, so the mounted editor is left
+            // alone, but refreshes its content: an editor REmounted mid-session (its row keyed
+            // afresh) loads from it, and must load what the note now holds.
+            else if (decision.action === 'rekey' && noteOp && editingNoteOps.current)
+              editingNoteOps.current[0] = noteOp;
             if (decision.refreshBaseline) editingNoteOpsBaseline.current = noteOp;
             if (decision.action === 'rekey') {
               editingNoteIsNew.current = false;
@@ -3911,7 +3982,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       nowMs: Date.now(),
       paneSession:
         paneEditingIndexRef.current !== undefined
-          ? { hasFocus: paneHasFocusRef.current, lastEditAtMs: lastPaneNoteEditAt.current }
+          ? {
+              // The row editor keeps DOM focus while the window itself is away (`paneHasFocusRef`
+              // does not: it tracks the visible caret), and its typing is what deferral protects.
+              hasFocus: paneHasFocusRef.current || !!paneNoteEditorRef.current?.containsFocus(),
+              lastEditAtMs: lastPaneNoteEditAt.current,
+            }
           : undefined,
     });
     if (activity.isNoteSessionStale) {
@@ -4618,6 +4694,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   // editor or the popover) owns focus and the pane must not pull it away.
                   focusRowOnFocusRequest={viewType === 'standard' && noteEditingSurface === 'none'}
                   onPaneFocusChange={handlePaneFocusChange}
+                  // The placeholder the data hook serves until the chapter arrives, while the text
+                  // beside it shows a spinner.
+                  isLoading={!liveEditorUsj && usjFromPdp === defaultUsj}
                 >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                   <OutPortal node={editorPortalNode} />

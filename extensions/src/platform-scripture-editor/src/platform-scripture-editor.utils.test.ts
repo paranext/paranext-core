@@ -16,6 +16,7 @@ import {
   decideNoteCallerClickAction,
   decideNoteSessionUpdate,
   resolveNoteVerseRef,
+  findEditorUsjNotes,
   finalizeProjectSwitch,
   formatEditorTitle,
   generateParagraphMenuListItems,
@@ -4029,6 +4030,20 @@ describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
       verseNum: 4,
       versificationStr: 'English',
     });
+  });
+
+  // The editor stamps its documents 3.1 and the markers map is declared for 3.0; left uncorrected,
+  // the reader logs the whole chapter on every pick.
+  it("reads the editor's own document version without logging it", () => {
+    expect(chapterWithNotesInTwoVerses.version).toBe('3.1');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, currentScrRef)?.verseNum).toBe(4);
+      expect(findEditorUsjNotes(chapterWithNotesInTwoVerses)).toHaveLength(2);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('changes nothing but the verse — the editor holds one chapter', () => {

@@ -73,7 +73,25 @@ const usjWithTwoNotes: Usj = {
     },
   ],
 };
-const localizedStrings = { '%webView_footnoteList_close%': 'Close footnotes pane' };
+/** A one-paragraph chapter holding a note per text, in order. */
+function usjWithNotes(...texts: string[]): Usj {
+  return {
+    ...usjWithTwoNotes,
+    content: [
+      usjWithTwoNotes.content[0],
+      usjWithTwoNotes.content[1],
+      {
+        type: 'para',
+        marker: 'p',
+        content: [{ type: 'verse', marker: 'v', number: '1' }, ...texts.map(note)],
+      },
+    ],
+  };
+}
+const localizedStrings = {
+  '%webView_footnoteList_close%': 'Close footnotes pane',
+  '%webView_footnoteList_empty%': 'This chapter has no footnotes.',
+};
 
 function renderPane(overrides: Partial<ComponentProps<typeof FootnotesLayout>> = {}) {
   const { children = <div data-testid="editor" />, ...rest } = overrides;
@@ -220,6 +238,128 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
     screen.getByTestId('plain-portal').focus();
 
     expect(onPaneFocusLeft).toHaveBeenCalledTimes(1);
+  });
+
+  // A click on another panel or the tab strip takes focus out of this document (a blur with no
+  // related target, which ends nothing); coming back by clicking into the text is the move on.
+  it('reports a return to the text after focus first left the document', () => {
+    const onPaneFocusLeft = vi.fn();
+    renderPane({
+      onPaneFocusLeft,
+      children: (
+        <button type="button" data-testid="text">
+          text
+        </button>
+      ),
+    });
+    const row = screen.getAllByRole('option')[0];
+    row.focus();
+    // A blur with no related target is what focus leaving the document looks like from in here.
+    // eslint-disable-next-line no-null/no-null
+    fireEvent.blur(row, { relatedTarget: null });
+    expect(onPaneFocusLeft).not.toHaveBeenCalled();
+
+    screen.getByTestId('text').focus();
+
+    expect(onPaneFocusLeft).toHaveBeenCalledWith(screen.getByTestId('text'));
+  });
+
+  // An overlay is portalled outside the pane, so its own blur never reaches the pane.
+  it('reports a move out of an overlay the row editor opened', () => {
+    const onPaneFocusLeft = vi.fn();
+    const onPaneFocusChange = vi.fn();
+    renderPane({
+      onPaneFocusLeft,
+      onPaneFocusChange,
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => (
+        <>
+          <input data-testid="row-editor" />
+          {createPortal(
+            <div data-slot="popover-content">
+              <button type="button" data-testid="overlay-item">
+                comment
+              </button>
+            </div>,
+            document.body,
+          )}
+        </>
+      ),
+      children: (
+        <button type="button" data-testid="text">
+          text
+        </button>
+      ),
+    });
+    screen.getByTestId('row-editor').focus();
+    screen.getByTestId('overlay-item').focus();
+    expect(onPaneFocusLeft).not.toHaveBeenCalled();
+
+    screen.getByTestId('text').focus();
+
+    expect(onPaneFocusLeft).toHaveBeenCalledTimes(1);
+    expect(onPaneFocusChange).toHaveBeenLastCalledWith(false);
+  });
+
+  // The editor's right-click menu is portalled like the dropdowns, and its items take focus.
+  it("stays silent while focus moves into the row editor's right-click menu", () => {
+    const onPaneFocusLeft = vi.fn();
+    renderPane({
+      onPaneFocusLeft,
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => (
+        <>
+          <input data-testid="row-editor" />
+          {createPortal(
+            <div className="typeahead-popover">
+              <ul>
+                <li tabIndex={-1} data-testid="menu-item">
+                  Cut
+                </li>
+              </ul>
+            </div>,
+            document.body,
+          )}
+        </>
+      ),
+    });
+    screen.getByTestId('row-editor').focus();
+
+    screen.getByTestId('menu-item').focus();
+
+    expect(onPaneFocusLeft).not.toHaveBeenCalled();
+  });
+
+  // Removing the focused element takes focus with it without a blur the pane sees.
+  it('reports losing focus when the focused row editor goes away', () => {
+    const onPaneFocusChange = vi.fn();
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      onPaneFocusChange,
+      usj: usjWithTwoNotes,
+    };
+    const { rerender } = render(
+      <FootnotesLayout
+        {...props}
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <input data-testid="row-editor" />}
+      >
+        <div />
+      </FootnotesLayout>,
+    );
+    screen.getByTestId('row-editor').focus();
+    expect(onPaneFocusChange).toHaveBeenLastCalledWith(true);
+
+    rerender(
+      <FootnotesLayout {...props}>
+        <div />
+      </FootnotesLayout>,
+    );
+
+    expect(onPaneFocusChange).toHaveBeenLastCalledWith(false);
   });
 
   it('stays silent while focus moves within the pane', () => {
@@ -476,20 +616,19 @@ describe('FootnotesLayout selection across USJ changes', () => {
     expect(screen.getByTestId('row-editor')).toBeInTheDocument();
   });
 
-  it('does not remount the list when a row enters edit mode', () => {
+  // Ending a session flushes the row editor's last keystrokes, so the row's final content and the
+  // end of editing arrive in one update - which must not read as the selected note changing.
+  it('keeps the row selected when its editing ends in the same update as its final content', () => {
+    const onSelectedFootnoteChange = vi.fn();
     const props = {
       showMarkers: true,
       useWebViewState: useWebViewStateMock,
       localizedStrings,
       onClose: () => {},
+      onSelectedFootnoteChange,
+      focusRequest: { index: 1 },
     };
     const { rerender } = render(
-      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
-        <div />
-      </FootnotesLayout>,
-    );
-    const rowsBefore = screen.getAllByRole('option');
-    rerender(
       <FootnotesLayout
         {...props}
         usj={usjWithTwoNotes}
@@ -499,11 +638,16 @@ describe('FootnotesLayout selection across USJ changes', () => {
         <div />
       </FootnotesLayout>,
     );
-    // A remount would produce a brand new element for the non-editing row; same node means the
-    // USJ-processing effect did not re-run (and therefore did not re-mint `footnoteListKey`) just
-    // because `editingFootnoteIndex` changed.
-    expect(screen.getAllByRole('option')[0]).toBe(rowsBefore[0]);
-    expect(screen.getByTestId('row-editor')).toBeInTheDocument();
+    onSelectedFootnoteChange.mockClear();
+
+    rerender(
+      <FootnotesLayout {...props} usj={usjWithNotes('alpha', 'beta typed more')}>
+        <div />
+      </FootnotesLayout>,
+    );
+
+    expect(onSelectedFootnoteChange).not.toHaveBeenCalledWith(undefined);
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
   });
 });
 
@@ -558,6 +702,43 @@ describe('FootnotesLayout list identity across USJ changes', () => {
     expect(screen.getAllByRole('option')[0]).toBe(rowBefore);
   });
 
+  it('keeps the row editor mounted when a note is added ahead of the edited last row', () => {
+    let mounts = 0;
+    function RowEditor() {
+      useEffect(() => {
+        mounts += 1;
+      }, []);
+      return <div data-testid="row-editor" />;
+    }
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      renderEditingFootnote: () => <RowEditor />,
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes} editingFootnoteIndex={1}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(mounts).toBe(1);
+
+    // The web view moves the index and publishes the document in the same update.
+    rerender(
+      <FootnotesLayout
+        {...props}
+        usj={usjWithNotes('new', 'alpha', 'beta')}
+        editingFootnoteIndex={2}
+      >
+        <div />
+      </FootnotesLayout>,
+    );
+
+    expect(mounts).toBe(1);
+    expect(screen.getByTestId('row-editor')).toBeInTheDocument();
+  });
+
   it('remounts the rows when a note is added or removed', () => {
     const props = {
       showMarkers: true,
@@ -598,5 +779,26 @@ describe('FootnotesLayout list identity across USJ changes', () => {
     );
     expect(screen.getAllByRole('option')).toHaveLength(3);
     expect(screen.getAllByRole('option')[0]).not.toBe(rowBefore);
+  });
+});
+
+describe('FootnotesLayout empty state', () => {
+  it('says the chapter has no footnotes once it has loaded', () => {
+    renderPane({ usj: usjWithNotes() });
+    expect(screen.getByRole('status')).toHaveTextContent('This chapter has no footnotes.');
+  });
+
+  it('says nothing while the chapter is still loading', () => {
+    renderPane({ usj: usjWithNotes(), isLoading: true });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('FootnotesLayout rows under the close button', () => {
+  // The button floats over whichever row is scrolled to the top, not only the first one.
+  it('reserves trailing room on every row', () => {
+    renderPane();
+    const wrapper = screen.getByRole('listbox').parentElement;
+    expect(wrapper?.className).toContain('tw:[&_li]:pe-7');
   });
 });

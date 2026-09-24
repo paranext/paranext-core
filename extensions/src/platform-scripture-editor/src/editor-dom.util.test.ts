@@ -26,8 +26,8 @@ import {
   isSameScrollGeometry,
   isSameVerseRef,
   measureBaselineOffset,
-  focusPaneNoteEditor,
   focusPaneSelectedRow,
+  FOOTNOTES_PANE_ATTRIBUTE,
   measureRangeScrollGeometry,
   paraAtPoint,
   RANGE_SCROLL_TOP_OFFSET,
@@ -573,85 +573,49 @@ describe('scrollToAnnotation', () => {
 });
 
 describe('scrollToNoteCaller', () => {
-  it('returns undefined and does not scroll when no note exists at the index', () => {
-    const { wrapperScrollTo } = buildNotesDom();
-    expect(scrollToNoteCaller(2)).toBeUndefined();
-    expect(wrapperScrollTo).not.toHaveBeenCalled();
-  });
-
   it('does not scroll when the caller is already fully visible', () => {
     const { notes, wrapperScrollTo } = buildNotesDom();
     stubRect(notes[0], 400, 20); // within [0, 900), scrollTop 0
-    expect(scrollToNoteCaller(0)).toBe(notes[0]);
+    scrollToNoteCaller(notes[0]);
     expect(wrapperScrollTo).not.toHaveBeenCalled();
   });
 
   it('aligns the caller to the closer edge when it is out of view', () => {
     const { notes, wrapperScrollTo } = buildNotesDom(); // note 1 rect top 1800, height 20
-    expect(scrollToNoteCaller(1)).toBe(notes[1]);
+    scrollToNoteCaller(notes[1]);
     // noteTop = 1800, bottom = 1820; distanceToTop = 1800, distanceToBottom = |900 - 1820| = 920
     // -> bottom edge; targetTop = 1820 - 900 + 80 = 1000
     expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 1000 });
-  });
-
-  it('addresses notes by document order', () => {
-    const { notes, wrapperScrollTo } = buildNotesDom();
-    scrollToNoteCaller(0);
-    // note 0 rect top 1500: bottom edge, target = 1520 - 900 + 80 = 700
-    expect(wrapperScrollTo).toHaveBeenLastCalledWith({ behavior: 'smooth', top: 700 });
-    expect(scrollToNoteCaller(0)).toBe(notes[0]);
-  });
-});
-
-describe('focusPaneNoteEditor', () => {
-  // `focus()` leaves a collapsed Selection on the focused element in jsdom, and `addRange` is a
-  // no-op while the document already holds a range — so a test later in this file that builds its
-  // own selection would silently get none.
-  afterEach(() => {
-    document.getSelection()?.removeAllRanges();
-  });
-
-  /**
-   * Both surfaces render the same `FootnoteEditor` markup; only the pane's copy lives inside the
-   * footnotes list, which is what the helper has to key on.
-   */
-  function buildBothNoteEditors() {
-    document.body.innerHTML = `
-      <div class="footnote-editor"><div class="editor-input" id="popover" tabindex="-1"></div></div>
-      <ul role="listbox">
-        <li><div class="footnote-editor"><div class="editor-input" id="row" tabindex="-1"></div></div></li>
-      </ul>`;
-  }
-
-  it('focuses the row editor inside the footnotes list, not the popover editor', () => {
-    buildBothNoteEditors();
-    const focused = focusPaneNoteEditor();
-    expect(focused?.id).toBe('row');
-    expect(document.activeElement?.id).toBe('row');
-  });
-
-  it('returns undefined when no row is being edited', () => {
-    document.body.innerHTML = '<ul role="listbox"><li>plain row</li></ul>';
-    expect(focusPaneNoteEditor()).toBeUndefined();
   });
 });
 
 describe('focusPaneSelectedRow', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    // See the note in `focusPaneNoteEditor` above.
+    // `focus()` leaves a collapsed Selection on the focused element in jsdom, and `addRange` is a
+    // no-op while the document already holds a range — so a test later in this file that builds
+    // its own selection would silently get none.
     document.getSelection()?.removeAllRanges();
   });
 
+  /**
+   * The pane's list, preceded by another list whose highlighted option is also `aria-selected` - a
+   * portalled menu, say, which the helper must not reach.
+   */
   function buildRows() {
     document.body.innerHTML = `
       <ul role="listbox">
-        <li role="option" aria-selected="false" id="first" tabindex="0">first</li>
-        <li role="option" aria-selected="true" id="selected" tabindex="0">selected</li>
-      </ul>`;
+        <li role="option" aria-selected="true" id="menu-item" tabindex="0">menu item</li>
+      </ul>
+      <div ${FOOTNOTES_PANE_ATTRIBUTE}>
+        <ul role="listbox">
+          <li role="option" aria-selected="false" id="first" tabindex="0">first</li>
+          <li role="option" aria-selected="true" id="selected" tabindex="0">selected</li>
+        </ul>
+      </div>`;
   }
 
-  it('focuses the selected row', () => {
+  it("focuses the pane's selected row", () => {
     buildRows();
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     expect(focusPaneSelectedRow()?.id).toBe('selected');

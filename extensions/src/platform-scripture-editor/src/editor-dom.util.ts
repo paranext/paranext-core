@@ -615,36 +615,21 @@ export function scrollToAnnotation(id: string): HTMLElement | undefined {
 }
 
 /**
- * Scrolls the text so the caller of the note at `noteIndex` (document order — the same index the
- * footnotes pane and `EditorRef.getNoteIndex` use) is visible.
+ * Scrolls the text so a note's caller is visible.
  *
- * @param noteIndex The document-order index of the note whose caller to scroll to
- * @returns The note element, or `undefined` when no note exists at that index
+ * @param noteElement The note's element in the Scripture editor (`EditorRef.getElementByKey` of the
+ *   note's key) - resolved by key rather than by a document query, since every mounted editor (the
+ *   footnotes pane's row editor, the note popover's) renders note elements of its own
  */
-export function scrollToNoteCaller(noteIndex: number): HTMLElement | undefined {
-  const noteElement = document.querySelectorAll<HTMLElement>('.editor-container .note')[noteIndex];
-  if (!noteElement) return undefined;
-
+export function scrollToNoteCaller(noteElement: HTMLElement): void {
   scrollElementIntoScrollContainer(noteElement);
-
-  return noteElement;
 }
 
 /**
- * Puts DOM focus back into the footnotes pane's row editor, which restores the caret its own editor
- * last held. Scoped to the pane's list so it can never reach the note popover's editor, the other
- * surface that renders a `FootnoteEditor`.
- *
- * @returns The row editor's editable element, or `undefined` when no row is being edited
+ * Attribute that marks the footnotes pane's own element, so a query for one of its rows cannot
+ * reach another list in the document (a portalled menu's options are `role="option"` too).
  */
-export function focusPaneNoteEditor(): HTMLElement | undefined {
-  const editorInput =
-    document.querySelector<HTMLElement>('[role="listbox"] .footnote-editor .editor-input') ??
-    undefined;
-  editorInput?.focus();
-
-  return editorInput;
-}
+export const FOOTNOTES_PANE_ATTRIBUTE = 'data-footnotes-pane';
 
 /**
  * Puts DOM focus on the footnotes pane's selected row, which is where a row-editing session was
@@ -656,16 +641,15 @@ export function focusPaneNoteEditor(): HTMLElement | undefined {
  * changed under it, driven from the toolbar or another view, and focusing a row then would pull
  * focus out of wherever the user is working.
  *
- * Scoped to the pane's list, like {@link focusPaneNoteEditor}.
- *
  * @returns The selected row element, or `undefined` when the pane has no selected row or the
  *   document does not hold focus
  */
 export function focusPaneSelectedRow(): HTMLElement | undefined {
   if (!document.hasFocus()) return undefined;
   const row =
-    document.querySelector<HTMLElement>('[role="listbox"] [role="option"][aria-selected="true"]') ??
-    undefined;
+    document.querySelector<HTMLElement>(
+      `[${FOOTNOTES_PANE_ATTRIBUTE}] [role="option"][aria-selected="true"]`,
+    ) ?? undefined;
   row?.focus();
 
   return row;

@@ -252,8 +252,7 @@ export type NoteCallerClickState = {
   surface: NoteEditingSurface;
   /**
    * Whether the text is shown in Standard view. Only Standard view gives a read-only text the
-   * navigation half of the pane model; every other view keeps a read-only caller inert, as it was
-   * before the pane became an editing surface.
+   * navigation half of the pane model; every other view keeps a read-only caller inert.
    */
   isStandardView: boolean;
 };
@@ -312,7 +311,7 @@ export type NoteCallerClickDecision = {
  *
  * - An expanded note's caller does nothing (the note is edited in place).
  * - A read-only text outside Standard view does nothing either: the pane's navigate-to-note model is
- *   Standard view's, and every other view keeps the inert caller it has always had.
+ *   Standard view's, and every other view keeps the caller inert.
  * - While a popover is really shown, a popover-surface click is ignored (one session at a time). A
  *   pane-editor session has no such limit — its row stays open across clicks.
  * - A popover session's key left behind without a shown popover is STALE and must not block the
@@ -435,6 +434,23 @@ export function decideNoteSessionUpdate(state: NoteSessionUpdateState): NoteSess
 }
 
 /**
+ * The notes in a document the editor produced, in document order - the list the footnotes pane
+ * shows and `EditorRef.getNoteIndex` indexes.
+ *
+ * The editor stamps its documents with a USJ version the markers map is not declared for, and
+ * `UsjReaderWriter` logs the WHOLE document on that mismatch; this corrects the version first (see
+ * {@link correctEditorUsjVersion}) so reading the notes on every keystroke logs nothing.
+ *
+ * @param editorUsj A document from the editor (`EditorRef.getUsj`) or the PDP
+ * @returns The notes, as `UsjReaderWriter.findAllNotes` returns them
+ */
+export function findEditorUsjNotes(editorUsj: Usj): MarkerObject[] {
+  return new UsjReaderWriter(correctEditorUsjVersion(editorUsj), {
+    markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+  }).findAllNotes();
+}
+
+/**
  * Whether the editor's freshly settled document has to be republished to the footnotes pane.
  *
  * Typing in the Scripture body changes the document on every keystroke and the note list on none of
@@ -489,7 +505,8 @@ export function resolveNoteVerseRef(
 ): SerializedVerseRef | undefined {
   if (!usj || noteIndex < 0) return undefined;
   try {
-    const usjReaderWriter = new UsjReaderWriter(usj, {
+    // Corrected for the same reason as in `findEditorUsjNotes`.
+    const usjReaderWriter = new UsjReaderWriter(correctEditorUsjVersion(usj), {
       markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
     });
     const note = usjReaderWriter.findAllNotes()[noteIndex];

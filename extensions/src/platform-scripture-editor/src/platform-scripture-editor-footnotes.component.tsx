@@ -22,18 +22,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import {
-  getErrorMessage,
-  getPaneSizeLimits,
-  LanguageStrings,
-  USFM_MARKERS_MAP_PARATEXT_3_0,
-  UsjReaderWriter,
-} from 'platform-bible-utils';
+import { getErrorMessage, getPaneSizeLimits, LanguageStrings } from 'platform-bible-utils';
 import { EditorWebViewMessage } from 'platform-scripture-editor';
 import { UseWebViewStateHook } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { X } from 'lucide-react';
-import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
+import {
+  findEditorUsjNotes,
+  valuesAreDeeplyEqual as deepEqualAcrossIframes,
+} from './platform-scripture-editor.utils';
 
 // TODO (PT-3657): calculate these dynamically:
 const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
@@ -48,9 +45,11 @@ const maximumFootnotesPaneWidthPercent = 50;
  * Overlay content the pane's own row editor puts on screen. Radix renders dropdown and popover
  * content through a React portal at `document.body`, so it is nowhere inside the pane's DOM even
  * though the pane is what opened it - the row editor's note-type and caller dropdowns and its
- * marker menu are all this shape.
+ * marker menu are all this shape. The editor's right-click menu (`.typeahead-popover`) is portalled
+ * the same way, and its items take focus on mousedown.
  */
-const paneOverlaySelector = '[data-slot="dropdown-menu-content"], [data-slot="popover-content"]';
+const paneOverlaySelector =
+  '[data-slot="dropdown-menu-content"], [data-slot="popover-content"], .typeahead-popover';
 
 /**
  * Whether a focus target counts as still being in the pane, including {@link paneOverlaySelector}
@@ -120,16 +119,27 @@ export type FootnotesLayoutProps = PropsWithChildren<{
    */
   onPaneFocusChange?: (hasFocus: boolean) => void;
   /**
-   * Fires when DOM focus leaves the pane for another element in the SAME document — clicking into
+   * Fires when DOM focus lands on an element in the SAME document outside the pane — clicking into
    * the Scripture text, the toolbar, anywhere the user has visibly moved on to. PT9 treats that as
    * leaving the note being edited, so this is what tells the host to end a row-editing session.
    *
-   * Deliberately NOT fired when focus leaves the document entirely (`relatedTarget` is null): that
-   * is a command palette or dialog rendered in the host frame outside this web view's iframe, or
-   * the window itself losing focus. In neither case has the user moved off the row editor, and
-   * ending the session there would close the editor they are still working in.
+   * Fires on every such landing, not only on a move straight out of the pane: focus can leave the
+   * document first (another panel, the tab strip) and come back to the text later, and that return
+   * is the user moving on just the same.
+   *
+   * Deliberately NOT fired while focus is outside the document (a command palette or dialog in the
+   * host frame outside this web view's iframe, or the window itself losing focus): the user has not
+   * moved off the row editor, and ending the session there would close the editor they are still
+   * working in.
+   *
+   * @param target The element focus landed on
    */
-  onPaneFocusLeft?: () => void;
+  onPaneFocusLeft?: (target: Element) => void;
+  /**
+   * Whether `usj` is still a placeholder for a chapter that has not arrived. The pane then says
+   * nothing rather than announcing that the chapter has no footnotes.
+   */
+  isLoading?: boolean;
 }>;
 
 export function FootnotesLayout({
@@ -148,6 +158,7 @@ export function FootnotesLayout({
   focusRowOnFocusRequest,
   onPaneFocusChange,
   onPaneFocusLeft,
+  isLoading = false,
 }: FootnotesLayoutProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -228,23 +239,27 @@ export function FootnotesLayout({
   }, [focusRequest, footnotes, focusRowOnFocusRequest]);
 
   // Mirrors `editingFootnoteIndex` into a ref so the USJ-processing effect below can read its
-  // current value without depending on it: `editingFootnoteIndex` changes far more often relative
-  // to `usj` staying fixed (entering/leaving edit mode) than the reverse, and re-running the USJ
-  // parse on every such change would re-mint every footnote's row key via `setFootnoteListKey`,
-  // remounting the entire list (including the editing row itself) for no content change. Declared
-  // BEFORE the USJ effect so the ref is already current when that effect reads it within the same
-  // commit.
+  // current value without depending on it: that effect parses the document, and a row entering or
+  // leaving edit mode changes nothing to parse. Declared BEFORE the USJ effect so the ref is already
+  // current when that effect reads it within the same commit.
   const editingFootnoteIndexRef = useRef(editingFootnoteIndex);
+  /**
+   * The row whose editing just ended, until the next USJ parse. Ending a session flushes the row
+   * editor's last keystrokes, so the row's final content and the end of editing arrive in the same
+   * commit: this effect has already cleared `editingFootnoteIndexRef` by the time the parse below
+   * sees content the selection has not, and that row is still the selection.
+   */
+  const endedEditingFootnoteIndexRef = useRef<number | undefined>(undefined);
   useEffect(() => {
+    // Only an END: an editing row that moved (a note added ahead of it) is followed by the index.
+    endedEditingFootnoteIndexRef.current =
+      editingFootnoteIndex === undefined ? editingFootnoteIndexRef.current : undefined;
     editingFootnoteIndexRef.current = editingFootnoteIndex;
   }, [editingFootnoteIndex]);
 
   useEffect(() => {
     try {
-      const usjReaderWriter = new UsjReaderWriter(usj, {
-        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-      });
-      const newFootnotes = usjReaderWriter.findAllNotes();
+      const newFootnotes = findEditorUsjNotes(usj);
 
       // The list id tells FootnoteList its rows are new. Only additions and deletions make them
       // new; a content edit (every live-applied keystroke in the row editor) or a same-shape
@@ -254,6 +269,9 @@ export function FootnotesLayout({
       footnotesCountRef.current = newFootnotes.length;
       setFootnotes(newFootnotes);
 
+      // Read here, not in the updater, which runs after this ref is cleared.
+      const endedEditingIndex = endedEditingFootnoteIndexRef.current;
+      endedEditingFootnoteIndexRef.current = undefined;
       setSelectedFootnote((currentSelected) => {
         if (!currentSelected) return undefined;
         const { index, footnote } = currentSelected;
@@ -262,8 +280,9 @@ export function FootnotesLayout({
         // The row being edited is the selection by definition: its content changes on every
         // live-apply, so content equality must not decide whether it stays selected.
         const isEditingRow =
-          editingFootnoteIndexRef.current !== undefined &&
-          index === editingFootnoteIndexRef.current;
+          (editingFootnoteIndexRef.current !== undefined &&
+            index === editingFootnoteIndexRef.current) ||
+          (endedEditingIndex !== undefined && index === endedEditingIndex);
         if (
           isEditingRow ||
           (fresh.marker === footnote.marker &&
@@ -508,22 +527,50 @@ export function FootnotesLayout({
     onPaneFocusChange?.(true);
   }, [onPaneFocusChange]);
 
+  const reportPaneFocusLost = useCallback(() => {
+    if (!paneHasFocusRef.current) return;
+    paneHasFocusRef.current = false;
+    onPaneFocusChange?.(false);
+  }, [onPaneFocusChange]);
+
   const handlePaneBlur = useCallback(
     (event: FocusEvent<HTMLDivElement>) => {
       // Focus landing on another element inside the pane (the list to the row editor and back)
       // never leaves it. A null `relatedTarget` — focus going nowhere, e.g. the window losing it —
-      // does count as leaving, matching what the user sees: no caret in the pane.
+      // does count as leaving, matching what the user sees: no caret in the pane. Where focus
+      // LANDS is the document listener's to judge (see `onPaneFocusLeft`).
       if (event.relatedTarget && isInsidePaneOrItsOverlays(event.relatedTarget, paneContainerRef))
         return;
-      if (!paneHasFocusRef.current) return;
-      paneHasFocusRef.current = false;
-      onPaneFocusChange?.(false);
-      // Only a move to a real element in this document is the user leaving the pane behind — see
-      // `onPaneFocusLeft` for why a null `relatedTarget` is not.
-      if (event.relatedTarget) onPaneFocusLeft?.();
+      reportPaneFocusLost();
     },
-    [onPaneFocusChange, onPaneFocusLeft],
+    [reportPaneFocusLost],
   );
+
+  // Where focus lands, judged from the document rather than from the pane's own blur: the blur
+  // cannot see a return to the text after focus first left the document, nor a move out of an
+  // overlay portalled outside the pane (which is not a pane descendant, so its blur never reaches
+  // the pane at all).
+  useEffect(() => {
+    const doc = paneContainerRef.current?.ownerDocument ?? document;
+    const handleFocusIn = (event: globalThis.FocusEvent) => {
+      const { target } = event;
+      if (!(target instanceof Element) || isInsidePaneOrItsOverlays(target, paneContainerRef))
+        return;
+      reportPaneFocusLost();
+      onPaneFocusLeft?.(target);
+    };
+    doc.addEventListener('focusin', handleFocusIn);
+    return () => doc.removeEventListener('focusin', handleFocusIn);
+  }, [reportPaneFocusLost, onPaneFocusLeft]);
+
+  // A focused row editor that unmounts (a reload or a chapter change closing it) takes focus with
+  // it without a blur the pane can see, leaving focus nowhere - so re-check after every change to
+  // the editing row.
+  useEffect(() => {
+    const { activeElement } = paneContainerRef.current?.ownerDocument ?? document;
+    if (activeElement && isInsidePaneOrItsOverlays(activeElement, paneContainerRef)) return;
+    reportPaneFocusLost();
+  }, [editingFootnoteIndex, reportPaneFocusLost]);
 
   // Report every change to which row is selected (row click, focus request, or cleared) so the web
   // view can highlight the corresponding caller in the text.
@@ -554,6 +601,8 @@ export function FootnotesLayout({
         >
           <div
             ref={paneContainerRef}
+            // `FOOTNOTES_PANE_ATTRIBUTE`, spelled out: a JSX attribute name cannot be computed.
+            data-footnotes-pane=""
             className="tw:relative tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
             onFocus={handlePaneFocus}
             onBlur={handlePaneBlur}
@@ -580,14 +629,15 @@ export function FootnotesLayout({
                 <TooltipContent>{localizedStrings['%webView_footnoteList_close%']}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            {/* The close button floats over the list's first row, so that row alone reserves
-                trailing room for it - the pane keeps all of its height for notes without the
-                button painting over the first note's text. */}
+            {/* The close button floats over whichever row is scrolled to the top of the list, so
+                every row reserves trailing room for it - the pane keeps all of its height for
+                notes without the button painting over (or a click aimed at the text landing on)
+                a note. */}
             <div
               ref={setFootnoteListWrapperRef}
-              className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li:first-of-type]:pe-7"
+              className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li]:pe-7"
             >
-              {footnotes.length === 0 && (
+              {footnotes.length === 0 && !isLoading && (
                 <EmptyState
                   className="tw:p-2"
                   message={localizedStrings['%webView_footnoteList_empty%']}
@@ -610,7 +660,14 @@ export function FootnotesLayout({
                 onFootnoteEditRequested={
                   onFootnoteEditRequested ? handleFootnoteEditRequested : undefined
                 }
-                editingFootnoteIndex={editingFootnoteIndex}
+                // Clamped for the one commit in which a note inserted ahead of the edited LAST row
+                // has moved the index but not yet the list (derived in an effect below): out of
+                // range, no row would be the editing row and the row editor would remount.
+                editingFootnoteIndex={
+                  editingFootnoteIndex === undefined
+                    ? undefined
+                    : Math.min(editingFootnoteIndex, footnotes.length - 1)
+                }
                 renderEditingFootnote={renderEditingFootnote}
               />
             </div>
