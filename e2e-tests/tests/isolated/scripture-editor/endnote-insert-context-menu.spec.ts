@@ -15,14 +15,12 @@
  * what decides the open menu's other keyboard claims — Enter with nothing highlighted, and the
  * marker palette's backslash — which is why those are asserted here rather than in a unit test.
  *
- * Selecting the item by MOUSE is deliberately not asserted: `ContextMenuOption`'s constructor mints
- * a fresh React key on every rebuild of the item list, so any prop the insert callbacks close over
- * (e.g. the live `scrRef`) remounts every `<li>` — the item itself detaches mid-click, not the
- * portal around it, and any such assertion would be flaky by construction. The keyboard path is
- * unaffected by that per-item churn (the highlight is the plugin's own state, and an auto-retrying
- * locator re-queries the re-created item), so it is asserted here. The final insert is additionally
- * driven from the visible Insert top menu, exercising the `menus.json` wiring a unit test cannot
- * reach.
+ * The item is also asserted BY MOUSE: with scripture-editors#14, `ContextMenuPlugin` keys each item
+ * by its index and title (not a counter that increments on every rebuild), so an options rebuild
+ * with unchanged content keeps the same `<li>` elements and a mouse click no longer risks the item
+ * detaching mid-click. The keyboard and mouse paths exercise different code inside the plugin
+ * (arrow/Enter vs. a pointer event), so both are asserted. The final insert is additionally driven
+ * from the visible Insert top menu, exercising the `menus.json` wiring a unit test cannot reach.
  *
  * Two constraints shape the step order below.
  *
@@ -40,14 +38,25 @@
  *
  * - A one-shot read of `[data-overlay-command-palette]` right after a keypress cannot see a palette
  *   that is still crossing the async `papi.overlays.showCommandPalette` round trip, so the
- *   no-stray-palette checks install a `MutationObserver` instead and read it back after a barrier
- *   that is guaranteed to be on the far side of that round trip.
- * - The insert shortcuts (Ctrl+T, Ctrl+Shift+T) are pressed WHILE the menu is open and must be inert,
- *   proven by note counts taken immediately before them and re-checked both right after and after
- *   the chapter round trip (an async insert that slipped through would still be racing the PDP at
- *   the first check).
- * - Cycling the SAME editor to Formatted view proves the `\` guard holds outside Standard view too,
- *   with a positive control (the same key with the menu closed) showing the check is falsifiable.
+ *   no-stray-palette checks install a `MutationObserver` instead. In the arrow-keys/insert step
+ *   below, it is read back after the note-count wait — a barrier guaranteed to be on the far side
+ *   of that round trip. The "nothing highlighted" step has no such barrier before its own read;
+ *   what actually guards THAT step is the Escape check just after it, since a palette that had
+ *   stolen the Escape would leave the menu detached with nothing left to reattach it.
+ * - The insert shortcuts (Ctrl+T, Ctrl+Shift+T) and the comment hotkey are pressed WHILE the menu is
+ *   open and must be inert, proven by note counts taken immediately before them and re-checked both
+ *   right after and after the chapter round trip (an async insert that slipped through would still
+ *   be racing the PDP at the first check). With scripture-editors#14, the menu's own
+ *   document-capture listener claims every key before it can reach these keys' HOST-side guards
+ *   (`platform-scripture-editor.web-view.tsx`'s Ctrl+T/Ctrl+Shift+T and comment-hotkey checks), so
+ *   this proves the menu's own blanket claim, not those host guards — which stand ready here only
+ *   as an unexercised fallback for an editor package that doesn't claim every key itself.
+ * - Cycling the SAME editor to Formatted view proves the menu's blanket key-claim holds outside
+ *   Standard view too: the same document-capture listener claims `\` before it can ever reach the
+ *   host's own Formatted-view guard (`isEditorContextMenuOpen` inside `handleKeyDown`), so this is
+ *   another case of the menu itself being under test — with a positive control (the same key with
+ *   the menu closed) showing the check is falsifiable — and the host's own guard again exercised
+ *   only as an unexercised fallback.
  * - A real window resize (never `page.setViewportSize()` — see `setWindowHeight`) forces the menu's
  *   list past its natural height, proving the scrollbar declared in the step above is not just
  *   declared but load-bearing: the list actually caps, actually scrolls, and stays open while doing
@@ -57,7 +66,7 @@
  * Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { setWindowHeight } from '../../../fixtures/helpers';
+import { setWindowHeight, sleep } from '../../../fixtures/helpers';
 import {
   EDITOR_HAMBURGER_SELECTOR,
   makeSampleProjectEditable,
@@ -67,6 +76,15 @@ import {
   sendPapiCommandWhenRegistered,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
+
+/**
+ * Budget for the double-rAF settle wait below, mirroring `WINDOW_WIDTH_RAF_SETTLE_TIMEOUT_MS` in
+ * `helpers.ts`: Chromium's `backgroundThrottling` stops `requestAnimationFrame` entirely for a
+ * hidden or occluded window, and `page.evaluate` (here, `Locator.evaluate`) carries no timeout of
+ * its own, so this wait needs its own bound rather than relying on the test's overall timeout to
+ * end it.
+ */
+const RAF_SETTLE_TIMEOUT_MS = 2_000;
 
 test.use({
   interfaceMode: 'power',
@@ -220,9 +238,11 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     });
 
     await test.step('the menu fits without scrolling at full window height, and declares a visible scrollbar for when it cannot', async () => {
-      // Re-opened rather than reused from the step above: the plugin closes the menu on a scroll of
-      // anything but itself, and the chapter is still settling, so an already-open menu is not
-      // something a later step can rely on.
+      // Re-opened rather than reused from the step above: with scripture-editors#14, the plugin
+      // closes the menu on a scroll of anything but itself (an editor without that in-menu
+      // exemption closes on ANY scroll — see the "genuinely overflows and scrolls" step below), and
+      // the chapter is still settling, so an already-open menu is not something a later step can
+      // rely on either way.
       await openContextMenu();
       // The popover markup is shared with the marker typeahead, whose `ul` is capped at 200px and
       // scrolls. This menu is a short fixed list that must show all of itself: it has no filter to
@@ -253,8 +273,10 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       // sets both to the opposite values (`scroll` + `none`), so the pair stays falsifiable.
       //
       // `overscroll-behavior` rides along because it protects the same gesture: without it a wheel
-      // that reaches the end of the list chains to the ancestor scroller, whose scroll event is not
-      // inside the menu, so the close-on-scroll listener closes the menu mid-read.
+      // that reaches the end of the list chains to the ancestor scroller, whose scroll event is NOT
+      // inside the menu, so the close-on-scroll listener closes the menu mid-read even with
+      // scripture-editors#14's in-menu exemption — that exemption covers a scroll TARGETING the
+      // menu, not this chained scroll of an ancestor outside it.
       const listScrollStyle = await contextMenu.locator('ul').evaluate((ul: HTMLElement) => {
         const style = getComputedStyle(ul);
         return {
@@ -322,16 +344,23 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       await openContextMenu();
 
       // Insert shortcuts pressed while the menu is open must be inert — the menu is the only
-      // keyboard mode on screen, and none of these may open a popup over it. Baselines are taken
-      // here, immediately before the presses, so the later checks can tell "nothing happened" from
-      // "something happened and was later undone".
+      // keyboard mode on screen, and none of these may open a popup over it. With the menu's own
+      // document-capture listener claiming every key first (scripture-editors#14), this exercises
+      // THAT claim rather than the host's own Ctrl+T/Ctrl+Shift+T/comment-hotkey guards in
+      // platform-scripture-editor.web-view.tsx, which this spec leaves untested as a fallback for an
+      // editor package that doesn't claim every key itself. Baselines are taken here, immediately
+      // before the presses, so the later checks can tell "nothing happened" from "something happened
+      // and was later undone".
       footnoteCountBeforeGuardedShortcuts = await mainEditor.locator('span.note.usfm_f').count();
       crossReferenceCountBeforeGuardedShortcuts = await mainEditor
         .locator('span.note.usfm_x')
         .count();
       await mainPage.keyboard.press('Control+t');
       await mainPage.keyboard.press('Control+Shift+T');
-      await mainPage.keyboard.press('Control+Alt+m');
+      // ControlOrMeta, not Control: on macOS the comment hotkey is Cmd+Option+M
+      // (platform-scripture-editor.web-view.tsx's isMac branch), which a literal `Control+Alt+m`
+      // would never match, leaving this press a no-op there whether or not the menu claims it.
+      await mainPage.keyboard.press('ControlOrMeta+Alt+m');
 
       for (let i = 0; i <= endNoteIndex; i += 1) {
         await mainPage.keyboard.press('ArrowDown');
@@ -432,6 +461,25 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
     });
 
+    await test.step('clicking "Insert endnote" in the right-click menu with the mouse inserts an endnote', async () => {
+      const versePara = nextClearVersePara();
+      await expect(versePara).toBeVisible({ timeout: 30_000 });
+
+      // Counted here, immediately before the insert, for the same reason as the top-menu step
+      // above: the chapter may already contain endnotes from an earlier step.
+      const endnotesBefore = await endnotes.count();
+
+      await openContextMenu(versePara);
+      const insertEndnoteOption = contextMenu.getByRole('option', {
+        name: 'Insert endnote',
+        exact: true,
+      });
+      await insertEndnoteOption.click();
+
+      await expect(endnotes).toHaveCount(endnotesBefore + 1, { timeout: 15_000 });
+      await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
+    });
+
     await test.step('the backslash does not open the inline markers menu while the context menu is open, in Formatted view', async () => {
       // The footnote editor popover from earlier steps has no `onOpenChange` and only closes on a
       // chapter change; leaving it open here would sit over the click below. Also re-establishes a
@@ -484,12 +532,22 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
 
       // The open is a synchronous React state update from a discrete keydown handler, so it has
       // committed (or not) by the time two animation frames inside the editor frame have run.
-      await editorContainer.evaluate(
-        () =>
-          new Promise<void>((resolve) => {
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-          }),
-      );
+      // Raced against a bounded sleep, not awaited outright: a hidden/occluded window suspends
+      // requestAnimationFrame indefinitely (see RAF_SETTLE_TIMEOUT_MS), so this must fail fast
+      // instead of hanging — mirrors `setWindowWidth` in `helpers.ts`. `Promise.race` never cancels
+      // its loser, so the `.catch(() => {})` keeps the abandoned `evaluate` call from surfacing as
+      // an unhandled rejection once the window becomes visible again after the race has settled.
+      await Promise.race([
+        editorContainer
+          .evaluate(
+            () =>
+              new Promise<void>((resolve) => {
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+              }),
+          )
+          .catch(() => {}),
+        sleep(RAF_SETTLE_TIMEOUT_MS),
+      ]);
 
       const strayMarkerMenuSeen = await editorContainer.evaluate(() => {
         // See the install call above for why this cast is needed.
@@ -562,12 +620,31 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       expect(overflow.overflowY).toBe('auto');
       expect(overflow.scrollbarWidth).toBe('thin');
 
-      // The fold is reachable: scrolling the list to its own end does not close the menu — the
-      // plugin closes only on a scroll of something else — and the last option ends up inside the
-      // list's own visible box rather than still hidden past it.
-      await list.evaluate((ul) => {
-        ul.scrollTop = ul.scrollHeight;
-      });
+      // The fold is reachable: scrolling the list to its own end does not close the menu. This
+      // depends on scripture-editors#14: `ContextMenuPlugin`'s close-on-scroll listener exempts a
+      // scroll whose target is inside the menu only there — an editor without that exemption closes
+      // on ANY scroll, this one included. Driven with a real wheel gesture rather than setting
+      // `scrollTop` directly, so the step goes through the same close-on-scroll listener a user's
+      // scroll would trigger, and the assertion below only passes once the scroll has actually
+      // happened rather than on the same tick it was requested. `list.boundingBox()` already
+      // resolves to page coordinates across the nested editor iframe, so `mainPage.mouse` can target
+      // it directly.
+      const listBoxForWheel = await list.boundingBox();
+      if (!listBoxForWheel) throw new Error('list has no bounding box to scroll over');
+      await mainPage.mouse.move(
+        listBoxForWheel.x + listBoxForWheel.width / 2,
+        listBoxForWheel.y + listBoxForWheel.height / 2,
+      );
+      const scrollTopBeforeWheel = await list.evaluate((ul) => ul.scrollTop);
+      // A large delta so one wheel gesture reaches the list's true end regardless of its height —
+      // the browser clamps `scrollTop` at `scrollHeight - clientHeight` rather than overshooting,
+      // which is what lets the assertions below treat the list as fully scrolled.
+      await mainPage.mouse.wheel(0, 100_000);
+      await expect
+        .poll(() => list.evaluate((ul) => ul.scrollTop), { timeout: 15_000 })
+        .toBeGreaterThan(scrollTopBeforeWheel);
+      // The menu survived the scroll it was just put through, and the last option ends up inside
+      // the list's own visible box rather than still hidden past it.
       await expect(contextMenu).toBeAttached();
       // `getBoundingClientRect()` itself is not returned — its fields sit on the prototype, not as
       // own properties, so Playwright's structured-clone serialization would hand back `{}`. Each
