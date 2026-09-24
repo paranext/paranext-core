@@ -27,6 +27,12 @@ const MOCK_FILES: { [uri: string]: string } = {
     "%firstRun_title%": "Configurer",
     "%firstRun_button_next%": "Suivant"
   }`,
+  // es clears the setup-dialog threshold (2/2 firstRun keys) and is offered.
+  'resources://assets/localization/es.json': `{
+    "%general_button_submit%": "Enviar",
+    "%firstRun_title%": "Configurar",
+    "%firstRun_button_next%": "Siguiente"
+  }`,
   // de has only 1 of the 2 baseline firstRun keys (50%) → below the 90% setup-dialog threshold.
   'resources://assets/localization/de.json': `{
     "%general_button_submit%": "Senden",
@@ -239,11 +245,24 @@ test('Good keys and missing but valid language code return default English', asy
   });
 });
 
-test('getSetupDialogLanguages includes fully-translated locales and excludes under-translated ones', async () => {
+test('getSetupDialogLanguages offers only allowlisted languages', async () => {
   const result = await localizationDataProviderEngine.getSetupDialogLanguages();
-  expect(result.en).toBeDefined(); // always qualifies
-  expect(result.fr).toBeDefined(); // 2/2 firstRun keys = 100%
-  expect(result.de).toBeUndefined(); // 1/2 firstRun keys = 50% → excluded by the 90% threshold
+  // fr clears the threshold (2/2 firstRun keys) but is not offered; de is neither.
+  expect(Object.keys(result).sort()).toEqual(['en', 'es']);
+});
+
+test('getAvailableInterfaceLanguages offers only allowlisted languages', async () => {
+  const result = await localizationDataProviderEngine.getAvailableInterfaceLanguages();
+  expect(Object.keys(result).sort()).toEqual(['en', 'es']);
+  expect(result.es?.autonym).toBe('Español');
+});
+
+test('a loaded but hidden language still renders when requested explicitly', async () => {
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%general_button_submit%',
+    locales: ['fr'],
+  });
+  expect(response).toEqual('Soumettre');
 });
 
 test('setSetupDialogLanguages always throws', async () => {
@@ -253,13 +272,13 @@ test('setSetupDialogLanguages always throws', async () => {
 });
 
 test('firstRun key falls back to English when the requested locale lacks it', async () => {
-  // %firstRun_button_next% exists in en (and fr here); request a firstRun key only in en via a
-  // locale that has no firstRun data → resolves to English (chosen → base → English → raw key).
+  // de.json has %firstRun_title% but not %firstRun_button_next% → resolves to English
+  // (chosen → base → English → raw key).
   const response = await localizationDataProviderEngine.getLocalizedString({
-    localizeKey: '%firstRun_title%',
-    locales: ['es'], // es.json has no firstRun keys in MOCK_FILES
+    localizeKey: '%firstRun_button_next%',
+    locales: ['de'],
   });
-  expect(response).toEqual('Set up');
+  expect(response).toEqual('Next');
 });
 
 test('re-emits localized strings when the interface language changes', async () => {

@@ -44,4 +44,18 @@ describe('pickBestSetupLanguage', () => {
     expect(pickBestSetupLanguage('', QUALIFYING)).toBeUndefined();
     expect(pickBestSetupLanguage('not a locale', QUALIFYING)).toBeUndefined();
   });
+  // With only en and es offered. `es-419` is what Electron reports for `--lang=es-MX` and for
+  // `LANG=es_MX.UTF-8`, so it is the Spanish value real users produce.
+  test.each([
+    ['es-419', 'es'],
+    ['es-MX', 'es'],
+    ['es-ES', 'es'],
+    ['fr', undefined],
+    ['fr-FR', undefined],
+    ['zh-CN', undefined],
+    ['de-DE', undefined],
+    ['en-US', 'en'],
+  ])('with en and es offered, OS locale %s picks %s', (osLocale, expected) => {
+    expect(pickBestSetupLanguage(osLocale, ['en', 'es'])).toBe(expected);
+  });
 });
