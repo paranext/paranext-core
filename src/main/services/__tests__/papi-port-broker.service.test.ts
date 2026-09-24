@@ -127,7 +127,7 @@ describe('papiPortBroker', () => {
     ]);
   });
 
-  test('answers once per page load: a second request is ignored and warned about', () => {
+  test('answers once per page load: a second request gets a port error and is warned about', () => {
     const fake = makeFakeWebContents();
     registerWindow(fake.webContents, 'w1');
     fake.requestPort();
@@ -135,7 +135,10 @@ describe('papiPortBroker', () => {
     fake.requestPort();
 
     expect(mockAcceptLocalClient).toHaveBeenCalledTimes(1);
-    expect(fake.mainFrame.postMessage).toHaveBeenCalledTimes(1);
+    expect(fake.mainFrame.postMessage).toHaveBeenCalledTimes(2);
+    expect(fake.mainFrame.postMessage).toHaveBeenLastCalledWith(PAPI_PORT_ERROR_CHANNEL, {
+      reason: 'This page already has a PAPI port; a page gets exactly one per load',
+    });
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('already has a PAPI port'));
   });
 
@@ -182,15 +185,18 @@ describe('papiPortBroker', () => {
     expect(mockAcceptLocalClient).toHaveBeenCalledTimes(1);
   });
 
-  test('a renderer crash allows the reloaded page to request a new port', () => {
+  test('a renderer crash closes the old port as 1006 and allows the reloaded page to request a new port', () => {
     const fake = makeFakeWebContents();
     registerWindow(fake.webContents, 'w1');
     fake.requestPort();
 
     fake.crash();
-    ports[0].emit('close');
     fake.requestPort();
 
+    expect(ports[0].postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 1006, reason: 'renderer process gone' }),
+    );
+    expect(ports[0].close).toHaveBeenCalled();
     expect(mockAcceptLocalClient).toHaveBeenCalledTimes(2);
   });
 

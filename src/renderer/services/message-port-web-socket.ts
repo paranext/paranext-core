@@ -223,11 +223,14 @@ export class MessagePortWebSocket implements WebSocket {
   }
 
   private emit(type: SocketEventName, event: unknown): void {
+    // `dispatchEvent` can hand over any event name; one a WebSocket does not have reaches no one
+    const listeners: Set<SocketListener> | undefined = this.listeners[type];
+    if (!listeners) return;
     // The `on<type>` handlers are typed per event; this dispatches any of them with its own event
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const handler = this[`on${type}`] as unknown as ((ev: unknown) => unknown) | null;
     if (handler) handler.call(this, event);
-    this.listeners[type].forEach((listener) => listener(event));
+    listeners.forEach((listener) => listener(event));
   }
 }
 
