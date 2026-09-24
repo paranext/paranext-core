@@ -106,6 +106,25 @@ describe('useResourceContentZoom', () => {
     expect(result.current.hasOwnLevel('def')).toBe(false);
   });
 
+  it('ignores a stored level outside the zoom range, as the platform does', () => {
+    mockUseSetting.mockReturnValue([1.3, vi.fn(), vi.fn(), false]);
+    const { result } = renderController({ 'resource-abc': 0.4, 'resource-def': 3.1 });
+    expect(result.current.getZoom('abc')).toBe(1.3);
+    expect(result.current.hasOwnLevel('abc')).toBe(false);
+    expect(result.current.getZoom('def')).toBe(1.3);
+    expect(result.current.hasOwnLevel('def')).toBe(false);
+  });
+
+  it('treats a stored levels value that is not a map as no levels at all', () => {
+    mockUseSetting.mockReturnValue([1.3, vi.fn(), vi.fn(), false]);
+    // Web view state is JSON, so `null` is a value the stored map can really hold.
+    // eslint-disable-next-line no-null/no-null
+    const { useFakeWebViewState } = makeWebViewState({ 'platform.contentZoomLevels': null });
+    const { result } = renderHook(() => useResourceContentZoom('wv-grid', useFakeWebViewState));
+    expect(result.current.getZoom('abc')).toBe(1.3);
+    expect(result.current.hasOwnLevel('abc')).toBe(false);
+  });
+
   it('sends the platform’s zoom commands with the tab’s web view id and the resource’s area', () => {
     const { result } = renderController();
     act(() => {

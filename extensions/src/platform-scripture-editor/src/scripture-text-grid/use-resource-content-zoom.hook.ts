@@ -1,7 +1,12 @@
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useSetting } from '@papi/frontend/react';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+} from 'platform-bible-utils';
 import { useCallback, useMemo } from 'react';
 import { resourceZoomAreaOf } from './resource-zoom-area.utils';
 
@@ -34,10 +39,18 @@ export type ResourceZoomController = {
   resetZoom: (resourceId: string) => void;
 };
 
-/** The level the pane holds for one area, or `undefined` when it holds no usable one. */
-function ownLevelOf(levels: Record<string, unknown>, areaId: string): number | undefined {
-  const level = levels[areaId];
-  return typeof level === 'number' && Number.isFinite(level) ? level : undefined;
+/**
+ * The level the pane holds for one area, or `undefined` when it holds no usable one: the stored
+ * value is not a map, or the area's level is not a number within the zoom range. The platform
+ * ignores the same values when it applies the levels, so a resource never shows a level here that
+ * its text does not have.
+ */
+function ownLevelOf(levels: unknown, areaId: string): number | undefined {
+  if (typeof levels !== 'object' || !levels) return undefined;
+  const level: unknown = Reflect.get(levels, areaId);
+  return typeof level === 'number' && level >= MIN_ZOOM_FACTOR && level <= MAX_ZOOM_FACTOR
+    ? level
+    : undefined;
 }
 
 /**

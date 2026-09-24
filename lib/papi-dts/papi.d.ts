@@ -716,7 +716,7 @@ declare module 'shared/models/web-view.model' {
    * Attribute a web view may add to an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} to name
    * that zoom area for the user. The zoom indicator then reads `<label> · <level>` (for example `HSV
    * · 120 %`) instead of the level alone. Plain text; the platform reads the first non-empty label
-   * among the area's marked elements. Areas without a label are shown as before.
+   * among the area's marked elements. An area without a label shows the level alone.
    *
    * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
    * writes the literal `'data-platform-content-zoom-label'` itself (or uses `ContentZoomRoot`'s
