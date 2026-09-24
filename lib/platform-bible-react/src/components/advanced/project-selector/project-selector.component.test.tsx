@@ -1458,7 +1458,7 @@ describe('disabled rows', () => {
       />,
     );
 
-    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
     // A project can be listed more than once (e.g. its bound-but-closed row and its not-open row).
     const openButtonsIn = async (shortName: string) =>
       (await screen.findAllByText(shortName)).flatMap((label) => {

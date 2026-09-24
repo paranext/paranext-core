@@ -4,7 +4,7 @@ import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CopyrightNoticeBanner } from './copyright-notice-banner.component';
-import { BIBLICA_PERMISSIONS_URL } from './copyright-notice-message.utils';
+import { BIBLICA_PERMISSIONS_URL } from './copyright-notice.const';
 
 const { sendCommand } = vi.hoisted(() => ({ sendCommand: vi.fn(async () => undefined) }));
 
@@ -21,7 +21,7 @@ const STRINGS = {
   '%platformScripture_copyrightNotice_restrictedLicense_details_noYears%':
     'Do not quote the {name} Bible. {fullName}™ Bible copyright © Biblica, Inc. Ask at {permissionsLink}',
   '%platformScripture_copyrightNotice_notification_format%': '{name}: {notice}',
-  '%platformScripture_copyrightNotice_moreInfo%': 'More info…',
+  '%platformScripture_copyrightNotice_moreInfo%': 'More info',
   '%platformScripture_copyrightNotice_showMore%': 'Show more',
   '%platformScripture_copyrightNotice_showLess%': 'Show less',
   '%platformScripture_copyrightNotice_dismiss%': 'Dismiss copyright notice',
@@ -93,7 +93,7 @@ function renderBanner(overrides: Partial<BannerProps> = {}) {
 }
 
 function openDetails(name = 'NIV11') {
-  fireEvent.click(screen.getByRole('button', { name: 'More info…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'More info' }));
   return screen.getByRole('dialog', { name: `Copyright for ${name}` });
 }
 
@@ -227,7 +227,7 @@ describe('CopyrightNoticeBanner', () => {
 
   it('returns focus to More info when the details close', async () => {
     renderBanner();
-    const moreInfo = screen.getByRole('button', { name: 'More info…' });
+    const moreInfo = screen.getByRole('button', { name: 'More info' });
     moreInfo.focus();
 
     fireEvent.keyDown(openDetails(), { key: 'Escape' });
