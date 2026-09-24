@@ -76,6 +76,8 @@ function SelectTrigger({ className, size = 'default', children, ...props }: Sele
 }
 
 /** @inheritdoc Select */
+// CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
+// scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function SelectContent({
   className,
   children,
