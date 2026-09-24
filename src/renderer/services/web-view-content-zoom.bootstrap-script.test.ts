@@ -231,6 +231,69 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-click-wins', 'footnotes');
   });
 
+  it('keeps zooming the area the user clicked when the view throws the caret back into another one', () => {
+    const { bound } = install('wv-view-moved-focus', TWO_AREAS);
+    // A click on a footnote row: the pointer goes down in the footnotes area, and the view answers
+    // by putting the caret back in the editor text. `focus()` rather than a dispatched `focusin`,
+    // because the chord path reads `document.activeElement` and a dispatched event never moves it.
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    expect(document.activeElement).toBe(byId('verse'));
+    key({ key: '0', ctrlKey: true });
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-view-moved-focus', 'footnotes');
+  });
+
+  it('keeps zooming that area however long after the click the chord comes', () => {
+    // Only the monotonic clock the gesture window is measured with is faked, so nothing but the age
+    // of the last pointer gesture changes.
+    vi.useFakeTimers({ toFake: ['performance'] });
+    try {
+      const { bound } = install('wv-late-chord', TWO_AREAS);
+      byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      byId('verse').focus();
+      vi.advanceTimersByTime(2_000);
+      key({ key: '=', ctrlKey: true });
+      expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-late-chord', 1, 'footnotes');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hands the chords back to the caret after Tab', () => {
+    const { bound } = install('wv-tab-hands-back', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // Tab is a focus move the user asked for, so the caret is theirs again from here on.
+    key({ key: 'Tab' });
+    key({ key: '0', ctrlKey: true });
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-tab-hands-back', 'main');
+  });
+
+  it('a click outside every zoom area does not hand the chords back to a caret the view moved', () => {
+    const { bound } = install('wv-toolbar-click', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // The view's own toolbar is in no zoom area: clicking it moves no caret and says nothing about
+    // which content the user is working in.
+    byId('toolbar').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    key({ key: '0', ctrlKey: true });
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-toolbar-click', 'footnotes');
+  });
+
+  it('a click inside the area does not hand the chords back to a caret the view moved either', () => {
+    const { bound } = install('wv-nonfocusable-click', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // #foot is the footnotes area's own root and takes no focus, so unlike the toolbar case above,
+    // this pointer down lands INSIDE a reported area - and still moves no caret.
+    byId('foot').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    key({ key: '0', ctrlKey: true });
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith(
+      'wv-nonfocusable-click',
+      'footnotes',
+    );
+  });
+
   it('follows a focus change no pointer gesture is behind, so the keyboard can pick the area', () => {
     const { bound } = install('wv-keyboard-focus', TWO_AREAS);
     byId('note').dispatchEvent(new Event('focusin', { bubbles: true }));
@@ -910,6 +973,29 @@ describe('content-zoom bootstrap script', () => {
     );
     await oneFrame();
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+  });
+
+  it('tells the platform which area the caret is in when the areas arrive after the view has focused one', async () => {
+    // Nothing is marked yet, so the bootstrap's first scan reports no areas at all.
+    const { bound } = install('wv-late-areas', '<div id="toolbar">bar</div>');
+    document.body.innerHTML =
+      '<div id="toolbar">bar</div>' +
+      '<div data-platform-content-zoom-root id="main"><p id="verse" tabindex="0">text</p></div>' +
+      '<div data-platform-content-zoom-root="footnotes" id="foot"><p id="note" tabindex="0">note</p></div>';
+    byId('note').focus();
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-late-areas', [
+      'main',
+      'footnotes',
+    ]);
+    // The reported active area is what the platform resolves a pane's area from for everything
+    // that never goes through this script - the tab menu's zoom commands, and a surface the
+    // platform renders outside the pane - so a blind first-area seed would misdirect those even
+    // where a chord itself still lands right.
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+      'wv-late-areas',
+      'footnotes',
+    );
   });
 
   it('reports the ordered area list, ignores nested markers, and adds a rule for a named area that appears later', async () => {

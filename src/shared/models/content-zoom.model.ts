@@ -129,14 +129,15 @@ export const CONTENT_ZOOM_STYLE_ELEMENT_ID = 'platform-content-zoom-styles';
  * web-view types by string here because core code cannot import extension source (same pattern as
  * `SCRIPTURE_EDITOR_WEBVIEW_TYPE`).
  *
- * `platformEnhancedResources.enhancedResource` and `platformScriptureEditor.scriptureTextGrid`
- * still zoom their panes themselves — each has its own key/wheel handler, its own clamp and its own
- * stored factor (`scripturePaneZoom` web-view state; `use-resource-zoom-input.hook.ts`) — and
- * neither marks a platform zoom area, so the platform only scales their whole iframe at the
- * Settings default and that scaling multiplies with the view's own factor. When either view adopts
- * the platform mechanism (the grid in PT-4582, Enhanced Resources in PT-4583) it should mark its
- * areas, drop its own handler and stored factor, and migrate that factor into the memory key this
- * map selects; only then does its entry here start to matter.
+ * Every web view type listed here marks at least one platform zoom area — including
+ * `platformEnhancedResources.enhancedResource` and `platformScriptureEditor.scriptureTextGrid` — so
+ * every entry is live: each area's factor is read from the memory key the view's kind selects.
+ *
+ * `platformScriptureEditor.scriptureTextGrid` is a documented exception, not a precedent: inside
+ * its `text-collection` area, each resource cell still carries its own independent zoom
+ * (Ctrl/Cmd+wheel, the right-click menu, the hover kebab — see `use-resource-zoom-input.hook.ts`).
+ * That per-resource factor nests inside the area's CSS zoom and multiplies with it rather than
+ * replacing it.
  */
 export const CONTENT_ZOOM_KIND_BY_WEB_VIEW_TYPE: ReadonlyMap<string, ContentZoomKind> = new Map<
   string,

@@ -514,6 +514,7 @@
   "%settings_platform_webViewContentZoom_label%": "Tab content default zoom",
   "%settings_platform_webViewContentZoom_reset%": "Reset default zoom",
   "%settings_platform_webViewContentZoomMemory_label%": "Pane zoom memory",
+  "%settings_platform_webViewContentZoomTypesWithAreas_label%": "Pane zoom area capability cache",
   "%settings_platform_zoomFactor_description%": "Applies to the entire application. 1.0 is the default. Allowed range is 0.5 to 3.0.",
   "%settings_platform_zoomFactor_errorMessage%": "Allowed range is {lowerLimit} to {upperLimit}.",
   "%settings_platform_zoomFactor_label%": "Zoom factor",

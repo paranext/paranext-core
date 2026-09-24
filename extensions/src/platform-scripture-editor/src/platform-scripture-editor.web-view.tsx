@@ -3903,7 +3903,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           The Scripture text zoom area: the toolbar and the footnotes-pane divider live outside it,
           in the surrounding layout; the editor and everything it renders inline (including the
           Simple-mode character-marker bar) scale with the text. Content that portals out of it
-          (menus, pop-ups) is not inside the area. */}
+          (menus, pop-ups) is not inside the area: the library's popovers, dropdown menus and
+          tooltips opened from inside follow it through the area `ContentZoomRoot` provides, while
+          the editor's own right-click menu stays at interface scale. */}
       <InPortal node={editorPortalNode}>
         <PortalContents>
           <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
