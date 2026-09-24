@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type React from 'react';
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -707,16 +707,6 @@ describe('ResourceCellView zoom UI', () => {
 });
 
 describe('ResourceCellView reorder grip', () => {
-  // Radix UI Tooltip schedules a timer (default 700 ms delayDuration) when the
-  // drag handle receives focus. Without fake timers, that timer fires during test
-  // cleanup — outside act() — producing stderr act() warnings that exit with code 1.
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('renders the grip as a focusable, labeled control and fires onReorderKeyDown on keydown', () => {
     const onReorderKeyDown = vi.fn();
     renderCells(
@@ -738,7 +728,7 @@ describe('ResourceCellView reorder grip', () => {
     expect(grip).toHaveAttribute('data-reorder-handle-id', 'gen');
     // A real focusable control (button), not an aria-hidden decoration.
     expect(grip).not.toHaveAttribute('aria-hidden');
-    grip.focus();
+    act(() => grip.focus());
     expect(grip).toHaveFocus();
 
     fireEvent.keyDown(grip, { key: 'ArrowRight' });
@@ -762,12 +752,8 @@ describe('ResourceCellView reorder grip', () => {
     );
 
     fireEvent.focus(screen.getByRole('button', { name: 'Reorder Genesis' }));
-    // Advance fake timers past Radix Tooltip's delayDuration and flush React
-    // state updates inside act() so the tooltip content mounts before asserting.
-    await act(async () => {
-      vi.runAllTimers();
-    });
-    expect(screen.getAllByText('Drag or press arrow keys to reorder')).not.toHaveLength(0);
+    // Radix renders the tooltip content into a live region on focus.
+    expect(await screen.findAllByText('Drag or press arrow keys to reorder')).not.toHaveLength(0);
   });
 
   it('does not crash when showDragHandle is set without reorder wiring', () => {
