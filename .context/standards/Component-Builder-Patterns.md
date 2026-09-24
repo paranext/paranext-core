@@ -1,10 +1,10 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.7.7
+version: 1.7.8
 status: active
 created: 2026-03-04
-last_updated: 2026-09-23
+last_updated: 2026-09-24
 toc: true
 ---
 
@@ -196,9 +196,23 @@ The platform then scales the marked elements on Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+w
 
 **Text rendered by `platform-bible-react` components.** Library components that render project text — the comment cards' scripture snippet, bodies, conflict diffs and composer — mark it only inside a `ContentZoomTextProvider`. Wrap the list in `<ContentZoomTextProvider>` (or `area="…"` for a named area) rather than in a `ContentZoomRoot`, and never both: a marked element inside another is ignored. A component that renders project text inline can take part the same way by spreading `useContentZoomTextProps()` onto the existing text element — it returns the marker attribute inside a provider and nothing outside one — never onto pop-up content or an element that contains another marker.
 
-**Several elements share one area id.** No `area` prop means the view's `main` area; a view with several independently zoomable panes gives each its own id (`area="footnotes"`; ids are `[a-z][a-z0-9-]*`, and `default` is reserved). Card, list and table views mark every text element with the same id, and the platform zooms them as one area with one level and one memory: the shortcuts act on the area holding keyboard focus, the wheel on the area under the pointer, and the tab menu on the area last used — a click or wheel over an unmarked control or gap targets the area used last, because the bootstrap resolves the area from the nearest marked ancestor. **Areas must not nest** — a marked element inside another marked element is ignored — and resize handles, dividers and panel headers stay outside every area so they do not change size. A view with its own zoom of some text keeps that inline `zoom` on an element inside the marker, never on the marker itself, where it would replace the platform's level instead of multiplying with it. A view that marks nothing, and whose web view type the platform does not declare zoomable, is not zoomed at all: it renders at 100 % content zoom, with no zoom items in its tab menu and no zoom shortcuts. Such a view is zoomable only while a marked element is rendered, so render an empty marked element while it has nothing to show.
+**Several elements share one area id.** No `area` prop means the view's `main` area; a view with several independently zoomable panes gives each its own id (`area="footnotes"`; ids are `[a-z][a-z0-9-]*`, and `default` is reserved). Card, list and table views mark every text element with the same id, and the platform zooms them as one area with one level and one memory: the shortcuts act on the area holding keyboard focus, the wheel on the area under the pointer, and the tab menu on the area last used — a click or wheel over an unmarked control or gap targets the area used last, unless a zoom scope encloses it (below), because the bootstrap resolves the area from the nearest marked ancestor, then the nearest scope. **Areas must not nest** — a marked element inside another marked element is ignored — and resize handles, dividers and panel headers stay outside every area so they do not change size. A view with its own zoom of some text keeps that inline `zoom` on an element inside the marker, never on the marker itself, where it would replace the platform's level instead of multiplying with it. A view that marks nothing, and whose web view type the platform does not declare zoomable, is not zoomed at all: it renders at 100 % content zoom, with no zoom items in its tab menu and no zoom shortcuts. Such a view is zoomable only while a marked element is rendered, so render an empty marked element while it has nothing to show.
 
-First reference implementations: the Scripture editor (`main` around the editor tree, `footnotes`), the Comments list (`ContentZoomTextProvider` around the cards), and the Text Collection grid (one `text-collection` marker per cell).
+**Areas the user cannot tell apart, and unscaled containers that belong to one area.** When a view
+has several areas of the same kind — the Text Collection gives each resource its own area,
+`resource-<id>` — name each for the zoom indicator with `ContentZoomRoot`'s `label` prop
+(`<ContentZoomRoot area={zoomArea} label={resourceName}>`); the indicator then reads
+"HSV · 120 %" instead of "120 %". A container that is not itself scaled but belongs to one area —
+a row, a column or a card that holds the text together with its name and its controls — carries
+`data-platform-content-zoom-scope="<area id>"` (the name is exported as
+`CONTENT_ZOOM_SCOPE_ATTRIBUTE` from `platform-bible-react`; write the literal attribute in JSX). A
+click, a focus or Ctrl/⌘+wheel anywhere inside it then means that area. A marker inside the scope
+still decides for itself; never put the scope on a marked element, and never scale a scope element.
+Both attributes are experimental. Reference implementation: the Text Collection grid
+(`scripture-text-grid.component.tsx` for the scopes, `resource-cell-view.component.tsx` for the
+labelled markers, `resource-zoom-area.utils.ts` for the area ids).
+
+First reference implementations: the Scripture editor (`main` around the editor tree, `footnotes`), the Comments list (`ContentZoomTextProvider` around the cards), and the Text Collection grid (one `resource-<id>` area per resource, labelled with its name, with a zoom scope on each row and column).
 
 Card, list and table reference implementations mark each project-text element with the view's one area id: Find's result snippet, verse context and replace preview (`extensions/src/platform-scripture/src/find/search-result.component.tsx`); the four inventories' item column (`extensions/src/platform-scripture/src/checks/inventories/inventory-item-column.tsx`) plus PBR's occurrence table (`lib/platform-bible-react/src/components/advanced/inventory/occurrences-table.component.tsx`), opted in with `ContentZoomTextProvider`; the Checks card's item text (`extensions/src/platform-scripture/src/checks/checks-side-panel/check-card.component.tsx`); the Markers Checklist's text and marker tokens (`extensions/src/platform-scripture/src/components/checklist.component.tsx`); and the Lexical Tools dictionary's lemmas, glosses and definitions (`extensions/src/platform-lexical-tools/src/components/dictionary/`). Each of these web-view types is also declared zoomable in core's content-zoom declaration map, so its zoom items and shortcuts exist before any text is rendered.
 
@@ -848,3 +862,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.7.5 | 2026-09-23 | "Content Zoom Opt-In": mark the project text, not a content root — `ContentZoomRoot as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps` for library text, one id across many text elements, per-view inline zoom inside the marker. |
 | 1.7.6 | 2026-09-23 | List the card, list and table reference implementations of text-level zoom markers (Find, the inventories, Checks, the Markers Checklist, the Lexical Tools dictionary) and note that these types are declared zoomable in core. |
 | 1.7.7 | 2026-09-23 | Drop the Text Collection grid's per-resource zoom as the example of a view with its own inline zoom and of a view owning Ctrl/⌘+wheel for a sub-region: the grid's text is sized by content zoom alone. The rules themselves are unchanged. |
+| 1.7.8 | 2026-09-24 | "Content Zoom Opt-In": name areas the user cannot tell apart with `ContentZoomRoot`'s `label`, and tie unscaled rows, columns and cards to one area with `data-platform-content-zoom-scope` (both experimental); the Text Collection grid is the reference, one `resource-<id>` area per resource. |

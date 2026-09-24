@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.6
+version: 1.1.7
 status: active
 created: 2026-03-04
-last_updated: 2026-09-23
+last_updated: 2026-09-24
 ---
 
 # Extension Development Guide
@@ -321,6 +321,12 @@ That is the whole opt-in. The platform then scales the marked elements on Ctrl/�
 
 - **One area id across many text elements.** A *zoom area* is a named part of a view that zooms as one and keeps its own level. `<ContentZoomRoot>` with no `area` prop marks the view's `main` area — it renders the marker attribute with an empty value, and that empty value *is* the contract, not an oversight. A list or card view marks every text element with the same id and they zoom together; a view with several independently zoomable panes names each one (`area="footnotes"`), and each area gets its own level and memory. Ids are lower-case letters, digits and hyphens starting with a letter (`[a-z][a-z0-9-]*`); `default` is reserved. Use `as="span"` inside a `<p>`, a heading or a table cell. Text rendered by a `platform-bible-react` component (the comment cards) is marked by that component when you wrap it in `ContentZoomTextProvider`; your own inline text components can spread `useContentZoomTextProps()` onto their text element to take part the same way.
 - **Areas must not nest.** A marked element inside another marked element is ignored (and logged once). Mark the text itself, not a scroll container that also holds a second area. Dividers, resize handles, banners and panel headers stay **outside** every area so they keep their size while the content scales.
+- **Name areas the user cannot tell apart, and tie unscaled containers to their area.** Give each
+  such area a name with `ContentZoomRoot`'s `label` prop, and the zoom indicator shows it
+  ("HSV · 120 %"). Put `data-platform-content-zoom-scope="<area id>"` on a row, column or card that
+  holds the text together with unscaled controls, so a click or Ctrl/⌘+wheel anywhere in it means
+  that area. See [Component-Builder-Patterns.md](Component-Builder-Patterns.md) "Content Zoom
+  Opt-In (experimental)"; the Text Collection grid is the reference.
 - **Plain-HTML WebViews** put the attribute on each text element directly — `<div data-platform-content-zoom-root>` for the main area, `<div data-platform-content-zoom-root="footnotes">` (or a `<span>` for inline text) for a named one. `ContentZoomRoot` is only the React convenience wrapper over the same attribute; `CONTENT_ZOOM_ROOT_ATTRIBUTE` is exported beside it so you never have to spell the string.
 - **Measuring inside a zoomed area.** The platform applies CSS `zoom` to the marked element, so `getBoundingClientRect()` inside it reports **zoomed** pixels while `getComputedStyle(element).fontSize` reports the **unzoomed** value. Code that converts between the two must read the factor itself, from the CSS custom property `--platform-content-zoom-<areaId>` on the WebView's `documentElement` (`--platform-content-zoom-main` for the unnamed area), falling back to `--platform-content-zoom-default`, which holds the Settings default that any area without its own level follows. (This mismatch is the PT-4167 caveat.)
 - **If your view owns Ctrl/⌘+wheel for a sub-region of its own**, register that listener in the **capture** phase and call `stopPropagation()`. The platform's listener is deliberately on the bubble phase so that a view which does this keeps precedence.
@@ -328,7 +334,7 @@ That is the whole opt-in. The platform then scales the marked elements on Ctrl/�
 - **Keep the terminology apart**, in your copy and in your identifiers. *Interface scaling* (the `platform.zoomFactor` setting) scales the **whole application**, chrome included; it is labelled "Interface scaling" in Settings. *Content zoom* is per **pane** and scales only marked content; its default is the `platform.webViewContentZoom` setting, labelled "Tab content default zoom" in Settings. Say **pane**, not "tab", for the thing that zooms — one tab may hold several panes, as the Scripture editor holds a text pane and a footnotes pane.
 - **Simple mode's tab menu shows only the `platform.tabZoom` group.** It narrows the platform's contributed tab menu to that one group before rendering it, so an extension's own tab-menu contribution appears in Power mode only, never in Simple mode. A tab whose pane is not zoomable therefore has no tab menu at all in Simple mode.
 
-`ContentZoomRoot`, `ContentZoomTextProvider`, `useContentZoomTextProps`, `CONTENT_ZOOM_ROOT_ATTRIBUTE` and the `data-platform-content-zoom-root` contract are **experimental** and may change without notice.
+`ContentZoomRoot` (including its `label` prop), `ContentZoomTextProvider`, `useContentZoomTextProps`, `CONTENT_ZOOM_ROOT_ATTRIBUTE`, `CONTENT_ZOOM_SCOPE_ATTRIBUTE`, `CONTENT_ZOOM_LABEL_ATTRIBUTE` and the `data-platform-content-zoom-root` / `-scope` / `-label` contracts are **experimental** and may change without notice.
 
 **Pop-ups stay at interface scale.** Menus, popovers, dropdowns and tooltips from
 `platform-bible-react`, the pop-ups requested through `papi.overlays` (`showCommandPalette`,
@@ -494,3 +500,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.4   | 2026-09-23 | Pop-ups stay at interface scale: replace "Pop-ups follow their area" and the `papi.overlays` scaling note with one rule; `ContentZoomAreaProvider`, the pop-up attribute and `EditorOptions.contextMenuContainer` are gone. |
 | 1.1.5   | 2026-09-23 | "Content Zoom": mark the project text, not a content root — per-element markers sharing one id, `as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps`. |
 | 1.1.6   | 2026-09-23 | "Content Zoom": drop the Text Collection grid's per-resource zoom as the example of a view owning Ctrl/⌘+wheel for a sub-region — the grid's text is sized by content zoom alone. The capture-phase rule is unchanged. |
+| 1.1.7   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference. |
