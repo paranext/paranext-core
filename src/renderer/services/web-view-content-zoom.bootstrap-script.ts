@@ -6,6 +6,7 @@ import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
   CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE,
+  CONTENT_ZOOM_POPUP_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   CONTENT_ZOOM_UNNESTED_CLAUSE,
@@ -124,6 +125,13 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
   (() => {
     const webViewId = ${id};
     const ATTR = '${attr}';
+    // Pop-up content (a popover or menu portaled out of an area) carries its area's marker so the
+    // zoom rule scales it, plus this flag: it is never a pane of its own, so it is left out of the
+    // reported areas and the indicator's placement. A click or wheel inside it still targets its area.
+    // Hidden case: nothing to catch up — a pop-up is only open in a visible pane, and its zoom is a
+    // CSS variable that updates while the tab is hidden.
+    const POPUP_ATTR = '${CONTENT_ZOOM_POPUP_ATTRIBUTE}';
+    const isPopup = (element) => element.hasAttribute(POPUP_ATTR);
     const MAIN = '${MAIN_CONTENT_ZOOM_AREA}';
     const AREA_ID = new RegExp(${JSON.stringify(CONTENT_ZOOM_AREA_ID_PATTERN.source)});
     const RESERVED_ID = ${JSON.stringify(RESERVED_CONTENT_ZOOM_AREA_ID)};
@@ -206,6 +214,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const collectAreas = () => {
       const found = [];
       document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
+        if (isPopup(element)) return;
         const areaId = idOf(element);
         if (!isAreaId(areaId)) { warnOnce('ignoring zoom area with invalid id "' + areaId + '"'); return; }
         if (element.parentElement && element.parentElement.closest('[' + ATTR + ']')) { warnOnce('ignoring nested zoom area "' + areaId + '"'); return; }
@@ -239,23 +248,40 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
           syncWheelListener();
         }
       }
-      if (!activeArea || areas.indexOf(activeArea) === -1) setActive(areas[0]);
+      if (!activeArea || areas.indexOf(activeArea) === -1) {
+        const focused = areaOf(document.activeElement);
+        setActive(focused !== undefined && areas.indexOf(focused) !== -1 ? focused : areas[0]);
+      }
     };
     // The badge and live region live in this document, so writing their text is itself a
     // childList mutation; a zoom step would otherwise pay for a second full-document scan.
     const isIndicatorRecord = (record) =>
       (badge && badge.contains(record.target)) || (liveRegion && liveRegion.contains(record.target));
-    const carriesMarker = (node) =>
-      node.nodeType === 1 && (node.matches('[' + ATTR + ']') || !!node.querySelector('[' + ATTR + ']'));
+    // A pop-up's root carries ATTR alongside POPUP_ATTR (see the pop-up comment above), and
+    // closest() matches an element against itself before its ancestors, so this is true both for
+    // the pop-up root and for a marker nested inside its subtree — exactly the two shapes
+    // collectAreas already rejects (isPopup for the root, "ignoring nested zoom area" for anything
+    // nested under it, since the root carries ATTR too).
+    const isPopupOrWithinPopup = (element) => !!element.closest('[' + POPUP_ATTR + ']');
+    const carriesMarker = (node) => {
+      if (node.nodeType !== 1) return false;
+      if (node.matches('[' + ATTR + ']')) return !isPopupOrWithinPopup(node);
+      return Array.prototype.some.call(
+        node.querySelectorAll('[' + ATTR + ']'),
+        (marker) => !isPopupOrWithinPopup(marker),
+      );
+    };
     const someCarriesMarker = (nodes) => Array.prototype.some.call(nodes, carriesMarker);
     // Only a record that carries a marker can change the area list: an added or removed node that is
     // one or contains one, or a change to the marker attribute itself, which is the only attribute
     // this observer is given. Typing in a view moves text nodes and unmarked elements, so without
-    // this the editor would pay for a whole-document scan per keystroke. A removed node's subtree is
-    // intact and queryable while the record holds it, so a marker removed inside a larger subtree is
-    // seen too; nesting needs no case of its own, because any change to a marker's marked ancestry
-    // is itself the addition, removal or retitling of a marker. A marker inside a shadow root is
-    // still invisible here, as it was before, since the observer does not traverse shadow trees.
+    // this the editor would pay for a whole-document scan per keystroke. A pop-up opening or closing
+    // is filtered out the same way, so a tooltip or menu popping in and out under the pointer does
+    // not pay for one either. A removed node's subtree is intact and queryable while the record
+    // holds it, so a marker removed inside a larger subtree is seen too; nesting needs no case of
+    // its own, because any change to a marker's marked ancestry is itself the addition, removal or
+    // retitling of a marker. A marker inside a shadow root is still invisible here, as it was
+    // before, since the observer does not traverse shadow trees.
     const isAreaRecord = (record) => {
       if (isIndicatorRecord(record)) return false;
       // Until the parent has taken a report, every mutation is worth another try: that retry is the
@@ -303,6 +329,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // zoom chord pressed inside the window is exactly what the protection is for.
     let pointerArea;
     let pointerTime = 0;
+    // Whether the element holding focus is one the VIEW focused rather than one the user chose.
+    // Set when a pointer gesture's answering focus change is suppressed below - the view moving the
+    // caret out of the area the user just clicked, which is what selecting a footnote row does.
+    // Cleared by a focus change the platform accepts, or by Tab - never by a pointer down: a click
+    // is not itself a focus move, and a click that moves no caret (a non-focusable element) must
+    // leave the caret exactly where the view put it rather than hand the chords back to it. The
+    // chords consult this flag; the wheel does not, since it reads the pointer and never the caret.
+    let viewMovedFocus = false;
     const onPointerDown = (e) => {
       const areaId = areaOf(e.target);
       // Recorded only when the id is one setActive would actually accept, and only for the primary
@@ -326,12 +360,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         performance.now() - pointerTime < ${GESTURE_FOCUS_MS};
       if (suppress) {
         pointerArea = undefined;
+        viewMovedFocus = true;
         return;
       }
+      viewMovedFocus = false;
       setActive(areaId);
     };
     const onGestureKeyDown = (e) => {
-      if (e.key === 'Tab') pointerArea = undefined;
+      if (e.key === 'Tab') { pointerArea = undefined; viewMovedFocus = false; }
     };
     window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('focusin', onFocusIn, true);
@@ -406,7 +442,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (!hasModifier(e)) return;
       const chord = chordFor(e);
       if (!chord) return;
-      const areaId = targetFor(document.activeElement);
+      const areaId =
+        viewMovedFocus && activeArea && areas.indexOf(activeArea) !== -1
+          ? activeArea
+          : targetFor(document.activeElement);
       if (!areaId) return;
       e.preventDefault();
       // Whatever the tick path has pending goes over first, so the parent is asked to step in the
@@ -720,7 +759,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const cornerOf = (areaId) => {
       let top = Infinity; let left = Infinity; let right = -Infinity; let anchor;
       document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
-        if (idOf(element) !== areaId) return;
+        if (idOf(element) !== areaId || isPopup(element)) return;
         if (!anchor) anchor = element;
         const rect = element.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) return;

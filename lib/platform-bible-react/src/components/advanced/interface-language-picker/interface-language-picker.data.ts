@@ -16,6 +16,7 @@ export const SAMPLE_LOCALIZED_STRINGS: InterfaceLanguagePickerLocalizedStrings =
 export const SAMPLE_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
   es: { autonym: 'Español', uiNames: { en: 'Spanish' } },
+  fr: { autonym: 'Français', uiNames: { en: 'French' } },
   'zh-hans': { autonym: '中文（简体）', uiNames: { en: 'Chinese (Simplified)' } },
   tpi: { autonym: 'Tok Pisin', otherNames: ['Pidgin'] },
 };

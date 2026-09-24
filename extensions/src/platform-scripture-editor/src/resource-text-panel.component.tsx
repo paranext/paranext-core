@@ -3,6 +3,7 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
+  ContentZoomRoot,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -501,6 +502,10 @@ export function ResourceTextPanel({
   const { emptyStatePromptKey, bookNotAvailableKey, pickButtonKey } =
     resolveResourcePanelStringKeys(resourceType);
 
+  // Both web-view types share this component and resolve to the same content-zoom memory identity
+  // (their container project), so each names its own area to keep its remembered level separate.
+  const contentZoomArea = resourceType === 'ScriptureResource' ? 'bible-texts' : 'commentaries';
+
   if (!hasProject) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
@@ -693,6 +698,15 @@ export function ResourceTextPanel({
   // This panel (Bible Texts / Commentaries) is Simple-mode-only, so `editor-container-simple`
   // (flattens .editor-container's rounded top corners — see _simple-mode.scss) is applied
   // unconditionally, unlike the Scripture Editor's conditional use of the same class.
+  //
+  // The ContentZoomRoot below is only reached once the panel has a project, is not mid-pick/install,
+  // has a configured readiness, and has not just failed an install. None of the earlier returns for
+  // those states (no project; selecting/installing; readiness not configured; install failed) mark a
+  // zoom area, so while any of them is on screen this pane reports no area and offers no per-pane
+  // zoom control until content arrives; what the platform does with a pane that reports no areas is
+  // core's to define and document. Acceptable: each of those states shows only chrome — a prompt, a
+  // spinner or an error — with no scripture content to scale. Some of them (an unconfigured
+  // readiness, a failed install) can stay on screen indefinitely without that changing.
   return (
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       <ResourceSelectorDropdown
@@ -707,7 +721,9 @@ export function ResourceTextPanel({
         )}
       />
 
-      {renderContent()}
+      <ContentZoomRoot area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+        {renderContent()}
+      </ContentZoomRoot>
     </div>
   );
 

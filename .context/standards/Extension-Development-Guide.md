@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.0
+version: 1.1.2
 status: active
 created: 2026-03-04
-last_updated: 2026-09-15
+last_updated: 2026-09-21
 ---
 
 # Extension Development Guide
@@ -325,6 +325,32 @@ That is the whole opt-in. The platform then scales the marked element on Ctrl/�
 
 `ContentZoomRoot`, `CONTENT_ZOOM_ROOT_ATTRIBUTE` and the `data-platform-content-zoom-root` contract are **experimental** and may change without notice.
 
+**Pop-ups follow their area.** Popovers, dropdown menus and tooltips from `platform-bible-react`
+that open from inside a `ContentZoomRoot` take that area's zoom level. Popovers and dropdown
+menus also cap their own width and height to the pane's available space and scroll their content
+if it doesn't fit; tooltips cap only width, so a tooltip taller than the available space is
+clipped at the pane's edge. A pop-up your view renders outside the area element — beside the
+content and anchored to a position in it — joins the area only when wrapped in
+`ContentZoomAreaProvider` (pass the same `area` as the root; omit it for the main area). Toolbar
+pop-ups outside every area stay at interface scale. `SelectContent`, `ContextMenuContent`,
+`MenubarContent` and `DropdownMenuSubContent` do not follow an area yet either — they render at
+interface scale even when opened from inside one. `ContentZoomRoot` and `ContentZoomAreaProvider`
+are experimental. A
+pop-up you build without these components can opt in by putting
+`data-platform-content-zoom-root="<area>"` and `data-platform-content-zoom-popup` on its portaled
+content. Those attributes only scale it: such a pop-up gets none of the library's size caps, so it
+must keep itself inside the pane. The Scripture editor's own right-click menu is drawn by the
+editor library rather than by these components; it stays at interface scale, in the text pane and
+the footnote editor pop-up alike.
+
+**Pop-ups requested through `papi.overlays` follow the requesting pane too.** A command palette,
+popover or context menu shown with `papi.overlays.showCommandPalette`/`showPopover`/
+`showContextMenu` renders outside your WebView, in the platform's own document — the platform
+resolves your pane's content scale for you and draws the pop-up at it, capped to stay inside the
+window. There is nothing for you to opt in: call the `papi.overlays` methods as you already do. A
+command palette shown centred (no anchor position) is not anchored to any pane's content and stays
+at interface scale, like a modal dialog.
+
 ---
 
 ## Contributions
@@ -473,3 +499,5 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | ------- | ---------- | --------------- |
 | 1.0.0   | 2026-03-04 | Initial version |
 | 1.1.0   | 2026-09-15 | Add "Content Zoom (experimental)" under WebViews — the `ContentZoomRoot` / `data-platform-content-zoom-root` opt-in, one root per zoom area, the no-root whole-view fallback, the zoomed-`getBoundingClientRect` vs unzoomed-`fontSize` caveat, the capture-phase rule for views owning Ctrl+wheel, and the Interface-Scaling / content-zoom terminology split. |
+| 1.1.1   | 2026-09-18 | Note that a command palette, popover or context menu requested through `papi.overlays` follows the requesting pane's content scale automatically — nothing for the extension author to opt in. |
+| 1.1.2   | 2026-09-21 | Note that a view mounting the Scripture editor inside a zoom area hands it that area's element (`EditorOptions.contextMenuContainer`) so the editor's right-click menu takes the area's zoom. |

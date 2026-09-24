@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import {
   translateCoordinates,
   getWebViewIframe,
+  getWebViewIframeZoom,
   clampToViewport,
   isWebViewVisible,
   isPositionInViewport,
@@ -113,6 +114,38 @@ describe('overlay-coordinates', () => {
 
       const result = translateCoordinates('test-webview-1', { x: 300, y: 200 });
       expect(result).toEqual({ x: 400, y: 250 });
+    });
+  });
+
+  describe('getWebViewIframeZoom', () => {
+    let mockIframe: HTMLIFrameElement;
+
+    beforeEach(() => {
+      mockIframe = document.createElement('iframe');
+      mockIframe.setAttribute('data-web-view-id', 'test-webview-1');
+      document.body.appendChild(mockIframe);
+    });
+
+    afterEach(() => {
+      document.body.removeChild(mockIframe);
+    });
+
+    it('reports the iframe zoom when one is set', () => {
+      mockIframe.style.zoom = '1.5';
+      expect(getWebViewIframeZoom('test-webview-1')).toBe(1.5);
+    });
+
+    it('reports 1 for an iframe with no zoom set', () => {
+      expect(getWebViewIframeZoom('test-webview-1')).toBe(1);
+    });
+
+    it('reports 1 for an iframe with an empty-string zoom', () => {
+      mockIframe.style.zoom = '';
+      expect(getWebViewIframeZoom('test-webview-1')).toBe(1);
+    });
+
+    it('reports 1 for an unknown web view id', () => {
+      expect(getWebViewIframeZoom('non-existent')).toBe(1);
     });
   });
 

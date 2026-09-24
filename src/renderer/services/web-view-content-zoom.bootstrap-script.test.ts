@@ -231,6 +231,69 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-click-wins', 'footnotes');
   });
 
+  it('keeps zooming the area the user clicked when the view throws the caret back into another one', () => {
+    const { bound } = install('wv-view-moved-focus', TWO_AREAS);
+    // A click on a footnote row: the pointer goes down in the footnotes area, and the view answers
+    // by putting the caret back in the editor text. `focus()` rather than a dispatched `focusin`,
+    // because the chord path reads `document.activeElement` and a dispatched event never moves it.
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    expect(document.activeElement).toBe(byId('verse'));
+    key({ key: '0', ctrlKey: true });
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-view-moved-focus', 'footnotes');
+  });
+
+  it('keeps zooming that area however long after the click the chord comes', () => {
+    // Only the monotonic clock the gesture window is measured with is faked, so nothing but the age
+    // of the last pointer gesture changes.
+    vi.useFakeTimers({ toFake: ['performance'] });
+    try {
+      const { bound } = install('wv-late-chord', TWO_AREAS);
+      byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      byId('verse').focus();
+      vi.advanceTimersByTime(2_000);
+      key({ key: '=', ctrlKey: true });
+      expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-late-chord', 1, 'footnotes');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hands the chords back to the caret after Tab', () => {
+    const { bound } = install('wv-tab-hands-back', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // Tab is a focus move the user asked for, so the caret is theirs again from here on.
+    key({ key: 'Tab' });
+    key({ key: '0', ctrlKey: true });
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-tab-hands-back', 'main');
+  });
+
+  it('a click outside every zoom area does not hand the chords back to a caret the view moved', () => {
+    const { bound } = install('wv-toolbar-click', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // The view's own toolbar is in no zoom area: clicking it moves no caret and says nothing about
+    // which content the user is working in.
+    byId('toolbar').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    key({ key: '0', ctrlKey: true });
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-toolbar-click', 'footnotes');
+  });
+
+  it('a click inside the area does not hand the chords back to a caret the view moved either', () => {
+    const { bound } = install('wv-nonfocusable-click', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // #foot is the footnotes area's own root and takes no focus, so unlike the toolbar case above,
+    // this pointer down lands INSIDE a reported area - and still moves no caret.
+    byId('foot').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    key({ key: '0', ctrlKey: true });
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith(
+      'wv-nonfocusable-click',
+      'footnotes',
+    );
+  });
+
   it('follows a focus change no pointer gesture is behind, so the keyboard can pick the area', () => {
     const { bound } = install('wv-keyboard-focus', TWO_AREAS);
     byId('note').dispatchEvent(new Event('focusin', { bubbles: true }));
@@ -912,6 +975,29 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
   });
 
+  it('tells the platform which area the caret is in when the areas arrive after the view has focused one', async () => {
+    // Nothing is marked yet, so the bootstrap's first scan reports no areas at all.
+    const { bound } = install('wv-late-areas', '<div id="toolbar">bar</div>');
+    document.body.innerHTML =
+      '<div id="toolbar">bar</div>' +
+      '<div data-platform-content-zoom-root id="main"><p id="verse" tabindex="0">text</p></div>' +
+      '<div data-platform-content-zoom-root="footnotes" id="foot"><p id="note" tabindex="0">note</p></div>';
+    byId('note').focus();
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-late-areas', [
+      'main',
+      'footnotes',
+    ]);
+    // The reported active area is what the platform resolves a pane's area from for everything
+    // that never goes through this script - the tab menu's zoom commands, and a surface the
+    // platform renders outside the pane - so a blind first-area seed would misdirect those even
+    // where a chord itself still lands right.
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+      'wv-late-areas',
+      'footnotes',
+    );
+  });
+
   it('reports the ordered area list, ignores nested markers, and adds a rule for a named area that appears later', async () => {
     const { bound } = install('wv-7', TWO_AREAS);
     await nextFrame();
@@ -1585,6 +1671,149 @@ describe('content-zoom bootstrap script', () => {
     api.showIndicator('footnotes', '120 %');
     const badge = document.getElementById('platform-content-zoom-indicator');
     expect(badge?.dataset.area).toBe('footnotes');
+  });
+
+  it('leaves pop-up content out of the reported areas and warns about none of it', async () => {
+    const { bound, papi } = install('wv-popup', TWO_AREAS);
+    await nextFrame();
+    const popupForFootnotes = document.createElement('div');
+    popupForFootnotes.setAttribute('data-platform-content-zoom-root', 'footnotes');
+    popupForFootnotes.setAttribute('data-platform-content-zoom-popup', '');
+    const popupOnlyArea = document.createElement('div');
+    popupOnlyArea.setAttribute('data-platform-content-zoom-root', 'menu');
+    popupOnlyArea.setAttribute('data-platform-content-zoom-popup', '');
+    const nestedPopup = document.createElement('div');
+    nestedPopup.setAttribute('data-platform-content-zoom-root', '');
+    nestedPopup.setAttribute('data-platform-content-zoom-popup', '');
+    byId('main').appendChild(nestedPopup);
+    // Controls in the same batch: a real late pane is reported, a real nested marker still warns.
+    const late = document.createElement('aside');
+    late.setAttribute('data-platform-content-zoom-root', 'sidebar');
+    const nestedPane = document.createElement('div');
+    nestedPane.setAttribute('data-platform-content-zoom-root', 'inner');
+    byId('foot').appendChild(nestedPane);
+    document.body.append(popupForFootnotes, popupOnlyArea, late);
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-popup', [
+      'main',
+      'footnotes',
+      'sidebar',
+    ]);
+    const warnings = papi.logger.warn.mock.calls.map(([message]) => String(message));
+    expect(warnings.some((message) => message.includes('"inner"'))).toBe(true);
+    expect(warnings.filter((message) => message.includes('nested'))).toHaveLength(1);
+  });
+
+  it('does not report a changed area list when a pop-up opens or closes', async () => {
+    const { bound } = install('wv-popup-churn', TWO_AREAS);
+    await nextFrame();
+    const reportsBefore = bound.reportContentZoomAreasById.mock.calls.length;
+    expect(reportsBefore).toBeGreaterThan(0);
+    const popup = document.createElement('div');
+    // An area id the pane never reported, so counting the pop-up as an area would change the list.
+    popup.setAttribute('data-platform-content-zoom-root', 'menu');
+    popup.setAttribute('data-platform-content-zoom-popup', '');
+    document.body.appendChild(popup);
+    await nextFrame();
+    popup.remove();
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById.mock.calls.length).toBe(reportsBefore);
+  });
+
+  it('does not rescan the document when a pop-up opens or closes', async () => {
+    install('wv-popup-no-rescan', TWO_AREAS);
+    await nextFrame();
+    const spy = vi.spyOn(document, 'querySelectorAll');
+    const markerScanCount = () =>
+      spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
+        .length;
+    try {
+      const popup = document.createElement('div');
+      popup.setAttribute('data-platform-content-zoom-root', 'menu');
+      popup.setAttribute('data-platform-content-zoom-popup', '');
+      const before = markerScanCount();
+      document.body.appendChild(popup);
+      await nextFrame();
+      popup.remove();
+      await nextFrame();
+      expect(markerScanCount() - before).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('keeps the indicator on the pane while a pop-up of the same area is open', async () => {
+    install('wv-popup-corner', TWO_AREAS);
+    const popup = document.createElement('div');
+    popup.setAttribute('data-platform-content-zoom-root', '');
+    popup.setAttribute('data-platform-content-zoom-popup', '');
+    document.body.appendChild(popup);
+    const rect = (top: number, left: number, right: number): DOMRect =>
+      DOMRect.fromRect({ x: left, y: top, width: right - left, height: 50 });
+    vi.spyOn(byId('main'), 'getBoundingClientRect').mockReturnValue(rect(100, 0, 500));
+    vi.spyOn(popup, 'getBoundingClientRect').mockReturnValue(rect(10, 600, 900));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+    api.showIndicator('main', '200 %');
+    // A show asks for a placement rather than performing one, so the area's corner is measured in
+    // the frame that follows it.
+    await oneFrame();
+    const badge = byId('platform-content-zoom-indicator');
+    // Pane only: top 100 + 12, right edge 500 → innerWidth - 500 + 16. Including the pop-up would
+    // give top 22 and a right offset from 900.
+    expect(badge.style.top).toBe('112px');
+    expect(badge.style.right).toBe(`${window.innerWidth - 500 + 16}px`);
+  });
+
+  it('a click or Ctrl+wheel inside a pop-up targets the area the pop-up belongs to', async () => {
+    const { bound } = install('wv-popup-target', TWO_AREAS);
+    await nextFrame();
+    const popup = document.createElement('div');
+    popup.setAttribute('data-platform-content-zoom-root', 'footnotes');
+    popup.setAttribute('data-platform-content-zoom-popup', '');
+    popup.innerHTML = '<p id="popup-item">item</p>';
+    document.body.appendChild(popup);
+    await nextFrame();
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    byId('popup-item').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    const event = wheel({ ctrlKey: true, deltaY: -120 }, byId('popup-item'));
+    expect(event.defaultPrevented).toBe(true);
+    // A notch adds its step to a pending total that one adjustment per frame carries over.
+    await oneFrame();
+    expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-popup-target', 1, 'footnotes');
+  });
+
+  it('scales a top-level pop-up with its area’s rule but no rule matches a nested one', async () => {
+    install('wv-popup-css', TWO_AREAS);
+    const popup = document.createElement('div');
+    popup.id = 'popup';
+    popup.setAttribute('data-platform-content-zoom-root', 'footnotes');
+    popup.setAttribute('data-platform-content-zoom-popup', '');
+    document.body.appendChild(popup);
+    const nested = document.createElement('div');
+    nested.id = 'nestedPopup';
+    nested.setAttribute('data-platform-content-zoom-root', 'footnotes');
+    nested.setAttribute('data-platform-content-zoom-popup', '');
+    byId('main').appendChild(nested);
+    await nextFrame();
+    const sheet = document.querySelector<HTMLStyleElement>('#platform-content-zoom-styles')?.sheet;
+    const selectors = sheet
+      ? Array.from(sheet.cssRules).flatMap((rule) =>
+          rule instanceof CSSStyleRule ? [rule.selectorText] : [],
+        )
+      : [];
+    expect(selectors.some((selector) => byId('popup').matches(selector))).toBe(true);
+    expect(selectors.some((selector) => byId('nestedPopup').matches(selector))).toBe(false);
   });
 
   it('anchors the indicator at inline-end: right for an LTR area, left for an RTL area', async () => {

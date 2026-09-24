@@ -54,6 +54,11 @@ function ContextMenuRadioGroup({
 }
 
 /** @inheritdoc ContextMenu */
+// CUSTOM: This Radix-popper content does not read the content-zoom area context yet, unlike
+// PopoverContent, DropdownMenuContent and TooltipContent — it renders at interface scale even when
+// opened from inside a zoom area. Whatever first needs a context menu that follows one should read
+// useContentZoomArea() here and apply the same marker attributes and factor-divided size caps
+// PopoverContent uses.
 function ContextMenuContent({
   className,
   // CUSTOM: Destructure style so we can merge the shared z-index constant into it

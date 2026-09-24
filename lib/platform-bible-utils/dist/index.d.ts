@@ -4867,6 +4867,72 @@ export type EffectiveStructureProtectionInputs = {
  * the user's own preference governs (defaulting to on when never set).
  */
 export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
+/**
+ * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
+ * a trackpad pinch. Both the platform's per-pane zoom and the Text Collection grid's per-resource
+ * zoom read a wheel this way; the platform's copy is inlined in its injected bootstrap script,
+ * which imports nothing, and a parity test keeps the two in step.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomWheelReader = {
+	/**
+	 * How many zoom steps `event` means: positive zooms IN, negative zooms OUT, 0 means the event's
+	 * travel has not yet crossed a step boundary. `scopeId` is whatever opaque string the caller uses
+	 * to key its own zoomable region — a pane's zoom area for the platform, a resource id for the
+	 * Text Collection grid — and the reader resets its accumulated travel whenever it changes.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	read(event: WheelEvent, scopeId: string): number;
+	/**
+	 * Removes every listener the reader installed to track physically-held modifier keys. A reader
+	 * with no window to listen on (see {@link ContentZoomWheelReaderOptions.window}) has nothing to
+	 * remove.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	dispose(): void;
+};
+/**
+ * Options for {@link createContentZoomWheelReader}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomWheelReaderOptions = {
+	/**
+	 * Largest number of steps one event may ask for. Default: the platform's 0.5–3.0 zoom range
+	 * expressed in units of the effective {@link ContentZoomWheelReaderOptions.zoomStep} (25 at the
+	 * default step of 0.1) — so overriding `zoomStep` scales this default with it.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	maxSteps?: number;
+	/**
+	 * Zoom step the pinch calibration is derived from. Default 0.1. Must be a positive, finite
+	 * number; the reader does not validate it, and a zero or negative step yields a meaningless
+	 * calibration.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	zoomStep?: number;
+	/**
+	 * Window the modifier listeners attach to. Default `globalThis.window`; tests pass jsdom's. When
+	 * neither exists (a reader created outside a DOM, such as under Node) the reader still reads
+	 * notch and pinch counts from the events it is handed — it just cannot tell a synthesized pinch
+	 * from a real one held down by a physically-pressed Ctrl or Cmd key.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	window?: Window;
+};
+/**
+ * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
+ * a trackpad pinch — see {@link ContentZoomWheelReader} for the full contract.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function createContentZoomWheelReader(options?: ContentZoomWheelReaderOptions): ContentZoomWheelReader;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
@@ -6476,9 +6542,44 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private fragmentsByJsonPathInternal;
 	private indicesInUsfmByVerseRefInternal;
 	private usfmInternal;
+	/**
+	 * Messages already reported by {@link reportProblemOnce}, so each distinct problem is reported
+	 * once per instance rather than once per occurrence. A commentary or UBS Handbook repeats markers
+	 * this class's markers map does not carry tens of thousands of times per book, and a web view's
+	 * console calls cross IPC to the main process's log file, so reporting per occurrence costs work
+	 * proportional to the document.
+	 *
+	 * Keyed by full message text, so a report collapses only as far as its text repeats: the marker
+	 * reports name only the marker, while the chapter and verse reports also name a position. The set
+	 * lives as long as the instance, so a caller that builds a new instance per action reports each
+	 * problem again per action. Deliberately not reset by {@link usjChanged}: these describe the
+	 * marker, not where it appeared.
+	 */
+	private readonly reportedProblems;
 	constructor(usj: Usj, options?: UsjReaderWriterOptions);
 	usjChanged(): void;
 	private static areUsjVersionsCompatible;
+	/**
+	 * The book this document is for, for naming it in a log message.
+	 *
+	 * Reads the book marker straight off the top level of the content already in memory and stops at
+	 * the first one, so it costs nothing beyond that scan and does not walk into nested content. Only
+	 * call it on a path that is about to log — there is no reason to look for the book otherwise.
+	 *
+	 * @returns The book code, or {@link NO_BOOK_ID} if the document does not carry one
+	 */
+	private getBookIdForLogging;
+	/**
+	 * Reports `message`, unless an identical message has already been reported by this instance. See
+	 * {@link reportedProblems} for why repeats are dropped.
+	 *
+	 * Defaults to `warn` because these describe a document that is malformed or that this class had
+	 * to reinterpret. Pass `debug` for problems that are normal in a well-formed document.
+	 *
+	 * @param message Message to report
+	 * @param level Console level to report at. Defaults to `warn`
+	 */
+	private reportProblemOnce;
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	findParent<T>(jsonPathQuery: string): T | undefined;
 	/**
@@ -6872,7 +6973,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   potential adjustments to handle verse ranges differently when we know better what we ought to
 	 *   do.
 	 */
-	private static transferFragmentsInfoArrayToMaps;
+	private transferFragmentsInfoArrayToMaps;
 	/**
 	 * Generates USFM representation of the USJ document passed in and returns it along with
 	 * information about how various locations in USFM and USJ map to each other

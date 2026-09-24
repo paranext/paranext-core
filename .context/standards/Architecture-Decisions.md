@@ -1519,7 +1519,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   installed trivially fails its "is the installed copy the newest" test — so the front end clears
   `updateAvailable` for any row it reconciles as not installed rather than persisting a flag that
   describes nothing. That keeps the cached flag meaning what the list renders it as: "the copy on
-  disk is out of date".
+  disk is out of date". Both `refreshResourceFlags` and the `recomputeDblResourcesUpdateStatus`
+  method it calls through are now marked `@experimental` / `'x-experimental': true`, because this
+  recompute contract remains untested beyond its one caller.
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
 
 ## adr-dbl-install-status-from-backend: The backend is the authority on which DBL resources are installed, and on which project id
@@ -1573,6 +1575,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   styles; it was judged below the bar for its own work and is not reproduced. Folding the install lookup into the existing single
   pass removed the per-row `ExistingScrText` scans from the catalog projection as well, so the
   projection now costs one collection pass rather than one per catalogued row.
+  `recomputeDblResourcesInstallStatus` is now marked `@experimental` / `'x-experimental': true` for
+  the same reason as its sibling in `adr-dbl-cache-recompute-on-read` — the contract remains
+  untested beyond its one caller.
 - **Source:** PT-4484; builds directly on `adr-dbl-cache-recompute-on-read`.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
@@ -1901,6 +1906,67 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   longer derived from a window-scoped suffix at all. See `adr-web-view-ids-are-unique-from-birth` for
   the id scheme that replaced it.
 - **Source:** PT-4464.
+
+## adr-editor-context-menu-follows-its-area-via-a-container: The editor library renders its context menu into an element the host supplies
+
+- **Date:** 2026-09-18
+- **Status:** Withdrawn (2026-09-23). The option this entry relies on, `EditorOptions.contextMenuContainer`,
+  is not part of the editor library: as of 2026-09-23 it is no longer pursued
+  (paranext/scripture-editors#17, to be closed unmerged), so no host hands the editor a container and
+  its right-click menu stays at interface scale. The entry is kept below as the record of what was
+  considered.
+- **Context:** The Scripture editor's right-click menu is drawn by `ContextMenuPlugin` in
+  `paranext/scripture-editors`, not by our `ContextMenuContent`. It portalled hand-built markup to
+  `document.body`, outside every zoom area, so at 200 % it stayed at interface scale beside text
+  twice its size — at the text pane and inside the footnote editor pop-up alike.
+- **Decision:** the library takes an optional `EditorOptions.contextMenuContainer?: () =>
+  HTMLElement | undefined` getter. It calls that getter once, inside its own `contextmenu`
+  handler, and stores the returned element in state — never during render. Inside that element the
+  menu inherits the area's CSS `zoom`; it divides its viewport coordinates by
+  `Element.currentCSSZoom`, clamps to the container's rect narrowed by every clipping ancestor and
+  the viewport, and caps its height to that box. Every host that mounts the editor inside a zoom
+  area supplies that area's `ContentZoomRoot` element: the editor web view for the text pane, the
+  Model Text panel, the Bible Texts / Commentaries panel, and the Enhanced Resources web view for
+  its scripture pane. `FootnoteEditor` overrides the container with its own root, because the web
+  view's value would otherwise flow through `FootnoteEditor`'s own `...editorOptions` spread and
+  bind the pop-up's menu against the text pane's box instead of the pop-up's own.
+- **Alternatives:**
+  - stamping `data-platform-content-zoom-root` + `data-platform-content-zoom-popup` on the
+    portalled element, as our own pop-ups do — rejected: it puts our attribute names and
+    `--platform-content-zoom-*` variable names inside a library that also serves Scribe and the
+    PERF demos, where `currentCSSZoom` is a standard property that needs no convention;
+  - a generic attribute bag the host fills in — the positioning still lives in the library, keyed
+    off an attribute it does not understand;
+  - positioning the menu from here — the plugin owns the `contextmenu` event and the clamp, and
+    the host cannot see the menu's measured size;
+  - dropping the menu's hard-coded 14px font and 200px width — measured irrelevant: CSS `zoom`
+    scales `px` lengths, so those already scale; changing them would restyle the menu at 100 %.
+- **Consequences:**
+  - the library gains no knowledge of this platform; the only shared vocabulary is a standard DOM
+    property;
+  - a fixed-position menu is not clipped by a scrolling ancestor, so staying inside the pane is
+    computed rather than inherited — the clipping-ancestor walk is load-bearing in split layouts;
+  - resolving the container lazily, inside the `contextmenu` handler, rather than reading it during
+    render is load-bearing, not incidental: an earlier shape that called the host's getter during
+    render made React Compiler abandon optimizing the whole component
+    (`react-hooks/preserve-manual-memoization`). The getter shape also lets both hosts pass a
+    stable `useCallback`, or a plain ref read, with no `useState` and no memo churn of their own;
+  - the capped menu's outer element gets `overflowY: auto` while the inner `<ul>` still carries
+    `editor.css`'s own `max-height: 200px; overflow-y: scroll`; a short pane at zoom 200 % or more
+    with a full menu can bind both constraints at once, producing two nested scroll regions with
+    only one visible scrollbar (`scrollbar-width: none` hides the inner one). Left as is:
+    collapsing the two caps would mean changing the library's own stylesheet for every host, and
+    the menu was usable in hand checks at 200 %. Revisit if a user reports a menu that will not
+    scroll to its last item;
+  - the fix reaches core through the `platform-yalc` pin, so the behaviour lives in
+    `scripture-editors` and core holds only the call sites;
+  - a host that mounts the editor inside a zoom area and does not supply its area's element leaves
+    its right-click menu at interface size against `document.body`, with no other signal, so each
+    host's tests pin its wiring. `scripture-text-grid`'s `resource-cell-view` is not a host of this
+    kind: it zooms its cells itself and intercepts `onContextMenuCapture` with its own menu — the
+    grid web view always supplies the labels that enable it, and only a story or test renders a cell
+    without them — so the editor's menu never opens there.
+- **Source:** PT-4713.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
@@ -2923,6 +2989,83 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the four themes, so an inter-thread gap stops reading as separation and a divider becomes
   load-bearing. **Revisit** for any list row whose background already carries state — the same
   overload is the general case, not a comments-specific one.
+
+## adr-log-file-writes-queued: Main's log file writes are queued and coalesced, trading tail durability for an event loop that never blocks on log disk I/O
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `electron-log`'s file transport defaults to `sync: true`, which appends to the log
+  file with one `fs.writeFileSync` per line (`File.js` `writeLine`). Every log call therefore sits
+  on the calling process's critical path, and a web view's `console.*` calls are forwarded to the
+  main process by `spyRendererConsole`, so a hot logging path inside an iframe spends main-process
+  event-loop time on disk I/O. A marker-serialization path that logged once per marker occurrence
+  emitted ~10^5 messages for a single commentary book; the resulting serialized appends hung the
+  app for minutes and saturated the Windows disk queue badly enough that the desktop and Task
+  Manager stopped responding. The volume bug is worth fixing on its own, but any future hot log
+  path has the same reach, so the transport itself is the durable exposure.
+- **Decision:** Set `log.transports.file.sync = false` in `src/shared/services/logger.service.ts`,
+  **in main only**. `electron-log` then queues each line and, whenever a write is already in
+  flight, joins the whole accumulated queue into the next single `fs.writeFile` — so a burst costs
+  one write per disk round-trip instead of one per message, and no log call blocks main's disk
+  I/O. This is the library's own supported mode, not a patch. Main is the process that must never
+  stall: it owns the UI, and it is where every web view's forwarded console calls land. The
+  extension host is deliberately left synchronous — it ends its graceful shutdown with
+  `process.exit()` (`extension-host.ts`), which runs no pending I/O callback, so queuing there
+  would silently discard its shutdown diagnostics (including a `Failed to deactivate extensions`
+  error) on every run; and its own log level is `error` when packaged, so it does not need the
+  protection for the flood this decision responds to.
+- **Alternatives:** Keeping synchronous writes and rate-limiting or de-duplicating at the log
+  ingress — rejected as the primary defense; it preserves durability exactly but only guards the
+  paths the throttle anticipates, leaving the transport able to stall on the next unthrottled one.
+  (De-duplication is still worth doing at individual noisy sites, and was, for the marker
+  warnings — the two are complementary, not substitutes.) Async for most levels plus a second
+  synchronous transport for `error`, so the last error before a crash is always durable — rejected
+  for now as two transports to keep in step for a narrow gain, since errors are rare and do not
+  flood; revisit if crash reports turn up truncated at an error.
+- **Consequences:**
+  - *Queued lines die with the process.* Lines still queued are lost if the process dies without
+    running the pending write, so a hard kill can cost the most recent messages — precisely in the
+    flood or slow-disk case where the queue is deepest, which is a real loss of crash-diagnostic
+    fidelity accepted in exchange for the app not freezing. `electron-log` exposes no public flush,
+    though the queue state is reachable (`transports.file.getFile()` carries `asyncWriteQueue` and
+    `hasActiveAsyncWriting`), so a bounded drain is implementable if one of the costs below starts
+    to bite.
+  - *Exiting without draining loses the line just logged.* Two main-process paths do it:
+    `main.ts`'s second-instance branch logs the handed-off `process.argv` and then calls
+    `app.exit()`, which skips before-quit/will-quit, making protocol-handoff bugs undiagnosable
+    from the log; and any future `process.exit()` in main would do the same. The obvious repair —
+    flipping `sync` back to `true` just before such a log — **does not work**, and fails silently:
+    `FileRegistry.provide` returns an already-created `File` before it reads `writeAsync`, and
+    `File.writeAsync` is set only in the constructor with no setter, so the flag is fixed once
+    anything has written to the log. Toggling it afterwards is a no-op, and whether it happens to
+    take effect depends on nothing having logged earlier in that process — an ordering dependency
+    with no error and nothing to test against. A durable fix has to drain the queue or avoid the
+    transport for that line.
+  - *In-app reads of the log go stale, not just crash-time ones.* `platform.getLogFileContent`
+    reads the file straight off disk, and Usersnap attaches its result to a user's bug report, so a
+    report filed during a flood can carry a log that stops short of the problem being reported.
+    Tracked as `PT-4523`.
+  - *Rotation fires late.* It compares `maxSize` — 3 MB, set in
+    `src/node/utils/log-archiver.util.ts`, which also replaces `archiveLogFn` with a 5-file rotating
+    chain — against `initialSize + bytesWritten`, and `bytesWritten` only advances once a write
+    completes, so a burst can push the file past `maxSize` before it rotates.
+  - *Main and the extension host interleave by batch.* They share `main.log`
+    (`getDefaultFileName` returns it for every process type except renderer and worker), so the
+    unit of interleaving between them is now a coalesced batch rather than a single line; since
+    Node's `fs.writeFile` loops on partial writes, a very large batch could in principle be split
+    and interleaved mid-line. That is unlikely for regular files and costs only log legibility,
+    never app behavior, so it is accepted rather than designed around.
+  - *Not unit-tested.* What matters is that a flood cannot block the loop, which is not observable
+    at this seam, and asserting the property was set would only mirror the implementation.
+  - *The per-message CPU cost remains.* This closes the write path, not the whole per-message
+    cost: the hook in `setUpLogger` (`src/shared/utils/logger.utils.ts`) still calls
+    `identifyCaller()` — `new Error()` plus a regex per stack frame — synchronously for every
+    message it does not early-return on, so a flood of messages above the transport's level still
+    spends main CPU proportional to its volume. Reducing per-message volume at the source therefore
+    remains worthwhile even with writes queued, which is why the de-duplication in
+    `UsjReaderWriter` is complementary to this decision rather than redundant with it.
+- **Source:** PT-4514; `electron-log@5.4.1` `src/node/transports/file/File.js` (`writeLine`,
+  `nextAsyncWrite`) and `src/node/transports/file/index.js` (`sync`, `writeAsync`).
 
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
@@ -4117,7 +4260,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   store keyed by web view id. Content zoom is the first feature written to the rule: the pane's own
   levels are `platform.contentZoomLevels` in the definition state, the default and the per-project
   memory are `platform.webViewContentZoom` and `platform.webViewContentZoomMemory`
-  (`src/renderer/services/web-view-content-zoom.service.ts`).
+  (`src/renderer/services/web-view-content-zoom.service.ts`). Definition state that belongs to a
+  project carries the identity it belongs to: the levels are stamped with
+  `platform.contentZoomIdentity` (`kind:identity`), written and removed with them, because a pane
+  re-pointed at another project keeps its web view id and the view spreads its own saved state onto
+  the new definition — so without the stamp the previous project's levels are indistinguishable from
+  levels chosen for the new one.
 - **Alternatives:** (a) **A per-view service with its own hidden `Record` store** — the April
   content-zoom prototype, PR #2211 — rejected: two stores for one value, and the one that is not the
   definition has to be taught by hand about every lifecycle event the definition gets for free.
@@ -4494,6 +4642,88 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
   measured against the top of the multi-window stack.
 
+## adr-pop-ups-follow-their-content-zoom-area: A pop-up takes the zoom of the area it opens from
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** pop-ups portal to `document.body`, outside the zoom area, so they rendered at
+  interface scale next to zoomed content, and a hand-wrapped editor popover was misplaced at
+  200 %.
+- **Decision:** a pop-up takes the zoom of the area it opens from. `ContentZoomRoot` publishes
+  its area through React context, and the library's popover, dropdown menu and tooltip mark
+  their portaled content with the area and a pop-up flag and cap their size by the zoom factor.
+  The platform bootstrap never counts flagged content as a pane or anchors the indicator on it.
+  `ContentZoomAreaProvider` covers pop-ups rendered outside the area element.
+
+  A pop-up the platform itself draws outside the web view — the command palette, popover and
+  context menu requested through `papi.overlays`, portalled by `OverlayHost` into the renderer's
+  own document rather than into the requesting pane's iframe — takes the same rule by a different
+  route: it cannot see the pane's `--platform-content-zoom-<area>` custom property, since that
+  property lives on the requesting iframe's own document, so `OverlayHost` reads the requesting
+  pane's scale directly from the content-zoom service (`getContentZoomScaleForWebView`) and passes
+  it down to `OverlayCommandPalette`, `OverlayPopover` and `OverlayContextMenu` as a plain prop.
+  The request carries no area, so the scale is that of the pane's active area — the one last clicked
+  or focused. That is the area the user is working in when they open a pop-up by click or key, and
+  it can differ from the opener's area for a pop-up opened by hover in a pane with several areas.
+  Each applies it as CSS `zoom`, capped by the space Radix reports available divided by the scale —
+  the same shape as the library's own cap. The popover and command palette combine that cap with the
+  size cap actually in force via `min()` once zoomed — the caller's `maxWidth`/`maxHeight` when one
+  was supplied, the component's own default otherwise, so a zoomed pop-up keeps its default bound
+  rather than losing it; the context menu takes no caller size cap at all.
+
+  **Where the `zoom` goes, and why it is not on the Radix content element.** For a pop-up that draws
+  an arrow, the zoom and all the sizing go on a wrapper div *inside* `Popover.Content`, with
+  `Popover.Arrow` left outside that wrapper as a direct child of the content. Radix requires the
+  arrow to be a content descendant and positions it by writing an inline pixel offset on it; inside
+  a zoomed element the browser reads that offset as a pre-zoom length and scales it a second time,
+  so the arrow lands at `offset × scale` instead of `offset` — and where the true offset is small,
+  the doubled value trips floating-ui's arrow clamp and collapses onto the content's own corner.
+  Radix's own placement of the pop-up is unaffected, because the popper wrapper it positions sits
+  outside the content element entirely. CSS `zoom` on a child still grows its parent's layout box,
+  so the pop-up still scales with the pane.
+
+  **The inner wrapper owns sizing, and it owns all of it.** The shared `PopoverContent` supplies a
+  fixed `tw:w-72` width, `tw:flex tw:flex-col tw:gap-2.5` layout and `tw:p-2.5` padding, and a
+  pop-up's content renderers return fragments — so their children were direct flex items of that
+  element. Moving the content inward moves it out of reach of every one of those, which is a
+  behaviour change at interface scale and not only when zoomed. So the wrapper must take over the
+  width, the flex layout and the padding together, with `width: 'auto'` and `tw:p-0` on
+  `Popover.Content` so the fixed class cannot reassert itself over the wrapper. Splitting them —
+  taking the padding inward and leaving the width and gap behind — silently resizes and respaces
+  the pop-up at every scale. Taking them inward also makes them scale with the content, which is
+  what following the pane's zoom means.
+
+  Anything Radix positions with an inline pixel offset inside a zoomed element has this defect. At
+  the time of writing the arrow is the only such element in the platform's own overlays: the context
+  menu draws no arrow, and its sub-menu content portals out of the zoomed subtree.
+
+  `OverlayHost` is deliberately the one place that depends on the content-zoom
+  service: `OverlayContextMenu` is part of the generated extension-facing declaration bundle, and an
+  import of the service from there would publish it — including its test-only seams — to extension
+  authors. A command palette shown centred, with no anchor position, is not anchored to any pane's
+  content and stays at interface scale, as does a modal dialog.
+- **Alternatives:**
+  - per-call-site `ContentZoomRoot` wraps with a `zoomArea` prop threaded through the comment
+    list (repeated at every site, easy to forget);
+  - the bootstrap detecting Radix pop-ups and copying the trigger's area (depends on Radix
+    internals);
+  - keeping pop-ups at interface scale (rejected by the product owner).
+- **Consequences:**
+  - six shadcn files carry `CUSTOM` changes - three functional (popover, dropdown menu, tooltip)
+    and three recording the components that do not follow an area yet;
+  - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
+    (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
+    when first opened from zoomed content. The Scripture editor's right-click menu is not one of
+    these — it is drawn by the editor library and stays at interface scale; see
+    `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn);
+  - a pop-up portaled into a container inside another area inherits that container's zoom;
+  - a command palette blocks the window's input while open, so the pane it was drawn for cannot
+    change underneath it; a popover and a context menu do not block input, so a zoom chord pressed
+    while one is open re-scales the pane behind it and the overlay keeps the level it was drawn at
+    until it closes — accepted, not a bug to be fixed later.
+- **Source:** PT-4634; the outside-the-web-view extension (`papi.overlays` command palette,
+  popover, context menu) by PT-4712.
+
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
 - **Date:** 2026-08-27
@@ -4786,14 +5016,27 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   repeatedly — a hook or effect keyed on the set of open web views, a selection, a setting that
   another surface writes — acts on the **diff** of that set: it acquires only what joined, releases
   only what left, and keeps resolved providers (and failed lookups) for its own lifetime so a
-  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, or a
-  provider that could not be subscribed to, is kept for a bounded delay (30 seconds in the hook)
-  and then looked up afresh on the next join, whatever the failure was: the lookup service's
-  `No project found` is also what a late-registering factory or a mid-session resource install
-  produces, so no message text is treated as a permanent verdict. `useOpenProjectBookIds`
-  (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the reference implementation; the
-  scroll-group service's `ensureVersificationSubscribed` is the older in-tree instance and evicts
-  immediately on failure, which suits a module-level cache with few callers. (2)
+  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, a provider
+  that could not be subscribed to, or one whose setting could not be read, is kept for a bounded
+  delay (30 seconds in the hook) and then looked up afresh by a timer the failed subscription arms
+  for itself, without waiting for the project to leave and rejoin (leaving cancels the timer),
+  whatever the failure was: the lookup service's `No project found` is also what a
+  late-registering factory or a mid-session resource install produces, so no message text is
+  treated as a permanent verdict. The attempts are not capped: an id that never resolves costs one
+  fan-out per delay for as long as its view stays open, which after rule (1) is a handful of
+  requests, and the lookup service logs an empty answer to a query that names one project at debug
+  rather than warn, so a project the platform does not know costs no production log line per
+  attempt. A setting read that throws still warns per attempt, from the data-provider service: a
+  project that exists and cannot be read is a genuine anomaly, and in-tree base providers answer a
+  setting they do not store with its contributed default rather than a failure, so that path is
+  not reached by a provider that merely lacks `booksPresent`. A real value delivered by the
+  subscription clears the stamp (not the subscribe resolving, which proves only that the listener
+  attached), and a member that cannot report contributes no books rather than its previous list.
+  `useOpenProjectBookIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the
+  reference implementation; the scroll-group service's `ensureVersificationSubscribed` is the
+  older in-tree instance and evicts immediately on failure, so, being pull-driven and re-read on
+  every conversion, it pays a fan-out per conversion for a project that never resolves — a gap
+  outside this decision, not a pattern it endorses. (2)
   The **lookup service stays a broadcast** with no cache of its own for now: which factories serve
   which project changes as factories register, as resources install, and as layering factories
   come and go, and a stale answer there is a correctness bug for every caller, not a performance
@@ -4808,17 +5051,36 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the debounce window; a diff costs nothing when the set is unchanged, so it needs no delay.
   (c) **Read `booksPresent` through one aggregating service** instead of a provider per project —
   a larger redesign that would still have to answer where that service gets its providers from.
+  (d) **One process-level provider cache shared by the toolbar hook and the scroll-group service**
+  — open, not rejected: the two caches key on the same project ids in the same renderer, so a
+  project both consumers hold costs two fan-outs. They differ in shape (the scroll-group cache is
+  pull-driven and re-read on every conversion; the hook's is push-driven and consulted on join or
+  by its retry timer), so a shared cache would have to carry the retry policy of the push-driven
+  consumer. Worth doing when a third consumer appears. (e) **Heal from network events instead of a
+  timer** — `use-project-picker-data.hook.ts` already does this for the same failure mode,
+  refetching on `platform.onDidChangeProjects` and on `object:onDidCreateNetworkObject` filtered
+  to PDP factories, debounced. It costs nothing while idle and heals in about 200 ms. Not chosen
+  for the hook: three more network subscriptions against one timer, and the events miss a C#
+  factory that starts serving an id without a new factory registering. Remains the right shape
+  for a consumer that must heal fast.
 - **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
   `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
-  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup failed is
-  retried the next time it joins after the delay, so a project the backend begins serving later in
-  the session is picked up within that delay plus one membership change, never sooner; a
-  consumer that needs it sooner would subscribe to project-list or factory-registration events and
-  evict on those instead. The flap sources that exposed this are tracked as
-  PT-4592 (a panel republishing its navigable project ids while its reference list resolves
-  transiently empty) and PT-4743 (one installed resource yielding two picker rows under two project
-  id spellings). Revisit rule (2) if a platform-level in-flight de-duplication lands. Rule (1) is
-  restated for agents in `.claude/rules/architecture/provider-lookups-fan-out.md`.
+  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup,
+  subscribe or setting read failed is retried by a timer after the delay, in place, so a project
+  the backend begins serving later in the session is picked up within one delay of its failure,
+  never sooner; a consumer that needs it sooner takes alternative (e). Reviewers of any
+  `subscribeSetting` consumer should also know that a read failure is a value in the callback, not
+  a rejection, so a catch around the subscribe does not see it. The retry mutates the toolbar's
+  book list on its own cadence, without a user action: a project that fails while the picker is
+  open loses its books from the list mid-interaction, accepted over showing books that cannot be
+  navigated to. A subscription that dies without reporting a failure (a provider whose network
+  object is disposed by an extension host restart while the subscription stays registered
+  locally) is not covered by the timer; as of 2026-09-24 it is tracked on PT-4592.
+  The flap sources that exposed this are tracked as PT-4592 (a panel republishing its navigable
+  project ids while its reference list resolves transiently empty) and PT-4743 (one installed
+  resource yielding two picker rows under two project id spellings). Revisit rule (2) if a
+  platform-level in-flight de-duplication lands. Rule (1) is restated for agents in
+  `.claude/rules/architecture/provider-lookups-fan-out.md`.
 
 ## adr-pt9-interlinear-selected-reads: Publish the size limit and allow callers to select individual files or all at once
 
@@ -5441,6 +5703,67 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts). Premise
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
+
+## adr-resource-panes-name-their-zoom-areas: The Text Collection grid and the Bible Texts / Commentaries / Model Text panels each name their own zoom area, because they share one project identity; Enhanced Resources retires its private zoom
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** PT-4582/PT-4583 extended `adr-zoom-composition`'s per-pane content zoom to the
+  Resources views: the Text Collection grid, the Bible Texts / Commentaries / Model Text panels, and
+  the Enhanced Resources viewer. `memoryIdentityFor`
+  (`src/renderer/services/web-view-content-zoom.service.ts`) keys a pane's remembered level on its
+  web-view definition's `projectId` (normalized) paired with a `ContentZoomKind`
+  (`'editor' | 'resource' | 'notes'`, `src/shared/models/content-zoom.model.ts`). For the Text
+  Collection grid and for the Bible Texts, Commentaries and Model Text panels, that `projectId` is
+  the *container* project — the resource actually on screen (`selectedRef.projectId` in
+  `resource-text-panel.component.tsx`) never reaches the definition — so all four resolve to the
+  same kind and the same identity; with the unnamed `main` area they would all read and remember one
+  shared zoom level, and zooming one would silently change the others. PT-4582's own ticket
+  description assumed the opposite — that the definition carried the displayed resource's project —
+  which the code does not do. Separately, the Enhanced Resources viewer already carried its own zoom
+  control — `scripturePaneZoom`, a font-size multiplier driven by its own `window` `keydown` handler
+  for the same Ctrl+`=`/`-`/`0` chords the platform mechanism claims, with its menu items living in
+  the toolbar outside every pane — that the new mechanism had to either absorb or retire. The two
+  handlers collided rather than one shadowing the other: both were registered bubble-phase on
+  `window` and neither stopped propagation, so a single keypress drove the private font-size
+  multiplier *and* the platform's content zoom.
+- **Decision:**
+  - The four resource views each name their own `ContentZoomRoot` area — `text-collection`
+    (`scripture-text-grid.web-view.tsx`), `bible-texts` and `commentaries` (both
+    `resource-text-panel.component.tsx`, selected by `resourceType`), and `model-text`
+    (`model-text-panel.component.tsx`) — so their remembered levels stay apart from each other
+    although kind and identity are identical for all four.
+  - Enhanced Resources marks three areas rather than one: an unnamed area around
+    `EnhancedScripturePane`, `entries` around its tab set, and `footnotes` in the footnotes pane's
+    resizable panel (`enhanced-resource.web-view.tsx`, `footnotes-pane.component.tsx`). Its body is
+    genuinely three independently resizable panes; a single area would remove the user's existing
+    ability to enlarge just the Bible text relative to the other two. Its private `scripturePaneZoom`
+    is deleted outright rather than migrated — state, prop chain, toolbar menu items, their localized
+    strings, and the keyboard-catalog entries for the retired handler all go — and the platform
+    mechanism covers all three panes from a clean start.
+- **Alternatives:**
+  - Adding per-view values to `ContentZoomKind` (one kind per resource panel) instead of naming
+    areas — rejected: it reads tidier at each call site, but edits a core model file for no
+    behavioral gain over an area id, and a new kind would be needed for every future resource-panel-
+    shaped view.
+  - Carrying Enhanced Resources' stored `scripturePaneZoom` value into the scripture pane's area at
+    startup — rejected: it would require the view to write state the platform now owns and seeds,
+    against the "views do not build their own zoom stacks" rule in `adr-zoom-composition`.
+- **Consequences:** `adr-zoom-composition`'s statement that the Text Collection grid's per-resource
+  zoom "stays" holds unchanged: it nests inside the grid's own `text-collection` area and multiplies
+  with it, and this work only wraps that area — it does not touch the per-resource mechanism. The
+  grid's own wheel/pinch handling (`use-resource-zoom-input.hook.ts`) now reads notches and pinches
+  through `createContentZoomWheelReader` from `platform-bible-utils`, while the platform's injected
+  bootstrap (`web-view-content-zoom.bootstrap-script.ts`) keeps its own separate copy of the same
+  notch/pinch reading for chrome-driven chords; `web-view-content-zoom.wheel-parity.test.ts` pins
+  both copies to identical totals over the same Ctrl-held wheel sequences, so their step arithmetic
+  cannot silently drift apart. It does not compare their physical-modifier tracking (a held Control
+  or ⌘, a pointer event reporting Ctrl, clearing on blur), which is what tells a macOS mouse notch
+  from a trackpad pinch. Enhanced Resources has no leftover zoom fallback that could fall out of
+  step with the platform mechanism. The Scripture editor's right-click menu stays at interface scale in
+  every one of these panes; see `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn).
+- **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
+  PT-4583 (Enhanced Resources viewer).
 
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
@@ -6940,6 +7263,46 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
 
+## adr-usersnap-lives-in-product-patch: Usersnap keys and Help items live in the product's repo patch; core ships empty constants
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** The Usersnap account core's feedback forms used to share was lost (PT-3923), and
+  product decided that the live Usersnap integration is Paratext 10 only (PT-4530, question 13).
+  Usersnap's space and project keys are write-only client keys, so they are not secrets, but they
+  identify one product's Usersnap space and do not belong in a public repo that other products build
+  on. Paratext 10 already carries its product-specific changes to core as a repo patch.
+- **Decision:** Core keeps the Usersnap service and commands (`initializeUsersnapApi` and
+  `openUsersnapForm` in `src/renderer/services/usersnap.service.ts`) but ships the
+  `USERSNAP_SPACE_API_KEY`, `USERSNAP_PROJECT_REPORT_ISSUE_API_KEY` and
+  `USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY` constants in `src/shared/data/platform.data.ts` empty, and
+  no items in the `platform.helpFeedback` menu group (`src/extension-host/data/menu.data.json`).
+  Paratext 10's `repo-patches/paranext-core.patch` (in the `paratext-10-studio` repo) sets the keys
+  and re-adds the two items, `platform.usersnapSubmitIdea` and `platform.usersnapReportIssue`; as of
+  2026-09-24 that patch change is paratext-10-studio PR #194, open and stacked on paranext-core
+  PR #2855. The
+  main-process display-media handler that serves the widget's native screenshot is registered only
+  when the space key is set (`registerDisplayMediaRequestHandler` in
+  `src/main/services/display-media-request.util.ts`), and it serves only the window's top frame
+  (`selectDisplayMediaSource`). Code running in that frame's origin shares the grant, which includes
+  web views created with the default `allowSameOrigin`.
+- **Alternatives:** **Keys as `{{ productInfo.* }}` tokens replaced at build time** — rejected: dev
+  runs of a temp build would carry the unreplaced tokens and send them to Usersnap. **Keep the keys
+  in core** — rejected: the repo is public and the keys are product-specific. **Grant capture only
+  while a feedback form is open** — not done: the exposure it would remove is an installed
+  extension's same-origin web view capturing the pixels of an isolated web view, judged not worth a
+  renderer-to-main signal. Revisit if a product ships untrusted extensions.
+- **Consequences:** Platform.Bible makes no Usersnap request, registers no display-media handler,
+  and tells a user who reaches a feedback command that the forms are not available in this build.
+  The exact-equality main-menu pins in
+  `src/extension-host/services/menu-data.service-host.contributions.test.ts` expect the two
+  feedback items exactly when `USERSNAP_SPACE_API_KEY` is set, so they hold in core and in a
+  patched build alike; the empty `platform.helpFeedback` group and the
+  `%mainMenu_feedbackForm_screenshot%` / `%mainMenu_feedbackForm_textArea%` labels stay in core as
+  anchors for the patch. Any core change touching a file the patch edits requires regenerating the
+  Paratext 10 patch.
+- **Source:** PT-4558 (PR #2855).
+
 ## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
 
 - **Date:** 2026-09-15
@@ -6988,13 +7351,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   not even register its wheel listener while a pane has no areas — and the platform scales such a view
   whole at the Settings default instead. On Windows and Linux this is what a user notices first:
   Ctrl+`+`, Ctrl+`-` and Ctrl+`0` now do nothing anywhere except a view that answers them itself —
-  today the Scripture editor, through the zoom areas it marks, and Enhanced Resources, through the
-  keydown handler it has always had for its own scripture-pane zoom
+  today the Scripture editor and the comment list, through the zoom areas they mark, and Enhanced
+  Resources, through the keydown handler it has always had for its own scripture-pane zoom
   (`extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx`). Main
   no longer claims those chords, nothing replaces them, and a pane with no marked area deliberately
   leaves the keystroke to whoever else may want it rather than swallowing it for no effect. So a user
-  on Notes, or on the Text Collection — whose own pane zoom is wheel and menu only — presses Ctrl+0
-  and nothing happens. That is the intended cost of scoping zoom to a pane rather than to the window,
+  on the Text Collection — whose own pane zoom is wheel and menu only — or on any view that marks no
+  area, such as Home or an inventory, presses Ctrl+0 and nothing happens. That is the intended cost of scoping zoom to a pane rather than to the window,
   and it shrinks as views adopt the mechanism (the Text Collection grid in PT-4582, Enhanced
   Resources in PT-4583). The bootstrap listens in the **bubble** phase on purpose, so
   a view that owns Ctrl+wheel for a sub-region keeps precedence by stopping propagation in the capture
@@ -7013,6 +7376,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   reaches a view from behind a cover.
   **Revisit** if a second platform-injected shortcut appears
   — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
+- **Amended 2026-09-19 (PT-4582/PT-4583):** four statements above no longer hold. Enhanced
+  Resources' own `keydown` handler for its scripture-pane zoom — named above as what answers the
+  chords — is gone; the view now answers through the three areas it marks (`main`, `entries`,
+  `footnotes`), the same mechanism as the Scripture editor and the comment list, not a handler of
+  its own. The list of views above also omitted two more that now answer the same way: the Text
+  Collection grid marks `text-collection`, and the Bible Texts, Commentaries and Model Text resource
+  panels mark `bible-texts`, `commentaries` and `model-text` respectively. The Text Collection is
+  therefore no longer an example of a pane "whose own pane zoom is wheel and menu only" — Ctrl+`0`
+  with the grid focused now changes its pane level too. A view that marks no area at all, such as
+  Home or an inventory, still ignores the chords, which remains an accurate example of the cost
+  described above. And the forward reference to "the Text Collection grid in PT-4582, Enhanced
+  Resources in PT-4583" is resolved: both landed together in this same work.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
   chord ownership), epic PT-4575.
 
@@ -7433,7 +7808,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   custom property per area (`--platform-content-zoom-<areaId>`, falling back to
   `--platform-content-zoom-default`). **Zoom areas are a platform capability**: a view marks one or
   more non-nested areas and the platform owns the targeting (focus, then pointer, then last active
-  area), the per-area state, the memory and the indicator. Views do not build their own zoom stacks.
+  area, except that the chords stay on the last active area rather than trust a caret the view
+  itself just moved), the per-area state, the memory and the indicator. Views do not build their
+  own zoom stacks.
 - **Alternatives:** (a) **A font-size cascade on the content root** — rejected: it does not reach the
   editor's rendered scripture, which sets its own sizes (PT-4167), so the one view the feature exists
   for would not scale. (b) **`transform: scale`** — rejected: it breaks hit-testing, so clicks and
@@ -7453,5 +7830,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pane's own area around it and leaves it in place; moving it onto the platform mechanism is not
   scheduled. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view carries a
   private zoom any more.
+
+  The whole-iframe fallback applies as soon as a pane loads and is dropped the moment the view
+  reports an area, and which view types mark areas is remembered per type so the decision is right
+  before the content loads from the second open onwards. The first-ever open of a marking type on a
+  machine still shows one frame-scaled moment: only the view can say whether it marks an area, and
+  it can only say so after it has drawn. A type recorded as marking areas is not moved back by a
+  pane of that type reporting none, so a view that stops marking areas keeps its panes unscaled
+  until the record is cleared.
 - **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
-  recorded here by PT-4580.
+  recorded here by PT-4580; the chord-targeting exception added by PT-4711; the immediate fallback
+  and the per-type expectation added by PT-4714.

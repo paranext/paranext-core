@@ -82,20 +82,6 @@
         "command": "platform.showOnboardingTour"
       },
       {
-        "label": "%mainMenu_feedbackForm_textArea%",
-        "localizeNotes": "Application main menu > Help > Submit an idea",
-        "group": "platform.helpFeedback",
-        "order": 1,
-        "command": "platform.usersnapSubmitIdea"
-      },
-      {
-        "label": "%mainMenu_feedbackForm_screenshot%",
-        "localizeNotes": "Application main menu > Help > Report a bug / Send feedback",
-        "group": "platform.helpFeedback",
-        "order": 2,
-        "command": "platform.usersnapReportIssue"
-      },
-      {
         "label": "%mainMenu_openDeveloperDocumentation%",
         "hiddenInterfaceModes": ["simple"],
         "localizeNotes": "Application main menu > Help > Open Developer Documentation. Hidden in Simple mode: it addresses extension developers, not translators",

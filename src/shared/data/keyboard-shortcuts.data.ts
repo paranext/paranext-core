@@ -227,7 +227,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'content-zoom-in',
     purpose:
-      'Zoom the focused zoom area of the pane in by 10 % (the area containing keyboard focus, else the area last used)',
+      'Zoom the active zoom area of the pane in by 10 % (the area last clicked or focused; a click keeps its area even when the view answers it by moving focus elsewhere)',
     category: 'Zoom',
     context:
       'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
@@ -282,13 +282,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'content-zoom-wheel',
-    purpose: 'Zoom the content of the pane in or out one step per wheel notch',
+    purpose:
+      'Zoom the content of the pane in or out — one step per wheel notch, or by travel for a trackpad pinch',
     category: 'Zoom',
     context:
-      'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area)',
+      'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area). A trackpad pinch also zooms with no modifier held — the browser synthesizes it as Ctrl+wheel, which the handler recognizes as pinch travel rather than a notch chord',
     // The handler accepts Ctrl or ⌘ as the modifier on every platform, and ignores the gesture when
     // Shift or Alt is held as well.
-    keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    keys: { macOS: '⌘ wheel / ⌃ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
     locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
   },
   {
@@ -578,15 +579,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-text-grid-zoom-wheel',
     purpose:
-      'Zoom one resource column of the Text Collection grid in or out one step per wheel notch',
+      'Zoom one resource column of the Text Collection grid in or out — one step per wheel notch, or by travel for a trackpad pinch',
     category: 'Zoom',
     context:
-      'Inside the Text Collection grid — the resource column under the pointer. Registered capture-phase on the grid container and stops propagation, so it takes precedence over the pane-level content zoom (see content-zoom-wheel)',
+      'Inside the Text Collection grid — the resource column under the pointer. Registered capture-phase on the grid container and stops propagation, so it takes precedence over the pane-level content zoom (see content-zoom-wheel). A trackpad pinch also zooms the resource under the pointer with no modifier held — the browser synthesizes it as Ctrl+wheel, which the shared reader recognizes as pinch travel rather than a notch chord',
     // Accepts Ctrl or ⌘ and still acts when Shift or Alt is held as well, unlike the pane-level
     // handler. Keyboard zoom for this grid is deferred pending PT-4143.
-    keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    keys: { macOS: '⌘ wheel / ⌃ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts',
+      'lib/platform-bible-utils/src/content-zoom-wheel.util.ts',
     ],
   },
   {
@@ -595,36 +597,6 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'View',
     context: 'Enhanced resources web view',
     keys: { macOS: 'F7', windows: 'F7', linux: 'F7' },
-    locations: [
-      'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
-    ],
-  },
-  {
-    id: 'enhanced-resources-zoom-in',
-    purpose: 'Zoom the scripture pane in',
-    category: 'Zoom',
-    context: 'Enhanced resources web view',
-    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
-    locations: [
-      'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
-    ],
-  },
-  {
-    id: 'enhanced-resources-zoom-out',
-    purpose: 'Zoom the scripture pane out',
-    category: 'Zoom',
-    context: 'Enhanced resources web view',
-    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
-    locations: [
-      'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
-    ],
-  },
-  {
-    id: 'enhanced-resources-reset-zoom',
-    purpose: 'Reset the scripture pane zoom',
-    category: 'Zoom',
-    context: 'Enhanced resources web view',
-    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
     locations: [
       'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
     ],
@@ -669,6 +641,17 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Editing',
     context: 'Footnote editor',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
+    ],
+  },
+  {
+    id: 'footnote-close-markers-menu',
+    purpose: 'Close the inline markers menu in the footnote editor',
+    category: 'Editing',
+    context: 'Footnote editor',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
       'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',

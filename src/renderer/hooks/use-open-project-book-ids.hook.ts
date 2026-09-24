@@ -8,7 +8,7 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { logger } from '@shared/services/logger.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { useEvent } from 'platform-bible-react';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { deepEqual, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import type { UnsubscriberAsync } from 'platform-bible-utils';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import {
@@ -18,7 +18,7 @@ import {
 } from 'platform-bible-utils/experimental';
 import { Canon } from '@sillsdev/scripture';
 import { useDeferredDockLayoutRead } from '@renderer/hooks/use-deferred-dock-layout-read.hook';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** Canon order for the returned union, so consumers can group by section without re-sorting. */
 const CANON_BOOK_IDS = Canon.allBookIds;
@@ -35,18 +35,27 @@ type BaseProjectDataProvider =
   ProjectDataProviderInterfaces[typeof PROJECT_INTERFACE_PLATFORM_BASE];
 
 /**
- * How long a project whose provider could not be reached is left alone before a rejoin looks it up
- * again. Long enough that an id flapping many times a second costs one fan-out per window rather
- * than one per flap; short enough that a project a factory begins serving later in the session (a
- * slow startup, a resource installed mid-session, an extension host restart) is picked up without
- * reloading the window. The same delay applies whatever the failure was: the lookup service cannot
- * tell "no such project" from "no factory has answered yet" reliably enough to treat them apart.
+ * How long a project whose provider could not be reached is left alone before it is looked up
+ * again. The retry is timer-driven: it fires without waiting for the project to leave and rejoin
+ * the open set (leaving cancels it), so a project that stays open through a slow startup is still
+ * picked up. Long enough that an id flapping many times a second costs one fan-out per retry delay
+ * rather than one per flap; short enough that a project a factory begins serving later in the
+ * session (a slow startup, a resource installed mid-session, an extension host restart) is picked
+ * up without reloading the window. The same delay applies whatever the failure was: the lookup
+ * service cannot tell "no such project" from "no factory has answered yet" reliably enough to treat
+ * them apart. The retry is not capped: an id that never resolves costs one fan-out per delay for as
+ * long as its view stays open, a cost the decision entry accepts over a project that stays dark.
  */
 export const FAILED_PROVIDER_LOOKUP_RETRY_MS = 30_000;
 
-/** A cached provider lookup, and when (if ever) it failed so a rejoin can know whether to retry. */
+/**
+ * A cached provider lookup, and when (if ever) it failed so the retry can be timed from the first
+ * failure. Cleared again once the provider delivers a real value: a provider that works is not
+ * discarded.
+ */
 type ProviderCacheEntry = {
   provider: Promise<BaseProjectDataProvider | undefined>;
+  /** A `performance.now()` reading, monotonic like the retry timer itself. */
   failedAt: number | undefined;
 };
 
@@ -61,7 +70,20 @@ type ReportBooks = (projectId: string, bookIds: string[]) => void;
 type BooksPresentSubscription = {
   isDisposed: boolean;
   unsubscribe: UnsubscriberAsync | undefined;
+  /** A retry waiting to run after a failure; cleared by `dispose`. */
+  retryTimer: ReturnType<typeof setTimeout> | undefined;
   dispose: () => void;
+};
+
+/**
+ * What one project's subscription needs from the hook that hosts it: the two per-hook maps and the
+ * way to report books into the hook's state. Built once per hook instance; nothing here changes
+ * identity for the life of the hook.
+ */
+type BooksPresentHost = {
+  providers: Map<string, ProviderCacheEntry>;
+  subscriptions: Map<string, BooksPresentSubscription>;
+  reportBooks: ReportBooks;
 };
 
 /**
@@ -114,7 +136,8 @@ function getOpenProjectIds(): string[] {
  * answer holds. The cache holds the promise, not the value, so concurrent joins of one id share a
  * single lookup (see the hook body for why a repeat lookup is so expensive). A lookup that failed,
  * or whose provider later failed to subscribe (see {@link markProviderFailed}), is kept for
- * {@link FAILED_PROVIDER_LOOKUP_RETRY_MS} and then looked up afresh on the next join.
+ * {@link FAILED_PROVIDER_LOOKUP_RETRY_MS} and then looked up afresh on the next attempt, which the
+ * retry timer makes without waiting for the project to leave and rejoin the set.
  */
 function getBaseProjectDataProvider(
   cache: Map<string, ProviderCacheEntry>,
@@ -129,23 +152,29 @@ function getBaseProjectDataProvider(
 }
 
 function hasRetryDelayPassed(entry: ProviderCacheEntry): boolean {
-  return (
-    entry.failedAt !== undefined && Date.now() - entry.failedAt >= FAILED_PROVIDER_LOOKUP_RETRY_MS
-  );
+  return entry.failedAt !== undefined && remainingRetryDelayMs(entry) === 0;
+}
+
+/** How much of the retry delay is left for a failed entry; 0 for one that has not failed. */
+function remainingRetryDelayMs(entry: ProviderCacheEntry): number {
+  if (entry.failedAt === undefined) return 0;
+  return Math.max(0, FAILED_PROVIDER_LOOKUP_RETRY_MS - (performance.now() - entry.failedAt));
 }
 
 /**
  * Records that a cached provider is not usable — its lookup failed, or it was reached but could not
  * be subscribed to (its network object may have been disposed since, as an extension host restart
- * does) — so a join after {@link FAILED_PROVIDER_LOOKUP_RETRY_MS} looks the project up again instead
- * of reusing the dead entry. Stamps the entry the failure belongs to, not whichever entry the cache
- * holds for the project by then: a late rejection from a superseded provider must not mark its
- * replacement.
+ * does) — so the attempt after {@link FAILED_PROVIDER_LOOKUP_RETRY_MS} looks the project up again
+ * instead of reusing the dead entry. Stamps the entry the failure belongs to, not whichever entry
+ * the cache holds for the project by then: a late rejection from a superseded provider must not
+ * mark its replacement.
  */
 function markProviderFailed(entry: ProviderCacheEntry): void {
   // Timed from the FIRST failure. A dead provider fails again on every rejoin inside the delay,
   // and restamping it each time would let a flapping id push its own retry out for ever.
-  if (entry.failedAt === undefined) entry.failedAt = Date.now();
+  // Monotonic, not wall-clock: this hook mounts with the window, during startup, when the wall
+  // clock can be stepped, and the timer it feeds is monotonic too.
+  if (entry.failedAt === undefined) entry.failedAt = performance.now();
 }
 
 /**
@@ -171,10 +200,8 @@ async function lookUpBaseProjectDataProvider(
 }
 
 /**
- * Releases a live subscription, reporting rather than throwing. The unsubscriber is a round trip to
- * the provider, which may be gone by the time the project leaves; a rejection here must not become
- * an unhandled rejection in the renderer, and a `false` result (nothing was unsubscribed) is worth
- * a line in the log.
+ * Releases a subscription's live `booksPresent` subscription, if it has one, and forgets it first
+ * so a second release finds nothing to do. See {@link releaseUnsubscriber}.
  */
 async function releaseBooksPresentSubscription(
   subscription: BooksPresentSubscription,
@@ -183,6 +210,19 @@ async function releaseBooksPresentSubscription(
   const { unsubscribe } = subscription;
   if (!unsubscribe) return;
   subscription.unsubscribe = undefined;
+  await releaseUnsubscriber(unsubscribe, projectId);
+}
+
+/**
+ * Calls an unsubscriber, reporting rather than throwing. It is a round trip to the provider, which
+ * may be gone by the time the project leaves; a rejection here must not become an unhandled
+ * rejection in the renderer, and a `false` result (nothing was unsubscribed) is worth a line in the
+ * log.
+ */
+async function releaseUnsubscriber(
+  unsubscribe: UnsubscriberAsync,
+  projectId: string,
+): Promise<void> {
   try {
     if (!(await unsubscribe()))
       logger.debug(`Open project books: booksPresent for ${projectId} did not unsubscribe`);
@@ -196,44 +236,133 @@ async function releaseBooksPresentSubscription(
 /**
  * Opens `projectId`'s `booksPresent` subscription into `subscription`, honoring a `dispose` that
  * lands at any point along the way. Never rejects: a project whose provider or setting cannot be
- * reached contributes no books, and says so at debug level.
+ * reached contributes no books, says so at debug level, and is tried again after the retry delay
+ * (see {@link scheduleBooksPresentRetry}).
  */
 async function subscribeToBooksPresent(
   subscription: BooksPresentSubscription,
   projectId: string,
-  providers: Map<string, ProviderCacheEntry>,
-  reportBooks: ReportBooks,
+  host: BooksPresentHost,
 ): Promise<void> {
+  const { providers, reportBooks } = host;
   const entry = getBaseProjectDataProvider(providers, projectId);
   try {
     const pdp = await entry.provider;
-    if (!pdp || subscription.isDisposed) return;
+    if (subscription.isDisposed) return;
+    if (!pdp) {
+      // The lookup failed. Reporting no books matters when this is a rejoin after the delay: the
+      // project's earlier list is still in state and would show again now that it is back in the
+      // set, though it can no longer be trusted.
+      handleBooksPresentFailure(subscription, projectId, host, entry);
+      return;
+    }
+    // A setting that cannot be read fails as a VALUE, not a rejection: `subscribeSetting` resolves
+    // once the update listener is attached and reads the current value in the background, and a
+    // read that throws reaches the callback as a `PlatformError` (see `createDataProviderSubscriber`
+    // in `data-provider.service.ts`). So a provider that has no `booksPresent`, or whose proxy was
+    // revoked between subscribing and the first read, shows up in the callback rather than in the
+    // catch below — and it can land before or after `subscribeSetting` resolves.
+    let settingReadFailed = false;
     const unsubscribe = await pdp.subscribeSetting('platformScripture.booksPresent', (value) => {
-      // subscribeSetting invokes its callback with the current value as soon as it subscribes, so a
-      // callback can still land around teardown; this skips the pointless state update.
-      if (subscription.isDisposed) return;
+      // The callback runs with the current value as soon as the first read lands, so it can still
+      // arrive around teardown; this skips the pointless state update. Once this attempt's read has
+      // failed, the failure handler owns the project: it has released this subscription and armed a
+      // retry, so a value that still arrives through it must neither clear the stamp nor report
+      // books nobody is subscribed for.
+      if (subscription.isDisposed || settingReadFailed) return;
       if (isPlatformError(value)) {
         logger.debug(
           `Open project books: ${projectId} reported an error for booksPresent: ${getErrorMessage(value)}`,
         );
-        reportBooks(projectId, EMPTY_IDS);
+        // Retried like a failed lookup: a provider that lacks the setting contributes nothing until
+        // it gains it, which keeps this forward-compatible with resource providers that do so later.
+        settingReadFailed = true;
+        handleBooksPresentFailure(subscription, projectId, host, entry);
         return;
       }
+      // A real value is the evidence that the provider works, whatever it did earlier: a stale stamp
+      // would discard it after the delay. `subscribeSetting` resolving proves only that the listener
+      // attached, so the stamp is cleared here and not there.
+      entry.failedAt = undefined;
       reportBooks(projectId, getBookIdsFromBooksPresent(value));
     });
+    if (subscription.isDisposed || settingReadFailed) {
+      // Disposed while the subscription was settling, or its first read failed before it settled:
+      // nothing owns this subscription any more (a retry opens its own), so release it here.
+      await releaseUnsubscriber(unsubscribe, projectId);
+      return;
+    }
     subscription.unsubscribe = unsubscribe;
-    // Disposed while the subscription was settling: release it now that it exists.
-    if (subscription.isDisposed) await releaseBooksPresentSubscription(subscription, projectId);
   } catch (e) {
-    // The provider was reached but its subscription failed. A provider without `booksPresent`
-    // contributes nothing, which keeps this forward-compatible with resource providers that gain the
-    // setting later; a provider whose network object is gone is retried after the delay like a
-    // failed lookup.
-    markProviderFailed(entry);
+    // The subscribe itself threw: the provider's proxy has been revoked (an extension host
+    // restart), or it has no `subscribeSetting` at all. Retried after the delay like a failed lookup.
     logger.debug(
       `Open project books: could not subscribe to booksPresent for ${projectId}: ${getErrorMessage(e)}`,
     );
+    handleBooksPresentFailure(subscription, projectId, host, entry);
   }
+}
+
+/**
+ * The shared tail of every failed attempt by a live subscription, whether the lookup failed, the
+ * subscribe threw, or the setting could not be read: any live `booksPresent` subscription is
+ * released (a retry opens its own), the entry is stamped (idempotently, so the retry is still timed
+ * from the first failure), the project stops contributing books because it cannot report them, and
+ * a retry is armed. Stamping here rather than trusting the lookup helper to have done it keeps
+ * "stamped before scheduled" a local invariant — an unstamped entry would otherwise arm a
+ * zero-delay retry against the same cached answer.
+ *
+ * A disposed subscription's subscribe or read failure is ignored, stamp included: its replacement
+ * may have reused the same entry and be working with it, and a late failure from the superseded
+ * attempt must not mark a provider that works. If the entry really is dead, the live subscription's
+ * own attempt fails and stamps it. (A failed LOOKUP stamps its entry regardless, in
+ * {@link lookUpBaseProjectDataProvider}: that stamp belongs to an entry whose lookup genuinely
+ * failed, whoever was waiting on it.)
+ */
+function handleBooksPresentFailure(
+  subscription: BooksPresentSubscription,
+  projectId: string,
+  host: BooksPresentHost,
+  entry: ProviderCacheEntry,
+): void {
+  if (subscription.isDisposed) return;
+  // Not awaited: the helper never rejects, and the retry must not wait on a round trip to a
+  // provider that may be gone.
+  releaseBooksPresentSubscription(subscription, projectId);
+  markProviderFailed(entry);
+  host.reportBooks(projectId, EMPTY_IDS);
+  scheduleBooksPresentRetry(subscription, projectId, host, entry);
+}
+
+/** Cancels a pending retry, if any, and forgets it. */
+function clearBooksPresentRetry(subscription: BooksPresentSubscription): void {
+  if (subscription.retryTimer !== undefined) clearTimeout(subscription.retryTimer);
+  subscription.retryTimer = undefined;
+}
+
+/**
+ * Arms one retry for a subscription whose attempt failed, for whatever remains of the delay since
+ * `entry`'s first failure, so a flapping id still costs one lookup per retry delay. The timer
+ * belongs to the subscription, so leaving the set (`dispose`) cancels it. The identity check
+ * against the host's map is defense in depth: every removal from that map disposes first, so a
+ * stale timer is already stopped by `isDisposed`; the check is kept so that a future removal path
+ * which forgets to dispose cannot make a stale timer attempt on behalf of the subscription that
+ * replaced it.
+ */
+function scheduleBooksPresentRetry(
+  subscription: BooksPresentSubscription,
+  projectId: string,
+  host: BooksPresentHost,
+  entry: ProviderCacheEntry,
+): void {
+  if (subscription.isDisposed || host.subscriptions.get(projectId) !== subscription) return;
+  clearBooksPresentRetry(subscription);
+  subscription.retryTimer = setTimeout(() => {
+    subscription.retryTimer = undefined;
+    if (subscription.isDisposed || host.subscriptions.get(projectId) !== subscription) return;
+    // Not awaited: the helper never rejects, and a failure re-arms this timer itself.
+    subscribeToBooksPresent(subscription, projectId, host);
+  }, remainingRetryDelayMs(entry));
 }
 
 /**
@@ -345,25 +474,35 @@ export function useOpenProjectBookIds(
   // its navigable project ids in a loop) into a request storm that starves the backends.
   //
   // A resolved provider is kept per project id for as long as the hook lives. A failed one is kept
-  // for `FAILED_PROVIDER_LOOKUP_RETRY_MS` and then looked up afresh on the next join, so a flapping
-  // id costs one fan-out per window while a project a factory starts serving later is still picked
-  // up — see `getBaseProjectDataProvider`. Both maps are bounded by the number of distinct projects
-  // a session opens, like `bookIdsByProjectId` above.
+  // for `FAILED_PROVIDER_LOOKUP_RETRY_MS` and then looked up afresh by a timer the failed
+  // subscription arms for itself, without waiting for the project to leave and rejoin — so a
+  // flapping id costs one fan-out per retry delay while a project a factory starts serving later is
+  // still picked up. See
+  // `getBaseProjectDataProvider` and `scheduleBooksPresentRetry`. Both maps are bounded by the
+  // number of distinct projects a session opens, like `bookIdsByProjectId` above.
   //
-  // Built once through a state initializer: `useRef(new Map())` would construct and discard a Map
-  // on every render. The state is never set; only the Map's contents change.
-  const [providersByProjectId] = useState(() => new Map<string, ProviderCacheEntry>());
-  const [subscriptionsByProjectId] = useState(() => new Map<string, BooksPresentSubscription>());
-
-  // Stable for the life of the hook, so a subscription opened under one render reports into the
-  // same state as one opened under a later render.
-  const reportBooks = useCallback<ReportBooks>((projectId, bookIds) => {
-    setBookIdsByProjectId((previous) => ({ ...previous, [projectId]: bookIds }));
-  }, []);
+  // Built once through a state initializer, so the maps are not constructed and discarded on
+  // every render as `useRef(new Map())` would, and the whole bundle keeps one identity for the
+  // life of the hook. The state is never set; only the maps' contents change. `reportBooks` closes
+  // over the stable state setter, so a subscription opened under one render reports into the same
+  // state as one opened under a later render.
+  const [host] = useState<BooksPresentHost>(() => ({
+    providers: new Map<string, ProviderCacheEntry>(),
+    subscriptions: new Map<string, BooksPresentSubscription>(),
+    reportBooks: (projectId, bookIds) => {
+      // The shared empty list again (a project that keeps failing reports it once per retry for as
+      // long as it stays open): keep the previous state so the host does not re-render for nothing.
+      // Only the shared constant can match by reference; a provider re-delivering an equal list is
+      // caught where it is observable, by the union compare in the returned memo.
+      setBookIdsByProjectId((previous) =>
+        previous[projectId] === bookIds ? previous : { ...previous, [projectId]: bookIds },
+      );
+    },
+  }));
 
   useEffect(() => {
     const projectIds = openProjectIds;
-    const subscriptions = subscriptionsByProjectId;
+    const { subscriptions } = host;
 
     subscriptions.forEach((subscription, projectId) => {
       if (projectIds.includes(projectId)) return;
@@ -372,7 +511,7 @@ export function useOpenProjectBookIds(
     });
 
     if (projectIds.length === 0) {
-      setBookIdsByProjectId({});
+      setBookIdsByProjectId((previous) => (Object.keys(previous).length === 0 ? previous : {}));
       return;
     }
 
@@ -382,8 +521,10 @@ export function useOpenProjectBookIds(
       const subscription: BooksPresentSubscription = {
         isDisposed: false,
         unsubscribe: undefined,
+        retryTimer: undefined,
         dispose: () => {
           subscription.isDisposed = true;
+          clearBooksPresentRetry(subscription);
           // Not awaited: releasing is a network round trip the effect must not wait on, and the
           // helper never rejects. A subscription still settling is released the moment it lands, in
           // subscribeToBooksPresent.
@@ -392,24 +533,29 @@ export function useOpenProjectBookIds(
       };
       subscriptions.set(projectId, subscription);
       // Not awaited: the effect must not wait on network round trips, and the helper never rejects.
-      subscribeToBooksPresent(subscription, projectId, providersByProjectId, reportBooks);
+      subscribeToBooksPresent(subscription, projectId, host);
     });
     // `openProjectIds` is membership-stable (see its definition), so an unrelated web view event
-    // cannot reach the diff above at all. The other dependencies never change identity.
-  }, [openProjectIds, reportBooks, providersByProjectId, subscriptionsByProjectId]);
+    // cannot reach the diff above at all. `host` never changes identity.
+  }, [openProjectIds, host]);
 
   // Unmount tears down whatever is still subscribed. The membership effect above deliberately
   // returns no cleanup: React runs an effect's cleanup before every re-run, which is exactly the
   // tear-down-everything-on-every-change this hook must not do.
   useEffect(
     () => () => {
-      subscriptionsByProjectId.forEach((subscription) => subscription.dispose());
-      subscriptionsByProjectId.clear();
+      host.subscriptions.forEach((subscription) => subscription.dispose());
+      host.subscriptions.clear();
     },
     // Never changes identity, so this cleanup runs on unmount only.
-    [subscriptionsByProjectId],
+    [host],
   );
 
+  // The last list handed out, so a re-render that leaves the union unchanged (a provider
+  // re-delivering the same books, or the active project's own books moving, which the union
+  // excludes) returns the same array and a consumer memoized on it holds. The lists are short, so
+  // the deep compare is cheap.
+  const lastUnion = useRef<string[]>(EMPTY_IDS);
   return useMemo(() => {
     const openIds = new Set(openProjectIds);
     const books = new Set<string>();
@@ -428,8 +574,10 @@ export function useOpenProjectBookIds(
       if (projectId === activeProjectId) return;
       bookIds.forEach((bookId) => books.add(bookId));
     });
-    if (books.size === 0) return EMPTY_IDS;
-    return CANON_BOOK_IDS.filter((bookId) => books.has(bookId));
+    const union =
+      books.size === 0 ? EMPTY_IDS : CANON_BOOK_IDS.filter((bookId) => books.has(bookId));
+    if (!deepEqual(lastUnion.current, union)) lastUnion.current = union;
+    return lastUnion.current;
   }, [bookIdsByProjectId, openProjectIds, activeProjectId]);
 }
 
