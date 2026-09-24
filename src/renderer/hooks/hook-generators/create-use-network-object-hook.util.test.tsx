@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 import { NetworkObject } from '@shared/models/network-object.model';
-import { createUseNetworkObjectHook } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
+import {
+  createUseNetworkObjectHook,
+  createUseNetworkObjectStateHook,
+} from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
 
 /** Handlers the hooks subscribed to the "a network object was created" event */
 const { createdNetworkObjectHandlers } = vi.hoisted(() => {
@@ -140,5 +143,126 @@ describe('useNetworkObject hooks after the object they hold is disposed', () => 
     act(() => publishNetworkObject('TheAppGlobalObject-suffixed'));
 
     await waitFor(() => expect(result.current).toBe(secondHost.networkObject));
+  });
+});
+
+// The state hook exists because `NetworkObject | undefined` cannot say WHICH of "nothing asked",
+// "in flight", and "not available" it means — and, across a source change, cannot say that the
+// object it is handing over belongs to the source the caller has stopped asking about.
+describe('useNetworkObjectState', () => {
+  /**
+   * A lookup that is never expected to run, typed so the generated hook still takes a source
+   * argument — a bare `vi.fn()` leaves the generator nothing to infer the parameters from.
+   */
+  const unusedLookup = () =>
+    vi.fn<(source: string | NetworkObject<object> | undefined) => Promise<undefined>>(
+      async () => undefined,
+    );
+
+  it('reports noSource when there is nothing to look up', () => {
+    const useNetworkObjectState = createUseNetworkObjectStateHook(unusedLookup());
+
+    const { result } = renderHook(() => useNetworkObjectState(undefined));
+
+    expect(result.current).toEqual({ status: 'noSource' });
+  });
+
+  it('reports loading until the object for the source arrives, then ready', async () => {
+    const registration = makeNetworkObject('the object');
+    let resolveLookup: (networkObject: NetworkObject<object>) => void = () => {};
+    const useNetworkObjectState = createUseNetworkObjectStateHook(
+      vi.fn<(source: string | NetworkObject<object> | undefined) => Promise<NetworkObject<object>>>(
+        () =>
+          new Promise<NetworkObject<object>>((resolve) => {
+            resolveLookup = resolve;
+          }),
+      ),
+    );
+
+    const { result } = renderHook(() => useNetworkObjectState('TheNetworkObject'));
+    expect(result.current).toEqual({ status: 'loading' });
+
+    await act(async () => {
+      resolveLookup(registration.networkObject);
+    });
+    await waitFor(() =>
+      expect(result.current).toEqual({
+        status: 'ready',
+        networkObject: registration.networkObject,
+      }),
+    );
+  });
+
+  it('reports loading — not the previous object — from the render the source changes on', async () => {
+    const first = makeNetworkObject('first source');
+    const getNetworkObject = vi
+      .fn()
+      .mockResolvedValueOnce(first.networkObject)
+      .mockImplementationOnce(() => new Promise<NetworkObject<object>>(() => {}));
+    const useNetworkObjectState = createUseNetworkObjectStateHook(getNetworkObject);
+
+    const { result, rerender } = renderHook(
+      ({ source }: { source: string }) => useNetworkObjectState(source),
+      { initialProps: { source: 'FirstSource' } },
+    );
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    rerender({ source: 'SecondSource' });
+
+    // This is the whole point: the caller can tell that what it had no longer answers its question,
+    // so it can neither display nor write through it.
+    expect(result.current).toEqual({ status: 'loading' });
+  });
+
+  it('reports unavailable when the lookup rejects', async () => {
+    const rejection = new Error('the lookup blew up');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const useNetworkObjectState = createUseNetworkObjectStateHook(
+      vi.fn().mockRejectedValue(rejection),
+    );
+
+    const { result } = renderHook(() => useNetworkObjectState('TheNetworkObject'));
+
+    // Distinguishable from `loading`, so a consumer can report a dead end instead of spinning.
+    await waitFor(() =>
+      expect(result.current).toEqual({ status: 'unavailable', error: rejection }),
+    );
+    vi.restoreAllMocks();
+  });
+
+  it('reports unavailable when nothing is registered under the name', async () => {
+    const useNetworkObjectState = createUseNetworkObjectStateHook(
+      vi.fn().mockResolvedValue(undefined),
+    );
+
+    const { result } = renderHook(() => useNetworkObjectState('TheNetworkObject'));
+
+    await waitFor(() => expect(result.current).toEqual({ status: 'unavailable' }));
+  });
+
+  it('goes back to loading when the object it was serving is disposed', async () => {
+    const registration = makeNetworkObject('the object');
+    const getNetworkObject = vi
+      .fn()
+      .mockResolvedValueOnce(registration.networkObject)
+      .mockImplementation(() => new Promise<NetworkObject<object>>(() => {}));
+    const useNetworkObjectState = createUseNetworkObjectStateHook(getNetworkObject);
+
+    const { result } = renderHook(() => useNetworkObjectState('TheNetworkObject'));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    // A disposal drives a re-lookup, which is a wait — not a dead end.
+    act(() => registration.dispose());
+
+    await waitFor(() => expect(result.current.status).toBe('loading'));
+  });
+
+  it('serves an object it was handed directly as ready', () => {
+    const registration = makeNetworkObject('handed in');
+    const useNetworkObjectState = createUseNetworkObjectStateHook(unusedLookup());
+
+    const { result } = renderHook(() => useNetworkObjectState(registration.networkObject));
+
+    expect(result.current).toEqual({ status: 'ready', networkObject: registration.networkObject });
   });
 });
