@@ -112,7 +112,8 @@ describe('content zoom settings', () => {
     const validate = coreSettingsValidators['platform.webViewContentZoom'];
     if (!validate) throw new Error('validator missing');
     await expect(validate(1.2, 1, {})).resolves.toBe(true);
-    await expect(validate(0.4, 1, {})).rejects.toThrow('Allowed range is 0.5 to 3.');
+    // Percentages, the way Settings shows the value, with a narrow no-break space before `%`.
+    await expect(validate(0.4, 1, {})).rejects.toThrow('Allowed range is 50\u202f% to 300\u202f%.');
     await expect(validate(Number.NaN, 1, {})).resolves.toBe(false);
   });
 
@@ -121,6 +122,12 @@ describe('content zoom settings', () => {
     if (!validate) throw new Error('validator missing');
     await expect(validate(1.2, 1, {})).resolves.toBe(true);
     await expect(validate(Number.NaN, 1, {})).resolves.toBe(false);
+  });
+
+  it('states the whole-UI zoom range in percentages when it rejects a value', async () => {
+    const validate = coreSettingsValidators['platform.zoomFactor'];
+    if (!validate) throw new Error('validator missing');
+    await expect(validate(3.5, 1, {})).rejects.toThrow('Allowed range is 50\u202f% to 300\u202f%.');
   });
 
   it('validates the memory as a record of in-range numbers', async () => {
