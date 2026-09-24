@@ -1,10 +1,16 @@
 /**
- * Creates a WebSocket from the node ws library or from the browser WebSocket depending on if we're
- * in node or browser.
+ * Creates the socket a client process uses to reach main: in the extension host, a WebSocket from
+ * the node ws library; in the renderer, a MessagePort-backed socket when running in Electron, and
+ * the browser WebSocket elsewhere.
  */
 
 import { isRenderer } from '@shared/utils/internal-util';
 import { IWebSocket } from './web-socket.interface';
+
+/** The part of the preload's bridge that says a MessagePort to main can be requested */
+type GlobalWithPapiBridge = typeof globalThis & {
+  electronAPI?: { papi?: { requestPort?: unknown } };
+};
 
 /**
  * Creates a WebSocket for the renderer or extension host depending on where you're running
@@ -13,6 +19,16 @@ import { IWebSocket } from './web-socket.interface';
  */
 export const createWebSocket = async (url: string): Promise<IWebSocket> => {
   if (isRenderer()) {
+    // Electron hands the page a MessagePort to main, which survives an OS suspend; a Chromium
+    // WebSocket does not. A page with no bridge (a non-Electron host) keeps the WebSocket.
+    const bridgedGlobal: GlobalWithPapiBridge = globalThis;
+    if (typeof bridgedGlobal.electronAPI?.papi?.requestPort === 'function') {
+      const [{ MessagePortWebSocket }, { createElectronPapiPortProvider }] = await Promise.all([
+        import('@renderer/services/message-port-web-socket'),
+        import('@renderer/services/electron-papi-port-provider'),
+      ]);
+      return new MessagePortWebSocket(createElectronPapiPortProvider());
+    }
     const Ws = (await import('@renderer/services/renderer-web-socket.service')).default;
     return new Ws(url);
   }
