@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
@@ -9,8 +9,14 @@ import type { WebViewProps } from '@papi/core';
 // Hoisted mocks — must be before any import that touches the component
 // ---------------------------------------------------------------------------
 
-const { mockUseEffectiveResourceReferenceList } = vi.hoisted(() => ({
+const {
+  mockUseEffectiveResourceReferenceList,
+  mockUseResourcePickerResources,
+  copyrightNoticesByProject,
+} = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
+  mockUseResourcePickerResources: vi.fn(),
+  copyrightNoticesByProject: new Map<string, unknown>(),
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -48,6 +54,11 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_resourcePanel_commentaries_pick%': 'Pick commentary…',
       '%webView_resourcePanel_commentaries_title%': 'Commentaries',
       '%webView_resourcePanel_commentaries_title_withResource%': 'Commentaries ({textName})',
+      '%platformScripture_copyrightNotice_restrictedLicense_banner%':
+        '{label}: The {name} is for reference only.',
+      '%platformScripture_copyrightNotice_moreInfo%': 'More info…',
+      '%platformScripture_copyrightNotice_dismiss%': 'Dismiss copyright notice',
+      '%platformScripture_copyrightNotice_details_title%': 'Copyright for {name}',
     },
     false,
   ],
@@ -56,7 +67,16 @@ vi.mock('@papi/frontend/react', () => ({
   useProjectData: vi.fn(() => ({
     ChapterUSJ: vi.fn(() => [undefined, false]),
   })),
-  useProjectSetting: vi.fn(() => ['ltr', false]),
+  useProjectSetting: vi.fn((projectId: string | undefined, key: string, fallback: unknown) => {
+    if (key === 'platformScripture.copyrightNotice')
+      return [
+        (projectId && copyrightNoticesByProject.get(projectId)) ?? fallback,
+        vi.fn(),
+        vi.fn(),
+        false,
+      ];
+    return ['ltr', false];
+  }),
   useSetting: vi.fn(() => ['simple', false]),
   useDialogCallback: vi.fn(() => vi.fn()),
   usePromise: vi.fn(() => [undefined, false]),
@@ -95,8 +115,8 @@ vi.mock('./use-effective-resource-reference-list.hook', () => ({
 // The picker list is a source the panel waits on: while it is loading the panel renders a spinner
 // instead of any empty state, so it has to be settled for the disclosure to be reachable at all.
 vi.mock('./use-resource-picker-resources.hook', () => ({
-  useResourcePickerResources: vi.fn(() => [[], false]),
-  default: vi.fn(() => [[], false]),
+  useResourcePickerResources: (...args: unknown[]) => mockUseResourcePickerResources(...args),
+  default: (...args: unknown[]) => mockUseResourcePickerResources(...args),
 }));
 
 vi.mock('./use-commentary-marker-styles.hook', () => ({
@@ -217,7 +237,31 @@ function renderZeroState(resourceType: 'ScriptureResource' | 'Commentary' = 'Scr
 // Tests
 // ---------------------------------------------------------------------------
 
+// jsdom ships no ResizeObserver, which the copyright notice banner measures itself with
+class NoopResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', NoopResizeObserver);
+  mockUseResourcePickerResources.mockReturnValue([[], false]);
+  copyrightNoticesByProject.clear();
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -234,5 +278,44 @@ describe('ResourceTextPanel — More info disclosure', () => {
   it('renders no disclosure for commentaries, whose prompt is self-explanatory', () => {
     renderZeroState('Commentary');
     expect(screen.queryByRole('button', { name: 'More info' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel — copyright notice', () => {
+  it("shows the notice of the resource on screen, not of the panel's own project", () => {
+    copyrightNoticesByProject.set('niv-project', {
+      kind: 'restrictedLicense',
+      name: 'NIV11',
+      fullName: 'New International Version 2011',
+      copyrightYears: '2011',
+    });
+    copyrightNoticesByProject.set('test-project-id', {
+      kind: 'restrictedLicense',
+      name: 'OWN',
+      fullName: 'The panel project',
+      copyrightYears: '2011',
+    });
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.0.0', items: [] },
+    });
+    mockUseResourcePickerResources.mockReturnValue([
+      [
+        {
+          reference: { type: 'project', id: 'niv-project', name: 'NIV11' },
+          source: 'downloaded',
+          isAdminLocked: false,
+          type: 'ScriptureResource',
+          installed: true,
+          projectId: 'niv-project',
+        },
+      ],
+      false,
+    ]);
+
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps()} />);
+
+    expect(screen.getByRole('note')).toHaveTextContent(/^NIV11:/);
   });
 });

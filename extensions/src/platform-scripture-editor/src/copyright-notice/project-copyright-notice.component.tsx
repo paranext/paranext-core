@@ -1,56 +1,77 @@
 import type { WebViewProps } from '@papi/core';
 import { LanguageStrings } from 'platform-bible-utils';
-import { useCallback } from 'react';
+import { useEffect } from 'react';
 import { CopyrightNoticeBanner } from './copyright-notice-banner.component';
-import { openExternalUrl } from './open-external-url.util';
 import { useCopyrightNotice } from './use-copyright-notice.hook';
-
-/** Projects whose notice was dismissed in this pane, keyed by project id */
-type DismissedCopyrightNotices = Record<string, true>;
-
-const NO_DISMISSALS: DismissedCopyrightNotices = {};
 
 export type ProjectCopyrightNoticeProps = {
   /** The project whose text the pane shows */
   projectId: string | undefined;
   /** Must include the keys in `COPYRIGHT_NOTICE_STRING_KEYS` */
   localizedStrings: LanguageStrings;
-  /** The pane's web view state, where dismissals are kept */
+  /** The pane's web view state, where the dismissal is kept */
   useWebViewState: WebViewProps['useWebViewState'];
 };
+
+type NoticeForProjectProps = {
+  projectId: string;
+  localizedStrings: LanguageStrings;
+  isDismissed: boolean;
+  onDismiss: () => void;
+};
+
+function NoticeForProject({
+  projectId,
+  localizedStrings,
+  isDismissed,
+  onDismiss,
+}: NoticeForProjectProps) {
+  const notice = useCopyrightNotice(projectId);
+  if (!notice || isDismissed) return undefined;
+  return (
+    <CopyrightNoticeBanner
+      notice={notice}
+      localizedStrings={localizedStrings}
+      onDismiss={onDismiss}
+    />
+  );
+}
 
 /**
  * Shows the copyright notice banner for the project a pane is showing, if it needs one.
  *
- * A dismissal is kept per pane and per project, as Paratext 9 keeps it per window: a pane that
- * switches to another text shows that text's notice, and switching back does not bring back a
- * notice already dismissed there.
+ * As in Paratext 9, which keeps one dismissal per window and clears it when the window's text
+ * changes, a pane remembers only the text whose notice was dismissed: switching to another text and
+ * back shows the first text's notice again. The dismissal survives the pane being reopened.
  */
 export function ProjectCopyrightNotice({
   projectId,
   localizedStrings,
   useWebViewState,
 }: ProjectCopyrightNoticeProps) {
-  const { notice, name, fullName } = useCopyrightNotice(projectId);
-  const [dismissedNotices, setDismissedNotices] = useWebViewState<DismissedCopyrightNotices>(
+  const [dismissedFor, setDismissedFor, resetDismissedFor] = useWebViewState<string | undefined>(
     'copyrightNoticeDismissedFor',
-    NO_DISMISSALS,
+    undefined,
   );
 
-  const dismiss = useCallback(() => {
-    if (projectId) setDismissedNotices({ ...dismissedNotices, [projectId]: true });
-  }, [dismissedNotices, projectId, setDismissedNotices]);
+  // A pane that briefly has no text (while it loads) has not changed text
+  const hasOtherTextDismissed =
+    projectId !== undefined && dismissedFor !== undefined && dismissedFor !== projectId;
+  useEffect(() => {
+    if (hasOtherTextDismissed) resetDismissedFor();
+  }, [hasOtherTextDismissed, resetDismissedFor]);
 
-  if (!projectId || !notice || dismissedNotices[projectId]) return undefined;
+  if (!projectId) return undefined;
 
   return (
-    <CopyrightNoticeBanner
-      notice={notice}
-      name={name}
-      fullName={fullName}
+    // Keyed so a newly shown text never shows or dismisses the previous text's notice while its own
+    // is on its way
+    <NoticeForProject
+      key={projectId}
+      projectId={projectId}
       localizedStrings={localizedStrings}
-      onDismiss={dismiss}
-      onOpenUrl={openExternalUrl}
+      isDismissed={dismissedFor === projectId}
+      onDismiss={() => setDismissedFor(projectId)}
     />
   );
 }

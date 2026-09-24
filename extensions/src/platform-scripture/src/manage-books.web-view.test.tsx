@@ -35,6 +35,7 @@ type MockWireProject = {
   isResource: boolean;
   fullName: string;
   versification: string;
+  isRestrictedAsBase: boolean;
 };
 
 const { mockRecentProjects, mockWireProjects } = vi.hoisted(() => {
@@ -107,7 +108,11 @@ function getManageBooksWebView(): ComponentType<WebViewProps> {
   return (globalThis as Record<string, unknown>).webViewComponent as ComponentType<WebViewProps>;
 }
 
-function makeProps(): WebViewProps {
+/**
+ * @param webViewState Initial values for the web view's saved state, by key; any other key starts
+ *   at the default the web view asks for.
+ */
+function makeProps(webViewState: { [key: string]: unknown } = {}): WebViewProps {
   // The literal supplies only the props the web view reads; the double cast avoids restating
   // every optional field of WebViewProps.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -117,12 +122,14 @@ function makeProps(): WebViewProps {
     useWebViewState: vi.fn(
       // useWebViewState is generic (key → TState); a mock cannot express that genericity.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (_key: string, defaultValue: any): [any, (val: any) => void] => {
+      (key: string, defaultValue: any): [any, (val: any) => void] => {
         // Stateful so the web view's own writes (projectId persistence) feed straight back in,
         // matching how the platform's real useWebViewState behaves. A hook inside a mock callback
         // is the only way to get that, and the callback is only ever called during render.
         // eslint-disable-next-line react-hooks/rules-of-hooks
-        const [value, setValue] = useState(defaultValue);
+        const [value, setValue] = useState(
+          Object.hasOwn(webViewState, key) ? webViewState[key] : defaultValue,
+        );
         return [value, setValue];
       },
     ),
@@ -137,6 +144,7 @@ const wireProject = (overrides: Partial<MockWireProject>): MockWireProject => ({
   isResource: false,
   fullName: 'Project A',
   versification: '4',
+  isRestrictedAsBase: false,
   ...overrides,
 });
 
@@ -269,5 +277,44 @@ describe('ManageBooksWebView sidebar project grouping', () => {
         name: localizedValueFor('%projectSelector_grouping_language_label%'),
       }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('ManageBooksWebView create reference picker', () => {
+  it('lists a project the backend restricts as a base, but not as a choice', async () => {
+    mockRecentProjects.value = [];
+    mockWireProjects.value = [
+      wireProject({}),
+      wireProject({
+        projectId: 'KJV',
+        name: 'KJV',
+        fullName: 'King James Version',
+        isEditable: false,
+        isResource: true,
+      }),
+      wireProject({
+        projectId: 'NIV11',
+        name: 'NIV11',
+        fullName: 'New International Version 2011',
+        isEditable: false,
+        isResource: true,
+        isRestrictedAsBase: true,
+      }),
+    ];
+
+    const ManageBooksWebView = getManageBooksWebView();
+    render(<ManageBooksWebView {...makeProps({ initialSection: 'create' })} />);
+
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const reference = await screen.findByTestId('manage-books-create-reference-trigger');
+    await user.click(within(reference).getByRole('combobox'));
+
+    const options = await screen.findAllByRole('option');
+    const niv = options.find((option) => option.textContent?.includes('NIV11'));
+    const kjv = options.find((option) => option.textContent?.includes('KJV'));
+    if (!niv || !kjv) throw new Error('Expected both projects in the picker');
+    expect(niv).toHaveAttribute('aria-disabled', 'true');
+    // The flag, not the project's being a resource, is what disables the row.
+    expect(kjv).not.toHaveAttribute('aria-disabled', 'true');
   });
 });
