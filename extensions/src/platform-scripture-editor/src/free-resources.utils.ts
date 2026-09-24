@@ -1,3 +1,4 @@
+import type { CommandHandlers } from 'papi-shared-types';
 import type { ResourceReference } from 'platform-scripture';
 import { isDblResourceReference } from './resource-reference.utils';
 import { FREE_RESOURCE_DBL_ENTRY_UIDS } from './free-resources.const';
@@ -24,6 +25,10 @@ export const HAS_FREE_RESOURCES: boolean = FREE_RESOURCE_DBL_ENTRY_UIDS.length >
 
 const UNRESTRICTED_PICKER_OPTIONS = Object.freeze({});
 
+/** Opens the Paratext registration ("Account") dialog. */
+const SHOW_REGISTRATION_COMMAND: keyof CommandHandlers =
+  'paratextRegistration.showParatextRegistration';
+
 /**
  * The resource-picker options that restrict the catalog to free resources, or nothing when the
  * caller may offer the whole catalog. Spread into the dialog options.
@@ -37,16 +42,29 @@ const UNRESTRICTED_PICKER_OPTIONS = Object.freeze({});
  * empty list, no language filters, and no explanation at all. With a one-entry allowlist that is a
  * likely first experience, not an edge case.
  *
+ * The notice carries a button to the registration ("Account") dialog, because registering with an
+ * organization is what gives access to more resources. Opening it cancels the picker.
+ *
  * Callers spread the result inside their own `useMemo`/`useCallback`, which is what keeps the
  * dialog options at a stable identity.
  *
  * @param isFreeResourceEntryPoint Whether this caller is the no-project free-resource entry point.
  * @param notice Already-localized sentence explaining the restriction.
+ * @param registerLabel Already-localized label for the button that opens registration.
  * @returns Options to spread; `{}` when unrestricted.
  */
-export function freeResourcePickerOptions(isFreeResourceEntryPoint: boolean, notice: string) {
+export function freeResourcePickerOptions(
+  isFreeResourceEntryPoint: boolean,
+  notice: string,
+  registerLabel: string,
+) {
   return isFreeResourceEntryPoint
-    ? { allowedResourceIds: FREE_RESOURCE_DBL_ENTRY_UIDS, notice }
+    ? {
+        allowedResourceIds: FREE_RESOURCE_DBL_ENTRY_UIDS,
+        notice,
+        noticeCommandLabel: registerLabel,
+        noticeCommand: SHOW_REGISTRATION_COMMAND,
+      }
     : UNRESTRICTED_PICKER_OPTIONS;
 }
 

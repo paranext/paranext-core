@@ -181,6 +181,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
         ...freeResourcePickerOptions(
           isFreeResourceEntryPoint,
           localizedStrings['%webView_resourcePanel_freeResourcesOnly_notice%'],
+          localizedStrings['%webView_resourcePanel_noProject_register%'],
         ),
         isModal: true,
         resourceType: 'ScriptureResource',

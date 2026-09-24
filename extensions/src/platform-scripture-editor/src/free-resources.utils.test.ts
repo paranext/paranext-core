@@ -81,10 +81,13 @@ describe('HAS_FREE_RESOURCES', () => {
 
 describe('freeResourcePickerOptions', () => {
   it('restricts the picker to the allowlist at the free-resource entry point', () => {
-    expect(freeResourcePickerOptions(true, 'Only free texts.')).toEqual({
+    expect(freeResourcePickerOptions(true, 'Only free texts.', 'Register')).toEqual({
       // The curated list as-is, in its original case: the picker matches case-insensitively itself.
       allowedResourceIds: ['AAAA1111BBBB2222', 'cccc3333dddd4444'],
       notice: 'Only free texts.',
+      // Registering with an organization is what widens access, so the notice offers it.
+      noticeCommandLabel: 'Register',
+      noticeCommand: 'paratextRegistration.showParatextRegistration',
     });
   });
 
@@ -92,20 +95,22 @@ describe('freeResourcePickerOptions', () => {
     // The dialog builds its own explanation from the fetch results, which this narrowing does not
     // touch — so without the notice a restricted picker matching nothing renders a blank list with
     // nothing said about why.
-    expect(freeResourcePickerOptions(true, 'Only free texts.')).toHaveProperty(
+    expect(freeResourcePickerOptions(true, 'Only free texts.', 'Register')).toHaveProperty(
       'notice',
       'Only free texts.',
     );
   });
 
   it('adds no restriction anywhere else, leaving the whole catalog offerable', () => {
-    expect(freeResourcePickerOptions(false, 'Only free texts.')).toEqual({});
+    expect(freeResourcePickerOptions(false, 'Only free texts.', 'Register')).toEqual({});
   });
 
   it('keeps the unrestricted result at a stable identity', () => {
     // The unrestricted branch is spread into memoized dialog options on every render of every
     // project-backed panel, so it stays a module constant. The restricted branch cannot: it carries
     // a caller-supplied notice, and its callers memoize instead.
-    expect(freeResourcePickerOptions(false, 'a')).toBe(freeResourcePickerOptions(false, 'b'));
+    expect(freeResourcePickerOptions(false, 'a', 'x')).toBe(
+      freeResourcePickerOptions(false, 'b', 'y'),
+    );
   });
 });
