@@ -173,6 +173,7 @@ import {
   isMissingBookInfoOnScreen,
   isOverrunProjectIdParse,
   openCommentListAndSelectThreadSafe,
+  paragraphMarkerNameKey,
   parseMissingBookError,
   resolveAddChapterNumberClick,
   resolveViewTypeForInterfaceMode,
@@ -264,7 +265,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // — never offered by the switcher, but their titles still need to be preloaded for the trigger
   // label / gutter tooltip.
   ...[...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_MARKERS].map(
-    (marker): LocalizeKey => `%paragraphMenu_${marker}_markerDescription%`,
+    paragraphMarkerNameKey,
   ),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -3839,7 +3840,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const blockMarkerNameKey: LocalizeKey | undefined =
     blockMarker && isDisplayableParagraphMarkerTitle(blockMarker)
-      ? `%paragraphMenu_${blockMarker}_markerDescription%`
+      ? paragraphMarkerNameKey(blockMarker)
       : undefined;
   const blockMarkerName = blockMarkerNameKey
     ? localizedStrings[blockMarkerNameKey]
