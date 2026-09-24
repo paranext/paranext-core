@@ -61,8 +61,10 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_appearance_system%',
 ];
 
+/** Shown while the offered languages load: exactly the offered languages. */
 const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
+  es: { autonym: 'Español' },
 };
 
 /**
