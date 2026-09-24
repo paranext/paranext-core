@@ -1078,6 +1078,58 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
   });
 
+  it('does not let a catalog text restricted as a model text be picked or saved as the model text', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    vi.mocked(sendCommand).mockImplementation(async (commandName: unknown) => {
+      if (commandName === 'platformGetResources.getCachedResources')
+        return {
+          status: 'available',
+          resources: [
+            makeDblResource({
+              dblEntryUid: 'niv-uid',
+              displayName: 'NIV11',
+              fullName: 'New International Version 2011',
+              isRestrictedAsModelText: true,
+            }),
+            makeDblResource({
+              dblEntryUid: 'esv-uid',
+              displayName: 'ESV',
+              fullName: 'English Standard Version',
+            }),
+          ],
+        };
+      return undefined;
+    });
+
+    const { submitDialog } = renderWrapper();
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+
+    // A real edit elsewhere, so Save writes and the assertion below has something to be absent from.
+    act(() => {
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
+    });
+    act(() => {
+      screen.getByText('%shareLayoutDialog_modelText_none%').click();
+    });
+    const rowFor = (fullName: string) => {
+      const row = screen.getByText(fullName).closest('tr');
+      if (!row) throw new Error(`${fullName} row not found`);
+      return row;
+    };
+    const restrictedRow = rowFor('New International Version 2011');
+    expect(restrictedRow).toHaveAttribute('aria-disabled', 'true');
+    // The flag, not the picker, is what disables the row: an unflagged text stays selectable.
+    expect(rowFor('English Standard Version')).not.toHaveAttribute('aria-disabled');
+    act(() => {
+      restrictedRow.click();
+    });
+    await confirmDialog();
+
+    expect(submitDialog).toHaveBeenCalledWith(true);
+    expect(mockState.setStructureProtected).toHaveBeenCalledWith(true);
+    expect(mockState.setModelTexts).not.toHaveBeenCalled();
+  });
+
   // On a project that has never shared a layout, `seedResourceList` seeds the resource lists from
   // the ADMIN'S PERSONAL selections — so writing them unconditionally would publish one person's
   // resource list to the whole team as a side effect of flipping an unrelated switch.

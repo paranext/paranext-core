@@ -469,32 +469,87 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             Assert.That(installedProjectIds.IsComplete, Is.False);
         }
 
-        private static DblResourcesDataProvider.DblResourceData CatalogRow(string dblEntryUid) =>
-            new(dblEntryUid, "Name", "Full name", "English", ResourceType.DBL, 1, false, false, "");
+        private const string ListModelTextRestrictionsWireName =
+            "object:platformGetResources.dblResourcesProvider-data.listModelTextRestrictions";
+
+        private const string BiblicaCopyright =
+            "The Holy Bible, New International Version® NIV® Copyright © 2011 by Biblica, Inc.®";
+
+        private static string ProjectId(ScrText scrText) =>
+            scrText.Guid.ToString().ToUpperInvariant();
 
         [Test]
-        public void DblResourceData_MarksTraditionallyLicensedBiblicaTextsAsRestrictedModelTexts()
+        public async Task ListModelTextRestrictions_IsRegisteredUnderItsContractName()
         {
-            // NIV11
-            Assert.That(CatalogRow("71c6eab17ae5b667").IsRestrictedAsModelText, Is.True);
+            DblResourcesDataProvider provider = new(Client, ParatextProjects);
+
+            await provider.RegisterDataProviderAsync();
+
+            Assert.That(
+                Client.IsHandlerRegistered(ListModelTextRestrictionsWireName),
+                Is.True,
+                $"Expected '{ListModelTextRestrictionsWireName}' on the wire; "
+                    + $"registered: {string.Join(", ", Client.RegisteredRequestTypes)}"
+            );
         }
 
         [Test]
-        public void DblResourceData_DoesNotRestrictOtherTexts()
+        public async Task ListModelTextRestrictions_ListsBiblicasIdsAndTheRestrictedInstalledProjects()
         {
-            // WEB
-            Assert.That(CatalogRow("97196133a859179b").IsRestrictedAsModelText, Is.False);
+            // On Biblica's list (NIV11)
+            var listed = AddInstalledResourceProject("71c6eab17ae5b667");
+            // Not on the list, but its copyright says it is Biblica's
+            var byCopyright = AddInstalledResourceProject("0123456789abcdef");
+            byCopyright.Settings.Copyright = BiblicaCopyright;
+            // An ordinary resource (WEB)
+            AddInstalledResourceProject("97196133a859179b");
+            // A Biblica translation team's own project
+            DummyScrText teamProject = new();
+            teamProject.Settings.Copyright = BiblicaCopyright;
+            ScrTextCollection.Add(teamProject, true);
+            DblResourcesDataProvider provider = new(Client, ParatextProjects);
+
+            ModelTextRestrictions restrictions = await provider.ListModelTextRestrictions();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    restrictions.DblIds,
+                    Is.EquivalentTo(BiblicaLicensing.RestrictedTextIds)
+                );
+                Assert.That(
+                    restrictions.ProjectIds,
+                    Is.EquivalentTo(new[] { ProjectId(listed), ProjectId(byCopyright) })
+                );
+            });
         }
 
         [Test]
-        public void DblResourceData_SendsTheRestrictionUnderItsFrontEndName()
+        public async Task ListModelTextRestrictions_SkipsAnUnreadableProjectAndKeepsTheRest()
+        {
+            UnreadableScrText unreadable = new();
+            ScrTextCollection.Add(unreadable, true);
+            unreadable.IsUnreadable = true;
+            var listed = AddInstalledResourceProject("71c6eab17ae5b667");
+            DblResourcesDataProvider provider = new(Client, ParatextProjects);
+
+            ModelTextRestrictions restrictions = await provider.ListModelTextRestrictions();
+
+            Assert.That(restrictions.ProjectIds, Is.EquivalentTo(new[] { ProjectId(listed) }));
+        }
+
+        [Test]
+        public void ModelTextRestrictions_SerializesToTheShapeTheFrontEndReads()
         {
             string json = JsonSerializer.Serialize(
-                CatalogRow("71c6eab17ae5b667"),
+                new ModelTextRestrictions(["71c6eab17ae5b667"], ["ABC123"]),
                 SerializationOptions.CreateSerializationOptions()
             );
 
-            Assert.That(json, Does.Contain("\"isRestrictedAsModelText\":true"));
+            Assert.That(
+                json,
+                Is.EqualTo("""{"dblIds":["71c6eab17ae5b667"],"projectIds":["ABC123"]}""")
+            );
         }
     }
 }

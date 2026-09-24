@@ -48,14 +48,6 @@ public sealed class ProjectSettingsNames
     /// </summary>
     public const string PB_COPYRIGHT_NOTICE = "platformScripture.copyrightNotice";
 
-    /// <summary>
-    /// Settings.xml names read raw (through <c>GetRawParatextSetting</c>) to compute
-    /// <see cref="PB_COPYRIGHT_NOTICE"/>-style licensing flags without touching a resource's files.
-    /// Neither is a platform setting, so neither is in s_platformBibleToParatextSettingsNames.
-    /// </summary>
-    public const string PT_COPYRIGHT = "Copyright";
-    public const string PT_DBL_ID = "DBLId";
-
     public const string PB_TEXT_DIRECTION = "platform.textDirection";
     public const string PT_TEXT_DIRECTION = "TextDirection";
 

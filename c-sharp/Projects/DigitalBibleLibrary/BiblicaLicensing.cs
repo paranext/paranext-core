@@ -1,10 +1,12 @@
+using System.Net;
 using System.Text.RegularExpressions;
+using Paratext.Data;
 
 namespace Paranext.DataProvider.Projects.DigitalBibleLibrary;
 
 /// <summary>
 /// Identifies Biblica, Inc.'s traditionally licensed texts. Biblica provides these as reference
-/// texts, but its licence does not allow them to be used as the basis of a new translation or
+/// texts, but its license does not allow them to be used as the basis of a new translation or
 /// other derivative work. Biblica® Open (Creative Commons) texts have no such restriction.
 /// </summary>
 /// <remarks>
@@ -20,9 +22,10 @@ public static partial class BiblicaLicensing
     /// installed yet has no copyright to read, so pickers that list the DBL catalog rely on this
     /// list alone.
     /// </summary>
-    // TODO: Update this list from the DBL when Biblica adds texts; it does not pick up new texts by
-    // itself. The copyright rule in IsRestrictedLicense covers installed ones in the meantime.
-    public static IReadOnlySet<string> RestrictedModelTextIds { get; } =
+    // This list does not pick up new Biblica texts by itself: refresh it from the DBL (rights holder
+    // Biblica, not open access) together with biblica-restricted-texts.json. Until then the
+    // copyright rule covers installed resources.
+    public static IReadOnlySet<string> RestrictedTextIds { get; } =
         new HashSet<string>
         {
             "300672556a449b25", // APSD
@@ -101,33 +104,79 @@ public static partial class BiblicaLicensing
     private static partial Regex FormatCharacters();
 
     /// <summary>
-    /// "Biblica, Inc", "Biblica Inc", "Biblica, inc.®", "Biblica®". Requiring "Inc" or "®" keeps out
-    /// Bible Society texts such as "Sociedad Biblica de Guatemala" and "Sociedades Biblicas Unidas".
+    /// "Biblica, Inc", "Biblica Inc", "Biblica , Inc", "Biblica، Inc" (Arabic comma), "Biblica，Inc"
+    /// (full-width comma), "Biblica, inc.®", "Biblica®". Requiring "Inc" or "®" keeps out Bible
+    /// Society texts such as "Sociedad Biblica de Guatemala" and "Sociedades Biblicas Unidas".
+    /// "Biblica" may directly follow a letter of another script, as it can in Chinese or Arabic
+    /// text, but not a Latin letter or digit.
     /// </summary>
     [GeneratedRegex(
-        @"\bBiblica(?:,?\s*Inc\b|\s*®)",
+        @"(?<![A-Za-z0-9])Biblica(?:\s*[,،，]?\s*Inc\b|\s*®)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex BiblicaIncorporated();
 
+    /// <summary>"Biblica® Open" or "Biblica Open"</summary>
     [GeneratedRegex(
-        @"\bBiblica\s*®\s*Open\b",
+        @"(?<![A-Za-z0-9])Biblica\s*®?\s*Open\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex BiblicaOpen();
 
+    /// <summary>Four decimal digits in any script</summary>
+    [GeneratedRegex(@"\d{4}")]
+    private static partial Regex FourDigits();
+
     /// <summary>
-    /// Whether a text is a traditionally licensed Biblica text: it is on Biblica's list
-    /// (<see cref="RestrictedModelTextIds"/>), or its copyright says so. The copyright rule agrees
-    /// with the list for every text in Platform.Bible's resource list, and also catches Biblica
-    /// texts added to the DBL after the list was made.
+    /// Whether a project is one of Biblica's traditionally licensed texts, so it must not be used
+    /// as a model or base text: it is on Biblica's list (<see cref="RestrictedTextIds"/>), or its
+    /// copyright says so. Only resources count, because a Biblica translation team's own project
+    /// (or Biblica's master project, whose DBL id matches the list) is theirs to translate in.
     /// </summary>
-    /// <param name="copyright">The project's Copyright setting, as plain text or HTML</param>
-    /// <param name="fullName">The project's full name</param>
-    /// <param name="dblId">The project's DBL id, if it came from the DBL</param>
-    public static bool IsRestrictedLicense(string? copyright, string? fullName, string? dblId)
+    public static bool IsRestricted(ScrText scrText)
     {
-        if (IsRestrictedAsModelText(dblId))
+        if (!scrText.IsResourceProject)
+            return false;
+
+        return IsRestrictedLicense(
+            GetPlainTextCopyright(scrText),
+            scrText.Settings.FullName,
+            ReadDblId(scrText)
+        );
+    }
+
+    /// <summary>
+    /// The project's copyright as plain text: paragraph ends become line breaks, HTML tags are
+    /// removed and HTML entities are decoded. Empty when the project has no copyright.
+    /// </summary>
+    internal static string GetPlainTextCopyright(ScrText scrText) =>
+        WebUtility.HtmlDecode(scrText.Settings.CopyrightPlainText ?? "");
+
+    private static string? ReadDblId(ScrText scrText)
+    {
+        try
+        {
+            return scrText.Settings.DBLId?.Id;
+        }
+        // A malformed DBLId, or a resource whose zipped DBL metadata cannot be read, has no usable id
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether a text is a traditionally licensed Biblica text: it is on Biblica's list, or its
+    /// copyright says so. The copyright rule agrees with the list for every text in
+    /// Platform.Bible's resource list, and also catches Biblica texts added to the DBL after the
+    /// list was made.
+    /// </summary>
+    /// <param name="copyright">The text's copyright as plain text</param>
+    /// <param name="fullName">The text's full name</param>
+    /// <param name="dblId">The text's DBL id, if it came from the DBL</param>
+    internal static bool IsRestrictedLicense(string? copyright, string? fullName, string? dblId)
+    {
+        if (IsOnRestrictedList(dblId))
             return true;
         if (string.IsNullOrEmpty(copyright))
             return false;
@@ -145,11 +194,11 @@ public static partial class BiblicaLicensing
     }
 
     /// <summary>
-    /// Whether a DBL resource is a traditionally licensed Biblica text, so it must not be offered
-    /// as a model or base text.
+    /// Whether a DBL id is on Biblica's list of traditionally licensed texts. Pickers that list
+    /// the DBL catalog use this for texts that are not installed.
     /// </summary>
-    public static bool IsRestrictedAsModelText(string? dblId) =>
-        dblId != null && RestrictedModelTextIds.Contains(dblId.ToLowerInvariant());
+    public static bool IsOnRestrictedList(string? dblId) =>
+        dblId != null && RestrictedTextIds.Contains(dblId.ToLowerInvariant());
 
     /// <summary>
     /// The years in a text's own copyright statement, e.g. "1973, 1978, 1984, 2011" for "Copyright ©
@@ -157,6 +206,7 @@ public static partial class BiblicaLicensing
     /// statement counts, because some texts go on to quote another text's copyright. Years written
     /// in other scripts' digits come back in Western digits.
     /// </summary>
+    /// <param name="copyright">The text's copyright as plain text</param>
     public static string GetCopyrightYears(string? copyright)
     {
         if (string.IsNullOrEmpty(copyright))
@@ -177,13 +227,10 @@ public static partial class BiblicaLicensing
             string year = string.Concat(
                 match.Value.Select(digit => (int)char.GetNumericValue(digit))
             );
+            // Other four-digit runs, such as catalogue numbers, are not copyright years
             if (int.Parse(year) is >= 1900 and <= 2099 && !years.Contains(year))
                 years.Add(year);
         }
         return string.Join(", ", years);
     }
-
-    /// <summary>Four decimal digits in any script</summary>
-    [GeneratedRegex(@"\d{4}")]
-    private static partial Regex FourDigits();
 }

@@ -17,7 +17,7 @@ import type {
 import { useCallback, useEffect, useMemo } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
-import { isDblResourceReference } from './resource-reference.utils';
+import { isDblResourceReference, resolveModelTextProjectId } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
@@ -136,6 +136,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     projectId,
   );
 
+  // The project on screen, whichever kind of reference chose it, for its copyright notice
+  const displayedProjectId = resolveModelTextProjectId(effectiveModelText, dblResources);
+
   // --- Operation callbacks ---
 
   // Re-resolve the cached resource list once an install completes so the resource flips to
@@ -218,7 +221,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       logger={logger}
       copyrightNotice={
         <ProjectCopyrightNotice
-          projectId={modelResourceProjectId}
+          projectId={displayedProjectId}
           localizedStrings={localizedStrings}
           useWebViewState={useWebViewState}
         />

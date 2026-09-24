@@ -8,6 +8,7 @@ import {
   ReactNode,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -707,6 +708,9 @@ function ProjectRowView({
     );
   }
 
+  const disabledReasonId = useId();
+  const hasDisabledReason = row.isDisabled && Boolean(row.disabledReason);
+
   const rowNode = (
     <CommandItem
       ref={row.isSelected ? selectedRowRef : undefined}
@@ -718,7 +722,16 @@ function ProjectRowView({
       disabled={row.isDisabled}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
+      // Spread rather than passed as `undefined`: this node is a Radix `Slot` child, whose props win
+      // over the trigger's, so an explicit `undefined` would erase the `aria-describedby` Radix
+      // points at the open tooltip on every other row.
+      {...(hasDisabledReason && { 'aria-describedby': disabledReasonId })}
+      className={cn(
+        'tw:flex tw:items-center tw:gap-2 tw:pe-4',
+        // `CommandItem` turns pointer events off on disabled items, which would keep the tooltip
+        // explaining why from ever opening. cmdk itself still ignores clicks on disabled items.
+        'tw:data-[disabled=true]:pointer-events-auto tw:data-[disabled=true]:cursor-not-allowed',
+      )}
     >
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
@@ -753,6 +766,13 @@ function ProjectRowView({
         )}
       </span>
       {rightContent}
+      {/* `hidden` rather than `sr-only`: the option's name comes from its content, which must not
+          include the reason. A hidden element still supplies the text `aria-describedby` points at. */}
+      {hasDisabledReason && (
+        <span id={disabledReasonId} hidden>
+          {row.disabledReason}
+        </span>
+      )}
     </CommandItem>
   );
 

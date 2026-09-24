@@ -1,6 +1,7 @@
 import type { DblResourceReference, ProjectReference, ResourceReference } from 'platform-scripture';
 import { formatProjectName } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
+import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 
 /**
  * Returns true if the {@link DblResourceData} entry was synthesized from a locally-installed non-DBL
@@ -102,5 +103,27 @@ export function getResourceReferenceRowId(reference: ResourceReference): string 
  */
 export function getResourceReferenceBareId(reference: ResourceReference): string | undefined {
   if (isDblResourceReference(reference) || isProjectReference(reference)) return reference.id;
+  return undefined;
+}
+
+/**
+ * The installed project a model text reference shows, or `undefined` while it is not installed. A
+ * DBL reference resolves through the catalog; a project reference only when the catalog lists the
+ * project as installed on this computer, so an admin-shared reference to a project the user lacks
+ * resolves to nothing.
+ *
+ * @param reference The configured model text
+ * @param dblResources The catalog, including locally-installed non-DBL resources
+ */
+export function resolveModelTextProjectId(
+  reference: ResourceReference | undefined,
+  dblResources: DblResourceData[],
+): string | undefined {
+  if (isDblResourceReference(reference)) {
+    const match = findCachedDblResource(reference, dblResources);
+    return match?.installed ? match.projectId : undefined;
+  }
+  if (isProjectReference(reference))
+    return dblResources.find((r) => isNonDblResource(r) && r.projectId === reference.id)?.projectId;
   return undefined;
 }

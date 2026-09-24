@@ -217,7 +217,7 @@ describe('ManageBooksDialog project pickers', () => {
     await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Type']));
   });
 
-  it('shows a text whose licence restricts it in the create reference picker, but not as a choice', async () => {
+  it('shows a text whose license restricts it in the create reference picker, but not as a choice', async () => {
     const user = setupUser();
     const reason = 'Licensing prohibits using this text as a base.';
     render(
@@ -234,7 +234,7 @@ describe('ManageBooksDialog project pickers', () => {
           },
         ],
         localizedStrings: {
-          '%platformScripture_copyrightNotice_restrictedModelText_tooltip%': reason,
+          '%resourcePicker_restrictedModelText_tooltip%': reason,
         },
       }),
     );

@@ -125,7 +125,7 @@ type ProjectListResult = {
      * Whether licensing terms prohibit using the project as the base of new text. Mirrors the C#
      * `ProjectSummary.IsRestrictedAsBase` wire field.
      */
-    isRestrictedAsBase?: boolean;
+    isRestrictedAsBase: boolean;
   }[];
 };
 

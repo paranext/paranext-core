@@ -1,22 +1,25 @@
 import { DblResourceData, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 
 /**
- * Tooltip explaining why a text cannot be picked as a model or base text. The string lives in
- * platform-scripture, next to the copyright notice strings it belongs with.
+ * Tooltip explaining why a text cannot be picked as a model or base text. A core resource picker
+ * string, so it lives in core's `assets/localization`; extensions that disable the same texts in
+ * their own pickers reuse this key.
  */
 export const RESTRICTED_MODEL_TEXT_TOOLTIP_KEY: LocalizeKey =
-  '%platformScripture_copyrightNotice_restrictedModelText_tooltip%';
+  '%resourcePicker_restrictedModelText_tooltip%';
 
 /**
  * Why a resource cannot be picked as a model or base text, or `undefined` when it can. Only
- * traditionally licensed Biblica texts are restricted today; their licence prohibits using them as
+ * traditionally licensed Biblica texts are restricted today; their license prohibits using them as
  * the basis of a new translation. Pass as a resource picker's `getDisabledReason`.
  */
 export function getRestrictedModelTextReason(
   resource: DblResourceData,
   localizedStrings: LanguageStrings,
 ): string | undefined {
+  // Falls back to the key because pickers disable a row only when it has a reason: a missing string
+  // must not make a restricted text selectable.
   return resource.isRestrictedAsModelText
-    ? localizedStrings[RESTRICTED_MODEL_TEXT_TOOLTIP_KEY]
+    ? localizedStrings[RESTRICTED_MODEL_TEXT_TOOLTIP_KEY] || RESTRICTED_MODEL_TEXT_TOOLTIP_KEY
     : undefined;
 }
