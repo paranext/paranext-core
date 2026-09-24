@@ -338,12 +338,21 @@ export async function openCellContextMenu(
 /**
  * Opens the "⋮" zoom options menu in a chapter-view column's header (it is revealed on hover) and
  * returns the menu once it is open.
+ *
+ * Focus is taken off whatever holds it first. Closing a pop-up with Escape (as
+ * {@link switchToChapterView} does) returns focus to its trigger, and a focused trigger shows its
+ * tooltip until focus moves: the grid's "View Options" tooltip then hangs over the header end of
+ * the last column, exactly where that column's "⋮" sits, and takes the click.
  */
 export async function openChapterViewZoomOptions(
   frame: FrameLocator,
   column: Locator,
   resourceName: string,
 ): Promise<Locator> {
+  await gridBody(frame).evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  await expect(frame.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
   await column.hover();
   await column.getByRole('button', { name: `Zoom options for ${resourceName}` }).click();
   const menu = frame.getByRole('menu');
