@@ -1,4 +1,96 @@
 import { useEffect, useRef, useState } from 'react';
+import { DblResourceData, ResourceType } from 'platform-bible-utils';
+import { MultiSelectComboBoxEntry } from '@/components/advanced/multi-select-combo-box.component';
+
+/**
+ * Whether a resource belongs to the section of the catalogue currently on display. An undefined
+ * `resourceType` means "no type filter", so everything matches, as does an empty array — that is
+ * what a multi-select with nothing chosen hands over.
+ *
+ * Shared by the resource rows and the language filter so the two can never disagree about which
+ * resources are in play — a language offered by the filter always has rows behind it.
+ */
+export function matchesResourceType(
+  resource: DblResourceData,
+  resourceType?: ResourceType | ResourceType[],
+): boolean {
+  if (!resourceType) return true;
+  if (!Array.isArray(resourceType)) return resource.type === resourceType;
+  return resourceType.length === 0 || resourceType.includes(resource.type);
+}
+
+/**
+ * Builds the language filter's options from the resources currently in play.
+ *
+ * Languages are returned alphabetically, never in catalogue order — a DBL catalogue arrives in an
+ * arbitrary order that has nothing to do with what the user is likely to want. Languages that
+ * already have an installed resource are `starred`, which `MultiSelectComboBox` promotes to the top
+ * of the list when its `sortSelected` prop is set. Each entry carries its resource count as
+ * `secondaryLabel`.
+ *
+ * Pass the same list the rows are drawn from — already narrowed with {@link matchesResourceType} on
+ * a surface that scopes by type. Every language offered here has a resource behind it in whatever
+ * it is given, so "selecting a language can never produce an empty result list" is a guarantee the
+ * caller earns by deriving its rows and its options from one list, not one this function can make
+ * on its own.
+ *
+ * Note that a consumer passing `sortSelected` re-sorts these entries itself, so the rendered order
+ * is that component's (starred first, then selected, then alphabetical) rather than the plain
+ * alphabetical order returned here.
+ *
+ * @param resources The resources in play — the same list the rows are drawn from.
+ * @returns Alphabetically ordered entries, ready for `MultiSelectComboBox`.
+ */
+export function buildLanguageFilterOptions(
+  resources: DblResourceData[],
+): MultiSelectComboBoxEntry[] {
+  const countByLanguage = new Map<string, number>();
+  const installedLanguages = new Set<string>();
+
+  resources.forEach((resource) => {
+    const language = resource.bestLanguageName;
+    countByLanguage.set(language, (countByLanguage.get(language) ?? 0) + 1);
+    if (resource.installed) installedLanguages.add(language);
+  });
+
+  return Array.from(countByLanguage.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([language, count]) => ({
+      label: language,
+      value: language,
+      starred: installedLanguages.has(language),
+      secondaryLabel: count.toString(),
+    }));
+}
+
+/**
+ * Splits a filter selection into the values its options currently offer and the ones they do not.
+ *
+ * A resource list's filter options narrow with the rest of the view — the type filter, a reloaded
+ * catalogue — so a selection can name a value that is not on offer right now. Hand the filter only
+ * `offered`: filtering rows on a held value would empty the list, and `Filter` labels a badge by
+ * looking its value up in the options, so a held value would render as an X with no label.
+ *
+ * Held values are hidden, not discarded. Write a change back as `[...held, ...next]` so choosing a
+ * visible value does not drop them, and they apply again once the options offer them. This is what
+ * keeps a transient change of scope from destroying a saved selection; see
+ * `adr-shared-list-scope-predicate`.
+ *
+ * @param selected The full selection, as saved.
+ * @param entries The filter's current options.
+ * @returns `offered` — the selected values `entries` contains, in selection order; `held` — the
+ *   rest.
+ */
+export function partitionFilterSelection(
+  selected: string[],
+  entries: MultiSelectComboBoxEntry[],
+): { offered: string[]; held: string[] } {
+  const offeredValues = new Set(entries.map((entry) => entry.value));
+  const offered: string[] = [];
+  const held: string[] = [];
+  selected.forEach((value) => (offeredValues.has(value) ? offered : held).push(value));
+  return { offered, held };
+}
 
 /**
  * Tracks how many items from a large list should be visible, expanding the count as the user
