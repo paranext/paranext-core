@@ -14,6 +14,15 @@ import { deserialize, getErrorMessage, retryUntil, serialize } from 'platform-bi
 export const WEBSOCKET_PORT = 8876;
 
 /**
+ * Largest message the WebSocket transport carries. A message over this is not a failed request: the
+ * receiver closes the connection with 1009, taking down every request in flight on it and, for the
+ * C# data provider, the process itself. Declared here rather than left to the `ws` default so a
+ * producer sizing a response against it - see `Pt9InterlinearReader.MaxPt9InterlinearDataBytes` -
+ * is measuring against a number this repository states.
+ */
+export const MAX_WEBSOCKET_PAYLOAD_BYTES = 100 * 1024 * 1024;
+
+/**
  * How many times to try sending a request before giving up if the request is not yet registered.
  * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
  * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of
@@ -516,10 +525,12 @@ export function getJsonRpcRequestErrorMessagePrefix(code: number): string {
  *
  * The code has to be read back out of the message because `doRequest` flattens every RPC-level
  * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
- * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker (the richer
- * `platformErrorCode` field is populated only for C# `PlatformErrorCodes.WithCode` throws, which a
- * "no handler yet" response never carries — it has no `error.data` at all). Deriving the format
- * from {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
+ * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker: a "no
+ * handler yet" response has no `error.data` at all, and the `platformErrorCode` field is no help
+ * either, because it is never populated from C#. `JsonRpc.ExceptionStrategy` is left at its
+ * `CommonErrorData` default, which serializes no `Exception.Data`, so `error.data.data` is always
+ * absent whatever `PlatformErrorCodes.WithCode` set. Deriving the format from
+ * {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
  * with, keeps this matcher in lockstep with any reformat there.
  *
  * @param error Error thrown by a `networkService` request

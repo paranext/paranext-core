@@ -12,7 +12,7 @@ import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { projectLookupService } from '@shared/services/project-lookup.service';
-import { getErrorMessage } from 'platform-bible-utils';
+import { compareProjectShortNames, getErrorMessage } from 'platform-bible-utils';
 import { useEvent, usePromise } from 'platform-bible-react';
 import type {
   ResultStatus,
@@ -708,7 +708,10 @@ export function useSyncStatus(): SyncStatusInfo {
           // same set, so sorting is what keeps an open popover from reshuffling under the user. Ties
           // break on id, because two projects sharing a display name (or both falling back to their
           // id) would otherwise be left in exactly the meaningless order the sort exists to remove.
-          .sort((a, b) => a.name.localeCompare(b.name) || a.projectId.localeCompare(b.projectId))
+          .sort(
+            (a, b) =>
+              compareProjectShortNames(a.name, b.name) || a.projectId.localeCompare(b.projectId),
+          )
       );
     }, [effectiveProjectIds]),
     NO_SYNCING_PROJECTS,

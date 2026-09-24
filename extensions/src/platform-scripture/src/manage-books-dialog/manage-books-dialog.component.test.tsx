@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   makeBuiltInGroupings,
   type ProjectSelectorGrouping,
@@ -16,6 +16,10 @@ import {
   type ManageBooksDialogProps,
   type MutationResult,
 } from './manage-books-dialog.component';
+import {
+  MANAGE_BOOKS_DIALOG_STRING_KEYS,
+  type ManageBooksDialogLocalizedStrings,
+} from './manage-books-dialog.types';
 import { installManageBooksJsdomShims, scrolledElements } from './manage-books-dialog.test-utils';
 
 let uninstallShims: () => void;
@@ -233,5 +237,122 @@ describe('ManageBooksDialog project pickers', () => {
     await waitFor(() => expect(screen.getByText('English versification')).toBeInTheDocument());
     expect(screen.getByText('Vulgate versification')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Group by' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ManageBooksDialog header subtitle', () => {
+  /**
+   * The subtitle is gated on `useIsNarrow`, which measures the dialog root against a 448px
+   * breakpoint. jsdom has no layout, so every element reports width 0 and the dialog renders in its
+   * collapsed form with the subtitle hidden — the line under test never mounts. Report a width past
+   * the breakpoint for these tests only; widening it globally would change how the other suites in
+   * this file render.
+   */
+  let wideRect: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    wideRect = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(0, 0, 900, 600));
+  });
+
+  afterEach(() => {
+    wideRect.mockRestore();
+  });
+
+  /**
+   * The `PROJECTS` fixture above carries no `fullName`, so it exercises only the short-name-alone
+   * branch. These spell out the three field combinations the project label has to tell apart.
+   */
+  const withNames = (shortName: string, fullName?: string): ManageBooksDialogProject[] => [
+    { id: 'WEB', shortName, name: shortName, fullName },
+  ];
+
+  /** The subtitle is the only line reading "{n} books in …"; it renders once projects have loaded. */
+  const subtitle = () => screen.findByText(/books in/i);
+
+  /**
+   * The subtitle's text with the bidi isolates stripped. The name is interpolated into a sentence,
+   * so it travels wrapped in `isolateBidi`; these assertions are about the name's ORDER and
+   * punctuation, and the isolates are pinned separately below.
+   */
+  const subtitleText = async () =>
+    ((await subtitle()).textContent ?? '').replaceAll('\u2068', '').replaceAll('\u2069', '');
+
+  it('leads the project label with the short name', async () => {
+    render(dialog({ loadProjects: () => withNames('WEB', 'World English Bible') }));
+
+    // Asserted as one ordered string rather than two `toContain`s: the point of the shared helper is
+    // the ORDER, and a long-name-first label contains both names just as happily.
+    expect(await subtitleText()).toContain('books in WEB - World English Bible');
+  });
+
+  it('isolates the project name so it cannot reorder the sentence around it', async () => {
+    render(dialog({ loadProjects: () => withNames('WEB', 'World English Bible') }));
+
+    // A right-to-left name dropped bare into this template pulls the surrounding punctuation into
+    // its own directional run. `dir="auto"` cannot fix an interpolated name — it reads the
+    // SENTENCE's first strong character — so the isolate has to travel inside the string.
+    expect((await subtitle()).textContent).toContain('\u2068WEB - World English Bible\u2069');
+  });
+
+  it('shows the short name alone when the project carries no full name', async () => {
+    render(dialog({ loadProjects: () => withNames('WEB') }));
+
+    // No dangling separator — `formatProjectName` drops it along with the absent field.
+    expect(await subtitleText()).toMatch(/books in WEB \u22c5/);
+  });
+
+  it('does not repeat a full name that equals the short name', async () => {
+    render(dialog({ loadProjects: () => withNames('WEB', 'WEB') }));
+
+    // The `fullName === shortName` de-dup, asserted at the consumer rather than only in the helper's
+    // units: a consumer that stopped routing through the helper would render "WEB - WEB" while the
+    // helper's own tests stayed green.
+    const text = await subtitleText();
+    expect(text).not.toContain('WEB - WEB');
+    // Positive control — without it this passes just as happily against a subtitle that never
+    // rendered a project label at all.
+    expect(text).toMatch(/books in WEB \u22c5/);
+  });
+});
+
+describe('ManageBooksDialog project pickers — dialog strings unresolved', () => {
+  // What `useLocalizedStrings` actually hands a web view before strings load, and permanently if
+  // the localization provider errors: every key seeded as its own value. Those are defined
+  // strings, so the dialog's `t()` helper has to judge them rather than rely on `??`.
+  const UNRESOLVED_STRINGS: ManageBooksDialogLocalizedStrings = Object.fromEntries(
+    MANAGE_BOOKS_DIALOG_STRING_KEYS.map((key) => [key, key]),
+  );
+
+  const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+
+  it("keeps each picker's own English rather than the picker's generic default", async () => {
+    render(dialog({ initialSection: 'copy', localizedStrings: UNRESOLVED_STRINGS }));
+
+    // Distinct names matter as much as correct ones: without the dialog's own fallbacks both
+    // comboboxes resolve to ProjectSelector's identical 'Projects & resources'.
+    const rail = await screen.findByTestId('manage-books-sidebar-project-trigger');
+    await waitFor(() => expect(within(rail).getByRole('combobox')).toBeEnabled());
+    expect(within(rail).getByRole('combobox')).toHaveAccessibleName('Project');
+    // The rail shows its placeholder until the active project lands in the loaded list. That
+    // placeholder is a dialog-owned fallback too, so it must be English rather than a raw key.
+    expect(within(rail).getByRole('combobox')).toHaveTextContent('Select project');
+
+    expect(await screen.findByRole('combobox', { name: 'Select project' })).toBeInTheDocument();
+  });
+
+  it('renders no raw localization key in the copy source picker, trigger or popover', async () => {
+    const user = setupUser();
+    render(dialog({ initialSection: 'copy', localizedStrings: UNRESOLVED_STRINGS }));
+
+    // Any `%…%` key, whatever its prefix — a sweep narrowed to `%manageBooks_` would miss the
+    // shared `%projectSelector_*%` block the popover also renders.
+    const RAW_KEY = /%[^%\s]+%/;
+    await user.click(await screen.findByRole('combobox', { name: 'Select project' }));
+    const popover = await screen.findByRole('dialog');
+
+    expect(within(popover).queryAllByText(RAW_KEY)).toHaveLength(0);
+    expect(within(popover).queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
   });
 });

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { forwardRef, useImperativeHandle } from 'react';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { act, render } from '@testing-library/react';
+import { forwardRef, ReactNode, useImperativeHandle } from 'react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { act, render, waitFor } from '@testing-library/react';
+import { ContentZoomAreaProvider } from '@/components/advanced/content-zoom-root.component';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type {
@@ -16,48 +17,27 @@ import FootnoteEditor, {
   FootnoteEditorMarkerPalette,
   markerMenuItemToPaletteItem,
 } from './footnote-editor.component';
+import { installPopoverJsdomStubs } from './footnote-editor.test-harness';
 import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditorLocalizedStrings,
 } from './footnote-editor.types';
+import { editableView } from './footnote-editor.fixtures';
 
-// cmdk (Command/CommandInput, used by the inline MarkerMenu popover) instantiates a
-// ResizeObserver on mount and schedules scrollTo/scrollIntoView; jsdom ships none of these.
-// No-op stubs are sufficient since these tests never open that popover.
-class NoopResizeObserver implements ResizeObserver {
-  private readonly targets = new Set<Element>();
-
-  observe(target: Element) {
-    this.targets.add(target);
-  }
-
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
-}
-
-beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (typeof Element.prototype.scrollTo !== 'function') {
-    Element.prototype.scrollTo = () => {};
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
-});
+installPopoverJsdomStubs();
 
 /**
  * Mutable holder for the mocked `EditorRef` the stubbed `Editorial` below exposes via
  * `useImperativeHandle`. Declared with `vi.hoisted` so the `vi.mock` factory (itself hoisted to the
  * top of the file by Vitest) can close over it.
  */
-const { mockEditorRefHolder, mockGetMarkerMenuItems, mockRegisterOnUsjChange } = vi.hoisted(() => ({
+const {
+  mockEditorRefHolder,
+  mockGetMarkerMenuItems,
+  mockRegisterOptions,
+  mockRegisterOnUsjChange,
+  mockRegisterOnStateChange,
+} = vi.hoisted(() => ({
   mockEditorRefHolder: {
     // Placeholder only — every test overwrites this with a full mock (see `renderFootnoteEditor`)
     // before rendering, so the empty object is never actually read as an `EditorRef`.
@@ -65,10 +45,16 @@ const { mockEditorRefHolder, mockGetMarkerMenuItems, mockRegisterOnUsjChange } =
     current: {} as EditorRef,
   },
   mockGetMarkerMenuItems: vi.fn(),
+  // Records the `options` the stubbed `Editorial` was handed, so a test can assert what this
+  // component decided to pass down rather than what its caller supplied.
+  mockRegisterOptions: vi.fn(),
   // Records the `onUsjChange` the stubbed `Editorial` was handed, so a test can fire the editor
   // change the real editor would have: that is what evaluates note-type switchability, and so what
   // enables the note-type dropdown.
   mockRegisterOnUsjChange: vi.fn(),
+  // Records the `onStateChange` the stubbed `Editorial` was handed, so a test can report the
+  // caret's context marker the way the real editor does: that is what fills the inline markers menu.
+  mockRegisterOnStateChange: vi.fn(),
 }));
 
 // Replaces the real `Editorial` with a minimal stub exposing `.editor-input` (queried by the
@@ -81,17 +67,24 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
   return {
     ...actual,
     getMarkerMenuItems: mockGetMarkerMenuItems,
-    Editorial: forwardRef<EditorRef, { onUsjChange?: (usj: unknown) => void }>(
-      ({ onUsjChange }, ref) => {
-        mockRegisterOnUsjChange(onUsjChange);
-        useImperativeHandle(ref, () => mockEditorRefHolder.current);
-        // This stub only stands in for the real editor in tests that dispatch keydown events at
-        // `document` and check `document.activeElement`; it's never navigated via Tab/keyboard, so
-        // it doesn't need the interaction handlers a real focusable non-form element would.
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-        return <div className="editor-input" tabIndex={0} data-testid="popover-editor-input" />;
-      },
-    ),
+    Editorial: forwardRef<
+      EditorRef,
+      {
+        options?: unknown;
+        onUsjChange?: (usj: unknown) => void;
+        onStateChange?: (state: unknown) => void;
+      }
+    >(({ options, onUsjChange, onStateChange }, ref) => {
+      mockRegisterOptions(options);
+      mockRegisterOnUsjChange(onUsjChange);
+      mockRegisterOnStateChange(onStateChange);
+      useImperativeHandle(ref, () => mockEditorRefHolder.current);
+      // This stub only stands in for the real editor in tests that dispatch keydown events at
+      // `document` and check `document.activeElement`; it's never navigated via Tab/keyboard, so
+      // it doesn't need the interaction handlers a real focusable non-form element would.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      return <div className="editor-input" tabIndex={0} data-testid="popover-editor-input" />;
+    }),
   };
 });
 
@@ -100,6 +93,7 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
 // behavior — any earlier test that exercised the same path leaks its calls into later ones.
 beforeEach(() => {
   mockGetMarkerMenuItems.mockClear();
+  mockRegisterOptions.mockClear();
 });
 
 function buildLocalizedStrings(): FootnoteEditorLocalizedStrings {
@@ -178,7 +172,10 @@ function placeDomCaretOutsideNote(editorInput: HTMLElement): void {
 function renderFootnoteEditor(
   editorOptions: EditorOptions,
   markerPalette?: FootnoteEditorMarkerPalette,
-  { inline = false }: { inline?: boolean } = {},
+  {
+    inline = false,
+    wrapper,
+  }: { inline?: boolean; wrapper?: (props: { children: ReactNode }) => ReactNode } = {},
 ) {
   // EditorRef has many required methods; using a partial mock via type assertion is simpler than
   // stubbing all of them in a test (same rationale as
@@ -230,7 +227,7 @@ function renderFootnoteEditor(
     />
   );
 
-  const utils = render(renderElement(scrRef));
+  const utils = render(renderElement(scrRef), { wrapper });
 
   const editorInput = utils.getByTestId('popover-editor-input');
   editorInput.focus();
@@ -242,6 +239,142 @@ function renderFootnoteEditor(
     rerenderScrRef: (nextScrRef: SerializedVerseRef) => utils.rerender(renderElement(nextScrRef)),
   };
 }
+
+describe('FootnoteEditor width lock', () => {
+  it('locks the container to its own CSS width, not its painted width', () => {
+    // jsdom has no layout: client rects are all zero and computed widths are empty. Report a layout
+    // width for the container only, so the lock has something to read; a lock taken from client
+    // rects (the painted size, which a zoomed ancestor scales) would stay unset here.
+    const originalGetComputedStyle = window.getComputedStyle.bind(window);
+    const spy = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((element, pseudoElement) => {
+        const style = originalGetComputedStyle(element, pseudoElement);
+        if (!element.classList.contains('footnote-editor')) return style;
+        return new Proxy(style, {
+          get: (target, property) =>
+            property === 'width' ? '480.5px' : Reflect.get(target, property),
+        });
+      });
+    try {
+      const { container } = renderFootnoteEditor({
+        view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+      });
+      const lockedContainer = container.querySelector<HTMLElement>('.footnote-editor');
+      expect(lockedContainer?.style.width).toBe('480.5px');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('FootnoteEditor context menu', () => {
+  it('hands its editor no context-menu container, so the menu stays at interface scale', () => {
+    renderFootnoteEditor({ view: editableView });
+
+    const passedOptions: unknown = mockRegisterOptions.mock.calls.at(-1)?.[0];
+    // Positive control: this component always sets `hasExternalUI`, so the options really arrived.
+    expect(passedOptions).toHaveProperty('hasExternalUI', true);
+    expect(passedOptions).not.toHaveProperty('contextMenuContainer');
+  });
+});
+
+describe('FootnoteEditor inline markers menu placement', () => {
+  /**
+   * Makes every `Range` report `rect` as its one client rect. jsdom does not implement either
+   * method on `Range`, so they are defined for the test and removed again by the returned
+   * function.
+   */
+  function stubRangeRect(rect: DOMRect) {
+    const originals = {
+      getBoundingClientRect: Object.getOwnPropertyDescriptor(
+        Range.prototype,
+        'getBoundingClientRect',
+      ),
+      getClientRects: Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects'),
+    };
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => rect,
+    });
+    // Only the length is read, and jsdom exposes no `DOMRectList` to build a real one from.
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: () => [rect],
+    });
+    return () => {
+      Object.entries(originals).forEach(([name, descriptor]) => {
+        if (descriptor) Object.defineProperty(Range.prototype, name, descriptor);
+        else Reflect.deleteProperty(Range.prototype, name);
+      });
+    };
+  }
+
+  /** The Radix wrapper that positions the markers menu (the popover holding its search box). */
+  function getMenuPositioner(): HTMLElement {
+    const wrapper = document
+      .querySelector('[cmdk-input]')
+      ?.closest<HTMLElement>('[data-radix-popper-content-wrapper]');
+    if (!wrapper) throw new Error('inline markers menu is not open');
+    return wrapper;
+  }
+
+  it('places the menu at the left edge of the live selection rect, not at an offset inside the pop-up', async () => {
+    // jsdom has no layout, so any element's client rect is all zeros. An anchor placed inside the
+    // pop-up from offsets would therefore put the menu at the origin; the selection's own rect is
+    // what the menu must sit against (it is also correct inside a zoomed pop-up, where written-back
+    // offsets would be scaled twice).
+    let restoreRange = stubRangeRect(new DOMRect(120, 50, 30, 10));
+    try {
+      const { editorInput } = renderFootnoteEditor(
+        { view: { markerMode: 'visible', hasSpacing: true, isFormattedFont: true } },
+        undefined,
+        {
+          wrapper: ({ children }) => (
+            <ContentZoomAreaProvider area="footnotes">{children}</ContentZoomAreaProvider>
+          ),
+        },
+      );
+      // The `\` menu offers the markers allowed inside the caret's context marker.
+      await act(async () => {
+        const onStateChange = mockRegisterOnStateChange.mock.calls.at(-1)?.[0];
+        onStateChange?.({ contextMarker: 'f', canRedo: false });
+      });
+      placeDomCaretInsideNote(editorInput);
+
+      await act(async () => {
+        editorInput.ownerDocument.dispatchEvent(
+          new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+        );
+      });
+
+      // Centered on the selection's left edge (the menu itself has no size in jsdom), 4px (the
+      // popover's side offset) below or above the selection's 50–60px band. Which side is up to the
+      // positioning's collision checks, which jsdom's empty layout decides, so either is accepted.
+      await waitFor(() =>
+        expect(getMenuPositioner().style.transform).toMatch(/^translate\(120px, (64|46)px\)$/),
+      );
+
+      // The menu is a pop-up of the same zoom area, marked on its own content.
+      expect(getMenuPositioner().querySelector('[data-slot="popover-content"]')).toHaveAttribute(
+        'data-platform-content-zoom-root',
+        'footnotes',
+      );
+
+      // The anchor is read again when the menu is repositioned, so the menu follows its text.
+      restoreRange();
+      restoreRange = stubRangeRect(new DOMRect(200, 80, 30, 10));
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'));
+      });
+      await waitFor(() =>
+        expect(getMenuPositioner().style.transform).toMatch(/^translate\(200px, (94|76)px\)$/),
+      );
+    } finally {
+      restoreRange();
+    }
+  });
+});
 
 function makeItem(overrides: Partial<EditorMarkerMenuItem> = {}): EditorMarkerMenuItem {
   return {

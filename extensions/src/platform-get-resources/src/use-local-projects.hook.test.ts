@@ -255,20 +255,29 @@ describe('metadataToLocalProjectInfo', () => {
     });
   });
 
-  it('falls back to the id for name and fullName when both are absent', () => {
+  it('falls back the name to the id, and leaves fullName absent, when both are unset', () => {
     expect(metadataToLocalProjectInfo(makeMetadata({ id: 'proj-id-only' }))).toEqual({
       projectId: 'proj-id-only',
       name: 'proj-id-only',
-      fullName: 'proj-id-only',
+      fullName: undefined,
       language: '',
       isPublished: false,
     });
   });
 
-  it('falls back fullName to name when fullName is absent but name is present', () => {
+  it('leaves fullName absent rather than mirroring the short name into it', () => {
+    // Home renders Full Name in its own column beside Name, so a mirror would print the same text
+    // twice across two columns.
     const result = metadataToLocalProjectInfo(makeMetadata({ id: 'p1', name: 'ShortOnly' }));
     expect(result.name).toBe('ShortOnly');
-    expect(result.fullName).toBe('ShortOnly');
+    expect(result.fullName).toBeUndefined();
+  });
+
+  it('treats a whitespace-only full name as absent', () => {
+    const result = metadataToLocalProjectInfo(
+      makeMetadata({ id: 'p1', name: 'S', fullName: '  ' }),
+    );
+    expect(result.fullName).toBeUndefined();
   });
 
   it('defaults isPublished to false and language to the empty string when absent', () => {

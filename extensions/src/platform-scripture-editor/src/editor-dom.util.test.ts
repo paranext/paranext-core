@@ -18,6 +18,9 @@ import {
   clampToScrollRange,
   clampTopToVisibleArea,
   computeRangeScrollTop,
+  createNoteAnchorSource,
+  createPendingCommentAnchorSource,
+  createPendingCommentCenterAnchorSource,
   findScrollContainer,
   getEditorSelectionRange,
   getVerseElement,
@@ -25,6 +28,7 @@ import {
   isEchoOfPublishedScrRef,
   isSameScrollGeometry,
   isSameVerseRef,
+  measureAnnotation,
   measureBaselineOffset,
   focusPaneSelectedRow,
   FOOTNOTES_PANE_ATTRIBUTE,
@@ -1234,5 +1238,304 @@ describe('waitForLayoutToSettle', () => {
     expect(onSettled).toHaveBeenCalledWith(9, true);
     // Settling — even this late — still resolves through onSettled, never onTimedOut.
     expect(onTimedOut).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Gives `target` the client rects jsdom cannot lay out. The measurement helpers read
+ * `getClientRects()` (and, for a range, `getBoundingClientRect()`), so a test supplies them per
+ * element or range.
+ */
+function stubClientRects(target: Element | Range, rects: DOMRect[]) {
+  Object.defineProperty(target, 'getClientRects', { value: () => rects, configurable: true });
+  Object.defineProperty(target, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => {
+      const left = Math.min(...rects.map((rect) => rect.left));
+      const top = Math.min(...rects.map((rect) => rect.top));
+      const right = Math.max(...rects.map((rect) => rect.right));
+      const bottom = Math.max(...rects.map((rect) => rect.bottom));
+      return new DOMRect(left, top, right - left, bottom - top);
+    },
+  });
+}
+
+/**
+ * A rect's numbers, for comparison. `DOMRect` keeps its values on the prototype, so `toEqual` on
+ * two rects compares nothing and passes for any pair.
+ */
+function rectNumbers(rect: DOMRect | undefined) {
+  if (!rect) return undefined;
+  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+}
+
+/** An annotation fragment inside the editor container, carrying the rects it paints. */
+function addAnnotationFragment(container: Element, id: string, rects: DOMRect[]) {
+  const fragment = document.createElement('span');
+  fragment.className = `annotationId-${id}`;
+  stubClientRects(fragment, rects);
+  container.appendChild(fragment);
+  return fragment;
+}
+
+/** An editor container for the annotation selector to scope to. */
+function addEditorContainer() {
+  const container = document.createElement('div');
+  container.className = 'editor-container';
+  document.body.appendChild(container);
+  return container;
+}
+
+describe('measureAnnotation', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('has no rect when the annotation is not in the document', () => {
+    addEditorContainer();
+    expect(measureAnnotation('missing')).toBeUndefined();
+  });
+
+  it('has no rect when the annotation renders no line box', () => {
+    // An annotation in a collapsed or unrendered subtree has an element but paints nothing;
+    // anchoring a pop-up on a zero rect would put it in the frame's corner.
+    addAnnotationFragment(addEditorContainer(), 'abc', []);
+    expect(measureAnnotation('abc')).toBeUndefined();
+  });
+
+  it('spans every line box of a wrapped annotation', () => {
+    // A selection that wraps renders as several line boxes; the anchor must cover all of them
+    // rather than its first line.
+    const container = addEditorContainer();
+    addAnnotationFragment(container, 'abc', [
+      new DOMRect(200, 100, 100, 20),
+      new DOMRect(40, 120, 260, 20),
+    ]);
+
+    expect(rectNumbers(measureAnnotation('abc'))).toEqual({
+      x: 40,
+      y: 100,
+      width: 260,
+      height: 40,
+    });
+  });
+
+  it('spans every fragment when formatting splits the annotation', () => {
+    // Partly formatted text renders one annotation as several elements.
+    const container = addEditorContainer();
+    addAnnotationFragment(container, 'abc', [new DOMRect(50, 100, 60, 20)]);
+    addAnnotationFragment(container, 'abc', [new DOMRect(110, 100, 90, 20)]);
+
+    expect(rectNumbers(measureAnnotation('abc'))).toEqual({
+      x: 50,
+      y: 100,
+      width: 150,
+      height: 20,
+    });
+  });
+
+  it('ignores an annotation outside the editor container', () => {
+    // The selector is scoped to the editor, so a copy elsewhere in the document cannot pull the
+    // anchor away.
+    addEditorContainer();
+    const elsewhere = document.createElement('div');
+    document.body.appendChild(elsewhere);
+    addAnnotationFragment(elsewhere, 'abc', [new DOMRect(10, 10, 10, 10)]);
+
+    expect(measureAnnotation('abc')).toBeUndefined();
+  });
+});
+
+describe('createPendingCommentAnchorSource', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function addParagraph(text: string) {
+    const container = addEditorContainer();
+    const paragraph = document.createElement('p');
+    paragraph.textContent = text;
+    container.appendChild(paragraph);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    return { container, paragraph, range };
+  }
+
+  it('mark absent and the range still intact: follows the range', () => {
+    const { container, range } = addParagraph('In the beginning');
+    stubClientRects(range, [new DOMRect(30, 60, 120, 18)]);
+
+    const source = createPendingCommentAnchorSource(range, 'pending-comment', container);
+
+    expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 60, width: 0, height: 18 });
+    expect(source.contextElement).toBe(container);
+  });
+
+  it('mark absent and the range moved: measure reports no rect', () => {
+    const { container, paragraph, range } = addParagraph('In the beginning');
+    const movedTo = document.createElement('p');
+    movedTo.textContent = 'elsewhere';
+    container.appendChild(movedTo);
+    // A stale stub: still returns this rect after the move below, so the test only passes because
+    // isRangeIntact() is checked BEFORE this stub is ever consulted — not because the stub happens
+    // to reflect the move.
+    stubClientRects(range, [new DOMRect(30, 60, 120, 18)]);
+
+    const source = createPendingCommentAnchorSource(range, 'pending-comment', container);
+
+    // The editor re-rendered and moved the range to a different node before the mark appeared.
+    range.selectNodeContents(movedTo);
+    expect(range.startContainer).not.toBe(paragraph);
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  it('mark present: follows the union of its fragments at the fraction from where the caret was', () => {
+    const { container, range } = addParagraph('In the beginning');
+    // The caret sat at x=90 when the popover opened, before the mark existed.
+    stubClientRects(range, [new DOMRect(90, 105, 30, 20)]);
+
+    const source = createPendingCommentAnchorSource(range, 'abc', container);
+
+    // The editor re-rendered the selection into the pending-comment mark, splitting it into two
+    // fragments whose union is left=40, top=100, width=200, height=40.
+    addAnnotationFragment(container, 'abc', [new DOMRect(40, 100, 80, 20)]);
+    addAnnotationFragment(container, 'abc', [new DOMRect(120, 120, 120, 20)]);
+
+    // fraction = (90 - 40) / 200 = 0.25; x = 40 + 0.25 * 200 = 90 (the caret's original x).
+    expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 40 });
+  });
+
+  it('a wrapped selection measured before its second fragment renders is not frozen against the partial width', () => {
+    const { container, range } = addParagraph('In the beginning');
+    // The caret sat at x=90 when the popover opened, before the mark existed.
+    stubClientRects(range, [new DOMRect(90, 105, 30, 20)]);
+
+    const source = createPendingCommentAnchorSource(range, 'abc', container);
+
+    // The mark's first measurable frame renders only the first fragment of the wrapped selection —
+    // the second line has not painted yet.
+    addAnnotationFragment(container, 'abc', [new DOMRect(40, 100, 80, 20)]);
+    source.measure();
+
+    // The second fragment paints on a later frame, completing the union used by the earlier
+    // "follows the union ... at the fraction from where the caret was" test: left=40, top=100,
+    // width=200, height=40.
+    addAnnotationFragment(container, 'abc', [new DOMRect(120, 120, 120, 20)]);
+
+    // fraction = (90 - 40) / 200 = 0.25; x = 40 + 0.25 * 200 = 90 (the caret's original x). A
+    // fraction taken against the first fragment alone (width 80) and then reused against the full
+    // union would instead land at x = 165.
+    expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 40 });
+  });
+});
+
+describe('createNoteAnchorSource', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('measures the passed-in element directly when it is still connected', () => {
+    const container = addEditorContainer();
+    const caller = document.createElement('span');
+    container.append(caller);
+    stubClientRects(caller, [new DOMRect(30, 60, 12, 18)]);
+    const getElementByKey = vi.fn();
+
+    const source = createNoteAnchorSource(caller, 'note-1', getElementByKey);
+
+    // leftEdgeRect: zero-width, full-height, pinned to the left edge.
+    expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 60, width: 0, height: 18 });
+    expect(getElementByKey).not.toHaveBeenCalled();
+  });
+
+  it('returns undefined when the connected element has no layout', () => {
+    const container = addEditorContainer();
+    const caller = document.createElement('span');
+    container.append(caller);
+    stubClientRects(caller, []);
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn());
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  it('falls back to the key lookup once the passed-in element is detached', () => {
+    const caller = document.createElement('span'); // never appended -> not connected
+    const replacement = document.createElement('span');
+    document.body.append(replacement);
+    stubClientRects(replacement, [new DOMRect(15, 45, 10, 20)]);
+    const getElementByKey = vi.fn().mockReturnValue(replacement);
+
+    const source = createNoteAnchorSource(caller, 'note-1', getElementByKey);
+
+    expect(rectNumbers(source.measure())).toEqual({ x: 15, y: 45, width: 0, height: 20 });
+    expect(getElementByKey).toHaveBeenCalledWith('note-1');
+  });
+
+  it('returns undefined when detached and the key lookup finds nothing', () => {
+    const caller = document.createElement('span'); // never appended -> not connected
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn().mockReturnValue(undefined));
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  it('returns undefined when detached and the looked-up element has no layout', () => {
+    const caller = document.createElement('span'); // never appended -> not connected
+    const replacement = document.createElement('span');
+    document.body.append(replacement);
+    stubClientRects(replacement, []);
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn().mockReturnValue(replacement));
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  it("reports the nearest '.editor-input' ancestor as the context element", () => {
+    const editorInput = document.createElement('div');
+    editorInput.className = 'editor-input';
+    document.body.append(editorInput);
+    const caller = document.createElement('span');
+    editorInput.append(caller);
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn());
+
+    expect(source.contextElement).toBe(editorInput);
+  });
+
+  it('reports the element itself as the context element when no editor-input ancestor exists', () => {
+    const caller = document.createElement('span');
+    document.body.append(caller);
+
+    const source = createNoteAnchorSource(caller, 'note-1', vi.fn());
+
+    expect(source.contextElement).toBe(caller);
+  });
+});
+
+describe('createPendingCommentCenterAnchorSource', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('returns undefined when the editor container has no layout', () => {
+    const container = addEditorContainer();
+    stubClientRects(container, []);
+
+    const source = createPendingCommentCenterAnchorSource(container);
+
+    expect(source.measure()).toBeUndefined();
+  });
+
+  it("returns a zero-size rect at the container's centre when it has layout", () => {
+    const container = addEditorContainer();
+    stubClientRects(container, [new DOMRect(100, 200, 300, 400)]);
+
+    const source = createPendingCommentCenterAnchorSource(container);
+
+    // centre x = 100 + 300/2 = 250; centre y = 200 + 400/2 = 400; zero size.
+    expect(rectNumbers(source.measure())).toEqual({ x: 250, y: 400, width: 0, height: 0 });
+    expect(source.contextElement).toBe(container);
   });
 });

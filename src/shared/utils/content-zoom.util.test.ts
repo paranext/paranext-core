@@ -27,11 +27,31 @@ describe('content-zoom.util', () => {
     expect(adjustZoomFactor(1.2, -1)).toBe(1.1);
   });
 
+  it('snaps an off-grid factor to the nearest tenth as it steps', () => {
+    // An off-grid factor lands back on the tenth grid, so a step is not always 10 points: from a
+    // stored 1.25, `+1` moves 15 points and `-1` moves 5, because `Math.round` breaks the .5 tie
+    // upward in both directions. The app-wide zoom command summaries name this snap.
+    expect(adjustZoomFactor(1.25, 1)).toBe(1.4);
+    expect(adjustZoomFactor(1.25, -1)).toBe(1.2);
+  });
+
   it('clamps to the shared range', () => {
     expect(clampZoom(0.2)).toBe(0.5);
     expect(clampZoom(9)).toBe(3);
     expect(adjustZoomFactor(3, 1)).toBe(3);
     expect(adjustZoomFactor(0.5, -1)).toBe(0.5);
+  });
+
+  it('avoids accumulated float drift across many repeated steps', () => {
+    let factor = 1;
+    for (let i = 0; i < 20; i += 1) factor = adjustZoomFactor(factor, 1);
+    expect(factor).toBe(3);
+
+    let factorDown = 1;
+    for (let i = 0; i < 5; i += 1) factorDown = adjustZoomFactor(factorDown, -1);
+    expect(factorDown).toBe(0.5);
+
+    expect(adjustZoomFactor(2.9000000000000004, 1)).toBe(3);
   });
 
   it('rounds to one decimal', () => {

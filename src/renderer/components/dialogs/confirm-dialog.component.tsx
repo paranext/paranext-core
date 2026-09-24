@@ -30,7 +30,11 @@ function ConfirmDialog({
       <DialogHeader>
         <DialogTitle>{title ?? FALLBACK_TITLE}</DialogTitle>
       </DialogHeader>
-      <DialogDescription>{prompt}</DialogDescription>
+      {/* Falls back to the title rather than rendering empty. `prompt` is optional, and this
+          dialog suppresses the shell's fallback description, so an absent prompt would otherwise
+          leave `aria-describedby` pointing at nothing. Same `prompt ?? title` rule the shell
+          applies. */}
+      <DialogDescription>{prompt ?? title ?? FALLBACK_TITLE}</DialogDescription>
       <DialogFooter>
         <Button variant="outline" onClick={() => submitDialog(false)}>
           {cancelLabel ?? FALLBACK_CANCEL_LABEL}
@@ -51,6 +55,9 @@ export const CONFIRM_DIALOG: DialogDefinition<typeof CONFIRM_DIALOG_TYPE> = Obje
   tabType: CONFIRM_DIALOG_TYPE,
   defaultTitle: '%overlay_dialog_title_confirm%',
   initialSize: { width: 400, height: 200 },
+  // The component renders both halves itself, in every state — see the description fallback above.
+  providesOwnTitle: true,
+  providesOwnDescription: true,
   dialogRole: 'alertdialog',
   Component: ConfirmDialog,
 });

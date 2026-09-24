@@ -11,6 +11,7 @@ import {
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   Button,
+  ContentZoomRoot,
   EmptyState,
   FootnoteCaretPosition,
   FootnoteList,
@@ -633,8 +634,12 @@ export function FootnotesLayout({
                 every row reserves trailing room for it - the pane keeps all of its height for
                 notes without the button painting over (or a click aimed at the text landing on)
                 a note. */}
-            <div
+            {/* Footnotes zoom area: the close button above, the pane's own padding (on the
+                ResizablePanel) and its resize handle stay outside so they keep their size while
+                the list content scales. */}
+            <ContentZoomRoot
               ref={setFootnoteListWrapperRef}
+              area="footnotes"
               className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li]:pe-7"
             >
               {footnotes.length === 0 && !isLoading && (
@@ -670,7 +675,7 @@ export function FootnotesLayout({
                 }
                 renderEditingFootnote={renderEditingFootnote}
               />
-            </div>
+            </ContentZoomRoot>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

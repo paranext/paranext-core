@@ -822,3 +822,54 @@ describe('FootnotesLayout rows under the close button', () => {
     expect(wrapper?.className).toContain('tw:[&_li]:pe-7');
   });
 });
+
+/** The pane's state hook with `footnotesPanePosition` driven to `position`. */
+function positionedWebViewState(position: 'bottom' | 'trailing') {
+  return function useWebViewStateAtPosition<T>(
+    key: string,
+    defaultValue: T,
+  ): [T, (stateValue: T) => void, () => void] {
+    const positionValue: unknown = position;
+    // Narrowing a literal test value back to the caller's generic T; the hook's real
+    // implementation has the same unavoidable widen-then-narrow shape when reading persisted
+    // state of unknown type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const initial = key === 'footnotesPanePosition' ? (positionValue as T) : defaultValue;
+    return useWebViewStateMock(key, initial);
+  };
+}
+
+describe('FootnotesLayout content zoom marker', () => {
+  it.each(['bottom', 'trailing'] as const)(
+    'marks the footnotes area exactly once, as "footnotes" (%s pane position)',
+    (position) => {
+      const { container } = renderPane({
+        useWebViewState: positionedWebViewState(position),
+        children: <div data-testid="editor-child" />,
+      });
+
+      const markedElements = container.querySelectorAll('[data-platform-content-zoom-root]');
+      expect(markedElements).toHaveLength(1);
+
+      const marked = markedElements[0];
+      expect(marked.getAttribute('data-platform-content-zoom-root')).toBe('footnotes');
+      expect(marked).toContainElement(screen.getByRole('listbox'));
+
+      // Dividers/resize handles and the pane's close button must stay outside the marked area so
+      // they keep their own size.
+      const handle = container.querySelector('[data-slot="resizable-handle"]');
+      expect(handle).not.toBeNull();
+      expect(handle?.closest('[data-platform-content-zoom-root]')).toBeNull();
+      expect(
+        screen
+          .getByRole('button', { name: 'Close footnotes pane' })
+          .closest('[data-platform-content-zoom-root]'),
+      ).toBeNull();
+
+      // The editor's own marker travels in the reverse portal (elsewhere), not here.
+      expect(
+        screen.getByTestId('editor-child').closest('[data-platform-content-zoom-root]'),
+      ).toBeNull();
+    },
+  );
+});

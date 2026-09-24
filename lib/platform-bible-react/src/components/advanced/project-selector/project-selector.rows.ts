@@ -1,4 +1,8 @@
-import { normalizeProjectId, type ScrollGroupId } from 'platform-bible-utils';
+import {
+  compareProjectsByName,
+  normalizeProjectId,
+  type ScrollGroupId,
+} from 'platform-bible-utils';
 
 // #region Types
 
@@ -15,7 +19,11 @@ export type ProjectSelectorMode = 'project' | 'project-multi' | 'projectScrollGr
 export type ProjectSelectorProject = {
   id: string;
   shortName: string;
-  fullName: string;
+  /**
+   * Full name, shown as the row's muted second line. Omit it when the project has none — don't copy
+   * the short name in; the selector already renders a single line when the names match.
+   */
+  fullName?: string;
   /**
    * When `true`, the row for this project is rendered muted, is not selectable, and the
    * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
@@ -176,7 +184,7 @@ export type ProjectRow = {
   rowKey: string;
   projectId: string;
   shortName: string;
-  fullName: string;
+  fullName?: string;
   /**
    * The scroll group this row represents. `undefined` means the row is a project-level row (no
    * chip, or `project` mode chips aggregated in `openGroups`).
@@ -269,6 +277,14 @@ function collectOpenTabsByProject(
   return map;
 }
 
+/**
+ * Whether a (project, scroll group) pair is in the selection.
+ *
+ * Project ids are compared normalized, for the same reason `computeRows` normalizes the
+ * single-selection id: a caller whose selection came from a different source than its project list
+ * spells the same project in a different case, and comparing raw would leave every row unchecked
+ * while the trigger — which folds — named the project correctly.
+ */
 function pairIsSelected(
   pairs: readonly ProjectSelectorProjectPair[],
   projectId: string,
@@ -293,7 +309,13 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   const tabsByProject = collectOpenTabsByProject(args.openTabs);
 
   if (args.mode === 'project') {
-    const selectedId = args.selection.projectId;
+    // Normalized once, and compared normalized below, for the same reason open tabs are: a project
+    // id is canonical only up to case, so a caller whose selection came from a different source
+    // than its project list would otherwise leave the selected row unmarked.
+    const selectedKey =
+      args.selection.projectId === undefined
+        ? undefined
+        : normalizeProjectId(args.selection.projectId);
     return args.projects.map((project) => {
       const tabs = tabsByProject.get(normalizeProjectId(project.id)) ?? [];
       return {
@@ -304,9 +326,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         scrollGroupId: undefined,
         scrollGroupScrRefLabel: undefined,
         openGroups: tabs.map((t) => t.scrollGroupId),
-        isSelected:
-          selectedId !== undefined &&
-          normalizeProjectId(selectedId) === normalizeProjectId(project.id),
+        isSelected: selectedKey !== undefined && selectedKey === normalizeProjectId(project.id),
         isMuted: tabs.length === 0,
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
@@ -457,7 +477,7 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
   // scrollGroupId. The component scrolls the selected row into view on open,
   // so selected rows do NOT float to the top — users can predict where any
   // project will land after selecting it.
-  const nameCmp = a.shortName.localeCompare(b.shortName, undefined, { sensitivity: 'base' });
+  const nameCmp = compareProjectsByName(a, b);
   if (nameCmp !== 0) return nameCmp;
   // Tie-break: scrollGroupId asc so the same project lists A before B before C.
   const aGroup = a.scrollGroupId ?? Number.POSITIVE_INFINITY;

@@ -25,6 +25,93 @@ export interface OpenScriptureEditorOptions {
 }
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
+
+/**
+ * Names of the three content-zoom commands (registered in
+ * `src/main/services/web-view.service-router.ts`). Restated here rather than imported from
+ * `@shared/models/content-zoom.model`'s `CONTENT_ZOOM_COMMANDS`: `e2e-tests/tsconfig.json` carries
+ * no path aliases, so e2e specs cannot reach core source and this is the one place the literal is
+ * kept.
+ */
+export const CONTENT_ZOOM_COMMANDS = {
+  in: 'platform.webViewContentZoomIn',
+  out: 'platform.webViewContentZoomOut',
+  reset: 'platform.webViewContentZoomReset',
+} as const;
+
+/**
+ * The `<iframe data-web-view-id>` element's content frame — a real `Frame`, not a `FrameLocator`,
+ * so `evaluate` can read the CSS custom properties the platform writes onto the pane's own
+ * `documentElement`.
+ */
+export async function getEditorFrame(page: Page, webViewId: string): Promise<Frame> {
+  const handle = await page.locator(`iframe[data-web-view-id="${webViewId}"]`).elementHandle();
+  const frame = await handle?.contentFrame();
+  if (!frame) throw new Error(`Editor iframe ${webViewId} has no content frame`);
+  return frame;
+}
+
+/**
+ * Reads one zoom area's effective factor straight off the CSS custom property the platform writes
+ * as an inline style on the pane's `documentElement` (`pushContentZoom`'s
+ * `root.style.setProperty`), so it is readable from inside the frame without going through any DOM
+ * measurement. `areaId` is `''` for the `main` area.
+ */
+export async function readFactor(frame: Frame, areaId: string): Promise<number> {
+  const value = await frame.evaluate(
+    (variableName) =>
+      getComputedStyle(document.documentElement).getPropertyValue(variableName).trim(),
+    `--platform-content-zoom-${areaId || 'main'}`,
+  );
+  return Number(value);
+}
+
+/**
+ * Sends a PAPI command from the renderer, exactly as a menu entry would (`window.papi` is exposed
+ * on `globalThis` but not typed there). Used both for the three content-zoom commands (with an area
+ * id) and for `platformScriptureEditor.toggleFootnotes` (without one).
+ */
+export async function sendCommandWithId(
+  page: Page,
+  commandName: string,
+  webViewId: string,
+  areaId?: string,
+): Promise<void> {
+  await page.evaluate(
+    ([cmd, id, area]) => {
+      // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as
+      // scripture-text-grid-zoom.spec.ts's afterEach cleanup).
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: { commands: { sendCommand: (c: string, ...a: unknown[]) => Promise<unknown> } };
+      };
+      return area === undefined
+        ? win.papi.commands.sendCommand(cmd, id)
+        : win.papi.commands.sendCommand(cmd, id, area);
+    },
+    [commandName, webViewId, areaId] as const,
+  );
+}
+
+/**
+ * Shows the footnotes pane, tolerating that it may already be visible: Power mode's footnotes
+ * auto-show/hide (`resolveFootnotesPaneAutoVisibility`) shows the pane by itself for any chapter
+ * that has notes — so sending `toggleFootnotes` unconditionally would just as often HIDE an
+ * already-auto-shown pane.
+ */
+export async function ensureFootnotesVisible(
+  page: Page,
+  frame: Frame,
+  webViewId: string,
+): Promise<void> {
+  const footnotesRoot = frame.locator(
+    '[data-platform-content-zoom-root="footnotes"]:not([data-platform-content-zoom-popup])',
+  );
+  if ((await footnotesRoot.count()) === 0) {
+    await sendCommandWithId(page, 'platformScriptureEditor.toggleFootnotes', webViewId);
+  }
+  await footnotesRoot.waitFor({ state: 'attached', timeout: 20_000 });
+}
 /**
  * Poll until the ProjectLookupService advertises the bundled sample WEB project. The generic
  * `waitForAtLeastOneProjectMetadata` is NOT sufficient here: other PDP factories (e.g. the lexical

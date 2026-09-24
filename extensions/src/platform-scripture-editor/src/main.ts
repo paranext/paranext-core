@@ -37,6 +37,7 @@ import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getTabTitleProjectName,
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
   openOrUpdateRelatedPanels,
@@ -603,10 +604,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       unformattedTitle,
       projectId,
       isReadOnlyForTitle,
-      async (projectIdFormat) => {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
-        return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
-      },
+      async (projectIdFormat) => getTabTitleProjectName(papi, projectIdFormat),
       papi.localization.getLocalizedStrings,
     );
 

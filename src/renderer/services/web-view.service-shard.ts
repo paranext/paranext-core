@@ -32,6 +32,7 @@ import {
   setContentZoomAreas,
 } from '@renderer/services/web-view-content-zoom.service';
 import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
+import { isCreateElementAllowedByStack } from '@renderer/services/renderer-create-element-guard.util';
 import { localThemeService } from '@renderer/services/theme.service';
 import {
   deleteFullWebViewStateById,
@@ -48,7 +49,6 @@ import {
   OnLayoutChange,
   PapiDockLayout,
   SavedTabInfo,
-  TAB_TYPE_WEBVIEW,
   TabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
@@ -103,7 +103,6 @@ import {
 import { markStartupOnce } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
 import cloneDeep from 'lodash/cloneDeep';
-import memoizeOne from 'memoize-one';
 import {
   AsyncVariable,
   deserialize,
@@ -113,6 +112,7 @@ import {
   isSerializable,
   isString,
   newGuid,
+  PlatformEventEmitter,
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
   UnsubscriberAsync,
@@ -405,66 +405,6 @@ export const WEBVIEW_IFRAME_SRCDOC_SANDBOX = ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUE
     value !== IFRAME_SANDBOX_ALLOW_POPUPS,
 ).join(' ');
 
-/**
- * Get Regex to test stack traces against for creating script and iframe tags on the renderer
- * document. Only renderer code is allowed to create script and iframe tags. script and iframe tags
- * coming from any other source throw an error.
- *
- * Note that sourceURLs can't have spaces in them, so we explicitly test for a space before the
- * source so bad actors can't put these special words into their sourceURL
- */
-/* In development, safe errors look like this:
-Error
-	at document.createElement (http://localhost/renderer.dev.js...)
-	at __webpack_require__.l (http://localhost/renderer.dev.js...)
-  ...
-*/
-/* In development, bad errors look more like this:
-Error
-	at document.createElement (http://localhost/renderer.dev.js...)
-	at evil.web-view.htmlfile://app.asar
-*/
-/* In production, safe errors look like this:
-Error
-	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/renderer.js...)
-	at i.l (file:///C:/Users/app.asar/dist/renderer/renderer.js...)
-  ...
-*/
-/* In production, bad errors look more like this:
-Error
-	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/stuffnthings)
-	at evil.web-view.htmlfile://app.asar
-*/
-const getRendererScriptRegex = memoizeOne(() =>
-  globalThis.isPackaged
-    ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)/
-    : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/\S*\/renderer\.dev\.js\S*\)/,
-);
-/**
- * Get Regex to test stack traces against for rendering Usersnap feedback forms on the renderer
- * document. Only Usersnap is allowed to create form and anchor tags. forms and anchor tags coming
- * from any other source throw an error.
- *
- * Note that sourceURLs can't have spaces in them, so we explicitly test for a space before the
- * source so bad actors can't put these special words into their sourceURL
- */
-/* In development, safe errors look like this:
-Error
-	at document.createElement (http://localhost/renderer.dev.js...)
-	at Kl (https://resources.usersnap.com/widget-assets/js/chunks/6057/cf91460f62d8c495661e.js...)
-  ...
-*/
-/* In production, safe errors look like this:
-Error
-	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/renderer.js...)
-	at Kl (https://resources.usersnap.com/widget-assets/js/chunks/6057/cf91460f62d8c495661e.js...)
-  ...
-*/
-const getRendererUsersnapRegex = memoizeOne(() =>
-  globalThis.isPackaged
-    ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(https?:\/\/resources\.usersnap\.com\/widget-assets\/js\/chunks\/\d+\/\w+\.js\S*\)/
-    : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/resources\.usersnap\.com\/widget-assets\/js\/chunks\/\d+\/\w+\.js\S*\)/,
-);
 /**
  * The HTML tags that are not allowed at all in the main renderer window. Our MutationObserver
  * deletes these immediately if it sees them.
@@ -826,29 +766,22 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
 };
 
 /**
- * Collects the ids of all web view tabs present in layout information (docked, floated, and
- * maximized boxes) without loading it. Layout info tabs are `SavedTabInfo`-shaped, so a web view
- * tab is one whose `tabType` is {@link TAB_TYPE_WEBVIEW}; a web view tab's id is its `WebViewId`.
+ * Collects the ids of every tab present in layout information (docked, floated, and maximized
+ * boxes) without loading it — of any tab type, not only web views. Layout info tabs are
+ * `SavedTabInfo`-shaped, and a tab's id is the same field regardless of its `tabType`.
  *
  * Reads the layout data instead of querying the dock layout because rc-dock applies `loadLayout`
  * via React state, so the dock layout still reports the pre-load tabs immediately after a load.
  */
-function collectWebViewIdsFromLayoutInfo(layout: LayoutInfo): Set<WebViewId> {
-  const webViewIds = new Set<WebViewId>();
+function collectTabIdsFromLayoutInfo(layout: LayoutInfo): Set<string> {
+  const tabIds = new Set<string>();
 
   const visit = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if ('tabs' in node && Array.isArray(node.tabs)) {
       node.tabs.forEach((tab: unknown) => {
-        if (
-          tab &&
-          typeof tab === 'object' &&
-          'tabType' in tab &&
-          tab.tabType === TAB_TYPE_WEBVIEW &&
-          'id' in tab &&
-          typeof tab.id === 'string'
-        )
-          webViewIds.add(tab.id);
+        if (tab && typeof tab === 'object' && 'id' in tab && typeof tab.id === 'string')
+          tabIds.add(tab.id);
       });
     }
     if ('children' in node && Array.isArray(node.children)) node.children.forEach(visit);
@@ -859,25 +792,51 @@ function collectWebViewIdsFromLayoutInfo(layout: LayoutInfo): Set<WebViewId> {
   visit(layout.maxbox);
   visit(layout.windowbox);
 
-  return webViewIds;
+  return tabIds;
 }
+
+const layoutLoadTabIdsEmitter = new PlatformEventEmitter<Set<string>>();
+
+/**
+ * Emits with the ids of every tab (of any type) present right after a whole-layout `loadLayout`
+ * call replaces the dock. `PapiDockLayout.loadLayout` does this without running rc-dock's per-tab
+ * remove callback (see `onLayoutChange`), so a tab a load has dropped is otherwise reported
+ * nowhere. A web view's own removal is covered above by {@link onDidCloseWebView}; this event exists
+ * for every other kind of tab, whose owner this module does not know — the dialog service shard's
+ * docked, non-modal dialogs, so far (see its subscription in `startDialogServiceShard`). This
+ * module keeps no record of which non-web-view tabs existed before a load, so it reports what
+ * survived and leaves each subscriber to compare that against the ids it was itself tracking.
+ *
+ * @internal function; not exposed on papi
+ */
+export const onLayoutLoadTabIds = layoutLoadTabIdsEmitter.event;
 
 /**
  * Emits {@link onDidCloseWebView} for every web view that was open before a whole-layout load and is
- * not present in the loaded layout. `PapiDockLayout.loadLayout` replaces all tabs at once without
- * running rc-dock's per-tab remove callback (the only other place the close event is emitted — see
+ * not present in the loaded layout, and emits {@link onLayoutLoadTabIds} with the tabs the loaded
+ * layout does contain. `PapiDockLayout.loadLayout` replaces all tabs at once without running
+ * rc-dock's per-tab remove callback (the only other place either event is emitted — see
  * `onLayoutChange`), so without this, web views discarded by a layout load (e.g. switching
  * `platform.interfaceMode`) would close silently and close subscribers — the window service's
  * last-selected tracker, web view nonce cleanup — would keep references to web views that no longer
  * exist.
+ *
+ * Emits {@link onLayoutLoadTabIds} before the web view close events: `PlatformEventEmitter.emitFn`
+ * runs subscribers through a plain, non-isolating loop (see its doc comment; `emitIsolated` is the
+ * isolating alternative and is not used by either event here), so a subscriber that throws
+ * synchronously aborts whatever this function was about to do next. Emitting the tab ids first
+ * means a misbehaving `onDidCloseWebView` subscriber cannot suppress the non-web-view sweep (e.g.
+ * the dialog service shard's docked-request settling) that depends on {@link onLayoutLoadTabIds}
+ * having fired.
  */
 function emitCloseEventsForWebViewsRemovedByLayoutLoad(
   webViewsBeforeLoad: WebViewDefinition[],
   loadedLayout: LayoutInfo,
 ): void {
-  const webViewIdsAfterLoad = collectWebViewIdsFromLayoutInfo(loadedLayout);
+  const tabIdsAfterLoad = collectTabIdsFromLayoutInfo(loadedLayout);
+  layoutLoadTabIdsEmitter.emit(tabIdsAfterLoad);
   webViewsBeforeLoad.forEach((webViewDefinition) => {
-    if (!webViewIdsAfterLoad.has(webViewDefinition.id))
+    if (!tabIdsAfterLoad.has(webViewDefinition.id))
       onDidCloseWebViewBufferedEmitter.emit({
         webView: convertWebViewDefinitionToSaved(webViewDefinition),
       });
@@ -1988,10 +1947,10 @@ function waitForNextPaint(): Promise<void> {
 }
 
 /**
- * Resolves the most-recently-opened project id that's usable as a Simple-mode switch target, trying
- * each entry in `recentlyOpenedProjects` (most-recent first, already capped at
- * `MAX_RECENT_PROJECTS` by the provider) in order until one isn't a published resource, or the list
- * is exhausted. Mirrors `tryOpenFromRecentlyOpened`'s same try-next-candidate pattern in
+ * Resolves the most-recently-opened project id that's usable as a Simple-mode switch target: the
+ * first entry in `recentlyOpenedProjects` (most-recent first, already capped at
+ * `MAX_RECENT_PROJECTS` by the provider) that isn't a published resource, or `undefined` if the
+ * list holds none. Mirrors `tryOpenFromRecentlyOpened`'s same try-next-candidate pattern in
  * `platform-scripture-editor.utils.ts` (the default project picker's own recents fallback) - but
  * scoped to what this fast-path switch needs: a project id, not an opened editor. A published
  * resource is never a valid target here, matching `cacheLastOpenedSimpleProject`'s exclusion on the
@@ -2001,6 +1960,7 @@ function waitForNextPaint(): Promise<void> {
  * The whole walk (recents fetch + every candidate's metadata lookup) shares one bound from the
  * caller ({@link COLD_START_LOOKUP_TIMEOUT_MS}, via `withTimeout`), not a bound per candidate -
  * otherwise a full walk of a slow list could take several times the intended "fast path" budget.
+ * That shared bound is also why the candidates are checked concurrently rather than one at a time.
  */
 async function getMostRecentUsableProjectId(): Promise<string | undefined> {
   try {
@@ -2010,17 +1970,16 @@ async function getMostRecentUsableProjectId(): Promise<string | undefined> {
     if (!recentsProvider) return undefined;
     const recents = await recentsProvider.getRecentProjects(undefined);
     if (!Array.isArray(recents)) return undefined;
-    // `reduce` with a Promise accumulator (rather than a `for` loop) tries each candidate
-    // sequentially: each callback awaits the previous result before deciding whether to check the
-    // next candidate, so this doesn't check every candidate in parallel - it stops at the first
-    // usable one. Mirrors `tryOpenFromRecentlyOpened`'s identical accumulator in
-    // `platform-scripture-editor.utils.ts`.
-    return await recents.reduce(async (prev: Promise<string | undefined>, candidateId: string) => {
-      const usableId = await prev;
-      if (usableId !== undefined) return usableId;
-      const isPublished = await resolveProjectIsPublished(candidateId);
-      return isPublished ? undefined : candidateId;
-    }, Promise.resolve<string | undefined>(undefined));
+    // Checked CONCURRENTLY, then picked in recents order. Checking them one at a time would stop
+    // at the first usable candidate and so issue fewer lookups, but every published resource ahead
+    // of that candidate adds a full round trip - `getMetadataForProject` waits on a PDP factory and
+    // then retries - and the whole walk shares one {@link COLD_START_LOOKUP_TIMEOUT_MS} budget. A
+    // run of resources at the head of the list could therefore exhaust the budget and leave Simple
+    // mode with no project at all, which became reachable once the titlebar picker started
+    // offering read-only projects. The list is already capped at `MAX_RECENT_PROJECTS`, so the
+    // extra lookups are bounded, and concurrently they cost about what one costs.
+    const publishedFlags = await Promise.all(recents.map(resolveProjectIsPublished));
+    return recents.find((_candidateId, index) => !publishedFlags[index]);
   } catch (err) {
     // Distinct from a timeout (logged separately by the caller, which races this whole function
     // against COLD_START_LOOKUP_TIMEOUT_MS via withTimeout): this is a genuine failure of the
@@ -2089,20 +2048,28 @@ function finalizeProjectSwitch(projectId: string): void {
  * @param layout Information about where to put a new tab
  * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
  *   tabs. Defaults to `true`
+ * @param onDocked Run synchronously, in the same tick the tab is actually placed in the dock — not
+ *   after this function's returned promise resolves. A caller that needs to record "this tab is
+ *   really in the dock now" (e.g. so a concurrent whole-layout load's tab-drop sweep can tell a
+ *   docked request from one still in flight) must do it from here: crossing back into an `await`
+ *   continuation to do that recording is one tick too late, since a load's wipe-and-sweep runs
+ *   synchronously and can land in exactly that gap.
  * @returns If tab added, final layout used to display the new tab. If existing tab updated,
  *   `undefined`
  */
 export const addTab = async <TData = unknown>(
   savedTabInfo: SavedTabInfo & { data?: TData },
   layout: Layout,
-  shouldBringToFront = true,
+  shouldBringToFront?: boolean,
+  onDocked?: () => void,
 ): Promise<Layout | undefined> => {
   await admitContentToDock(`dock a ${savedTabInfo.tabType} tab`);
   const finalLayout = (await getDockLayout()).addTabToDock(
     savedTabInfo,
     layout,
-    shouldBringToFront,
+    shouldBringToFront ?? true,
   );
+  onDocked?.();
   // The dock took it. Noted here rather than at each caller because every one of them is a tab
   // landing in this dock, which is the whole of what this records. The refusals those same callers
   // make deliberately stay with them instead: those need an operation name and each caller's own
@@ -3729,10 +3696,7 @@ export const initialize = () => {
       const tagName = tagNameCaps.toLowerCase();
       if (FORBIDDEN_HTML_TAGS.includes(tagName) || RESTRICTED_HTML_TAGS.includes(tagName)) {
         const stackTrace = Error().stack ?? '';
-        if (
-          getRendererScriptRegex().test(stackTrace) ||
-          getRendererUsersnapRegex().test(stackTrace)
-        ) {
+        if (isCreateElementAllowedByStack(stackTrace, globalThis.isPackaged)) {
           logger.debug(
             `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackTrace}`,
           );

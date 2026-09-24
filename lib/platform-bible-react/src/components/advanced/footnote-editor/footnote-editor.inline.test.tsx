@@ -259,31 +259,29 @@ describe('FootnoteEditor inline mode', () => {
     expect(container.querySelector(cancelButtonSelector)).toBeNull();
   });
 
-  // jsdom's getBoundingClientRect() always returns width 0, so the width-lock guard
-  // (`if (width > 0) ...`) never fires without a stub — both sides of the popover-vs-inline
-  // guard need a non-zero rect to be actually exercised (rather than passing vacuously
-  // regardless of the guard's presence).
-  describe('width-lock behavior (with non-zero getBoundingClientRect)', () => {
-    let getBoundingClientRectSpy: ReturnType<typeof vi.spyOn>;
+  // jsdom has no layout, so the container's computed width is empty and the width-lock guard
+  // (`if (width > 0) ...`) never fires without a stub — both sides of the popover-vs-inline guard
+  // need a non-zero width to be actually exercised (rather than passing vacuously regardless of the
+  // guard's presence).
+  describe('width-lock behavior (with a non-zero computed width)', () => {
+    let getComputedStyleSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-      getBoundingClientRectSpy = vi
-        .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-        .mockReturnValue({
-          width: 200,
-          height: 100,
-          top: 0,
-          left: 0,
-          bottom: 100,
-          right: 200,
-          x: 0,
-          y: 0,
-          toJSON: () => {},
+      const originalGetComputedStyle = window.getComputedStyle.bind(window);
+      getComputedStyleSpy = vi
+        .spyOn(window, 'getComputedStyle')
+        .mockImplementation((element, pseudoElement) => {
+          const style = originalGetComputedStyle(element, pseudoElement);
+          if (!element.classList.contains('footnote-editor')) return style;
+          return new Proxy(style, {
+            get: (target, property) =>
+              property === 'width' ? '200px' : Reflect.get(target, property),
+          });
         });
     });
 
     afterEach(() => {
-      getBoundingClientRectSpy.mockRestore();
+      getComputedStyleSpy.mockRestore();
     });
 
     it('width-locks its container in popover mode (default)', () => {

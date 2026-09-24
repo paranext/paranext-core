@@ -116,6 +116,7 @@
       "%webView_platformScriptureEditor_publisherInfo%": "Publisher Info",
       "%webView_platformScriptureEditor_punctuationInventory%": "Inventory: Punctuation...",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventory: Repeated Words...",
+      "%webView_platformScriptureEditor_resetZoomToDefault%": "Reset zoom to default",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Share layout with team",
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
       "%webView_platformScriptureEditor_showFootnotes%": "Show footnotes",
@@ -125,10 +126,13 @@
       "%webView_platformScriptureEditor_structureProtection_lockStructureForProject%": "Lock structure for project",
       "%webView_platformScriptureEditor_structureProtection_lockedByAdmin%": "Structure locked by Project Administrator",
       "%webView_platformScriptureEditor_structureProtection_projectAriaLabel%": "Toggle structure lock for project",
+      "%webView_platformScriptureEditor_structureProtection_stateEditable%": "USFM structure editable",
+      "%webView_platformScriptureEditor_structureProtection_stateProtected%": "USFM structure protected",
       "%webView_platformScriptureEditor_structureProtection_unlockStructure%": "Unlock structure",
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Unlock structure for project",
       "%webView_platformScriptureEditor_switchScriptureView%": "Switch Scripture view",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Editing paused — Send/Receive in progress",
+      "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Edit team layout",
       "%webView_platformScriptureEditor_textColor%": "Text Color",
       "%webView_platformScriptureEditor_thickBorders%": "Thick Borders",
       "%webView_platformScriptureEditor_title_editable_indicator%": "(Editable)",
@@ -139,6 +143,8 @@
       "%webView_platformScriptureEditor_tools%": "Tools",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Press {key} again to delete selection",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Press {key} again to remove verse marker",
+      "%webView_platformScriptureEditor_zoomIn%": "Zoom in",
+      "%webView_platformScriptureEditor_zoomOut%": "Zoom out",
       "%webView_resourcePanel_bibleTexts_bookNotAvailable%": "This book does not exist in this Bible text.",
       "%webView_resourcePanel_bibleTexts_emptyState_lessInfo%": "Less info",
       "%webView_resourcePanel_bibleTexts_emptyState_moreInfo%": "More info",
@@ -315,6 +321,7 @@
       "%webView_platformScriptureEditor_publisherInfo%": "Información del editor",
       "%webView_platformScriptureEditor_punctuationInventory%": "Inventario: Puntuación...",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventario: Palabras repetidas...",
+      "%webView_platformScriptureEditor_resetZoomToDefault%": "Restablecer el zoom al valor predeterminado",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Compartir diseño con el equipo",
       "%webView_platformScriptureEditor_showCheckResults%": "Mostrar resultados de verificación...",
       "%webView_platformScriptureEditor_showFootnotes%": "Mostrar notas al pie",
@@ -324,10 +331,13 @@
       "%webView_platformScriptureEditor_structureProtection_lockStructureForProject%": "Bloquear estructura para el proyecto",
       "%webView_platformScriptureEditor_structureProtection_lockedByAdmin%": "Estructura bloqueada por el administrador",
       "%webView_platformScriptureEditor_structureProtection_projectAriaLabel%": "Alternar bloqueo de estructura para el proyecto",
+      "%webView_platformScriptureEditor_structureProtection_stateEditable%": "Estructura USFM editable",
+      "%webView_platformScriptureEditor_structureProtection_stateProtected%": "Estructura USFM protegida",
       "%webView_platformScriptureEditor_structureProtection_unlockStructure%": "Desbloquear estructura",
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Desbloquear estructura para el proyecto",
       "%webView_platformScriptureEditor_switchScriptureView%": "Cambiar vista de escrituras",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Edición pausada — Enviar/Recibir en curso",
+      "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Editar el diseño del equipo",
       "%webView_platformScriptureEditor_textColor%": "Color del texto",
       "%webView_platformScriptureEditor_thickBorders%": "Bordes gruesos",
       "%webView_platformScriptureEditor_title_editable_indicator%": "(editable)",
@@ -338,6 +348,8 @@
       "%webView_platformScriptureEditor_tools%": "Herramientas",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Presione {key} de nuevo para eliminar lo seleccionado",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Presione {key} de nuevo para borrar este número de versículo",
+      "%webView_platformScriptureEditor_zoomIn%": "Acercar",
+      "%webView_platformScriptureEditor_zoomOut%": "Alejar",
       "%webView_resourcePanel_bibleTexts_bookNotAvailable%": "Este libro no existe en este texto bíblico.",
       "%webView_resourcePanel_bibleTexts_emptyState_lessInfo%": "Menos información",
       "%webView_resourcePanel_bibleTexts_emptyState_moreInfo%": "Más información",
@@ -414,6 +426,42 @@
     },
     "%webView_platformScriptureEditor_openChecks%": {
       "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%"
+    },
+    "%webView_platformScriptureEditor_shareLayout_ariaLabel%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The toolbar button that opens this dialog was renamed from \"Share layout with team\" to \"Team layout\". The new key is %webView_platformScriptureEditor_teamLayout_ariaLabel%."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_lockStructure%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The tooltip now reports the current state rather than naming the click's action. The new key is %webView_platformScriptureEditor_structureProtection_stateEditable%."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_lockStructureForProject%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The team-wide structure lock moved out of the editor toolbar and into the Team layout dialog, so the toolbar had no project-wide toggle left to label. Retired with no replacement key."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_projectAriaLabel%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The team-wide structure lock moved out of the editor toolbar and into the Team layout dialog, so the toolbar had no project-wide toggle left to label. Retired with no replacement key."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_unlockStructure%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The tooltip now reports the current state rather than naming the click's action. The new key is %webView_platformScriptureEditor_structureProtection_stateProtected%."
+      }
+    },
+    "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": {
+      "deprecationInfo": {
+        "date": "2026-09-21",
+        "message": "The team-wide structure lock moved out of the editor toolbar and into the Team layout dialog, so the toolbar had no project-wide toggle left to label. Retired with no replacement key."
+      }
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"

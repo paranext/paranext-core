@@ -1531,18 +1531,69 @@ declare module 'platform-scripture' {
   };
 
   /**
-   * Map of project-relative file path to the lowercase SHA-256 hex of that file's current bytes: an
-   * opaque change-detection token per file, covering the interlinear book files, the lexicon, and
-   * the stored word analyses. Only interlinear file content is change-detected: the
-   * {@link Pt9InterlinearProjectData} payload's `setups` (from the setups file or rebuilt from
-   * project settings) and `hasAssociatedLexicalProject` derive partly from project settings and can
-   * change the payload without any hash changing. Path separators are forward slashes; a backslash
-   * inside a key is part of a file name, never a separator. Empty when the project has no
-   * interlinear data.
+   * What the interlinear probe reports about one file: how to tell whether it changed, how big it
+   * is, and which book it holds.
    *
    * @experimental
    */
-  export type Pt9InterlinearProjectManifest = { [filePath: string]: string };
+  export type Pt9InterlinearFileInfo = {
+    /** Lowercase SHA-256 hex of the file's current bytes: a change-detection token, never content. */
+    hash: string;
+    /**
+     * The file's size on disk. This is what a read is measured against, so summing these against
+     * `maxReadBytes` is how a caller groups its reads and finds a file no selection can retrieve.
+     */
+    sizeBytes: number;
+    /**
+     * The gloss language the file's root element declares. Absent for the lexicon and the stored
+     * word analyses, and for a file whose root element could not be read.
+     */
+    glossLanguage?: string;
+    /**
+     * The book the file's root element declares, absent under the same conditions as
+     * `glossLanguage`. Not unique on its own: one book can appear once per gloss language, so a
+     * report that names files should pair this with `glossLanguage`, or fall back to the path.
+     */
+    bookId?: string;
+  };
+
+  /**
+   * What the interlinear probe reports: the project's files and the ceiling a read of them is
+   * measured against. The keys of `files` are what a data read's selector names; path separators
+   * are forward slashes, and a backslash inside a key is part of a file name. `files` is empty when
+   * the project has no interlinear data.
+   *
+   * Only file content is change-detected. The {@link Pt9InterlinearProjectData} payload's `setups`
+   * and `hasAssociatedLexicalProject` derive partly from project settings, so they can change
+   * without any hash changing.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearProjectManifest = {
+    /**
+     * The most on-disk bytes of selected files one `getPt9InterlinearData` response may take on;
+     * the setups file is served in addition and is not counted.
+     */
+    maxReadBytes: number;
+    /** Every interlinear file the project has, keyed by project-relative path. */
+    files: { [filePath: string]: Pt9InterlinearFileInfo };
+  };
+
+  /**
+   * Selects which interlinear files one `getPt9InterlinearData` read takes on. `paths` holds
+   * manifest keys. Omitting the selector, or its `paths`, reads every file the project has; an
+   * empty `paths` is rejected rather than serving an empty payload.
+   *
+   * A path the project does not have fails the whole read rather than being skipped, so a caller
+   * reading file by file never mistakes a missing file for a book that holds no data.
+   *
+   * Build `paths` from a freshly polled manifest each time rather than replaying a stored list: a
+   * key names where a file currently lives, not the book itself, so a list kept between sessions
+   * can stop naming the project's files.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearDataSelector = { paths?: string[] } | undefined;
 
   /**
    * Data types the PT9 interlinear projectInterface exposes via its base
@@ -1554,10 +1605,20 @@ declare module 'platform-scripture' {
    * @experimental
    */
   export type Pt9InterlinearProjectInterfaceDataTypes = {
-    /** Per-file SHA-256 hex, for change detection without transferring content. */
+    /**
+     * Per-file hash, size and book identity, plus the `maxReadBytes` ceiling a read is measured
+     * against - all without transferring content.
+     */
     Pt9InterlinearManifest: DataProviderDataType<undefined, Pt9InterlinearProjectManifest, never>;
-    /** The parsed interlinear data. */
-    Pt9InterlinearData: DataProviderDataType<undefined, Pt9InterlinearProjectData, never>;
+    /**
+     * The parsed interlinear data, for the whole project or for the files a
+     * {@link Pt9InterlinearDataSelector} names.
+     */
+    Pt9InterlinearData: DataProviderDataType<
+      Pt9InterlinearDataSelector,
+      Pt9InterlinearProjectData,
+      never
+    >;
   };
 
   /**
@@ -1597,9 +1658,12 @@ declare module 'platform-scripture' {
    *   projectId,
    * );
    * const manifest = await pdp.getPt9InterlinearManifest();
-   * if (!hashesMatch(manifest, storedHashes)) {
-   *   const data = await pdp.getPt9InterlinearData();
-   *   // Convert and persist `data` together with `manifest` for the next comparison.
+   * if (!hashesMatch(manifest.files, storedHashes)) {
+   *   // Groups whose summed `sizeBytes` each stay within the ceiling the manifest carries.
+   *   for (const paths of groupWithinCeiling(manifest.files, manifest.maxReadBytes)) {
+   *     const data = await pdp.getPt9InterlinearData({ paths });
+   *     // Convert and persist together with `manifest.files` for the next comparison.
+   *   }
    * }
    * ```
    *
@@ -1608,16 +1672,35 @@ declare module 'platform-scripture' {
   export type IPt9InterlinearProjectDataProvider =
     IProjectDataProvider<Pt9InterlinearProjectInterfaceDataTypes> & {
       /**
-       * The change-detection probe: reads and hashes every interlinear file, so it is cheap
-       * relative to transferring and parsing the content, not free. Throws if the project directory
-       * or a file found by the scan cannot be read, so an unreadable project never poses as one
-       * with no data and a caller never receives a partial manifest. Shares the data read's size
-       * cap: files over it throw the same too-large error instead of being hashed, so a probe never
-       * reads more than a servable corpus.
+       * The probe: describes every interlinear file the project has without transferring their
+       * content. Call it first - its keys are what {@link getPt9InterlinearData}'s selector names,
+       * and its sizes are what that read is measured against, so a caller can group its reads and
+       * name what it must leave out before transferring anything:
        *
-       * @returns The lowercase SHA-256 hex of each covered PT9 interlinear file's current bytes
-       *   (see {@link Pt9InterlinearProjectManifest} for what is covered), keyed by project-relative
-       *   path; empty when the project has no interlinear data.
+       * ```ts
+       * const { maxReadBytes, files } = await pdp.getPt9InterlinearManifest();
+       * const gettable = Object.keys(files).filter((p) => files[p].sizeBytes <= maxReadBytes);
+       * const skipped = Object.entries(files)
+       *   .filter(([, info]) => info.sizeBytes > maxReadBytes)
+       *   // One book can appear once per gloss language, so name the language too.
+       *   .map(([path, info]) =>
+       *     info.bookId ? `${info.bookId} (${info.glossLanguage})` : path,
+       *   );
+       * ```
+       *
+       * It hashes every file, so it is cheap relative to transferring and parsing content, not
+       * free, and its cost grows with the corpus rather than with any cap - a very large corpus on
+       * a slow share can exhaust the request timeout. It is never refused for size, so it works for
+       * a project no single read could return.
+       *
+       * Throws if the project directory or a file found by the scan cannot be read, so an
+       * unreadable project never poses as one with no data. A file whose root element cannot be
+       * read still appears, without `glossLanguage` or `bookId`.
+       *
+       * @returns `{ maxReadBytes, files }`. `maxReadBytes` is the ceiling
+       *   {@link getPt9InterlinearData} measures a read against; `files` describes every interlinear
+       *   file the project has, keyed by project-relative path, and is empty when the project has
+       *   none.
        * @experimental
        */
       getPt9InterlinearManifest(): Promise<Pt9InterlinearProjectManifest>;
@@ -1656,23 +1739,46 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
 
       /**
-       * Returns the project's PT9 interlinear data parsed from its interlinear files. Throws if the
-       * project directory or a file found by the scan cannot be read, or a file cannot be parsed,
-       * so an unreadable project never poses as one with no data and a caller never receives a
-       * partial payload. Also throws, with an error message starting `PT9 interlinear data is too
-       * large`, when the project's interlinear files exceed the size cap - a response over the
-       * WebSocket's message limit would tear down the whole connection, so the request fails
-       * instead. The cap bounds the files' source bytes (realistic data serializes smaller than its
-       * indented on-disk XML; the serialized size itself cannot be confirmed at that layer). The
-       * machine-readable contract for recognizing the condition is the `RESOURCE_EXHAUSTED`
-       * platform error code on the thrown PlatformError; the message prefix remains for consumers
-       * that see only the message, since error types do not cross the RPC boundary.
+       * Returns the project's PT9 interlinear data parsed from its interlinear files, for the whole
+       * project or for the files `selector` names.
        *
-       * @returns Setups, per-book cluster data, the lexicon, and stored word analyses; empty lists
-       *   when the project has no interlinear data.
+       * A read is refused when the total on-disk size of the files it selects exceeds the
+       * `maxReadBytes` that {@link getPt9InterlinearManifest} reports - strictly greater, so a
+       * selection summing to exactly that is served. The quantity compared is the source files'
+       * size on disk, the same number that probe reports as `sizeBytes`, not the serialized
+       * response size, which cannot be known at this layer. The setups file is served whatever the
+       * selection and is not counted.
+       *
+       * Calling this with no selector reads every file at once, which fails for a project whose
+       * files exceed the ceiling in total - a real project can, while no single file comes close. A
+       * caller that cannot assume a small project reads {@link getPt9InterlinearManifest} first and
+       * groups its reads by summed `sizeBytes`; the groups reassemble to exactly what one
+       * unselected read would have returned, except `setups` and `hasAssociatedLexicalProject`,
+       * which repeat on every response - take them from any one.
+       *
+       * Throws if the project directory or a file cannot be read or parsed, so an unreadable
+       * project never poses as one with no data and a caller never receives a partial payload. A
+       * read over the ceiling throws with the message prefix `PT9 interlinear data is too large`; a
+       * selector naming an unknown path throws with the prefix `Unknown PT9 interlinear paths`, and
+       * one naming no paths at all throws with a message naming `Pt9InterlinearDataSelector.Paths`.
+       * Branch on the message rather than on a code: these carry `RESOURCE_EXHAUSTED` and
+       * `INVALID_ARGUMENT` on the provider side, but a C# platform error code does not reach a
+       * consumer across the RPC boundary today.
+       *
+       * @param selector Which interlinear files to read; omit to read all of them. See
+       *   {@link Pt9InterlinearDataSelector}.
+       * @returns Setups, per-book cluster data, the lexicon, and stored word analyses for the
+       *   selected files; empty lists when the project has no interlinear data. `setups` and
+       *   `hasAssociatedLexicalProject` come from project settings, so every response carries them
+       *   whatever the selection. A selection omitting `Lexicon.xml` returns `lexicon: null` and
+       *   one omitting `WordAnalyses.xml` returns `wordAnalyses: []` - the same values a project
+       *   holding neither file gives - so a caller merging file-by-file reads must track which
+       *   paths it asked for rather than replacing its prior state wholesale.
        * @experimental
        */
-      getPt9InterlinearData(): Promise<Pt9InterlinearProjectData>;
+      getPt9InterlinearData(
+        selector?: Pt9InterlinearDataSelector,
+      ): Promise<Pt9InterlinearProjectData>;
       /**
        * Read-only - throws if called. See {@link setPt9InterlinearManifest}.
        *
@@ -1694,7 +1800,10 @@ declare module 'platform-scripture' {
        * skips only the deep comparison and then delivers no-change callbacks. Prefer subscribing to
        * the manifest and fetching the data only when its hashes actually changed.
        *
-       * @param selector Always `undefined`: the payload is argument-less, whole-project data.
+       * @param selector Pass `undefined` to subscribe to the whole project, which is what a
+       *   subscription is for. A selector is accepted and forwarded to each re-fetch, so a project
+       *   too large to carry in one response must pass one; prefer reading it with
+       *   {@link getPt9InterlinearData} a selection at a time instead of subscribing.
        * @param callback Receives the payload, or a {@link PlatformError} when retrieving it after an
        *   update fails.
        * @param options Subscription behavior; the retention and re-fetch costs above apply in every
@@ -1703,7 +1812,7 @@ declare module 'platform-scripture' {
        * @experimental
        */
       subscribePt9InterlinearData(
-        selector: undefined,
+        selector: Pt9InterlinearDataSelector,
         callback: (data: Pt9InterlinearProjectData | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
