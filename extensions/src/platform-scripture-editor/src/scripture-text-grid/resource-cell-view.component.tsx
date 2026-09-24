@@ -48,6 +48,12 @@ export type ResourceCellViewProps = {
   state: ResourceCellState;
   /** Resource label shown in the header band or inline label. */
   label: string;
+  /**
+   * Content zoom area this resource's text belongs to — `resource-<id>`, or the pane-wide
+   * `text-collection` for an id that yields none. Both layouts mark their text with it, labelled
+   * with `label` for the zoom indicator; a resource's verse row and chapter view share it.
+   */
+  zoomArea: string;
   /** This resource's own text direction ('ltr' | 'rtl'), applied to the content area. */
   textDirection: string;
   /** Localized strings; import `RESOURCE_CELL_STRING_KEYS` to resolve them. */
@@ -131,11 +137,14 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
  * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
  * right-click Copy menu and the drag/keyboard reorder handle grip. The cell text is marked as the
- * pane's `text-collection` content-zoom area, which alone sizes it.
+ * resource's own content-zoom area (`zoomArea`), named with the resource label for the zoom
+ * indicator; the scroll box around it stays unmarked, so its scrollbar and padding keep interface
+ * size.
  */
 export function ResourceCellView({
   state,
   label,
+  zoomArea,
   textDirection,
   localizedStrings,
   editor,
@@ -237,9 +246,11 @@ export function ResourceCellView({
         // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
-          <ContentZoomRoot area="text-collection" className="tw:min-w-0 tw:flex-1 tw:overflow-auto">
-            {stateContent}
-          </ContentZoomRoot>
+          <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto">
+            <ContentZoomRoot area={zoomArea} label={label}>
+              {stateContent}
+            </ContentZoomRoot>
+          </div>
         </div>
       ) : (
         // Chapter context: a compact header line (colored name with a bottom border) with the
@@ -275,13 +286,13 @@ export function ResourceCellView({
             ) : undefined}
             <ResourceNameLabel label={label} className="tw:min-w-0 tw:flex-1 tw:text-xs" />
           </div>
-          <ContentZoomRoot
-            area="text-collection"
-            className="tw:flex-1 tw:overflow-auto"
-            dir={textDirection}
-          >
-            <div className="tw:p-2">{stateContent}</div>
-          </ContentZoomRoot>
+          <div className="tw:flex-1 tw:overflow-auto" dir={textDirection}>
+            <div className="tw:p-2">
+              <ContentZoomRoot area={zoomArea} label={label}>
+                {stateContent}
+              </ContentZoomRoot>
+            </div>
+          </div>
         </>
       )}
       {hasRightClickMenu ? (

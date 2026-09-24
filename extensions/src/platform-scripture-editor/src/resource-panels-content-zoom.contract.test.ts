@@ -53,7 +53,7 @@ const ALLOWED_CONTENT_ZOOM_ROOT_COUNTS: Readonly<Record<string, number>> = {
   'platform-scripture-editor-footnotes.component.tsx': 1,
   'platform-scripture-editor.web-view.tsx': 1,
   'resource-text-panel.component.tsx': 1,
-  // One per cell layout (verse row and chapter column); every cell shares the one area id.
+  // One per cell layout (verse row and chapter column); each names its resource's own area.
   [path.join('scripture-text-grid', 'resource-cell-view.component.tsx')]: 2,
 };
 
@@ -77,15 +77,21 @@ describe('content zoom markers (Text Collection grid)', () => {
     expect(grid).not.toContain('<ContentZoomRoot');
   });
 
-  it('marks each cell’s text with the text-collection area directly around that text, in both layouts', () => {
+  it('marks each cell’s text with its resource’s own area and name, inside the unmarked scroll box, in both layouts', () => {
     expect(
       cell.match(
-        /<ContentZoomRoot area="text-collection"[^>]*> ?(?:{stateContent}|<div className="tw:p-2">{stateContent}<\/div>) ?<\/ContentZoomRoot>/g,
+        /<ContentZoomRoot area={zoomArea} label={label}> ?{stateContent} ?<\/ContentZoomRoot>/g,
       ),
     ).toHaveLength(2);
+    expect(cell).toContain(
+      '<div className="tw:min-w-0 tw:flex-1 tw:overflow-auto"> <ContentZoomRoot area={zoomArea}',
+    );
+    expect(cell).toContain('<div className="tw:p-2"> <ContentZoomRoot area={zoomArea}');
+    // The pane-wide area is only the grid's fallback, never a literal in the cell.
+    expect(cell).not.toContain('area="text-collection"');
   });
 
-  it('gives the cell text no zoom of its own, so the text-collection area alone sizes it', () => {
+  it('gives the cell text no zoom of its own, so its content zoom area alone sizes it', () => {
     // Positive control: the file still renders the cell text this test is about.
     expect(cell).toContain('{stateContent}');
     expect(cell).not.toMatch(/\bzoom\s*:/);

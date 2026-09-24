@@ -579,12 +579,12 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           empty (a DBL ref resolves to a cell only once the cached list loads). The
           `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
 
-          The body itself is not a zoom area: each cell marks its own verse text as the
-          "text-collection" area, so the cells' name labels and reorder grips, the chapter-context
-          chrome and the empty and error states keep interface scale. The cells use their own area
-          id so the grid's remembered level is kept apart from this project's other resource panes,
-          which resolve to the same kind/identity pair and would otherwise all read one remembered
-          level. */}
+          The body itself is not a zoom area: each cell marks only its resource's text, with that
+          resource's own area (`resource-<id>`, see `resource-zoom-area.utils.ts`), so the cells'
+          name labels, reorder grips and other controls, the chapter-context chrome and the empty and
+          error states keep interface scale. Naming each resource's area keeps its remembered level
+          apart from the other resources' and from this project's other resource panes, which
+          resolve to the same kind/identity pair. */}
       <div className="tw:flex-1 tw:overflow-hidden">
         {gridBodyState === 'catalogError' && (
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
