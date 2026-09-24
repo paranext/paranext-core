@@ -302,6 +302,56 @@ export async function switchToChapterView(frame: FrameLocator): Promise<void> {
 }
 
 /**
+ * The content zoom area of one resource's row or column, read off the zoom scope the grid puts on
+ * the container (`resource-<id>`, or `text-collection` for an id that yields none).
+ */
+export async function readResourceZoomArea(resourceContainer: Locator): Promise<string> {
+  const areaId = await resourceContainer.getAttribute('data-platform-content-zoom-scope');
+  if (!areaId) throw new Error('Resource container carries no zoom scope');
+  return areaId;
+}
+
+/** The name a resource's text is labelled with for the zoom indicator (its cell label). */
+export async function readResourceZoomLabel(resourceContainer: Locator): Promise<string> {
+  const label = await resourceContainer
+    .locator('[data-platform-content-zoom-label]')
+    .first()
+    .getAttribute('data-platform-content-zoom-label');
+  if (!label) throw new Error('Resource text carries no zoom label');
+  return label;
+}
+
+/** Right-clicks a resource's text and returns the cell's own menu once it is open. */
+export async function openCellContextMenu(
+  frame: FrameLocator,
+  resourceContainer: Locator,
+): Promise<Locator> {
+  await resourceContainer
+    .locator('[data-platform-content-zoom-root]')
+    .first()
+    .click({ button: 'right' });
+  const menu = frame.getByRole('menu');
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/**
+ * Opens the "⋮" zoom options menu in a chapter-view column's header (it is revealed on hover) and
+ * returns the menu once it is open.
+ */
+export async function openChapterViewZoomOptions(
+  frame: FrameLocator,
+  column: Locator,
+  resourceName: string,
+): Promise<Locator> {
+  await column.hover();
+  await column.getByRole('button', { name: `Zoom options for ${resourceName}` }).click();
+  const menu = frame.getByRole('menu');
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/**
  * Open an Enhanced Resource window via the Platform menu and wait for the iframe to be ready.
  *
  * The hardcoded ESV16UK+ default in main.ts (TODO(GAP-001)) means the menu click opens the resource
