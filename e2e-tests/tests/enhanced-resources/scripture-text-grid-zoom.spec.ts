@@ -31,6 +31,7 @@ import {
   closeDockTab,
   ctrlWheel,
   firstLineBoxHeight,
+  onScreenBox,
   readIndicatorText,
 } from '../../fixtures/content-zoom-helpers';
 import {
@@ -291,11 +292,15 @@ test.describe('Scripture Text Grid — per-resource content zoom', () => {
     });
 
     await test.step('a notch inside the panel moves the row too', async () => {
-      const panelText = stg.frame
-        .getByTestId('scripture-text-grid-chapter-context')
-        .locator(`[data-platform-content-zoom-root="${areaA}"]`);
-      const box = await panelText.boundingBox();
-      if (!box) throw new Error('Chapter panel text has no bounding box');
+      // The panel holds the whole chapter, so its text runs far below the pane: aim at the part
+      // that is on screen.
+      const box = await onScreenBox(
+        frame,
+        frame
+          .getByTestId('scripture-text-grid-chapter-context')
+          .locator(`[data-platform-content-zoom-root="${areaA}"]`),
+        'Chapter panel text',
+      );
       await ctrlWheel(mainPage, box, -120);
       const raisedTwice = roundLevel(settingsDefault + 0.2);
       await expect.poll(() => readFactor(frame, areaA)).toBeCloseTo(raisedTwice, 5);
