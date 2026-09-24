@@ -11,6 +11,9 @@ import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
 // selects, dropdown and context menus, the menubar) — or it renders behind the surface it
 // describes. The ordering is pinned by z-index.test.tsx.
 import { Z_INDEX_TOOLTIP } from '@/components/z-index';
+// CUSTOM: Import the content-zoom area context so a tooltip opened from zoomed content follows
+// that area's zoom
+import { getContentZoomPopupStyle, useContentZoomArea } from '@/context/content-zoom-area.context';
 
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
 /** @inheritdoc Tooltip */
@@ -83,6 +86,8 @@ function TooltipContent({
   // CUSTOM: arrowClassName prop — see comment above for full semantics
   arrowClassName?: string;
 }) {
+  // CUSTOM: Read the content-zoom area this tooltip was opened from (undefined outside every area)
+  const zoomArea = useContentZoomArea();
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -92,12 +97,30 @@ function TooltipContent({
         // must clear every layer that can hold its trigger — modal dialogs and the overlay layer
         // (popovers, selects, dropdown and context menus, the menubar) — or it renders behind the
         // surface it describes. The ordering is pinned by z-index.test.tsx.
-        style={{ zIndex: Z_INDEX_TOOLTIP, ...style }}
+        // CUSTOM: Inside a content-zoom area, also carry the area's zoom factor for the width cap below
+        style={{
+          zIndex: Z_INDEX_TOOLTIP,
+          ...(zoomArea === undefined ? undefined : getContentZoomPopupStyle(zoomArea)),
+          ...style,
+        }}
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
           'pr-twp tw:inline-flex tw:w-fit tw:max-w-xs tw:origin-(--radix-tooltip-content-transform-origin) tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-foreground tw:px-3 tw:py-1.5 tw:text-xs tw:text-background tw:has-data-[slot=kbd]:pe-1.5 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:**:data-[slot=kbd]:relative tw:**:data-[slot=kbd]:isolate tw:**:data-[slot=kbd]:z-50 tw:**:data-[slot=kbd]:rounded-sm tw:data-[state=delayed-open]:animate-in tw:data-[state=delayed-open]:fade-in-0 tw:data-[state=delayed-open]:zoom-in-95 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',
+          // CUSTOM: Inside a content-zoom area, keep the tooltip's usual 20rem limit (zoomed with its
+          // text) but never wider than the space Radix reports as available, divided by the area's
+          // zoom factor, so a zoomed tooltip stays inside the pane. Replaces the base max-w-xs.
+          // CUSTOM: Falls back to 100vw until Radix's size middleware publishes the real available
+          // width, so the measuring pass gets a real cap instead of an invalid var() computing to none
+          zoomArea !== undefined &&
+            'tw:max-w-[min(20rem,calc(var(--radix-tooltip-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1)))]',
           className,
         )}
+        // CUSTOM: Inside a content-zoom area, mark the content with that area so the platform's
+        // zoom rule scales it, and flag it as pop-up content so the platform never counts it as a
+        // pane. It is portaled out of the area element, so it is a marker of its own, not a nested
+        // one.
+        data-platform-content-zoom-root={zoomArea}
+        data-platform-content-zoom-popup={zoomArea === undefined ? undefined : ''}
         {...props}
       >
         {children}
