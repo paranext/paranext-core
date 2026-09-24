@@ -107,6 +107,8 @@ function DropdownMenuTrigger({
 /** @inheritdoc DropdownMenuProps */
 // CUSTOM: Lifted the prop shape out of the function signature into the named
 // DropdownMenuContentProps type above so it can be exported.
+// CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
+// scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function DropdownMenuContent({
   className,
   align = 'start',

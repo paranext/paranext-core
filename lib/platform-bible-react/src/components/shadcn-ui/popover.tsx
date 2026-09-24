@@ -110,6 +110,8 @@ function PopoverPortalContainerProvider({
 /* #endregion CUSTOM */
 
 /** @inheritdoc Popover */
+// CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
+// scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function PopoverContent({
   className,
   align = 'center',
