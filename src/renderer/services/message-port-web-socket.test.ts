@@ -194,6 +194,16 @@ describe('MessagePortWebSocket', () => {
     expect(port.postMessage).toHaveBeenCalledWith(createPapiPortCloseFrame(1001, 'page unloading'));
   });
 
+  test('dispatchEvent with an event name a WebSocket does not have is a no-op', () => {
+    const { provider } = makeProvider();
+    const socket = new MessagePortWebSocket(provider, { addPageHideListener: false });
+    let result: boolean | undefined;
+    expect(() => {
+      result = socket.dispatchEvent(new Event('foo'));
+    }).not.toThrow();
+    expect(result).toBe(true);
+  });
+
   test('exposes the WebSocket constants and a working dispatchEvent/on* surface', () => {
     const { provider, grant } = makeProvider();
     const socket = new MessagePortWebSocket(provider, { addPageHideListener: false });

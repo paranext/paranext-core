@@ -1635,10 +1635,9 @@ async function main() {
         // the tracked list, and until that fires a fan-out would still ask a window that cannot
         // answer — and report the coverage of whatever it was doing as incomplete because of it.
         markWindowNotReady(windowId);
-        // Last, after every request this handler made to the page has been answered: the page's own
-        // `pagehide` normally closes the port first, and this is the backstop that keeps a window
-        // close reading as a clean close on main rather than as a connection that died.
-        closePapiPortForWindow(windowId, 1001, 'window closing');
+        // The PAPI port is closed from here only on the paths that destroy the window, because
+        // `destroy()` skips the page's unload and so its `pagehide` close. On the `close()` path
+        // the page closes its own port with 1001 after its `beforeunload` teardown has used it.
         // The escape hatch above takes the window down on a second close click, which can happen
         // any time during the wait this handler just came out of
         if (newWindow.isDestroyed()) {
@@ -1648,6 +1647,7 @@ async function main() {
         } else if (isAppGoingDown) {
           // `event.preventDefault()` above suppresses Electron's default close; destroy() here
           // triggers the 'closed' event and allows the app to quit.
+          closePapiPortForWindow(windowId, 1001, 'window closing');
           newWindow.destroy();
         } else {
           // Closed rather than destroyed, because the app is staying up and the page still has
@@ -1665,6 +1665,7 @@ async function main() {
             logger.warn(
               `Window ${windowId} did not finish closing within ${WINDOW_CLOSE_TIME_OUT_MS} ms; destroying it`,
             );
+            closePapiPortForWindow(windowId, 1001, 'window closing');
             newWindow.destroy();
           }, WINDOW_CLOSE_TIME_OUT_MS);
           newWindow.once('closed', () => clearTimeout(forceCloseTimeout));
