@@ -2,7 +2,9 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { Usj } from '@eten-tech-foundation/scripture-utilities';
+import type { DblResourceData } from 'platform-bible-utils';
 import type { WebViewProps } from '@papi/core';
 
 // ---------------------------------------------------------------------------
@@ -14,11 +16,17 @@ const {
   mockUseDblResourceAutoInstall,
   mockUseDblResourceCatalog,
   mockUseResourcePickerResources,
+  mockUseInstallDblResource,
+  mockUseProjectData,
+  mockFindCachedDblResource,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockUseDblResourceAutoInstall: vi.fn(),
   mockUseDblResourceCatalog: vi.fn(),
   mockUseResourcePickerResources: vi.fn(),
+  mockUseInstallDblResource: vi.fn(),
+  mockUseProjectData: vi.fn(),
+  mockFindCachedDblResource: vi.fn(),
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -43,6 +51,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_resourcePanel_selecting%': 'Selecting…',
       '%webView_resourcePanel_installFailed%': "Couldn't install.",
       '%webView_resourcePanel_installFailedOffline%': "Couldn't install. Check your connection.",
+      '%webView_resourcePanel_installedButUnavailable%': "Installed, but couldn't be opened.",
       '%webView_resourcePanel_retry%': 'Try again',
       '%webView_resourcePanel_downloadResources%': 'Download resources',
       '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%': 'More info',
@@ -61,9 +70,7 @@ vi.mock('@papi/frontend/react', () => ({
   ],
   useDataProvider: vi.fn(() => undefined),
   useProjectDataProvider: vi.fn(() => undefined),
-  useProjectData: vi.fn(() => ({
-    ChapterUSJ: vi.fn(() => [undefined, false]),
-  })),
+  useProjectData: (...args: unknown[]) => mockUseProjectData(...args),
   useProjectSetting: vi.fn(() => ['ltr', false]),
   useSetting: vi.fn(() => ['simple', false]),
   useDialogCallback: vi.fn(() => vi.fn()),
@@ -123,8 +130,8 @@ vi.mock('./use-dbl-resource-catalog.hook', () => ({
 }));
 
 vi.mock('./use-install-dbl-resource.hook', () => ({
-  useInstallDblResource: vi.fn(() => vi.fn(async () => {})),
-  default: vi.fn(() => vi.fn(async () => {})),
+  useInstallDblResource: (...args: unknown[]) => mockUseInstallDblResource(...args),
+  default: (...args: unknown[]) => mockUseInstallDblResource(...args),
 }));
 
 vi.mock('./use-is-online.hook', () => ({
@@ -137,7 +144,7 @@ vi.mock('./select-dbl-resource', () => ({
 }));
 
 vi.mock('./scripture-text-grid/dbl-resource-lookup.utils', () => ({
-  findCachedDblResource: vi.fn(() => undefined),
+  findCachedDblResource: (...args: unknown[]) => mockFindCachedDblResource(...args),
 }));
 
 // NOTE: './panel-state-views.component' is deliberately NOT mocked. The disclosure tests below
@@ -241,6 +248,9 @@ function resetPanelHooks() {
     refetchCatalog: vi.fn(),
   });
   mockUseResourcePickerResources.mockReturnValue([[], false]);
+  mockUseInstallDblResource.mockImplementation(() => vi.fn(async () => {}));
+  mockUseProjectData.mockReturnValue({ ChapterUSJ: vi.fn(() => [undefined, false]) });
+  mockFindCachedDblResource.mockReturnValue(undefined);
 }
 
 beforeEach(resetPanelHooks);
@@ -315,5 +325,105 @@ describe('ResourceTextPanel — failed install recovery', () => {
     // ...and it was handed this panel's catalog refetch as the list-refresher that retry uses.
     const [, , optionsPassedToHook] = mockUseDblResourceAutoInstall.mock.lastCall ?? [];
     expect(optionsPassedToHook).toMatchObject({ refreshResourceList: refetchCatalog });
+  });
+});
+
+describe('ResourceTextPanel — install against a stale catalog', () => {
+  const UNINSTALLED_WEB: DblResourceData = {
+    dblEntryUid: 'uid-web',
+    displayName: 'WEB',
+    fullName: 'World English Bible',
+    bestLanguageName: 'English',
+    type: 'ScriptureResource',
+    size: 1200,
+    installed: false,
+    updateAvailable: false,
+    projectId: '',
+  };
+  const INSTALLED_WEB: DblResourceData = { ...UNINSTALLED_WEB, installed: true, projectId: 'WEB1' };
+  const CHAPTER_USJ: Usj = {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
+      },
+    ],
+  };
+
+  it('shows the text in the same panel once a retry re-reads a catalog that has caught up', async () => {
+    // The real auto-install hook and catalog lookup, so the failure, the retry and the recovery are
+    // this panel's own behaviour rather than values the test hands it.
+    const actualAutoInstall = await vi.importActual<
+      typeof import('./use-dbl-resource-auto-install.hook')
+    >('./use-dbl-resource-auto-install.hook');
+    mockUseDblResourceAutoInstall.mockImplementation(actualAutoInstall.useDblResourceAutoInstall);
+    const actualLookup = await vi.importActual<
+      typeof import('./scripture-text-grid/dbl-resource-lookup.utils')
+    >('./scripture-text-grid/dbl-resource-lookup.utils');
+    mockFindCachedDblResource.mockImplementation(actualLookup.findCachedDblResource);
+    // One identity for the whole test: the hook reads a new installer as a reason to install again.
+    const installResource = vi.fn(async () => {});
+    mockUseInstallDblResource.mockReturnValue(installResource);
+    mockUseProjectData.mockImplementation((_dataProviderSource: unknown, resourceProjectId) => ({
+      ChapterUSJ: () => [resourceProjectId ? CHAPTER_USJ : undefined, vi.fn(), false],
+    }));
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.0.0', items: [] },
+    });
+
+    const refetchCatalog = vi.fn();
+    /** The catalog as the panel's re-read returns it, and the picker row derived from it. */
+    const setCatalog = (resources: DblResourceData[]) => {
+      mockUseDblResourceCatalog.mockReturnValue({
+        dblResources: resources,
+        isLoadingResources: false,
+        isCatalogReady: true,
+        hasCatalogError: false,
+        refetchCatalog,
+      });
+      const webRow = resources.find((resource) => resource.dblEntryUid === 'uid-web');
+      mockUseResourcePickerResources.mockReturnValue([
+        [
+          {
+            reference: { type: 'dblResource', id: 'uid-web', name: 'WEB' },
+            source: 'user',
+            isAdminLocked: false,
+            type: 'ScriptureResource',
+            installed: webRow?.installed ?? false,
+            projectId: webRow?.installed ? webRow.projectId : undefined,
+          },
+        ],
+        false,
+      ]);
+    };
+
+    const ResourceTextPanel = getResourceTextPanel();
+    const props = makeProps();
+    setCatalog([UNINSTALLED_WEB]);
+    const { rerender } = render(<ResourceTextPanel {...props} />);
+    await waitFor(() => expect(installResource).toHaveBeenCalledWith('uid-web'));
+
+    // The install succeeded as a no-op, and the re-read it triggers comes back still stale.
+    setCatalog([]);
+    rerender(<ResourceTextPanel {...props} />);
+    setCatalog([{ ...UNINSTALLED_WEB }]);
+    rerender(<ResourceTextPanel {...props} />);
+    expect(await screen.findByText("Installed, but couldn't be opened.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(refetchCatalog).toHaveBeenCalledTimes(1);
+    // The re-read the retry started: the catalog empties while in flight, then comes back current.
+    setCatalog([]);
+    rerender(<ResourceTextPanel {...props} />);
+    setCatalog([INSTALLED_WEB]);
+    rerender(<ResourceTextPanel {...props} />);
+
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
+    expect(mockUseProjectData).toHaveBeenLastCalledWith('platformScripture.USJ_Chapter', 'WEB1');
   });
 });

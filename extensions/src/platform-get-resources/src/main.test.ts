@@ -86,6 +86,12 @@ async function getCachedResources() {
   return handler();
 }
 
+async function refreshResourceFlags(shouldRecomputeUpdateStatus?: boolean) {
+  const handler = mocks.registeredCommands.get('platformGetResources.refreshResourceFlags');
+  if (!handler) throw new Error('refreshResourceFlags was not registered');
+  return handler(shouldRecomputeUpdateStatus);
+}
+
 /** Every catalog this module persisted, parsed back, oldest first. */
 function persistedCatalogs(): DblResourceData[][] {
   return mocks.writeUserData.mock.calls.map(([, , json]) => JSON.parse(String(json)));
@@ -130,6 +136,54 @@ describe('platformGetResources activation', () => {
     expect(persistedCatalogs().at(-1)).toContainEqual(
       expect.objectContaining({ dblEntryUid: 'aaaa', installed: true, projectId: 'AAAA1' }),
     );
+  });
+
+  it('recomputes updateAvailable for a refresh that queued behind a project change', async () => {
+    // Both wait on the same in-flight sync and resume in the order they started waiting, so the
+    // project-change listener starts the next sync — one that skips updateAvailable — before the
+    // refresh gets to. Joining that one would leave an updated resource showing "Update".
+    await activateWithFreshModule();
+    await getCachedResources();
+    let answerInFlightSync: (status: Record<string, string>) => void = () => {};
+    provider.recomputeDblResourcesInstallStatus.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerInFlightSync = resolve;
+        }),
+    );
+    provider.recomputeDblResourcesInstallStatus.mockResolvedValue({ aaaa: 'AAAA1' });
+    // A read of the catalog starts a background sync that does not recompute updateAvailable.
+    await getCachedResources();
+    await vi.waitFor(() => expect(provider.recomputeDblResourcesInstallStatus).toHaveBeenCalled());
+
+    mocks.projectsChangedHandlers.forEach((handler) => handler());
+    const refresh = refreshResourceFlags(true);
+    answerInFlightSync({ aaaa: 'AAAA1' });
+    await refresh;
+
+    expect(provider.recomputeDblResourcesUpdateStatus).toHaveBeenCalled();
+  });
+
+  it('ends the sync without touching the catalog when the backend reports no install status', async () => {
+    // An empty map is also what a busy provider returns, so it is not an answer to act on: no
+    // update-status round trip, no write, and the installed flags stay as they were.
+    provider.getDblResources.mockResolvedValueOnce([row('bbbb', 'BBBB1')]);
+    await activateWithFreshModule();
+    await getCachedResources();
+    const writeCountBeforeRefresh = persistedCatalogs().length;
+    provider.recomputeDblResourcesInstallStatus.mockClear();
+
+    await refreshResourceFlags(true);
+
+    // The sync did ask, so what follows is its response to the empty answer, not a sync that
+    // never ran.
+    expect(provider.recomputeDblResourcesInstallStatus).toHaveBeenCalled();
+    expect(provider.recomputeDblResourcesUpdateStatus).not.toHaveBeenCalled();
+    expect(persistedCatalogs().length).toBe(writeCountBeforeRefresh);
+    expect(await getCachedResources()).toEqual({
+      status: 'available',
+      resources: [expect.objectContaining({ dblEntryUid: 'bbbb', installed: true })],
+    });
   });
 
   it('stops listening for project changes once the extension is deactivated', async () => {

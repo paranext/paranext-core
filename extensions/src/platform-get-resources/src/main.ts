@@ -42,6 +42,8 @@ let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
 let hasFetchStarted = false;
 let syncInFlight: Promise<void> | undefined;
+/** Whether `syncInFlight` refreshes `updateAvailable` as well as the install flags. */
+let doesSyncInFlightRecomputeUpdateStatus = false;
 
 async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
@@ -251,11 +253,12 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
  * being current await it and re-read `cachedResources` afterwards.
  *
  * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable`. A
- *   caller that needs it joins an in-flight sync that does not refresh it, so ask for it through
- *   {@link refreshResourceFlags}, which starts a sync of its own rather than joining.
+ *   caller that needs it may still join an in-flight sync that does not refresh it, so ask for it
+ *   through {@link refreshResourceFlags}, which never settles for one of those.
  */
 function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promise<void> {
   if (!syncInFlight) {
+    doesSyncInFlightRecomputeUpdateStatus = shouldRecomputeUpdateStatus;
     syncInFlight = syncFlags(shouldRecomputeUpdateStatus)
       .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
       .finally(() => {
@@ -273,6 +276,14 @@ function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promis
  */
 async function syncAfterInFlight(shouldRecomputeUpdateStatus: boolean): Promise<void> {
   if (syncInFlight) await syncInFlight;
+  // Any sync running now started after this call, so joining it is fresh enough — unless this
+  // caller needs `updateAvailable` and that sync skips it. Every caller waiting on the sync above
+  // resumes in the order it started waiting, so another waiter can have started such a sync first:
+  // the project-change listener, say, ahead of the Get Resources list's refresh. Wait those out.
+  while (shouldRecomputeUpdateStatus && syncInFlight && !doesSyncInFlightRecomputeUpdateStatus)
+    // Each pass waits on a different sync, so these awaits cannot run in parallel.
+    // eslint-disable-next-line no-await-in-loop
+    await syncInFlight;
   await ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus);
 }
 
@@ -553,7 +564,16 @@ export async function activate(context: ExecutionActivationContext) {
         summary:
           "Brings the resource catalog's derived flags (installed, projectId, updateAvailable) " +
           'up to date and resolves once they are, so the next read of the catalog sees them',
-        params: [],
+        params: [
+          {
+            name: 'shouldRecomputeUpdateStatus',
+            required: false,
+            summary:
+              'Whether to also refresh updateAvailable, which costs a second backend round trip. ' +
+              'Defaults to true; a caller that reads installed alone should pass false',
+            schema: { type: 'boolean' },
+          },
+        ],
         result: {
           name: 'return value',
           summary: 'Void',
@@ -614,6 +634,10 @@ export async function activate(context: ExecutionActivationContext) {
     // Never `updateAvailable`: only the Get Resources list renders it and that list refreshes it
     // itself, so recomputing it here would put a second backend round trip on every project change
     // for a value nothing reads.
+    // After an install from this window the event arrives once the caller's own refresh has already
+    // run, so that install costs two syncs. That is accepted rather than deduplicated: a sync that
+    // finished before the event cannot vouch for the state the event announces, and one sync is a
+    // single cheap backend call.
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     syncAfterInFlight(false);
   });

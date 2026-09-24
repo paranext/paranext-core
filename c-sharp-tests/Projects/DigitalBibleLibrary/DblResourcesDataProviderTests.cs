@@ -121,8 +121,8 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             };
 
         /// <summary>
-        /// The root of PT-4588: installing a resource that is already installed and up to date is
-        /// what the caller asked for, so it is a no-op success rather than a throw. A caller whose
+        /// Installing a resource that is already installed and up to date is what the caller asked
+        /// for, so it is a no-op success rather than a throw. A caller whose
         /// catalog wrongly reports the resource missing would otherwise retry forever.
         /// </summary>
         [Test]

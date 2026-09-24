@@ -156,18 +156,19 @@ function renderPanel(overrides: Partial<ModelTextPanelProps> = {}) {
  * triggers: the catalog clears while the fetch is in flight and comes back still reporting the
  * resource uninstalled. That is what a no-op install against a stale catalog looks like.
  */
-async function renderWithCatalogStaleAfterInstall() {
+async function renderWithCatalogStaleAfterInstall(overrides: Partial<ModelTextPanelProps> = {}) {
   const installResource = vi.fn(async () => {});
   const props = makeProps({
     modelTextsState: readyState(configuredModelText('uid-web')),
     dblResources: [UNINSTALLED_RESOURCE],
     installResource,
+    ...overrides,
   });
   const { rerender } = render(<ModelTextPanel {...props} />);
   await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
   rerender(<ModelTextPanel {...props} dblResources={[]} />);
   rerender(<ModelTextPanel {...props} dblResources={[{ ...UNINSTALLED_RESOURCE }]} />);
-  return { installResource };
+  return { installResource, props, rerender };
 }
 
 afterEach(() => {
@@ -341,6 +342,28 @@ describe('ModelTextPanel', () => {
 
     await screen.findByRole('button', { name: 'Try again' });
     expect(installResource).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the model text in the same panel once a retry re-reads a catalog that has caught up', async () => {
+    // The whole recovery, with no remount: a no-op install against a stale flag, the retry, and a
+    // re-read that finally reports the resource installed.
+    setUsjSpy.mockClear();
+    const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
+    const onRetryCatalog = vi.fn();
+    const { props, rerender } = await renderWithCatalogStaleAfterInstall({
+      getResourceChapter,
+      onRetryCatalog,
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(onRetryCatalog).toHaveBeenCalledTimes(1);
+    // The re-read the retry started: the catalog empties while in flight, then comes back current.
+    rerender(<ModelTextPanel {...props} dblResources={[]} />);
+    rerender(<ModelTextPanel {...props} dblResources={[INSTALLED_RESOURCE]} />);
+
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
+    expect(getResourceChapter).toHaveBeenCalledWith('project-web', expect.anything());
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalledWith(SAMPLE_USJ));
   });
 
   it('says the model text is installed, with no connection hint, when the catalog has not caught up', async () => {

@@ -1544,10 +1544,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
      unconditionally would put a full rescan in front of every ordinary install, so the cheap answer
      gates the expensive one. The no-op sends the same notifications a real install does, because
      the caller's view is the thing that was wrong.
-  2. **`installed` is a hint, so a caller that acts on it refreshes first.** The resource panels, the
-     text grid and both pickers await `platformGetResources.refreshResourceFlags` and then read the
-     catalog, rather than acting on a snapshot that is one refresh behind. A listing does not
-     bother: showing the previous snapshot costs nothing it cannot correct on the next read.
+  2. **`installed` is a hint, so a caller that acts on it refreshes first — unless acting on a
+     stale one is cheap.** The resource panels and the text grid await
+     `platformGetResources.refreshResourceFlags` and then read the catalog, rather than acting on a
+     snapshot that is one refresh behind. The resource and team-layout pickers deliberately do not:
+     awaiting the refresh would hold the dialog's first paint on a backend call, and a stale flag
+     there costs only a redundant install that rule 1 turns into a no-op that corrects it. A listing
+     does not bother either: showing the previous snapshot costs nothing it cannot correct on the
+     next read.
   3. **A resolved install is not re-fired for the same uid.** An idempotent install plus a catalog
      that never converges would otherwise loop. The panel offers a retry instead, and says the
      resource is installed but could not be opened — not that the install failed, which would send
