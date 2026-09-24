@@ -17,7 +17,12 @@ import {
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 } from '@shared/services/web-view.service-model';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import {
+  compareProjectsByName,
+  getErrorMessage,
+  isPlatformError,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { findFirstEditorWebViewDefinition } from '@shared/models/web-view.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
@@ -79,17 +84,18 @@ function resolveLanguage(
 
 /**
  * Converts cheap project metadata (already fetched via `projectLookupService`) into a `ProjectItem`
- * for display, without opening a project data provider. `fullName`/`name` are optional on
- * `ProjectMetadata`, so both fall back to the project id to guarantee defined display strings (and
- * a safe sort key for callers that sort by `fullName`). A present-but-empty value passes through
- * as-is - empty FullName is a real, deliberately-supported Paratext case.
+ * for display, without opening a project data provider. `name` falls back to the project id so the
+ * identifying string is always defined; `fullName` does not, because a project with no full name of
+ * its own must stay without one rather than mirror its short name.
  */
 function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
   const resolved = resolveLanguage(m.language ?? '', m.languageTag ?? '');
   return {
     id: m.id,
-    fullName: m.fullName ?? m.name ?? m.id,
-    shortName: m.name ?? m.id,
+    fullName: normalizeFullName(m.fullName),
+    // A blank name falls back to the id as an absent one does: the short name is the field that
+    // identifies a project in every list, so a blank one leaves an unidentifiable row.
+    shortName: m.name?.trim() ? m.name : m.id,
     language: resolved?.tag,
     languageDisplayName: resolved?.displayName,
     isEditable: m.isEditable ?? true,
@@ -430,7 +436,7 @@ export function useProjectPickerData(): ProjectPickerData {
     () =>
       allProjectsWithRecent
         .filter((p) => !recentIdSet.has(normalizeProjectId(p.id)))
-        .sort((a, b) => a.fullName.localeCompare(b.fullName)),
+        .sort(compareProjectsByName),
     [allProjectsWithRecent, recentIdSet],
   );
 

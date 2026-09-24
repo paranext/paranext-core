@@ -49,7 +49,11 @@ export declare const Z_INDEX_TOOLTIP = 675;
 export type ProjectSelectorProject = {
 	id: string;
 	shortName: string;
-	fullName: string;
+	/**
+	 * Full name, shown as the row's muted second line. Omit it when the project has none — don't copy
+	 * the short name in; the selector already renders a single line when the names match.
+	 */
+	fullName?: string;
 	/**
 	 * When `true`, the row for this project is rendered muted, is not selectable, and the
 	 * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
@@ -368,7 +372,12 @@ export type ProjectSelectorFooterAction = {
  * groupings can supply their own localized label without a separate string channel.
  */
 export type ProjectSelectorLocalizedStrings = {
-	/** Trigger `aria-label`. */
+	/**
+	 * Names what the trigger selects (e.g. "Project"), NOT the whole accessible name. With something
+	 * selected the trigger announces `"{ariaLabel}: {selection}"`, so a consumer passing `"Select
+	 * project"` gets "Select project: WEB". Supply the group label alone and let the selection be
+	 * appended.
+	 */
 	ariaLabel?: string;
 	/** Trigger fallback text when nothing is selected. */
 	buttonPlaceholder?: string;

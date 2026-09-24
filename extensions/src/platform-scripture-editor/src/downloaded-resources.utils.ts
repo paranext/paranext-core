@@ -1,6 +1,10 @@
 import papi, { logger } from '@papi/frontend';
 import type { DblResourceData, ResourceType } from 'platform-bible-utils';
-import { doesCatalogRowCoverProject, getErrorMessage } from 'platform-bible-utils';
+import {
+  doesCatalogRowCoverProject,
+  getErrorMessage,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -17,7 +21,12 @@ import {
 export type DownloadedResource = {
   projectId: string;
   name: string;
-  fullName: string;
+  /**
+   * Absent when the resource has no full name distinct from its short one. Deliberately not
+   * mirrored from `name`: a mirrored value claims a full name the resource does not have, which
+   * every consumer then has to un-claim.
+   */
+  fullName?: string;
   language: string;
 };
 
@@ -61,7 +70,7 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
     return metadata.map((data) => ({
       projectId: data.id,
       name: data.name ?? data.id,
-      fullName: data.fullName ?? data.name ?? data.id,
+      fullName: normalizeFullName(data.fullName),
       language: data.language ?? '',
     }));
   } catch (e) {

@@ -304,7 +304,9 @@ function setupUser() {
 }
 
 function openProjectSelector(user: ReturnType<typeof setupUser>) {
-  return user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL }));
+  return user.click(
+    screen.getByRole('combobox', { name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`) }),
+  );
 }
 
 /** Opens the Find filters panel, which is where every filter control lives */
@@ -351,15 +353,17 @@ describe('Find project selector — simple interface mode', () => {
   it('appends the scroll group letter to the trigger in power mode', () => {
     render(<Find {...buildProps()} />);
 
-    expect(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL })).toHaveTextContent(
-      'WEB · A',
-    );
+    expect(
+      screen.getByRole('combobox', { name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`) }),
+    ).toHaveTextContent('WEB · A');
   });
 
   it('shows the bare project short name in the trigger when scroll groups are hidden', () => {
     render(<Find {...buildProps({ hideScrollGroups: true })} />);
 
-    const trigger = screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL });
+    const trigger = screen.getByRole('combobox', {
+      name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`),
+    });
     expect(trigger).toHaveTextContent('WEB');
     // The separator is what carries the group letter in power mode; its absence is the assertion.
     expect(trigger).not.toHaveTextContent('·');

@@ -11,6 +11,7 @@ import {
   TooltipTrigger,
   useListbox,
 } from 'platform-bible-react';
+import { hasDistinctFullName } from 'platform-bible-utils';
 import { CheckIcon } from 'lucide-react';
 import LabelledGlyph from '@renderer/components/projects/labelled-glyph.component';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
@@ -18,7 +19,11 @@ import { RefObject, useMemo, useState } from 'react';
 
 export type ProjectItem = {
   id: string;
-  fullName: string;
+  /**
+   * Long display name. Absent when the project has no full name of its own — never mirror the short
+   * name in, or every project reads as though it had a distinct full name.
+   */
+  fullName?: string;
   shortName: string;
   /** Short BCP-47 language tag displayed in the language column (e.g. "en", "en-US"). */
   language?: string;
@@ -77,7 +82,7 @@ function matchesSearch(project: ProjectItem, searchText: string): boolean {
   if (!searchText) return true;
   const lower = searchText.toLowerCase();
   return (
-    project.fullName.toLowerCase().includes(lower) ||
+    (project.fullName?.toLowerCase().includes(lower) ?? false) ||
     project.shortName.toLowerCase().includes(lower) ||
     (project.language?.toLowerCase().includes(lower) ?? false)
   );
@@ -156,10 +161,14 @@ function ProjectSection({
               {p.shortName}
             </span>
           </div>
-          {/* Column 2 — full name. Truncates rather than widening the row; the native hover label
-              keeps the clipped text reachable. */}
-          <div className="tw:min-w-0 tw:truncate tw:px-3 tw:text-sm" title={p.fullName}>
-            {p.fullName}
+          {/* Column 2 — full name, empty for a project that has none. Only the full name, never a
+              repeat of the short name already in column 1. Truncates rather than widening the row;
+              the native hover label keeps the clipped text reachable. */}
+          <div
+            className="tw:min-w-0 tw:truncate tw:px-3 tw:text-sm"
+            title={hasDistinctFullName(p) ? p.fullName : undefined}
+          >
+            {hasDistinctFullName(p) ? p.fullName : undefined}
           </div>
           {/* Column 3 — language tag. Floored and truncating like the two columns before it: its
               min-content contribution is a whole unbreakable word, so a track that could not shrink

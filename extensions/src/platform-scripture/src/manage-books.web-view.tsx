@@ -36,6 +36,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   makeProjectSelectorCustomData,
+  normalizeFullName,
   normalizeProjectId,
 } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
@@ -108,8 +109,11 @@ type ProjectListResult = {
     isResource: boolean;
     /**
      * Long human-readable name (e.g. "English Standard Version 2016"). Returned on the list so the
-     * frontend does not have to fetch `platform.fullName` per project. Empty when unset — fall back
-     * to the short `name`.
+     * frontend does not have to fetch `platform.fullName` per project.
+     *
+     * Empty when unset. Readers narrow it with `normalizeFullName` and leave the full name absent
+     * rather than falling back to the short `name` — mirroring claims a full name the project does
+     * not have.
      */
     fullName: string;
     /**
@@ -372,9 +376,11 @@ export function toManageBooksSelectorRows(
 ): SidebarProject[] {
   return projects.map((p) => ({
     id: p.projectId,
-    // `fullName` arrives on the wire row, so no per-project `getSetting` is needed here.
+    // `fullName` arrives on the wire row, so no per-project `getSetting` is needed here. It is
+    // left absent rather than mirrored from the short name when unset — the selector renders one
+    // line for a project with no distinct full name, and a mirror would claim it has one.
     shortName: p.name,
-    fullName: p.fullName.length > 0 ? p.fullName : p.name,
+    fullName: normalizeFullName(p.fullName),
     isEditable: p.isEditable,
     customData: makeProjectSelectorCustomData({
       type: p.projectType,
@@ -848,8 +854,9 @@ global.webViewComponent = function ManageBooksWebView({
         id: p.projectId,
         shortName: p.name,
         name: p.name,
-        // fullName is empty when unset server-side; fall back to the short name.
-        fullName: p.fullName.length > 0 ? p.fullName : p.name,
+        // Empty when unset server-side, and left absent rather than mirrored from the short name:
+        // the pickers render one line for a project with no distinct full name.
+        fullName: normalizeFullName(p.fullName),
         isEditable: p.isEditable,
         // Forward the isResource flag so the dialog can filter resources out of the Copy "From"
         // picker (licensing). The Create "Based on" picker includes resources (structure-only

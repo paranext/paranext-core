@@ -505,18 +505,27 @@ describe('TeamLayoutDialogContent', () => {
     expect(screen.getByText('HNF - Hanif Bible')).toBeInTheDocument();
   });
 
+  it('labels a catalogued resource short-name-first, and by short name alone when it has no catalog entry', () => {
+    renderContent();
+
+    // ESV is in the catalog, so its row carries both names, short name leading. NIV is not, so it
+    // falls back to the reference's own short name rather than composing a partial label.
+    expect(screen.getByText('ESV - English Standard Version')).toBeInTheDocument();
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+  });
+
   // Column three's two resource types are tabs for the team, so they are tabs here. Only the open
   // tab's rows are mounted, which is the point: the column stops growing with the resource count.
   it('puts each resource type on its own tab and shows one tab at a time', () => {
     renderContent({ initialCommentaryResources: [IVP] });
 
-    expect(screen.getByText('English Standard Version (ESV)')).toBeInTheDocument();
+    expect(screen.getByText('ESV - English Standard Version')).toBeInTheDocument();
     expect(screen.queryByText('IVP Commentary')).not.toBeInTheDocument();
 
     showCommentaryTab();
 
     expect(screen.getByText('IVP Commentary')).toBeInTheDocument();
-    expect(screen.queryByText('English Standard Version (ESV)')).not.toBeInTheDocument();
+    expect(screen.queryByText('ESV - English Standard Version')).not.toBeInTheDocument();
   });
 
   // The count is the only place the dialog states that the text collection draws on both tabs at

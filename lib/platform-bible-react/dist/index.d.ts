@@ -1639,9 +1639,34 @@ export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
 };
+/**
+ * A project as this sidebar's consumer supplies it.
+ *
+ * `projectName`/`projectFullName` are the same pair `platform-bible-utils` calls
+ * `ProjectNames.shortName`/`fullName`; the names differ because this type predates that helper and
+ * is exported from the stable barrel, where renaming a field is a breaking change. The two shapes
+ * meet in exactly one adapter — the `projectSelectorProjects` memo below — so the helper's rules
+ * still apply to every project this component renders.
+ */
 export type ProjectInfo = {
 	projectId: string;
+	/**
+	 * Short project name — the trigger label for the `<ProjectSelector>` and the primary line of each
+	 * popover row. Sourced from the `platform.name` project setting.
+	 */
 	projectName: string;
+	/**
+	 * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
+	 * popover rows. Omit it for a project that has no distinct full name; when it is absent, blank or
+	 * equal to `projectName`, the row falls back to a single-line layout (the `hasDistinctFullName`
+	 * rule the `ProjectSelector` applies).
+	 *
+	 * Source it from project metadata (`getMetadataForAllProjects`), NOT from a
+	 * `getSetting('platform.fullName')` read: that setting cannot express "no full name" — it
+	 * defaults to a localized `%project_full_name_missing%` placeholder, which would render here as a
+	 * second name the project does not have.
+	 */
+	projectFullName?: string;
 };
 export type SettingsSidebarProps = {
 	/** Optional id for testing */
@@ -2392,8 +2417,9 @@ export type ToolbarCompoundLabelProps = {
 	 */
 	separator?: string;
 	/**
-	 * Render `secondary` before `primary`, for labels that read that way round — a project selector
-	 * shows `Translation Project 1 (TP1)`, full name first, short name last.
+	 * Render `secondary` before `primary`, for labels that read that way round — a measurement that
+	 * reads `12 pt` puts the number (`secondary`) first, even though `primary` (the unit, `pt`) is
+	 * still the field that must survive shrinking.
 	 */
 	secondaryFirst?: boolean;
 	/** Whether the secondary field is rendered at all. Defaults to `true`. */

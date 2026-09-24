@@ -5,7 +5,7 @@ import {
   useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
-import { isPlatformError } from 'platform-bible-utils';
+import { formatProjectName, isPlatformError } from 'platform-bible-utils';
 import { usePromise, useRetryablePromise } from 'platform-bible-react';
 import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { DblResourceData } from 'platform-bible-utils';
@@ -227,8 +227,7 @@ function TeamLayoutDialogWrapper({
     const shortName = isPlatformError(projectShortNameSetting) ? '' : projectShortNameSetting;
     const fullName = isPlatformError(projectFullNameSetting) ? '' : projectFullNameSetting;
     if (!shortName) return fullName || undefined;
-    if (!fullName || fullName === shortName) return shortName;
-    return `${shortName} - ${fullName}`;
+    return formatProjectName({ shortName, fullName });
   }, [projectShortNameSetting, projectFullNameSetting]);
 
   const seededItems = useMemo(

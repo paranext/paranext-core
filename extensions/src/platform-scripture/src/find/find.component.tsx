@@ -204,8 +204,11 @@ export type FindProject = {
   id: string;
   /** Short display name (e.g. an abbreviation). */
   shortName: string;
-  /** Full display name. */
-  fullName: string;
+  /**
+   * Full display name. Optional: a project with no distinct full name omits it rather than
+   * mirroring the short name in, so the picker renders a single line for it.
+   */
+  fullName?: string;
   /** Language name, used by the picker's Language grouping. Omitted when unknown. */
   language?: string;
   /**
@@ -500,17 +503,18 @@ export const FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['la
  * projects beyond the open ones would want it without a second round of plumbing.
  */
 export function toFindSelectorRows(projects: readonly FindProject[]): ProjectSelectorProject[] {
-  return [...projects]
-    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-    .map((project) => ({
-      id: project.id,
-      shortName: project.shortName,
-      fullName: project.fullName,
-      customData: makeProjectSelectorCustomData({
-        language: project.language,
-        lastUsedAt: project.lastUsedAt,
-      }),
-    }));
+  // Deliberately unsorted. `ProjectSelector` sorts every section it renders itself — every
+  // partition path in `project-selector.rows.ts` runs `compareRows`, which leads with
+  // `compareProjectsByName` — so a sort here would order rows nothing ever reads in that order.
+  return projects.map((project) => ({
+    id: project.id,
+    shortName: project.shortName,
+    fullName: project.fullName,
+    customData: makeProjectSelectorCustomData({
+      language: project.language,
+      lastUsedAt: project.lastUsedAt,
+    }),
+  }));
 }
 
 /**

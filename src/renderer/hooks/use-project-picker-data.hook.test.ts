@@ -286,22 +286,31 @@ describe('useProjectPickerData', () => {
     });
   });
 
-  it('falls back to the project id for fullName/shortName when metadata name/fullName are missing', async () => {
-    const { projectLookupService } = await importMocks();
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
-      metadataList([{ id: 'proj-no-names', isEditable: true }]) as never,
-    );
+  it.each([
+    ['missing', {}],
+    // A blank name is as unusable as an absent one — it is the field that identifies the row.
+    ['blank', { name: '   ' }],
+  ])(
+    'falls back to the project id for the short name when the metadata name is %s, and leaves the full name absent',
+    async (_label, nameFields) => {
+      const { projectLookupService } = await importMocks();
+      vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+        metadataList([{ id: 'proj-no-names', isEditable: true, ...nameFields }]) as never,
+      );
 
-    const { result } = renderHook(() => useProjectPickerData());
+      const { result } = renderHook(() => useProjectPickerData());
 
-    await settle(result);
-    expect(result.current.allProjects).toHaveLength(1);
-    expect(result.current.allProjects[0]).toMatchObject({
-      id: 'proj-no-names',
-      fullName: 'proj-no-names',
-      shortName: 'proj-no-names',
-    });
-  });
+      await settle(result);
+      expect(result.current.allProjects).toHaveLength(1);
+      // The full name stays absent rather than mirroring the id: a mirrored value would make every
+      // nameless project render as though it had a full name distinct from its short name.
+      expect(result.current.allProjects[0]).toMatchObject({
+        id: 'proj-no-names',
+        shortName: 'proj-no-names',
+      });
+      expect(result.current.allProjects[0].fullName).toBeUndefined();
+    },
+  );
 
   it('recentProjects reflects recent project IDs from data provider, without opening any project data provider', async () => {
     const { projectLookupService, useData } = await importMocks();
@@ -454,6 +463,25 @@ describe('useProjectPickerData', () => {
     expect(result.current.allProjects).toHaveLength(1);
     expect(result.current.allProjects[0].id).toBe('proj-other');
     expect(result.current.recentProjects[0].id).toBe('proj-r1');
+  });
+
+  it('orders all projects by short name, not full name', async () => {
+    const { projectLookupService } = await importMocks();
+    // Two traps at once. The fixture arrives in reverse `shortName` order, so deleting the sort
+    // altogether fails rather than yielding the expectation by coincidence; and `fullName` order is
+    // the exact reverse of `shortName` order, so a comparator reading the wrong field returns the
+    // reversed list.
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'proj-a', name: 'ZZZ', fullName: 'Alpha First' },
+        { id: 'proj-z', name: 'AAA', fullName: 'Zulu Last' },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.allProjects.map((project) => project.shortName)).toEqual(['AAA', 'ZZZ']);
   });
 
   it('refreshes currentSimpleProject when onDidUpdateWebView fires', async () => {

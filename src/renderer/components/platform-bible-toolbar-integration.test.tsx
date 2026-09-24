@@ -43,11 +43,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%projectPicker_toolbar_more_projects%': 'Test more projects',
       '%projectPicker_toolbar_no_projects%': 'Test no projects',
       '%projectPicker_toolbar_select_project%': 'Test select a project',
-      '%projectPicker_toolbar_trigger_label%': 'Test select a project, {fullName} ({shortName})',
+      '%projectPicker_toolbar_trigger_label_2%': 'Test select a project, {shortName}, {fullName}',
+      '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Test select a project, {shortName}',
       '%projectPicker_toolbar_trigger_label_empty%': 'Test select a project, no projects here',
       '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
-      '%projectPicker_toolbar_label_nameAndShortName%': '{fullName} ({shortName})',
-      '%projectPicker_toolbar_label_shortNameOnly%': '({shortName})',
+      '%projectPicker_toolbar_label_shortNameAndFullName%': '{shortName} :: {fullName}',
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [
@@ -240,9 +240,7 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
 
     // `combobox` is the real trigger's role, and the aria label is the one the toolbar localizes —
     // a stub selector satisfies neither.
-    const trigger = await screen.findByRole('combobox', {
-      name: 'Test select a project, Project One (P1)',
-    });
+    const trigger = await screen.findByRole('combobox', { name: /^Test select a project/ });
     expect(trigger).toBeInTheDocument();
     // Nothing measures the toolbar in jsdom, so the shrink step sits at its narrowest and the
     // compound label shows the short name alone.
@@ -261,7 +259,7 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     // and inaudible to a screen reader. Queried by role rather than by reading the attribute, so
     // the assertion fails if any future change reintroduces a content-suppressing name.
     expect(
-      await screen.findByRole('combobox', { name: 'Test select a project, Project One (P1)' }),
+      await screen.findByRole('combobox', { name: 'Test select a project, P1, Project One' }),
     ).toBeInTheDocument();
   });
 
@@ -306,7 +304,7 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     // The visible label switches to the pick immediately; the accessible name has to move with it
     // or a screen reader keeps announcing the previous project's failure over the new selection.
     expect(
-      await screen.findByRole('combobox', { name: 'Test select a project, Project One (P1)' }),
+      await screen.findByRole('combobox', { name: 'Test select a project, P1, Project One' }),
     ).toBeInTheDocument();
   });
 
@@ -341,9 +339,7 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
       allProjects: [PROJECTS[1]],
     });
 
-    await user.click(
-      await screen.findByRole('combobox', { name: 'Test select a project, Project One (P1)' }),
-    );
+    await user.click(await screen.findByRole('combobox', { name: /^Test select a project/ }));
 
     // The real component accepts the toolbar's custom grouping — `availableGroupings: ['custom']`
     // with `hideFilterMenu` — and renders the toolbar's own section headings over its projects.
@@ -386,9 +382,7 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
       allProjects: [PROJECTS[1]],
     });
 
-    await user.click(
-      await screen.findByRole('combobox', { name: 'Test select a project, Project One (P1)' }),
-    );
+    await user.click(await screen.findByRole('combobox', { name: /^Test select a project/ }));
     await screen.findByTestId('project-selector-footer-action');
 
     // The toolbar localizes only a few of `ProjectSelectorLocalizedStrings`' keys; the rest keep

@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -50,8 +51,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%projectPicker_toolbar_more_projects%': 'Test more projects',
       '%projectPicker_toolbar_no_projects%': 'Test no projects',
       '%projectPicker_toolbar_select_project%': 'Test select a project',
-      '%projectPicker_toolbar_trigger_label%': 'Test select a project, {fullName} ({shortName})',
+      '%projectPicker_toolbar_trigger_label_2%': 'Test select a project, {shortName} - {fullName}',
       '%projectPicker_toolbar_trigger_label_error%': 'Test select a project, {errorMessage}',
+      '%projectPicker_toolbar_trigger_label_empty%': 'Test select a project, no projects',
+      '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Test select a project, {shortName}',
     },
   ]),
   useScrollGroupScrRef: vi.fn(() => [
@@ -1330,7 +1333,13 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   });
 });
 
+/** The real signature of the mocked localization hook, for typing an override of it. */
+type UseLocalizedStrings = typeof import('@renderer/hooks/papi-hooks').useLocalizedStrings;
+
 describe('PlatformBibleToolbar project selector label', () => {
+  /** The module factory's `useLocalizedStrings`, captured the first time a test overrides it. */
+  let defaultLocalizedStrings: UseLocalizedStrings | undefined;
+
   // `clearAllMocks()` clears call history but does not reset `mockReturnValue`, so restore the
   // module factory's default picker data explicitly to prevent a per-test `mockReturnValue` from
   // leaking. A per-test `mockReturnValueOnce` still takes priority over this.
@@ -1370,11 +1379,85 @@ describe('PlatformBibleToolbar project selector label', () => {
     expect(trigger).not.toHaveTextContent('Test Project');
   });
 
-  it('keeps the project name and short name readable as one string', () => {
-    // Split across two spans, so without a real separator this reads "Test Project(TP)".
+  // Restores the module factory's localized strings after a test swaps in a different template;
+  // `clearAllMocks()` clears call history but leaves an implementation override in place.
+  afterEach(async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const mocked = vi.mocked(useLocalizedStrings);
+    if (defaultLocalizedStrings) mocked.mockImplementation(defaultLocalizedStrings);
+  });
+
+  it('follows a locale that reorders the pair, instead of a hardcoded order', async () => {
+    // The point of driving the visible label from the format string: the joined tooltip and the two
+    // visible fields come from ONE string, so they cannot disagree about order or punctuation.
+    // Fails if the label goes back to a literal short-name/separator/full-name sequence.
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const mocked = vi.mocked(useLocalizedStrings);
+    const original = mocked.getMockImplementation();
+    if (!original) throw new Error('useLocalizedStrings is not mocked');
+    defaultLocalizedStrings ??= original;
+    // Wraps rather than replaces, so every other picker string keeps the factory's value and this
+    // test pins the one key it is about. Mutates the returned tuple in place rather than rebuilding
+    // it, which keeps the hook's exact tuple type instead of widening to an array.
+    mocked.mockImplementation((...args) => {
+      const result = original(...args);
+      result[0] = {
+        ...result[0],
+        '%projectPicker_toolbar_label_shortNameAndFullName%': '{fullName} / {shortName}',
+      };
+      return result;
+    });
+
     renderAtStep(SHRINK_STEP.WIDE);
 
-    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Test Project (TP)');
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Test Project / TP');
+  });
+
+  it('keeps the project name and short name readable as one string', () => {
+    // Split across two spans, so without a real separator this reads "TPTest Project".
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('TP - Test Project');
+  });
+
+  it('does not repeat the name when the full name equals the short name', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+      currentSimpleProject: { id: 'proj-1', fullName: 'TP', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent(/^TP$/);
+  });
+
+  it('opens no tooltip on hover when the full name equals the short name', async () => {
+    // Hovering a label that already shows everything must not pop a tooltip repeating it — distinct
+    // from the abbreviation/clipped cases above, where the tooltip is exactly the point. Uses
+    // `mockReturnValue` (not `mockReturnValueOnce`) because hovering triggers a re-render, which
+    // would otherwise re-call the hook and fall back to the describe block's default mock.
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: { id: 'proj-1', fullName: 'TP', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+
+    // MINIMUM, not WIDE. The only tooltip opener reachable in jsdom is the dropped-field
+    // (`isShowingPartialLabel`) one — `useTruncationTooltip` needs a real `scrollWidth`, which is
+    // always 0 here — and that opener is live only at the step where the secondary field is
+    // dropped. At WIDE it cannot fire at all, so the assertion would hold with the de-dup deleted.
+    renderAtStep(SHRINK_STEP.MINIMUM);
+
+    await userEvent.hover(screen.getByText('TP'));
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
   it('shows an error in place of the label, not alongside it', async () => {
@@ -1454,7 +1537,7 @@ describe('PlatformBibleToolbar project selector label', () => {
     renderAtStep(SHRINK_STEP.WIDE);
 
     const trigger = screen.getByTestId('project-picker-value');
-    expect(trigger).toHaveTextContent('Test Project (TP)');
+    expect(trigger).toHaveTextContent('TP - Test Project');
     expect(trigger).not.toHaveTextContent('Test select a project');
   });
 
@@ -1778,5 +1861,61 @@ describe('PlatformBibleToolbar — pending project display', () => {
     const trigger = screen.getByTestId('project-picker-value');
     expect(trigger).toHaveTextContent('NEW');
     expect(trigger).not.toHaveTextContent('Project failed to load');
+  });
+});
+
+describe('PlatformBibleToolbar — project selector accessible name', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+    // `clearAllMocks()` above drops the module factory's implementation, so the picker data has to
+    // be re-established here (same reason the "books beyond the active project" block does it).
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+  });
+
+  it('names the current project, not just the action', async () => {
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
+    });
+
+    // This selector supplies `renderTriggerLabel`, so `ProjectSelector` has no trigger text to
+    // derive an accessible name from and leaves it to the consumer. Asserted on the prop rather
+    // than the DOM because the selector is stubbed here; the composed name's effect on the real
+    // button is covered in `project-selector.component.test.tsx`.
+    expect(requireCapturedProjectSelectorProps().localizedStrings?.ariaLabel).toBe(
+      'Test select a project, TP - Test Project',
+    );
+  });
+
+  it('falls back to the action alone when no project is current', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: undefined,
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
+    });
+
+    // Naming a project that is not selected would announce a selection that does not exist, so
+    // the name falls back to a form that, with an empty project list, states that rather than
+    // inviting a selection that cannot be made.
+    expect(requireCapturedProjectSelectorProps().localizedStrings?.ariaLabel).toBe(
+      'Test select a project, no projects',
+    );
   });
 });

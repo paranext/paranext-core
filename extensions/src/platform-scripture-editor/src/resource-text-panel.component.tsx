@@ -101,7 +101,9 @@ function ResourceSelectorDropdown({
             variant="outline"
             className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
           >
-            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+            {/* `dir="auto"`: `getRefLabel` returns the joined short/full name as one text node, so
+                the label needs the name's own direction rather than the panel's. */}
+            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap" dir="auto">
               {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : ''}
             </span>
             <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
@@ -120,6 +122,7 @@ function ResourceSelectorDropdown({
                 onCheckedChange={() => {
                   onSelectResource(refId);
                 }}
+                dir="auto"
               >
                 {getRefLabel(ref.reference, dblResources)}
               </DropdownMenuCheckboxItem>

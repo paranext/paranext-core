@@ -720,12 +720,14 @@ export function ModelTextPanel({
                 // `tw:min-w-0` unlocks the shrink that `tw:overflow-hidden` then bounds.
                 className="tw:flex tw:h-[42px] tw:min-w-0 tw:shrink-0 tw:items-center tw:overflow-hidden tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
               >
-                <span ref={modelTextLabelRef} className="tw:min-w-0 tw:truncate">
+                {/* `dir="auto"`: the label is a joined short/full name in one text node, so it
+                    carries its own direction rather than the panel's. */}
+                <span ref={modelTextLabelRef} className="tw:min-w-0 tw:truncate" dir="auto">
                   {modelTextLabel}
                 </span>
               </div>
             </TooltipTrigger>
-            <TooltipContent>{modelTextLabel}</TooltipContent>
+            <TooltipContent dir="auto">{modelTextLabel}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}

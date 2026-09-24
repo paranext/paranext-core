@@ -694,7 +694,7 @@ describe('ModelTextPanel', () => {
     expect(header).toHaveClass('tw:flex');
     expect(header).not.toHaveClass('tw:truncate');
 
-    const label = within(header).getByText('World English Bible (WEB)');
+    const label = within(header).getByText('WEB - World English Bible');
     expect(label).not.toBe(header);
     expect(label).toHaveClass('tw:truncate');
   });

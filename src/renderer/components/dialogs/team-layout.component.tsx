@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { formatReplacementString } from 'platform-bible-utils';
+import { formatProjectName, formatReplacementString } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import {
@@ -234,10 +234,12 @@ function hasStringId(
 }
 
 /**
- * Formats a resource for display as `FULL NAME (SHORT_NAME)`, looking the full name up from the
- * cached DBL catalog by id. Falls back to just the short name when the reference has no id, or the
- * id isn't found in the currently-loaded catalog (e.g. an uncached resource, or a non-dbl reference
- * type).
+ * Formats a resource for display short-name-first through {@link formatProjectName} — `SHORT_NAME -
+ * FULL NAME` — looking the full name up from the cached DBL catalog by id. Falls back to just the
+ * short name when the reference has no id, or the id isn't found in the currently-loaded catalog
+ * (e.g. an uncached resource, or a non-dbl reference type). The helper also drops the full name
+ * when it repeats the short one, which a locally-installed non-DBL resource does (its `fullName`
+ * falls back to its `displayName`).
  *
  * Takes a `Map` rather than the catalog array because the catalog runs to a couple of thousand rows
  * and this is called twice per resource row (the label and the checkbox's accessible name), for
@@ -252,7 +254,7 @@ function formatResourceDisplayName(
   if (!hasStringId(reference)) return shortName;
   const match = resourcesByUid.get(reference.id);
   if (!match) return shortName;
-  return `${match.fullName} (${match.displayName})`;
+  return formatProjectName({ shortName: match.displayName, fullName: match.fullName });
 }
 
 function toResourceReference(resource: DblResourceData): ResourceReference {
@@ -354,11 +356,14 @@ function ResourceRow({
               className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm"
               onPointerEnter={onPointerEnter}
               onPointerLeave={onPointerLeave}
+              // The resource label is a joined short/full name in one text node, so it carries its
+              // own direction rather than inheriting the dialog's.
+              dir="auto"
             >
               {displayName}
             </span>
           </TooltipTrigger>
-          <TooltipContent>{displayName}</TooltipContent>
+          <TooltipContent dir="auto">{displayName}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>
@@ -839,6 +844,8 @@ export function TeamLayoutDialogContent({
                             className="tw:truncate"
                             onPointerEnter={onModelTextLabelPointerEnter}
                             onPointerLeave={onModelTextLabelPointerLeave}
+                            // Joined resource name as one text node — see `ResourceRow`.
+                            dir="auto"
                           >
                             {modelTextLabel}
                           </span>
