@@ -2,7 +2,9 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, expect, it } from 'vitest';
 import {
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
   ContentZoomTextProvider,
   useContentZoomTextProps,
 } from '@/context/content-zoom-text.context';
@@ -23,8 +25,10 @@ function ProjectText({ children }: { children: string }) {
 }
 
 describe('content-zoom-text context', () => {
-  it('exports the attribute literal that mirrors core’s constant', () => {
+  it('exports the attribute literals that mirror core’s constants', () => {
     expect(CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe('data-platform-content-zoom-root');
+    expect(CONTENT_ZOOM_SCOPE_ATTRIBUTE).toBe('data-platform-content-zoom-scope');
+    expect(CONTENT_ZOOM_LABEL_ATTRIBUTE).toBe('data-platform-content-zoom-label');
   });
 
   it('marks nothing outside a provider', () => {

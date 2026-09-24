@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CONTENT_ZOOM_ROOT_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
+import {
+  CONTENT_ZOOM_LABEL_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_LABEL_ATTRIBUTE,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_SCOPE_ATTRIBUTE,
+} from 'platform-bible-react';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import * as webViewModel from '@shared/models/web-view.model';
 import { isValidContentZoomAreaId } from '@shared/utils/content-zoom.util';
@@ -9,9 +13,11 @@ import {
   CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_IDENTITY_STATE_KEY,
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
   CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   getContentZoomCssVariable,
   getContentZoomDeclaration,
@@ -86,6 +92,8 @@ describe('content-zoom.model', () => {
     expect(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE).toBe('--platform-content-zoom-default');
     expect(getContentZoomCssVariable('footnotes')).toBe('--platform-content-zoom-footnotes');
     expect(CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe('data-platform-content-zoom-root');
+    expect(CONTENT_ZOOM_SCOPE_ATTRIBUTE).toBe('data-platform-content-zoom-scope');
+    expect(CONTENT_ZOOM_LABEL_ATTRIBUTE).toBe('data-platform-content-zoom-label');
     expect(CONTENT_ZOOM_STYLE_ELEMENT_ID).toBe('platform-content-zoom-styles');
     expect(CONTENT_ZOOM_COMMANDS.in).toBe('platform.webViewContentZoomIn');
     expect(CONTENT_ZOOM_COMMANDS.out).toBe('platform.webViewContentZoomOut');
@@ -98,6 +106,14 @@ describe('content-zoom.model', () => {
 
   it('keeps the library marker attribute equal to the platform constant', () => {
     expect(LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe(CONTENT_ZOOM_ROOT_ATTRIBUTE);
+  });
+
+  it('keeps the library scope and label attributes equal to the platform constants', () => {
+    expect(LIBRARY_CONTENT_ZOOM_SCOPE_ATTRIBUTE).toBe(CONTENT_ZOOM_SCOPE_ATTRIBUTE);
+    expect(LIBRARY_CONTENT_ZOOM_LABEL_ATTRIBUTE).toBe(CONTENT_ZOOM_LABEL_ATTRIBUTE);
+    // Positive control: both sides are defined, so the equality is not undefined === undefined.
+    expect(CONTENT_ZOOM_SCOPE_ATTRIBUTE).toBeTruthy();
+    expect(LIBRARY_CONTENT_ZOOM_LABEL_ATTRIBUTE).toBeTruthy();
   });
 
   it('publishes no pop-up attribute: pop-ups are never marked as zoomed content', () => {

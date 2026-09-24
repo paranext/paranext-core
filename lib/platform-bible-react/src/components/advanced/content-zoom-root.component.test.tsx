@@ -5,6 +5,7 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ContentZoomRoot } from '@/components/advanced/content-zoom-root.component';
 import {
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   useContentZoomTextProps,
 } from '@/context/content-zoom-text.context';
@@ -111,5 +112,35 @@ describe('ContentZoomRoot', () => {
     );
     expect(container.querySelectorAll(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toHaveLength(1);
     expect(screen.getByTestId('library-text')).not.toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE);
+  });
+
+  it('names its area for the zoom indicator through the label prop', () => {
+    const { container } = render(
+      <ContentZoomRoot area="resource-hsv" label="HSV">
+        text
+      </ContentZoomRoot>,
+    );
+    const element = container.firstElementChild;
+    expect(element?.getAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE)).toBe('resource-hsv');
+    expect(element?.getAttribute(CONTENT_ZOOM_LABEL_ATTRIBUTE)).toBe('HSV');
+    // Positive control: the prop reaches the DOM only as the data attribute, never as `label`.
+    expect(element?.hasAttribute('label')).toBe(false);
+  });
+
+  it('writes no label attribute when the label is absent or empty', () => {
+    const { container } = render(
+      <>
+        <ContentZoomRoot area="resource-a">a</ContentZoomRoot>
+        <ContentZoomRoot area="resource-b" label="">
+          b
+        </ContentZoomRoot>
+      </>,
+    );
+    const markers = container.querySelectorAll(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`);
+    // Positive control: both markers rendered, so the absence below is about the label alone.
+    expect(markers).toHaveLength(2);
+    markers.forEach((marker) =>
+      expect(marker.hasAttribute(CONTENT_ZOOM_LABEL_ATTRIBUTE)).toBe(false),
+    );
   });
 });
