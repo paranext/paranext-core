@@ -1,6 +1,12 @@
 import { logger } from '@papi/frontend';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Unsubscriber } from 'platform-bible-utils';
+import {
+  leftEdgeRect,
+  LivePopoverAnchorSource,
+  measureElement,
+  measureRange,
+} from 'platform-bible-react';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -542,19 +548,197 @@ export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
 }
 
 /**
+ * The selector for every element of the annotation with the given ID within the editor content.
+ * Annotation/comment ids can contain CSS metacharacters (":", ".", etc.); escaping the whole class
+ * token via CSS.escape keeps the selector valid (same approach as selectorForAnnotationIds in
+ * platform-enhanced-resources' scripture-pane.component.tsx).
+ */
+function annotationSelector(id: string): string {
+  return `.editor-container .${CSS.escape(`annotationId-${id}`)}`;
+}
+
+/**
+ * Finds the (first) element of the annotation with the given ID within the editor content.
+ *
+ * @param id The ID of the annotation to find
+ * @returns The DOM element of the annotation if found; otherwise undefined
+ */
+function getAnnotationElement(id: string): HTMLElement | undefined {
+  return document.querySelector<HTMLElement>(annotationSelector(id)) ?? undefined;
+}
+
+/**
+ * The viewport rect around every rendered fragment of the annotation with the given ID. An
+ * annotation over wrapped or partly formatted text renders as several elements, each with one or
+ * more line boxes.
+ *
+ * @param id The ID of the annotation to measure
+ * @returns The union of the fragments' client rects, or undefined when nothing is rendered
+ */
+export function measureAnnotation(id: string): DOMRect | undefined {
+  const rects = Array.from(document.querySelectorAll(annotationSelector(id))).flatMap((element) =>
+    Array.from(element.getClientRects()),
+  );
+  const [first, ...rest] = rects;
+  if (!first) return undefined;
+  const bounds = rest.reduce(
+    (accumulator, rect) => ({
+      left: Math.min(accumulator.left, rect.left),
+      top: Math.min(accumulator.top, rect.top),
+      right: Math.max(accumulator.right, rect.right),
+      bottom: Math.max(accumulator.bottom, rect.bottom),
+    }),
+    { left: first.left, top: first.top, right: first.right, bottom: first.bottom },
+  );
+  return new DOMRect(
+    bounds.left,
+    bounds.top,
+    bounds.right - bounds.left,
+    bounds.bottom - bounds.top,
+  );
+}
+
+/**
+ * Builds the anchor source for the pending-comment popover, in the shape `useLivePopoverAnchor`'s
+ * `setSource` takes. The editor re-renders the selected text to mark it as the pending comment,
+ * which moves `range` to the start of its text node (or detaches it), so this follows two phases:
+ * until the mark exists, it follows `range` itself, bailing out once the range no longer matches
+ * what it was when the popover opened; once the mark exists, it follows the union of the mark's
+ * rendered fragments, at the horizontal fraction along the mark's width where the caret sat when
+ * the popover opened. Anchoring on a fraction of the mark's width, rather than a fixed pixel
+ * offset, keeps the anchor at the caret's original position through a zoom change.
+ *
+ * @param range The DOM range the selection had when the popover opened. The caller clones it from
+ *   the live selection first, since a live selection range keeps moving as the user reads or
+ *   edits.
+ * @param annotationId The id of the annotation the editor renders for the pending comment.
+ * @param contextElement Element to report as `contextElement`; passed straight through.
+ * @returns The anchor source for `useLivePopoverAnchor().setSource`.
+ */
+export function createPendingCommentAnchorSource(
+  range: Range,
+  annotationId: string,
+  contextElement: Element,
+): LivePopoverAnchorSource {
+  const rangeRectAtOpen = measureRange(range);
+  const { startContainer, startOffset, endContainer, endOffset } = range;
+  const isRangeIntact = () =>
+    startContainer.isConnected &&
+    range.startContainer === startContainer &&
+    range.startOffset === startOffset &&
+    range.endContainer === endContainer &&
+    range.endOffset === endOffset;
+
+  const computeFraction = (annotationRect: DOMRect): number =>
+    rangeRectAtOpen && annotationRect.width > 0
+      ? Math.min(
+          Math.max((rangeRectAtOpen.left - annotationRect.left) / annotationRect.width, 0),
+          1,
+        )
+      : 0;
+
+  let fractionInAnnotation: number | undefined;
+  let previousAnnotationRect: DOMRect | undefined;
+  return {
+    measure: () => {
+      const annotationRect = measureAnnotation(annotationId);
+      if (!annotationRect) {
+        // Between the re-render and the mark appearing, a moved range would place the popover at
+        // the start of the text node; keep the last good rect instead.
+        if (!isRangeIntact()) return undefined;
+        const rangeRect = measureRange(range);
+        return rangeRect && leftEdgeRect(rangeRect);
+      }
+      if (fractionInAnnotation === undefined) {
+        // A selection that wraps can render only its first fragment on the frame the mark first
+        // becomes measurable — the rest of the union paints on a later frame. Freezing the fraction
+        // against that partial width would misplace the popover for as long as it stays open, so
+        // wait for two consecutive frames to report the same rect (the same stability check
+        // `isSameScrollGeometry` uses for scroll geometry) before trusting it enough to freeze.
+        // Until then, recompute the fraction from the current (possibly still-growing) rect on
+        // every frame instead of caching a partial one.
+        const isSettled =
+          previousAnnotationRect !== undefined &&
+          isSameScrollGeometry(previousAnnotationRect.left, annotationRect.left) &&
+          isSameScrollGeometry(previousAnnotationRect.width, annotationRect.width);
+        if (isSettled) fractionInAnnotation = computeFraction(annotationRect);
+        else previousAnnotationRect = annotationRect;
+      }
+      const fraction = fractionInAnnotation ?? computeFraction(annotationRect);
+      return new DOMRect(
+        annotationRect.left + fraction * annotationRect.width,
+        annotationRect.top,
+        0,
+        annotationRect.height,
+      );
+    },
+    contextElement,
+  };
+}
+
+/**
+ * Builds the anchor source for the footnote/cross-reference editor popover, in the shape
+ * `useLivePopoverAnchor`'s `setSource` takes. Anchors on the note caller's left edge, spanning its
+ * height, so the popover shows below (or above) the caller's line.
+ *
+ * The caller element the click handler captured can go missing from under it — the editor
+ * re-renders note callers as notes are added, moved or removed elsewhere in the chapter — so this
+ * re-resolves by key through `getElementByKey` once the captured element is no longer connected, on
+ * every measurement rather than once, so the anchor keeps following the note across any number of
+ * re-renders while the popover stays open.
+ *
+ * @param element The note caller element as it was when the popover opened.
+ * @param noteKey The editor's node key for the note, used to re-resolve `element` once it detaches.
+ * @param getElementByKey Resolves a node key to its current rendered element, or `undefined` if the
+ *   note no longer exists in the document. Passed as a callback rather than an editor reference so
+ *   this module stays free of the editor's own types.
+ * @returns The anchor source for `useLivePopoverAnchor().setSource`.
+ */
+export function createNoteAnchorSource(
+  element: Element,
+  noteKey: string,
+  getElementByKey: (nodeKey: string) => HTMLElement | undefined,
+): LivePopoverAnchorSource {
+  return {
+    measure: () => {
+      const target = element.isConnected ? element : getElementByKey(noteKey);
+      if (!target) return undefined;
+      const rect = measureElement(target);
+      return rect && leftEdgeRect(rect);
+    },
+    contextElement: element.closest('.editor-input') ?? element,
+  };
+}
+
+/**
+ * Builds the fallback anchor source for the pending-comment popover, used when there is no live DOM
+ * selection to anchor {@link createPendingCommentAnchorSource} to — the popover then centers on the
+ * editor's own viewport instead of tracking any particular text.
+ *
+ * @param editorContainer The `.usfm` element the popover should center over.
+ * @returns The anchor source for `useLivePopoverAnchor().setSource`.
+ */
+export function createPendingCommentCenterAnchorSource(
+  editorContainer: Element,
+): LivePopoverAnchorSource {
+  return {
+    measure: () => {
+      const rect = measureElement(editorContainer);
+      if (!rect) return undefined;
+      return new DOMRect(rect.left + rect.width / 2, rect.top + rect.height / 2, 0, 0);
+    },
+    contextElement: editorContainer,
+  };
+}
+
+/**
  * Scrolls to the annotation with the given ID within the editor content.
  *
  * @param id The ID of the annotation to scroll to
  * @returns The DOM element of the annotation if found; otherwise undefined
  */
 export function scrollToAnnotation(id: string): HTMLElement | undefined {
-  // annotation/comment ids can contain CSS metacharacters (":", ".", etc.); escaping the whole
-  // class token via CSS.escape keeps the selector valid (same approach as selectorForAnnotationIds
-  // in platform-enhanced-resources' scripture-pane.component.tsx).
-  const escapedAnnotationClass = CSS.escape(`annotationId-${id}`);
-  const annotationElement =
-    document.querySelector<HTMLElement>(`.editor-container .${escapedAnnotationClass}`) ??
-    undefined;
+  const annotationElement = getAnnotationElement(id);
 
   const scrollContainerElement = annotationElement
     ? findScrollContainer(annotationElement)

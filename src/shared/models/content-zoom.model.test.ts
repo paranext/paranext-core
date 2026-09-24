@@ -1,12 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { CONTENT_ZOOM_ROOT_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
-import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import {
+  CONTENT_ZOOM_CSS_VARIABLE_PREFIX as LIBRARY_CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
+  CONTENT_ZOOM_DEFAULT_CSS_VARIABLE as LIBRARY_CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_POPUP_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_POPUP_ATTRIBUTE,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  MAIN_CONTENT_ZOOM_AREA_ID as LIBRARY_MAIN_CONTENT_ZOOM_AREA_ID,
+} from 'platform-bible-react';
+import {
+  MAIN_CONTENT_ZOOM_AREA,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+} from '@shared/models/web-view.model';
 import {
   CONTENT_ZOOM_COMMANDS,
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_IDENTITY_STATE_KEY,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
   CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
+  CONTENT_ZOOM_POPUP_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   getContentZoomCssVariable,
@@ -28,6 +39,7 @@ describe('content-zoom.model', () => {
 
   it('exposes stable names used by the bootstrap and the views', () => {
     expect(CONTENT_ZOOM_LEVELS_STATE_KEY).toBe('platform.contentZoomLevels');
+    expect(CONTENT_ZOOM_IDENTITY_STATE_KEY).toBe('platform.contentZoomIdentity');
     expect(CONTENT_ZOOM_CSS_VARIABLE_PREFIX).toBe('--platform-content-zoom-');
     expect(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE).toBe('--platform-content-zoom-default');
     expect(getContentZoomCssVariable('footnotes')).toBe('--platform-content-zoom-footnotes');
@@ -44,5 +56,15 @@ describe('content-zoom.model', () => {
 
   it('keeps the library marker attribute equal to the platform constant', () => {
     expect(LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe(CONTENT_ZOOM_ROOT_ATTRIBUTE);
+  });
+
+  it('keeps the library pop-up attribute and zoom variables equal to the platform constants', () => {
+    expect(LIBRARY_CONTENT_ZOOM_POPUP_ATTRIBUTE).toBe(CONTENT_ZOOM_POPUP_ATTRIBUTE);
+    expect(LIBRARY_CONTENT_ZOOM_CSS_VARIABLE_PREFIX).toBe(CONTENT_ZOOM_CSS_VARIABLE_PREFIX);
+    expect(LIBRARY_CONTENT_ZOOM_DEFAULT_CSS_VARIABLE).toBe(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE);
+  });
+
+  it('keeps the library main-area id equal to the platform constant', () => {
+    expect(LIBRARY_MAIN_CONTENT_ZOOM_AREA_ID).toBe(MAIN_CONTENT_ZOOM_AREA);
   });
 });

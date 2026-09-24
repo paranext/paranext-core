@@ -4199,7 +4199,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   store keyed by web view id. Content zoom is the first feature written to the rule: the pane's own
   levels are `platform.contentZoomLevels` in the definition state, the default and the per-project
   memory are `platform.webViewContentZoom` and `platform.webViewContentZoomMemory`
-  (`src/renderer/services/web-view-content-zoom.service.ts`).
+  (`src/renderer/services/web-view-content-zoom.service.ts`). Definition state that belongs to a
+  project carries the identity it belongs to: the levels are stamped with
+  `platform.contentZoomIdentity` (`kind:identity`), written and removed with them, because a pane
+  re-pointed at another project keeps its web view id and the view spreads its own saved state onto
+  the new definition — so without the stamp the previous project's levels are indistinguishable from
+  levels chosen for the new one.
 - **Alternatives:** (a) **A per-view service with its own hidden `Record` store** — the April
   content-zoom prototype, PR #2211 — rejected: two stores for one value, and the one that is not the
   definition has to be taught by hand about every lifecycle event the definition gets for free.
@@ -4575,6 +4580,33 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   caller can never be told that everything is dead.
 - **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
   measured against the top of the multi-window stack.
+
+## adr-pop-ups-follow-their-content-zoom-area: A pop-up takes the zoom of the area it opens from
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** pop-ups portal to `document.body`, outside the zoom area, so they rendered at
+  interface scale next to zoomed content, and a hand-wrapped editor popover was misplaced at
+  200 %.
+- **Decision:** a pop-up takes the zoom of the area it opens from. `ContentZoomRoot` publishes
+  its area through React context, and the library's popover, dropdown menu and tooltip mark
+  their portaled content with the area and a pop-up flag and cap their size by the zoom factor.
+  The platform bootstrap never counts flagged content as a pane or anchors the indicator on it.
+  `ContentZoomAreaProvider` covers pop-ups rendered outside the area element.
+- **Alternatives:**
+  - per-call-site `ContentZoomRoot` wraps with a `zoomArea` prop threaded through the comment
+    list (repeated at every site, easy to forget);
+  - the bootstrap detecting Radix pop-ups and copying the trigger's area (depends on Radix
+    internals);
+  - keeping pop-ups at interface scale (rejected by the product owner).
+- **Consequences:**
+  - six shadcn files carry `CUSTOM` changes - three functional (popover, dropdown menu, tooltip)
+    and three recording the components that do not follow an area yet;
+  - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
+    (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
+    when first opened from zoomed content;
+  - a pop-up portaled into a container inside another area inherits that container's zoom.
+- **Source:** PT-4634.
 
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
@@ -6995,13 +7027,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   not even register its wheel listener while a pane has no areas — and the platform scales such a view
   whole at the Settings default instead. On Windows and Linux this is what a user notices first:
   Ctrl+`+`, Ctrl+`-` and Ctrl+`0` now do nothing anywhere except a view that answers them itself —
-  today the Scripture editor, through the zoom areas it marks, and Enhanced Resources, through the
-  keydown handler it has always had for its own scripture-pane zoom
+  today the Scripture editor and the comment list, through the zoom areas they mark, and Enhanced
+  Resources, through the keydown handler it has always had for its own scripture-pane zoom
   (`extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx`). Main
   no longer claims those chords, nothing replaces them, and a pane with no marked area deliberately
   leaves the keystroke to whoever else may want it rather than swallowing it for no effect. So a user
-  on Notes, or on the Text Collection — whose own pane zoom is wheel and menu only — presses Ctrl+0
-  and nothing happens. That is the intended cost of scoping zoom to a pane rather than to the window,
+  on the Text Collection — whose own pane zoom is wheel and menu only — or on any view that marks no
+  area, such as Home or an inventory, presses Ctrl+0 and nothing happens. That is the intended cost of scoping zoom to a pane rather than to the window,
   and it shrinks as views adopt the mechanism (the Text Collection grid in PT-4582, Enhanced
   Resources in PT-4583). The bootstrap listens in the **bubble** phase on purpose, so
   a view that owns Ctrl+wheel for a sub-region keeps precedence by stopping propagation in the capture

@@ -32,14 +32,16 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { expect, type FrameLocator, type Page } from '@playwright/test';
+import { expect, type Frame, type FrameLocator, type Page } from '@playwright/test';
 import {
   addUsersToProject,
+  DEFAULT_WEBSOCKET_PORT,
   escapeXml,
   PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
+import { getEditorFrame } from './scripture-editor-helpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -64,8 +66,6 @@ const PARATEXT_PROJECTS_ROOT = path.join(
 
 /** Network object name for the Paratext project data provider factory */
 const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProviderId';
-
-const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
  * Paratext app-data directories are named `Paratext<major><minor>` — `Paratext80` is 8.0,
@@ -633,6 +633,118 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
   /* eslint-enable no-await-in-loop, no-continue */
 
   throw new Error(`Failed to open comment list after 5 attempts for project ${project.shortName}`);
+}
+
+/**
+ * Clicks a project-scoped comment-list tab — the Column 3 "Comments" tab in Simple mode
+ * (`comments-tab.spec.ts`) or the per-project Comments panel tab it shares a layout with
+ * (`comments-panel-content-zoom.spec.ts`) — handling the rc-tabs overflow case where the tab is
+ * attached but clipped by the scrollable tab bar: rc-tabs renders every tab node at all times but
+ * clips those outside the visible portion, so `toBeAttached()` succeeds for a clipped tab while a
+ * direct click would miss it.
+ *
+ * @param webViewId The tab's web view id (`data-web-view-id` on `.platform-tab-title`)
+ * @param actionTimeoutMs Bounds the click/hover actions — pass a short value when calling inside a
+ *   retry loop so a blocked click (e.g. the workspace-updating overlay intercepting pointer events)
+ *   fails fast and the loop can retry, instead of burning the default 30 s action timeout
+ */
+export async function clickCommentsTab(
+  mainPage: Page,
+  webViewId: string,
+  actionTimeoutMs = 30_000,
+): Promise<void> {
+  const tabTitle = mainPage.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
+  if (await tabTitle.isVisible()) {
+    await tabTitle.click({ timeout: actionTimeoutMs });
+    return;
+  }
+  // Tab is outside the visible scroll area — open the overflow dropdown and activate it.
+  const dockBar = mainPage.locator('.dock-bar').filter({ has: tabTitle });
+  await dockBar.locator('.dock-nav-more').hover({ timeout: actionTimeoutMs });
+  // rc-tabs re-renders PlatformTabTitle (including our data-web-view-id) in the overflow popup.
+  await mainPage
+    .locator('[role="listbox"] [role="option"]')
+    .filter({ has: mainPage.locator(`[data-web-view-id="${webViewId}"]`) })
+    .click({ timeout: 5_000 });
+}
+
+/**
+ * Points the (worker-scoped, singleton) Comment List Panel — the Column 3 "Comments" tab in Simple
+ * mode — at `projectId`, via the `legacyCommentManager.openCommentListPanel` command. Shared by
+ * `comments-tab.spec.ts` (called inline for each of its test projects) and
+ * `comments-panel-content-zoom.spec.ts` (its own Simple-mode Column 3 panel tab).
+ */
+export async function openCommentListPanel(
+  projectId: string,
+  port = DEFAULT_WEBSOCKET_PORT,
+  registrationTimeoutMs = 60_000,
+  sendTimeoutMs = 150_000,
+): Promise<void> {
+  await waitForPapiMethodRegistered(
+    'command:legacyCommentManager.openCommentListPanel',
+    port,
+    registrationTimeoutMs,
+  );
+  await sendPapiRequestOnce(
+    'command:legacyCommentManager.openCommentListPanel',
+    [projectId],
+    port,
+    sendTimeoutMs,
+  );
+}
+
+/**
+ * Calls {@link openCommentListPanel}, brings its tab to front (which is also what mounts the panel's
+ * iframe the first time — Column 3's tabs render their content lazily, on first activation), and
+ * retries the whole sequence, bounded, until the iframe attaches and `expectedText` appears inside
+ * it — ARRANGEMENT only, for seeding the (fixed, non-closable Simple-mode) singleton Comments panel
+ * with content before a test acts on it. Returns the resolved content frame so the caller doesn't
+ * need a separate {@link getEditorFrame} call.
+ *
+ * TODO(PT-4745): every `openCommentListPanel` call re-points an already-mounted panel rather than
+ * creating a fresh instance (Simple mode's Comments panel is a singleton mounted before any test
+ * code runs), and the re-point sometimes never reaches the mounted component's props — the panel
+ * then keeps showing the previous project (or nothing), with no error. The command is idempotent,
+ * so reissuing it here is safe. Do NOT reach for this to retry an assertion that is itself testing
+ * the re-point path — see `comments-panel-content-zoom.spec.ts`'s "re-pointed panel" step, which is
+ * `test.step.skip`ped for the same underlying bug instead of retried, because retrying there would
+ * retry the very behavior under test.
+ *
+ * @param mainPage The Electron main window page the panel's iframe attaches in
+ * @param panelId The Comment List Panel's web view id (`data-web-view-id`)
+ * @param projectId The project id to point the panel at
+ * @param expectedText Text expected to appear in the panel body once it shows `projectId`'s content
+ * @param attempts Bounded retry count; the call is cheap and idempotent, so a few attempts absorb
+ *   the intermittent re-point failure without masking a persistent one
+ */
+export async function openCommentListPanelUntilVisible(
+  mainPage: Page,
+  panelId: string,
+  projectId: string,
+  expectedText: string,
+  attempts = 3,
+): Promise<Frame> {
+  let lastError: unknown;
+  // Sequential retry loop: each attempt must open the panel, activate its tab, wait for its iframe,
+  // and poll for its content before deciding whether to retry.
+  /* eslint-disable no-await-in-loop */
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    await openCommentListPanel(projectId);
+    await clickCommentsTab(mainPage, panelId);
+    const timeout = attempt < attempts - 1 ? 20_000 : 90_000;
+    try {
+      await mainPage
+        .locator(`iframe[data-web-view-id="${panelId}"]`)
+        .waitFor({ state: 'attached', timeout });
+      const frame = await getEditorFrame(mainPage, panelId);
+      await expect(frame.locator('body')).toContainText(expectedText, { timeout });
+      return frame;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+  throw lastError;
 }
 
 /** Returns the frame locator for the comment list web view iframe. */
