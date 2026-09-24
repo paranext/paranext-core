@@ -118,10 +118,15 @@ editor package:
   `stopPropagation` there ends the press before the menu's listener runs. Were the menu's listener
   ever moved onto `window` too, the two would run in registration order, and neither side could
   count on seeing a key first.
-- **The menu is found by its portal's classes, `.typeahead-popover.auto-embed-menu`.** Nothing in
-  this repo's unit tests reads those from the package; the context-menu e2e spec
-  (`endnote-insert-context-menu.spec.ts`) locates the menu by the same selector against the real
-  editor, so a rename fails there.
+- **The menu is found by the FOCUSED editor's `aria-controls="editor-context-menu"` attribute**,
+  which the editor package sets on that editor's own root for exactly as long as its menu stays
+  open (`isEditorContextMenuOpenFor` in `editor-context-menu.util.ts` reads it). Only
+  scripture-editors#14 sets it — an earlier `platform-editor` build never marks the root, so every
+  gate keyed on `isEditorContextMenuOpen` silently evaluates "menu closed" against it, all at once:
+  the `\` trigger, the Enter hand-down, and the insert-shortcut swallow all fall through together,
+  with no local signal that anything broke. `footnote-editor.context-menu-gate.test.tsx` and
+  `editor-context-menu-merge-order-contract.test.tsx` both mount the real editor rather than a mock,
+  so they exercise the actual attribute instead of assuming its shape.
 
 Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.
