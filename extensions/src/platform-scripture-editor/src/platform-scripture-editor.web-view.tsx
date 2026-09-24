@@ -18,6 +18,7 @@ import {
   MarkerMenuItem,
   PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
+  SetUsjOptions,
   STANDARD_VIEW_MODE,
   StructureProtectionMode,
   StyleInfo,
@@ -1335,8 +1336,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    *
    * @param usj The USJ to set in the editor
    */
-  const setEditorUsj = useRef((usj: Usj) => {
-    editorRef.current?.setUsj(usj);
+  const setEditorUsj = useRef((usj: Usj, options?: SetUsjOptions) => {
+    editorRef.current?.setUsj(usj, options);
     clearAnnotationInfo.current();
     setEditorChapterKey(renderedChapterKeyRef.current);
   });
@@ -3040,7 +3041,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const editorRoot = editorRef.current?.getElementByKey('root');
       const outgoingFirstBlock = editorRoot?.firstElementChild ?? undefined;
       try {
-        setEditorUsj.current(repairedUsj);
+        // Forced: the repair can be exactly the editor's record from before a marker edit still in
+        // progress — a chapter number the user backspaced away, put back — which the editor would
+        // otherwise take for a host re-sending old text and keep the edit on screen.
+        setEditorUsj.current(repairedUsj, { force: true });
       } catch (error) {
         logger.error(
           `Error putting the repaired chapter marker back into the editor: ${getErrorMessage(error)}`,
