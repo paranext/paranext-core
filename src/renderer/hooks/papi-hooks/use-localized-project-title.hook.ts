@@ -32,7 +32,8 @@ import { useMemo } from 'react';
  *   trigger any lookups, so it need not be stable.
  * @returns The formatted title, or `undefined` while the short name or the localized format is
  *   still loading (or when there is no `projectId`). Leave the title as it is while this is
- *   `undefined` rather than showing a placeholder.
+ *   `undefined` rather than showing a placeholder. A key with no localization produces the key
+ *   itself, as `getLocalizedProjectTitle` does.
  */
 export function useLocalizedProjectTitle(
   projectId: string | undefined,
@@ -45,14 +46,9 @@ export function useLocalizedProjectTitle(
   const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(localizeKeys);
   const titleFormat = localizedStrings[localizeKey];
 
-  // The localized strings hold the key itself until the lookup completes
-  if (
-    !projectId ||
-    isProjectNameLoading ||
-    isLocalizedStringsLoading ||
-    !titleFormat ||
-    titleFormat === localizeKey
-  )
+  // `titleFormat` is missing for one render after `localizeKey` changes, while the strings still
+  // belong to the previous key
+  if (!projectId || isProjectNameLoading || isLocalizedStringsLoading || !titleFormat)
     return undefined;
 
   return formatProjectTitle(titleFormat, projectId, projectName, replacements);

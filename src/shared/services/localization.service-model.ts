@@ -128,9 +128,10 @@ export type ILocalizationService = {
      * Never rejects, so a failed lookup cannot keep a web view from opening:
      *
      * - If the short name cannot be read, or is empty, the project id is shown in its place.
-     * - If the format cannot be localized, the title is just the project's name (or id).
+     * - If the format lookup fails, the title is just the project's name (or id).
      *
-     * Both failures are logged as warnings.
+     * Both failures are logged as warnings. A key with no localization is not a failure: as with
+     * `getLocalizedString`, the title is the key itself, so the missing string is noticed.
      *
      * @example
      *

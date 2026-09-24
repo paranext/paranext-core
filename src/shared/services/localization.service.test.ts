@@ -77,7 +77,17 @@ describe('getLocalizedProjectTitle', () => {
     ).resolves.toBe('Character Inventory: abc123');
   });
 
-  it('falls back to just the project name when the format cannot be localized', async () => {
+  it('shows the key when it has no localization', async () => {
+    getLocalizedString.mockResolvedValue('%extension_missingTitle%');
+    await expect(
+      localizationService.getLocalizedProjectTitle({
+        localizeKey: '%extension_missingTitle%',
+        projectId: 'abc123',
+      }),
+    ).resolves.toBe('%extension_missingTitle%');
+  });
+
+  it('falls back to just the project name when the format lookup fails', async () => {
     getLocalizedString.mockRejectedValue(new Error('Localization unavailable'));
     await expect(
       localizationService.getLocalizedProjectTitle({

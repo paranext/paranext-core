@@ -66,10 +66,10 @@ describe('useLocalizedProjectTitle', () => {
     expect(result.current).toBeUndefined();
   });
 
-  it('returns undefined while the format is still the unresolved key', () => {
+  it('shows the key once loaded when the key has no localization', () => {
     mockTitleFormat(TITLE_KEY);
     const { result } = renderHook(() => useLocalizedProjectTitle('abc123', TITLE_KEY));
-    expect(result.current).toBeUndefined();
+    expect(result.current).toBe(TITLE_KEY);
   });
 
   it('returns undefined with no project', () => {

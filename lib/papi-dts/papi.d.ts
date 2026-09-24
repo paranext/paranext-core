@@ -10446,9 +10446,10 @@ declare module 'shared/services/localization.service-model' {
        * Never rejects, so a failed lookup cannot keep a web view from opening:
        *
        * - If the short name cannot be read, or is empty, the project id is shown in its place.
-       * - If the format cannot be localized, the title is just the project's name (or id).
+       * - If the format lookup fails, the title is just the project's name (or id).
        *
-       * Both failures are logged as warnings.
+       * Both failures are logged as warnings. A key with no localization is not a failure: as with
+       * `getLocalizedString`, the title is the key itself, so the missing string is noticed.
        *
        * @example
        *
@@ -11112,13 +11113,14 @@ declare module 'renderer/hooks/papi-hooks/use-localized-project-title.hook' {
    *
    * @param projectId Id of the project the title is for. With no project there is no title, so the
    *   hook returns `undefined`.
-   * @param localizeKey Key of the localized title format. The format should contain a
-   *   `{projectName}` placeholder.
+   * @param localizeKey Key of the localized title format. The format should contain a `{projectName}`
+   *   placeholder.
    * @param replacements Values for any other `{key}` placeholders in the format. Changing it does not
    *   trigger any lookups, so it need not be stable.
    * @returns The formatted title, or `undefined` while the short name or the localized format is
    *   still loading (or when there is no `projectId`). Leave the title as it is while this is
-   *   `undefined` rather than showing a placeholder.
+   *   `undefined` rather than showing a placeholder. A key with no localization produces the key
+   *   itself, as `getLocalizedProjectTitle` does.
    */
   export function useLocalizedProjectTitle(
     projectId: string | undefined,
