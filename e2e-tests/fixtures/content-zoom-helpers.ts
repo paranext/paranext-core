@@ -63,17 +63,32 @@ export async function areaBox(
   frame: Frame,
   areaId: string,
 ): Promise<{ x: number; y: number; width: number; height: number }> {
-  const box = await frame
-    .locator(`[data-platform-content-zoom-root="${areaId}"]`)
-    .first()
-    .boundingBox();
-  if (!box) throw new Error(`Zoom area "${areaId}" has no bounding box`);
+  return onScreenBox(
+    frame,
+    frame.locator(`[data-platform-content-zoom-root="${areaId}"]`).first(),
+    `Zoom area "${areaId}"`,
+  );
+}
+
+/**
+ * `element`'s box clipped to the web view's frame, so a gesture aimed at its center lands on screen
+ * even when the element is taller than the pane (a whole chapter of text is). An unclipped center
+ * can lie below the window, where the pointer reaches no element at all. Main-frame-relative;
+ * `description` names the element in the errors.
+ */
+export async function onScreenBox(
+  frame: Frame,
+  element: Locator,
+  description: string,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await element.boundingBox();
+  if (!box) throw new Error(`${description} has no bounding box`);
   const pane = await frameBox(frame);
   const left = Math.max(box.x, pane.x);
   const top = Math.max(box.y, pane.y);
   const right = Math.min(box.x + box.width, pane.x + pane.width);
   const bottom = Math.min(box.y + box.height, pane.y + pane.height);
-  if (right <= left || bottom <= top) throw new Error(`Zoom area "${areaId}" is not on screen`);
+  if (right <= left || bottom <= top) throw new Error(`${description} is not on screen`);
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
