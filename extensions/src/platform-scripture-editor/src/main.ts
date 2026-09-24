@@ -160,7 +160,8 @@ async function openPlatformResourceViewer(
  * them only with book text and a view that allows note insertion. Platform.Bible keeps all three
  * Insert items always available instead and gates at submission — see
  * `adr-menus-always-available-gate-at-submission` in Architecture-Decisions.md; the submission-time
- * check itself is the web view's read-only/sync-blocked guard on each insert callback.
+ * check itself is the web view's read-only/sync-blocked guard in `insertNoteAtCurrentSelection`,
+ * the one callback all three insert kinds share.
  */
 async function insertNoteAtSelection(
   method: EditorMessageInsertTextualNoteAtSelection['method'],
