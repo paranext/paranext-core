@@ -121,6 +121,11 @@ import {
   setWindowPendingContentPredicate,
   startFocusedWindowIdEvent,
 } from '@main/services/window-state.service';
+import {
+  closeAllPorts as closeAllPapiPorts,
+  closeWindowPort as closePapiPortForWindow,
+  registerWindow as registerWindowWithPapiPortBroker,
+} from '@main/services/papi-port-broker.service';
 import { confirmCloseAllWindows } from '@main/services/close-all-prompt.service';
 import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
@@ -216,7 +221,7 @@ import {
   WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
   WINDOW_ID,
 } from '@shared/data/platform.data';
-import { GET_METHODS } from '@shared/data/rpc.model';
+import { GET_METHODS, INTENTIONAL_CLOSE_CODE } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { WINDOW_MIN_WIDTH_PX } from '@shared/models/window-constraints.model';
 import * as commandService from '@shared/services/command.service';
@@ -913,6 +918,9 @@ async function main() {
         ? restoreInfo.entry.windowId
         : undefined,
     );
+    // Before `loadURL` below: the page asks for its PAPI port as soon as its preload runs, so the
+    // handler has to exist first. Registered on the WebContents, so it survives reloads.
+    registerWindowWithPapiPortBroker(newWindow.webContents, windowId);
 
     // Tie the window to its persisted identity so layout persistence can serve and save it. If the
     // entry has gone (the user closed it while this window was starting), `assignEntryToWindow`
@@ -1627,6 +1635,10 @@ async function main() {
         // the tracked list, and until that fires a fan-out would still ask a window that cannot
         // answer — and report the coverage of whatever it was doing as incomplete because of it.
         markWindowNotReady(windowId);
+        // Last, after every request this handler made to the page has been answered: the page's own
+        // `pagehide` normally closes the port first, and this is the backstop that keeps a window
+        // close reading as a clean close on main rather than as a connection that died.
+        closePapiPortForWindow(windowId, 1001, 'window closing');
         // The escape hatch above takes the window down on a second close click, which can happen
         // any time during the wait this handler just came out of
         if (newWindow.isDestroyed()) {
@@ -2312,6 +2324,9 @@ async function main() {
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
         extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
       ]);
+      // Windows are normally destroyed by now, so this closes nothing; it is the backstop for a
+      // port still open when the network goes down, so it reads as an intentional close.
+      closeAllPapiPorts(INTENTIONAL_CLOSE_CODE, 'app shutdown');
       await networkService.shutdown();
 
       // In development, the dotnet watcher was killed so we have to wait here.
