@@ -64,8 +64,8 @@ export function getSortedMenuColumns(columns: Localized<ColumnsWithHeaders>): Me
  * Whether a group's items render under `columnOrSubMenuKey`: either the group names it as its
  * `column`, or the group is the one keyed by it, which is how a submenu addresses its own group.
  *
- * `TabDropdownMenu` picks a column's groups with this and {@link getMenuSectionsWithItems} decides
- * which columns have something to show with it, so "this column renders nothing" can never mean two
+ * `TabDropdownMenu` picks a column's groups with this and `getMenuSectionsWithItems` decides which
+ * columns have something to show with it, so "this column renders nothing" can never mean two
  * different things.
  *
  * @param groupKey The key the group is stored under
@@ -89,7 +89,10 @@ export type MenuSection = {
   columnKey: string;
   /** The column's localized label */
   label: string;
-  /** Whether the section is shown without its label as a heading; see `isHeaderHidden` */
+  /**
+   * Whether the section is shown without its label as a heading; see
+   * {@link MenuColumnWithHeader.isHeaderHidden}
+   */
   isHeaderHidden: boolean;
 };
 

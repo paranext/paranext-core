@@ -50,6 +50,7 @@ import {
   startDefaultProjectPicker,
   syncOnProjectSwitch,
   toScriptureEditorInfos,
+  updateRelatedChecksSidePanel,
   updateRelatedFindPanel,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
@@ -446,10 +447,11 @@ async function open(
       )
       .finally(emitDidFinish);
 
-    // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find waits
-    // until here because it is the one panel that needs the id of the editor this call just
-    // created. No Simple-mode check here — it owns its own mode guard.
+    // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find and Checks
+    // wait until here because they are the panels that need the id of the editor this call just
+    // created. No Simple-mode or project-kind checks here — each helper owns its own guards.
     await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
+    await updateRelatedChecksSidePanel(papi, projectForWebView.projectId, openedWebViewId);
 
     return openedWebViewId;
   }

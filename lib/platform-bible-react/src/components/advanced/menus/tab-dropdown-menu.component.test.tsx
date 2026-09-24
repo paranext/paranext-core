@@ -104,6 +104,15 @@ const EDITOR_MENU: Localized<MultiColumnMenu> = {
   ],
 };
 
+/** {@link EDITOR_MENU} with its Edit column set to show no heading */
+const EDITOR_MENU_WITH_HIDDEN_EDIT_HEADER: Localized<MultiColumnMenu> = {
+  ...EDITOR_MENU,
+  columns: {
+    ...EDITOR_MENU.columns,
+    'platformScriptureEditor.edit': { label: 'Edit', order: 2, isHeaderHidden: true },
+  },
+};
+
 async function openMenu(menuData: Localized<MultiColumnMenu>, showSectionHeadings = true) {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   render(
@@ -176,21 +185,38 @@ describe('TabDropdownMenu', () => {
   });
 
   it('shows a column that sets isHeaderHidden with no heading, but still names and divides it', async () => {
-    await openMenu({
-      ...EDITOR_MENU,
-      columns: {
-        ...EDITOR_MENU.columns,
-        'platformScriptureEditor.edit': { label: 'Edit', order: 2, isHeaderHidden: true },
-      },
-    });
+    await openMenu(EDITOR_MENU_WITH_HIDDEN_EDIT_HEADER);
 
     // Positive control: the neighboring sections keep their visible headings
-    expect(screen.getByText('Project')).toBeInTheDocument();
-    expect(screen.getByText('Insert')).toBeInTheDocument();
-    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+    expect(screen.getByText('Project')).not.toHaveClass('tw:sr-only');
+    expect(screen.getByText('Insert')).not.toHaveClass('tw:sr-only');
+    // jsdom applies no styles, so the class is the observable part of "visually hidden"
+    expect(screen.getByText('Edit')).toHaveClass('tw:sr-only');
     const edit = screen.getByRole('group', { name: 'Edit' });
     expect(within(edit).getByRole('menuitem', { name: /^Find/ })).toBeInTheDocument();
     expect(screen.getAllByRole('separator')).toHaveLength(2);
+  });
+
+  it('names no section, isHeaderHidden or not, without `showSectionHeadings`', async () => {
+    await openMenu(EDITOR_MENU_WITH_HIDDEN_EDIT_HEADER, false);
+
+    const sections = screen.getAllByRole('group');
+    // Positive control: all three sections render, so there is something to be unnamed
+    expect(sections).toHaveLength(3);
+    sections.forEach((section) => expect(section).not.toHaveAccessibleName());
+    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+  });
+
+  it('names no section when a column that sets isHeaderHidden is the only one with items', async () => {
+    await openMenu({
+      ...EDITOR_MENU_WITH_HIDDEN_EDIT_HEADER,
+      items: EDITOR_MENU.items.filter((item) => item.group === 'platformScriptureEditor.find'),
+    });
+
+    const section = screen.getByRole('group');
+    expect(within(section).getByRole('menuitem', { name: /^Find/ })).toBeInTheDocument();
+    expect(section).not.toHaveAccessibleName();
+    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
   });
 
   it('shows no heading when only one section has items', async () => {
