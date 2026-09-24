@@ -10,6 +10,7 @@ import {
   REGISTER_METHOD,
   RequestParams,
   requestWithRetry,
+  ServerSocketLike,
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
   MAX_WEBSOCKET_PAYLOAD_BYTES,
@@ -20,7 +21,6 @@ import {
   IRpcMethodRegistrar,
   RegisteredRpcMethodDetails,
   RpcClientDisconnectEvent,
-  ServerSocketLike,
 } from '@shared/models/rpc.interface';
 import {
   createEmptyOpenRpc,

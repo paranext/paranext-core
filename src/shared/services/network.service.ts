@@ -12,6 +12,7 @@ import {
   getJsonRpcRequestErrorMessagePrefix,
   InternalRequestHandler,
   JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+  ServerSocketLike,
 } from '@shared/data/rpc.model';
 import {
   AsyncVariable,
@@ -37,7 +38,6 @@ import {
   IRpcLocalClientAcceptor,
   IRpcMethodRegistrar,
   RpcClientDisconnectEvent,
-  ServerSocketLike,
 } from '@shared/models/rpc.interface';
 import { isServer } from '@shared/utils/internal-util';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';

@@ -1355,6 +1355,366 @@ declare module 'shared/services/logger.service' {
   };
   export default logger;
 }
+declare module 'shared/data/rpc.model' {
+  import { SerializedRequestType } from 'shared/utils/util';
+  import {
+    JSONRPCErrorCode,
+    JSONRPCErrorResponse,
+    JSONRPCRequest,
+    JSONRPCResponse,
+    JSONRPCSuccessResponse,
+  } from 'json-rpc-2.0';
+  /** Port to use for the WebSocket */
+  export const WEBSOCKET_PORT = 8876;
+  /**
+   * Largest message the WebSocket transport carries. A message over this is not a failed request: the
+   * receiver closes the connection with 1009, taking down every request in flight on it and, for the
+   * C# data provider, the process itself. Declared here rather than left to the `ws` default so a
+   * producer sizing a response against it - see `Pt9InterlinearReader.MaxPt9InterlinearDataBytes` -
+   * is measuring against a number this repository states.
+   */
+  export const MAX_WEBSOCKET_PAYLOAD_BYTES: number;
+  /**
+   * How many times to try sending a request before giving up if the request is not yet registered.
+   * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
+   * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of
+   * re-declaring the literal and silently diverging if it is ever retuned.
+   *
+   * @experimental
+   */
+  export const MAX_REQUEST_ATTEMPTS = 10;
+  /**
+   * How long in ms to wait between request attempts if the request is not yet registered. Exported
+   * for the same derive-don't-duplicate reason as {@link MAX_REQUEST_ATTEMPTS}.
+   *
+   * @experimental
+   */
+  export const REQUEST_ATTEMPT_WAIT_TIME_MS = 1000;
+  /**
+   * Whether an RPC object is setting up or has finished setting up its connection and is ready to
+   * communicate on the network
+   */
+  export enum ConnectionStatus {
+    /** Not connected to the network */
+    Disconnected = 0,
+    /** Attempting to connect to the network */
+    Connecting = 1,
+    /** Finished setting up its connection */
+    Connected = 2,
+  }
+  /** Parameters provided to an RPC request message */
+  export type RequestParams = Array<any>;
+  /**
+   * Function to call internally when a request is received. The return value is sent back as the
+   * response to the request. If the request was received over the network, the response will be
+   * packaged into a JSONRPCSuccessResponse message.
+   */
+  export type InternalRequestHandler = (...requestParams: RequestParams) => any;
+  /** Function that processes an event received locally or over the network */
+  export type EventHandler = <T>(eventType: string, event: T) => void;
+  /**
+   * ID of an individual request. It must be unique between an RPC client and server for a single
+   * connection. Once a connection has closed and reopens, IDs can be reused.
+   */
+  export type RequestId = number | string;
+  /**
+   * Create a JSONRPCRequest message
+   *
+   * @param requestType Indicates what to do with the request
+   * @param requestParams Parameters to pass along when the request is processed
+   * @param requestId Unique ID for this connection of this request
+   * @returns JSONRPCRequest message that can be serialized and sent over a connection
+   */
+  export function createRequest(
+    requestType: SerializedRequestType,
+    requestParams: RequestParams,
+    requestId: RequestId,
+  ): JSONRPCRequest;
+  /**
+   * Create a JSONRPCSuccessResponse message
+   *
+   * @param contents Data to return to the requester when the request succeeds
+   * @param requestId ID of the request that this response is intended to address. If no ID was
+   *   provided, don't pass a value to this parameter.
+   * @returns JSONRPCSuccessResponse message that can be serialized and sent over a connection
+   */
+  export function createSuccessResponse<T>(
+    contents: T,
+    requestId?: RequestId,
+  ): JSONRPCSuccessResponse;
+  /**
+   * Create a JSONRPCErrorResponse message
+   *
+   * @param errorMessage Text to provide to the requester about why this request failed
+   * @param errorCode JSONRPCErrorCode value that best aligns with the purpose of the failure
+   * @param requestId ID of the request that this response is intended to address. If no ID was
+   *   provided, don't pass a value to this parameter.
+   * @returns JSONRPCErrorResponse message that can be serialized and sent over a connection
+   */
+  export function createErrorResponse(
+    errorMessage: string,
+    errorCode?: JSONRPCErrorCode,
+    requestId?: RequestId,
+  ): JSONRPCErrorResponse;
+  /**
+   * Maximum characters retained from a single logged detail that can originate from a remote peer (a
+   * close `reason`, an error `message`)
+   */
+  export const MAX_LOGGED_DETAIL_LENGTH = 200;
+  /**
+   * Maximum characters retained from a logged stack trace.
+   *
+   * Far more generous than {@link MAX_LOGGED_DETAIL_LENGTH} because a stack is generated locally
+   * rather than supplied by a peer, so the flood-protection rationale does not apply — and because a
+   * stack bounded to a couple of hundred characters is one or two frames, which is rarely the frame
+   * that explains a disconnect.
+   */
+  export const MAX_LOGGED_STACK_LENGTH = 4000;
+  /**
+   * Close code used when we close a PAPI socket on purpose (shutdown, teardown). The WebSocket spec
+   * reserves 3000-4999 for application use, so carrying intent in the code itself lets a close
+   * handler tell a deliberate shutdown from a connection that died, with no extra state to keep in
+   * sync.
+   */
+  export const INTENTIONAL_CLOSE_CODE = 4000;
+  /**
+   * Whether a WebSocket close `code` represents a clean, expected shutdown rather than a connection
+   * that died.
+   *
+   * Clean codes: 1000 (normal), 1001 (going away — a page or window navigating away or closing), 1005
+   * (no status code was present in the close frame, which a plain `close()` with no arguments
+   * produces), and {@link INTENTIONAL_CLOSE_CODE}, this codebase's own marker for a close we initiated
+   * on purpose. What all four have in common is that a closing handshake completed. The code that
+   * matters is 1006: no close frame was ever received, the fingerprint of a connection that died
+   * rather than being closed — the shape a suspend produces.
+   *
+   * Shared so the client and server close handlers cannot independently drift on which codes count as
+   * clean. {@link isCleanCloseEvent} is the predicate to use where the event itself is in hand.
+   *
+   * @param code `code` from a WebSocket `close` event
+   * @returns `true` if the code indicates a completed closing handshake, `false` otherwise (including
+   *   for a non-numeric code)
+   */
+  export function isCleanCloseCode(code: unknown): boolean;
+  /**
+   * Whether a close event represents an orderly shutdown rather than a connection that died.
+   *
+   * `wasClean` is the authoritative answer — it reports whether a closing handshake completed — so it
+   * wins whenever the event carries it. Both Chromium and the `ws` library always set it; the
+   * {@link isCleanCloseCode} fallback covers a partial or foreign event shape that does not.
+   *
+   * Deciding on the code alone would misreport a close frame that carried no status: that arrives as
+   * 1005 with `wasClean` true, which a plain `close()` produces on every window close and page
+   * reload. Marking those abnormal would bury a genuine socket death under routine noise.
+   *
+   * @param ev A WebSocket `close` event, or anything at all — a non-event is reported as not clean
+   * @returns Whether a closing handshake completed
+   */
+  export function isCleanCloseEvent(ev: unknown): boolean;
+  /**
+   * Describe a WebSocket `close` event for a log line.
+   *
+   * Chromium and the `ws` library deliver structurally different close events, and both keep
+   * `code`/`reason`/`wasClean` as accessors on the prototype rather than own properties — so
+   * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
+   *
+   * `code` is the single most diagnostic field: 1006 (no close frame) means the connection died
+   * rather than being closed politely. A reader should not need the WebSocket code table memorized to
+   * see that, so an event that {@link isCleanCloseEvent} rejects also carries an `abnormal=true` pair.
+   * The marker is its own pair rather than a parenthetical inside `code=` so the whole detail stays a
+   * sequence of space-separated `key=value` pairs.
+   *
+   * @param ev A WebSocket `close` event, or anything at all
+   * @returns Space-separated `key=value` pairs — `code`, `abnormal` (only when the connection died),
+   *   `reason` (JSON-quoted, so a reason containing a quote or a bracket cannot forge the surrounding
+   *   log line) and `wasClean`. A field that cannot be read is reported as `n/a`, so a non-event
+   *   yields `code=n/a reason=n/a wasClean=n/a` rather than throwing.
+   */
+  export function describeWebSocketCloseEvent(ev: unknown): string;
+  /**
+   * Describe a WebSocket `error` event for a log line.
+   *
+   * The `ws` library's `ErrorEvent` keeps `message` and `error` as accessors on the prototype, so
+   * `JSON.stringify` on the event yields `{}` — only own properties are serialized. Read the fields
+   * explicitly.
+   *
+   * Note a browser `WebSocket` fires a plain `Event` on error, carrying no detail at all by
+   * specification, so `message=unknown` is the expected result on the renderer end.
+   *
+   * @param ev A WebSocket `error` event, or anything at all
+   * @returns A single log line holding `message=`, `code=` and, when the error carried one, a
+   *   `stack:` section. Never contains a line break, so an error keeps the one-record-per-line shape
+   *   every other line here has; a field that cannot be read is reported as `unknown`/`n/a` rather
+   *   than throwing.
+   */
+  export function describeWebSocketErrorEvent(ev: unknown): string;
+  /**
+   * The subset of a socket the main-process RPC layer touches. Both `ws`'s server-side sockets and
+   * the DOM `WebSocket` type satisfy it structurally, and so does a MessagePort wrapped to look like
+   * one. `RpcServer` and `RpcWebSocketListener` are written against this rather than against
+   * `WebSocket` so that main can serve a client over something other than a TCP socket.
+   *
+   * @experimental
+   */
+  export interface ServerSocketLike {
+    /**
+     * 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED, as on `WebSocket.readyState`
+     *
+     * @experimental
+     */
+    readonly readyState: number;
+    /** @experimental */
+    send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
+    /** @experimental */
+    close(code?: number, reason?: string): void;
+    /** @experimental */
+    addEventListener<K extends 'close' | 'error' | 'message'>(
+      type: K,
+      listener: (ev: WebSocketEventMap[K]) => void,
+    ): void;
+    /** @experimental */
+    removeEventListener<K extends 'close' | 'error' | 'message'>(
+      type: K,
+      listener: (ev: WebSocketEventMap[K]) => void,
+    ): void;
+  }
+  /** Serialize a payload, if needed, and send it over the provided WebSocket */
+  export function sendPayloadToWebSocket(ws: ServerSocketLike | undefined, payload: unknown): void;
+  /**
+   * Deserialize a payload from the network and return it as a JSONRPC message or array of messages.
+   * Note that all `null` values from the payload will be converted into `undefined` values except for
+   * `result` values in JSONRPCSuccessResponse messages. A `null` value as the response to a request
+   * must not be converted to `undefined` per the JSONRPC protocol.
+   *
+   * After a request has been processed by the protocol stack, call `fixupResponse` to restore
+   * `undefined` responses.
+   */
+  export function deserializeMessage(
+    payload: string,
+  ): JSONRPCRequest | JSONRPCResponse | Array<JSONRPCRequest | JSONRPCResponse>;
+  /**
+   * Convert `null` results back to `undefined` once we're out of the protocol stack.
+   *
+   * This works in tandem with `deserializeMessage` to properly handle `null` values in JSONRPC
+   * messages.
+   */
+  export function fixupResponse(response: JSONRPCResponse): JSONRPCResponse;
+  /**
+   * Runs the request callback and retries a number of times if `requestCallback` resolves to a method
+   * not found error
+   *
+   * @param requestCallback Function to run to send a JSON-RPC request. Should return a JSONRPC error
+   *   with code {@link JSONRPCErrorCode.MethodNotFound} if it fails to find the method
+   * @param name Name of the handler running this request for logging purposes
+   * @param requestType Type of request for logging purposes
+   * @returns The response from the request including the method not found error if it times out
+   */
+  export function requestWithRetry(
+    requestCallback: () => Promise<JSONRPCResponse>,
+    name: string,
+    requestType: string,
+  ): Promise<JSONRPCResponse>;
+  /**
+   * Register a method on the network so that requests of the given type are routed to your request
+   * handler.
+   */
+  export const REGISTER_METHOD = 'network:registerMethod';
+  /**
+   * Unregister a method on the network so that requests of the given type are no longer routed to
+   * your request handler.
+   */
+  export const UNREGISTER_METHOD = 'network:unregisterMethod';
+  /**
+   * Tell main which peer is on the other end of this socket, so main's connection log lines can be
+   * joined to the client's own. Main labels each socket with an incrementing id, which appears
+   * nowhere in the client's logs; the client labels itself with a name it alone knows.
+   */
+  export const ANNOUNCE_PEER = 'network:announcePeer';
+  /**
+   * Register a network event emitter with the main process so that the event is tracked centrally.
+   * Multi-source vs. single-source semantics are determined by looking up the event name in
+   * `MULTI_SOURCE_EVENT_NAMES`.
+   */
+  export const REGISTER_EVENT = 'network:registerEvent';
+  /**
+   * Unregister a network event emitter from the main process so that the event is no longer tracked
+   * centrally.
+   */
+  export const UNREGISTER_EVENT = 'network:unregisterEvent';
+  /**
+   * Get all methods that are currently registered on the network. Required to be 'rpc.discover' by
+   * the OpenRPC specification.
+   */
+  export const GET_METHODS = 'rpc.discover';
+  /** Prefix on requests that indicates that the request is a command */
+  export const CATEGORY_COMMAND = 'command';
+  /**
+   * Builds the exact prefix that `network.service`'s `doRequest` embeds in the message it throws for
+   * a JSON-RPC _error response_ with the given `code` — the full thrown message is this prefix
+   * followed by `: <error message>`.
+   *
+   * Exported so the few callers that must classify these thrown errors by message (there is no richer
+   * machine-readable marker for a "method not found" response) derive the format from this single
+   * producer instead of hand-copying the literal. Hand-copied copies silently drift: reformat the
+   * producer and a separate matcher/fixture keeps matching its old string while real errors stop
+   * matching, and the tests stay green. Everything routing through this function stays in lockstep.
+   *
+   * @param code The JSON-RPC error code from the error response being classified
+   * @returns The exact message prefix `doRequest` uses for an error response with that `code`
+   * @experimental
+   */
+  export function getJsonRpcRequestErrorMessagePrefix(code: number): string;
+  /**
+   * Whether `error` is what `networkService`'s request plumbing (`doRequest` in `network.service.ts`)
+   * throws for a JSON-RPC "method not found" response — i.e. no handler for the requested method has
+   * registered anywhere on the network.
+   *
+   * Callers that want to treat "nobody is listening" as a benign outcome must key off the JSON-RPC
+   * error _code_, never off the human-readable text that follows it. The two producers of a
+   * method-not-found response word that text differently (`'<method>' not found` in `rpc-server.ts`,
+   * `No handler found for <method>` in `rpc-websocket-listener.ts`), and matching the text alone also
+   * matches an unrelated failure from a handler that _did_ run and threw a message with the same
+   * words in it — turning "no validator, allow it" into "the validator rejected this, allow it
+   * anyway". The code is the only part that distinguishes the two.
+   *
+   * The code has to be read back out of the message because `doRequest` flattens every RPC-level
+   * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
+   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker: a "no
+   * handler yet" response has no `error.data` at all, and the `platformErrorCode` field is no help
+   * either, because it is never populated from C#. `JsonRpc.ExceptionStrategy` is left at its
+   * `CommonErrorData` default, which serializes no `Exception.Data`, so `error.data.data` is always
+   * absent whatever `PlatformErrorCodes.WithCode` set. Deriving the format from
+   * {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
+   * with, keeps this matcher in lockstep with any reformat there.
+   *
+   * @param error Error thrown by a `networkService` request
+   * @param requestType If provided, additionally require the error to name this request type, so a
+   *   method-not-found response for some _other_ request cannot be mistaken for this one's. Both
+   *   producers embed the raw request type in their message.
+   * @returns Whether `error` is a method-not-found response (for `requestType`, when given)
+   * @experimental
+   */
+  export function isJsonRpcMethodNotFoundError(error: unknown, requestType?: string): boolean;
+  /**
+   * Prefix that `network.service`'s `doRequest` embeds in the message it throws when a request times
+   * out client-side before any response arrives. Exported for the same drift-prevention reason as
+   * {@link getJsonRpcRequestErrorMessagePrefix}.
+   *
+   * @experimental
+   */
+  export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';
+  /**
+   * Whether `error` is what `network.service`'s request plumbing throws when a request expires
+   * client-side before any answer arrives (`doRequest` builds `JSON-RPC Request timed out:
+   * <requestType> <args>` when its per-request wait runs out). Matched by message substring — no
+   * richer machine-readable marker exists for this failure — deriving the format from its one
+   * producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}), so a reformat there cannot silently
+   * stop this matcher from matching.
+   *
+   * @experimental
+   */
+  export function isRequestTimedOutError(error: unknown): boolean;
+}
 declare module 'shared/models/openrpc.model' {
   import type { JSONSchema7 } from 'json-schema';
   /**
@@ -1597,576 +1957,6 @@ declare module 'shared/models/openrpc.model' {
    * unchanged.
    */
   export function withNotificationPrefix(entry: OpenRpcNotification): OpenRpcNotification;
-}
-declare module 'shared/models/rpc.interface' {
-  import {
-    ConnectionStatus,
-    EventHandler,
-    InternalRequestHandler,
-    RequestParams,
-  } from 'shared/data/rpc.model';
-  import {
-    SingleMethodDocumentation,
-    SingleNotificationDocumentation,
-  } from 'shared/models/openrpc.model';
-  import { SerializedRequestType } from 'shared/utils/util';
-  import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { PlatformEvent } from 'platform-bible-utils';
-  /**
-   * What a process took with it when its connection to the network went away
-   *
-   * @experimental
-   */
-  export type RpcClientDisconnectEvent = {
-    /**
-     * Names of the methods that were registered by the departed process and have now been removed
-     * from the central registry, in registration order. Nothing has interpreted these names; a
-     * subscriber that knows how a given kind of name is formed is the one that can say what died.
-     */
-    removedMethodNames: string[];
-  };
-  /**
-   * Defines how to support sending requests on the network and emitting events on the network
-   *
-   * NOTE: In JSONRPC jargon, a "request" is made to a "method". In our code we talk about "request
-   * types", but JSONRPC doesn't have the notion of a "request type". However, a "request type" is
-   * really just the name of a method in JSONRPC. So "method names" and "request types" are treated as
-   * the same thing. Similarly, what we call a "request handler" is the same thing as a "method" that
-   * has been registered with a JSONRPC server.
-   */
-  export interface IRpcHandler {
-    /**
-     * Whether this connector is setting up or has finished setting up its connection and is ready to
-     * communicate on the network
-     */
-    connectionStatus: ConnectionStatus;
-    /**
-     * Sets up the RPC handler by populating connector info, setting up event handlers, and doing one
-     * of the following:
-     *
-     * - On clients: connecting to the server
-     * - On servers: opening an endpoint for clients to connect
-     *
-     * An implementation that opens an endpoint MUST NOT resolve `true` until that endpoint is
-     * actually accepting connections. Callers treat this resolving as permission to start processes
-     * that immediately connect, and those clients may get a single attempt with no retry — so
-     * reporting ready optimistically surfaces as a client that was refused, whose symptoms appear in
-     * a different process entirely. See `adr-papi-websocket-hostname-bind`.
-     *
-     * @param localEventHandler Function that handles events from the server by accepting an eventType
-     *   and an event and emitting the event locally. Used when receiving an event over the network.
-     * @returns `true` once the connection is established and usable — for a server, once its endpoint
-     *   is accepting connections. `false` if the connection could not be established.
-     *
-     *   TODO(PT-4495): implementations disagree on what they return when this handler was already
-     *   connected or connecting, so a caller can neither rely on that case nor tell a benign
-     *   double-connect from a real failure. PT-4495 replaces the boolean with a result type that
-     *   distinguishes the three outcomes; until then, only the two states above are contractual.
-     */
-    connect: (localEventHandler: EventHandler) => Promise<boolean>;
-    /**
-     * Disconnects from the connection:
-     *
-     * - On clients: disconnects from the server
-     * - On servers: disconnects from all clients and closes its connection endpoint
-     */
-    disconnect: () => Promise<void>;
-    /**
-     * Send a request and resolve after receiving a response
-     *
-     * @param requestType Type of request (or "method" in JSONRPC jargon) to call
-     * @param requestParams Parameters associated with this request
-     * @param skipRetry Whether to skip the retry process that will retry up to 10 times
-     * @returns Promise that resolves to a JSONRPCSuccessResponse or JSONRPCErrorResponse message
-     */
-    request: (
-      requestType: SerializedRequestType,
-      requestParams: RequestParams,
-      skipRetry?: boolean,
-    ) => Promise<JSONRPCResponse>;
-    /**
-     * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
-     * run by NetworkEventEmitter after sending on network.
-     *
-     * @param eventType Unique network event type for coordinating between processes
-     * @param event Event data to emit on the network
-     */
-    emitEventOnNetwork: EventHandler;
-  }
-  /**
-   * Represents anything that handles the RPC protocol and allows callers to register methods that can
-   * be called remotely over the network.
-   *
-   * NOTE: In JSONRPC jargon, a "request" is made to a "method". In our code we talk about "request
-   * types", but JSONRPC doesn't have the notion of a "request type". However, a "request type" is
-   * really just the name of a method in JSONRPC. So "method names" and "request types" are treated as
-   * the same thing. Similarly, what we call a "request handler" is the same thing as a "method" that
-   * has been registered with a JSONRPC server.
-   */
-  export interface IRpcMethodRegistrar extends IRpcHandler {
-    /** Register a method that will be called if an RPC request is made */
-    registerMethod: (
-      methodName: string,
-      method: InternalRequestHandler,
-      methodDocs?: SingleMethodDocumentation,
-    ) => Promise<boolean>;
-    /** Unregister a method so it is no longer available to RPC requests */
-    unregisterMethod: (methodName: string) => Promise<boolean>;
-    /**
-     * Register a centrally-tracked network event with the main process. Multi-source vs single-source
-     * semantics is determined by looking up the event name in `MULTI_SOURCE_EVENT_NAMES`. See
-     * {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
-     *
-     * Returns `true` if the registration was accepted, `false` otherwise. Used by
-     * `createNetworkEventEmitterAsync`; not for direct caller use.
-     */
-    registerEvent: (
-      eventName: string,
-      documentation?: SingleNotificationDocumentation,
-    ) => Promise<boolean>;
-    /** Unregister a network event emitter so it is no longer tracked centrally */
-    unregisterEvent: (eventName: string) => Promise<boolean>;
-    /**
-     * Event that fires when a process disconnects from the network, carrying the method names its
-     * departure removed from the central registry.
-     *
-     * This is platform-internal core plumbing between the process that owns the websocket server and
-     * the services that know how their own registered names are formed, not part of the `@papi/*`
-     * surface.
-     *
-     * This is a local, in-process event: only the process that owns the connections can observe one
-     * being lost, so it fires exclusively in the process holding the websocket server. Everywhere
-     * else it is a real event that simply never fires.
-     *
-     * @experimental
-     */
-    onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
-    /**
-     * Event that fires when this process's own connection to the network is lost unexpectedly — the
-     * websocket closed without the app having asked it to.
-     *
-     * This is platform-internal core plumbing between the process that holds a client connection and
-     * the services that react to losing one, not part of the `@papi/*` surface — the same status as
-     * `onDidDisconnectClient` above, which is this seam in the opposite direction.
-     *
-     * This is a local, in-process event. Only a process that holds a client connection can lose one,
-     * so it fires exclusively on clients; in the process that owns the websocket server it is a real
-     * event that simply never fires. A deliberate disconnect does not fire it: intent travels in the
-     * close code, and a close the app asked for is not a loss.
-     *
-     * Nor does a connection that was never established. A socket that dies during the opening
-     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
-     * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
-     * event is only for losing a connection that was up.
-     *
-     * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
-     * to react to the loss rather than to classify it.
-     *
-     * @experimental
-     */
-    onDidLoseConnection: PlatformEvent<void>;
-  }
-  export type RegisteredRpcMethodDetails = {
-    handler: IRpcHandler;
-    methodDocs?: SingleMethodDocumentation;
-  };
-  /**
-   * Minimal interface for event registries so that {@link RpcServer} can participate in event
-   * registration without importing from `rpc-websocket-listener.ts` (which would create a circular
-   * dependency).
-   *
-   * @internal
-   */
-  export interface IRpcEventRegistry {
-    tryRegister(
-      handler: unknown,
-      eventName: string,
-      documentation?: SingleNotificationDocumentation,
-    ): boolean;
-    tryUnregister(handler: unknown, eventName: string): boolean;
-    /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
-    unregisterAll(handler: unknown): void;
-  }
-  /**
-   * The subset of a socket the main-process RPC layer touches. Both `ws`'s server-side sockets and
-   * the DOM `WebSocket` type satisfy it structurally, and so does a MessagePort wrapped to look like
-   * one. `RpcServer` and `RpcWebSocketListener` are written against this rather than against
-   * `WebSocket` so that main can serve a client over something other than a TCP socket.
-   *
-   * @experimental
-   */
-  export interface ServerSocketLike {
-    /**
-     * 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED, as on `WebSocket.readyState`
-     *
-     * @experimental
-     */
-    readonly readyState: number;
-    /** @experimental */
-    send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
-    /** @experimental */
-    close(code?: number, reason?: string): void;
-    /** @experimental */
-    addEventListener<K extends 'close' | 'error' | 'message'>(
-      type: K,
-      listener: (ev: WebSocketEventMap[K]) => void,
-    ): void;
-    /** @experimental */
-    removeEventListener<K extends 'close' | 'error' | 'message'>(
-      type: K,
-      listener: (ev: WebSocketEventMap[K]) => void,
-    ): void;
-  }
-  /**
-   * An RPC handler that can serve a client whose socket was created by the caller rather than
-   * accepted from the websocket server. Only the process that owns the server (main) implements this;
-   * it is how a renderer's MessagePort-backed connection joins the same registry as the websocket
-   * clients.
-   *
-   * @experimental
-   */
-  export interface IRpcLocalClientAcceptor {
-    /**
-     * Start serving `socket` as a client of this process's RPC server.
-     *
-     * @param socket The server end of the client's connection
-     * @param name Label for this client in log lines, in place of the incrementing websocket number
-     * @throws If this handler is not currently accepting clients
-     * @experimental
-     */
-    acceptLocalClient(socket: ServerSocketLike, name: string): void;
-  }
-}
-declare module 'shared/data/rpc.model' {
-  import { SerializedRequestType } from 'shared/utils/util';
-  import type { ServerSocketLike } from 'shared/models/rpc.interface';
-  import {
-    JSONRPCErrorCode,
-    JSONRPCErrorResponse,
-    JSONRPCRequest,
-    JSONRPCResponse,
-    JSONRPCSuccessResponse,
-  } from 'json-rpc-2.0';
-  /** Port to use for the WebSocket */
-  export const WEBSOCKET_PORT = 8876;
-  /**
-   * Largest message the WebSocket transport carries. A message over this is not a failed request: the
-   * receiver closes the connection with 1009, taking down every request in flight on it and, for the
-   * C# data provider, the process itself. Declared here rather than left to the `ws` default so a
-   * producer sizing a response against it - see `Pt9InterlinearReader.MaxPt9InterlinearDataBytes` -
-   * is measuring against a number this repository states.
-   */
-  export const MAX_WEBSOCKET_PAYLOAD_BYTES: number;
-  /**
-   * How many times to try sending a request before giving up if the request is not yet registered.
-   * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
-   * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of
-   * re-declaring the literal and silently diverging if it is ever retuned.
-   *
-   * @experimental
-   */
-  export const MAX_REQUEST_ATTEMPTS = 10;
-  /**
-   * How long in ms to wait between request attempts if the request is not yet registered. Exported
-   * for the same derive-don't-duplicate reason as {@link MAX_REQUEST_ATTEMPTS}.
-   *
-   * @experimental
-   */
-  export const REQUEST_ATTEMPT_WAIT_TIME_MS = 1000;
-  /**
-   * Whether an RPC object is setting up or has finished setting up its connection and is ready to
-   * communicate on the network
-   */
-  export enum ConnectionStatus {
-    /** Not connected to the network */
-    Disconnected = 0,
-    /** Attempting to connect to the network */
-    Connecting = 1,
-    /** Finished setting up its connection */
-    Connected = 2,
-  }
-  /** Parameters provided to an RPC request message */
-  export type RequestParams = Array<any>;
-  /**
-   * Function to call internally when a request is received. The return value is sent back as the
-   * response to the request. If the request was received over the network, the response will be
-   * packaged into a JSONRPCSuccessResponse message.
-   */
-  export type InternalRequestHandler = (...requestParams: RequestParams) => any;
-  /** Function that processes an event received locally or over the network */
-  export type EventHandler = <T>(eventType: string, event: T) => void;
-  /**
-   * ID of an individual request. It must be unique between an RPC client and server for a single
-   * connection. Once a connection has closed and reopens, IDs can be reused.
-   */
-  export type RequestId = number | string;
-  /**
-   * Create a JSONRPCRequest message
-   *
-   * @param requestType Indicates what to do with the request
-   * @param requestParams Parameters to pass along when the request is processed
-   * @param requestId Unique ID for this connection of this request
-   * @returns JSONRPCRequest message that can be serialized and sent over a connection
-   */
-  export function createRequest(
-    requestType: SerializedRequestType,
-    requestParams: RequestParams,
-    requestId: RequestId,
-  ): JSONRPCRequest;
-  /**
-   * Create a JSONRPCSuccessResponse message
-   *
-   * @param contents Data to return to the requester when the request succeeds
-   * @param requestId ID of the request that this response is intended to address. If no ID was
-   *   provided, don't pass a value to this parameter.
-   * @returns JSONRPCSuccessResponse message that can be serialized and sent over a connection
-   */
-  export function createSuccessResponse<T>(
-    contents: T,
-    requestId?: RequestId,
-  ): JSONRPCSuccessResponse;
-  /**
-   * Create a JSONRPCErrorResponse message
-   *
-   * @param errorMessage Text to provide to the requester about why this request failed
-   * @param errorCode JSONRPCErrorCode value that best aligns with the purpose of the failure
-   * @param requestId ID of the request that this response is intended to address. If no ID was
-   *   provided, don't pass a value to this parameter.
-   * @returns JSONRPCErrorResponse message that can be serialized and sent over a connection
-   */
-  export function createErrorResponse(
-    errorMessage: string,
-    errorCode?: JSONRPCErrorCode,
-    requestId?: RequestId,
-  ): JSONRPCErrorResponse;
-  /**
-   * Maximum characters retained from a single logged detail that can originate from a remote peer (a
-   * close `reason`, an error `message`)
-   */
-  export const MAX_LOGGED_DETAIL_LENGTH = 200;
-  /**
-   * Maximum characters retained from a logged stack trace.
-   *
-   * Far more generous than {@link MAX_LOGGED_DETAIL_LENGTH} because a stack is generated locally
-   * rather than supplied by a peer, so the flood-protection rationale does not apply — and because a
-   * stack bounded to a couple of hundred characters is one or two frames, which is rarely the frame
-   * that explains a disconnect.
-   */
-  export const MAX_LOGGED_STACK_LENGTH = 4000;
-  /**
-   * Close code used when we close a PAPI socket on purpose (shutdown, teardown). The WebSocket spec
-   * reserves 3000-4999 for application use, so carrying intent in the code itself lets a close
-   * handler tell a deliberate shutdown from a connection that died, with no extra state to keep in
-   * sync.
-   */
-  export const INTENTIONAL_CLOSE_CODE = 4000;
-  /**
-   * Whether a WebSocket close `code` represents a clean, expected shutdown rather than a connection
-   * that died.
-   *
-   * Clean codes: 1000 (normal), 1001 (going away — a page or window navigating away or closing), 1005
-   * (no status code was present in the close frame, which a plain `close()` with no arguments
-   * produces), and {@link INTENTIONAL_CLOSE_CODE}, this codebase's own marker for a close we initiated
-   * on purpose. What all four have in common is that a closing handshake completed. The code that
-   * matters is 1006: no close frame was ever received, the fingerprint of a connection that died
-   * rather than being closed — the shape a suspend produces.
-   *
-   * Shared so the client and server close handlers cannot independently drift on which codes count as
-   * clean. {@link isCleanCloseEvent} is the predicate to use where the event itself is in hand.
-   *
-   * @param code `code` from a WebSocket `close` event
-   * @returns `true` if the code indicates a completed closing handshake, `false` otherwise (including
-   *   for a non-numeric code)
-   */
-  export function isCleanCloseCode(code: unknown): boolean;
-  /**
-   * Whether a close event represents an orderly shutdown rather than a connection that died.
-   *
-   * `wasClean` is the authoritative answer — it reports whether a closing handshake completed — so it
-   * wins whenever the event carries it. Both Chromium and the `ws` library always set it; the
-   * {@link isCleanCloseCode} fallback covers a partial or foreign event shape that does not.
-   *
-   * Deciding on the code alone would misreport a close frame that carried no status: that arrives as
-   * 1005 with `wasClean` true, which a plain `close()` produces on every window close and page
-   * reload. Marking those abnormal would bury a genuine socket death under routine noise.
-   *
-   * @param ev A WebSocket `close` event, or anything at all — a non-event is reported as not clean
-   * @returns Whether a closing handshake completed
-   */
-  export function isCleanCloseEvent(ev: unknown): boolean;
-  /**
-   * Describe a WebSocket `close` event for a log line.
-   *
-   * Chromium and the `ws` library deliver structurally different close events, and both keep
-   * `code`/`reason`/`wasClean` as accessors on the prototype rather than own properties — so
-   * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
-   *
-   * `code` is the single most diagnostic field: 1006 (no close frame) means the connection died
-   * rather than being closed politely. A reader should not need the WebSocket code table memorized to
-   * see that, so an event that {@link isCleanCloseEvent} rejects also carries an `abnormal=true` pair.
-   * The marker is its own pair rather than a parenthetical inside `code=` so the whole detail stays a
-   * sequence of space-separated `key=value` pairs.
-   *
-   * @param ev A WebSocket `close` event, or anything at all
-   * @returns Space-separated `key=value` pairs — `code`, `abnormal` (only when the connection died),
-   *   `reason` (JSON-quoted, so a reason containing a quote or a bracket cannot forge the surrounding
-   *   log line) and `wasClean`. A field that cannot be read is reported as `n/a`, so a non-event
-   *   yields `code=n/a reason=n/a wasClean=n/a` rather than throwing.
-   */
-  export function describeWebSocketCloseEvent(ev: unknown): string;
-  /**
-   * Describe a WebSocket `error` event for a log line.
-   *
-   * The `ws` library's `ErrorEvent` keeps `message` and `error` as accessors on the prototype, so
-   * `JSON.stringify` on the event yields `{}` — only own properties are serialized. Read the fields
-   * explicitly.
-   *
-   * Note a browser `WebSocket` fires a plain `Event` on error, carrying no detail at all by
-   * specification, so `message=unknown` is the expected result on the renderer end.
-   *
-   * @param ev A WebSocket `error` event, or anything at all
-   * @returns A single log line holding `message=`, `code=` and, when the error carried one, a
-   *   `stack:` section. Never contains a line break, so an error keeps the one-record-per-line shape
-   *   every other line here has; a field that cannot be read is reported as `unknown`/`n/a` rather
-   *   than throwing.
-   */
-  export function describeWebSocketErrorEvent(ev: unknown): string;
-  /** Serialize a payload, if needed, and send it over the provided WebSocket */
-  export function sendPayloadToWebSocket(ws: ServerSocketLike | undefined, payload: unknown): void;
-  /**
-   * Deserialize a payload from the network and return it as a JSONRPC message or array of messages.
-   * Note that all `null` values from the payload will be converted into `undefined` values except for
-   * `result` values in JSONRPCSuccessResponse messages. A `null` value as the response to a request
-   * must not be converted to `undefined` per the JSONRPC protocol.
-   *
-   * After a request has been processed by the protocol stack, call `fixupResponse` to restore
-   * `undefined` responses.
-   */
-  export function deserializeMessage(
-    payload: string,
-  ): JSONRPCRequest | JSONRPCResponse | Array<JSONRPCRequest | JSONRPCResponse>;
-  /**
-   * Convert `null` results back to `undefined` once we're out of the protocol stack.
-   *
-   * This works in tandem with `deserializeMessage` to properly handle `null` values in JSONRPC
-   * messages.
-   */
-  export function fixupResponse(response: JSONRPCResponse): JSONRPCResponse;
-  /**
-   * Runs the request callback and retries a number of times if `requestCallback` resolves to a method
-   * not found error
-   *
-   * @param requestCallback Function to run to send a JSON-RPC request. Should return a JSONRPC error
-   *   with code {@link JSONRPCErrorCode.MethodNotFound} if it fails to find the method
-   * @param name Name of the handler running this request for logging purposes
-   * @param requestType Type of request for logging purposes
-   * @returns The response from the request including the method not found error if it times out
-   */
-  export function requestWithRetry(
-    requestCallback: () => Promise<JSONRPCResponse>,
-    name: string,
-    requestType: string,
-  ): Promise<JSONRPCResponse>;
-  /**
-   * Register a method on the network so that requests of the given type are routed to your request
-   * handler.
-   */
-  export const REGISTER_METHOD = 'network:registerMethod';
-  /**
-   * Unregister a method on the network so that requests of the given type are no longer routed to
-   * your request handler.
-   */
-  export const UNREGISTER_METHOD = 'network:unregisterMethod';
-  /**
-   * Tell main which peer is on the other end of this socket, so main's connection log lines can be
-   * joined to the client's own. Main labels each socket with an incrementing id, which appears
-   * nowhere in the client's logs; the client labels itself with a name it alone knows.
-   */
-  export const ANNOUNCE_PEER = 'network:announcePeer';
-  /**
-   * Register a network event emitter with the main process so that the event is tracked centrally.
-   * Multi-source vs. single-source semantics are determined by looking up the event name in
-   * `MULTI_SOURCE_EVENT_NAMES`.
-   */
-  export const REGISTER_EVENT = 'network:registerEvent';
-  /**
-   * Unregister a network event emitter from the main process so that the event is no longer tracked
-   * centrally.
-   */
-  export const UNREGISTER_EVENT = 'network:unregisterEvent';
-  /**
-   * Get all methods that are currently registered on the network. Required to be 'rpc.discover' by
-   * the OpenRPC specification.
-   */
-  export const GET_METHODS = 'rpc.discover';
-  /** Prefix on requests that indicates that the request is a command */
-  export const CATEGORY_COMMAND = 'command';
-  /**
-   * Builds the exact prefix that `network.service`'s `doRequest` embeds in the message it throws for
-   * a JSON-RPC _error response_ with the given `code` — the full thrown message is this prefix
-   * followed by `: <error message>`.
-   *
-   * Exported so the few callers that must classify these thrown errors by message (there is no richer
-   * machine-readable marker for a "method not found" response) derive the format from this single
-   * producer instead of hand-copying the literal. Hand-copied copies silently drift: reformat the
-   * producer and a separate matcher/fixture keeps matching its old string while real errors stop
-   * matching, and the tests stay green. Everything routing through this function stays in lockstep.
-   *
-   * @param code The JSON-RPC error code from the error response being classified
-   * @returns The exact message prefix `doRequest` uses for an error response with that `code`
-   * @experimental
-   */
-  export function getJsonRpcRequestErrorMessagePrefix(code: number): string;
-  /**
-   * Whether `error` is what `networkService`'s request plumbing (`doRequest` in `network.service.ts`)
-   * throws for a JSON-RPC "method not found" response — i.e. no handler for the requested method has
-   * registered anywhere on the network.
-   *
-   * Callers that want to treat "nobody is listening" as a benign outcome must key off the JSON-RPC
-   * error _code_, never off the human-readable text that follows it. The two producers of a
-   * method-not-found response word that text differently (`'<method>' not found` in `rpc-server.ts`,
-   * `No handler found for <method>` in `rpc-websocket-listener.ts`), and matching the text alone also
-   * matches an unrelated failure from a handler that _did_ run and threw a message with the same
-   * words in it — turning "no validator, allow it" into "the validator rejected this, allow it
-   * anyway". The code is the only part that distinguishes the two.
-   *
-   * The code has to be read back out of the message because `doRequest` flattens every RPC-level
-   * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
-   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker: a "no
-   * handler yet" response has no `error.data` at all, and the `platformErrorCode` field is no help
-   * either, because it is never populated from C#. `JsonRpc.ExceptionStrategy` is left at its
-   * `CommonErrorData` default, which serializes no `Exception.Data`, so `error.data.data` is always
-   * absent whatever `PlatformErrorCodes.WithCode` set. Deriving the format from
-   * {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
-   * with, keeps this matcher in lockstep with any reformat there.
-   *
-   * @param error Error thrown by a `networkService` request
-   * @param requestType If provided, additionally require the error to name this request type, so a
-   *   method-not-found response for some _other_ request cannot be mistaken for this one's. Both
-   *   producers embed the raw request type in their message.
-   * @returns Whether `error` is a method-not-found response (for `requestType`, when given)
-   * @experimental
-   */
-  export function isJsonRpcMethodNotFoundError(error: unknown, requestType?: string): boolean;
-  /**
-   * Prefix that `network.service`'s `doRequest` embeds in the message it throws when a request times
-   * out client-side before any response arrives. Exported for the same drift-prevention reason as
-   * {@link getJsonRpcRequestErrorMessagePrefix}.
-   *
-   * @experimental
-   */
-  export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';
-  /**
-   * Whether `error` is what `network.service`'s request plumbing throws when a request expires
-   * client-side before any answer arrives (`doRequest` builds `JSON-RPC Request timed out:
-   * <requestType> <args>` when its per-request wait runs out). Matched by message substring — no
-   * richer machine-readable marker exists for this failure — deriving the format from its one
-   * producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}), so a reformat there cannot silently
-   * stop this matcher from matching.
-   *
-   * @experimental
-   */
-  export function isRequestTimedOutError(error: unknown): boolean;
 }
 declare module 'shared/services/shared-store.service' {
   type LamportClock = {
@@ -2418,6 +2208,216 @@ declare module 'shared/models/papi-network-event-emitter.model' {
     dispose: () => Promise<boolean>;
   }
   export default PapiNetworkEventEmitter;
+}
+declare module 'shared/models/rpc.interface' {
+  import {
+    ConnectionStatus,
+    EventHandler,
+    InternalRequestHandler,
+    RequestParams,
+    ServerSocketLike,
+  } from 'shared/data/rpc.model';
+  import {
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
+  import { SerializedRequestType } from 'shared/utils/util';
+  import { JSONRPCResponse } from 'json-rpc-2.0';
+  import { PlatformEvent } from 'platform-bible-utils';
+  /**
+   * What a process took with it when its connection to the network went away
+   *
+   * @experimental
+   */
+  export type RpcClientDisconnectEvent = {
+    /**
+     * Names of the methods that were registered by the departed process and have now been removed
+     * from the central registry, in registration order. Nothing has interpreted these names; a
+     * subscriber that knows how a given kind of name is formed is the one that can say what died.
+     */
+    removedMethodNames: string[];
+  };
+  /**
+   * Defines how to support sending requests on the network and emitting events on the network
+   *
+   * NOTE: In JSONRPC jargon, a "request" is made to a "method". In our code we talk about "request
+   * types", but JSONRPC doesn't have the notion of a "request type". However, a "request type" is
+   * really just the name of a method in JSONRPC. So "method names" and "request types" are treated as
+   * the same thing. Similarly, what we call a "request handler" is the same thing as a "method" that
+   * has been registered with a JSONRPC server.
+   */
+  export interface IRpcHandler {
+    /**
+     * Whether this connector is setting up or has finished setting up its connection and is ready to
+     * communicate on the network
+     */
+    connectionStatus: ConnectionStatus;
+    /**
+     * Sets up the RPC handler by populating connector info, setting up event handlers, and doing one
+     * of the following:
+     *
+     * - On clients: connecting to the server
+     * - On servers: opening an endpoint for clients to connect
+     *
+     * An implementation that opens an endpoint MUST NOT resolve `true` until that endpoint is
+     * actually accepting connections. Callers treat this resolving as permission to start processes
+     * that immediately connect, and those clients may get a single attempt with no retry — so
+     * reporting ready optimistically surfaces as a client that was refused, whose symptoms appear in
+     * a different process entirely. See `adr-papi-websocket-hostname-bind`.
+     *
+     * @param localEventHandler Function that handles events from the server by accepting an eventType
+     *   and an event and emitting the event locally. Used when receiving an event over the network.
+     * @returns `true` once the connection is established and usable — for a server, once its endpoint
+     *   is accepting connections. `false` if the connection could not be established.
+     *
+     *   TODO(PT-4495): implementations disagree on what they return when this handler was already
+     *   connected or connecting, so a caller can neither rely on that case nor tell a benign
+     *   double-connect from a real failure. PT-4495 replaces the boolean with a result type that
+     *   distinguishes the three outcomes; until then, only the two states above are contractual.
+     */
+    connect: (localEventHandler: EventHandler) => Promise<boolean>;
+    /**
+     * Disconnects from the connection:
+     *
+     * - On clients: disconnects from the server
+     * - On servers: disconnects from all clients and closes its connection endpoint
+     */
+    disconnect: () => Promise<void>;
+    /**
+     * Send a request and resolve after receiving a response
+     *
+     * @param requestType Type of request (or "method" in JSONRPC jargon) to call
+     * @param requestParams Parameters associated with this request
+     * @param skipRetry Whether to skip the retry process that will retry up to 10 times
+     * @returns Promise that resolves to a JSONRPCSuccessResponse or JSONRPCErrorResponse message
+     */
+    request: (
+      requestType: SerializedRequestType,
+      requestParams: RequestParams,
+      skipRetry?: boolean,
+    ) => Promise<JSONRPCResponse>;
+    /**
+     * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
+     * run by NetworkEventEmitter after sending on network.
+     *
+     * @param eventType Unique network event type for coordinating between processes
+     * @param event Event data to emit on the network
+     */
+    emitEventOnNetwork: EventHandler;
+  }
+  /**
+   * Represents anything that handles the RPC protocol and allows callers to register methods that can
+   * be called remotely over the network.
+   *
+   * NOTE: In JSONRPC jargon, a "request" is made to a "method". In our code we talk about "request
+   * types", but JSONRPC doesn't have the notion of a "request type". However, a "request type" is
+   * really just the name of a method in JSONRPC. So "method names" and "request types" are treated as
+   * the same thing. Similarly, what we call a "request handler" is the same thing as a "method" that
+   * has been registered with a JSONRPC server.
+   */
+  export interface IRpcMethodRegistrar extends IRpcHandler {
+    /** Register a method that will be called if an RPC request is made */
+    registerMethod: (
+      methodName: string,
+      method: InternalRequestHandler,
+      methodDocs?: SingleMethodDocumentation,
+    ) => Promise<boolean>;
+    /** Unregister a method so it is no longer available to RPC requests */
+    unregisterMethod: (methodName: string) => Promise<boolean>;
+    /**
+     * Register a centrally-tracked network event with the main process. Multi-source vs single-source
+     * semantics is determined by looking up the event name in `MULTI_SOURCE_EVENT_NAMES`. See
+     * {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
+     *
+     * Returns `true` if the registration was accepted, `false` otherwise. Used by
+     * `createNetworkEventEmitterAsync`; not for direct caller use.
+     */
+    registerEvent: (
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ) => Promise<boolean>;
+    /** Unregister a network event emitter so it is no longer tracked centrally */
+    unregisterEvent: (eventName: string) => Promise<boolean>;
+    /**
+     * Event that fires when a process disconnects from the network, carrying the method names its
+     * departure removed from the central registry.
+     *
+     * This is platform-internal core plumbing between the process that owns the websocket server and
+     * the services that know how their own registered names are formed, not part of the `@papi/*`
+     * surface.
+     *
+     * This is a local, in-process event: only the process that owns the connections can observe one
+     * being lost, so it fires exclusively in the process holding the websocket server. Everywhere
+     * else it is a real event that simply never fires.
+     *
+     * @experimental
+     */
+    onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Event that fires when this process's own connection to the network is lost unexpectedly — the
+     * websocket closed without the app having asked it to.
+     *
+     * This is platform-internal core plumbing between the process that holds a client connection and
+     * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+     * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+     *
+     * This is a local, in-process event. Only a process that holds a client connection can lose one,
+     * so it fires exclusively on clients; in the process that owns the websocket server it is a real
+     * event that simply never fires. A deliberate disconnect does not fire it: intent travels in the
+     * close code, and a close the app asked for is not a loss.
+     *
+     * Nor does a connection that was never established. A socket that dies during the opening
+     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
+     * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
+     * event is only for losing a connection that was up.
+     *
+     * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
+     * to react to the loss rather than to classify it.
+     *
+     * @experimental
+     */
+    onDidLoseConnection: PlatformEvent<void>;
+  }
+  export type RegisteredRpcMethodDetails = {
+    handler: IRpcHandler;
+    methodDocs?: SingleMethodDocumentation;
+  };
+  /**
+   * Minimal interface for event registries so that {@link RpcServer} can participate in event
+   * registration without importing from `rpc-websocket-listener.ts` (which would create a circular
+   * dependency).
+   *
+   * @internal
+   */
+  export interface IRpcEventRegistry {
+    tryRegister(
+      handler: unknown,
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): boolean;
+    tryUnregister(handler: unknown, eventName: string): boolean;
+    /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
+    unregisterAll(handler: unknown): void;
+  }
+  /**
+   * An RPC handler that can serve a client whose socket was created by the caller rather than
+   * accepted from the websocket server. Only the process that owns the server (main) implements this;
+   * it is how a renderer's MessagePort-backed connection joins the same registry as the websocket
+   * clients.
+   *
+   * @experimental
+   */
+  export interface IRpcLocalClientAcceptor {
+    /**
+     * Start serving `socket` as a client of this process's RPC server.
+     *
+     * @param socket The server end of the client's connection
+     * @param name Label for this client in log lines, in place of the incrementing websocket number
+     * @throws If this handler is not currently accepting clients
+     * @experimental
+     */
+    acceptLocalClient(socket: ServerSocketLike, name: string): void;
+  }
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -2908,9 +2908,8 @@ declare module 'main/services/rpc-server' {
     IRpcEventRegistry,
     IRpcHandler,
     RegisteredRpcMethodDetails,
-    ServerSocketLike,
   } from 'shared/models/rpc.interface';
-  import { ConnectionStatus, RequestParams } from 'shared/data/rpc.model';
+  import { ConnectionStatus, RequestParams, ServerSocketLike } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
   import {
     SingleMethodDocumentation,
@@ -3092,12 +3091,12 @@ declare module 'main/services/rpc-websocket-listener' {
     EventHandler,
     InternalRequestHandler,
     RequestParams,
+    ServerSocketLike,
   } from 'shared/data/rpc.model';
   import {
     IRpcLocalClientAcceptor,
     IRpcMethodRegistrar,
     RpcClientDisconnectEvent,
-    ServerSocketLike,
   } from 'shared/models/rpc.interface';
   import {
     OpenRpc,
@@ -3241,11 +3240,11 @@ declare module 'shared/services/network.service' {
    * expose this whole service on papi, but there are a few things that are exposed via
    * papiNetworkService
    */
-  import { InternalRequestHandler } from 'shared/data/rpc.model';
+  import { InternalRequestHandler, ServerSocketLike } from 'shared/data/rpc.model';
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
   import { StoreChangeEvent } from 'shared/services/shared-store.service';
   import { SerializedRequestType } from 'shared/utils/util';
-  import { RpcClientDisconnectEvent, ServerSocketLike } from 'shared/models/rpc.interface';
+  import { RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
   import {
     SingleMethodDocumentation,
     SingleNotificationDocumentation,

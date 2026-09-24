@@ -1,5 +1,4 @@
-import { ServerSocketLike } from '@shared/models/rpc.interface';
-import { isCleanCloseCode } from '@shared/data/rpc.model';
+import { isCleanCloseCode, ServerSocketLike } from '@shared/data/rpc.model';
 import {
   createPapiPortCloseFrame,
   createSyntheticCloseEvent,

@@ -14,7 +14,6 @@ import {
   IRpcEventRegistry,
   IRpcHandler,
   RegisteredRpcMethodDetails,
-  ServerSocketLike,
 } from '@shared/models/rpc.interface';
 import {
   ANNOUNCE_PEER,
@@ -33,6 +32,7 @@ import {
   RequestParams,
   requestWithRetry,
   sendPayloadToWebSocket,
+  ServerSocketLike,
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
 } from '@shared/data/rpc.model';
