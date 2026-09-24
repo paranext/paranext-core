@@ -3,42 +3,33 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
+import { newPlatformError } from 'platform-bible-utils';
 import type { CopyrightNotice } from 'platform-scripture';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectCopyrightNotice } from './project-copyright-notice.component';
 
-type ProjectSettings = {
-  'platformScripture.copyrightNotice': CopyrightNotice | Error;
-  'platform.name': string;
-  'platform.fullName': string;
-};
-
-const { settingsByProject } = vi.hoisted(() => ({
-  settingsByProject: new Map<string, Partial<ProjectSettings>>(),
+const { noticesByProject, loggerWarn } = vi.hoisted(() => ({
+  /** Each project's notice; a project that is absent has not answered yet */
+  noticesByProject: new Map<string, unknown>(),
+  loggerWarn: vi.fn(),
 }));
 
-vi.mock('@papi/frontend/react', () => ({
-  useProjectSetting: (
-    projectId: string | undefined,
-    key: keyof ProjectSettings,
-    fallback: unknown,
-  ) => [
-    (projectId && settingsByProject.get(projectId)?.[key]) ?? fallback,
-    vi.fn(),
-    vi.fn(),
-    false,
-  ],
-}));
-
-vi.mock('@papi/frontend', () => ({
-  default: { commands: { sendCommand: vi.fn(async () => undefined) } },
-  logger: { warn: vi.fn() },
-}));
-
-vi.mock('platform-bible-utils', async (importOriginal) => {
-  const original = await importOriginal<typeof import('platform-bible-utils')>();
-  return { ...original, isPlatformError: (value: unknown) => value instanceof Error };
+// Like the real hook, keeps serving the value it last had until the new project's value arrives
+vi.mock('@papi/frontend/react', async () => {
+  const { useRef } = await import('react');
+  return {
+    useProjectSetting: (projectId: string | undefined, key: string, fallback: unknown) => {
+      const lastValue = useRef(fallback);
+      if (key === 'platformScripture.copyrightNotice' && projectId) {
+        const value = noticesByProject.get(projectId);
+        if (value !== undefined) lastValue.current = value;
+      }
+      return [lastValue.current, vi.fn(), vi.fn(), false];
+    },
+  };
 });
+
+vi.mock('@papi/frontend', () => ({ logger: { warn: loggerWarn } }));
 
 const STRINGS = {
   '%platformScripture_copyrightNotice_restrictedLicense_banner%':
@@ -51,10 +42,14 @@ const STRINGS = {
   '%platformScripture_copyrightNotice_moreInfo%': 'More Info…',
   '%platformScripture_copyrightNotice_showMore%': 'Show more',
   '%platformScripture_copyrightNotice_showLess%': 'Show less',
-  '%platformScripture_copyrightNotice_dismiss%': 'Dismiss',
+  '%platformScripture_copyrightNotice_dismiss%': 'Dismiss copyright notice',
   '%platformScripture_copyrightNotice_details_title%': 'Copyright for {name}',
   '%platformScripture_copyrightNotice_details_close%': 'Close',
 };
+
+function restricted(name: string, fullName: string): CopyrightNotice {
+  return { kind: 'restrictedLicense', name, fullName, copyrightYears: '2011' };
+}
 
 /** Web view state that outlives the component, as the real web view's state does */
 function makeWebViewState() {
@@ -113,91 +108,102 @@ class NoopResizeObserver {
   }
 }
 
+function dismiss() {
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss copyright notice' }));
+}
+
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', NoopResizeObserver);
-  settingsByProject.clear();
-  settingsByProject.set('niv', {
-    'platformScripture.copyrightNotice': { kind: 'restrictedLicense', copyrightYears: '2011' },
-    'platform.name': 'NIV11',
-    'platform.fullName': 'New International Version 2011',
-  });
-  settingsByProject.set('nrt', {
-    'platformScripture.copyrightNotice': { kind: 'restrictedLicense', copyrightYears: '2011' },
-    'platform.name': 'NRT23',
-    'platform.fullName': 'New Russian Translation 2023',
-  });
-  settingsByProject.set('web', {
-    'platformScripture.copyrightNotice': { kind: 'none' },
-    'platform.name': 'WEB',
-    'platform.fullName': 'World English Bible',
-  });
+  loggerWarn.mockClear();
+  noticesByProject.clear();
+  noticesByProject.set('niv', restricted('NIV11', 'New International Version 2011'));
+  noticesByProject.set('nrt', restricted('NRT23', 'New Russian Translation 2023'));
+  noticesByProject.set('web', { kind: 'none' });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('ProjectCopyrightNotice', () => {
   it("shows the project's notice using its names", () => {
     render(<Harness projectId="niv" useWebViewState={makeWebViewState()} />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('NIV11: The NIV11 is for reference only.');
+    expect(screen.getByRole('note')).toHaveTextContent('NIV11: The NIV11 is for reference only.');
   });
 
   it('shows nothing for a project that needs no notice', () => {
     render(<Harness projectId="web" useWebViewState={makeWebViewState()} />);
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 
   it('shows nothing for a notice kind it does not know', () => {
-    settingsByProject.set('niv', {
-      ...settingsByProject.get('niv'),
-      // A kind a newer backend might send
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      'platformScripture.copyrightNotice': { kind: 'somethingNew' } as unknown as CopyrightNotice,
-    });
+    noticesByProject.set('niv', { kind: 'somethingNew' });
 
     render(<Harness projectId="niv" useWebViewState={makeWebViewState()} />);
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 
   it('shows nothing when there is no project', () => {
     render(<Harness projectId={undefined} useWebViewState={makeWebViewState()} />);
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 
-  it('shows nothing when the notice cannot be read', () => {
-    settingsByProject.set('niv', {
-      ...settingsByProject.get('niv'),
-      'platformScripture.copyrightNotice': new Error('no provider'),
-    });
+  it('shows nothing, and says why in the log, when the notice cannot be read', () => {
+    noticesByProject.set('niv', newPlatformError('no provider'));
 
     render(<Harness projectId="niv" useWebViewState={makeWebViewState()} />);
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    expect(loggerWarn).toHaveBeenCalledWith(expect.stringContaining('no provider'));
   });
 
-  it('stays dismissed for that text, including after the pane is reopened', () => {
+  it('stays dismissed for the text it shows, including after the pane is reopened', () => {
     const useWebViewState = makeWebViewState();
     const { unmount } = render(<Harness projectId="niv" useWebViewState={useWebViewState} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    dismiss();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
 
     unmount();
     render(<Harness projectId="niv" useWebViewState={useWebViewState} />);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 
-  it('shows the notice again when the pane switches to another restricted text', () => {
+  it("shows the notice again once the pane has shown another text, as Paratext 9's window does", () => {
     const useWebViewState = makeWebViewState();
     const { rerender } = render(<Harness projectId="niv" useWebViewState={useWebViewState} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    dismiss();
 
     rerender(<Harness projectId="nrt" useWebViewState={useWebViewState} />);
-    expect(screen.getByRole('status')).toHaveTextContent('NRT23:');
+    expect(screen.getByRole('note')).toHaveTextContent('NRT23:');
 
-    // Switching back keeps the first text's dismissal
     rerender(<Harness projectId="niv" useWebViewState={useWebViewState} />);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('NIV11:');
+  });
+
+  it('keeps the dismissal while the pane briefly has no text', () => {
+    const useWebViewState = makeWebViewState();
+    const { rerender } = render(<Harness projectId="niv" useWebViewState={useWebViewState} />);
+    dismiss();
+
+    rerender(<Harness projectId={undefined} useWebViewState={useWebViewState} />);
+    rerender(<Harness projectId="niv" useWebViewState={useWebViewState} />);
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it("never shows the previous text's notice while the new text's notice is on its way", () => {
+    noticesByProject.delete('nrt');
+    const useWebViewState = makeWebViewState();
+    const { rerender } = render(<Harness projectId="niv" useWebViewState={useWebViewState} />);
+    expect(screen.getByRole('note')).toHaveTextContent('NIV11:');
+
+    rerender(<Harness projectId="nrt" useWebViewState={useWebViewState} />);
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 });

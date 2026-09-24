@@ -285,6 +285,9 @@ export function ResourceCellView({
   const hasRightClickMenu = state !== 'unavailable';
 
   const handleCellContextMenu = useCallback((event: MouseEvent) => {
+    // A window opened from the cell (its copyright details) renders outside it, but React still
+    // delivers its events here; leave its right-clicks alone
+    if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
     // The editor owns `contextmenu` over its content, and its built-in menu clips and cannot flip
     // near the viewport edge. Intercept in the capture phase (before the editor's handler) and open
     // our own portaled, collision-aware menu at the cursor instead.

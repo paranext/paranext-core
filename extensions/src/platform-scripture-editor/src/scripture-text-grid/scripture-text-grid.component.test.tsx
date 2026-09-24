@@ -2,12 +2,16 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
+import { createPortal } from 'react-dom';
 import { CONTENT_ZOOM_SCOPE_ATTRIBUTE } from 'platform-bible-react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
 
 const { mockWarn } = vi.hoisted(() => ({ mockWarn: vi.fn() }));
 vi.mock('@papi/frontend', () => ({ logger: { warn: mockWarn } }));
+
+/** When set, each cell also renders a window portalled out of it, as its copyright notice does */
+const cellWindow = { isOpen: false };
 
 const mockResourceCell = vi.fn(
   ({
@@ -37,7 +41,16 @@ const mockResourceCell = vi.fn(
       data-view-mode={viewMode}
       data-zoom-area={zoomArea}
     >
-      {`${resourceRef.label}@${scrRef.verseNum}`}
+      <span>{`${resourceRef.label}@${scrRef.verseNum}`}</span>
+      <span data-testid={`cell-text-${resourceRef.projectId}`}>verse text</span>
+      {cellWindow.isOpen
+        ? createPortal(
+            <div role="dialog" aria-label={`Window from ${resourceRef.label}`}>
+              <button type="button">Close</button>
+            </div>,
+            document.body,
+          )
+        : undefined}
       {showDragHandle ? (
         // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
         <button
@@ -93,6 +106,7 @@ function renderGrid(gridResources: typeof resources) {
 beforeEach(() => {
   mockResourceCell.mockClear();
   mockWarn.mockClear();
+  cellWindow.isOpen = false;
 });
 
 describe('ScriptureTextGrid', () => {
@@ -797,4 +811,69 @@ describe('ScriptureTextGrid — zoom areas', () => {
     expect(screen.getAllByTestId(/^cell-/)).toHaveLength(1);
     expect(everyCellGotThem()).toBe(true);
   });
+});
+
+describe('ScriptureTextGrid — events from inside a verse item', () => {
+  function renderActivatableGrid() {
+    const onChapterContextChange = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onChapterContextChange={onChapterContextChange}
+      />,
+    );
+    return onChapterContextChange;
+  }
+
+  it('opens the chapter view for a click on the verse text', () => {
+    const onChapterContextChange = renderActivatableGrid();
+
+    fireEvent.click(screen.getByTestId('cell-text-b'));
+
+    expect(onChapterContextChange).toHaveBeenCalledWith(resources[1]);
+  });
+
+  it('ignores a click inside a window portalled out of a cell', () => {
+    cellWindow.isOpen = true;
+    const onChapterContextChange = renderActivatableGrid();
+
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Window from KJV' })).getByRole('button', {
+        name: 'Close',
+      }),
+    );
+
+    expect(onChapterContextChange).not.toHaveBeenCalled();
+  });
+
+  it.each(['Enter', ' '])(
+    'opens the chapter view for %j pressed on the verse item itself',
+    (key) => {
+      const onChapterContextChange = renderActivatableGrid();
+
+      fireEvent.keyDown(screen.getAllByRole('listitem')[1], { key });
+
+      expect(onChapterContextChange).toHaveBeenCalledWith(resources[1]);
+    },
+  );
+
+  it.each(['Enter', ' '])(
+    'leaves %j pressed on a control inside the verse item to that control',
+    (key) => {
+      cellWindow.isOpen = true;
+      const onChapterContextChange = renderActivatableGrid();
+
+      const isNotCancelled = fireEvent.keyDown(
+        within(screen.getByRole('dialog', { name: 'Window from KJV' })).getByRole('button', {
+          name: 'Close',
+        }),
+        { key },
+      );
+
+      expect(isNotCancelled).toBe(true);
+      expect(onChapterContextChange).not.toHaveBeenCalled();
+    },
+  );
 });

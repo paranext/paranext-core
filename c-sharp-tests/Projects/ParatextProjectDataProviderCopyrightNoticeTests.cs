@@ -10,65 +10,86 @@ namespace TestParanextDataProvider.Projects
     [ExcludeFromCodeCoverage]
     internal class ParatextProjectDataProviderCopyrightNoticeTests : PapiTestBase
     {
-        private const string PdpName = "copyrightNoticeTestProject";
         private const string NivCopyright =
             "The Holy Bible, New International Version® NIV® Copyright © 1973, 1978, 1984, 2011 by Biblica, Inc.® Used by Permission of Biblica, Inc.® All rights reserved worldwide.";
 
-        private ScrText _scrText = null!;
-        private DummyParatextProjectDataProvider _provider = null!;
+        // NIV11
+        private const string ListedDblId = "71c6eab17ae5b667";
+
+        /// <summary>An editable project, as a translation team has</summary>
+        private ScrText _project = null!;
+        private DummyParatextProjectDataProvider _projectProvider = null!;
+
+        /// <summary>An installed resource, as Biblica's texts are</summary>
+        private ScrText _resource = null!;
+        private DummyParatextProjectDataProvider _resourceProvider = null!;
 
         [SetUp]
         public override async Task TestSetupAsync()
         {
             await base.TestSetupAsync();
 
-            _scrText = CreateDummyProject();
-            ProjectDetails projectDetails = CreateProjectDetails(_scrText);
-            ParatextProjects.FakeAddProject(projectDetails, _scrText);
+            _project = CreateDummyProject();
+            _projectProvider = await RegisterProviderAsync("copyrightNoticeProject", _project);
 
-            _provider = new DummyParatextProjectDataProvider(
-                PdpName,
-                Client,
-                projectDetails,
-                ParatextProjects
-            );
-            await _provider.RegisterDataProviderAsync();
+            _resource = new ResourceDummyScrText();
+            _resourceProvider = await RegisterProviderAsync("copyrightNoticeResource", _resource);
+        }
+
+        private async Task<DummyParatextProjectDataProvider> RegisterProviderAsync(
+            string name,
+            ScrText scrText
+        )
+        {
+            ProjectDetails projectDetails = CreateProjectDetails(scrText);
+            ParatextProjects.FakeAddProject(projectDetails, scrText);
+            DummyParatextProjectDataProvider provider =
+                new(name, Client, projectDetails, ParatextProjects);
+            await provider.RegisterDataProviderAsync();
+            return provider;
         }
 
         [TearDown]
         public void TearDown()
         {
-            _scrText?.Dispose();
+            _project?.Dispose();
+            _resource?.Dispose();
         }
 
-        private CopyrightNotice GetNotice() =>
-            (CopyrightNotice)_provider.GetProjectSetting(ProjectSettingsNames.PB_COPYRIGHT_NOTICE)!;
+        private static CopyrightNotice GetNotice(DummyParatextProjectDataProvider provider) =>
+            (CopyrightNotice)provider.GetProjectSetting(ProjectSettingsNames.PB_COPYRIGHT_NOTICE)!;
+
+        private CopyrightNotice GetProjectNotice() => GetNotice(_projectProvider);
+
+        private CopyrightNotice GetResourceNotice() => GetNotice(_resourceProvider);
 
         [Test]
         public void GetProjectSetting_NoCopyright_ReturnsNone()
         {
-            Assert.That(GetNotice().Kind, Is.EqualTo(CopyrightNoticeKind.None));
+            Assert.That(GetProjectNotice(), Is.EqualTo(CopyrightNotice.None()));
         }
 
         [Test]
         public void GetProjectSetting_OrdinaryCopyright_ReturnsNone()
         {
-            _scrText.Settings.Copyright = "© 2001 Example Bible Society. Used by permission.";
+            _resource.Settings.Copyright = "© 2001 Example Bible Society. Used by permission.";
 
-            Assert.That(GetNotice().Kind, Is.EqualTo(CopyrightNoticeKind.None));
+            Assert.That(GetResourceNotice(), Is.EqualTo(CopyrightNotice.None()));
         }
 
         [Test]
         public void GetProjectSetting_PlainTextNotification_SplitsBannerFromDetails()
         {
-            _scrText.Settings.Copyright =
+            _project.Settings.Copyright =
                 "Notification: The text may not be translated.\nCopyright © 2016 Example.\nAll rights reserved.";
+            _project.Settings.FullName = "Example Standard Version";
 
             Assert.That(
-                GetNotice(),
+                GetProjectNotice(),
                 Is.EqualTo(
-                    new CopyrightNotice(
-                        CopyrightNoticeKind.Notification,
+                    CopyrightNotice.Notification(
+                        _project.Name,
+                        "Example Standard Version",
                         "The text may not be translated.",
                         "Copyright © 2016 Example.\nAll rights reserved."
                     )
@@ -79,66 +100,113 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void GetProjectSetting_NotificationPrefixIgnoresCase()
         {
-            _scrText.Settings.Copyright = "NOTIFICATION: Banner text\nDetails";
+            _project.Settings.Copyright = "NOTIFICATION: Banner text\nDetails";
 
-            Assert.That(GetNotice().Kind, Is.EqualTo(CopyrightNoticeKind.Notification));
+            Assert.That(GetProjectNotice().Kind, Is.EqualTo(CopyrightNoticeKind.Notification));
         }
 
         [Test]
-        public void GetProjectSetting_HtmlNotification_UsesParagraphsAsLines()
+        public void GetProjectSetting_HtmlNotification_UsesParagraphsAsLinesAndDecodesEntities()
         {
-            _scrText.Settings.Copyright =
-                "<p>Notification: Banner text</p><p>First detail</p><p>Second <b>detail</b></p>";
+            _project.Settings.Copyright =
+                "<p>Notification: Banner &amp; text</p><p>First detail</p><p>Second <b>detail</b> &#169; 2016</p>";
 
             Assert.That(
-                GetNotice(),
+                GetProjectNotice(),
                 Is.EqualTo(
-                    new CopyrightNotice(
-                        CopyrightNoticeKind.Notification,
-                        "Banner text",
-                        "First detail\nSecond detail"
+                    CopyrightNotice.Notification(
+                        _project.Name,
+                        _project.Settings.FullName,
+                        "Banner & text",
+                        "First detail\nSecond detail © 2016"
                     )
                 )
             );
         }
 
         [Test]
-        public void GetProjectSetting_BiblicaTraditionalLicense_ReturnsRestrictedLicenseWithCopyrightYears()
+        public void GetProjectSetting_BiblicaResource_ReturnsRestrictedLicenseWithNamesAndCopyrightYears()
         {
-            _scrText.Settings.Copyright = NivCopyright;
+            _resource.Settings.Copyright = NivCopyright;
+            _resource.Settings.FullName = " New International Version 2011 ";
 
             Assert.That(
-                GetNotice(),
+                GetResourceNotice(),
                 Is.EqualTo(
-                    new CopyrightNotice(
-                        CopyrightNoticeKind.RestrictedLicense,
-                        CopyrightYears: "1973, 1978, 1984, 2011"
+                    CopyrightNotice.RestrictedLicense(
+                        _resource.Name,
+                        "New International Version 2011",
+                        "1973, 1978, 1984, 2011"
                     )
                 )
             );
         }
 
         [Test]
-        public void GetProjectSetting_TextOnBiblicasListWithNoCopyright_IsStillRestricted()
+        public void GetProjectSetting_EmptyFullName_FallsBackToTheShortName()
         {
-            // NIV11
-            _scrText.Settings.DBLId = HexId.FromStr("71c6eab17ae5b667");
+            _resource.Settings.Copyright = NivCopyright;
+            _resource.Settings.FullName = "  ";
+
+            CopyrightNotice notice = GetResourceNotice();
+
+            Assert.That(notice.FullName, Is.EqualTo(_resource.Name));
+        }
+
+        [Test]
+        public void GetProjectSetting_HtmlBiblicaCopyright_TakesYearsFromTheDecodedText()
+        {
+            // Undecoded, "&copy;" hides where the text's own statement ends, and the quoted NIV
+            // years would be read as this text's
+            _resource.Settings.Copyright =
+                "<p>The Life of Christ&#8482; Copyright &copy; 2004 by Biblica, Inc.</p>"
+                + "<p>Scripture from the NIV&#174; Copyright &copy; 1984 by Biblica, Inc.</p>";
+
+            Assert.That(GetResourceNotice().CopyrightYears, Is.EqualTo("2004"));
+        }
+
+        [Test]
+        public void GetProjectSetting_ResourceOnBiblicasListWithNoCopyright_IsStillRestricted()
+        {
+            _resource.Settings.DBLId = HexId.FromStr(ListedDblId);
 
             Assert.That(
-                GetNotice(),
+                GetResourceNotice(),
                 Is.EqualTo(
-                    new CopyrightNotice(CopyrightNoticeKind.RestrictedLicense, CopyrightYears: "")
+                    CopyrightNotice.RestrictedLicense(
+                        _resource.Name,
+                        _resource.Settings.FullName,
+                        ""
+                    )
                 )
             );
+        }
+
+        [Test]
+        public void GetProjectSetting_EditableProjectWithBiblicaCopyright_ReturnsNone()
+        {
+            // A Biblica translation team's own project carries Biblica's copyright
+            _project.Settings.Copyright = NivCopyright;
+
+            Assert.That(GetProjectNotice(), Is.EqualTo(CopyrightNotice.None()));
+        }
+
+        [Test]
+        public void GetProjectSetting_EditableProjectWithListedDblId_ReturnsNone()
+        {
+            // Biblica's master project has the DBL id of the resource published from it
+            _project.Settings.DBLId = HexId.FromStr(ListedDblId);
+
+            Assert.That(GetProjectNotice(), Is.EqualTo(CopyrightNotice.None()));
         }
 
         [Test]
         public void GetProjectSetting_BiblicaOpen_ReturnsNone()
         {
-            _scrText.Settings.Copyright = "Copyright © 2020 by Biblica, Inc.";
-            _scrText.Settings.FullName = "Biblica® Open Example Contemporary Bible 2020";
+            _resource.Settings.Copyright = "Copyright © 2020 by Biblica, Inc.";
+            _resource.Settings.FullName = "Biblica® Open Example Contemporary Bible 2020";
 
-            Assert.That(GetNotice().Kind, Is.EqualTo(CopyrightNoticeKind.None));
+            Assert.That(GetResourceNotice(), Is.EqualTo(CopyrightNotice.None()));
         }
 
         [Test]
@@ -146,19 +214,19 @@ namespace TestParanextDataProvider.Projects
         {
             // Open Basic Turkish New Testament: Biblica Open, but its name and copyright do not say
             // so.
-            _scrText.Settings.Copyright =
+            _resource.Settings.Copyright =
                 "Open Basic Turkish New Testament™ Copyright © 2023 by Biblica, Inc., The Translation Trust, OM UK and Global Nomads";
-            _scrText.Settings.DBLId = HexId.FromStr("f6a5ef6e2e75a8b4");
+            _resource.Settings.DBLId = HexId.FromStr("f6a5ef6e2e75a8b4");
 
-            Assert.That(GetNotice().Kind, Is.EqualTo(CopyrightNoticeKind.None));
+            Assert.That(GetResourceNotice(), Is.EqualTo(CopyrightNotice.None()));
         }
 
         [Test]
         public void GetProjectSetting_NotificationOnBiblicaText_PrefersTheResourcesOwnNotification()
         {
-            _scrText.Settings.Copyright = "Notification: Own words\n" + NivCopyright;
+            _resource.Settings.Copyright = "Notification: Own words\n" + NivCopyright;
 
-            Assert.That(GetNotice().Kind, Is.EqualTo(CopyrightNoticeKind.Notification));
+            Assert.That(GetResourceNotice().Kind, Is.EqualTo(CopyrightNoticeKind.Notification));
         }
 
         [Test]
@@ -169,28 +237,26 @@ namespace TestParanextDataProvider.Projects
             Assert.Multiple(() =>
             {
                 Assert.That(
-                    JsonSerializer.Serialize(
-                        new CopyrightNotice(CopyrightNoticeKind.None),
-                        options
-                    ),
+                    JsonSerializer.Serialize(CopyrightNotice.None(), options),
                     Is.EqualTo("""{"kind":"none"}""")
                 );
                 Assert.That(
                     JsonSerializer.Serialize(
-                        new CopyrightNotice(
-                            CopyrightNoticeKind.RestrictedLicense,
-                            CopyrightYears: "Y"
-                        ),
+                        CopyrightNotice.Notification("N", "F", "B", "D"),
                         options
                     ),
-                    Is.EqualTo("""{"kind":"restrictedLicense","copyrightYears":"Y"}""")
+                    Is.EqualTo(
+                        """{"kind":"notification","name":"N","fullName":"F","bannerText":"B","details":"D"}"""
+                    )
                 );
                 Assert.That(
                     JsonSerializer.Serialize(
-                        new CopyrightNotice(CopyrightNoticeKind.Notification, "B", "C"),
+                        CopyrightNotice.RestrictedLicense("N", "F", "Y"),
                         options
                     ),
-                    Is.EqualTo("""{"kind":"notification","bannerText":"B","details":"C"}""")
+                    Is.EqualTo(
+                        """{"kind":"restrictedLicense","name":"N","fullName":"F","copyrightYears":"Y"}"""
+                    )
                 );
             });
         }
@@ -200,9 +266,9 @@ namespace TestParanextDataProvider.Projects
         {
             var ex = Assert.Throws<InvalidOperationException>(
                 () =>
-                    _provider.SetProjectSetting(
+                    _projectProvider.SetProjectSetting(
                         ProjectSettingsNames.PB_COPYRIGHT_NOTICE,
-                        new CopyrightNotice(CopyrightNoticeKind.None)
+                        CopyrightNotice.None()
                     )
             );
 

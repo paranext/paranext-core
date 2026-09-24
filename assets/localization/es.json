@@ -562,6 +562,7 @@
   "%resourcePicker_notice_dblCatalogUnavailable%": "No se puede acceder a la Biblioteca Digital de Biblias (DBL) en este momento, así que solo se muestran los recursos que ya están en esta computadora.",
   "%resourcePicker_notice_downloadsUnavailable%": "Las descargas de recursos no están disponibles en esta instalación, así que solo se muestran los recursos que ya están en esta computadora.",
   "%resourcePicker_notice_localResourcesUnavailable%": "No se pueden mostrar los recursos que ya están en esta computadora, así que puede que falten algunos recursos instalados en la lista.",
+  "%resourcePicker_restrictedModelText_tooltip%": "Este texto no se puede seleccionar porque sus condiciones de licencia prohíben usarlo como modelo o base para una nueva traducción.",
   "%resourcePicker_retry%": "Reintentar",
   "%resourcePicker_search_placeholder%": "Buscar recursos…",
   "%resourcePicker_section_already_selected%": "Incluido",

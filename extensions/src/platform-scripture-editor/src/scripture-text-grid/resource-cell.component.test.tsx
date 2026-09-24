@@ -54,6 +54,7 @@ vi.mock('@papi/frontend/react', () => ({
         '{fullName} copyright © {years}. {permissionsLink}',
       '%platformScripture_copyrightNotice_details_title%': 'Copyright for {name}',
       '%platformScripture_copyrightNotice_details_close%': 'Close',
+      '%platformScripture_copyrightNotice_indicator_label%': 'Copyright notice for {name}',
     },
     false,
   ],
@@ -722,19 +723,23 @@ describe('ResourceCell book not in this text', () => {
 });
 
 describe('ResourceCell copyright notice', () => {
-  it('offers the notice of a restricted text beside its name', () => {
+  it("offers the notice of the cell's own text beside its name", () => {
     setUsjResult(undefined, true);
-    mockUseProjectSetting.mockImplementation((_projectId: unknown, key: unknown) => {
+    mockUseProjectSetting.mockImplementation((projectId: unknown, key: unknown) => {
       if (key === 'platformScripture.copyrightNotice')
-        return [{ kind: 'restrictedLicense', copyrightYears: '2011' }, vi.fn(), vi.fn(), false];
-      if (key === 'platform.name') return ['NIV11', vi.fn(), vi.fn(), false];
+        return [
+          projectId === props.resourceRef.projectId
+            ? { kind: 'restrictedLicense', name: 'NIV11', fullName: 'NIV', copyrightYears: '2011' }
+            : { kind: 'none' },
+          vi.fn(),
+          vi.fn(),
+          false,
+        ];
       return ['ltr', vi.fn(), vi.fn(), false];
     });
 
     render(<ResourceCell {...props} />);
 
-    expect(
-      screen.getByRole('button', { name: 'NIV11: may not be used as a base text.' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copyright notice for NIV11' })).toBeInTheDocument();
   });
 });

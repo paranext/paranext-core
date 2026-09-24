@@ -395,10 +395,21 @@ export function ScriptureTextGrid({
             aria-label={verseItemName(resource.label)}
             tabIndex={activate ? 0 : undefined}
             draggable={onReorder ? true : undefined}
-            onClick={activate}
+            // A window opened from a cell (its copyright details) renders outside the row, but React
+            // still delivers its events here; only what happens inside the row activates it
+            onClick={
+              activate
+                ? (event) => {
+                    if (event.target instanceof Node && event.currentTarget.contains(event.target))
+                      activate();
+                  }
+                : undefined
+            }
             onKeyDown={
               activate
                 ? (event) => {
+                    // Enter and Space on a control inside the row belong to that control
+                    if (event.target !== event.currentTarget) return;
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
                       activate();

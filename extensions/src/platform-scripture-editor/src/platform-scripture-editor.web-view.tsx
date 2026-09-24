@@ -3930,7 +3930,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
-      {/* Outside the zoomed, scrolling text area, so the notice stays put while the text scrolls */}
+      {/* Outside the zoomed, scrolling text area, so the notice stays put while the text scrolls.
+          Every project is asked, because a "Notification:" copyright shows its banner on any text,
+          as in Paratext 9. */}
       <ProjectCopyrightNotice
         projectId={projectId}
         localizedStrings={localizedStrings}

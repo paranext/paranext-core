@@ -2958,24 +2958,24 @@ declare module 'platform-scripture' {
   // #endregion Markers Checklist Types
 
   /**
-   * The copyright notice to show when a project is opened: the value of the
-   * `platformScripture.copyrightNotice` project setting.
+   * The copyright notice to show for a resource: the value of the
+   * `platformScripture.copyrightNotice` project setting. A project that is not a resource always
+   * gets `none`. Treat a `kind` not listed here as `none`, since a newer backend may add kinds.
    *
    * - `none`: no notice.
-   * - `notification`: the project's copyright starts with "Notification:", as the ESV's does.
-   *   `bannerText` is the rest of that first paragraph, in the project's own words; show it as
-   *   Paratext 9 does. `details` is the rest of the copyright.
-   * - `restrictedLicense`: a traditionally licensed Biblica text, which is for reference only and may
-   *   not be used as the basis of a new translation. The caller supplies the wording of the notice
-   *   and of Biblica's terms for "More info". `copyrightYears` is the years in the text's copyright
+   * - `notification`: the copyright starts with "Notification:", as the ESV's does. `bannerText` is
+   *   the rest of that first paragraph and `details` the rest of the copyright.
+   * - `restrictedLicense`: a traditionally licensed Biblica text, for reference only and not to be
+   *   used as the basis of a new translation. `copyrightYears` is the years in its copyright
    *   statement (e.g. "1973, 1978, 1984, 2011"), or "" when it names none.
    *
-   * `details` is plain text with one paragraph per line (`\n`), for "More info". It is never HTML.
+   * `name` is the resource's short name and `fullName` its full name, which is the short name when
+   * it has none. `details` is plain text with one paragraph per line (`\n`), never HTML.
    */
   export type CopyrightNotice =
     | { kind: 'none' }
-    | { kind: 'notification'; bannerText: string; details: string }
-    | { kind: 'restrictedLicense'; copyrightYears: string };
+    | { kind: 'notification'; name: string; fullName: string; bannerText: string; details: string }
+    | { kind: 'restrictedLicense'; name: string; fullName: string; copyrightYears: string };
 }
 
 declare module 'papi-shared-types' {
@@ -3455,8 +3455,9 @@ declare module 'papi-shared-types' {
     'platformScripture.crossRefCallers': string;
 
     /**
-     * The copyright notice to show when this project is opened. Computed from the project's
-     * copyright, full name and DBL id; read-only through the settings surface.
+     * The copyright notice to show when this resource is opened; `none` for a project that is not a
+     * resource. Computed from its copyright, names and DBL id; read-only through the settings
+     * surface.
      */
     'platformScripture.copyrightNotice': CopyrightNotice;
   }
