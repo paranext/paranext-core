@@ -380,7 +380,7 @@ export const ManyLanguagesScopedToScripture: Story = {
       await userEvent.click(body.getByRole('combobox'));
     });
 
-    await step('Every offered language has at least one Scripture resource', async () => {
+    await step('The offered languages are exactly those with a Scripture resource', async () => {
       const offered = new Set(getOfferedLanguages(canvasElement.ownerDocument));
 
       // Pins the `resourceType` argument at the call site: without it every language in the
@@ -399,8 +399,8 @@ export const ManyLanguagesScopedToScripture: Story = {
       await expect(languagesWithoutScripture.filter((language) => offered.has(language))).toEqual(
         [],
       );
-      // ...and the scoping is not just hiding everything.
-      await expect(offered.size).toBeGreaterThan(0);
+      // ...and the scoping does not over-filter: every language with a Scripture resource is offered.
+      await expect([...offered].sort()).toEqual([...scriptureLanguages].sort());
     });
   },
 };

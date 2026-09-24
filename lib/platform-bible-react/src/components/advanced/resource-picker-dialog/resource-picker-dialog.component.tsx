@@ -450,10 +450,7 @@ export default function ResourcePickerDialog({
   // Measured against the type-scoped set, because that is the set the predicate is applied to:
   // counting selections against every language in the whole catalog calls a selection a filter when
   // it excludes nothing of this resource type (a "showing 4 of 4" count, and an offer to clear a
-  // filter that is not filtering), and calls it no filter when the catalog has changed under a
-  // mounted picker such that a still-selected language is no longer among the options — which is the
-  // worse direction, because it withdraws the "Clear filters" escape from a selection that is hiding
-  // every row.
+  // filter that is not filtering).
   const isLanguageFiltered =
     effectiveLanguages.length > 0 &&
     typeScopedResources.some((r) => !effectiveLanguages.includes(r.bestLanguageName));

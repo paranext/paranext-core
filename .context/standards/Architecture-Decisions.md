@@ -6226,8 +6226,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** The scope is one exported predicate (`matchesResourceType`, exported from
   `platform-bible-react/experimental`), and each surface derives its rows, its filter options and its
   result count from a single type-scoped list built with it. An empty array means "nothing is
-  filtering", so a multi-select with no selection reads naturally. A selected value that the
-  options no longer offer is held: it is hidden from the filter and ignored by the rows, so narrowing
+  filtering", so a multi-select with no selection reads naturally. A selected language that the
+  options no longer offer is held (the type filter is a deliberate exception; see Consequences): it
+  is hidden from the filter and ignored by the rows, so narrowing
   the type filter cannot strand a persisted language selection on an empty grid, but it stays in
   the saved selection — every change is written back as held values plus the new visible ones — and
   applies again once the options offer it. `partitionFilterSelection` (same export) is the one
@@ -6247,9 +6248,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   filtering the raw catalogue, or the dead end returns by another route. Holding hidden values
   means a user who widens the type filter can see the grid narrow to a language they picked earlier
   and cannot currently see in the filter; that is the intended trade, since it was their choice. The
-  explicit "Clear filters" action in the resource picker clears held values too. A type the build no
-  longer offers is not held: that value is invalid rather than hidden, so Get Resources narrows it
-  away against its canonical type list.
+  explicit "Clear filters" action in the resource picker clears held values too. The type filter
+  does not hold, and that asymmetry is deliberate rather than an inconsistency between the two
+  filters: a hidden language comes back the moment the type filter widens, but a type retired from
+  the build can never be offered again, so it is invalid rather than hidden. Get Resources narrows
+  the persisted types against its canonical type list, and an unrecognized type is gone from the
+  saved state after the next toggle.
 
 ## adr-shared-option-list-affordances-opt-in: New visual affordances on shared option-list components ship opt-in
 
