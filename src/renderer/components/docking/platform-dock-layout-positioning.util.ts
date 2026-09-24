@@ -91,11 +91,12 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
 
 /**
  * WebViewTypes that make up Simple mode's fixed 3-column layout, mapped to the rc-dock group each
- * is confined to while pinned there. Kept in sync with two sources: every webViewType hardcoded in
- * `simple-layout.data.ts` (all of Columns 1 and 2, and all of Column 3 except `scriptureTextGrid`),
- * plus `scriptureTextGrid` (Text Collection) itself, which is absent from that static layout and
- * instead joins Column 3 at runtime from `default-layout-supplement.json` once its feature flag is
- * enabled.
+ * is confined to while pinned there. Kept in sync with three sources: every webViewType hardcoded
+ * in `simple-layout.data.ts` (all of Columns 1 and 2, and all of Column 3 except the two below);
+ * `scriptureTextGrid` (Text Collection), which is absent from that static layout and instead joins
+ * Column 3 when the layout loads, from `default-layout-supplement.json`, once its feature flag is
+ * enabled; and `checksSidePanel`, which is also absent from it and joins Column 3 only when the
+ * user opens Checks (`openChecksSidePanelWebView` in `platform-scripture`).
  */
 const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
   'platformScriptureEditor.modelText': HEADLESS_GROUP,
@@ -105,6 +106,7 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
   'legacyCommentManager.commentListPanel': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.scriptureTextGrid': TAB_GROUP_RESOURCES,
   'platformScripture.find': TAB_GROUP_RESOURCES,
+  'platformScripture.checksSidePanel': TAB_GROUP_RESOURCES,
 };
 
 /**

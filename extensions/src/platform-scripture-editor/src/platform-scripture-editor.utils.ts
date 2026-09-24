@@ -1552,6 +1552,51 @@ export async function updateRelatedFindPanel(
   }
 }
 
+/**
+ * Re-points an open Checks side panel at `projectId`, the Checks counterpart of
+ * {@link updateRelatedFindPanel} and called at the same point for the same reason: the panel holds
+ * the editor's web view id to focus the editor and select a clicked result, so it needs the id of
+ * the editor the switch produced.
+ *
+ * Creates nothing. In Simple mode Checks joins Column 3 only when the user opens it, and a project
+ * switch is not a request to open it.
+ *
+ * Never follows a published resource (see `isProjectPublished`), the same rule as
+ * {@link updateRelatedTextCollectionPanel}: a resource is not something the user checks, so Checks
+ * stays on the translation project. A translation project with editing switched off is followed
+ * like any other.
+ *
+ * Only Simple mode re-points Checks, read fresh here for the same reason as in
+ * {@link updateRelatedFindPanel}. In Power mode each Checks panel is docked beside the editor it was
+ * opened for, so re-pointing "the" open one would retarget whichever editor's panel the probe
+ * happened to find.
+ *
+ * Never throws: a failure here is logged and swallowed, because the project switch itself has
+ * already succeeded by this point.
+ *
+ * @param papi The instance of papi to read the interface mode and project kind with and send the
+ *   command
+ * @param projectId The id of the project Checks should check from now on
+ * @param editorWebViewId Id of the editor web view the switch produced
+ */
+export async function updateRelatedChecksSidePanel(
+  papi: typeof PapiBackend,
+  projectId: string,
+  editorWebViewId: string | undefined,
+): Promise<void> {
+  try {
+    if ((await papi.settings.get('platform.interfaceMode')) !== 'simple') return;
+    if (await isProjectPublished(papi, projectId)) return;
+    await papi.commands.sendCommand(
+      'platformScripture.updateChecksSidePanelProject',
+      projectId,
+      editorWebViewId,
+    );
+  } catch (e) {
+    papi.logger.warn(`Error updating checks side panel project: ${getErrorMessage(e)}`);
+  }
+}
+
 // #endregion Text Connection Panels
 
 // #region Chapter Scaffold Helpers

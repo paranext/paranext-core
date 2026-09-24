@@ -31,14 +31,22 @@ export class ChecksSidePanelWebViewProvider implements IWebViewProvider {
   ): Promise<WebViewDefinition | undefined> {
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    const title = await papi.localization.getLocalizedString({
-      localizeKey: '%webView_checksSidePanel_title%',
-    });
+    const [title, interfaceMode] = await Promise.all([
+      papi.localization.getLocalizedString({
+        localizeKey: '%webView_checksSidePanel_title%',
+      }),
+      papi.settings.get('platform.interfaceMode'),
+    ]);
 
     return {
       ...savedWebView,
       title,
       projectId,
+      // In Simple mode this is a Column 3 tab, pinned like its siblings there: `getTabGroup` routes
+      // a non-closable tab of this type to Column 3's rc-dock group, which keeps it from being
+      // dragged into another column. Power mode docks it as an ordinary closable panel. Computed per
+      // provider, like its Column 3 siblings, until PT-4405 moves this into the renderer.
+      isClosable: interfaceMode !== 'simple',
       content: checksSidePanelWebView,
       styles: tailwindStyles,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,

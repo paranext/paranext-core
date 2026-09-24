@@ -2,6 +2,8 @@ import { vi } from 'vitest';
 import { BoxData, LayoutBase, PanelData } from 'rc-dock';
 import { readdirSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import { isGroupUnderColumnOrSubMenu } from 'platform-bible-react';
+import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { simpleLayout } from './simple-layout.data';
 import { applyProjectIdToTabs, buildSimpleLayoutForProject } from './simple-layout.builder';
@@ -114,16 +116,6 @@ type MenuItemJson = {
   hiddenInterfaceModes?: string[];
 };
 
-/**
- * Whether a group's items render under a column. Restates `isGroupUnderColumnOrSubMenu` in
- * `lib/platform-bible-react/src/components/advanced/menus/menu.util.ts`, which the package does not
- * export, so keep the two in sync: a group belongs to a column when it names that column, or when
- * it is keyed the same as the column.
- */
-function isGroupUnderColumn(groupKey: string, group: { column?: string }, columnKey: string) {
-  return group.column === columnKey || groupKey === columnKey;
-}
-
 /** The TOOLS section's commands, read straight off the raw menu JSON, in the order they are served. */
 function simpleToolsCommands(): string[] {
   const menus = JSON.parse(readFileSync(EDITOR_MENUS_PATH, 'utf8'));
@@ -132,12 +124,12 @@ function simpleToolsCommands(): string[] {
     groups,
     items,
   }: {
-    groups: Record<string, { column?: string; order: number }>;
+    groups: Localized<MultiColumnMenu['groups']>;
     items: MenuItemJson[];
   } = topMenu;
   return Object.entries(groups)
     .filter(([groupKey, group]) =>
-      isGroupUnderColumn(groupKey, group, 'platformScriptureEditor.simpleTools'),
+      isGroupUnderColumnOrSubMenu(groupKey, group, 'platformScriptureEditor.simpleTools'),
     )
     .sort(([, a], [, b]) => a.order - b.order)
     .flatMap(([groupKey]) =>
@@ -279,18 +271,14 @@ describe('shipped Simple-mode Column 3 order', () => {
     ]);
   });
 
-  /**
-   * TOOLS follows the Simple design's order rather than the tabs' order (the served order is pinned
-   * in `menu-data.service-host.scripture-editor-menu.test.ts`), so this compares the two as sets.
-   */
-  it('gives every third-column tab a TOOLS item in the Simple Project menu, and no item a missing tab', () => {
+  it("lists the Simple Project menu's TOOLS section in the same order as the third column", () => {
     const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
     const mappedTabs = simpleToolsCommands().map((command) => TAB_FOR_COMMAND[command]);
-    // An unmapped command maps to undefined; fail on it here rather than as an unexplained set
-    // mismatch below
+    // TAB_FOR_COMMAND[command] is undefined for an unmapped command, and a missing layout slot is
+    // also undefined, so the two could compare equal below for the wrong reason. Guard each mapped
+    // entry first so an unmapped command fails here instead.
     mappedTabs.forEach((tab) => expect(tab).toBeDefined());
-    expect(mappedTabs).toHaveLength(new Set(mappedTabs).size);
-    expect(new Set(mappedTabs)).toEqual(new Set(columnWebViewTypes(merged, 2)));
+    expect(mappedTabs).toEqual(columnWebViewTypes(merged, 2));
   });
 
   it('the real supplement leaves nothing Simple-mode-only behind in a power-mode merge', () => {
