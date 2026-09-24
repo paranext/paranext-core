@@ -53,6 +53,14 @@ export function installPopoverJsdomStubs() {
   if (typeof Range.prototype.getBoundingClientRect !== 'function') {
     Range.prototype.getBoundingClientRect = () => new DOMRect();
   }
+  // Anchoring only measures a caret that reports a painted box. Only the length is read, and jsdom
+  // exposes no `DOMRectList` to build a real one from.
+  if (typeof Range.prototype.getClientRects !== 'function') {
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: () => [new DOMRect()],
+    });
+  }
 }
 
 /**
