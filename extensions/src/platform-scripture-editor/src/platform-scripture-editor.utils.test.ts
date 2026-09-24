@@ -3641,6 +3641,25 @@ describe('updateRelatedTextCollectionPanel', () => {
     expect(mockProjectDataProvidersGet).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['no panel is open', []],
+    ['the panel already shows the project', [gridDef('proj-a')]],
+  ])(
+    'does not read whether the project is published when %s',
+    async (_label, openDefs: Array<Partial<SavedWebViewDefinition>>) => {
+      // The Power→Simple switch normally lands here: the grid arrives already bound, or is not open
+      // at all. A read there is wasted, and a failed one would warn about a re-point that was never
+      // going to happen.
+      const { papi, mockProjectDataProvidersGet, mockWarn } = createRelatedPanelsMockPapi(openDefs);
+      mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
+
+      await updateRelatedTextCollectionPanel(papi, 'proj-a');
+
+      expect(mockProjectDataProvidersGet).not.toHaveBeenCalled();
+      expect(mockWarn).not.toHaveBeenCalled();
+    },
+  );
+
   it('treats a project whose provider cannot be reached as a translation project and says so', async () => {
     // `platform.isPublished` defaults to false, and following is recoverable (the next switch
     // re-points again), whereas staying would leave the grid silently on the outgoing project.

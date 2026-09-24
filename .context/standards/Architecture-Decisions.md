@@ -930,11 +930,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     reach the Power→Simple path at all, because `getMostRecentUsableProjectId` walks past published
     candidates and `cacheLastOpenedSimpleProject` declines to cache them. The outgoing Send/Receive
     on an editor-column switch follows the same rule: `syncOnProjectSwitch` skips it only for a
-    published resource, since an `Editable=F` project can still hold new comments. Following costs a reload the old gate avoided: a round
+    published resource, since an `Editable=F` project can still hold new comments. The window-close
+    and shutdown syncs already draw that line: `getWritableEditorProjectIds` drops editors whose
+    saved `isReadOnly` is set, and that flag marks a Resource Viewer, which Home, New Tab and the open
+    dialog choose by `platform.isPublished`. Following costs a reload the old gate avoided: a round
     trip through a resource reloads Find twice, clearing its results, and an `Editable=F` project now
     reloads the grid. How an unbound grid gets its first project, and what following costs
     in Power mode, is recorded in `adr-active-editor-project-is-a-window-data-type`.
-  - **Added 2026-09-18 — what a followed `Editable=F` project's grid offers is unchecked.** As of 2026-09-21, whether
+  - **Added 2026-09-18 — what a followed `Editable=F` project's grid offers is unchecked.** Whether
     the Text Collection exposes controls that write to such a project is an open question, tracked on
     PT-4724, which should first settle where to run that check: `default-layout-supplement.json` lists
     the Scripture Text Grid behind `platformScriptureEditor.enableScriptureTextGrid` (contributed
@@ -966,7 +969,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     web views there — in Simple mode it calls `applyForProject` → `focusSharedLayoutDefaultTab`,
     which issues an `existingId: '?'` probe — so this adds a second enumeration and a reload to a
     path that had one probe. If both run for one switch the case-normalized skip guard makes the
-    second a no-op.
+    second a no-op. *(Amended 2026-09-18: the `finalizeProjectSwitch` path normally adds only the
+    enumeration. The Text Collection now arrives already bound from the mode switch (see the
+    Decision), so the re-point returns at its skip guard without a reload, and it reads
+    `platform.isPublished` only when a reload is still in question.)*
   - **The stale-held-setting path is narrowed, not closed.** Whenever the grid is still unbound it
     continues to change `projectId` in place through its latch effect, which is exactly the usage
     `useBufferedLayoutSetting` warns about: `shouldApply` is already `false` after the first apply,

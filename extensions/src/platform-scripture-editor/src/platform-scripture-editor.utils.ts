@@ -1122,7 +1122,11 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  *
  * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
  * holds nothing the user wrote. A translation project with editing switched off still syncs: its
- * Scripture text is locked, but the user can still add comments to it.
+ * Scripture text is locked, but the user can still add comments to it. The window-close and
+ * shutdown syncs (`getWritableEditorProjectIds` in `src/main/shutdown-tasks.ts`) draw the same
+ * line: they drop editors whose saved `isReadOnly` is set, and that flag marks a Resource Viewer,
+ * which Home, New Tab and the open dialog choose by `platform.isPublished` — not by
+ * `platform.isEditable`.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
@@ -1384,13 +1388,13 @@ export function resolveGridProviderProjectId(
  * @param papi The instance of papi to read web view definitions with and request the reload from
  * @param projectId The id of the project whose text collection the panel should show
  * @param isPublishedPromise Whether `projectId` is a published resource. A caller that already
- *   started this read passes it in so the round trip overlaps its own work; otherwise it starts
- *   here, alongside the open-web-view read.
+ *   started this read passes it in so the round trip overlaps its own work; otherwise it is read
+ *   here, and only once a reload is still in question.
  */
 export async function updateRelatedTextCollectionPanel(
   papi: typeof PapiBackend,
   projectId: string,
-  isPublishedPromise: Promise<boolean> = isProjectPublished(papi, projectId),
+  isPublishedPromise?: Promise<boolean>,
 ): Promise<void> {
   let existingPanel: SavedWebViewDefinition | undefined;
   try {
@@ -1416,7 +1420,7 @@ export async function updateRelatedTextCollectionPanel(
   )
     return;
 
-  if (await isPublishedPromise) return;
+  if (await (isPublishedPromise ?? isProjectPublished(papi, projectId))) return;
 
   try {
     // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
