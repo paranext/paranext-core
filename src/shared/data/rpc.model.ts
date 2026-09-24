@@ -1,6 +1,5 @@
 import { logger } from '@shared/services/logger.service';
 import { SerializedRequestType } from '@shared/utils/util';
-import type { ServerSocketLike } from '@shared/models/rpc.interface';
 import {
   JSONRPC,
   JSONRPCErrorCode,
@@ -331,6 +330,37 @@ export function describeWebSocketErrorEvent(ev: unknown): string {
   const describedMessage = cause ? sanitizeForLog(`${message} (cause: ${cause})`) : message;
 
   return `message=${describedMessage} code=${code}${stack ? ` stack: ${stack}` : ''}`;
+}
+
+/**
+ * The subset of a socket the main-process RPC layer touches. Both `ws`'s server-side sockets and
+ * the DOM `WebSocket` type satisfy it structurally, and so does a MessagePort wrapped to look like
+ * one. `RpcServer` and `RpcWebSocketListener` are written against this rather than against
+ * `WebSocket` so that main can serve a client over something other than a TCP socket.
+ *
+ * @experimental
+ */
+export interface ServerSocketLike {
+  /**
+   * 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED, as on `WebSocket.readyState`
+   *
+   * @experimental
+   */
+  readonly readyState: number;
+  /** @experimental */
+  send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
+  /** @experimental */
+  close(code?: number, reason?: string): void;
+  /** @experimental */
+  addEventListener<K extends 'close' | 'error' | 'message'>(
+    type: K,
+    listener: (ev: WebSocketEventMap[K]) => void,
+  ): void;
+  /** @experimental */
+  removeEventListener<K extends 'close' | 'error' | 'message'>(
+    type: K,
+    listener: (ev: WebSocketEventMap[K]) => void,
+  ): void;
 }
 
 /** Serialize a payload, if needed, and send it over the provided WebSocket */
