@@ -212,7 +212,7 @@ describe('ResourcePickerDialogWrapper', () => {
       fireEvent.click(row);
 
       expect(row).toHaveAttribute('aria-disabled', 'true');
-      expect(row).toHaveTextContent('%resourcePicker_restrictedModelText_tooltip%');
+      expect(row).toHaveTextContent('%restrictedModelOrBaseText_disabledReason%');
       expect(submitDialog).not.toHaveBeenCalled();
     });
 

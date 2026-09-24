@@ -23,7 +23,7 @@ export type CopyrightNoticeIndicatorViewProps = {
 /**
  * A small info button carrying a text's copyright notice, for places too small for the banner such
  * as a Text Collection cell. Its tooltip shows the notice, and clicking it opens the details the
- * banner's "More info…" opens. It cannot be dismissed, since it takes almost no space.
+ * banner's "More info" opens. It cannot be dismissed, since it takes almost no space.
  */
 export function CopyrightNoticeIndicatorView({
   notice,
