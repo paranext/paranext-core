@@ -1,12 +1,12 @@
 import { DblResourceData, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 
 /**
- * Tooltip explaining why a text cannot be picked as a model or base text. A core resource picker
- * string, so it lives in core's `assets/localization`; extensions that disable the same texts in
- * their own pickers reuse this key.
+ * Disabled reason explaining why a text cannot be picked as a model or base text. A core string, so
+ * it lives in core's `assets/localization`; extensions that disable the same texts in their own
+ * pickers reuse this key.
  */
-export const RESTRICTED_MODEL_TEXT_TOOLTIP_KEY: LocalizeKey =
-  '%resourcePicker_restrictedModelText_tooltip%';
+export const RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY: LocalizeKey =
+  '%restrictedModelOrBaseText_disabledReason%';
 
 /**
  * Why a resource cannot be picked as a model or base text, or `undefined` when it can. Only
@@ -20,6 +20,7 @@ export function getRestrictedModelTextReason(
   // Falls back to the key because pickers disable a row only when it has a reason: a missing string
   // must not make a restricted text selectable.
   return resource.isRestrictedAsModelText
-    ? localizedStrings[RESTRICTED_MODEL_TEXT_TOOLTIP_KEY] || RESTRICTED_MODEL_TEXT_TOOLTIP_KEY
+    ? localizedStrings[RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY] ||
+        RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY
     : undefined;
 }

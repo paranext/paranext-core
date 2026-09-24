@@ -6,9 +6,9 @@ import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice.const';
 
 /**
  * The strip across the top of a text pane that tells the reader about a text's license. Biblica's
- * traditionally licensed texts get Biblica's reference-only notice, and "More info…" opens
- * Biblica's terms for use outside Paratext. A text whose copyright starts with "Notification:" (the
- * ESV) gets its own wording, as in Paratext 9.
+ * traditionally licensed texts get Biblica's reference-only notice, and "More info" opens Biblica's
+ * terms for use outside Paratext. A text whose copyright starts with "Notification:" (the ESV) gets
+ * its own wording, as in Paratext 9.
  *
  * The message is clamped to two lines in a narrow pane; **Show more** appears only when it does not
  * fit. The X dismisses it until the pane shows another text.
@@ -49,14 +49,14 @@ export const BiblicaTextWidePane: Story = {
   parameters: { paneWidth: 1200 },
 };
 
-/** "More info…" open: Biblica's terms, with the years from the text's copyright statement. */
+/** "More info" open: Biblica's terms, with the years from the text's copyright statement. */
 export const BiblicaTermsOpen: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole('button', { name: /^More info/ }));
   },
 };
 
-/** "More info…" open for a text whose copyright names no years: the terms leave them out. */
+/** "More info" open for a text whose copyright names no years: the terms leave them out. */
 export const BiblicaTermsOpenWithoutYears: Story = {
   args: {
     notice: {
@@ -71,7 +71,7 @@ export const BiblicaTermsOpenWithoutYears: Story = {
 
 /**
  * A text whose copyright starts with "Notification:", as the ESV's does: its own banner wording,
- * and the rest of its copyright under "More info…".
+ * and the rest of its copyright under "More info".
  */
 export const NotificationText: Story = {
   args: {
@@ -87,6 +87,12 @@ export const NotificationText: Story = {
       ].join('\n'),
     },
   },
+};
+
+/** "More info" open for a "Notification:" text: the rest of its copyright, one paragraph per line. */
+export const NotificationDetailsOpen: Story = {
+  args: NotificationText.args,
+  play: BiblicaTermsOpen.play,
 };
 
 /** A right-to-left name: it stays in place, bold, ahead of its colon. */

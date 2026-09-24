@@ -234,7 +234,7 @@ describe('ManageBooksDialog project pickers', () => {
           },
         ],
         localizedStrings: {
-          '%resourcePicker_restrictedModelText_tooltip%': reason,
+          '%restrictedModelOrBaseText_disabledReason%': reason,
         },
       }),
     );

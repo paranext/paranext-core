@@ -4,7 +4,10 @@ import type { ModelTextRestrictions } from 'platform-get-resources';
 import {
   applyModelTextRestrictions,
   applyModelTextRestrictionsToCatalog,
+  applyModelTextRestrictionsToCatalogWithin,
+  applyModelTextRestrictionsWithin,
   createModelTextRestrictionsCache,
+  syncModelTextRestrictionsAfterFlagSync,
 } from './model-text-restrictions.utils';
 
 function row(overrides: Partial<DblResourceData>): DblResourceData {
@@ -26,6 +29,28 @@ const RESTRICTIONS: ModelTextRestrictions = {
   dblIds: ['a1b2c3d4e5f60718'],
   projectIds: ['NIVUK11'],
 };
+
+/** A fetch whose each call resolves only when the test says so. */
+function makeControlledFetch() {
+  const resolvers: ((value: ModelTextRestrictions | undefined) => void)[] = [];
+  const fetchRestrictions = vi.fn(
+    () =>
+      new Promise<ModelTextRestrictions | undefined>((resolve) => {
+        resolvers.push(resolve);
+      }),
+  );
+  return {
+    fetchRestrictions,
+    resolve: (i: number, v?: ModelTextRestrictions) => resolvers[i](v),
+  };
+}
+
+const PENDING = Symbol('pending');
+
+/** Whether a promise has already settled, so a test can tell a bounded wait from an unbounded one */
+async function isSettled(promise: Promise<unknown>): Promise<boolean> {
+  return (await Promise.race([promise, Promise.resolve(PENDING)])) !== PENDING;
+}
 
 describe('applyModelTextRestrictions', () => {
   it('restricts a catalog row whose DBL id is on the list, whatever its case', () => {
@@ -107,21 +132,6 @@ describe('createModelTextRestrictionsCache', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-
-  /** A fetch whose each call resolves only when the test says so. */
-  function makeControlledFetch() {
-    const resolvers: ((value: ModelTextRestrictions | undefined) => void)[] = [];
-    const fetchRestrictions = vi.fn(
-      () =>
-        new Promise<ModelTextRestrictions | undefined>((resolve) => {
-          resolvers.push(resolve);
-        }),
-    );
-    return {
-      fetchRestrictions,
-      resolve: (i: number, v?: ModelTextRestrictions) => resolvers[i](v),
-    };
-  }
 
   it('shares one fetch between callers that ask while it is in flight', async () => {
     const { fetchRestrictions, resolve } = makeControlledFetch();
@@ -206,6 +216,19 @@ describe('createModelTextRestrictionsCache', () => {
     await expect(cache.getWithin(0)).resolves.toBe(RESTRICTIONS);
   });
 
+  it('keeps working when its functions are called apart from the cache', async () => {
+    const installed: ModelTextRestrictions = { dblIds: [], projectIds: ['NEW'] };
+    const fetchRestrictions = vi
+      .fn<() => Promise<ModelTextRestrictions | undefined>>()
+      .mockResolvedValueOnce(RESTRICTIONS)
+      .mockResolvedValueOnce(installed);
+    const { sync, getWithin } = createModelTextRestrictionsCache(fetchRestrictions);
+
+    await expect(getWithin(2000)).resolves.toBe(RESTRICTIONS);
+    await expect(sync(false)).resolves.toBe(RESTRICTIONS);
+    await expect(sync(true)).resolves.toBe(installed);
+  });
+
   describe('sync', () => {
     it('leaves known restrictions alone when local state has not changed', async () => {
       const fetchRestrictions = vi.fn(async () => RESTRICTIONS);
@@ -276,6 +299,134 @@ describe('createModelTextRestrictionsCache', () => {
       resolve(0, RESTRICTIONS);
       await expect(cache.getWithin(2000)).resolves.toBe(RESTRICTIONS);
       expect(fetchRestrictions).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('syncModelTextRestrictionsAfterFlagSync', () => {
+  const INSTALLED: ModelTextRestrictions = { dblIds: [], projectIds: ['NEW'] };
+
+  async function makeLoadedCache() {
+    const fetchRestrictions = vi
+      .fn<() => Promise<ModelTextRestrictions | undefined>>()
+      .mockResolvedValueOnce(RESTRICTIONS)
+      .mockResolvedValueOnce(INSTALLED);
+    const cache = createModelTextRestrictionsCache(fetchRestrictions);
+    await cache.ensureLoaded();
+    return { cache, fetchRestrictions };
+  }
+
+  // A background sync that notices a newly installed restricted text is not a requested refresh;
+  // the changed flag is the only sign that the text is now on disk and must be restricted.
+  it('fetches afresh when the sync changed a flag, even though no refresh was requested', async () => {
+    const { cache } = await makeLoadedCache();
+
+    await expect(
+      syncModelTextRestrictionsAfterFlagSync(cache, {
+        isRefreshRequested: false,
+        isAnyFlagChanged: true,
+      }),
+    ).resolves.toBe(INSTALLED);
+  });
+
+  it('fetches afresh when a refresh was requested, even though no flag changed', async () => {
+    const { cache } = await makeLoadedCache();
+
+    await expect(
+      syncModelTextRestrictionsAfterFlagSync(cache, {
+        isRefreshRequested: true,
+        isAnyFlagChanged: false,
+      }),
+    ).resolves.toBe(INSTALLED);
+  });
+
+  it('keeps the known restrictions when nothing changed and no refresh was requested', async () => {
+    const { cache, fetchRestrictions } = await makeLoadedCache();
+
+    await expect(
+      syncModelTextRestrictionsAfterFlagSync(cache, {
+        isRefreshRequested: false,
+        isAnyFlagChanged: false,
+      }),
+    ).resolves.toBe(RESTRICTIONS);
+    expect(fetchRestrictions).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('applying the restrictions within a bound', () => {
+  const RESTRICTED_ROW = row({ dblEntryUid: 'a1b2c3d4e5f60718' });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('applyModelTextRestrictionsWithin', () => {
+    it('stamps the rows with restrictions that arrive inside the bound', async () => {
+      vi.useFakeTimers();
+      const { fetchRestrictions, resolve } = makeControlledFetch();
+      const cache = createModelTextRestrictionsCache(fetchRestrictions);
+
+      const stamped = applyModelTextRestrictionsWithin([RESTRICTED_ROW], cache, 2000);
+      await vi.advanceTimersByTimeAsync(1500);
+      resolve(0, RESTRICTIONS);
+
+      const [stampedRow] = await stamped;
+      expect(stampedRow.isRestrictedAsModelText).toBe(true);
+    });
+
+    it('returns the rows unstamped once the bound passes, without waiting any longer', async () => {
+      vi.useFakeTimers();
+      const { fetchRestrictions } = makeControlledFetch();
+      const cache = createModelTextRestrictionsCache(fetchRestrictions);
+      const rows = [RESTRICTED_ROW];
+
+      const stamped = applyModelTextRestrictionsWithin(rows, cache, 2000);
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(await isSettled(stamped)).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(await isSettled(stamped)).toBe(true);
+      await expect(stamped).resolves.toBe(rows);
+    });
+  });
+
+  describe('applyModelTextRestrictionsToCatalogWithin', () => {
+    it('stamps the catalog with restrictions that arrive inside the bound', async () => {
+      vi.useFakeTimers();
+      const { fetchRestrictions, resolve } = makeControlledFetch();
+      const cache = createModelTextRestrictionsCache(fetchRestrictions);
+
+      const stamped = applyModelTextRestrictionsToCatalogWithin(
+        Promise.resolve({ status: 'available', resources: [RESTRICTED_ROW] }),
+        cache,
+        2000,
+      );
+      await vi.advanceTimersByTimeAsync(1500);
+      resolve(0, RESTRICTIONS);
+
+      const catalog = await stamped;
+      expect(catalog.status === 'available' && catalog.resources[0].isRestrictedAsModelText).toBe(
+        true,
+      );
+    });
+
+    it('returns the catalog unstamped once the bound passes, without waiting any longer', async () => {
+      vi.useFakeTimers();
+      const { fetchRestrictions } = makeControlledFetch();
+      const cache = createModelTextRestrictionsCache(fetchRestrictions);
+      const rows = [RESTRICTED_ROW];
+
+      const stamped = applyModelTextRestrictionsToCatalogWithin(
+        Promise.resolve({ status: 'available', resources: rows }),
+        cache,
+        2000,
+      );
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(await isSettled(stamped)).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(await isSettled(stamped)).toBe(true);
+      await expect(stamped).resolves.toEqual({ status: 'available', resources: rows });
     });
   });
 });

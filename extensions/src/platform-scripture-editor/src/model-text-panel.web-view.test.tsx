@@ -41,7 +41,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%platformScripture_copyrightNotice_restrictedLicense_banner%':
         '{label}: The {name} is for reference only.',
       '%platformScripture_copyrightNotice_notification_format%': '{name}: {notice}',
-      '%platformScripture_copyrightNotice_moreInfo%': 'More info…',
+      '%platformScripture_copyrightNotice_moreInfo%': 'More info',
       '%platformScripture_copyrightNotice_dismiss%': 'Dismiss copyright notice',
       '%platformScripture_copyrightNotice_details_title%': 'Copyright for {name}',
     },

@@ -16,12 +16,9 @@ import {
   LanguageStrings,
 } from 'platform-bible-utils';
 import { ReactElement, useId } from 'react';
-import {
-  BIBLICA_PERMISSIONS_URL,
-  keyed,
-  type ShowableCopyrightNotice,
-} from './copyright-notice-message.utils';
-import { openInBrowser } from './open-in-browser.util';
+import { keyed, type ShowableCopyrightNotice } from './copyright-notice-message.utils';
+import { BIBLICA_PERMISSIONS_URL } from './copyright-notice.const';
+import { openInBrowser } from './open-in-browser.utils';
 
 type CopyrightNoticeDetailsProps = {
   notice: ShowableCopyrightNotice;
@@ -48,6 +45,8 @@ function CopyrightNoticeDetails({ notice, localizedStrings }: CopyrightNoticeDet
         </p>
       ));
 
+  // This wording, "Outside of Paratext" included, is Biblica's own required license text: do not
+  // reword it (e.g. to "Paratext 10") without Biblica's agreement
   const format = notice.copyrightYears
     ? localizedStrings['%platformScripture_copyrightNotice_restrictedLicense_details%']
     : localizedStrings['%platformScripture_copyrightNotice_restrictedLicense_details_noYears%'];
@@ -93,7 +92,7 @@ export type CopyrightDetailsDialogProps = {
   localizedStrings: LanguageStrings;
 };
 
-/** The window a copyright notice's "More info…" opens, with the notice's full terms */
+/** The window a copyright notice's "More info" opens, with the notice's full terms */
 export function CopyrightDetailsDialog({
   notice,
   trigger,

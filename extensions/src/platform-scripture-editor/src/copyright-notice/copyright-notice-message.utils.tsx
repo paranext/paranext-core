@@ -5,9 +5,6 @@ import { ReactNode } from 'react';
 /** A notice that has something to show */
 export type ShowableCopyrightNotice = Exclude<CopyrightNotice, { kind: 'none' }>;
 
-/** Where Biblica asks people to request permission for uses outside Paratext */
-export const BIBLICA_PERMISSIONS_URL = 'https://www.biblica.com/permissions/';
-
 /**
  * Only the kinds the notice UI knows how to word. A newer backend may send others, and a setting
  * that has not been read may be `undefined`; both are shown as no notice.
@@ -27,6 +24,18 @@ export function keyed(parts: ReactNode[]): ReactNode {
   ));
 }
 
+/** The localized format string that words the notice sentence for this kind of notice */
+export function getCopyrightNoticeMessageFormat(
+  notice: ShowableCopyrightNotice,
+  localizedStrings: LanguageStrings,
+): string {
+  return localizedStrings[
+    notice.kind === 'restrictedLicense'
+      ? '%platformScripture_copyrightNotice_restrictedLicense_banner%'
+      : '%platformScripture_copyrightNotice_notification_format%'
+  ];
+}
+
 /** The notice sentence, e.g. "NIV11: … the NIV11 …", led by the name in bold */
 function formatCopyrightNoticeMessage(
   notice: ShowableCopyrightNotice,
@@ -35,15 +44,12 @@ function formatCopyrightNoticeMessage(
   // Each name is isolated: a right-to-left name in a left-to-right sentence, or the reverse, would
   // otherwise reorder the punctuation around it
   const name = <bdi>{notice.name}</bdi>;
-  return notice.kind === 'restrictedLicense'
-    ? formatReplacementStringToArray(
-        localizedStrings['%platformScripture_copyrightNotice_restrictedLicense_banner%'],
-        { label: <strong>{name}</strong>, name },
-      )
-    : formatReplacementStringToArray(
-        localizedStrings['%platformScripture_copyrightNotice_notification_format%'],
-        { name, notice: notice.bannerText },
-      );
+  return formatReplacementStringToArray(
+    getCopyrightNoticeMessageFormat(notice, localizedStrings),
+    notice.kind === 'restrictedLicense'
+      ? { label: <strong>{name}</strong>, name }
+      : { name, notice: notice.bannerText },
+  );
 }
 
 /** The notice sentence as React content */

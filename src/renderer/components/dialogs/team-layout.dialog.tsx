@@ -13,7 +13,7 @@ import type { ResourceReference, ResourceReferenceList } from 'platform-scriptur
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import {
   getRestrictedModelTextReason,
-  RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
 } from '@renderer/components/dialogs/restricted-model-text.utils';
 import {
   DialogDefinition,
@@ -79,7 +79,7 @@ const NO_RESOURCES: DblResourceData[] = [];
 const TEAM_LAYOUT_STRING_KEYS = [...TEAM_LAYOUT_DIALOG_STRING_KEYS];
 const RESOURCE_PICKER_STRING_KEYS = [
   ...RESOURCE_PICKER_DIALOG_STRING_KEYS,
-  RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
 ];
 
 /**

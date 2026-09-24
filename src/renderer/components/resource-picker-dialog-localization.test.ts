@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import { RESOURCE_PICKER_NOTICE_STRING_KEYS } from './dialogs/resource-picker.utils';
-import { RESTRICTED_MODEL_TEXT_TOOLTIP_KEY } from './dialogs/restricted-model-text.utils';
+import { RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY } from './dialogs/restricted-model-text.utils';
 
 /**
  * Every key the resource picker can ask for: the component's own strings plus the notices and the
@@ -12,7 +12,7 @@ import { RESTRICTED_MODEL_TEXT_TOOLTIP_KEY } from './dialogs/restricted-model-te
 const ALL_RESOURCE_PICKER_KEYS = [
   ...RESOURCE_PICKER_DIALOG_STRING_KEYS,
   ...RESOURCE_PICKER_NOTICE_STRING_KEYS,
-  RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
 ];
 
 // Resolved from this file's location rather than `process.cwd()` so the test is not sensitive to

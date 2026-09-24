@@ -7,7 +7,7 @@ import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice.const';
 /**
  * The info button a Text Collection cell shows beside a text's name when the text carries a
  * copyright notice. Hovering or focusing it shows the notice; clicking it opens the same details
- * the banner's "More info…" opens. The cell supplies the notice through `CopyrightNoticeIndicator`,
+ * the banner's "More info" opens. The cell supplies the notice through `CopyrightNoticeIndicator`,
  * which reads it from the text's `platformScripture.copyrightNotice` setting.
  */
 const meta: Meta<typeof CopyrightNoticeIndicatorView> = {
@@ -39,7 +39,7 @@ export const TooltipShown: Story = {
   },
 };
 
-/** Clicked: the details the banner's "More info…" opens. */
+/** Clicked: the details the banner's "More info" opens. */
 export const DetailsOpen: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(

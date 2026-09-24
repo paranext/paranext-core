@@ -258,7 +258,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
   // Create "Based on" disabled-row tooltip. A core resource picker string shared with the model
   // text pickers, so it lives in core's localization files rather than this extension's.
-  '%resourcePicker_restrictedModelText_tooltip%',
+  '%restrictedModelOrBaseText_disabledReason%',
   // Section headings for the built-in `type` grouping in the manage-books project pickers. The
   // wire carries the raw PT9 `ProjectType` enum value with no display name, so the web view maps
   // each value onto one of these keys consumer-side.
