@@ -4,6 +4,8 @@ export type RaceWithTimeoutResult<T> = { timedOut: false; value: T } | { timedOu
  * Settles with `promise`'s value, or with `{ timedOut: true }` once `timeoutMs` has elapsed,
  * whichever comes first. A rejection before the timeout propagates, so a caller can tell a real
  * failure from running out of time. The timer is always cleared.
+ *
+ * Generic; move to platform-bible-utils once something outside analytics needs it.
  */
 export async function raceWithTimeout<T>(
   promise: Promise<T>,

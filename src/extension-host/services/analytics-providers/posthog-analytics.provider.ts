@@ -110,8 +110,9 @@ export class PostHogAnalyticsProvider implements AnalyticsProvider {
       this.client = new PostHog(this.projectKey, {
         host: this.host,
         disableGeoip: true,
-        // captureImmediate bypasses the client's batch queue; these keep anything that does land
-        // in it (nothing today) from lingering past the short shutdown window.
+        // captureImmediate bypasses the client's batch queue; these keep any call that does use the
+        // queue (a plain capture, identify, or feature-flag call) from lingering past the short
+        // shutdown window.
         flushAt: 1,
         flushInterval: 1000,
       });
