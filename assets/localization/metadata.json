@@ -106,6 +106,12 @@
       "message": "Relabeled to \"Community support\" so the name matches the Support.Bible destination the item has always opened. Use %mainMenu_helpInfo_visitCommunitySupportPage% instead."
     }
   },
+  "%mainMenu_helpInfo_visitFeatureRoadmapPage%": {
+    "deprecationInfo": {
+      "date": "2026-09-24",
+      "message": "Retired with no replacement key; the Feature roadmap item was removed from the Help menu because the roadmap page it opened is no longer published."
+    }
+  },
   "%mainMenu_visitSupportBible%": {
     "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%"
   },
