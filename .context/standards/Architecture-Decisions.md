@@ -3899,6 +3899,33 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
 
+## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit host-side allowlist, not a coverage rule
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** Locale files ship for languages at very different stages (as of 2026-09-24: `es`
+  ~97% of the app's strings, `fr`/`zh-*` ~6%, `km` 0%). The first-run setup-dialog threshold
+  (`setup-dialog-languages.util.ts` `computeSetupDialogLanguages`) only measures the `%firstRun_`
+  namespace, so a French or Chinese OS was auto-switched into a mostly-English UI. Product decided
+  to offer only English and Spanish for the Nov 2026 release (PT-4751).
+- **Decision:** `OFFERED_INTERFACE_LANGUAGES` in `src/extension-host/services/interface-languages.ts`
+  filters the loaded locales inside the localization service's `getAvailableInterfaceLanguages`
+  and `getSetupDialogLanguages`, so every picker and the OS-locale default see only offered
+  languages. Locale files, string resolution and the setup-dialog threshold are unchanged. The
+  `platform.interfaceLanguage` validator accepts every language with a locale file
+  (`getAllLoadedInterfaceLanguages`), and each picker keeps the user's current language(s) visible
+  via `includeCurrentLanguages` (`src/renderer/services/include-current-languages.ts`), so a hidden
+  language that is already set is honored, never reset.
+- **Alternatives:** Filtering in each renderer surface (four places to keep in sync; PAPI consumers
+  would still see hidden languages). Excluding hidden locale files from the build (removes the only
+  way to test those translations; re-enabling means restoring assets). A coverage threshold (the
+  only existing one measures the setup dialog, which is what caused the bad auto-pick). Resetting a
+  hidden language to English on startup (overrides deliberate testers and translators every
+  launch).
+- **Consequences:** Offering a language is a one-line change. PT-4457 (offer languages by
+  translation coverage) is expected to supersede the list; its rule must measure app-wide coverage,
+  not only `%firstRun_`. Revisit when French is ready.
+
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
 - **Formerly:** ADR-0017
