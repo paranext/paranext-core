@@ -33,7 +33,10 @@ export type ProjectSelectorProject = {
    * selection but can't toggle it again.
    */
   isDisabled?: boolean;
-  /** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
+  /**
+   * Human-readable explanation surfaced in the row tooltip, and to screen readers as the row's
+   * description, when `isDisabled` is true.
+   */
   disabledReason?: string;
   /**
    * Consumer-owned extra fields read by `ProjectSelectorGrouping.getGroupKey` implementations. The

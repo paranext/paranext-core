@@ -137,6 +137,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     projectId,
   );
 
+  // The project on screen, whichever kind of reference chose it, for its copyright notice
+  const displayedProjectId = getModelResourceProjectId(effectiveModelText, dblResources);
+
   // --- Operation callbacks ---
 
   // Re-resolve the cached resource list once an install completes so the resource flips to
@@ -234,7 +237,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       logger={logger}
       copyrightNotice={
         <ProjectCopyrightNotice
-          projectId={modelResourceProjectId}
+          projectId={displayedProjectId}
           localizedStrings={localizedStrings}
           useWebViewState={useWebViewState}
         />

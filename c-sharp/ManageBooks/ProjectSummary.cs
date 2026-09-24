@@ -109,12 +109,6 @@ public record ProjectSummary(
                 ProjectSettingsNames.PT_VERSIFICATION,
                 "4"
             ),
-            // Raw reads like the ones above: the typed Copyright and DBLId accessors can reach into a
-            // resource's zipped files, which a list over every project must not do
-            IsRestrictedAsBase: BiblicaLicensing.IsRestrictedLicense(
-                scrText.GetRawParatextSetting(ProjectSettingsNames.PT_COPYRIGHT),
-                scrText.GetRawParatextSetting(ProjectSettingsNames.PT_FULL_NAME),
-                scrText.GetRawParatextSetting(ProjectSettingsNames.PT_DBL_ID)
-            )
+            IsRestrictedAsBase: BiblicaLicensing.IsRestricted(scrText)
         );
 }
