@@ -552,19 +552,13 @@ export const selectableParagraphMarkers: readonly string[] = Object.keys(usfmMar
   )
   .sort();
 
-/** {@link selectableParagraphMarkers} as a set, for O(1) membership checks. */
-const selectableParagraphMarkerSet: ReadonlySet<string> = new Set(selectableParagraphMarkers);
-
 /**
  * True when a marker has a real (potentially localized) title available via
  * {@link getParagraphMarkerTitle} (as displayed in tooltips, the Paragraph combo box
  * trigger/switcher, etc.) Some titles may not be displayed in all possible contexts.
  */
 export function hasDisplayableParagraphMarkerTitle(marker: string): boolean {
-  return (
-    selectableParagraphMarkerSet.has(marker) ||
-    PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has(marker)
-  );
+  return isParagraphMarker(marker);
 }
 
 /**

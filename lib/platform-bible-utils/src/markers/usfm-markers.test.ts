@@ -122,7 +122,7 @@ describe('isParagraphMarker', () => {
     expect(isParagraphMarker('mt')).toBe(true); // book titles
     expect(isParagraphMarker('mt1')).toBe(true);
     expect(isParagraphMarker('s')).toBe(true); // section headings
-    expect(isParagraphMarker('s1')).toBe(true); //
+    expect(isParagraphMarker('s1')).toBe(true);
     expect(isParagraphMarker('q')).toBe(true); // poetry lines
     expect(isParagraphMarker('q3')).toBe(true);
     expect(isParagraphMarker('lh')).toBe(true); // list heading
