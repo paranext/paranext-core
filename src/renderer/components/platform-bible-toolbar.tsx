@@ -128,7 +128,6 @@ export const PROJECT_TRIGGER_MIN_WIDTH_CLASS = {
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%mainMenu_openHome%',
   '%projectPicker_toolbar_select_project%',
-  '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
   '%projectPicker_toolbar_trigger_label_2%',
   '%projectPicker_toolbar_trigger_label_empty%',
@@ -161,7 +160,6 @@ const PICKER_STRING_FALLBACKS = {
   '%projectPicker_section_recent%': 'Recent',
   '%projectPicker_toolbar_label_shortNameAndFullName%': '{shortName} - {fullName}',
   '%projectPicker_toolbar_more_projects%': 'More projects…',
-  '%projectPicker_toolbar_no_projects%': 'No projects',
   '%projectPicker_toolbar_select_project%': 'Select project',
   '%projectPicker_toolbar_trigger_label_2%': 'Select project, {shortName}, {fullName}',
   '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Select project, {shortName}',
@@ -195,7 +193,6 @@ function resolvePickerStrings(localizedStrings: LanguageStrings): Record<PickerS
       '%projectPicker_toolbar_trigger_label_shortNameOnly%',
     ),
     '%projectPicker_toolbar_more_projects%': resolve('%projectPicker_toolbar_more_projects%'),
-    '%projectPicker_toolbar_no_projects%': resolve('%projectPicker_toolbar_no_projects%'),
     '%projectPicker_toolbar_select_project%': resolve('%projectPicker_toolbar_select_project%'),
     '%projectPicker_toolbar_trigger_label_2%': resolve('%projectPicker_toolbar_trigger_label_2%'),
     '%projectPicker_toolbar_trigger_label_empty%': resolve(
@@ -403,10 +400,10 @@ function ToolbarProjectSelector({
     [readOnlyIds, strings],
   );
 
-  const placeholder =
-    selectorProjects.length > 0
-      ? strings['%projectPicker_toolbar_select_project%']
-      : strings['%projectPicker_toolbar_no_projects%'];
+  // The same invitation whether or not this computer has projects: with none, the trigger opens
+  // Home, where server projects and resources can still be reached.
+  const placeholder = strings['%projectPicker_toolbar_select_project%'];
+  const isShowingPlaceholder = !pendingProject && !currentProjectError && !displayedProject;
 
   // Supplying `renderTriggerLabel` hands this function the whole trigger label, `buttonPlaceholder`
   // included, so the nothing-selected case has to be answered here or the trigger renders empty.
@@ -460,9 +457,8 @@ function ToolbarProjectSelector({
       return formatReplacementString(strings['%projectPicker_toolbar_trigger_label_error%'], {
         errorMessage: currentProjectError,
       });
-    // With nothing to name, the bare placeholder would be the whole accessible name — "No
-    // projects, combo box" says nothing about the control still opening a picker, which is
-    // precisely the state a user needs the escape hatch from.
+    // With nothing on this computer to list, the bare placeholder would hide why activating the
+    // trigger opens Home rather than a list.
     if (!displayedProject)
       return selectorProjects.length > 0
         ? placeholder
@@ -500,7 +496,7 @@ function ToolbarProjectSelector({
   // where Radix refocuses the trigger just as a refresh starts and `.focus()` on a disabled button
   // silently drops the tab position to `<body>`. Only the load that has nothing to show yet earns
   // the disable. A genuinely empty list is not a loading state, so the trigger stays reachable and
-  // "More projects…" remains the way out.
+  // opens Home directly (`shouldRunFooterActionWhenEmpty`).
   const isFirstLoad = isLoading && selectorProjects.length === 0 && !displayedProject;
 
   const footerAction = useMemo(
@@ -537,11 +533,17 @@ function ToolbarProjectSelector({
       renderProjectIndicator={renderProjectIndicator}
       renderTriggerLabel={renderTriggerLabel}
       footerAction={footerAction}
+      // A popover holding nothing but "More projects…" is one click more than the user needs.
+      shouldRunFooterActionWhenEmpty
       isLoading={isFirstLoad}
       localizedStrings={selectorLocalizedStrings}
       buttonVariant="ghost"
       buttonClassName={cn(
-        'tw:w-auto tw:max-w-64 tw:border-0 tw:bg-transparent',
+        // No background of its own, so the ghost variant's `hover:bg-muted` shows it is clickable
+        // the same way the book/chapter control's ghost trigger does.
+        'tw:w-auto tw:max-w-64 tw:border-0',
+        // Muted until hovered or open, where the ghost variant switches to `text-foreground`.
+        isShowingPlaceholder && 'tw:text-muted-foreground',
         // Still a floor at the narrowest step, just a smaller one: `min-w-24` (96px) is the
         // measured width a short project name needs (~97px for `ESVUS16`, including the trigger's
         // padding and chevron), so the name stays readable while the trigger remains a comfortable

@@ -20,6 +20,8 @@ import {
 } from '@renderer/components/dialogs/resource-picker.utils';
 import { useCallback, useMemo } from 'react';
 import { sendCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
+import { getErrorMessage } from 'platform-bible-utils';
 
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS, ...RESOURCE_PICKER_NOTICE_STRING_KEYS];
 
@@ -32,8 +34,11 @@ function ResourcePickerDialogWrapper({
   selectedResourceIds,
   allowedResourceIds,
   notice,
+  noticeCommandLabel,
+  noticeCommand,
   allowSelectingInstalled,
   submitDialog,
+  cancelDialog,
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -107,6 +112,21 @@ function ResourcePickerDialogWrapper({
     return allResources.filter((resource) => allowed.has(resource.dblEntryUid.toUpperCase()));
   }, [allResources, allowedResourceIds]);
 
+  const noticeAction = useMemo(() => {
+    if (!noticeCommandLabel || !noticeCommand) return undefined;
+    return {
+      label: noticeCommandLabel,
+      onSelect: () => {
+        cancelDialog();
+        sendCommand(noticeCommand).catch((e) =>
+          logger.warn(
+            `Resource picker notice command '${noticeCommand}' failed: ${getErrorMessage(e)}`,
+          ),
+        );
+      },
+    };
+  }, [noticeCommandLabel, noticeCommand, cancelDialog]);
+
   return (
     <ResourcePickerDialog
       allResources={offeredResources}
@@ -118,6 +138,7 @@ function ResourcePickerDialogWrapper({
       selectedResourceIds={selectedResourceIds}
       localizedStrings={localizedStrings}
       notice={combinedNotice}
+      noticeAction={noticeAction}
       allowSelectingInstalled={allowSelectingInstalled}
       onSelect={submitDialog}
     />

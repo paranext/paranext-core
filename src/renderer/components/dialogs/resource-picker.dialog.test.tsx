@@ -279,3 +279,61 @@ describe('ResourcePickerDialogWrapper resource restriction', () => {
     expect(screen.queryByText('proj-local')).not.toBeInTheDocument();
   });
 });
+
+describe('ResourcePickerDialogWrapper notice command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCommands(async () => ({ status: 'available', resources: [] }));
+  });
+
+  function renderWithNoticeCommand(cancelDialog: () => void) {
+    render(
+      <Dialog open>
+        <ResourcePickerDialogWrapper
+          isDialog
+          resourceType="ScriptureResource"
+          selectedResourceIds={[]}
+          notice="Only free texts."
+          noticeCommandLabel="Register"
+          noticeCommand="paratextRegistration.showParatextRegistration"
+          submitDialog={vi.fn()}
+          cancelDialog={cancelDialog}
+          rejectDialog={vi.fn()}
+        />
+      </Dialog>,
+    );
+  }
+
+  it('closes the picker, then sends the command, so what it opens is not left behind the modal', async () => {
+    const order: string[] = [];
+    const cancelDialog = vi.fn(() => order.push('cancel'));
+    renderWithNoticeCommand(cancelDialog);
+    vi.mocked(sendCommand).mockImplementation(async (command: unknown) => {
+      order.push(String(command));
+      return undefined;
+    });
+
+    act(() => screen.getByRole('button', { name: 'Register' }).click());
+
+    expect(order).toEqual(['cancel', 'paratextRegistration.showParatextRegistration']);
+  });
+
+  it('shows no button without a command to send', () => {
+    render(
+      <Dialog open>
+        <ResourcePickerDialogWrapper
+          isDialog
+          resourceType="ScriptureResource"
+          selectedResourceIds={[]}
+          notice="Only free texts."
+          noticeCommandLabel="Register"
+          submitDialog={vi.fn()}
+          cancelDialog={vi.fn()}
+          rejectDialog={vi.fn()}
+        />
+      </Dialog>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Register' })).toBeNull();
+  });
+});

@@ -8776,6 +8776,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
   export default DIALOG_BASE;
 }
 declare module 'renderer/components/dialogs/dialog-definition.model' {
+  import { CommandHandlers } from 'papi-shared-types';
   import { DialogOptions } from 'shared/models/dialog-options.model';
   import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
   import { ReactElement } from 'react';
@@ -8883,6 +8884,18 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      * has for an incomplete list.
      */
     notice?: string;
+    /**
+     * Already-localized label for a button shown with {@link ResourcePickerDialogOptions.notice}.
+     * Shown only when `notice` and {@link ResourcePickerDialogOptions.noticeCommand} are both
+     * provided.
+     */
+    noticeCommandLabel?: string;
+    /**
+     * Command sent, with no arguments, when the {@link ResourcePickerDialogOptions.noticeCommandLabel}
+     * button is pressed. The picker is cancelled first — its request resolves `undefined` — so that
+     * whatever the command opens is not left behind this modal.
+     */
+    noticeCommand?: keyof CommandHandlers;
     /**
      * When false, resources already installed on this computer are shown but cannot be picked. Use it
      * when the caller can act on a resource that still needs installing but has nothing to do with

@@ -180,6 +180,15 @@ export const WithNotice: Story = {
   },
 };
 
+/** `noticeAction` puts a button under the notice for what the user can do about it. */
+export const WithNoticeAction: Story = {
+  args: {
+    notice:
+      'You can use freely available resources. Register with an organization to get more resources.',
+    noticeAction: { label: 'Register', onSelect: () => {} },
+  },
+};
+
 /**
  * A partial failure keeps the list and explains itself in the notice. The error state is reserved
  * for having nothing to show at all, so it must not replace rows that did load.

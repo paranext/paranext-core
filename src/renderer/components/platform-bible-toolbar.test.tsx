@@ -1660,8 +1660,12 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
   it('offers the footer action and disables nothing with zero local projects', async () => {
     await renderSimpleToolbarWith({ recentProjects: [], allProjects: [] });
 
-    const { footerAction, isDisabled, isLoading } = requireCapturedProjectSelectorProps();
+    const { footerAction, isDisabled, isLoading, shouldRunFooterActionWhenEmpty } =
+      requireCapturedProjectSelectorProps();
     expect(footerAction).toBeDefined();
+    // With nothing to list, the trigger opens Home directly rather than a popover holding only
+    // "More projects…".
+    expect(shouldRunFooterActionWhenEmpty).toBe(true);
     // An empty list must not disable the trigger: "More projects…" is the only way out of one, so
     // disabling here would take the escape hatch away exactly when it is the only thing left.
     // `ProjectSelector` disables on `isDisabled || isLoading`, so both levers are checked —
@@ -1841,7 +1845,7 @@ describe('PlatformBibleToolbar — pending project display', () => {
     // the editor supplies the real name when it reports the project.
     const trigger = screen.getByTestId('project-picker-value');
     expect(trigger).not.toHaveTextContent('far');
-    expect(trigger).toHaveTextContent('Test no projects');
+    expect(trigger).toHaveTextContent('Test select a project');
   });
 
   it('names the newly picked project instead of a stale error for the project that failed to resolve', async () => {
