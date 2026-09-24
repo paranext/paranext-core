@@ -15,6 +15,7 @@
  * graph from `main.ts` and enforces this.
  */
 
+import { logger } from '@papi/frontend';
 import {
   isBlockMarker,
   isLocalizeKey,
@@ -367,8 +368,8 @@ export interface NoteInsertConfig {
  * ONE table for every textual-note kind, keyed by the same method union the editor message and the
  * command handlers use — the marker, the version-history commit message, and the log description
  * all move together for a given kind instead of being repeated at each of the four call sites that
- * used to need a matching three-way switch (the context-menu wrappers, the top-menu message
- * listener, the Ctrl+T/Ctrl+Shift+T shortcut, and each hook's dependency array).
+ * need it (the context-menu wrappers, the top-menu message listener, the Ctrl+T/Ctrl+Shift+T
+ * shortcut, and each hook's dependency array).
  */
 export const NOTE_INSERT_CONFIG: Record<
   EditorMessageInsertTextualNoteAtSelection['method'],
@@ -400,6 +401,77 @@ export const NOTE_INSERT_CONFIG: Record<
  */
 export function shouldSkipNoteInsert(hasEditor: boolean, isReadOnlyEffective: boolean): boolean {
   return !hasEditor || isReadOnlyEffective;
+}
+
+/**
+ * Inserts a textual note (footnote, cross-reference, or endnote) at the current selection, per
+ * {@link NOTE_INSERT_CONFIG}. The body of the web view's `insertNoteAtCurrentSelection` hook,
+ * extracted so the ORDER of its two side effects — a version-history snapshot, then the marker
+ * insert — is directly unit-testable against injected fakes rather than only observable end to
+ * end.
+ *
+ * Checks read-only BEFORE calling `commitSnapshot`: a read-only top-menu click (which reaches this
+ * with no prior gate — the menu item itself has no enablement) must not write a forced, empty
+ * version-history commit. The refusal is logged, not shown to the user.
+ *
+ * @param kind Which textual note to insert.
+ * @param hasEditor Whether the editor is currently mounted.
+ * @param isReadOnlyEffective The editor's effective read-only state (already folds in a sync
+ *   freeze).
+ * @param insertMarker Inserts the kind's marker at the current selection, e.g. `(marker) =>
+ *   editorRef.current?.insertMarker(marker)`.
+ * @param commitSnapshot Commits a version-history snapshot before the insert, e.g.
+ *   `commitVersionHistorySnapshot` bound to the current project id.
+ * @param localizedStrings Resolves the kind's commit-message key.
+ */
+export async function insertNoteAtCurrentSelectionCore(
+  kind: EditorMessageInsertTextualNoteAtSelection['method'],
+  hasEditor: boolean,
+  isReadOnlyEffective: boolean,
+  insertMarker: (marker: string) => void,
+  commitSnapshot: (message: string, editDescription: string) => Promise<void>,
+  localizedStrings: LanguageStrings,
+): Promise<void> {
+  const { marker, commitMessageKey, editDescription } = NOTE_INSERT_CONFIG[kind];
+  if (shouldSkipNoteInsert(hasEditor, isReadOnlyEffective)) {
+    logger.debug(`Not ${editDescription}: no mounted editor or read-only`);
+    return;
+  }
+
+  await commitSnapshot(localizedStrings[commitMessageKey], editDescription);
+  insertMarker(marker);
+}
+
+/**
+ * Which {@link NOTE_INSERT_CONFIG} kind each editor context-menu insert action inserts. One mapping
+ * shared by the menu-item wiring and its tests, so a swap (e.g. the footnote action pointed at the
+ * endnote kind) fails a test instead of only showing up as a user picking one menu item and getting
+ * another note type.
+ */
+export const CONTEXT_MENU_ACTION_TO_NOTE_KIND: Record<
+  keyof Pick<InsertContextMenuActions, 'insertFootnote' | 'insertCrossReference' | 'insertEndnote'>,
+  EditorMessageInsertTextualNoteAtSelection['method']
+> = {
+  insertFootnote: 'insertFootnoteAtSelection',
+  insertCrossReference: 'insertCrossReferenceAtSelection',
+  insertEndnote: 'insertEndnoteAtSelection',
+};
+
+/**
+ * Which {@link NOTE_INSERT_CONFIG} kind the Ctrl+T / Ctrl+Shift+T keyboard shortcut inserts: Ctrl+T
+ * inserts a footnote, Ctrl+Shift+T inserts a cross-reference. One mapping shared by the shortcut
+ * handler and its test, so swapping the two chords' kinds fails a test rather than only showing up
+ * as Ctrl+T inserting the wrong note type.
+ *
+ * @param shiftKey Whether Shift was held (`KeyboardEvent.shiftKey`).
+ */
+export function noteKindForCtrlTChord(
+  shiftKey: boolean,
+): Extract<
+  EditorMessageInsertTextualNoteAtSelection['method'],
+  'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection'
+> {
+  return shiftKey ? 'insertCrossReferenceAtSelection' : 'insertFootnoteAtSelection';
 }
 
 const INSERT_FOOTNOTE_TITLE_KEY: LocalizeKey =
