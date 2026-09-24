@@ -1,29 +1,35 @@
 // @vitest-environment jsdom
 /**
- * Guards two behaviors this extension's right-click-menu keyboard gating and \id-line note-insert
- * depend on, but which live entirely inside the STAGED `@eten-tech-foundation/platform-editor`
- * package (whatever `dev-packages.json` currently resolves — not necessarily any particular git
- * commit of `paranext/scripture-editors`), not in this repo:
+ * Guards several behaviors this extension's right-click-menu keyboard gating and \id-line
+ * note-insert depend on, but which live entirely inside the STAGED
+ * `@eten-tech-foundation/platform-editor` package (whatever `dev-packages.json` currently resolves
+ * — not necessarily any particular git commit of `paranext/scripture-editors`), not in this repo:
  *
  * (a) With the editor's own right-click menu open and NOTHING highlighted, Enter must be swallowed
- * rather than reaching Lexical's default paragraph split. `handleStandardViewTriggers`
+ * rather than reaching Lexical's default paragraph split — and, more broadly, the menu must claim
+ * EVERY key while it is open, not just Enter, since this extension's own keyboard handlers assume
+ * whatever the menu doesn't want falls through to them. `handleStandardViewTriggers`
  * (`platform-scripture-editor.web-view.tsx`) hands Enter DOWN to the menu whenever
  * `isEditorContextMenuOpen()` is true, on the assumption that the menu's own capture-phase listener
  * claims it either way — that assumption is untestable from this repo's own unit tests, which mock
  * the editor, and CI's `test:e2e:smoke` project does not run the isolated e2e spec that would catch
- * it either. (b) A book (`\id`) whose content is more than a single string (e.g. `[text, a note]`)
- * must survive a settle round-trip. The three insert-context-menu entry points this extension adds
- * (footnote/cross-reference/endnote) are gated only on read-only, not on "is this an `\id` line",
- * so an editor that truncates multi-item book content on settle silently loses project text the
- * moment any of them is used at the start of a book.
+ * it either. Two more editor-side behaviors this extension leans on for the same menu are guarded
+ * alongside it: a scroll whose target is inside the menu must not close it (needed for the
+ * scrollable option list this PR adds), and the highlighted item must follow `mousemove`, not
+ * `mouseenter` alone (needed so a menu clamped under a stationary pointer doesn't pre-highlight an
+ * item the user never moved onto). (b) A book (`\id`) whose content is more than a single string
+ * (e.g. `[text, a note]`) must survive a settle round-trip. The three insert-context-menu entry
+ * points this extension adds (footnote/cross-reference/endnote) are gated only on read-only, not on
+ * "is this an `\id` line", so an editor that truncates multi-item book content on settle silently
+ * loses project text the moment any of them is used at the start of a book.
  *
- * Both are genuine merge-order gates, not a fixed-in-this-repo regression test: they pass today
- * because the currently staged `platform-editor` happens to carry both scripture-editors fixes, but
- * nothing in THIS repo keeps that true. If `dev-packages.json` is ever pointed at a
- * `platform-editor` build that predates either fix, this file must go red and stay red — never
- * "temporarily" skipped — until it resolves one that has both again.
+ * Both are genuine merge-order gates, not a fixed-in-this-repo regression test: whether they pass
+ * depends entirely on what `dev-packages.json` currently resolves for `platform-editor`, and
+ * nothing in THIS repo keeps that pinned to a build that has both fixes. If `dev-packages.json` is
+ * ever pointed at a `platform-editor` build that predates either fix, this file must go red and
+ * stay red — never "temporarily" skipped — until it resolves one that has both again.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRef } from 'react';
 import { render, act, fireEvent } from '@testing-library/react';
 import { Editorial, type EditorRef } from '@eten-tech-foundation/platform-editor';
@@ -105,6 +111,35 @@ async function renderEditor(defaultUsj: Usj) {
   return { editorRef, editorInput };
 }
 
+/**
+ * Places a real DOM caret inside the paragraph's own text and returns the paragraph element.
+ * Lexical's `KEY_ENTER_COMMAND` handling reads the live selection, and a keydown with no selection
+ * placed is a no-op regardless of what claims it — shared by the Enter-swallow case and its control
+ * so both dispatch Enter under IDENTICAL caret conditions, and the only difference between them is
+ * whether the menu is open.
+ */
+function placeCaretInParagraph(editorInput: HTMLElement): Element {
+  const paragraphElement = editorInput.querySelector('p.para');
+  if (!paragraphElement) throw new Error('paragraph element not found');
+  const walker = document.createTreeWalker(paragraphElement, NodeFilter.SHOW_TEXT);
+  let paragraphTextNode: Text | undefined;
+  while (walker.nextNode()) {
+    const candidate = walker.currentNode;
+    if (candidate instanceof Text && candidate.data.includes('beginning')) {
+      paragraphTextNode = candidate;
+    }
+  }
+  if (!paragraphTextNode) throw new Error('paragraph text node not found');
+  editorInput.focus();
+  const selection = document.getSelection();
+  const range = document.createRange();
+  range.setStart(paragraphTextNode, 2);
+  range.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  return paragraphElement;
+}
+
 describe('editor context-menu merge-order contract (STAGED @eten-tech-foundation/platform-editor)', () => {
   it('swallows Enter while the right-click menu is open with nothing highlighted (no paragraph split)', async () => {
     const { editorRef, editorInput } = await renderEditor(paragraphUsj);
@@ -113,10 +148,8 @@ describe('editor context-menu merge-order contract (STAGED @eten-tech-foundation
 
     // Right-click a DESCENDANT of the contenteditable root, not the root itself — the plugin
     // ignores a contextmenu event whose target IS its own root.
-    const paragraphElement = editorInput.querySelector('p.para');
-    if (!paragraphElement) throw new Error('no paragraph element to right-click');
     await act(async () => {
-      fireEvent.contextMenu(paragraphElement);
+      fireEvent.contextMenu(placeCaretInParagraph(editorInput));
       await Promise.resolve();
     });
 
@@ -125,8 +158,13 @@ describe('editor context-menu merge-order contract (STAGED @eten-tech-foundation
     // Precondition: nothing is highlighted yet (a freshly opened menu never is).
     expect(document.querySelector('.typeahead-popover.auto-embed-menu li.selected')).toBeNull();
 
+    // Dispatched on `.editor-input` — where Lexical actually listens for keydown, and the SAME
+    // target and caret state the control below uses — so the only difference between the two cases
+    // is whether the menu is open. A press dispatched at `document` with no caret placed would
+    // never reach Lexical either way (claimed by the menu or not), which would make "no split
+    // occurred" prove nothing about the menu's Enter claim.
     await act(async () => {
-      fireEvent.keyDown(document, { key: 'Enter', bubbles: true, cancelable: true });
+      fireEvent.keyDown(editorInput, { key: 'Enter', bubbles: true, cancelable: true });
       await Promise.resolve();
     });
 
@@ -134,33 +172,16 @@ describe('editor context-menu merge-order contract (STAGED @eten-tech-foundation
   });
 
   // Positive control for the test above, proving it is falsifiable rather than vacuously true: with
-  // no menu open, the SAME Enter press against the SAME document must still reach Lexical and split
-  // the paragraph — otherwise "no split occurred" would prove nothing about the menu's Enter claim.
+  // no menu open, the SAME caret placement (`placeCaretInParagraph`) and the SAME Enter dispatch on
+  // `.editor-input` used above must still reach Lexical and split the paragraph — the only
+  // difference between the two cases is whether the menu is open — otherwise "no split occurred"
+  // would prove nothing about the menu's Enter claim.
   it('splits the paragraph on Enter with no menu open (control)', async () => {
     const { editorRef, editorInput } = await renderEditor(paragraphUsj);
     const paragraphCountBefore = editorRef.current?.getUsj()?.content.length;
 
-    // A real DOM caret is required — Lexical's KEY_ENTER_COMMAND handling reads the live selection,
-    // and a keydown with no selection placed is a no-op regardless of what claims it.
-    const paragraphElement = editorInput.querySelector('p.para');
-    if (!paragraphElement) throw new Error('paragraph element not found');
-    const walker = document.createTreeWalker(paragraphElement, NodeFilter.SHOW_TEXT);
-    let paragraphTextNode: Text | undefined;
-    while (walker.nextNode()) {
-      const candidate = walker.currentNode;
-      if (candidate instanceof Text && candidate.data.includes('beginning')) {
-        paragraphTextNode = candidate;
-      }
-    }
-    if (!paragraphTextNode) throw new Error('paragraph text node not found');
     await act(async () => {
-      editorInput.focus();
-      const selection = document.getSelection();
-      const range = document.createRange();
-      range.setStart(paragraphTextNode, 2);
-      range.collapse(true);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
+      placeCaretInParagraph(editorInput);
       await Promise.resolve();
     });
 
@@ -170,6 +191,94 @@ describe('editor context-menu merge-order contract (STAGED @eten-tech-foundation
     });
 
     expect(editorRef.current?.getUsj()?.content.length).toBe((paragraphCountBefore ?? 0) + 1);
+  });
+
+  // A third #14 merge-order gate, alongside the Enter-swallow pair above: with the menu open, an
+  // ORDINARY key must be claimed too, not just Enter — an editor that only special-cased Enter (and
+  // the menu's own navigation keys) would let this one through. Checked by propagation, not by
+  // Lexical's reaction: jsdom does not simulate a printable keydown turning into typed text the way
+  // a real browser's contenteditable does, so a content-based assertion here would pass whether or
+  // not the key was ever claimed. A window BUBBLE-phase listener — mirroring where this extension's
+  // OWN `handleKeyDown` listens (`platform-scripture-editor.web-view.tsx`) — is a real signal either
+  // way: it fires only if the event reaches all the way back up the DOM, so it directly detects
+  // whether something upstream (the menu's document-capture listener) stopped it first. Falsifiable:
+  // without that capture-phase `stopPropagation`, nothing else in this test stops the event, so the
+  // spy WOULD fire.
+  it('claims an ordinary key while open, before it reaches a window-level listener', async () => {
+    const { editorInput } = await renderEditor(paragraphUsj);
+
+    await act(async () => {
+      fireEvent.contextMenu(placeCaretInParagraph(editorInput));
+      await Promise.resolve();
+    });
+    expect(document.querySelector('.typeahead-popover.auto-embed-menu')).not.toBeNull();
+
+    const windowKeydownSpy = vi.fn();
+    window.addEventListener('keydown', windowKeydownSpy);
+    try {
+      await act(async () => {
+        fireEvent.keyDown(editorInput, { key: 'z', bubbles: true, cancelable: true });
+        await Promise.resolve();
+      });
+      expect(windowKeydownSpy).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('keydown', windowKeydownSpy);
+    }
+  });
+
+  // A scroll INSIDE the menu must not close it (needed so the scrollable option list this PR adds
+  // is actually usable), but the close-on-scroll listener must still be a real target check, not a
+  // no-op — proven by the positive control below, which shows a scroll OUTSIDE the menu still closes
+  // it. Without the target check, the in-menu scroll would close the menu too, and the first
+  // assertion would fail.
+  it('does not close the menu on a scroll inside it, but does on a scroll outside it (control)', async () => {
+    const { editorInput } = await renderEditor(paragraphUsj);
+
+    await act(async () => {
+      fireEvent.contextMenu(placeCaretInParagraph(editorInput));
+      await Promise.resolve();
+    });
+    const list = document.querySelector('.typeahead-popover.auto-embed-menu ul');
+    if (!list) throw new Error('menu list not found');
+
+    await act(async () => {
+      fireEvent.scroll(list);
+      await Promise.resolve();
+    });
+    expect(document.querySelector('.typeahead-popover.auto-embed-menu')).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.scroll(document.body);
+      await Promise.resolve();
+    });
+    expect(document.querySelector('.typeahead-popover.auto-embed-menu')).toBeNull();
+  });
+
+  // The highlight must follow `mousemove`, not `mouseenter`: a menu clamped into the viewport under
+  // a stationary pointer (round-1 finding #2) fires a `mouseenter` with no real pointer motion, and
+  // an editor keyed on it would pre-highlight an item the user never moved onto. Falsifiable: an
+  // editor keyed on `mouseenter` instead would set `aria-selected`/`.selected` on the FIRST
+  // assertion already, before `mousemove` is ever dispatched.
+  it('highlights an option on mousemove, not on mouseenter alone', async () => {
+    const { editorInput } = await renderEditor(paragraphUsj);
+    await act(async () => {
+      fireEvent.contextMenu(placeCaretInParagraph(editorInput));
+      await Promise.resolve();
+    });
+    const option = document.querySelector('.typeahead-popover.auto-embed-menu [role="option"]');
+    if (!option) throw new Error('no menu option found');
+
+    await act(async () => {
+      fireEvent.mouseEnter(option);
+      await Promise.resolve();
+    });
+    expect(option.getAttribute('aria-selected')).toBe('false');
+
+    await act(async () => {
+      fireEvent.mouseMove(option);
+      await Promise.resolve();
+    });
+    expect(option.getAttribute('aria-selected')).toBe('true');
   });
 
   it("keeps an \\id book line's non-string content (e.g. a note) through a forced settle", async () => {
