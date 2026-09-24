@@ -25,12 +25,13 @@ import {
 } from 'platform-bible-react';
 import {
   debounce,
+  DebouncedFunction,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
   PlatformError,
 } from 'platform-bible-utils';
-import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ZoomStepper } from './zoom-stepper.component';
 import './settings.component.scss';
 
@@ -186,6 +187,15 @@ export function Setting({
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
+  // Ties the label to the control it names. Not `settingKey`: several settings tabs can be open at
+  // once (each opens with a fresh tab id) and rc-dock keeps inactive tabs mounted, so a key-derived
+  // id would be duplicated in the DOM.
+  const controlId = useId();
+  const labelId = useId();
+  const descriptionId = useId();
+  const isUiLanguageSelector =
+    Array.isArray(setting) && settingKey === 'platform.interfaceLanguage';
+
   // Although the full set of languages is likely to load more-or-less instantaneously, if there is
   // a delay, we want to be sure to include at least any language(s) currently selected, so the user
   // can't get into the weird state of dropping down the list and not seeing the current selection
@@ -195,7 +205,7 @@ export function Setting({
       en: { autonym: 'English', uiNames: { es: 'inglés' } },
     };
 
-    if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+    if (isUiLanguageSelector) {
       // Add hardcoded languages
       languages.es = { autonym: 'Español', uiNames: { en: 'Spanish', fr: 'espagnol' } };
       languages.fr = { autonym: 'Français', uiNames: { en: 'French', es: 'francés' } };
@@ -209,7 +219,7 @@ export function Setting({
     }
 
     return languages;
-  }, [setting, settingKey]);
+  }, [setting, isUiLanguageSelector]);
 
   const [languages] = useData(localizationService.dataProviderName).AvailableInterfaceLanguages(
     undefined,
@@ -308,103 +318,148 @@ export function Setting({
 
   // One debounce mechanism, two waits. Every control collapses a burst of edits into a single
   // validate-and-write, so a burst is one cross-process write rather than a race between several.
-  const debouncedHandleChange = useMemo(
-    () => debounce(handleChangeSetting, SETTING_WRITE_DEBOUNCE_MS),
-    [handleChangeSetting],
-  );
-  const debouncedHandleStepperChange = useMemo(
-    () => debounce(handleChangeSetting, STEPPER_WRITE_DEBOUNCE_MS),
-    [handleChangeSetting],
-  );
+  // Each debounced function lives for the life of the component, so edits made across re-renders
+  // collapse into a single write, and calls through a ref so the write always runs the latest
+  // handler, which closes over the current setting, setter, validator, and strings. A ref rather
+  // than `useMemo` holds each instance: it owns a live timer, and React may discard a memoized value,
+  // which would leave the discarded instance's armed timer to write alongside its replacement's.
+  const handleChangeSettingRef = useRef(handleChangeSetting);
+  handleChangeSettingRef.current = handleChangeSetting;
+  const debouncedHandleChangeRef = useRef<
+    DebouncedFunction<typeof handleChangeSetting> | undefined
+  >(undefined);
+  const debouncedHandleStepperChangeRef = useRef<
+    DebouncedFunction<typeof handleChangeSetting> | undefined
+  >(undefined);
+  if (!debouncedHandleChangeRef.current)
+    debouncedHandleChangeRef.current = debounce(
+      (...args: Parameters<typeof handleChangeSetting>) => handleChangeSettingRef.current(...args),
+      SETTING_WRITE_DEBOUNCE_MS,
+    );
+  if (!debouncedHandleStepperChangeRef.current)
+    debouncedHandleStepperChangeRef.current = debounce(
+      (...args: Parameters<typeof handleChangeSetting>) => handleChangeSettingRef.current(...args),
+      STEPPER_WRITE_DEBOUNCE_MS,
+    );
+  const debouncedHandleChange = debouncedHandleChangeRef.current;
+  const debouncedHandleStepperChange = debouncedHandleStepperChangeRef.current;
 
-  const generateComponent = useCallback(() => {
-    let component = <p>{localizedStrings['%settings_defaultMessage_noSettingComponent%']}</p>;
+  const ariaDescribedBy = description ? descriptionId : undefined;
+  const ariaInvalid = errorMessage ? true : undefined;
 
+  // The control and the id the label points at are derived together so `htmlFor` cannot drift from
+  // the branch that actually renders: a branch with nothing labelable returns no `labelFor`.
+  const { control, labelFor } = useMemo(() => {
     // The default pane zoom stores a factor but is edited as a percentage; the generic number
     // branch below would put a raw decimal in a text box instead.
     if (settingKey === 'platform.webViewContentZoom' && typeof setting === 'number')
-      component = (
-        <ZoomStepper
-          key={settingKey}
-          value={setting}
-          defaultValue={DEFAULT_ZOOM_FACTOR}
-          // Without a writer the stepper has nothing to send a press to, and its readout moves and
-          // is announced (`aria-live`) the moment a button is pressed. Gating the buttons keeps the
-          // number on screen honest instead of reporting a percentage that was never written.
-          disabled={disabled || !setSetting}
-          groupLabel={label}
-          labels={{
-            increase: localizedStrings['%settings_platform_webViewContentZoom_increase%'],
-            decrease: localizedStrings['%settings_platform_webViewContentZoom_decrease%'],
-            reset: localizedStrings['%settings_platform_webViewContentZoom_reset%'],
-            atMaximum: localizedStrings['%settings_platform_webViewContentZoom_atMaximum%'],
-            atMinimum: localizedStrings['%settings_platform_webViewContentZoom_atMinimum%'],
-            atDefault: localizedStrings['%settings_platform_webViewContentZoom_atDefault%'],
-          }}
-          onChange={debouncedHandleStepperChange}
-        />
-      );
-    else if (typeof setting === 'string' || typeof setting === 'number')
-      component = (
-        <Input
-          key={settingKey}
-          onChange={debouncedHandleChange}
-          defaultValue={setting}
-          disabled={disabled}
-        />
-      );
-    else if (typeof setting === 'boolean')
-      component = (
-        <Switch
-          key={settingKey}
-          onCheckedChange={debouncedHandleChange}
-          defaultChecked={setting}
-          disabled={disabled}
-        />
-      );
-    else if (typeof setting === 'object')
-      if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
-        // interfaceLanguage is a user (not project) setting, so it is never subject to per-project
-        // Send/Receive edit-blocking; UiLanguageSelector exposes no `disabled` prop, so none is passed.
-        component = (
-          <UiLanguageSelector
-            className="language-selector"
+      return {
+        control: (
+          <ZoomStepper
             key={settingKey}
-            knownUiLanguages={isPlatformError(languages) ? defaultLanguages : languages}
-            primaryLanguage={setting[0]}
-            fallbackLanguages={setting.slice(1)}
-            onLanguagesChange={debouncedHandleChange}
-            localizedStrings={localizedStrings}
+            value={setting}
+            defaultValue={DEFAULT_ZOOM_FACTOR}
+            // Without a writer the stepper has nothing to send a press to, and its readout moves and
+            // is announced (`aria-live`) the moment a button is pressed. Gating the buttons keeps the
+            // number on screen honest instead of reporting a percentage that was never written.
+            disabled={disabled || !setSetting}
+            groupLabel={label}
+            labels={{
+              increase: localizedStrings['%settings_platform_webViewContentZoom_increase%'],
+              decrease: localizedStrings['%settings_platform_webViewContentZoom_decrease%'],
+              reset: localizedStrings['%settings_platform_webViewContentZoom_reset%'],
+              atMaximum: localizedStrings['%settings_platform_webViewContentZoom_atMaximum%'],
+              atMinimum: localizedStrings['%settings_platform_webViewContentZoom_atMinimum%'],
+              atDefault: localizedStrings['%settings_platform_webViewContentZoom_atDefault%'],
+            }}
+            onChange={debouncedHandleStepperChange}
           />
-        );
-      } else {
-        component = (
+        ),
+        // A group of buttons, not one labelable control; the stepper names itself with `groupLabel`.
+        labelFor: undefined,
+      };
+
+    if (typeof setting === 'string' || typeof setting === 'number')
+      return {
+        control: (
           <Input
             key={settingKey}
+            id={controlId}
+            onChange={debouncedHandleChange}
+            defaultValue={setting}
+            disabled={disabled}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={ariaInvalid}
+          />
+        ),
+        labelFor: controlId,
+      };
+
+    if (typeof setting === 'boolean')
+      return {
+        control: (
+          <Switch
+            key={settingKey}
+            id={controlId}
+            onCheckedChange={debouncedHandleChange}
+            defaultChecked={setting}
+            disabled={disabled}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={ariaInvalid}
+          />
+        ),
+        labelFor: controlId,
+      };
+
+    if (typeof setting === 'object') {
+      if (isUiLanguageSelector)
+        return {
+          // UiLanguageSelector puts its `id` on a wrapper div, which `htmlFor` cannot label, so the
+          // label names a group around the selector instead.
+          control: (
+            <div
+              key={settingKey}
+              role="group"
+              aria-labelledby={labelId}
+              aria-describedby={ariaDescribedBy}
+            >
+              {/* interfaceLanguage is a user (not project) setting, so it is never subject to
+                  per-project Send/Receive edit-blocking; UiLanguageSelector exposes no `disabled`
+                  prop, so none is passed. */}
+              <UiLanguageSelector
+                className="language-selector"
+                knownUiLanguages={isPlatformError(languages) ? defaultLanguages : languages}
+                primaryLanguage={setting[0]}
+                fallbackLanguages={setting.slice(1)}
+                onLanguagesChange={debouncedHandleChange}
+                localizedStrings={localizedStrings}
+              />
+            </div>
+          ),
+          labelFor: undefined,
+        };
+
+      return {
+        control: (
+          <Input
+            key={settingKey}
+            id={controlId}
             onChange={debouncedHandleChange}
             defaultValue={JSON.stringify(setting, undefined, 2)}
             disabled={disabled}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={ariaInvalid}
           />
-        );
-      }
+        ),
+        labelFor: controlId,
+      };
+    }
 
-    return (
-      <div className="setting-container">
-        {component}
-        {errorMessage && (
-          <>
-            <Label className="error-label">
-              {localizedStrings['%settings_errorMessages_errorOccurred%']}
-            </Label>
-            <ErrorPopover errorDetails={errorMessage} localizedStrings={localizedStrings}>
-              <Label className="error-view-link">
-                {localizedStrings['%settings_errorMessages_viewError%']}
-              </Label>
-            </ErrorPopover>
-          </>
-        )}
-      </div>
-    );
+    // This setting type has no editor, so the fallback message is what renders — nothing labelable.
+    return {
+      control: <p>{localizedStrings['%settings_defaultMessage_noSettingComponent%']}</p>,
+      labelFor: undefined,
+    };
   }, [
     localizedStrings,
     setting,
@@ -412,11 +467,15 @@ export function Setting({
     label,
     debouncedHandleChange,
     debouncedHandleStepperChange,
-    errorMessage,
     languages,
     defaultLanguages,
     disabled,
     setSetting,
+    controlId,
+    labelId,
+    isUiLanguageSelector,
+    ariaDescribedBy,
+    ariaInvalid,
   ]);
 
   return (
@@ -430,14 +489,36 @@ export function Setting({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Label htmlFor={settingKey} className="setting-label">
+                <Label id={labelId} htmlFor={labelFor} className="setting-label">
                   {label}
                 </Label>
               </TooltipTrigger>
               {description && <TooltipContent>{description}</TooltipContent>}
             </Tooltip>
           </TooltipProvider>
-          {generateComponent()}
+          {/* The tooltip is hover-only; this copy is what the control's `aria-describedby` reads. */}
+          {description && (
+            <span id={descriptionId} className="tw:sr-only">
+              {description}
+            </span>
+          )}
+          <div className="setting-container">
+            {control}
+            {errorMessage && (
+              // Mounted only while there is an error, so the alert announces when one appears. The
+              // flex column repeats `.setting-container`'s so the error rows keep their spacing.
+              <div role="alert" className="tw:flex tw:flex-col tw:gap-2">
+                <Label className="error-label">
+                  {localizedStrings['%settings_errorMessages_errorOccurred%']}
+                </Label>
+                <ErrorPopover errorDetails={errorMessage} localizedStrings={localizedStrings}>
+                  <Label className="error-view-link">
+                    {localizedStrings['%settings_errorMessages_viewError%']}
+                  </Label>
+                </ErrorPopover>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

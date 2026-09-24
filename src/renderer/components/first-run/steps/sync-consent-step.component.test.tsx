@@ -2,10 +2,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import * as commandService from '@shared/services/command.service';
 import { SyncConsentStep } from './sync-consent-step.component';
 
 vi.mock('@renderer/services/first-run-store', () => ({
   isDemoMode: vi.fn(() => false),
+}));
+
+vi.mock('@shared/services/command.service', () => ({
+  sendCommand: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -15,6 +20,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
+      '%firstRun_button_dontSyncYet%': "Don't sync yet",
+      '%firstRun_button_back%': 'Back',
+      '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
     };
     const result: Record<string, string> = {};
     keys.forEach((k) => {
@@ -27,6 +35,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 function makeOnSync(impl: () => Promise<void> = () => Promise.resolve()) {
   return vi.fn(impl);
 }
+
+const mockSendCommand = vi.mocked(commandService.sendCommand);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -43,10 +53,16 @@ describe('SyncConsentStep', () => {
     expect(screen.getByText(/shared projects/i)).toBeInTheDocument();
   });
 
-  it('calls setCanSkip(true) on mount to signal the shell to show a Skip button', async () => {
-    const setCanSkip = vi.fn();
-    render(<SyncConsentStep onNext={vi.fn()} setCanSkip={setCanSkip} onSync={makeOnSync()} />);
-    await waitFor(() => expect(setCanSkip).toHaveBeenCalledWith(true));
+  it('calls setCanDeclineSync(true) on mount so the shell supplies the decline action', async () => {
+    const setCanDeclineSync = vi.fn();
+    render(
+      <SyncConsentStep
+        onNext={vi.fn()}
+        setCanDeclineSync={setCanDeclineSync}
+        onSync={makeOnSync()}
+      />,
+    );
+    await waitFor(() => expect(setCanDeclineSync).toHaveBeenCalledWith(true));
   });
 
   it('calls setCanProceed(undefined) on mount to hide the shell Next button', async () => {
@@ -57,38 +73,96 @@ describe('SyncConsentStep', () => {
     await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(undefined));
   });
 
-  it('renders a Sync button but no Back or Skip buttons of its own', () => {
-    render(<SyncConsentStep onNext={vi.fn()} onSync={makeOnSync()} />);
-    expect(screen.getByRole('button', { name: /^sync$/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
-  });
-
-  it('calls setCanSkip(false) when sync starts to prevent Skip while in-flight', async () => {
-    const setCanSkip = vi.fn();
+  it('calls setManagesOwnFooter(true) on mount so the shell does not render a second footer', () => {
+    const setManagesOwnFooter = vi.fn();
     render(
       <SyncConsentStep
         onNext={vi.fn()}
-        setCanSkip={setCanSkip}
+        setManagesOwnFooter={setManagesOwnFooter}
+        onSync={makeOnSync()}
+      />,
+    );
+    expect(setManagesOwnFooter).toHaveBeenCalledWith(true);
+  });
+
+  it('offers "Don\'t sync yet" beside "Sync" once the shell supplies the decline action', async () => {
+    const onDeclineSync = vi.fn();
+    render(
+      <SyncConsentStep onNext={vi.fn()} onDeclineSync={onDeclineSync} onSync={makeOnSync()} />,
+    );
+
+    expect(screen.getByRole('button', { name: /^sync$/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /don't sync yet/i }));
+
+    expect(onDeclineSync).toHaveBeenCalledOnce();
+  });
+
+  it('renders no decline or Back button until the shell supplies those actions', () => {
+    render(<SyncConsentStep onNext={vi.fn()} onSync={makeOnSync()} />);
+    expect(screen.getByRole('button', { name: /^sync$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /don't sync yet/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
+  });
+
+  it('disables every footer action while the shell is busy finishing the wizard', () => {
+    render(
+      <SyncConsentStep
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+        onDeclineSync={vi.fn()}
+        isBusy
+        onSync={makeOnSync()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /back/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /don't sync yet/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^sync$/i })).toBeDisabled();
+  });
+
+  it('withdraws "Don\'t sync yet" and announces the sync while it is in flight', async () => {
+    render(
+      <SyncConsentStep
+        onNext={vi.fn()}
+        onDeclineSync={vi.fn()}
+        onSync={makeOnSync(() => new Promise(() => {}))}
+      />,
+    );
+    expect(screen.queryByText('Syncing your projects.')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
+
+    expect(screen.queryByRole('button', { name: /don't sync yet/i })).not.toBeInTheDocument();
+    expect(await screen.findByText('Syncing your projects.')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
+  });
+
+  it('calls setCanDeclineSync(false) when sync starts to withdraw the decline while in flight', async () => {
+    const setCanDeclineSync = vi.fn();
+    render(
+      <SyncConsentStep
+        onNext={vi.fn()}
+        setCanDeclineSync={setCanDeclineSync}
         onSync={makeOnSync(() => new Promise(() => {}))}
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
-    expect(setCanSkip).toHaveBeenCalledWith(false);
+    expect(setCanDeclineSync).toHaveBeenCalledWith(false);
   });
 
-  it('calls setCanSkip(true) when sync throws so the user can still skip after a failed sync', async () => {
-    const setCanSkip = vi.fn();
+  it('calls setCanDeclineSync(true) when sync throws so the user can still decline after a failed sync', async () => {
+    const setCanDeclineSync = vi.fn();
     render(
       <SyncConsentStep
         onNext={vi.fn()}
-        setCanSkip={setCanSkip}
+        setCanDeclineSync={setCanDeclineSync}
         onSync={makeOnSync(() => Promise.reject(new Error('network error')))}
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
     await screen.findByText(/network error/i);
-    expect(setCanSkip).toHaveBeenLastCalledWith(true);
+    expect(setCanDeclineSync).toHaveBeenLastCalledWith(true);
   });
 
   it('"Sync" button calls onSync then onNext', async () => {
@@ -113,6 +187,23 @@ describe('SyncConsentStep', () => {
     await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
     expect(await screen.findByText(/network error/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^sync$/i })).not.toBeDisabled();
+  });
+
+  // Positive control for the first-run sync consent gate: the sync the user explicitly clicks here
+  // is the ONE sync allowed before consent is recorded, so exercise the component's real default
+  // sync path (no injected `onSync`). Without this, an over-correction that stopped the wizard's own
+  // sync from firing would leave every other test in this file green.
+  it('"Sync" button sends the real sync command when onSync is not injected', async () => {
+    const onNext = vi.fn();
+    render(<SyncConsentStep onNext={onNext} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
+
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      undefined,
+    );
+    await waitFor(() => expect(onNext).toHaveBeenCalledOnce());
   });
 
   it('does not call onNext when onSync throws', async () => {

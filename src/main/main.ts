@@ -51,6 +51,10 @@ import { startNetworkObjectStatusService } from '@main/services/network-object-s
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import {
+  deferAutomaticSyncForSession,
+  getAutomaticSyncConsent,
+} from '@main/first-run-consent.util';
+import {
   performShutdownTasks,
   performWindowCloseTasks,
   startWindowCloseTasksWithoutWaiting,
@@ -2699,6 +2703,33 @@ async function main() {
     {
       method: {
         summary: 'Get the os platform ("win32", "darwin", "linux")',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand('platform.getAutomaticSyncConsent', getAutomaticSyncConsent, {
+    method: {
+      summary:
+        'Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start now',
+      params: [],
+      result: {
+        name: 'return value',
+        schema: { type: 'string', enum: ['granted', 'unconfirmed', 'deferred'] },
+      },
+    },
+  });
+
+  commandService.registerCommand(
+    'platform.deferAutomaticSyncForSession',
+    async () => deferAutomaticSyncForSession(),
+    {
+      method: {
+        summary: 'Withhold automatic Simple-mode Send/Receive for the rest of this app session',
         params: [],
         result: {
           name: 'return value',

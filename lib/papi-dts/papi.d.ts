@@ -5685,6 +5685,24 @@ declare module 'papi-shared-types' {
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
     /**
+     * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
+     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered or its
+     * completion flag could not be read; or `deferred` when the user chose "Don't sync yet" earlier
+     * in this app session. Only meaningful in Simple mode: the completion flag is never written in
+     * Power mode, so a Power-mode sync must not consult this.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getAutomaticSyncConsent': () => Promise<'granted' | 'unconfirmed' | 'deferred'>;
+    /**
+     * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
+     * user chooses "Don't sync yet" in the first-run wizard; the next launch syncs as usual.
+     * One-way on purpose: nothing lifts the deferral before a restart.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.deferAutomaticSyncForSession': () => Promise<void>;
+    /**
      * Create a new application window.
      *
      * Rejects in simple interface mode, which is single-window and has no chrome that could reach a
@@ -6094,10 +6112,14 @@ declare module 'papi-shared-types' {
      */
     'platform.firstRunComplete': boolean;
     /**
-     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
-     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
-     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
-     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     * Whether to perform automatic startup sync. Hidden; not exposed in the settings UI. Read on
+     * each launch by the Simple-mode startup sync only — Power mode never reads it. Absent or
+     * `true` means sync, `false` means skip. Only the automatic startup sync is affected; manual
+     * Send/Receive is unaffected. The first-run wizard does not write it: declining there ("Don't
+     * sync yet") withholds automatic sync for that session only. A `false` can be left over from an
+     * earlier first-run wizard, which wrote it on decline, and nothing in core resets it.
+     *
+     * TODO(PT-4607): give profiles left with that `false` a way back to automatic startup sync.
      */
     'platform.syncOnStartup': boolean;
     /**

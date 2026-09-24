@@ -9,6 +9,10 @@ import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
 import {
+  getAutomaticSyncConsent,
+  WITHHELD_SYNC_CONSENT_REASONS,
+} from '@main/first-run-consent.util';
+import {
   RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE,
   type ScheduledSessionSyncResult,
   type SessionSyncBoundary,
@@ -212,7 +216,7 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
 
   const gatesBeforeWait = await evaluateSimpleModeSyncGates();
   if (!gatesBeforeWait.run) {
-    logger.debug(`Startup sync skipped: ${gatesBeforeWait.reason}`);
+    logger[gatesBeforeWait.logLevel](`Startup sync skipped: ${gatesBeforeWait.reason}`);
     return;
   }
 
@@ -262,7 +266,9 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // above exists to prevent, just triggered by elapsed time instead of a read failure.
   const gatesAfterWait = await evaluateSimpleModeSyncGates();
   if (!gatesAfterWait.run) {
-    logger.debug(`Startup sync skipped after the readiness wait: ${gatesAfterWait.reason}`);
+    logger[gatesAfterWait.logLevel](
+      `Startup sync skipped after the readiness wait: ${gatesAfterWait.reason}`,
+    );
     return;
   }
 
@@ -293,13 +299,19 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   }
 }
 
-/** What {@link evaluateSimpleModeSyncGates} decided, and why when it decided not to run. */
-type SimpleModeSyncGateResult = { run: true } | { run: false; reason: string };
+/**
+ * What {@link evaluateSimpleModeSyncGates} decided — and when it decided not to run, why and at
+ * which level to report it. `logLevel` is `'info'` for a withheld consent so that skip survives the
+ * packaged builds' info log level, where support reads it to explain a session that did not sync.
+ */
+type SimpleModeSyncGateResult =
+  | { run: true }
+  | { run: false; reason: string; logLevel: 'debug' | 'info' };
 
 /**
- * Evaluates the three settings gates that must all pass before the Simple-mode startup sync fires:
- * `platform.interfaceMode` must still be `'simple'`, `platform.firstRunComplete` must be `true`,
- * and `platform.syncOnStartup` must not be `false`.
+ * Evaluates the three gates that must all pass before the Simple-mode startup sync fires:
+ * `platform.interfaceMode` must still be `'simple'`, the first-run sync consent gate must grant
+ * consent (see {@link getAutomaticSyncConsent}), and `platform.syncOnStartup` must not be `false`.
  *
  * Called twice by {@link performStartupTasksInternal} — once before the readiness wait and again
  * immediately after it, since that wait can park for up to the readiness budget (120 s) and any of
@@ -316,8 +328,8 @@ type SimpleModeSyncGateResult = { run: true } | { run: false; reason: string };
  *   Logged as a warning (production-visible even in packaged builds).
  * - A mode that has moved away from `'simple'` (e.g. to `'power'`, mid-wait) is also `run: false` —
  *   this function only ever green-lights the Simple-mode sync.
- * - An unreadable or `false` `platform.firstRunComplete` skips (consent-safe: a fresh user must not
- *   sync before consenting, and an unreadable flag defaults to NOT syncing).
+ * - Withheld consent skips, and fails closed: an unanswered wizard, an unreadable completion flag,
+ *   and a "Don't sync yet" earlier in this session all mean NOT syncing.
  * - `platform.syncOnStartup === false` skips (the user explicitly opted out). An unreadable flag
  *   defaults to PROCEEDING with sync instead (consent-safe the other way: a read failure should not
  *   silently suppress a sync the user never actually declined). Logged as a warning.
@@ -345,26 +357,17 @@ async function evaluateSimpleModeSyncGates(): Promise<SimpleModeSyncGateResult> 
   } catch (e) {
     const reason = `could not read platform.interfaceMode: ${getErrorMessage(e)}`;
     logger.warn(`Startup sync: ${reason}`);
-    return { run: false, reason };
+    return { run: false, reason, logLevel: 'debug' };
   }
   if (interfaceMode !== 'simple')
-    return { run: false, reason: 'interface mode is no longer simple' };
+    return { run: false, reason: 'interface mode is no longer simple', logLevel: 'debug' };
 
-  // First-run gate: skip auto-sync until the simple-mode wizard completes, so a fresh user never
-  // syncs before consenting. On an unreadable flag, default to NOT syncing (consent-safe).
-  let firstRunComplete = false;
-  try {
-    firstRunComplete = (await settingsService.get('platform.firstRunComplete')) === true;
-  } catch (e) {
-    logger.warn(
-      `Could not read platform.firstRunComplete; skipping startup sync: ${getErrorMessage(e)}`,
-    );
-  }
-  if (!firstRunComplete) return { run: false, reason: 'first run not complete' };
+  const consent = await getAutomaticSyncConsent();
+  if (consent !== 'granted')
+    return { run: false, reason: WITHHELD_SYNC_CONSENT_REASONS[consent], logLevel: 'info' };
 
-  // Sync-consent gate: if the user chose "Skip automatic sync" on the sync-consent step, honor that
-  // permanently. On an unreadable flag, default to syncing (consent-safe: the user likely never
-  // explicitly skipped — a read failure here should not silently suppress a legitimate sync).
+  // Startup-sync preference: honor `platform.syncOnStartup === false`. On an unreadable flag,
+  // default to syncing — a read failure should not suppress a sync the user never turned off.
   let syncDisabled = false;
   try {
     syncDisabled = (await settingsService.get('platform.syncOnStartup')) === false;
@@ -373,7 +376,8 @@ async function evaluateSimpleModeSyncGates(): Promise<SimpleModeSyncGateResult> 
       `Could not read platform.syncOnStartup; proceeding with sync: ${getErrorMessage(e)}`,
     );
   }
-  if (syncDisabled) return { run: false, reason: 'platform.syncOnStartup is false' };
+  if (syncDisabled)
+    return { run: false, reason: 'platform.syncOnStartup is false', logLevel: 'debug' };
 
   return { run: true };
 }

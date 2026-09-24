@@ -1150,12 +1150,49 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * Gated on first-run sync consent: neither Send/Receive command runs unless the
+ * `platform.getAutomaticSyncConsent` command answers `granted`. That command is the main process's
+ * `getAutomaticSyncConsent`, the one implementation of the rule, so this module does not restate
+ * it. The gate covers those two commands only — this module still reaches the network elsewhere
+ * during the wizard, e.g. `openDefaultActiveProjectIfApplicable`'s
+ * `paratextBibleSendReceive.getSharedProjects` registry lookup (see PT-4606).
+ *
+ * The gate applies in Simple mode only, so this reads the mode itself rather than trusting every
+ * caller to be Simple-mode-only. An unreadable mode is treated as Simple, so it cannot bypass the
+ * gate.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
   incomingProjectId: string,
   outgoingProjectId: string | undefined,
 ): Promise<void> {
+  // The first-run wizard is an overlay, so the project picker behind it can drive a switch through
+  // here before the user has answered its sync-consent step.
+  let interfaceMode;
+  try {
+    interfaceMode = await papi.settings.get('platform.interfaceMode');
+  } catch (e) {
+    papi.logger.warn(
+      `Project-switch sync: failed to read platform.interfaceMode (${getErrorMessage(e)}); applying the first-run consent gate anyway`,
+    );
+  }
+  if (interfaceMode !== 'power') {
+    let consent;
+    try {
+      consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: could not check first-run sync consent (${getErrorMessage(e)}); skipping sync`,
+      );
+      return;
+    }
+    if (consent !== 'granted') {
+      papi.logger.info(`Project-switch sync skipped: first-run sync consent is ${consent}`);
+      return;
+    }
+  }
+
   try {
     await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
   } catch (e) {

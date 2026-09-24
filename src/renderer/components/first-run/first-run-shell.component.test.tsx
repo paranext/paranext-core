@@ -10,6 +10,7 @@ import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.compon
 
 vi.mock('@renderer/services/first-run-store', () => ({
   completeFirstRun: vi.fn(),
+  declineFirstRunSync: vi.fn(),
   // Required by IdentifyStep when rendered via DEFAULT_STEP_COMPONENTS
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
@@ -39,7 +40,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
       '%firstRun_button_finish%': 'Finish',
-      '%firstRun_button_skipSync%': 'Skip automatic sync',
+      '%firstRun_button_dontSyncYet%': "Don't sync yet",
       '%firstRun_step_syncProgress_heading%': 'Syncing your data',
       '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
       '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
@@ -156,6 +157,10 @@ vi.mock('platform-bible-react', () => {
 });
 
 const mockComplete = vi.mocked(store.completeFirstRun);
+const mockDecline = vi.mocked(store.declineFirstRunSync);
+
+/** The sync-consent step's decline button ("%firstRun_button_dontSyncYet%"). */
+const DONT_SYNC_YET = /don't sync yet/i;
 
 // Dummy step components for shell tests — decouples navigation tests from real step content.
 // Each stub calls setCanProceed(true) so goToStep's canProceed-reset doesn't strand
@@ -168,13 +173,14 @@ function makeDummyStep(label: string): ComponentType<FirstRunStepProps> {
   return DummyStep;
 }
 
-// SyncConsent dummy also calls setCanSkip(true) — the real step does this, and shell tests that
-// navigate through STUB_STEPS to syncConsent verify the shell surfaces Skip only on that step.
-function SyncConsentDummy({ setCanProceed, setCanSkip }: FirstRunStepProps) {
+// SyncConsent dummy also calls setCanDeclineSync(true) — the real step does this, and shell tests that
+// navigate through STUB_STEPS to syncConsent verify the shell surfaces the decline button only on
+// that step.
+function SyncConsentDummy({ setCanProceed, setCanDeclineSync }: FirstRunStepProps) {
   useEffect(() => {
     setCanProceed?.(true);
-    setCanSkip?.(true);
-  }, [setCanProceed, setCanSkip]);
+    setCanDeclineSync?.(true);
+  }, [setCanProceed, setCanDeclineSync]);
   return <p>sync-consent-step</p>;
 }
 
@@ -193,10 +199,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   // clearAllMocks clears call history but NOT implementations, and no global mockReset is
   // configured. Later tests set mockRejectedValue / a never-settling mockReturnValue on
-  // completeFirstRun; without this reset those implementations leak into subsequent tests and the
-  // suite passes only by accident of ordering. Reset just this stub (a blanket resetAllMocks would
-  // also wipe the useLocalizedStrings implementation set in the mock factory above).
+  // completeFirstRun and declineFirstRunSync; without this reset those implementations leak into
+  // subsequent tests and the suite passes only by accident of ordering. Reset just these stubs (a
+  // blanket resetAllMocks would also wipe the useLocalizedStrings implementation set in the mock
+  // factory above).
   mockComplete.mockReset();
+  mockDecline.mockReset();
 });
 
 describe('FirstRunShell', () => {
@@ -242,39 +250,40 @@ describe('FirstRunShell', () => {
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
-  it('completes with a sync-skipped hint when Skip is clicked on sync consent', async () => {
+  it('declines the wizard sync, rather than just completing, when "Don\'t sync yet" is clicked', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    // SyncConsentStep calls setCanSkip(true) on mount; the shell renders its own Skip button.
-    await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
-    expect(mockComplete).toHaveBeenCalledWith({ skippedStep: 'syncConsent' });
+    await userEvent.click(await screen.findByRole('button', { name: DONT_SYNC_YET }));
+    // Completing alone would open every automatic sync gate for the rest of the session.
+    expect(mockDecline).toHaveBeenCalledTimes(1);
+    expect(mockComplete).not.toHaveBeenCalled();
   });
 
-  it('shows Skip only on syncConsent, not on other numbered steps', async () => {
+  it('shows "Don\'t sync yet" only on syncConsent, not on other numbered steps', async () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
-    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: DONT_SYNC_YET })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
-    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: DONT_SYNC_YET })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // internetSettings → identify
-    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: DONT_SYNC_YET })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // identify → syncConsent
-    expect(await screen.findByRole('button', { name: /skip/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: DONT_SYNC_YET })).toBeInTheDocument();
   });
 
-  it('shows Skip when a step calls setCanSkip(true) and hides it after navigating away', async () => {
-    function SkippableStep({ setCanSkip }: FirstRunStepProps) {
-      useEffect(() => setCanSkip?.(true), [setCanSkip]);
+  it('shows "Don\'t sync yet" when a step calls setCanDeclineSync(true) and hides it after navigating away', async () => {
+    function SyncDecliningStep({ setCanDeclineSync }: FirstRunStepProps) {
+      useEffect(() => setCanDeclineSync?.(true), [setCanDeclineSync]);
       return <p>skippable</p>;
     }
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DUMMY_STEPS, language: SkippableStep }}
+        stepComponents={{ ...DUMMY_STEPS, language: SyncDecliningStep }}
       />,
     );
-    await waitFor(() => screen.getByRole('button', { name: /skip/i }));
-    // Navigate away — shell must reset canSkip so the next step does not inherit it.
+    await waitFor(() => screen.getByRole('button', { name: DONT_SYNC_YET }));
+    // Navigate away — shell must reset canDeclineSync so the next step does not inherit it.
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
-    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: DONT_SYNC_YET })).not.toBeInTheDocument();
   });
 
   it('advances to syncProgress when Sync is clicked on sync consent', async () => {
@@ -341,7 +350,7 @@ describe('FirstRunShell', () => {
       expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument(),
     );
     expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: DONT_SYNC_YET })).not.toBeInTheDocument();
     // But onBack is still supplied so the step can render Back within its own row.
     expect(receivedOnBack).toBeTypeOf('function');
   });
@@ -367,24 +376,24 @@ describe('FirstRunShell', () => {
     await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
   });
 
-  it('does not call completeFirstRun twice if onSkip fires twice in one tick (runAction guard)', async () => {
+  it('does not decline twice if onDeclineSync fires twice in one tick (runAction guard)', async () => {
     let done!: () => void;
-    mockComplete.mockImplementation(
+    mockDecline.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
           done = resolve;
         }),
     );
-    // Fire onSkip twice synchronously from one handler — the runAction re-entrancy guard (shared
+    // Fire onDeclineSync twice synchronously from one handler — the runAction re-entrancy guard (shared
     // with onNext) must block the second call, not just the footer button's disabled state.
-    function DoubleSkipStep({ onSkip, setCanSkip }: FirstRunStepProps) {
-      useEffect(() => setCanSkip?.(true), [setCanSkip]);
+    function DoubleDeclineStep({ onDeclineSync, setCanDeclineSync }: FirstRunStepProps) {
+      useEffect(() => setCanDeclineSync?.(true), [setCanDeclineSync]);
       return (
         <button
           type="button"
           onClick={() => {
-            onSkip?.();
-            onSkip?.();
+            onDeclineSync?.();
+            onDeclineSync?.();
           }}
         >
           double skip
@@ -394,21 +403,28 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="syncConsent"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncConsent: DoubleSkipStep }}
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncConsent: DoubleDeclineStep }}
       />,
     );
     await userEvent.click(await screen.findByRole('button', { name: /double skip/i }));
     done();
-    await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockDecline).toHaveBeenCalledTimes(1));
   });
 
-  it('disables the Skip button while an async action is in flight (isBusy guard)', async () => {
+  it('disables the "Don\'t sync yet" button while an async action is in flight (isBusy guard)', async () => {
     // Never-settling promise keeps isBusy=true indefinitely so the assertion doesn't race.
-    mockComplete.mockReturnValue(new Promise<void>(() => {}));
+    mockDecline.mockReturnValue(new Promise<void>(() => {}));
     render(<FirstRunShell entryStep="syncConsent" />);
-    // SyncConsentStep calls setCanProceed(undefined) so Next is hidden; Skip is the only footer button.
-    await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /skip/i })).toBeDisabled());
+    await userEvent.click(await screen.findByRole('button', { name: DONT_SYNC_YET }));
+    await waitFor(() => expect(screen.getByRole('button', { name: DONT_SYNC_YET })).toBeDisabled());
+  });
+
+  it('keeps the wizard open and shows the error when declining fails', async () => {
+    mockDecline.mockRejectedValue(new Error('could not defer sync'));
+    render(<FirstRunShell entryStep="syncConsent" />);
+    await userEvent.click(await screen.findByRole('button', { name: DONT_SYNC_YET }));
+    expect(await screen.findByText(/could not defer sync/i)).toBeInTheDocument();
+    expect(mockComplete).not.toHaveBeenCalled();
   });
 
   it('surfaces an error when completeFirstRun throws (syncProgress signals done)', async () => {
@@ -423,7 +439,7 @@ describe('FirstRunShell', () => {
     expect(await screen.findByText(/could not finish/i)).toBeInTheDocument();
   });
 
-  it('hides Back and Skip on syncProgress (interstitial — no footer navigation)', async () => {
+  it('hides Back and "Don\'t sync yet" on syncProgress (interstitial — no footer navigation)', async () => {
     // Navigate via SyncConsentStep's own Sync button (it hides the shell Next via setCanProceed(undefined)).
     render(
       <FirstRunShell
@@ -433,7 +449,7 @@ describe('FirstRunShell', () => {
     );
     await userEvent.click(await screen.findByRole('button', { name: /^sync$/i })); // → syncProgress
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: DONT_SYNC_YET })).not.toBeInTheDocument();
   });
 
   it('shows a step indicator that updates with navigation', async () => {
