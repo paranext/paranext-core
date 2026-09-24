@@ -255,7 +255,10 @@ button.toolbar-item {
   // Without this, a wheel gesture that reaches the end of the list chains to the ancestor
   // scroller. That ancestor's scroll event does not originate inside the menu, so the
   // close-on-scroll listener reads it as the page moving out from under a fixed-positioned menu
-  // and closes the menu mid-read — exactly when the list is long enough to need scrolling.
+  // and closes the menu mid-read — exactly when the list is long enough to need scrolling. This
+  // protects the CHAINED ancestor scroll specifically: the close-on-scroll listener's own
+  // scroll-target check (scripture-editors#14) already exempts a scroll of the list itself, but
+  // that exemption does not cover a scroll that chains past it to an ancestor.
   overscroll-behavior: contain;
 }
 
