@@ -14,20 +14,15 @@ const GOOD_SETUP_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
   es: { autonym: 'Español', uiNames: { en: 'Spanish' } },
 };
-// All known interface languages (real autonyms), including one (km) that is NOT setup-qualifying.
-const GOOD_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
-  ...GOOD_SETUP_LANGUAGES,
-  km: { autonym: 'ខ្មែរ', uiNames: { en: 'Khmer' } },
-};
+// Must stay unused: the step labels the current language from the shared language details.
+const availableInterfaceLanguagesHook = vi.hoisted(() => vi.fn(() => [{}, () => {}, false]));
 const hookState: {
   interfaceLanguage: string[];
   setupLanguages: Record<string, LanguageInfo> | PlatformError;
-  availableLanguages: Record<string, LanguageInfo> | PlatformError;
   isLoading: boolean;
 } = {
   interfaceLanguage: ['en'],
   setupLanguages: GOOD_SETUP_LANGUAGES,
-  availableLanguages: GOOD_AVAILABLE_LANGUAGES,
   isLoading: false,
 };
 
@@ -46,7 +41,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useSetting: vi.fn(() => [hookState.interfaceLanguage, mockSetInterfaceLanguage, vi.fn()]),
   useData: vi.fn(() => ({
     SetupDialogLanguages: () => [hookState.setupLanguages, () => {}, hookState.isLoading],
-    AvailableInterfaceLanguages: () => [hookState.availableLanguages, () => {}, false],
+    AvailableInterfaceLanguages: availableInterfaceLanguagesHook,
   })),
 }));
 vi.mock('@shared/services/localization.service', () => ({
@@ -91,7 +86,6 @@ describe('LanguageStep', () => {
     vi.clearAllMocks();
     hookState.interfaceLanguage = ['en'];
     hookState.setupLanguages = GOOD_SETUP_LANGUAGES;
-    hookState.availableLanguages = GOOD_AVAILABLE_LANGUAGES;
     hookState.isLoading = false;
   });
 
@@ -108,16 +102,25 @@ describe('LanguageStep', () => {
     expect(mockSetInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
   });
 
-  test('shows the current language by its real autonym even if it does not qualify for setup', () => {
-    hookState.interfaceLanguage = ['km']; // a known locale, but not setup-qualifying
+  test('shows a current language that is not offered by its real autonym', () => {
+    hookState.interfaceLanguage = ['fr']; // has a locale file but is not offered
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
-    // km is resolved from AvailableInterfaceLanguages, so it shows its in-script autonym, not the code
-    expect(screen.getByRole('option', { name: /ខ្មែរ/ })).toHaveAttribute('aria-current', 'true');
-    expect(screen.queryByText('km')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Français/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(screen.queryByText('fr')).not.toBeInTheDocument();
   });
 
-  test('falls back to the raw tag when the current language is unknown even to available languages', () => {
-    hookState.interfaceLanguage = ['xyz']; // in neither the setup nor the available map
+  test('labels the current language without subscribing to all interface languages', () => {
+    hookState.interfaceLanguage = ['km'];
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    expect(screen.getByRole('option', { name: /ខ្មែរ/ })).toHaveAttribute('aria-current', 'true');
+    expect(availableInterfaceLanguagesHook).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the raw tag when the current language has no known details', () => {
+    hookState.interfaceLanguage = ['xyz']; // no locale details for this tag
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
     expect(screen.getByRole('option', { name: /xyz/ })).toHaveAttribute('aria-current', 'true');
   });
