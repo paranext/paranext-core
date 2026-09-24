@@ -1696,6 +1696,13 @@ export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
 export type MenuColumnWithHeader = OrderedExtensibleContainer & {
 	/** Key that represents the text of the header text of the column */
 	label: LocalizeKey;
+	/**
+	 * Set to `true` to show this column's items without its header text in a menu that heads each
+	 * section with its column's header, such as a web view's tab menu. The label still names the
+	 * section for assistive technology. The application menubar ignores this, because there the
+	 * header is what opens the column.
+	 */
+	isHeaderHidden?: boolean;
 };
 export type MenuItemBase = OrderedItem & {
 	/** Menu group to which this menu item belongs */
@@ -1938,6 +1945,10 @@ export declare const menuDocumentSchema: {
 							type: string;
 						};
 						isExperimental: {
+							description: string;
+							type: string;
+						};
+						isHeaderHidden: {
 							description: string;
 							type: string;
 						};
