@@ -794,6 +794,34 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-fallback', 1, 'main');
   });
 
+  it('falls back to the pixel delta when wheelDeltaY rounds to 0 on a slow Ctrl+two-finger scroll', async () => {
+    // `wheelDeltaY` is an integer rounded from the pixel delta, so every sub-pixel frame of a slow
+    // two-finger scroll reports 0 while its travel is real. On macOS the physically held Ctrl is
+    // what keeps these small frames off the pinch path, so they reach the tick count.
+    stubPlatform('MacIntel');
+    const { bound } = install('wv-notch-slow-scroll', TWO_AREAS);
+    const slowScrollFrames = (frames: number) => {
+      for (let i = 0; i < frames; i += 1)
+        wheel(
+          { deltaY: -0.3, deltaX: 0, deltaMode: 0, ctrlKey: true, wheelDeltaY: 0 },
+          byId('verse'),
+        );
+    };
+    modifierKey('keydown', 'Control');
+    try {
+      // 150 frames are 45 px of travel: under the half of a 100 px tick that rounds to a step.
+      slowScrollFrames(150);
+      await oneFrame();
+      expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+      // 50 more make 60 px: one step, and the carried remainder is too small for a second.
+      slowScrollFrames(50);
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-slow-scroll', 1, 'main']]);
+    } finally {
+      modifierKey('keyup', 'Control');
+    }
+  });
+
   it('keeps a part of a tick through a pause of any length', async () => {
     const { bound } = install('wv-notch-pause', TWO_AREAS);
     let now = 1000;
