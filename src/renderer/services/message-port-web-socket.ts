@@ -110,6 +110,7 @@ export class MessagePortWebSocket implements WebSocket {
    * @param provider How to obtain the port
    * @param options `addPageHideListener` defaults to true; tests that share one jsdom window pass
    *   false so sockets do not pile listeners onto it
+   * @experimental
    */
   constructor(provider: PapiPortProvider, options: { addPageHideListener?: boolean } = {}) {
     this.onPortMessage = this.onPortMessage.bind(this);
