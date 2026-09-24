@@ -41,12 +41,29 @@ describe('Help menu links open the destinations their labels promise', () => {
     );
   });
 
-  test.each([
-    ['platform.visitGettingStartedPage', 'https://studio.paratext.org/start '],
-    ['platform.visitFeatureRoadmapPage', 'https://studio.paratext.org/roadmap'],
-  ] as const)('%s still opens %s', (command, url) => {
-    handleMenuCommand(menuItem(command));
+  test('Getting started opens the Getting Started page', () => {
+    handleMenuCommand(menuItem('platform.visitGettingStartedPage'));
 
-    expect(commandService.sendCommand).toHaveBeenCalledWith('platform.openWindow', url);
+    expect(commandService.sendCommand).toHaveBeenCalledWith(
+      'platform.openWindow',
+      'https://studio.paratext.org/start',
+    );
+  });
+
+  /**
+   * Feature roadmap has no menu item and no case of its own, so a stray item carrying its id must
+   * not reach the unpublished roadmap page.
+   */
+  test('the retired Feature roadmap command does not open a web page', () => {
+    handleMenuCommand(menuItem('platform.visitFeatureRoadmapPage'));
+
+    expect(commandService.sendCommand).toHaveBeenCalledWith(
+      'platform.visitFeatureRoadmapPage',
+      undefined,
+    );
+    expect(commandService.sendCommand).not.toHaveBeenCalledWith(
+      'platform.openWindow',
+      expect.anything(),
+    );
   });
 });
