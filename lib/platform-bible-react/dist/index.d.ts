@@ -1113,14 +1113,31 @@ export interface FootnoteEditorHandle {
 	 * or the note is unchanged.
 	 */
 	flushPendingEdits: () => void;
+	/** Puts DOM focus back in the note text, on the caret the editor last held. */
+	focus: () => void;
+	/**
+	 * Whether DOM focus is anywhere in this editor - its note text or its own controls. Reads the
+	 * document's active element, so it stays true while the window itself is not focused.
+	 */
+	containsFocus: () => boolean;
 }
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
-	/** Class name for styling the embedded `Editor` component in this editor popover */
+	/** Class name for styling the `Editor` this component embeds for the note's text */
 	classNameForEditor?: string;
 	/** Delta ops for the current note being edited that are applied to the note editorial */
 	noteOps: DeltaOpInsertNoteEmbed[] | undefined;
-	/** External function to handle closing the footnote editor */
+	/**
+	 * Called when the editing session ends, which is the host's cue to stop rendering this component.
+	 * Edits are KEPT on every path but popover Cancel:
+	 *
+	 * - Popover Save: the note is applied to the parent first.
+	 * - Popover Cancel: nothing is applied.
+	 * - A book or chapter change: saved as Save saves (popover), or flushed (inline).
+	 * - Escape in the inline editor (from its text or its own controls): whatever is still inside the
+	 *   live-apply debounce is applied first. An open marker-palette session, or the editor's own
+	 *   right-click menu, takes Escape for itself instead.
+	 */
 	onClose: () => void;
 	/** The scripture reference for the parent editor */
 	scrRef: SerializedVerseRef;
@@ -1177,19 +1194,19 @@ export interface FootnoteEditorProps {
 	initialCaretPosition?: FootnoteCaretPosition;
 	/**
 	 * Optional marker-palette driver (standard-view host wiring for PT9 parity). When provided in
-	 * editable marker mode, a typed `\` inside this popover's own editor opens the same palette the
-	 * main editor uses instead of the built-in inline markers menu below; when absent, editable mode
-	 * falls back to pass-through-only behavior (literal typing works, no menu) — a graceful
+	 * editable marker mode, a typed `\` inside this component's own note text opens the same palette
+	 * the main editor uses instead of the built-in inline markers menu below; when absent, editable
+	 * mode falls back to pass-through-only behavior (literal typing works, no menu) — a graceful
 	 * degradation for hosts that haven't wired one up. Never consulted outside editable marker mode —
 	 * the built-in `MarkerMenu` popup below owns that path unconditionally.
 	 */
 	markerPalette?: FootnoteEditorMarkerPalette;
 	/**
-	 * Called whenever the user edits the note in this popover: a content change (the auto-save path),
+	 * Called whenever the user edits the note in this editor: a content change (the auto-save path),
 	 * a caller-type change, or a custom-caller change. NOT called for programmatic initialization
-	 * (popover mount / initial content load). Carries no data — `onChange` is the data path — so
-	 * hosts can use it as a pure liveness signal for the editing session (e.g. refreshing a staleness
-	 * clock so a long live edit is never treated as an abandoned session).
+	 * (mount / initial content load). Carries no data — `onChange` is the data path — so hosts can
+	 * use it as a pure liveness signal for the editing session (e.g. refreshing a staleness clock so
+	 * a long live edit is never treated as an abandoned session).
 	 */
 	onNoteEdit?: () => void;
 }

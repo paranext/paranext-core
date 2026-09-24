@@ -71,25 +71,28 @@ function ScriptureEditorWithFootnotesPane({
       nodes: {
         noteCallerOnClick: isReadonly
           ? undefined
-          : (_event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+          : (
+              _event,
+              noteNodeKey,
+              isCollapsed,
+              _getCaller,
+              _setCaller,
+              getNoteOps,
+              getNoteIndex,
+            ) => {
               if (!isCollapsed) return;
               const noteOp = getNoteOps()?.at(0);
               if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
               editingNoteKey.current = noteNodeKey;
               editingNoteOps.current = [noteOp];
-              // Story-local index resolution: compare ops, since this story holds no editing session
-              const opsJson = JSON.stringify([noteOp]);
-              for (let i = 0; i < footnotes.length; i += 1) {
-                if (JSON.stringify(editorRef.current?.getNoteOps(i)) === opsJson) {
-                  setCaretPosition('end'); // PT9: caller click lands at end of note text
-                  setEditingIndex(i);
-                  return;
-                }
-              }
+              const index = getNoteIndex();
+              if (index === undefined) return;
+              setCaretPosition('end'); // PT9: caller click lands at end of note text
+              setEditingIndex(index);
             },
       },
     }),
-    [textDirection, isReadonly, showMarkers, footnotes.length],
+    [textDirection, isReadonly, showMarkers],
   );
 
   const handleEditRequested = useCallback(
@@ -104,7 +107,9 @@ function ScriptureEditorWithFootnotesPane({
       const noteOp = ops?.at(0);
       if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
       editingNoteOps.current = [noteOp];
-      editingNoteKey.current = undefined;
+      // Resolved like the production web view does, so the row editor's live-apply
+      // (`replaceEmbedUpdate`) has a key to target instead of silently no-opping every edit.
+      editingNoteKey.current = editorRef.current?.getNoteKey(index);
       setCaretPosition(caret); // caret-where-you-clicked
       setEditingIndex(index);
     },

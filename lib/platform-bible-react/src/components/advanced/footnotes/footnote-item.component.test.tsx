@@ -203,7 +203,9 @@ describe('FootnoteItem marker fidelity', () => {
     // The top-level `fp` run is a child of the note, so it stays unprefixed.
     const bodyText = renderBodyText(footnote);
     expect(bodyText).toContain('\\+fk');
-    expect(bodyText).not.toContain('\\fk ');
+    // Marker and text are separated by MARKER_SEPARATOR (U+00A0, a non-breaking space), never an
+    // ordinary space, so this must match that separator to actually rule out the unprefixed form.
+    expect(bodyText).not.toContain('\\fk\u00a0');
   });
 
   it('separates a marker from its text with a non-breaking space', () => {

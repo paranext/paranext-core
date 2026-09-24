@@ -84,15 +84,32 @@ export interface FootnoteEditorHandle {
    * or the note is unchanged.
    */
   flushPendingEdits: () => void;
+  /** Puts DOM focus back in the note text, on the caret the editor last held. */
+  focus: () => void;
+  /**
+   * Whether DOM focus is anywhere in this editor - its note text or its own controls. Reads the
+   * document's active element, so it stays true while the window itself is not focused.
+   */
+  containsFocus: () => boolean;
 }
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
-  /** Class name for styling the embedded `Editor` component in this editor popover */
+  /** Class name for styling the `Editor` this component embeds for the note's text */
   classNameForEditor?: string;
   /** Delta ops for the current note being edited that are applied to the note editorial */
   noteOps: DeltaOpInsertNoteEmbed[] | undefined;
-  /** External function to handle closing the footnote editor */
+  /**
+   * Called when the editing session ends, which is the host's cue to stop rendering this component.
+   * Edits are KEPT on every path but popover Cancel:
+   *
+   * - Popover Save: the note is applied to the parent first.
+   * - Popover Cancel: nothing is applied.
+   * - A book or chapter change: saved as Save saves (popover), or flushed (inline).
+   * - Escape in the inline editor (from its text or its own controls): whatever is still inside the
+   *   live-apply debounce is applied first. An open marker-palette session, or the editor's own
+   *   right-click menu, takes Escape for itself instead.
+   */
   onClose: () => void;
   /** The scripture reference for the parent editor */
   scrRef: SerializedVerseRef;
@@ -149,19 +166,19 @@ export interface FootnoteEditorProps {
   initialCaretPosition?: FootnoteCaretPosition;
   /**
    * Optional marker-palette driver (standard-view host wiring for PT9 parity). When provided in
-   * editable marker mode, a typed `\` inside this popover's own editor opens the same palette the
-   * main editor uses instead of the built-in inline markers menu below; when absent, editable mode
-   * falls back to pass-through-only behavior (literal typing works, no menu) — a graceful
+   * editable marker mode, a typed `\` inside this component's own note text opens the same palette
+   * the main editor uses instead of the built-in inline markers menu below; when absent, editable
+   * mode falls back to pass-through-only behavior (literal typing works, no menu) — a graceful
    * degradation for hosts that haven't wired one up. Never consulted outside editable marker mode —
    * the built-in `MarkerMenu` popup below owns that path unconditionally.
    */
   markerPalette?: FootnoteEditorMarkerPalette;
   /**
-   * Called whenever the user edits the note in this popover: a content change (the auto-save path),
+   * Called whenever the user edits the note in this editor: a content change (the auto-save path),
    * a caller-type change, or a custom-caller change. NOT called for programmatic initialization
-   * (popover mount / initial content load). Carries no data — `onChange` is the data path — so
-   * hosts can use it as a pure liveness signal for the editing session (e.g. refreshing a staleness
-   * clock so a long live edit is never treated as an abandoned session).
+   * (mount / initial content load). Carries no data — `onChange` is the data path — so hosts can
+   * use it as a pure liveness signal for the editing session (e.g. refreshing a staleness clock so
+   * a long live edit is never treated as an abandoned session).
    */
   onNoteEdit?: () => void;
 }
@@ -277,6 +294,12 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
 
 /** Debounce interval for inline-mode live application of note edits to the parent editor. */
 export const INLINE_APPLY_DEBOUNCE_MS = 300;
+
+/**
+ * The editor's right-click menu. The editor portals it to `document.body`, outside this component,
+ * and names it with this class alone.
+ */
+const EDITOR_CONTEXT_MENU_SELECTOR = '.typeahead-popover';
 
 /** The custom caller offered for a note that does not have one of its own yet. */
 const DEFAULT_CUSTOM_CALLER = '*';
@@ -442,6 +465,23 @@ export default function FootnoteEditor({
   /** Monotonic allocator for {@link paletteSession} tokens. */
   const paletteSessionCounter = useRef(0);
 
+  const markerPaletteRef = useRef(markerPalette);
+  useEffect(() => {
+    markerPaletteRef.current = markerPalette;
+  }, [markerPalette]);
+
+  // A session outliving this editor would leave the palette on screen offering items there is no
+  // longer a note to apply to, and its host still counting a palette as open (which reads as an
+  // editing session in progress). Every close unmounts this component, so this covers them all.
+  useEffect(
+    () => () => {
+      if (!paletteSession.current) return;
+      paletteSession.current = undefined;
+      markerPaletteRef.current?.dismiss();
+    },
+    [],
+  );
+
   /**
    * Last live USJ selection of this popover's editor, captured as focus left it (the focusout
    * listener below). A palette mouse click steals focus BEFORE the commit round-trips, and
@@ -561,6 +601,10 @@ export default function FootnoteEditor({
    */
   const applyCallerToEditor = useCallback(
     (resolvedCallerType: FootnoteCallerType, resolvedCustomCaller: string) => {
+      // The note is rebuilt from what this reads, and the read is unsettled: a marker rename still
+      // pending under the caret (the dropdown's blur leaves it pending) would be written back as
+      // the old marker. Settled first, as `closeAndSave` does.
+      if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
       const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
       if (!currentNoteOp || !isInsertEmbedOpOfType('note', currentNoteOp)) return;
       if (!currentNoteOp.insert.note) return;
@@ -601,8 +645,7 @@ export default function FootnoteEditor({
 
   // Declared BEFORE the load effect below (which calls it from its cleanup) so it can be listed
   // in that effect's dependency array without a temporal-dead-zone reference. Its own dependency
-  // (cancelPendingApply) never changes identity, so flushPendingApply's identity is stable too;
-  // moving it earlier doesn't change when it's created.
+  // (cancelPendingApply) never changes identity, so flushPendingApply's identity is stable too.
   const flushPendingApply = useCallback(() => {
     if (pendingApplyTimeoutRef.current === undefined) return;
     cancelPendingApply();
@@ -739,7 +782,18 @@ export default function FootnoteEditor({
     flushPendingApply();
   }, [flushPendingApply]);
 
-  useImperativeHandle(ref, () => ({ flushPendingEdits }), [flushPendingEdits]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      flushPendingEdits,
+      focus: () => editorRef.current?.focus(),
+      containsFocus: () => {
+        const container = containerRef.current;
+        return !!container && container.contains(container.ownerDocument.activeElement);
+      },
+    }),
+    [flushPendingEdits],
+  );
 
   const closeAndSave = useCallback(() => {
     // Abandonment window: settle pending mid-edit marker text before the final read
@@ -829,6 +883,8 @@ export default function FootnoteEditor({
   const handleNoteTypeChange = (value: string) => {
     setNoteType(value);
 
+    // Settled before the read for the same reason as `applyCallerToEditor`.
+    if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
     // Changes the note type for the current note that is being edited
     const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
     if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
@@ -844,6 +900,8 @@ export default function FootnoteEditor({
 
       // Inserts the new footnote/cross-reference and deletes the old one — triggers handleUsjChange
       editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
+      // A discrete action, applied now like a caller change (see `handleCallerChange`).
+      if (inline) flushPendingApply();
     }
   };
 
@@ -1135,6 +1193,18 @@ export default function FootnoteEditor({
     const getEditorInput = () =>
       editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
 
+    // The inline surface renders no Cancel/Close control - its edits apply live - so Escape is its
+    // explicit dismissal, and the only one that does not require a pointer. It ends the session
+    // KEEPING what was typed (`closeAndSave`'s inline branch just flushes the pending apply).
+    // Anywhere in the editor counts, its own controls included: Tab from the row above lands on the
+    // note-type dropdown first. The editor's right-click menu leaves focus in the note text and
+    // closes on Escape itself, so while it is open the key is the menu's.
+    const isInlineCloseEscape = (event: KeyboardEvent) =>
+      inline &&
+      event.key === 'Escape' &&
+      !!containerRef.current?.contains(document.activeElement) &&
+      !document.querySelector(EDITOR_CONTEXT_MENU_SELECTOR);
+
     if (options.view?.markerMode === 'editable') {
       // In editable marker mode (e.g. Standard view) a typed backslash IS content — the editor's
       // marker-editing engine resolves typed markers itself. Without a host-supplied
@@ -1156,26 +1226,21 @@ export default function FootnoteEditor({
         // its own. (The shared forwarding table repeats the check for its in-session keys, so
         // this outer guard covers only this handler's own trigger paths.)
         if (isImeCompositionKeyEvent(event)) return;
+        const session = paletteSession.current;
+        // A palette session takes Escape instead, to cancel the palette rather than the session.
+        if (!session && isInlineCloseEscape(event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeAndSaveRef.current();
+          return;
+        }
         const editorInput = getEditorInput();
         if (!editorInput || document.activeElement !== editorInput) return;
-        const session = paletteSession.current;
 
         if (session && markerPalette) {
           // Through the ref so this listener and the palette's forwarded keys provably run the
           // same handler (and so this effect needs no dependency on it).
           runPaletteSessionKeyRef.current(event);
-          return;
-        }
-
-        // The inline surface renders no Cancel/Close control - its edits apply live - so Escape
-        // is its explicit dismissal, and the only one that does not require a pointer. It ends
-        // the session KEEPING what was typed (`closeAndSave`'s inline branch just flushes the
-        // pending apply); there is no draft to discard. A palette session claims Escape above,
-        // to cancel the palette rather than the session.
-        if (inline && event.key === 'Escape') {
-          event.preventDefault();
-          event.stopPropagation();
-          closeAndSaveRef.current();
           return;
         }
 
@@ -1260,12 +1325,7 @@ export default function FootnoteEditor({
       } else if (showMarkersMenu && event.key === 'Escape') {
         event.preventDefault();
         setShowMarkersMenu(false);
-      } else if (
-        inline &&
-        event.key === 'Escape' &&
-        editorInput &&
-        document.activeElement === editorInput
-      ) {
+      } else if (isInlineCloseEscape(event)) {
         // Same explicit dismissal as the editable-mode branch above; the markers menu claims
         // Escape first when it is open.
         event.preventDefault();
@@ -1348,10 +1408,12 @@ export default function FootnoteEditor({
         className={cn('footnote-editor tw:grid tw:gap-[12px]', inline && 'tw:w-full')}
       >
         <div className="tw:flex">
-          {/* Wraps rather than overflowing: the inline editor's row is only as wide as the
+          {/* The inline editor wraps rather than overflowing: its row is only as wide as the
               footnotes pane, which the user can drag down to a fraction of the editor's width,
-              and a non-wrapping cluster of two labelled dropdowns plus undo/redo needs ~250px. */}
-          <div className="tw:flex tw:flex-wrap tw:gap-4">
+              and a non-wrapping cluster of two labelled dropdowns plus undo/redo needs ~250px. The
+              popover must not wrap: its full-width Cancel/Save sibling would squeeze the cluster
+              onto two lines at every popover width. */}
+          <div className={cn('tw:flex tw:gap-4', inline && 'tw:flex-wrap')}>
             <FootnoteTypeDropdown
               isTypeSwitchable={isTypeSwitchable}
               noteType={noteType}

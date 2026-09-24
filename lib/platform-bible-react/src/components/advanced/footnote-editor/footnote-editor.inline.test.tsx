@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { createRef, forwardRef, useImperativeHandle } from 'react';
+import type { RefObject } from 'react';
 import type { DeltaOpInsertNoteEmbed, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
@@ -135,6 +136,21 @@ function makeKeyReorderedNoteOps(text: string): DeltaOpInsertNoteEmbed[] {
   ];
 }
 
+/**
+ * Widens a live-apply test's `replaceEmbedUpdate`-only stub to `parentEditorRef`'s declared prop
+ * type (`RefObject<EditorRef | null>`). The stub implements only `replaceEmbedUpdate` — the one
+ * EditorRef method this component's live-apply path calls on its parent — so this is the single
+ * justified assertion that bridges the gap; call sites pass the same object straight through and
+ * keep reading `parentRef.current.replaceEmbedUpdate` for their assertions.
+ */
+function makeParentRef(parentRef: {
+  current: { replaceEmbedUpdate: ReturnType<typeof vi.fn> };
+}): RefObject<EditorRef | null> {
+  // The stub above only implements `replaceEmbedUpdate`, not the full EditorRef surface.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return parentRef as unknown as RefObject<EditorRef | null>;
+}
+
 function renderEditor(overrides: Partial<Parameters<typeof FootnoteEditor>[0]> = {}) {
   const props = {
     noteOps: makeNoteOps('first'),
@@ -150,7 +166,10 @@ function renderEditor(overrides: Partial<Parameters<typeof FootnoteEditor>[0]> =
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // `resetAllMocks` (not `clearAllMocks`): also clears `mockReturnValue` implementations set by an
+  // earlier test (e.g. `editorRefMock.getNoteOps`), so one test's stubbed return value can't leak
+  // into the next test's run when the suite order is shuffled.
+  vi.resetAllMocks();
   vi.useRealTimers();
 });
 
@@ -314,9 +333,7 @@ describe('FootnoteEditor inline live-apply', () => {
     const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
     renderEditor({
       inline: true,
-      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      parentEditorRef: parentRef as never,
+      parentEditorRef: makeParentRef(parentRef),
       noteKey: 'key-live',
     });
     await vi.runOnlyPendingTimersAsync(); // initial load
@@ -353,9 +370,7 @@ describe('FootnoteEditor inline live-apply', () => {
     const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
     const { unmount } = renderEditor({
       inline: true,
-      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      parentEditorRef: parentRef as never,
+      parentEditorRef: makeParentRef(parentRef),
       noteKey: 'key-flush',
     });
     await vi.runOnlyPendingTimersAsync();
@@ -381,9 +396,7 @@ describe('FootnoteEditor inline live-apply', () => {
     vi.useFakeTimers();
     const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
     renderEditor({
-      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      parentEditorRef: parentRef as never,
+      parentEditorRef: makeParentRef(parentRef),
     });
     await vi.runOnlyPendingTimersAsync();
     primeCurrentOps('snapshot');
@@ -412,9 +425,7 @@ describe('FootnoteEditor inline live-apply', () => {
     const noteOps = makeNoteOps('first');
     const { rerender, props } = renderEditor({
       inline: true,
-      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      parentEditorRef: parentRef as never,
+      parentEditorRef: makeParentRef(parentRef),
       noteKey: 'key-original',
       noteOps,
     });
@@ -424,9 +435,7 @@ describe('FootnoteEditor inline live-apply', () => {
       <FootnoteEditor
         {...props}
         inline
-        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        parentEditorRef={parentRef as never}
+        parentEditorRef={makeParentRef(parentRef)}
         noteKey="key-updated"
         noteOps={noteOps}
       />,
@@ -461,9 +470,7 @@ describe('FootnoteEditor inline live-apply', () => {
     const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
     const { rerender, unmount, props } = renderEditor({
       inline: true,
-      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      parentEditorRef: parentRef as never,
+      parentEditorRef: makeParentRef(parentRef),
       noteKey: 'key-race',
     });
     await vi.runOnlyPendingTimersAsync(); // initial load
@@ -488,9 +495,7 @@ describe('FootnoteEditor inline live-apply', () => {
       <FootnoteEditor
         {...props}
         inline
-        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        parentEditorRef={parentRef as never}
+        parentEditorRef={makeParentRef(parentRef)}
         noteKey="key-race"
         scrRef={{ book: 'EXO', chapterNum: 1, verseNum: 1 }}
       />,
@@ -514,9 +519,7 @@ describe('FootnoteEditor inline live-apply', () => {
     const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
     renderEditor({
       inline: true,
-      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      parentEditorRef: parentRef as never,
+      parentEditorRef: makeParentRef(parentRef),
       noteKey: 'key-unchanged',
       noteOps: makeNoteOps('unchanged'),
     });
@@ -548,9 +551,7 @@ describe('FootnoteEditor inline live-apply', () => {
     const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
     renderEditor({
       inline: true,
-      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      parentEditorRef: parentRef as never,
+      parentEditorRef: makeParentRef(parentRef),
       noteKey: 'key-reordered',
       noteOps: makeNoteOps('unchanged'),
     });
@@ -580,9 +581,7 @@ describe('FootnoteEditor inline live-apply', () => {
     const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
     renderEditor({
       inline: true,
-      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      parentEditorRef: parentRef as never,
+      parentEditorRef: makeParentRef(parentRef),
       noteKey: 'key-changed',
       noteOps: makeNoteOps('before'),
     });
@@ -624,14 +623,11 @@ describe('FootnoteEditor inline live-apply', () => {
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
       // The ref needs to start out with null for it to work as a component ref
-      // eslint-disable-next-line no-null/no-null
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
         ref: handleRef,
-        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        parentEditorRef: parentRef as never,
+        parentEditorRef: makeParentRef(parentRef),
         noteKey: 'key-handle-flush',
       });
       await vi.runOnlyPendingTimersAsync();
@@ -662,14 +658,11 @@ describe('FootnoteEditor inline live-apply', () => {
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
       // The ref needs to start out with null for it to work as a component ref
-      // eslint-disable-next-line no-null/no-null
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
         ref: handleRef,
-        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        parentEditorRef: parentRef as never,
+        parentEditorRef: makeParentRef(parentRef),
         noteKey: 'key-handle-clean',
       });
       await vi.runOnlyPendingTimersAsync();
@@ -687,14 +680,11 @@ describe('FootnoteEditor inline live-apply', () => {
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
       // The ref needs to start out with null for it to work as a component ref
-      // eslint-disable-next-line no-null/no-null
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
         ref: handleRef,
-        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        parentEditorRef: parentRef as never,
+        parentEditorRef: makeParentRef(parentRef),
         noteKey: 'key-handle-settle',
       });
       await vi.runOnlyPendingTimersAsync();
@@ -725,15 +715,12 @@ describe('FootnoteEditor inline live-apply', () => {
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
       // The ref needs to start out with null for it to work as a component ref
-      // eslint-disable-next-line no-null/no-null
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
         ref: handleRef,
         noteOps: makeNoteOps('loaded'),
-        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        parentEditorRef: parentRef as never,
+        parentEditorRef: makeParentRef(parentRef),
         noteKey: 'key-handle-rename',
       });
       await vi.runOnlyPendingTimersAsync();
@@ -785,14 +772,11 @@ describe('FootnoteEditor inline live-apply', () => {
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
       // The ref needs to start out with null for it to work as a component ref
-      // eslint-disable-next-line no-null/no-null
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
         ref: handleRef,
-        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        parentEditorRef: parentRef as never,
+        parentEditorRef: makeParentRef(parentRef),
         noteKey: 'key-handle-settle-clean',
       });
       await vi.runOnlyPendingTimersAsync();
@@ -808,9 +792,7 @@ describe('FootnoteEditor inline live-apply', () => {
       const noteOpsA = makeNoteOps('note A first');
       const { rerender, props } = renderEditor({
         inline: true,
-        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        parentEditorRef: parentRef as never,
+        parentEditorRef: makeParentRef(parentRef),
         noteKey: 'key-A',
         noteOps: noteOpsA,
       });
@@ -836,9 +818,7 @@ describe('FootnoteEditor inline live-apply', () => {
         <FootnoteEditor
           {...props}
           inline
-          // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          parentEditorRef={parentRef as never}
+          parentEditorRef={makeParentRef(parentRef)}
           noteKey="key-B"
           noteOps={makeNoteOps('note B first')}
         />,
@@ -970,6 +950,46 @@ describe('FootnoteEditor inline Escape dismissal', () => {
     expect(props.onClose).not.toHaveBeenCalled();
   });
 
+  // Tab from the row above lands on the note-type dropdown first, and closing a dropdown returns
+  // focus to its trigger, so Escape has to work from the editor's own controls too.
+  it("ends the session on Escape from the editor's own controls", async () => {
+    vi.useFakeTimers();
+    const { props } = renderEditor({
+      inline: true,
+      editorOptions: { view: editableView },
+      localizedStrings: buildLocalizedStrings(),
+    });
+    await vi.runAllTimersAsync();
+    const callerDropdown = screen.getByRole('button', { name: /callerDropdown/i });
+    callerDropdown.focus();
+
+    callerDropdown.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // The right-click menu leaves focus in the note text and closes itself on Escape.
+  it.each([
+    { name: 'in editable marker mode (Standard view)', editorOptions: { view: editableView } },
+    { name: 'in the default marker mode', editorOptions: {} },
+  ])("leaves Escape to the editor's open right-click menu $name", async ({ editorOptions }) => {
+    vi.useFakeTimers();
+    const { container, props } = renderEditor({ inline: true, editorOptions });
+    await vi.runAllTimersAsync();
+    const contextMenu = document.body.appendChild(document.createElement('div'));
+    contextMenu.className = 'typeahead-popover';
+
+    try {
+      pressEscapeInEditor(container);
+    } finally {
+      contextMenu.remove();
+    }
+
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
   it('ignores Escape pressed outside the editor', async () => {
     vi.useFakeTimers();
     const { props } = renderEditor({ inline: true, editorOptions: { view: editableView } });
@@ -980,5 +1000,122 @@ describe('FootnoteEditor inline Escape dismissal', () => {
     );
 
     expect(props.onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('FootnoteEditor caller and note-type changes', () => {
+  /** `makeNoteOps(text)` with its `\ft` run renamed to `\fqa`: a rename that has settled. */
+  function renamedNoteOps(text: string): DeltaOpInsertNoteEmbed[] {
+    const [noteOp] = makeNoteOps(text);
+    const ops = noteOp.insert.note?.contents?.ops ?? [];
+    ops[1] = { insert: text, attributes: { char: { style: 'fqa' } } };
+    return [noteOp];
+  }
+
+  /** The char style of the second run of the note last applied to the editor. */
+  function lastAppliedSecondRunStyle(): unknown {
+    const [ops] = editorRefMock.applyUpdate.mock.calls.at(-1) ?? [];
+    const noteOp: DeltaOpInsertNoteEmbed | undefined = ops?.[0];
+    return noteOp?.insert.note?.contents?.ops?.[1]?.attributes?.char;
+  }
+
+  /**
+   * Renders the inline editor on a note whose `\ft` rename is still pending: the editor reads the
+   * old marker until its pending edits are committed.
+   */
+  async function renderWithPendingRename() {
+    renderEditor({
+      inline: true,
+      editorOptions: { view: editableView },
+      localizedStrings: buildLocalizedStrings(),
+    });
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+    editorRefMock.getNoteOps.mockReturnValue(makeNoteOps('loaded'));
+    editorRefMock.commitPendingMarkerEdits.mockImplementation(() => {
+      editorRefMock.getNoteOps.mockReturnValue(renamedNoteOps('loaded'));
+    });
+    editorRefMock.applyUpdate.mockClear();
+  }
+
+  // The dropdown takes focus from the note text, which leaves the rename under the caret pending,
+  // and the note is rebuilt from what the editor reads: an unsettled read would write the old
+  // marker back.
+  it('keeps a pending marker rename through a caller change', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await renderWithPendingRename();
+
+    await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /hidden/i }));
+
+    expect(lastAppliedSecondRunStyle()).toEqual({ style: 'fqa' });
+  }, 20_000);
+
+  it('keeps a pending marker rename through a note-type change', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await renderWithPendingRename();
+
+    await user.click(screen.getByRole('button', { name: /noteType_footnote_label/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /noteType_endNote_label/i }));
+
+    expect(lastAppliedSecondRunStyle()).toEqual({ style: 'fqa' });
+  }, 20_000);
+
+  // A note-type change is a discrete action like a caller change: the inline surface has no Save,
+  // so it reaches the parent at once rather than after the typing debounce.
+  it('applies a note-type change to the parent at once', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    renderEditor({
+      inline: true,
+      localizedStrings: buildLocalizedStrings(),
+      parentEditorRef: makeParentRef(parentRef),
+      noteKey: 'key-type',
+    });
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+    const usj: Usj = { type: 'USJ', version: '3.1', content: [{ type: 'para' }] };
+    editorRefMock.getNoteOps.mockReturnValue(makeNoteOps('loaded'));
+    latestEditorialProps.onUsjChange?.(usj); // the load's own report
+    // The rebuilt note reaches the editor, which reports it as a change.
+    editorRefMock.applyUpdate.mockImplementation(([noteOp]) => {
+      editorRefMock.getNoteOps.mockReturnValue([noteOp]);
+      latestEditorialProps.onUsjChange?.(usj);
+    });
+
+    await user.click(screen.getByRole('button', { name: /noteType_footnote_label/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /noteType_endNote_label/i }));
+
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledOnce();
+    const [, [appliedNoteOp]] = parentRef.current.replaceEmbedUpdate.mock.calls[0];
+    expect(appliedNoteOp.insert.note.style).toBe('fe');
+  }, 20_000);
+});
+
+describe('FootnoteEditor handle focus', () => {
+  it('reports focus anywhere in the editor, its own controls included', async () => {
+    const handleRef = createRef<FootnoteEditorHandle>();
+    renderEditor({ inline: true, ref: handleRef, localizedStrings: buildLocalizedStrings() });
+    expect(handleRef.current?.containsFocus()).toBe(false);
+
+    screen.getByRole('button', { name: /callerDropdown/i }).focus();
+
+    expect(handleRef.current?.containsFocus()).toBe(true);
+  });
+
+  it("puts focus back in the note text through the editor's own focus", () => {
+    const handleRef = createRef<FootnoteEditorHandle>();
+    renderEditor({ inline: true, ref: handleRef });
+    editorRefMock.focus.mockClear();
+
+    handleRef.current?.focus();
+
+    expect(editorRefMock.focus).toHaveBeenCalledOnce();
   });
 });

@@ -364,3 +364,35 @@ describe('FootnoteEditor palette commit of fp (the footnote-paragraph BREAK)', (
     },
   );
 });
+
+describe('FootnoteEditor marker palette when the editor closes', () => {
+  // Every close unmounts the editor. A palette left open would offer items with no note to apply
+  // them to, and its host would go on counting an editing session in progress.
+  it('dismisses a palette session still open', async () => {
+    const { markerPalette, show } = makeDeferredMarkerPalette();
+    const { utils, editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      markerPalette,
+    });
+    await placeCaretInFtText(lexical, editorInput, 'end');
+    await act(async () => {
+      editorInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(show).toHaveBeenCalledTimes(1);
+
+    utils.unmount();
+
+    expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the palette alone when no session is open', async () => {
+    const { markerPalette } = makeDeferredMarkerPalette();
+    const { utils } = await renderPopoverAndWaitForInit(editableView, { markerPalette });
+
+    utils.unmount();
+
+    expect(markerPalette.dismiss).not.toHaveBeenCalled();
+  });
+});

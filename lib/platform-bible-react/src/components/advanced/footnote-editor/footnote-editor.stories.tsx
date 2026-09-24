@@ -172,8 +172,12 @@ function measureToolbar() {
   // across, and so what "pushed to the end" is measured against.
   const toolbarRow = callerButton.parentElement?.parentElement;
   if (!toolbarRow) throw new Error('toolbar row not found');
+  // The note-type dropdown leads the caller's group.
+  const noteTypeButton = callerButton.parentElement?.querySelector('button');
+  if (!noteTypeButton) throw new Error('note-type dropdown not found');
   return {
     scope,
+    noteType: noteTypeButton.getBoundingClientRect(),
     caller: callerButton.getBoundingClientRect(),
     undo: undoButton.getBoundingClientRect(),
     row: toolbarRow.getBoundingClientRect(),
@@ -222,8 +226,11 @@ export const PopoverToolbarKeepsUndoRedoAtTheEnd: Story = {
   render: () => <PopoverHost />,
   play: async () => {
     await waitForNoteEditor();
-    const { scope, caller, undo, row } = measureToolbar();
+    const { scope, noteType, caller, undo, row } = measureToolbar();
 
+    // Both dropdowns on one line: the popover's full-width Cancel/Save group would squeeze a
+    // wrapping cluster onto two.
+    expect(Math.abs(caller.top - noteType.top)).toBeLessThan(1);
     // Clearly separated from the caller dropdown, not clustered with it.
     expect(undo.left - caller.right).toBeGreaterThan(40);
     // And the group it leads runs out to the end of the row, with Save last.
