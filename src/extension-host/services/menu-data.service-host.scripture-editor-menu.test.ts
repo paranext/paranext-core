@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { isGroupUnderColumnOrSubMenu } from 'platform-bible-react';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { describe, expect, test } from 'vitest';
 // Resolvable from this project: neither a `tsc -p ./tsconfig.json` typecheck nor `vitest`'s
@@ -35,6 +36,7 @@ async function getEditorTopMenuInMode(mode: 'simple' | 'power') {
 
 type Menu = Localized<MultiColumnMenu>;
 type Item = Menu['items'][number];
+type Group = Parameters<typeof isGroupUnderColumnOrSubMenu>[1];
 
 /** Only the keyed entries of a columns/groups record, skipping collection-level flags. */
 function keyedEntries<T>(record: Record<string, unknown>): [string, T][] {
@@ -60,28 +62,18 @@ function describeItem(menu: Menu, item: Item): string {
 }
 
 /**
- * Whether a group's items render under a column. Restates `isGroupUnderColumnOrSubMenu` in
- * `lib/platform-bible-react/src/components/advanced/menus/menu.util.ts`, which the package does not
- * export, so keep the two in sync: a group belongs to a column when it names that column, or when
- * it is keyed the same as the column.
- */
-function isGroupUnderColumn(groupKey: string, group: { column?: string }, columnKey: string) {
-  return group.column === columnKey || groupKey === columnKey;
-}
-
-/**
  * The menu as sections, the way `TabDropdownMenu` lays it out: columns by `order`, each column's
  * groups by `order`, each group's items by `order`, and columns with no items left out — the same
  * rule as `getMenuSectionsWithItems` in platform-bible-react.
  */
 function describeSections(menu: Menu): [string, string[]][] {
-  const groups = keyedEntries<{ column?: string; order: number }>(menu.groups);
+  const groups = keyedEntries<Group>(menu.groups);
   return keyedEntries<{ order: number }>(menu.columns)
     .sort(([, a], [, b]) => a.order - b.order)
     .map(([columnKey]): [string, string[]] => [
       columnKey,
       groups
-        .filter(([groupKey, group]) => isGroupUnderColumn(groupKey, group, columnKey))
+        .filter(([groupKey, group]) => isGroupUnderColumnOrSubMenu(groupKey, group, columnKey))
         .sort(([, a], [, b]) => a.order - b.order)
         .flatMap(([groupKey]) => itemsInGroup(menu, groupKey))
         .map((item) => describeItem(menu, item)),
@@ -194,16 +186,16 @@ describe("The scripture editor's Project menu, per mode", () => {
         [
           'platformScriptureEditor.showBibleTextsPanel',
           'platformScriptureEditor.showCommentariesPanel',
+          'legacyCommentManager.showCommentListPanel',
           'platformScriptureEditor.showTextCollectionPanel',
           'platformScripture.openFind',
-          'legacyCommentManager.showCommentListPanel',
         ],
       ],
       ['platformScriptureEditor.simpleQualityChecks', ['platformScripture.openChecksSidePanel']],
     ]);
   });
 
-  test("Simple's Edit section is shown without a heading, and every other section has one", async () => {
+  test('the served Simple menu marks only the Edit column isHeaderHidden', async () => {
     const simpleMenu = await getEditorTopMenuInMode('simple');
     const headerHiddenColumns = keyedEntries<{ isHeaderHidden?: boolean }>(simpleMenu.columns)
       .filter(([, column]) => column.isHeaderHidden)
@@ -261,10 +253,8 @@ describe("The scripture editor's Project menu, per mode", () => {
     // The Power Comments item opens a separate Comment List web view; Simple's own Comments item
     // (legacyCommentManager.showCommentListPanel) fronts the shared Column 3 tab instead.
     'legacyCommentManager.openCommentList',
-    // Per-pane zoom: the v0 Simple design has no Options column, and every other item in that
-    // column is already Power-only, so serving these here would resurrect the whole column for a
-    // control Simple already offers. Simple reaches zoom from the tab menu instead, which core's
-    // `defaultWebViewTabMenu` serves in every mode.
+    // Per-pane zoom: serving these in Simple would bring back the whole Options column. See
+    // `contributions-zoom-menu.test.ts` in platform-scripture-editor for the full reasoning.
     'platform.webViewContentZoomIn',
     'platform.webViewContentZoomOut',
     'platform.webViewContentZoomReset',

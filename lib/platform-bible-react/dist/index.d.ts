@@ -8,7 +8,7 @@ import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { SerializedEditorState } from 'lexical';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuGroupDetailsInColumn, MenuGroupDetailsInSubMenu, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
@@ -1652,6 +1652,20 @@ export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRe
 export interface SelectMenuItemHandler {
 	(selectedMenuItem: MenuItemContainingCommand): void;
 }
+/**
+ * Whether a group's items render under `columnOrSubMenuKey`: either the group names it as its
+ * `column`, or the group is the one keyed by it, which is how a submenu addresses its own group.
+ *
+ * `TabDropdownMenu` picks a column's groups with this and `getMenuSectionsWithItems` decides
+ * which columns have something to show with it, so "this column renders nothing" can never mean two
+ * different things.
+ *
+ * @param groupKey The key the group is stored under
+ * @param group The group itself
+ * @param columnOrSubMenuKey The key of the column or submenu being rendered
+ * @returns `true` if the group's items belong under `columnOrSubMenuKey`
+ */
+export declare function isGroupUnderColumnOrSubMenu(groupKey: string, group: Localized<MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu>, columnOrSubMenuKey: string): boolean;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
@@ -2234,7 +2248,7 @@ type TabDropdownMenuProps = {
  * the next by a line; columns without items are left out. Groups within a column are not
  * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
  * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
- * sets `isHeaderHidden`.
+ * sets `isHeaderHidden`, whose label names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
