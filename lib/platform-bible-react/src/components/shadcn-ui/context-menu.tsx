@@ -54,6 +54,8 @@ function ContextMenuRadioGroup({
 }
 
 /** @inheritdoc ContextMenu */
+// CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
+// scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function ContextMenuContent({
   className,
   // CUSTOM: Destructure style so we can merge the shared z-index constant into it
