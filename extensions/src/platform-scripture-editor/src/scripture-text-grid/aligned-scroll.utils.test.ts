@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { findVerseBlockForVerse, isBlockInPortView } from './aligned-scroll.utils';
+import {
+  findVerseBlockForVerse,
+  isBlockInPortView,
+  scrollPortToBlock,
+} from './aligned-scroll.utils';
 
 /**
  * Builds a grid port holding one column per resource, each described as the verse ranges it
@@ -149,5 +153,66 @@ describe('isBlockInPortView', () => {
     const { port, block } = buildPortWithBlock(-200, 900);
 
     expect(isBlockInPortView(port, block)).toBe(true);
+  });
+});
+
+/**
+ * Builds a port rendered under an ancestor's CSS `zoom`, with one block `layoutDistance` layout
+ * pixels below the sticky header. Bounding rects report viewport pixels (scaled by `zoom`); the
+ * port's `offsetHeight`, `clientTop` and `scrollTop` stay in its own layout pixels, as in a
+ * browser.
+ *
+ * @param zoom The ancestor's zoom factor.
+ * @param layoutDistance Layout pixels from the bottom of the header to the top of the block.
+ * @param borderTop The port's top border, in layout pixels.
+ * @returns The port and the block, ready to pass to {@link scrollPortToBlock}.
+ */
+function buildZoomedPortWithBlock(zoom: number, layoutDistance: number, borderTop = 0) {
+  const layoutHeight = 300;
+  const headerLayoutHeight = 20;
+  const port = document.createElement('div');
+  const header = document.createElement('div');
+  header.setAttribute('data-cell-header', '');
+  const block = document.createElement('div');
+  block.className = 'verse-block';
+  port.append(header, block);
+
+  Object.defineProperty(port, 'offsetHeight', { value: layoutHeight });
+  Object.defineProperty(port, 'clientTop', { value: borderTop });
+  const rect = (top: number, height: number) => new DOMRect(0, top * zoom, 0, height * zoom);
+  port.getBoundingClientRect = () => rect(0, layoutHeight);
+  header.getBoundingClientRect = () => rect(borderTop, headerLayoutHeight);
+  block.getBoundingClientRect = () => rect(borderTop + headerLayoutHeight + layoutDistance, 40);
+  return { port, block };
+}
+
+describe('scrollPortToBlock', () => {
+  it('scrolls the block to just below the sticky header', () => {
+    const { port, block } = buildZoomedPortWithBlock(1, 500);
+
+    scrollPortToBlock(port, block);
+
+    expect(port.scrollTop).toBe(500);
+  });
+
+  it.each([1.5, 2, 3])(
+    'scrolls by layout pixels, not viewport pixels, under a %d× zoom',
+    (zoom) => {
+      // Rects include the ancestor's zoom and `scrollTop` does not; an unconverted distance
+      // overshoots by `zoom`×, and each retry overshoots back.
+      const { port, block } = buildZoomedPortWithBlock(zoom, 500);
+
+      scrollPortToBlock(port, block);
+
+      expect(port.scrollTop).toBeCloseTo(500);
+    },
+  );
+
+  it('scales the port border into viewport pixels under zoom', () => {
+    const { port, block } = buildZoomedPortWithBlock(2, 500, 3);
+
+    scrollPortToBlock(port, block);
+
+    expect(port.scrollTop).toBeCloseTo(500);
   });
 });

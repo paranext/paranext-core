@@ -74,6 +74,21 @@ export function findVerseBlockForVerse(
 }
 
 /**
+ * How many viewport pixels one of the port's own layout pixels covers.
+ *
+ * Bounding rects are in viewport pixels and include every ancestor's CSS `zoom` (the pane's content
+ * zoom sets it above the grid), while `scrollTop`, `clientTop` and `offsetHeight` are in the port's
+ * unzoomed layout pixels. Measuring the ratio off the port itself covers zoom from any ancestor.
+ * Falls back to 1 when the port has no layout height, where there is no ratio to measure.
+ *
+ * @param port The scroll port (the grid root).
+ * @returns Viewport pixels per layout pixel.
+ */
+function getViewportPxPerLayoutPx(port: HTMLElement): number {
+  return port.offsetHeight > 0 ? port.getBoundingClientRect().height / port.offsetHeight : 1;
+}
+
+/**
  * The viewport-relative Y of the port's first pixel a reader can actually see: past its top border,
  * and past the sticky resource-name header that covers the top of the scrollable area.
  *
@@ -89,7 +104,12 @@ export function findVerseBlockForVerse(
 function getFirstVisibleY(port: HTMLElement): number {
   const headerHeight =
     port.querySelector<HTMLElement>('[data-cell-header]')?.getBoundingClientRect().height ?? 0;
-  return port.getBoundingClientRect().top + port.clientTop + headerHeight;
+  // `clientTop` is in layout pixels; the rects it is added to are in viewport pixels.
+  return (
+    port.getBoundingClientRect().top +
+    port.clientTop * getViewportPxPerLayoutPx(port) +
+    headerHeight
+  );
 }
 
 /**
@@ -113,6 +133,10 @@ export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolea
  * Flush, with no context above it, unlike the Scripture editor's `VERSE_NUMBER_SCROLL_OFFSET` — a
  * deliberate difference; see `adr-aligned-grid-flattens-the-editor-dom` before changing either.
  *
+ * The distance is measured in viewport pixels and converted into layout pixels before it moves
+ * `scrollTop`. Under an ancestor's `zoom` of Z, adding it unconverted overshoots by Z×, and each
+ * retry then overshoots back — at 2× it never settles.
+ *
  * Arithmetic on `scrollTop` rather than `scrollIntoView`, which would also scroll the web view's
  * ancestors to bring the grid itself into view. Instant, not smooth: this also runs as the catch-up
  * when a hidden tab is activated, where there is nothing to animate from.
@@ -121,5 +145,6 @@ export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolea
  * @param block The verse block to bring to the top of the port.
  */
 export function scrollPortToBlock(port: HTMLElement, block: HTMLElement): void {
-  port.scrollTop += block.getBoundingClientRect().top - getFirstVisibleY(port);
+  port.scrollTop +=
+    (block.getBoundingClientRect().top - getFirstVisibleY(port)) / getViewportPxPerLayoutPx(port);
 }
