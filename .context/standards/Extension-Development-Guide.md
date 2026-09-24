@@ -1,7 +1,7 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.7
+version: 1.1.6
 status: active
 created: 2026-03-04
 last_updated: 2026-09-24
@@ -499,5 +499,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.3   | 2026-09-23 | Content zoom acts only on zoomable panes (declared by the platform, or rendering a marked element): an unmarked view is no longer scaled whole; document the "zoomable only while a marker is rendered" limitation for third-party views and Simple mode's menu-less non-zoomable tabs. |
 | 1.1.4   | 2026-09-23 | Pop-ups stay at interface scale: replace "Pop-ups follow their area" and the `papi.overlays` scaling note with one rule; `ContentZoomAreaProvider`, the pop-up attribute and `EditorOptions.contextMenuContainer` are gone. |
 | 1.1.5   | 2026-09-23 | "Content Zoom": mark the project text, not a content root — per-element markers sharing one id, `as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps`. |
-| 1.1.6   | 2026-09-23 | "Content Zoom": drop the Text Collection grid's per-resource zoom as the example of a view owning Ctrl/⌘+wheel for a sub-region — the grid's text is sized by content zoom alone. The capture-phase rule is unchanged. |
-| 1.1.7   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference. |
+| 1.1.6   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference, with one `resource-<id>` area per resource. |
