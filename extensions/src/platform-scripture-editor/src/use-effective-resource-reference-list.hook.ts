@@ -7,7 +7,7 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { logger } from '@papi/frontend';
-import { useProjectDataProvider } from '@papi/frontend/react';
+import { useProjectDataProviderState } from '@papi/frontend/react';
 import {
   CURRENT_DATA_VERSION,
   DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST,
@@ -99,7 +99,13 @@ export function useEffectiveResourceReferenceList(
   const [projectResourceReferenceList, isProjectSettingLoading, projectSettingError] =
     useBufferedLayoutSetting(projectId, settingName, DEFAULT_LIST);
 
-  const userPdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
+  // The STATE hook, so the user layer of this merge cannot answer for a project the caller has
+  // moved off of while the admin layer answers for the current one.
+  const userPdpState = useProjectDataProviderState(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
+  const userPdp = userPdpState.status === 'ready' ? userPdpState.networkObject : undefined;
 
   const [userResourceReferenceList, setUserResourceReferenceList] = useState<
     ResourceReferenceList | undefined
@@ -120,16 +126,18 @@ export function useEffectiveResourceReferenceList(
         : 'subscribeUserReferencedProjectsAndResources';
 
     const subscribePromise = userPdp[subscribeMethod](undefined, (value) => {
+      // Unsubscribing is an async round trip, so the outgoing subscription stays live for a moment
+      // after cleanup; a late delivery would reinstate a list this hook no longer reports on.
+      if (disposed) return;
       setUserResourceReferenceList(isPlatformError(value) ? DEFAULT_LIST : value);
     });
 
     subscribePromise
       .then((unsub) => {
-        if (disposed) {
-          unsub();
-        } else {
-          unsubscribe = unsub;
-        }
+        // Rejects when the provider it belongs to is already disposed. Reaching this branch means
+        // cleanup has already run, so that is the likely case rather than the exceptional one.
+        if (disposed) return unsub().then(() => undefined);
+        unsubscribe = unsub;
         return undefined;
       })
       .catch((err) => {
@@ -144,9 +152,30 @@ export function useEffectiveResourceReferenceList(
 
     return () => {
       disposed = true;
-      unsubscribe?.();
+      // Rejects when the provider it belongs to is already disposed, which a project switch
+      // routinely causes; unhandled without this.
+      unsubscribe?.().catch((err) =>
+        logger.warn(
+          `Failed to unsubscribe from user text connection settings: ${getErrorMessage(err)}`,
+        ),
+      );
     };
   }, [userPdp, settingName]);
+
+  // `useBufferedLayoutSetting` copies the loaded value into its held copy from an effect, so on the
+  // commit where the project setting finishes loading `isProjectSettingLoading` is already false
+  // while `projectResourceReferenceList` is still the empty `DEFAULT_LIST` stand-in. Reporting
+  // `ready` on that commit hands the caller a merge with no admin items in it at all.
+  //
+  // This latch is declared after `useBufferedLayoutSetting`, so its effect runs after that hook's
+  // apply effect in the same flush: by the commit that observes `hasHeldCopyCaughtUp`, the held copy
+  // is the loaded value. Comparing the held copy to `DEFAULT_LIST` by reference would be simpler and
+  // wrong — a project whose stored setting really is the default is served that same object, and the
+  // list would never be reported ready at all.
+  const [hasHeldCopyCaughtUp, setHasHeldCopyCaughtUp] = useState(false);
+  useEffect(() => {
+    if (!isProjectSettingLoading) setHasHeldCopyCaughtUp(true);
+  }, [isProjectSettingLoading]);
 
   return useMemo(() => {
     // Readiness must account for BOTH sources. The user layer needs `useProjectDataProvider` to
@@ -162,6 +191,9 @@ export function useEffectiveResourceReferenceList(
     if (projectSettingError || isPlatformError(projectResourceReferenceList))
       return { status: 'error' };
 
+    // Checked after the error branch so a read failure is still reported on the commit it lands.
+    if (!hasHeldCopyCaughtUp) return { status: 'loading' };
+
     if (userResourceReferenceList === undefined) return { status: 'loading' };
 
     return {
@@ -173,6 +205,7 @@ export function useEffectiveResourceReferenceList(
     projectSettingError,
     projectResourceReferenceList,
     userResourceReferenceList,
+    hasHeldCopyCaughtUp,
   ]);
 }
 
