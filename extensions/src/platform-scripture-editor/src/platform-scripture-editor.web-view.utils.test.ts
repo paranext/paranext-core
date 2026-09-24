@@ -10,12 +10,15 @@ import { join } from 'path';
 import type { EditorRef, SelectionRange } from '@eten-tech-foundation/platform-editor';
 import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
+  CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   INSERT_CONTEXT_MENU_STRING_KEYS,
+  insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
+  noteKindForCtrlTChord,
   NOTE_INSERT_CONFIG,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
@@ -26,6 +29,16 @@ import {
   STALE_NOTE_EDITING_SESSION_MS,
   type FootnotesPaneAutoVisibilityInput,
 } from './platform-scripture-editor.web-view.utils';
+
+// insertNoteAtCurrentSelectionCore logs its read-only/no-editor skip through `logger.debug`; the
+// shared `@papi/frontend` mock exports no `logger`, so the skip path needs its own, same as
+// use-open-find-shortcut.hook.test.ts. Hoisted so the vi.mock factory below can reference it (the
+// factory is hoisted above imports).
+const { loggerDebug } = vi.hoisted(() => ({ loggerDebug: vi.fn() }));
+vi.mock('@papi/frontend', () => ({
+  default: {},
+  logger: { debug: loggerDebug },
+}));
 
 /** Build a mock editor ref exposing a spy for the method the generator calls. */
 function makeMockEditorRef() {
@@ -595,6 +608,105 @@ describe('shouldSkipNoteInsert', () => {
   });
 });
 
+describe('insertNoteAtCurrentSelectionCore', () => {
+  // Resolves every kind's commit-message key to a traceable `LOC:<key>` string, same convention as
+  // the localized-strings stub further down this file.
+  const localizedStrings = Object.fromEntries(
+    Object.values(NOTE_INSERT_CONFIG).map((config) => [
+      config.commitMessageKey,
+      `LOC:${config.commitMessageKey}`,
+    ]),
+  );
+
+  /** A fresh pair of spies plus a shared call log, so ORDER between them is observable. */
+  function makeDeps() {
+    const calls: string[] = [];
+    const insertMarker = vi.fn((marker: string) => {
+      calls.push(`insertMarker:${marker}`);
+    });
+    const commitSnapshot = vi.fn(async (message: string) => {
+      calls.push(`commitSnapshot:${message}`);
+    });
+    return { calls, insertMarker, commitSnapshot };
+  }
+
+  // Falsifiability: this must go RED if the read-only check is deleted or moved below the
+  // snapshot — verified by hand against a temporarily reordered/deleted implementation.
+  it('skips both the snapshot and the marker insert when read-only', async () => {
+    const { calls, insertMarker, commitSnapshot } = makeDeps();
+    await insertNoteAtCurrentSelectionCore(
+      'insertFootnoteAtSelection',
+      true,
+      true,
+      insertMarker,
+      commitSnapshot,
+      localizedStrings,
+    );
+    expect(calls).toEqual([]);
+    expect(commitSnapshot).not.toHaveBeenCalled();
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('skips both the snapshot and the marker insert with no mounted editor', async () => {
+    const { calls, insertMarker, commitSnapshot } = makeDeps();
+    await insertNoteAtCurrentSelectionCore(
+      'insertFootnoteAtSelection',
+      false,
+      false,
+      insertMarker,
+      commitSnapshot,
+      localizedStrings,
+    );
+    expect(calls).toEqual([]);
+    expect(commitSnapshot).not.toHaveBeenCalled();
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('commits the snapshot with the kind’s commit message BEFORE inserting the marker when editable', async () => {
+    const { calls, insertMarker, commitSnapshot } = makeDeps();
+    await insertNoteAtCurrentSelectionCore(
+      'insertEndnoteAtSelection',
+      true,
+      false,
+      insertMarker,
+      commitSnapshot,
+      localizedStrings,
+    );
+    expect(calls).toEqual([
+      `commitSnapshot:LOC:${NOTE_INSERT_CONFIG.insertEndnoteAtSelection.commitMessageKey}`,
+      `insertMarker:${NOTE_INSERT_CONFIG.insertEndnoteAtSelection.marker}`,
+    ]);
+  });
+});
+
+describe('CONTEXT_MENU_ACTION_TO_NOTE_KIND', () => {
+  // Per-action, not aggregate: a table iterated in bulk can't tell a cross-wired entry (e.g. the
+  // footnote action mapped to the endnote kind) from a correct one, since every kind still appears
+  // somewhere in the table either way.
+  it.each([
+    ['insertFootnote', 'insertFootnoteAtSelection'],
+    ['insertCrossReference', 'insertCrossReferenceAtSelection'],
+    ['insertEndnote', 'insertEndnoteAtSelection'],
+  ] as const)('%s maps to %s', (action, kind) => {
+    expect(CONTEXT_MENU_ACTION_TO_NOTE_KIND[action]).toBe(kind);
+  });
+
+  it('maps each action to a distinct kind', () => {
+    const kinds = Object.values(CONTEXT_MENU_ACTION_TO_NOTE_KIND);
+    expect(new Set(kinds).size).toBe(kinds.length);
+  });
+});
+
+describe('noteKindForCtrlTChord', () => {
+  it('maps Ctrl+T (no Shift) to the footnote kind', () => {
+    expect(noteKindForCtrlTChord(false)).toBe('insertFootnoteAtSelection');
+  });
+
+  it('maps Ctrl+Shift+T to the cross-reference kind', () => {
+    expect(noteKindForCtrlTChord(true)).toBe('insertCrossReferenceAtSelection');
+  });
+});
+
 describe('createInsertContextMenuItems', () => {
   // Parity contract: the context menu must offer exactly the Insert-menu inserts, in menu order.
   // Read the Insert menu straight from the contribution so a menus.json change without a
@@ -693,9 +805,9 @@ describe('createInsertContextMenuItems', () => {
   });
 
   // Per-item, not aggregate: calling every item's onSelect and counting each action's TOTAL calls
-  // (the previous shape here) passes under any permutation of the item-to-action mapping — it
-  // cannot tell "Insert footnote" wired to insertCrossReference from the correct wiring. Asserting
-  // ONE item's onSelect against every action's call count catches exactly that cross-wiring.
+  // passes under any permutation of the item-to-action mapping — it cannot tell "Insert footnote"
+  // wired to insertCrossReference from the correct wiring. Asserting ONE item's onSelect against
+  // every action's call count catches exactly that cross-wiring.
   it.each([
     [0, 'insertFootnote'],
     [1, 'insertCrossReference'],
