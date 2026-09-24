@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Dialog } from 'platform-bible-react';
@@ -209,12 +209,10 @@ describe('ResourcePickerDialogWrapper', () => {
       const { submitDialog } = renderWrapper({ disableRestrictedModelTexts: true });
 
       const row = await findRow('NIV11');
-      row.click();
+      fireEvent.click(row);
 
       expect(row).toHaveAttribute('aria-disabled', 'true');
-      expect(row).toHaveTextContent(
-        '%platformScripture_copyrightNotice_restrictedModelText_tooltip%',
-      );
+      expect(row).toHaveTextContent('%resourcePicker_restrictedModelText_tooltip%');
       expect(submitDialog).not.toHaveBeenCalled();
     });
 
@@ -222,7 +220,7 @@ describe('ResourcePickerDialogWrapper', () => {
       mockCommands(async () => ({ status: 'available', resources: [restrictedText] }));
       const { submitDialog } = renderWrapper();
 
-      (await findRow('NIV11')).click();
+      fireEvent.click(await findRow('NIV11'));
 
       expect(submitDialog).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'NIV11' }));
     });
