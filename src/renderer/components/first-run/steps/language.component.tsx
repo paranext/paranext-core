@@ -1,4 +1,5 @@
 import { useData, useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
+import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { InterfaceLanguagePicker, type LanguageInfo } from 'platform-bible-react';
@@ -42,24 +43,13 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
     ? ENGLISH_FALLBACK_LANGUAGES
     : setupLanguagesPossiblyError;
 
-  // All known interface languages (with real in-script autonyms) — used only to render the current
-  // selection with its proper autonym when it doesn't meet the setup-dialog threshold.
-  const [availableLanguagesPossiblyError] = useData(
-    localizationService.dataProviderName,
-  ).AvailableInterfaceLanguages(undefined, ENGLISH_FALLBACK_LANGUAGES);
-  const availableLanguages = isPlatformError(availableLanguagesPossiblyError)
-    ? ENGLISH_FALLBACK_LANGUAGES
-    : availableLanguagesPossiblyError;
-
-  // Always keep the current selection in the list so it shows as selected even if it doesn't meet
-  // the setup-dialog threshold; prefer its real autonym, falling back to the raw tag if unknown.
-  // Memoized so the picker's own sort memo (keyed on this object) isn't defeated each render.
-  const languages = useMemo<Record<string, LanguageInfo>>(() => {
-    const merged = { ...setupLanguages };
-    if (!merged[primaryLanguage])
-      merged[primaryLanguage] = availableLanguages[primaryLanguage] ?? { autonym: primaryLanguage };
-    return merged;
-  }, [setupLanguages, availableLanguages, primaryLanguage]);
+  // Always keep the current selection in the list so it shows as selected even when it is not
+  // offered or doesn't meet the setup-dialog threshold. Memoized so the picker's own sort memo
+  // (keyed on this object) isn't defeated each render.
+  const languages = useMemo(
+    () => includeCurrentLanguages(setupLanguages, [primaryLanguage]),
+    [setupLanguages, primaryLanguage],
+  );
 
   // Don't let the user advance before languages load (avoids advancing on a premature default).
   useEffect(() => {
