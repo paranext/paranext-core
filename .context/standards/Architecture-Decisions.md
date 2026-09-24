@@ -5885,34 +5885,27 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   every one of these panes; see `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn).
 - **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
   PT-4583 (Enhanced Resources viewer).
-- **Amended 2026-09-23 (`adr-zoom-areas-mark-project-text`; the Text Collection per-column zoom
-  removed):** the area names in the Decision are unchanged. Two parts of the Consequences no longer
-  hold:
-  - The Text Collection grid has no zoom of its own, and it no longer marks its whole body: each
-    cell marks only its own text with the `text-collection` area
-    (`resource-cell-view.component.tsx`), and the pane's content zoom alone sizes it. Its right-click
-    zoom items, the chapter-view kebab, its Ctrl/⌘+wheel handling and the per-resource levels it
-    stored in web-view state (`scriptureTextGrid.zoomByResourceId`) are gone; the stored levels are
-    dropped, not migrated, and the key is left unread in web-view definitions saved before the
-    change. So the per-resource zoom neither "stays" nor multiplies with the `text-collection` area.
-  - The wheel-reader sentences are moot: `createContentZoomWheelReader` (`platform-bible-utils`) and
-    `web-view-content-zoom.wheel-parity.test.ts` are gone with the per-column zoom, so the
-    bootstrap's inlined reader is the only one. That reader consults its physical-modifier tracking
-    on macOS only. On Windows and Linux a touchpad pinch made while Ctrl is physically held arrives
-    as the same ctrl+wheel frames as any other pinch — a fraction of a pixel of `deltaY` each, with
-    a whole tick of `wheelDeltaY` — and reading the held key as evidence of a mouse notch would send
-    every frame down the tick path at a full zoom step per frame. There the size test alone tells
-    the two apart: the frame that opens a pinch sits within 5 % of a scale of 1 (under about 5 px of
-    `deltaY`), and the running gesture carries the rest, while a mouse notch (33 px or more) is far
-    outside the window that opens a pinch. On macOS, where a mouse notch can be as small as a pinch
-    frame, the held key still decides. The bootstrap reads the platform once, from
-    `navigator.platform`.
-- **Amended 2026-09-24 (`adr-text-collection-resources-are-zoom-areas`):** the Text Collection grid
-  zooms per resource again, as content-zoom areas rather than a zoom of its own: each cell marks its
-  resource's text with that resource's area `resource-<id>` instead of the shared `text-collection`,
-  which stays the grid's declared default area and the fallback for a resource id that yields no
-  area id. The rest of the 2026-09-23 amendment holds: no inline zoom, no grid wheel handling, and
-  `scriptureTextGrid.zoomByResourceId` left unread and not migrated.
+- **Amended 2026-09-24 (`adr-text-collection-resources-are-zoom-areas`):** the area names and the
+  zoom menus have moved since the Decision above. Each cell marks its own resource's text with that
+  resource's area `resource-<sanitized id>` instead of the shared `text-collection`, which stays the
+  grid's declared default area and the fallback for a resource id that yields no area characters.
+  Its right-click zoom items and the chapter-view "⋮" run the platform's
+  `platform.webViewContentZoomIn`/`Out`/`Reset` commands against the resource's area, rather than a
+  zoom of its own: the grid has no inline zoom and registers no wheel listener of its own
+  (`use-resource-zoom-input.hook.ts`, `createContentZoomWheelReader` and
+  `web-view-content-zoom.wheel-parity.test.ts` do not exist), so the bootstrap's inlined reader is
+  the only wheel/pinch reader. That reader consults its physical-modifier tracking (a held Control
+  or ⌘, a pointer event reporting Ctrl, clearing on blur) on macOS only. On Windows and Linux a
+  touchpad pinch made while Ctrl is physically held arrives as the same ctrl+wheel frames as any
+  other pinch — a fraction of a pixel of `deltaY` each, with a whole tick of `wheelDeltaY` — and
+  reading the held key as evidence of a mouse notch would send every frame down the tick path at a
+  full zoom step per frame. There the size test alone tells the two apart: the frame that opens a
+  pinch sits within 5 % of a scale of 1 (under about 5 px of `deltaY`), and the running gesture
+  carries the rest, while a mouse notch (33 px or more) is far outside the window that opens a
+  pinch. On macOS, where a mouse notch can be as small as a pinch frame, the held key still decides.
+  The bootstrap reads the platform once, from `navigator.platform`.
+  `scriptureTextGrid.zoomByResourceId`, the grid's former per-resource level store, is left unread
+  in web-view state and not migrated.
 
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
@@ -7177,16 +7170,19 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-09-24
 - **Status:** Accepted
-- **Context:** The Text Collection grid shipped a per-resource zoom of its own (PT-4155): right-click
-  Zoom in / Zoom out / Reset zoom, a "⋮" in the chapter view header and a grid-owned Ctrl/⌘+wheel
-  listener, stored per tab under `scriptureTextGrid.zoomByResourceId`. It multiplied with the pane's
-  content zoom, so it was removed in favour of one pane-wide `text-collection` area (see the
-  2026-09-23 amendment of `adr-resource-panes-name-their-zoom-areas`). Users rely on sizing one text
-  without the others, so the behaviour had to return on the one content-zoom mechanism every other
-  pane uses. Two framework gaps stood in the way: the bootstrap resolved the area of a click, a
-  focus or a wheel only from the nearest marked ancestor, so a click on a resource's name, grip or a
-  gap in its row fell to the area used last; and the zoom indicator showed only the level, which
-  cannot tell one resource's area from another's.
+- **Context:** On `main`, the Text Collection grid pairs two zoom mechanisms: the pane-wide
+  `text-collection` content-zoom area from `adr-resource-panes-name-their-zoom-areas`, and the
+  grid's own per-resource zoom (PT-4155) — a CSS `zoom` factor per resource, driven by a right-click
+  Zoom in / Zoom out / Reset zoom menu, a "⋮" in the chapter view header, and a grid-owned
+  Ctrl/⌘+wheel listener (`use-resource-zoom.hook.ts`, `use-resource-zoom-input.hook.ts`), stored per
+  tab under `scriptureTextGrid.zoomByResourceId`. The two multiply, so the pane's zoom and a
+  resource's own zoom compound. Consolidating them onto the one content-zoom mechanism every other
+  pane uses — one area per resource instead of a private CSS-zoom stack nested inside a pane-wide
+  area — retires the grid's own zoom and moves its resource-scoped menus onto the platform's zoom
+  commands. Two framework gaps stood in the way: the bootstrap resolved the area of a click, a focus
+  or a wheel only from the nearest marked ancestor, so a click on a resource's name, grip or a gap in
+  its row fell to the area used last; and the zoom indicator showed only the level, which cannot tell
+  one resource's area from another's.
 - **Decision:**
   - Each resource's text is its own zoom area `resource-<id>`: the resource id lower-cased, every
     character outside `[a-z0-9-]` replaced by `-` (`toResourceZoomAreaId`,
@@ -7215,8 +7211,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     (`useResourceContentZoom`), and reading the level from `platform.contentZoomLevels` and the Tab
     content default zoom. Reset is disabled while the resource has no level of its own.
 - **Alternatives:**
-  - **One pane-wide area** (the state after the 2026-09-23 amendment). Rejected: it takes away sizing
-    one text alone.
+  - **One pane-wide area, with no per-resource zoom.** Rejected: it takes away sizing one text
+    alone.
   - **Restoring the grid's own zoom** (inline `zoom`, its wheel listener,
     `scriptureTextGrid.zoomByResourceId`). Rejected: a second mechanism that multiplies with content
     zoom, with no badge, no memory per project and no single reset.
@@ -7238,19 +7234,20 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     removed resource's level comes back when it is added again. A Text Collection not yet pointed at
     a project remembers nothing (known limit, as for the pane before).
   - The zoom keys and the tab menu act on one resource — the one last clicked or focused, else the
-    first — where the removed per-column zoom's keys zoomed the whole pane.
+    first — where they used to act on the whole pane, through the pane-wide `text-collection` area
+    alone.
   - Sibling resource panes of the same project (Bible Texts, Commentaries, Model Text) are seeded
     with the grid's `resource-<id>` levels as unused CSS variables. Harmless and bounded.
   - Levels stored by the removed per-column zoom (`scriptureTextGrid.zoomByResourceId`) are not
     migrated: they are per tab and the new ones per project, and writing
     `platform.contentZoomLevels` from the view would race the platform's seeding. Users re-zoom once.
-  - PR #2781 (verse-aligned Grid view; open as of 2026-09-24) can mark each `.verse-block` with its
+  - PR #2781 (verse-aligned Grid view) can mark each `.verse-block` with its
     resource's area and leave its subgrid box unmarked, but only if the cell does not also mark its
     text: `ResourceCellView` wraps the whole editor in one `ContentZoomRoot`, a marker nested inside
     another marker is ignored (with a warning) and gets no zoom, and the wrapper's own `div` is one
     more level in the aligned view's subgrid/`display:contents` chain. So the aligned view must
     either skip the cell's own text marker, or keep it and read the resource's level from
-    `var(--platform-content-zoom-resource-<id>, …)` with the wrapper's zoom neutralised. Its
+    `var(--platform-content-zoom-resource-<id>, …)` with the wrapper's zoom neutralized. Its
     adaptation stays in that PR.
   - The two attributes serve any view with several areas the user cannot tell apart, or with
     unscaled containers that belong to one area; a view that does not write them sees no change.
@@ -7729,8 +7726,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Home or an inventory, still ignores the chords, which remains an accurate example of the cost
   described above. And the forward reference to "the Text Collection grid in PT-4582, Enhanced
   Resources in PT-4583" is resolved: both landed together in this same work.
-- **Amended 2026-09-23 (`adr-content-zoom-applies-only-to-zoomable-panes`; the Text Collection
-  per-column zoom removed):** these statements above no longer hold:
+- **Amended 2026-09-23 (`adr-content-zoom-applies-only-to-zoomable-panes`):** these statements
+  above no longer hold:
   - The Consequences paragraph's "the platform scales such a view whole at the Settings default
     instead" is superseded: an area-less, undeclared view is not scaled at all.
   - Its "the bootstrap does not even register its wheel listener while a pane has no areas" is
@@ -7747,6 +7744,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
   How the bootstrap tells a trackpad pinch from a wheel notch, and why a held modifier counts as
   evidence only on macOS, is recorded in the amendment of `adr-resource-panes-name-their-zoom-areas`.
+- **Amended 2026-09-24 (`adr-text-collection-resources-are-zoom-areas`):** the 2026-09-19
+  amendment's "the Text Collection grid marks `text-collection`" no longer holds: each resource in
+  the grid marks its own area `resource-<id>`, and `text-collection` remains only the grid's
+  declared default area and the fallback for a resource id that yields no area characters.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
   chord ownership), epic PT-4575.
 
@@ -8174,16 +8175,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - A marker's own inline `zoom` replaces the platform's rule instead of multiplying, so any zoom a
     view applies of its own belongs on an element inside the marker. No view carries one today.
   - In a view with several areas, a click or wheel over an unmarked control or gap targets the area
-    used last, because the bootstrap resolves the area from the nearest marked ancestor.
+    used last, unless a zoom scope (`data-platform-content-zoom-scope`) encloses it, in which case
+    it targets the scope's area — a marker still wins over an enclosing scope. Otherwise the
+    bootstrap resolves the area from the nearest marked ancestor.
   - Fixed-size geometry measured against, or reserved inside, zoomed text needs converting (the
     editor's gutter reservation and the character-marker bar's baseline probe are the examples):
     the Simple-mode gutter reservation divides by the area's factor, and the baseline probe takes
     the paragraph's `currentCSSZoom`.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
-- **Amended 2026-09-24 (`adr-text-collection-resources-are-zoom-areas`):** the consequence "a click
-  or wheel over an unmarked control or gap targets the area used last" now holds only where no zoom
-  scope (`data-platform-content-zoom-scope`) encloses the target; inside a scope, it targets the
-  scope's area. A marker still wins over an enclosing scope.
 
 ## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas
 
@@ -8240,15 +8239,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   recorded here by PT-4580; the chord-targeting exception added by PT-4711; the immediate fallback
   and the per-type expectation added by PT-4714.
 - **Amended 2026-09-23 (`adr-content-zoom-applies-only-to-zoomable-panes`,
-  `adr-zoom-areas-mark-project-text`; the Text Collection per-column zoom removed):** the
-  composition formula, CSS `zoom` on marked areas and zoom areas as a platform capability stand.
-  These parts no longer hold:
+  `adr-zoom-areas-mark-project-text`):** the composition formula, CSS `zoom` on marked areas and
+  zoom areas as a platform capability stand. These parts no longer hold:
   - Alternative (c)'s "it is kept only as the fallback for a view that marks no area, and for URL
     views", and the whole consequence paragraph beginning "The whole-iframe fallback applies as soon
     as a pane loads…": no view is scaled whole any more, and the per-type record is gone.
   - The Decision's "with the Text Collection's per-resource factor multiplying inside the grid's
     area", and the Consequences' "The Text Collection grid's per-resource zoom predates this
-    decision and stays … PT-4582 marks the grid pane's own area around it": the grid's per-resource
-    zoom is removed, and each cell marks its own text with the `text-collection` area, which content
-    zoom alone sizes. No view carries a private zoom any more (Enhanced Resources' was retired by
+    decision and stays … PT-4582 marks the grid pane's own area around it": the grid's own private
+    zoom factor is gone; each resource is its own content-zoom area `resource-<id>` instead
+    (`adr-text-collection-resources-are-zoom-areas`), with the pane-wide `text-collection` area kept
+    only as the declared default and the fallback for a resource id that yields no area characters.
+    No view carries a private zoom stack any more (Enhanced Resources' was retired by
     `adr-resource-panes-name-their-zoom-areas`).

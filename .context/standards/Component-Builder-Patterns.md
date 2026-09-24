@@ -1,7 +1,7 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.7.8
+version: 1.7.7
 status: active
 created: 2026-03-04
 last_updated: 2026-09-24
@@ -861,5 +861,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.7.4 | 2026-09-23 | Pop-ups stay at interface scale: replace "Pop-ups follow their area" and the `papi.overlays` scaling note with one rule; `ContentZoomAreaProvider`, the pop-up attribute and `EditorOptions.contextMenuContainer` are gone. |
 | 1.7.5 | 2026-09-23 | "Content Zoom Opt-In": mark the project text, not a content root — `ContentZoomRoot as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps` for library text, one id across many text elements, per-view inline zoom inside the marker. |
 | 1.7.6 | 2026-09-23 | List the card, list and table reference implementations of text-level zoom markers (Find, the inventories, Checks, the Markers Checklist, the Lexical Tools dictionary) and note that these types are declared zoomable in core. |
-| 1.7.7 | 2026-09-23 | Drop the Text Collection grid's per-resource zoom as the example of a view with its own inline zoom and of a view owning Ctrl/⌘+wheel for a sub-region: the grid's text is sized by content zoom alone. The rules themselves are unchanged. |
-| 1.7.8 | 2026-09-24 | "Content Zoom Opt-In": name areas the user cannot tell apart with `ContentZoomRoot`'s `label`, and tie unscaled rows, columns and cards to one area with `data-platform-content-zoom-scope` (both experimental); the Text Collection grid is the reference, one `resource-<id>` area per resource. |
+| 1.7.7 | 2026-09-24 | "Content Zoom Opt-In": name areas the user cannot tell apart with `ContentZoomRoot`'s `label`, and tie unscaled rows, columns and cards to one area with `data-platform-content-zoom-scope` (both experimental); the Text Collection grid is the reference, one `resource-<id>` area per resource, with its right-click and "⋮" zoom menus running the platform's zoom commands. |
