@@ -442,9 +442,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-insert-comment',
-    purpose: 'Insert a comment at the selection',
+    purpose:
+      'Insert a comment at the selection. Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
-    // Swallowed while the editor's right-click menu is open (see `isEditorContextMenuOpen`).
     context: 'Scripture editor web view',
     // Ctrl+Shift+N first (not code order) so the menu hint shows it
     keys: {
@@ -454,14 +454,15 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
   {
     id: 'scripture-insert-footnote',
-    purpose: 'Insert a footnote at the selection (Standard view, editable)',
+    purpose:
+      'Insert a footnote at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
-    // Swallowed while the editor's right-click menu is open (see `isEditorContextMenuOpen`).
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
@@ -469,13 +470,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   {
     id: 'scripture-insert-cross-reference',
-    purpose: 'Insert a cross-reference at the selection (Standard view, editable)',
+    purpose:
+      'Insert a cross-reference at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
-    // Swallowed while the editor's right-click menu is open (see `isEditorContextMenuOpen`).
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
@@ -483,6 +485,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   {
@@ -529,8 +532,19 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // which the editor package's `ContextMenuPlugin` (`@eten-tech-foundation/platform-editor`)
     // turns into the menu — no in-repo handler exists for the open gesture itself. `locations`
     // names where this repo supplies the menu's own items and reads its open state instead.
+    //
+    // Right-click only, on every platform: Shift+F10 and the Menu key also raise `contextmenu`,
+    // but a keyboard-invoked one always targets the content-editable ROOT (there is no click point
+    // to aim at a descendant), and `ContextMenuPlugin` ignores a `contextmenu` event whose target
+    // IS the editor root — the same check that keeps a right-click on empty editor space from
+    // opening the menu. Opening it by keyboard would need the editor package to special-case a
+    // keyboard-invoked `contextmenu` event.
     context: 'Scripture editor web view (main text and the footnote editor popover)',
-    keys: { macOS: '— (no equivalent)', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
+    keys: {
+      macOS: '— (no equivalent)',
+      windows: '— (no equivalent)',
+      linux: '— (no equivalent)',
+    },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
       'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
