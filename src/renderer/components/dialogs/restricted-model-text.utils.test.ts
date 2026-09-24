@@ -2,11 +2,11 @@ import { DblResourceData } from 'platform-bible-utils';
 import { describe, expect, it } from 'vitest';
 import {
   getRestrictedModelTextReason,
-  RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
 } from './restricted-model-text.utils';
 
 const STRINGS = {
-  [RESTRICTED_MODEL_TEXT_TOOLTIP_KEY]: 'Licensing prohibits using this as a model.',
+  [RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY]: 'Licensing prohibits using this as a model.',
 };
 
 function row(overrides: Partial<DblResourceData>): DblResourceData {
@@ -34,7 +34,7 @@ describe('getRestrictedModelTextReason', () => {
   // Pickers disable a row only when it has a reason, so a missing string must not re-enable it.
   it('still gives a reason for a restricted text when its string has not loaded', () => {
     expect(getRestrictedModelTextReason(row({ isRestrictedAsModelText: true }), {})).toBe(
-      RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+      RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
     );
   });
 

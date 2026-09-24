@@ -20,7 +20,7 @@ import {
 } from '@renderer/components/dialogs/resource-picker.utils';
 import {
   getRestrictedModelTextReason,
-  RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
 } from '@renderer/components/dialogs/restricted-model-text.utils';
 import { DblResourceData } from 'platform-bible-utils';
 import { useCallback, useMemo } from 'react';
@@ -29,7 +29,7 @@ import { sendCommand } from '@shared/services/command.service';
 const STRING_KEYS = [
   ...RESOURCE_PICKER_DIALOG_STRING_KEYS,
   ...RESOURCE_PICKER_NOTICE_STRING_KEYS,
-  RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
 ];
 
 /**

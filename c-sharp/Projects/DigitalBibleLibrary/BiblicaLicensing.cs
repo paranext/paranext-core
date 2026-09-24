@@ -194,10 +194,9 @@ public static partial class BiblicaLicensing
     }
 
     /// <summary>
-    /// Whether a DBL id is on Biblica's list of traditionally licensed texts. Pickers that list
-    /// the DBL catalog use this for texts that are not installed.
+    /// Whether a DBL id is on Biblica's list of traditionally licensed texts.
     /// </summary>
-    public static bool IsOnRestrictedList(string? dblId) =>
+    internal static bool IsOnRestrictedList(string? dblId) =>
         dblId != null && RestrictedTextIds.Contains(dblId.ToLowerInvariant());
 
     /// <summary>

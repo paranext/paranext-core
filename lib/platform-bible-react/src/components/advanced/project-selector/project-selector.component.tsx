@@ -639,13 +639,16 @@ function ProjectRowView({
   // truncation-driven open state.
   const [isExtraContentHovered, setIsExtraContentHovered] = useState(false);
 
+  const disabledReasonId = useId();
+  const hasDisabledReason = row.isDisabled && Boolean(row.disabledReason);
+
   // Tooltip lines that convey information NOT visible in the row text. These rows should
   // always show a tooltip on hover, regardless of whether the visible text is truncated.
   const hasExtraTooltipContent =
     Boolean(row.scrollGroupScrRefLabel) ||
     row.isBoundButClosed ||
     Boolean(indicator?.label) ||
-    (row.isDisabled && Boolean(row.disabledReason));
+    hasDisabledReason;
 
   const isHovered = isTruncatedHovered || isExtraContentHovered;
 
@@ -667,7 +670,8 @@ function ProjectRowView({
     <Check className={cn('tw:h-4 tw:w-4', row.isSelected ? 'tw:opacity-100' : 'tw:opacity-0')} />
   );
 
-  // Right-side content: chip(s) and, for bound-but-closed rows, an "Open" button.
+  // Right-side content: chip(s) and, for bound-but-closed rows that are not disabled, an "Open"
+  // button. A disabled row still takes the pointer (for its tooltip), so the button must not render.
   let rightContent: ReactNode;
   if (mode === 'project') {
     if (row.openGroups.length > 0) {
@@ -688,7 +692,7 @@ function ProjectRowView({
           scrollGroupId={row.scrollGroupId}
           isBoundButClosed={row.isBoundButClosed}
         />
-        {row.isBoundButClosed && onOpen && (
+        {row.isBoundButClosed && !row.isDisabled && onOpen && (
           <Button
             size="sm"
             variant="ghost"
@@ -707,9 +711,6 @@ function ProjectRowView({
       </span>
     );
   }
-
-  const disabledReasonId = useId();
-  const hasDisabledReason = row.isDisabled && Boolean(row.disabledReason);
 
   const rowNode = (
     <CommandItem
@@ -830,7 +831,7 @@ function ProjectRowView({
           </div>
         )}
         {row.isDisabled && row.disabledReason && (
-          <div className="tw:text-sm tw:italic tw:text-muted-foreground">{row.disabledReason}</div>
+          <div className="tw:text-sm tw:italic">{row.disabledReason}</div>
         )}
       </TooltipContent>
     </Tooltip>
