@@ -10926,9 +10926,11 @@ declare module 'shared/services/localization.service-model' {
      */
     getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
     /**
-     * Get a collection of known user-interface languages
+     * Get the user-interface languages offered to users. This is a curated subset of the languages
+     * that have a locale file. A language outside it can still be set in `platform.interfaceLanguage`
+     * and is still rendered; it is only not offered.
      *
-     * @returns All user-interface languages
+     * @returns The offered user-interface languages, keyed by raw locale tag
      */
     getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
     /**
@@ -10938,8 +10940,8 @@ declare module 'shared/services/localization.service-model' {
      */
     retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
-     * Get the interface languages that have setup-dialog localizations (used by the first-run
-     * language picker). A language qualifies when it has ≥90% of the English setup-dialog
+     * Get the interface languages offered in the first-run language picker. A language qualifies when
+     * it is offered (see `getAvailableInterfaceLanguages`) and has ≥90% of the English setup-dialog
      * (`%firstRun_*%`) keys.
      *
      * @returns Qualifying user-interface languages, keyed by raw locale tag
