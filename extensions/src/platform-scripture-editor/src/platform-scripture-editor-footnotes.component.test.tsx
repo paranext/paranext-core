@@ -264,6 +264,26 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
     expect(onPaneFocusLeft).toHaveBeenCalledWith(screen.getByTestId('text'));
   });
 
+  // The marker palette renders in the host frame, outside this document: opening it takes focus out
+  // of the document, and closing it hands focus back to the row editor.
+  it('keeps the session through the marker palette opening and closing', () => {
+    const onPaneFocusLeft = vi.fn();
+    renderPane({
+      onPaneFocusLeft,
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => <input data-testid="row-editor" />,
+    });
+    const rowEditor = screen.getByTestId('row-editor');
+    rowEditor.focus();
+    // A blur with no related target is what focus leaving the document looks like from in here.
+    // eslint-disable-next-line no-null/no-null
+    fireEvent.blur(rowEditor, { relatedTarget: null });
+
+    fireEvent.focusIn(rowEditor);
+
+    expect(onPaneFocusLeft).not.toHaveBeenCalled();
+  });
+
   // An overlay is portalled outside the pane, so its own blur never reaches the pane.
   it('reports a move out of an overlay the row editor opened', () => {
     const onPaneFocusLeft = vi.fn();

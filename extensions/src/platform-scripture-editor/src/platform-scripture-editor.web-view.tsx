@@ -3166,6 +3166,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const handlePaneFocusChange = useCallback(
     (hasFocus: boolean) => {
       paneHasFocusRef.current = hasFocus;
+      // Entering the pane is leaving the text, so a marker edit left mid-way there is settled now.
+      // Leaving the text settles everything but the marker the caret was in, which the idle clock
+      // would otherwise settle a second later - moving the caret, and with it focus, back into the
+      // text while the user types in the pane. The settle writes no DOM selection into the text
+      // while focus is elsewhere.
+      if (hasFocus) editorRef.current?.commitPendingMarkerEdits();
       applyCallerHighlight();
     },
     [applyCallerHighlight],
