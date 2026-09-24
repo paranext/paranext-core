@@ -6,12 +6,31 @@ import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
 import { Setting } from './setting.component';
 
-// Setting pulls in useData (only for the UI-language-selector fallback, unused by the string/
-// boolean cases below) and useLocalizedStrings; stub both so the component renders without a live
-// papi backend. Nothing under test reads their values.
+type LanguagesStub = Record<string, { autonym: string }>;
+type UiLanguageSelectorStubProps = { knownUiLanguages: LanguagesStub; primaryLanguage: string };
+
+// Lets a test stand in for the loaded offered languages; unset means "still loading", which hands
+// back the component's own default list the way useData does before data arrives.
+const availableLanguages = vi.hoisted(() => {
+  const state: { loaded?: LanguagesStub } = {};
+  return state;
+});
+// Records what the component hands UiLanguageSelector; renders nothing.
+const uiLanguageSelectorStub = vi.hoisted(() =>
+  vi.fn<(props: UiLanguageSelectorStubProps) => undefined>(() => undefined),
+);
+const lastSelectorProps = () => uiLanguageSelectorStub.mock.lastCall?.[0];
+
+// Setting pulls in useData (for the interface-language selector's offered languages) and
+// useLocalizedStrings; stub both so the component renders without a live papi backend. Only the
+// interface-language tests below read the offered languages.
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useData: vi.fn(() => ({
-    AvailableInterfaceLanguages: () => [{}, vi.fn(), false],
+    AvailableInterfaceLanguages: (_selector: undefined, defaultValue: unknown) => [
+      availableLanguages.loaded ?? defaultValue,
+      vi.fn(),
+      false,
+    ],
   })),
   useLocalizedStrings: vi.fn(() => [{}]),
 }));
@@ -29,6 +48,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         <div data-testid="error-details">{errorDetails}</div>
       </>
     ),
+    UiLanguageSelector: uiLanguageSelectorStub,
   };
 });
 
@@ -77,6 +97,7 @@ const baseProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  availableLanguages.loaded = undefined;
 });
 
 describe('Setting disabled forwarding', () => {
@@ -574,5 +595,43 @@ describe('platform.zoomFactor stepper', () => {
     );
     expect(screen.getByDisplayValue('30')).toBeInTheDocument();
     expect(screen.queryByRole('group')).toBeNull();
+  });
+});
+
+describe('interface language selector', () => {
+  const renderLanguageSetting = (setting: string[]) =>
+    render(
+      // A user setting, so it takes validateOtherSetting rather than baseProps' project validator.
+      <Setting
+        setSetting={vi.fn()}
+        isLoading={false}
+        validateOtherSetting={vi.fn()}
+        settingKey="platform.interfaceLanguage"
+        setting={setting}
+        label="Interface language"
+      />,
+    );
+
+  it('offers exactly English and Español while the languages load', () => {
+    renderLanguageSetting(['en']);
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual(['en', 'es']);
+  });
+
+  it('keeps a hidden current language, by its autonym, once the offered languages load', () => {
+    availableLanguages.loaded = { en: { autonym: 'English' }, es: { autonym: 'Español' } };
+    renderLanguageSetting(['fr']);
+    expect(lastSelectorProps()?.primaryLanguage).toBe('fr');
+    expect(lastSelectorProps()?.knownUiLanguages.fr?.autonym).toBe('Français');
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual([
+      'en',
+      'es',
+      'fr',
+    ]);
+  });
+
+  it('keeps hidden fallback languages too', () => {
+    availableLanguages.loaded = { en: { autonym: 'English' }, es: { autonym: 'Español' } };
+    renderLanguageSetting(['es', 'zh-hans']);
+    expect(lastSelectorProps()?.knownUiLanguages['zh-hans']?.autonym).toBe('中文（简体）');
   });
 });
