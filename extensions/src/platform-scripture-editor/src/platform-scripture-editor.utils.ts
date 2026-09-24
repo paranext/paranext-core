@@ -1765,24 +1765,53 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | '
  *
  * @param options.resourceProjectId The project id the panel is reading from, or `undefined` if a
  *   resource has not resolved to one yet.
- * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet. A
- *   caller that seeds its data hook with a default (the Bible texts panel passes `EMPTY_USJ`) never
- *   passes `undefined`; for those, `resourceProjectId` not having resolved yet is what produces
- *   `'loading'`.
+ * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet.
+ *   Whether `undefined` can reach here at all is the caller's choice of seed for its data hook. A
+ *   caller seeding `undefined` (the Bible texts panel) says "nothing has arrived" through this
+ *   value directly. One seeding a blank USJ (`scripture-text-grid/resource-cell.component.tsx`)
+ *   never can, because a blank USJ is neither `undefined` nor falsy, and must distinguish
+ *   not-yet-arrived some other way — there, `resourceProjectId` not having resolved yet, plus the
+ *   `isLoading` its own `deriveCellState` takes.
  * @param options.currentBookNum The book number the panel is currently displaying. A value of 0 or
  *   less means the panel has no book it can name, so no claim is made about one.
+ * @param options.isUsjSettled Whether the chapter subscription has stopped loading. Answers "is the
+ *   value in hand the CURRENT read's?", which both terminal branches need, because the data layer
+ *   holds the last delivered value across a resubscription — it resets `isLoading`, never `data`.
+ *
+ *   Escalating out of `'loading'`: distinguishes a `undefined` that has not arrived yet from one that
+ *   IS the answer — the data type's `getData` is `Usj | undefined` and the extender PDP returns
+ *   `undefined` for a falsy USX, so a delivered `undefined` is reachable and would otherwise spin
+ *   forever. This reports that case as `'failed'`, which is the honest answer for the only
+ *   reference it can reach here — chapter 0, the book's front matter. For a real chapter the
+ *   resource panel decides first that a delivered nothing is an EMPTY chapter and renders that
+ *   message instead; see its `isBlankChapter`. A retry cannot change a deterministic `undefined`,
+ *   so that precedence is what keeps an inert control off the state.
+ *
+ *   Entering `'loading'`: an error with a read in flight is the previous attempt's, so it is withheld
+ *   rather than named. Without this, re-driving a failed read leaves the identical message on
+ *   screen for the whole round trip and the retry affordance reads as inert.
+ *
+ *   The flag is re-armed from an effect, so for one render after a selector change it still reads
+ *   settled. With USJ or `undefined` in hand that is invisible (the value is the previous
+ *   reference's USJ, not `undefined`); with a stale error in hand it shows the old failure for a
+ *   single render before the spinner replaces it.
  * @returns Which of the four content states to render.
  */
 export function resolveResourceContentState({
   resourceProjectId,
   usjPossiblyError,
   currentBookNum,
+  isUsjSettled,
 }: {
   resourceProjectId: string | undefined;
   usjPossiblyError: unknown;
   currentBookNum: number;
+  isUsjSettled: boolean;
 }): ResourceContentState {
-  if (!resourceProjectId || usjPossiblyError === undefined) return 'loading';
+  if (!resourceProjectId) return 'loading';
+  // Nothing in hand. Still on its way until the subscription says otherwise; once it has settled,
+  // `undefined` is the delivered answer and there is no text to show.
+  if (usjPossiblyError === undefined) return isUsjSettled ? 'failed' : 'loading';
   if (!isPlatformError(usjPossiblyError)) return 'ready';
 
   // Parsed once and compared, rather than calling `isMissingBookOnScreen` and then
@@ -1796,6 +1825,14 @@ export function resolveResourceContentState({
   // the same ordering `deriveCellState` uses for the Scripture Text Grid, so the two surfaces cannot
   // give opposite answers about one error.
   if (missingBook || isMissingBookError(usjPossiblyError)) return 'loading';
+
+  // An error with a read already in flight belongs to the PREVIOUS attempt. The data layer holds
+  // the last delivered value across a resubscription — it resets `isLoading`, never `data` — so the
+  // error survives both a retry and a plain navigation, and reporting it would name a failure for a
+  // reference whose read has not finished. This is also what makes the retry affordance legible:
+  // without it, re-driving the read leaves the identical message on screen for the whole round
+  // trip, so pressing the button looks like it did nothing.
+  if (!isUsjSettled) return 'loading';
 
   // Any other failure is terminal: the value in hand is an error rather than USJ, and nothing
   // re-emits until the data provider does. Naming it beats both a spinner that never resolves and an

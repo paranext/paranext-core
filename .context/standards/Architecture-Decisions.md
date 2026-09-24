@@ -3972,6 +3972,49 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
   than the defect.
 
+## adr-panel-readiness-splits-display-from-persistence: A retryable failure settles what a panel may SHOW, never what it may WRITE BACK
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** Refines `adr-panel-readiness-from-sources`, which established that readiness is
+  derived from whether sources arrived. That framing treats readiness as one question, and it is
+  two. The resource panels filter their rows against the DBL catalog, and a DBL reference with no
+  catalog row resolves to nothing at all (`downloaded-resources.utils.ts`), so a configured
+  resource is simply ABSENT from the rows until its catalog entry lands. Auto-correct reads an
+  absent selection as "gone" and persists the first usable row over it — and the stored id does
+  not come back, because it has already been written away (PT-4470). Gating auto-correct on
+  arrival fixes the loading window but creates a worse one on FAILURE: `isCatalogReady` stays
+  `false` for the rest of the session after a failed fetch, while locally-downloaded rows keep
+  arriving and stay selectable, so a panel that waits for arrival has no selection, hence no
+  resource project id, hence a permanent spinner with no reachable retry (it is `configured`, so
+  it never renders `PanelReadinessView`). Both framings are wrong because both answer one question.
+- **Decision:** Split the question at the point of use. **Display** may proceed once the sources
+  have settled *for now* — a definitively failed catalog counts, because the rows in hand are all
+  the rows there are, and showing one beats showing nothing
+  (`canResolveResourceSelection`). **Persistence** requires that every source actually DELIVERED
+  (`canPublishResourcePanelProjectIds`), because a failure that a retry can undo is not evidence
+  that a selection is gone. `resolveResourceSelection` takes both as separate inputs
+  (`areSourcesSettled`, `mayPersistCorrection`) rather than one settled flag, so the asymmetry is
+  visible in its signature instead of living in a caller's head. The general rule: a state derived
+  from a RETRYABLE failure may drive what the user sees, never a write that outlives the failure.
+- **Alternatives:** **One `areSourcesSettled` flag treating a failed catalog as settled** —
+  rejected: it is what reintroduced PT-4470's defect in the failure branch, silently, in the one
+  window where the panel is showing its catalog-error view and the reader cannot see the pick being
+  replaced. **Wait for delivery for both questions** — rejected: the permanent-spinner outcome
+  above; failing closed is safe where it means "declare nothing" and unsafe where it means "show
+  nothing". **Make the write reversible instead (snapshot and restore the pick)** — rejected as
+  more machinery than the problem needs, and it still shows the wrong resource meanwhile.
+- **Consequences:** A panel whose catalog failed displays a fallback row while leaving the stored
+  selection untouched, so a successful retry restores the user's text rather than revealing that it
+  was overwritten. The two predicates coincide today except on catalog failure, and reusing
+  `canPublishResourcePanelProjectIds` for the persistence question keeps them from drifting into
+  two near-copies — but it does couple them, so a future change to publishing must check this
+  caller. Any third async source must answer both questions, not one. The same split applies beyond
+  selection: any panel state that both renders and persists should name which of the two a given
+  readiness signal licenses.
+- **Source:** PT-4350 (NN 5B Opening a resource always correctly loads it) and PT-4470, the
+  catalog-window regression, found in review of the fix for the loading window.
+
 ## adr-papi-websocket-hostname-bind: The PAPI websocket binds by hostname, and readiness is awaited rather than assumed
 
 - **Date:** 2026-08-29
@@ -6267,6 +6310,44 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   inside itself, or that added a staged package as an in-tree `file:` dependency of its own, would
   join core in the hard-coupled class and would then need its lockfile kept in sync.
 - **Source:** PT-4500, review of #2745.
+
+## adr-stale-value-survives-resubscription: A value held across a resubscription is not the current read's answer
+
+- **Date:** 2026-09-13
+- **Status:** Accepted
+- **Context:** `useData` (and everything built on it — `useProjectData`, `useProjectSetting`) resets
+  `isLoading` when the selector or data provider changes, but never resets `data`
+  (`create-use-data-hook.util.ts`). The last delivered value therefore survives every
+  resubscription: a reference change, a retry, a provider swap. Surfaces routinely render that value
+  as though it described the reference currently on screen. Two defects in the resource panels came
+  from exactly this. A failed chapter read left its `PlatformError` in hand, so re-driving the read
+  re-rendered the identical "text could not be loaded" message for the whole round trip — the retry
+  button the panel had just gained looked inert, and if the second attempt failed the same way the
+  screen never changed at all. The same staleness made a plain chapter navigation flash the previous
+  reference's failure over the new one.
+- **Decision:** A surface that renders a delivered value must decide whether that value belongs to
+  the read now in flight, and withhold it when it does not. Concretely: pair every value read
+  through these hooks with its `isLoading`, and treat a terminal state (a named failure, an "empty"
+  claim) as reportable only once the read has settled. `resolveResourceContentState` takes
+  `isUsjSettled` for precisely this and uses it in both directions — to escalate OUT of `loading`
+  when `undefined` is the delivered answer, and INTO `loading` when an error is the previous
+  attempt's.
+- **Alternatives:** **Reset `data` to the default on resubscribe, in the hook** — the real fix, and
+  still worth doing, but it changes behaviour for every consumer in the app at once (several rely on
+  the previous value persisting to avoid a flash of empty content between references) and so is not
+  a change to make from inside one panel's bug fix. **Track a retry-pending flag at each call site**
+  — rejected: it answers only the retry case, leaving the identical staleness on ordinary
+  navigation, and puts a second source of truth beside `isLoading`. **Compare value identity across
+  renders** — rejected: a provider free to re-deliver an equal object makes identity an unreliable
+  proxy for freshness.
+- **Consequences:** Terminal states arrive one render later than the value that triggers them, since
+  `isLoading` is re-armed from an effect. That window is invisible where the held value is USJ or
+  `undefined`, and shows the old failure for a single render where it is an error. Any new surface
+  reading these hooks inherits the same trap and needs the same pairing; a reviewer seeing a
+  rendered value without its `isLoading` nearby should ask which reference it belongs to. If the
+  hook is ever changed to reset `data`, these settled-checks become redundant rather than wrong.
+- **Source:** PT-4350, found in review — two independent analysis passes reached the same defect
+  from the retry affordance and from the `useLayoutEffect` change.
 
 ## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 

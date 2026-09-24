@@ -32,6 +32,11 @@ export const RESOURCE_PANEL_STRING_KEYS = Object.freeze([
   '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_settingsUnavailable%',
   '%webView_resourcePanel_loading%',
+  // The resource selector's own waiting label. Deliberately NOT `..._loading%`: that one is a
+  // status region's sentence, and reusing it here would make one string answer to both a status and
+  // a control, which translators cannot phrase differently. It also carries an ellipsis, which on a
+  // button means "this opens something you can back out of" rather than "this is in progress".
+  '%webView_resourcePanel_loadingResources%',
   '%webView_resourcePanel_catalogUnavailable%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_textUnavailable%',
