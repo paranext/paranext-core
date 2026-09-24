@@ -1,15 +1,30 @@
 import papi, { logger } from '@papi/backend';
 import {
   ExecutionActivationContext,
+  ExecutionToken,
   IWebViewProvider,
   ManageExtensions,
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { isString } from 'platform-bible-utils';
+import type {
+  DblResourceCatalog,
+  DblResourceInstallStatus,
+  DblResourceUpdateStatus,
+} from 'platform-get-resources';
+import type { DblResourceData } from 'platform-bible-utils';
+import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
+import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
+import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
+import {
+  buildHomeWebViewState,
+  type HomeWebViewOptions,
+  shouldReloadHomeForProjectsOnly,
+} from './home-web-view.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
+import { reconcileCachedResources } from './resources-cache.util';
 import tailwindStyles from './tailwind.css?inline';
 
 const GET_RESOURCES_WEB_VIEW_TYPE = 'platformGetResources.getResources';
@@ -18,6 +33,316 @@ const NEW_TAB_WEB_VIEW_TYPE = 'platformGetResources.newTab';
 
 const GET_RESOURCES_WEB_VIEW_SIZE = { width: 900, height: 650 };
 const HOME_WEB_VIEW_SIZE = { width: 1000, height: 650 };
+
+const RESOURCES_CACHE_KEY = 'cachedDblResources';
+const RESOURCES_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
+
+let executionToken: ExecutionToken | undefined;
+let cachedResources: DblResourceData[] | undefined;
+const fetchMutex = new Mutex();
+let hasFetchStarted = false;
+let syncInFlight: Promise<void> | undefined;
+
+async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
+  const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+  // The contract itself lives in `dbl-catalog.utils` so it can be tested: this module imports web
+  // views through webpack's `?inline` loader and so cannot be loaded by the test runner.
+  const catalog = await resolveDblCatalog(provider);
+  if (catalog.status !== 'available') return catalog;
+
+  cachedResources = catalog.resources;
+  // The catalog is already in hand, so a failed persistence write must not be reported as a failed
+  // fetch. `getCachedResources` rejects on failure and every host paints "couldn't load the list of
+  // available resources" with a retry — over a complete catalog, and a retry that appears to fix it
+  // only because it takes the cache fast path. Losing the cache costs a refetch next launch; losing
+  // the catalog costs the user the feature.
+  if (executionToken)
+    try {
+      await papi.storage.writeUserData(
+        executionToken,
+        RESOURCES_CACHE_KEY,
+        JSON.stringify(cachedResources),
+      );
+    } catch (e) {
+      logger.warn(`Failed to cache the DBL resource catalog: ${getErrorMessage(e)}`);
+    }
+  return catalog;
+}
+
+async function startBackgroundFetchResources(): Promise<void> {
+  if (hasFetchStarted) return;
+  hasFetchStarted = true;
+  await fetchMutex.runExclusive(async () => {
+    const result = await retryUntil(
+      async (attemptNumber) => {
+        try {
+          return await fetchAndCacheResources();
+        } catch (e) {
+          logger.debug(`Background resource fetch attempt ${attemptNumber} failed: ${e}`);
+          return undefined;
+        }
+      },
+      // A build with no DBL credentials has arrived at its answer; retrying it nine more times
+      // cannot change it. Only `notReady` is worth another attempt.
+      (catalog) => !!catalog && shouldStopBackgroundFetch(catalog),
+      { maxAttempts: 10, delayMs: 1000 },
+    );
+    if (result === undefined)
+      logger.warn('Background DBL resources fetch failed after 10 attempts');
+  });
+}
+
+/**
+ * Whether any C# resource project has been seen this session. The Paratext PDPF registers its
+ * projects after activation, and a metadata read that resolves first sees none — indistinguishable
+ * from a machine that genuinely has no read-only projects. Remembering the answer lets the retry
+ * below run when it can still discover something and stay out of the way afterwards.
+ */
+let haveLocalResourceProjectsAppeared = false;
+/** Whether the full wait below has already been spent without any resource project appearing. */
+let hasWaitedForLocalResourceProjects = false;
+
+const RESOURCE_PROJECT_WAIT_ATTEMPTS = 5;
+const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
+
+/**
+ * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
+ *
+ * The wait is what lets a locally-installed non-DBL resource appear in the picker: a read that
+ * resolves before the factory registers returns only the TypeScript PDPFs, and a caller that trusts
+ * it concludes there are none. It is spent at most once per session — once a resource project has
+ * been seen the factory is up and no wait is needed, and if the full budget passes with none seen
+ * the machine has none to find, so later calls return the first read immediately.
+ *
+ * Because the budget is one-shot, a resource project that registers after it expires is not waited
+ * for again; that session's reads return whatever is registered at the time.
+ *
+ * @returns The project metadata
+ */
+async function getLocalProjectMetadata(): Promise<
+  Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>
+> {
+  const readMetadata = () =>
+    papi.projectLookup.getMetadataForAllProjects({ includeProjectInterfaces: ['platform.base'] });
+  const hasResourceProject = (
+    metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>,
+  ) => metadata.some((m) => m.isEditable === false);
+
+  const shouldWait = !haveLocalResourceProjectsAppeared && !hasWaitedForLocalResourceProjects;
+  const metadata = shouldWait
+    ? await retryUntil(readMetadata, hasResourceProject, {
+        maxAttempts: RESOURCE_PROJECT_WAIT_ATTEMPTS,
+        delayMs: RESOURCE_PROJECT_WAIT_DELAY_MS,
+      })
+    : await readMetadata();
+
+  if (hasResourceProject(metadata)) haveLocalResourceProjectsAppeared = true;
+  else if (shouldWait) hasWaitedForLocalResourceProjects = true;
+
+  return metadata;
+}
+
+/**
+ * Asks the backend which local project each catalogued resource is installed as, or `undefined` if
+ * it could not say.
+ *
+ * A resource project's id is unrelated to the DBL entry it was installed from, so nothing in the
+ * local project list identifies the catalog row it belongs to and only the backend can answer.
+ * `undefined` leaves the flags at their cached values rather than guessing.
+ */
+async function readInstallStatus(): Promise<DblResourceInstallStatus | undefined> {
+  try {
+    const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+    return await provider?.recomputeDblResourcesInstallStatus();
+  } catch (error: unknown) {
+    logger.warn(`Could not recompute DBL resource install status: ${getErrorMessage(error)}`);
+    return undefined;
+  }
+}
+
+/**
+ * Asks the backend which resources have a newer version on the DBL, or `undefined` if it could not
+ * say.
+ *
+ * `updateAvailable` compares the locally installed revision against the DBL catalog's, and neither
+ * number is reachable from TypeScript, so only the backend can answer. `undefined` leaves those
+ * flags at their cached values rather than guessing.
+ */
+async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> {
+  try {
+    const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+    return await provider?.recomputeDblResourcesUpdateStatus();
+  } catch (error: unknown) {
+    logger.warn(`Could not recompute DBL resource update status: ${getErrorMessage(error)}`);
+    return undefined;
+  }
+}
+
+/**
+ * Syncs the derived flags on `cachedResources` against current local state, updating the cache and
+ * writing to storage when any of them change.
+ *
+ * `installed` and `projectId` come from the backend's install status and are always reconciled. The
+ * second round trip for `updateAvailable` is opt-in, because only the Get Resources list renders
+ * that flag: every other consumer of the catalog would otherwise wait on a value it discards.
+ *
+ * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`
+ */
+async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
+  // Nothing cached to reconcile yet — the startup fetch window, or a fresh profile. A caller that
+  // awaited a refresh gets a resolved promise and re-reads the flags it already had, so say so
+  // here: this is the one silent no-op that is reachable without any contention.
+  if (cachedResources === undefined) {
+    logger.debug('Skipped a resource flag sync: no cached catalog to reconcile yet');
+    return;
+  }
+  try {
+    // Sample the backend inside fetchMutex, not before it. Two things depend on that: a concurrent
+    // fetchAndCacheResources cannot overwrite cachedResources between the read and the assignment,
+    // and — because a refresh deliberately starts a sync of its own rather than joining one — an
+    // older sync whose status predates an install cannot win the write and persist flags from
+    // before it.
+    await fetchMutex.runExclusive(async () => {
+      // Re-checked inside the mutex because the wait for it is an await: a concurrent fetch can
+      // clear the cache in between. It also narrows the type for the reconcile below.
+      if (cachedResources === undefined) {
+        logger.debug('Skipped a resource flag sync: the cached catalog was cleared while waiting');
+        return;
+      }
+
+      const installStatus = await readInstallStatus();
+      // An empty map is not an answer: another DBL operation held the provider, or nothing is
+      // installed and the catalog has not loaded — and it reports both the same way. Reconciling
+      // against it would mark every installed resource not-installed and persist that, so leave
+      // the flags alone until there is something to act on.
+      if (!installStatus || Object.keys(installStatus).length === 0) {
+        logger.debug(
+          'Skipped a resource flag sync: the backend reported no install status, so the flags are left as they are',
+        );
+        return;
+      }
+
+      const updateStatus = shouldRecomputeUpdateStatus ? await readUpdateStatus() : undefined;
+
+      const { resources: newCachedResources, isChanged } = reconcileCachedResources(
+        cachedResources,
+        installStatus,
+        updateStatus,
+      );
+
+      if (isChanged) {
+        cachedResources = newCachedResources;
+        if (executionToken)
+          await papi.storage.writeUserData(
+            executionToken,
+            RESOURCES_CACHE_KEY,
+            JSON.stringify(cachedResources),
+          );
+      }
+    });
+  } catch (error: unknown) {
+    logger.warn(`Error syncing installed flags: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Starts a flag sync if one is not already running, and returns the promise for it. Callers that
+ * only need the catalog let it run in the background; callers whose answer depends on the flags
+ * being current await it and re-read `cachedResources` afterwards.
+ *
+ * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable`. A
+ *   caller that needs it joins an in-flight sync that does not refresh it, so ask for it through
+ *   {@link refreshResourceFlags}, which starts a sync of its own rather than joining.
+ */
+function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promise<void> {
+  if (!syncInFlight) {
+    syncInFlight = syncFlags(shouldRecomputeUpdateStatus)
+      .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
+      .finally(() => {
+        syncInFlight = undefined;
+      });
+  }
+  return syncInFlight;
+}
+
+/**
+ * Brings the derived flags up to date and resolves once they are, so the next read of the catalog
+ * sees them.
+ *
+ * `getCachedResources` deliberately does not wait for the sync, which makes it one refresh behind:
+ * it answers from the array it has and leaves the corrected one to the next call. For `installed`
+ * that is invisible, because the caller that just installed something already knows. For
+ * `updateAvailable` it is the whole defect — an updated resource keeps its "Update" badge, since
+ * nothing else about the row changes and no data-update event exists to announce the correction. A
+ * caller that has just changed local state awaits this first, then re-reads.
+ */
+async function refreshResourceFlags(): Promise<void> {
+  // Joining a sync that is already running is not enough, for two reasons: it may have asked the
+  // backend before the change this caller just made, and a background sync does not refresh
+  // `updateAvailable` at all. Let any running sync finish, then start one that is guaranteed to
+  // observe the change and to ask again.
+  if (syncInFlight) await syncInFlight;
+  await ensureInstalledFlagsSynced(true);
+}
+
+async function getCachedResources(): Promise<DblResourceCatalog> {
+  if (cachedResources !== undefined) {
+    // Run the installed-flag sync in the background so the dialog open is never blocked by
+    // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
+    // the C# PDPF is still initializing). This read therefore answers one refresh behind; a
+    // caller that needs the flags to reflect a change it just made awaits `refreshResourceFlags`
+    // before reading.
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    ensureInstalledFlagsSynced();
+    return { status: 'available', resources: cachedResources };
+  }
+
+  return fetchMutex.runExclusive(async () => {
+    if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
+    try {
+      // Awaited deliberately: returning the promise un-awaited from inside this `try` would let a
+      // rejection bypass the logging below entirely.
+      return await fetchAndCacheResources();
+    } catch (e) {
+      // Rethrown rather than flattened to an "unavailable" result. A caller can offer a retry that
+      // might actually work for a failure; it cannot for a build with no DBL credentials, and
+      // collapsing the two here is what makes that distinction unrecoverable upstream.
+      logger.warn(`getCachedResources on-demand fetch failed: ${getErrorMessage(e)}`);
+      throw e;
+    }
+  });
+}
+
+/**
+ * Returns locally-installed, read-only resources that are NOT in the DBL catalog — e.g. VULGP83,
+ * TNN, TND, HBK. Useful for populating the Resource Picker's INSTALLED section with resources that
+ * were installed outside the DBL download flow.
+ *
+ * Convention: each synthetic entry uses `dblEntryUid === projectId` to mark it as non-DBL so that
+ * callers (e.g. `selectTextConnection`) can create a `ProjectReference` instead of a
+ * `DblResourceReference` when the user selects one.
+ */
+async function getLocalNonDblResources(): Promise<DblResourceData[]> {
+  try {
+    await getCachedResources();
+    // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
+    // `getCachedResources` returns before its background sync finishes. Wait for that sync and read
+    // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
+    // than emitted a second time as a synthetic non-DBL one.
+    await ensureInstalledFlagsSynced();
+    // An absent catalog means one has never been fetched on this profile (a fetched catalog is
+    // persisted and reloaded on activation), so there is nothing for these projects to duplicate
+    // and no reason to withhold them. Suppressing them here would hide side-loaded resources from
+    // exactly the offline, never-connected users most likely to have them.
+    const dblCatalog = cachedResources ?? [];
+
+    const allMetadata = await getLocalProjectMetadata();
+    return buildLocalNonDblResources(allMetadata, dblCatalog);
+  } catch (error: unknown) {
+    logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
+    return [];
+  }
+}
 
 let manageExtensions: ManageExtensions;
 
@@ -38,7 +363,10 @@ const getResourcesWebViewProvider: IWebViewProvider = {
 };
 
 const homeWebViewProvider: IWebViewProvider = {
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: HomeWebViewOptions,
+  ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== HOME_WEB_VIEW_TYPE)
       throw new Error(
         `${HOME_WEB_VIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
@@ -47,6 +375,7 @@ const homeWebViewProvider: IWebViewProvider = {
     return {
       title: '%home_dialog_title%',
       ...savedWebView,
+      state: buildHomeWebViewState(savedWebView, getWebViewOptions),
       content: homeDialogReact,
       styles: tailwindStyles,
     };
@@ -71,6 +400,18 @@ const newTabWebViewProvider: IWebViewProvider = {
 
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('Platform Get Resources Extension is activating!');
+
+  executionToken = context.executionToken;
+
+  try {
+    const cached = await papi.storage.readUserData(executionToken, RESOURCES_CACHE_KEY);
+    if (typeof cached === 'string' && cached.length > 0) {
+      const parsed: DblResourceData[] = JSON.parse(cached);
+      cachedResources = parsed;
+    }
+  } catch {
+    // No cached data from previous session
+  }
 
   // #region Validate settings
 
@@ -104,7 +445,7 @@ export async function activate(context: ExecutionActivationContext) {
   const openGetResourcesWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openGetResources',
     async () => {
-      return papi.webViews.openWebView(
+      const webViewId = await papi.webViews.openWebView(
         GET_RESOURCES_WEB_VIEW_TYPE,
         {
           type: 'float',
@@ -113,21 +454,41 @@ export async function activate(context: ExecutionActivationContext) {
         // Focus existing one if one exists
         { existingId: '?' },
       );
+
+      return webViewId;
     },
   );
 
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openHome',
-    async () => {
-      return papi.webViews.openWebView(
+    async (shouldShowProjectsOnly?: boolean) => {
+      const options: HomeWebViewOptions = {
+        shouldShowProjectsOnly,
+        // Focus existing one if one exists
+        existingId: '?',
+      };
+
+      const homeWebViewId = await papi.webViews.openWebView(
         HOME_WEB_VIEW_TYPE,
         {
           type: 'float',
           floatSize: HOME_WEB_VIEW_SIZE,
         },
-        // Focus existing one if one exists
-        { existingId: '?' },
+        options,
       );
+      if (!homeWebViewId) return homeWebViewId;
+
+      // Reusing an existing Home raises its tab without consulting the provider, so the scoping
+      // this call asked for never reaches it. Reload only when the two disagree — a rebuilt iframe
+      // is the slowest thing this command can do.
+      const existingWebView = await papi.webViews.getOpenWebViewDefinition(homeWebViewId);
+      if (
+        existingWebView &&
+        shouldReloadHomeForProjectsOnly(existingWebView, !!shouldShowProjectsOnly)
+      )
+        await papi.webViews.reloadWebView(HOME_WEB_VIEW_TYPE, homeWebViewId, options);
+
+      return homeWebViewId;
     },
   );
 
@@ -163,20 +524,55 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
+  const getCachedResourcesCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.getCachedResources',
+    getCachedResources,
+  );
+
+  const getLocalNonDblResourcesCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.getLocalNonDblResources',
+    getLocalNonDblResources,
+  );
+
+  const refreshResourceFlagsCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.refreshResourceFlags',
+    refreshResourceFlags,
+    {
+      method: {
+        // Experimental: this command's contract is not yet stable.
+        'x-experimental': true,
+        summary:
+          "Brings the resource catalog's derived flags (installed, projectId, updateAvailable) " +
+          'up to date and resolves once they are, so the next read of the catalog sees them',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
     'platformGetResources.isSendReceiveAvailable',
     async () => {
-      let isSendReceiveAvailable: boolean = false;
-      if (context.elevatedPrivileges.manageExtensions) {
-        manageExtensions = context.elevatedPrivileges.manageExtensions;
-        const installedExtensions = await manageExtensions.getInstalledExtensions();
-        isSendReceiveAvailable = installedExtensions.packaged
-          .concat(installedExtensions.enabled)
-          .some((extension) => {
-            return extension.extensionName === 'paratextBibleSendReceive';
-          });
+      if (!context.elevatedPrivileges.manageExtensions) {
+        // `undefined`, not `false`: without the privilege there is nothing to check, so answering
+        // `false` would report "send/receive isn't in this build" on no evidence — and callers hide
+        // send/receive UI for the session on a `false`. `undefined` says "couldn't determine",
+        // which callers treat as unknown and fail open on.
+        logger.warn(
+          'platformGetResources cannot check whether send/receive is available without the manageExtensions privilege; reporting unknown',
+        );
+        return undefined;
       }
-      return isSendReceiveAvailable;
+
+      manageExtensions = context.elevatedPrivileges.manageExtensions;
+      const installedExtensions = await manageExtensions.getInstalledExtensions();
+      return installedExtensions.packaged.concat(installedExtensions.enabled).some((extension) => {
+        return extension.extensionName === 'paratextBibleSendReceive';
+      });
     },
   );
 
@@ -188,8 +584,33 @@ export async function activate(context: ExecutionActivationContext) {
     await openGetResourcesWebViewCommandPromise,
     await openHomeWebViewCommandPromise,
     await openNewTabWebViewCommandPromise,
+    await getCachedResourcesCommandPromise,
+    await getLocalNonDblResourcesCommandPromise,
+    await refreshResourceFlagsCommandPromise,
     await isSendReceiveAvailableCommandPromise,
   );
+
+  // Need to start async floating promise that continues after activation
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  startBackgroundFetchResources();
+
+  const refreshIntervalId = setInterval(() => {
+    // The mutex returns a floating promise here; we want fire-and-forget interval behavior
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    fetchMutex.runExclusive(async () => {
+      try {
+        await fetchAndCacheResources();
+      } catch (e) {
+        logger.warn(`Scheduled resource refresh failed: ${e}`);
+      }
+    });
+  }, RESOURCES_REFRESH_INTERVAL_MS);
+  context.registrations.add({
+    dispose: async () => {
+      clearInterval(refreshIntervalId);
+      return true;
+    },
+  });
 
   logger.debug('Platform Get Resources Extension finished activating!');
 }

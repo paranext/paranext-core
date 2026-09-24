@@ -1,5 +1,6 @@
 @use '../../styles/vars';
 @use './dock-panel-button-base';
+@use './tab-bar-metrics';
 
 /*
 This file styles with SCSS because rc-dock doesn't give us good ways to render with Tailwind.  I also comes with a lot of opinionated styling that we need to undo, so you'll see a lot of rules that use `unset`. We use `unset` instead of the literal initial values to connote their intention: undoing rc-dock's styling.
@@ -42,6 +43,18 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 .dock-tab-active,
 .dock-tabpane-active {
   --tab-background: var(--tab-front-blur);
+
+  /* Tint the content pane when this tab is the last-selected web view (see the
+  `platform-dock-tab-last-selected` rule further down for the matching header tint and the full
+  explanation). This selector's specificity (two classes) ties with the
+  `platform-dock-tabpane-window-focus` rule immediately below; CSS breaks specificity ties by
+  source order, so this rule is declared ABOVE that one so window focus would win if a pane were
+  ever both last-selected and focused — a defensive tie-breaker rather than a case the app can
+  currently reach, since the tint only shows while focus is outside all tabs (see the matching
+  header-rule comment further down). */
+  &.platform-dock-tabpane-last-selected {
+    --tab-background: var(--tab-highlight);
+  }
 
   // When a tab is the has focus within it, it gets a prominent color.
   &.platform-dock-tabpane-window-focus {
@@ -182,6 +195,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   border-radius: var(--radius);
 }
 
+// A web view can hold document focus in a window that is not the one the user is currently in —
+// see window.service-shard.ts for both the "cross-window raise" catch-up and the
+// `platform-window-not-focused` class (toggled on the root element) this rule keys off of. Left
+// alone, the browser's default focus outline would still draw on that iframe. Mirrors the
+// Simple-mode reset in dock-layout-wrapper.simple-mode.scss's SIMPLE-MODE FOCUS RING region,
+// scoped to Power mode since Simple mode already resets this outline unconditionally.
+:root.platform-window-not-focused [data-interface-mode='power'] .web-view:focus {
+  outline: none;
+}
+
 // #endregion TAB-PANE (CONTENTS) ///////////////////////////////////////
 
 // #region TAB-BAR //////////////////////////////////////////////////////
@@ -189,8 +212,17 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
   background: unset;
-  padding-inline: vars.$space--xs;
+  padding-inline: tab-bar-metrics.$tab-bar-padding-inline;
   border: unset;
+}
+
+// rc-dock places its edge-split drop layer (`.dock-drop-edge`, z-index 100, Power mode's
+// `dropMode="edge"`) 30px below the panel's top, sized for its own tab bar. This app's tab bar is
+// taller, so without this the layer would cover the bar's bottom strip and a tab dropped there would
+// split the layout instead of joining the bar. rc-dock computes split directions from this layer's
+// own rect, so moving its top keeps the edge-split areas around the panel content intact.
+.dock-layout .dock-panel.dock-style-platform-bible .dock-drop-edge {
+  top: tab-bar-metrics.$tab-bar-height;
 }
 
 /*   Visually reorder children to have the New Tab (+) button immediately after the tabs.
@@ -207,9 +239,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     flex-grow: 0;
   }
 
-  // Contains New Tab (+) button
+  // Contains the New Tab (+) button and the invisible whole-bar tab-drop zone
+  // (`tab-bar-drop-zone.component.tsx`) that fills whatever space is left after it.
   > .dock-extra-content {
     order: 2;
+    // Claim the bar's leftover space so the drop zone inside has something to grow into; without
+    // this, the space between the "+" button and the tab bar's end belongs to no flex item and a
+    // dropped tab there is silently ignored. Growing this container (rather than growing
+    // `.platform-tab-bar-drop-zone` against `.dock-nav`) keeps every tab-bar flex rule here in one
+    // place instead of split across two stylesheets.
+    flex-grow: 1;
   }
 
   // Contains Overflow Dropdown and other operations
@@ -217,6 +256,19 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     order: 3;
     flex-grow: 1;
   }
+}
+
+// While a tab or tab group of this group is being dragged, move the "+" button to the far end of
+// the bar so the drop zone grows into ONE continuous area between the last tab and "+", the way
+// Chrome's tab strip behaves — otherwise the "+" sits between rc-dock's own after-last-tab strip
+// and the zone as a dead spot that quietly ignores a drop. rc-dock appends a `.dragging-layer`
+// carrying the dragged group's `dock-style-*` classes to `<body>` for tab and tab-group drags
+// only (a divider drag carries no group), so the button never moves while a panel is resized.
+body:has(> .dragging-layer.dock-style-platform-bible)
+  .dock-panel.dock-style-platform-bible
+  .dock-extra-content
+  > .new-tab-button {
+  order: 1;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap {
@@ -234,11 +286,11 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   height: var(--dock-tab-height);
 }
 
-.dock-panel.dock-style-platform-bible .dock-nav-operations,
+.dock-panel.dock-style-platform-bible .dock-nav-operations:not(.dock-nav-operations-hidden),
 .dock-panel.dock-style-platform-bible .dock-extra-content {
-  gap: vars.$space--sm;
+  gap: tab-bar-metrics.$tab-bar-extra-gap;
   padding-block: var(--tab-header-to-content-gap);
-  height: 30px;
+  height: tab-bar-metrics.$panel-button-size;
   display: flex;
   align-items: center;
 }
@@ -246,6 +298,17 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 .dock-nav-operations {
   height: 100%;
 
+  // The box has `flex-grow: 1` (see `.dock-nav` above) and rc-tabs keeps it in the DOM even when no
+  // tab overflows into the dropdown, so left in flow it would silently split the bar's leftover
+  // space with `.dock-extra-content` and halve the tab-drop zone; rc-tabs never measures this box
+  // (its overflow math only reads `.dock-nav-wrap`/`.dock-nav-list`), so hiding it is safe. The
+  // `:not()` above isn't enough on its own: rc-dock's own `.dock-nav-operations { display: flex }`
+  // still applies to a `.dock-nav-operations-hidden` element, so it needs this override too.
+  //
+  // Deliberately unscoped to `.dock-style-platform-bible`, so it also applies in Simple mode: the
+  // same "rc-tabs measures only `.dock-nav-wrap`/`.dock-nav-list`" invariant holds there too, and
+  // Simple mode's tab-collapse threshold (comparing the panel's width against the tabs plus a
+  // constant, never against the bar's free space) is identical with or without this rule.
   &.dock-nav-operations-hidden {
     display: none;
   }
@@ -275,7 +338,9 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   margin-right: unset;
   border: unset;
 
-  --dock-tab-height: 30px; // also from rc-dock
+  // Kept equal to the panel buttons' height ($panel-button-size), not a separate literal, so the
+  // tab and the "+"/"more" buttons render at the same height.
+  --dock-tab-height: #{tab-bar-metrics.$panel-button-size}; // also from rc-dock
   height: calc(var(--dock-tab-height) + var(--tab-header-to-content-gap));
 
   display: flex;
@@ -322,6 +387,19 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   }
 }
 
+/* "Last selected" = the web view that the top toolbar's book/chapter/verse controls and
+navigation commands currently target. Tint its tab (and, via the paired rule near the top of this
+file, its content pane) so it stays easy to find once focus leaves every tab entirely (PT9
+parity) - e.g. to a toolbar control or dialog - but only when it was also the tab the user was
+most recently in; if the user visited some other (e.g. non-navigable) tab in between, it keeps
+driving navigation without the tint. While any tab or web view is focused, that tab's own focus
+highlight is the only marker, so this tint and the window-focus highlight never apply to a tab at
+the same time; the lower specificity below is a defensive tie-breaker rather than a case this app
+can currently reach. */
+.dock-tab-active.platform-dock-tab-last-selected {
+  --tab-background: var(--tab-highlight);
+}
+
 .dock-layout
   .dock-panel.dock-style-platform-bible
   .dock-tab:not(.dock-tab-active)
@@ -342,6 +420,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   padding-block: vars.$space--xs;
   display: flex;
   flex: auto;
+  gap: vars.$space--sm;
+}
+
+// Simple mode's icon-only Column 3 tab strip (resources column) needs more generous
+// per-tab padding than the icon+title Power-mode default above, to match the reference
+// mockup's evenly-spaced, roomier icon-only tabs. Values tuned and visually verified via
+// CDP screenshots against the reference description (see PT-4208 task 6 report).
+[data-interface-mode='simple'] .dock-panel.dock-style-resources .dock-tab .drag-initiator {
+  padding-inline: vars.$space--md;
+  padding-block: vars.$space--sm;
   gap: vars.$space--sm;
 }
 
@@ -520,3 +608,12 @@ $tab-bottom-rounding: vars.$space--sm;
   visibility: visible;
 }
 // #endregion CONTROLS ///////////////////////////////////////////////
+
+// All Simple-mode-ONLY styles (including the ones that depend on this file's own rules above via
+// source-order specificity tie-breaks) live in ./dock-layout-wrapper.simple-mode.scss, imported
+// as a separate stylesheet AFTER this one in dock-layout-wrapper.component.tsx — plain webpack
+// style imports concatenate in import order, preserving the same cascade position these rules
+// held when they lived at the bottom of this file. (Note: `@use` was deliberately NOT used here —
+// Sass hoists an `@use`d module's compiled CSS to the top of the importing file's output
+// regardless of where the `@use` statement appears in the source, which would have put these
+// rules BEFORE the ones above instead of after, breaking every source-order tie-break comment.)

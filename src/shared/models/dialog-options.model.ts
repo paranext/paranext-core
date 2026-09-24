@@ -30,7 +30,7 @@ export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS = [
   'cancelLabel',
 ] as const;
 
-/** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
+/** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-shard.ts` */
 export type DialogData = DialogOptions & {
   isDialog: true;
 };

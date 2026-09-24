@@ -17,15 +17,31 @@ declare module 'papi-shared-types' {
     IDisposableDataProvider,
   } from '@shared/models/data-provider.interface';
   import type { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
-  import type { NetworkableObject } from '@shared/models/network-object.model';
+  import type {
+    NetworkableObject,
+    NetworkObjectDetails,
+  } from '@shared/models/network-object.model';
+  import type {
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupUpdateInfo,
+  } from '@shared/services/scroll-group.service-model';
+  import type {
+    AppWindowInputEvent,
+    FocusedWindowIdEvent,
+    WindowSummary,
+  } from '@shared/services/window.service-model';
+  import type {
+    CloseWebViewEvent,
+    OpenWebViewEvent,
+    UpdateWebViewEvent,
+  } from '@shared/services/web-view.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
-  import { WebViewId } from '@shared/models/web-view.model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { ContentZoomAreaId, WebViewId } from '@shared/models/web-view.model';
 
   // #region Commands
 
@@ -68,10 +84,78 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
-    /** Increase the zoom level of the entire UI */
+    /**
+     * Create a new application window.
+     *
+     * Rejects in simple interface mode, which is single-window and has no chrome that could reach a
+     * second window. The first window of a launch is never refused.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.createWindow': () => Promise<void>;
+    /**
+     * Get the ID of the currently focused window, or undefined if no window is focused
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getFocusedWindowId': () => Promise<string | undefined>;
+    /**
+     * List every open window with the title it is currently showing, for offering the user a choice
+     * of window. Titles follow each window's own content, so two windows showing the same thing
+     * carry the same label and nothing distinguishes them.
+     *
+     * Only windows that can still take the work are listed: a window whose close has begun, and one
+     * whose renderer has been given up on, are both left out. Either can be the window holding the
+     * primary role, so the list can carry no `isMain` at all — absence is not evidence that some
+     * other window holds it.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getWindows': () => Promise<WindowSummary[]>;
+    /**
+     * Increase the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomIn`.
+     */
     'platform.zoomIn': () => Promise<void>;
-    /** Decrease the zoom level of the entire UI */
+    /**
+     * Decrease the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomOut`.
+     */
     'platform.zoomOut': () => Promise<void>;
+    /**
+     * Zoom one area of a web view's content in by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area (the one
+     * last clicked or focused). Only web views that mark at least one zoom area respond.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomIn': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Zoom one area of a web view's content out by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomOut': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Return one area of a web view's content to the default zoom set in Settings. Without an id,
+     * the focused window's last focused tab is the target; without an area, the pane's active
+     * area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomReset': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -89,13 +173,100 @@ declare module 'papi-shared-types' {
      * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
+    /**
+     * Open the Terms of Service document that ships beside the application - the terms the
+     * distributed application is licensed to the user under, rather than this repository's AGPL
+     * source (see LICENSING.md).
+     *
+     * The document is a self-contained HTML file, shown in a window the application owns rather
+     * than handed to the operating system. One window at a time: a second request focuses the one
+     * already open. Every link in the document leaves through the browser, so the window only ever
+     * shows the document.
+     *
+     * @throws If the document could not be loaded. A caller that offers this as a link needs to be
+     *   able to tell the user the document did not open, so the failure is reported rather than
+     *   only logged.
+     */
+    'platform.openTermsOfService': () => Promise<void>;
 
-    // These commands are provided in `web-view.service-host.ts`
+    // These commands are provided in `web-view.service-shard.ts`
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+
+    // These commands are provided in `web-view.service-router.ts` (main)
+    /**
+     * Move a web view to a window created for it.
+     *
+     * A move closes the web view in the window that holds it and reopens it — same
+     * `useWebViewState` state — in the target window. Consumers see a close event in the source and
+     * an open event in the target, and the web view controller is disposed and re-created: a held
+     * controller reference must be re-acquired after a move. The returned id is the authoritative
+     * id of the web view after the move — the same id as `webViewId`, since a web view keeps the id
+     * it was minted with for its whole life, across any number of moves — so use the returned id
+     * for anything after the move. In Simple mode — single-window by design — there is no other
+     * window to move to, and this does nothing.
+     *
+     * A failed move says where it left the web view, as a machine-readable marker at the front of
+     * the error message: `[webViewMoveFailure:<where>]`, where `<where>` is
+     * `reopened-in-source-window` (nothing about where it lives changed),
+     * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
+     * `not-reopened` (it is open in no window, and only the log holds what it was),
+     * `reached-new-window-unconfirmed` (the window created for the move is holding it, but the move
+     * could not get that confirmed), `possibly-closed` (taking it out of its window is what failed,
+     * so where it is cannot be told), or `already-moving` (this call was refused before it started,
+     * because another move of the same web view was already running — the web view is wherever that
+     * other move leaves it). The marker rides in the message because a rejection that crosses
+     * processes reaches its caller as a code and a message and nothing else. A failure decided
+     * before the move touches the web view for any other reason — an unknown target window, a
+     * target on its way out, an interface mode that could not be read — carries no marker. Strip
+     * the marker before showing the message to a user — it is there to be classified on, not read.
+     *
+     * @param webViewId Web view to move
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   above
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
+     */
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
+    /**
+     * Move a web view to an existing window, named by its window id (see
+     * `papi.window.getWindowId()` for the id of the window the caller is in, or
+     * `platform.getFocusedWindowId` for whichever window the user is looking at). Ids are
+     * platform-assigned and never reused within a profile.
+     *
+     * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
+     * carries to say where it left the web view — and: moving a web view to the window it is
+     * already in does nothing, and naming a window that does not exist is an error that leaves the
+     * web view where it is.
+     *
+     * @param webViewId Web view to move
+     * @param targetWindowId Window to move it to
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own. A target window the platform opened without activation and the user has not yet
+     *   been in stays backgrounded unless this is `true`: naming it is the user asking to go there,
+     *   which is what raises it. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   `platform.moveWebViewToNewWindow`
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
+     */
+    'platform.moveWebViewToWindow': (
+      webViewId: WebViewId,
+      targetWindowId: string,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
+
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
     /** Open Usersnap feedback form to submit an idea */
@@ -106,6 +277,95 @@ declare module 'papi-shared-types' {
     'platform.isUsersnapFormCurrentlyOpen': () => Promise<boolean>;
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
+
+    // This command is provided in `onboarding-tour.service-router.ts` (main)
+    /**
+     * Show the orientation tour again from its first stop, in the window the user is working in.
+     * Available in both interface modes: in Power mode the tour reduces to the stops whose anchors
+     * exist there, which today is the toolbar's profile button.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.showOnboardingTour': () => Promise<void>;
+
+    // These commands are provided in `scroll-group-navigation.commands.ts` (main)
+    /**
+     * Navigate the active scroll group to the next chapter (rolls into the next book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextChapter': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous chapter (rolls into the previous book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousChapter': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextBook': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousBook': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextVerse': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousVerse': () => Promise<void>;
+    /**
+     * Open the appropriate Book Chapter Control (the active tab's if it shows one, else the top
+     * toolbar's) and focus its input, ready for typing a reference
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openBookChapterControl': () => Promise<void>;
+    /**
+     * Navigate the reference history in the physical "left" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: left = back in
+     * LTR, forward in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
+     * @experimental
+     */
+    'platform.navigateLeftInReferenceHistory': () => Promise<boolean>;
+    /**
+     * Navigate the reference history in the physical "right" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: right = forward
+     * in LTR, back in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
+     * @experimental
+     */
+    'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
 
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
@@ -122,37 +382,6 @@ declare module 'papi-shared-types' {
    * @example 'platform.quit';
    */
   export type CommandNames = keyof CommandHandlers;
-
-  /**
-   * Event data types for each network event available on the papi. Each extension can extend this
-   * interface to add events it emits with `papi.network.createNetworkEventEmitter`.
-   *
-   * Note: Event names must consist of two strings separated by at least one period. We recommend
-   * one period and lower camel case in case we expand the api in the future to allow dot notation.
-   *
-   * An extension can extend this interface to add types for the network events it emits by adding
-   * the following to its `.d.ts` file:
-   *
-   * @example
-   *
-   * ```typescript
-   * declare module 'papi-shared-types' {
-   *   export interface NetworkEventHandlers {
-   *     'myExtension.onSomethingChanged': { someData: string };
-   *   }
-   * }
-   * ```
-   */
-  export interface NetworkEventHandlers {}
-
-  /**
-   * Names for each network event available on the papi.
-   *
-   * Automatically includes all extensions' network events that are added to
-   * {@link NetworkEventHandlers}.
-   */
-  export type NetworkEventNames = keyof NetworkEventHandlers;
-
   // #endregion
 
   // #region User Settings
@@ -181,11 +410,6 @@ declare module 'papi-shared-types' {
    */
   export interface SettingTypes {
     /**
-     * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
-     * `useWebViewScrollGroupScrRef`
-     */
-    'platform.verseRef': SerializedVerseRef;
-    /**
      * List of locales to use when localizing the interface. First in the list receives highest
      * priority. Please always add 'en' (English) at the end when using this setting so everything
      * localizes to English if it does not have a localization in a higher-priority locale.
@@ -210,8 +434,56 @@ declare module 'papi-shared-types' {
      */
     'platform.requestTimeout': number;
     /**
-     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
-     * 0.5 to 3.0.
+     * Default content zoom applied to every zoom area of a web view pane that has no level of its
+     * own (shown in Settings as "Tab content default zoom"). A factor: 1.0 = 100 %. Allowed range
+     * is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area its own level; Ctrl+`0` returns that area to
+     * this default. This factor multiplies with any font size a view sets for itself (for example a
+     * project's font size) and never replaces it; resetting a pane returns it to this default, not
+     * to that font size.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoom': number;
+    /**
+     * Per-project memory of content zoom levels, keyed `<kind>:<identity>:<area>` (kind is
+     * `editor`, `resource` or `notes`; identity is the project id, or the resource id for views
+     * without a project; area is the zoom area id, `main` for a view with one area). Written by the
+     * platform when an area's own level changes; read when a pane for that project opens. Local to
+     * this machine.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.ptxUtilsMementoData`: settings already give cross-window persistence and change
+     * notification for free. Writes are best-effort last-write-wins across windows, and a direct
+     * `papi.settings.set` on this key is tolerated rather than guarded against.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomMemory': { [key: string]: number };
+    /**
+     * Which web view types mark at least one content-zoom area, keyed by web view type. An absent
+     * key means the platform has no evidence yet that the type marks any area. Written by the
+     * platform the first time a pane of a type reports an area (the record only ever gains `true`
+     * entries; a type recorded `true` is never downgraded); read when a pane opens, before its
+     * content loads, so the platform knows whether to scale the whole view at the Settings default
+     * or to wait for the areas the view is about to mark. Without it every newly opened pane would
+     * show at the wrong scale for a moment. Local to this machine, and self-correcting in the
+     * `false`→`true` direction: a type that starts marking an area is re-recorded on its next
+     * open.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.webViewContentZoomMemory`. Deliberately separate from that key, which holds the
+     * user's remembered levels: this one is a capability cache, and clearing the user's levels must
+     * not clear it.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomTypesWithAreas': { [webViewType: string]: boolean };
+    /**
+     * The zoom factor that applies to the entire application, including menus and toolbars (shown
+     * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
+     * from Settings and by the `platform.zoomIn` and `platform.zoomOut` commands; no keyboard
+     * shortcut changes it — the zoom chords drive per-pane content zoom, which is
+     * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
@@ -225,6 +497,26 @@ declare module 'papi-shared-types' {
      * @default `simple`
      */
     'platform.interfaceMode': 'simple' | 'power';
+    /**
+     * Whether the simple-mode first-run setup wizard has been completed. Hidden; managed by the
+     * first-run state machine, not user-configurable. `false` (default) means onboarding has not
+     * finished and the wizard should gate the app on the next simple-mode startup.
+     */
+    'platform.firstRunComplete': boolean;
+    /**
+     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
+     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
+     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
+     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     */
+    'platform.syncOnStartup': boolean;
+    /**
+     * Whether to re-show the registration reminder at startup for an already-onboarded Simple-mode
+     * user whose Paratext registration has become invalid. `true` (default) keeps showing the
+     * reminder; `false` suppresses it (set by the wizard's "Don't show this on startup again"
+     * checkbox). Only consulted for completed users; the fresh-user onboarding flow ignores it.
+     */
+    'platform.showRegistrationReminderOnStartup': boolean;
   }
 
   /**
@@ -232,7 +524,7 @@ declare module 'papi-shared-types' {
    *
    * Automatically includes all extensions' user settings that are added to {@link SettingTypes}.
    *
-   * @example 'platform.verseRef'
+   * @example 'platform.interfaceLanguage'
    */
   export type SettingNames = keyof SettingTypes;
 
@@ -291,12 +583,78 @@ declare module 'papi-shared-types' {
      */
     'platform.fullName': string;
     /**
-     * Whether or not the project is editable. This is a general "editable", not necessarily that it
-     * is editable by the current user.
+     * Whether or not the primary content of the project is currently editable. If this is `false`,
+     * ancillary data may still be editable. This is a project-wide "editable"; if this is `true`,
+     * that does not necessarily mean it is editable by the current user.
      *
-     * Projects that are not editable are sometimes called "resources".
+     * This setting is intended to be used as a central location to turn off all editing of the
+     * primary content of the project temporarily. For example, an administrator of a Scripture
+     * project may want to disable editing the Scripture text while allowing users to comment on the
+     * project for a period of review.
+     *
+     * Each project may implement this differently. For Paratext Scripture projects, not editable
+     * means the following are not editable:
+     *
+     * - Scripture text
+     * - Inventory approval statuses
+     * - Biblical terms renderings
+     *
+     * While most everything else on the project is still editable such as the following
+     * (non-exhaustive):
+     *
+     * - Project comments
+     * - Biblical terms renderings descriptions
+     * - Project settings
+     * - Project plan
+     * - User permissions
+     *
+     * Note: not all of these editable rules are necessarily enforced on an API level for Paratext
+     * Scripture projects; some rules may be enforced only in UI.
+     *
+     * This is a coarse, project-level approximation of "the user can edit the primary content of
+     * this project" and currently doubles as our user-permissions proxy for editing primary project
+     * data. In the future, using it to check for editing permissions will be replaced by
+     * fine-grained user permissions.
+     *
+     * Use this setting when you need to determine whether **a project's primary content may be
+     * edited**.
+     *
+     * For determining whether a project should be treated as a fully read-only published reference
+     * / resource, use {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`}.
+     * If the project is read-only or a published resource, this setting should be `false` and
+     * {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`} should be
+     * `true`.
+     *
+     * If `isPublished` is `true`, then `isEditable` should always be `false`.
+     *
+     * Defaults to `true`.
      */
     'platform.isEditable': boolean;
+    /**
+     * Whether this project has been published and is therefore not currently writeable in any way.
+     *
+     * A "published" project is one that has been packaged or delivered for use as a reference (e.g.
+     * a Bible resource downloaded from DBL, a global-note-type resource). Nothing on a published
+     * project is writeable — not the primary content or ancillary data.
+     *
+     * Use this setting when you need to:
+     *
+     * - Determine whether a project has been packaged/delivered in a way that it is intended to be
+     *   used as a reference for consultation rather than a project that is actively being worked
+     *   on.
+     * - Determine whether ancillary data on a project (extension data, settings, etc.) may be
+     *   modified. On a published project the answer is always "no"; on a non-published project it
+     *   may still be "no" for other reasons but is at least not gated by publication.
+     *
+     * Do **not** use this setting as the sole gate on editing the primary content of a project —
+     * that is what {@link ProjectSettingTypes['platform.isEditable'] | `platform.isEditable`} is
+     * for. A non-published project may still have non-editable primary content for other reasons.
+     *
+     * If `isPublished` is `true`, then `isEditable` should always be `false`.
+     *
+     * Defaults to `false`.
+     */
+    'platform.isPublished': boolean;
     /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is
@@ -726,6 +1084,115 @@ declare module 'papi-shared-types' {
    * @example 'platform.placeholderWebView'
    */
   export type WebViewControllerTypes = keyof WebViewControllers;
+
+  // #endregion
+
+  // #region Network Events
+
+  /**
+   * Network events emitted from multiple processes (each process emits its own local event under
+   * the same name). Declared by the platform; not extensible by extensions.
+   *
+   * The names listed here are the source of truth for which event names use multi-source semantics
+   * at the central registry. An event name in this type allows registration from multiple processes
+   * (each process registers once, all emitters are valid sources). Any other event name uses
+   * single-source semantics (one registrant ever).
+   *
+   * Subscribers do not need to know which events are multi-source — `getNetworkEvent` handles both
+   * kinds identically.
+   *
+   * See {@link NetworkEvents} for the full registry of known event names.
+   */
+  export type MultiSourceNetworkEvents = {
+    /**
+     * Emitted when a network object is created in any process. Payload includes the new object's
+     * details.
+     */
+    'object:onDidCreateNetworkObject': NetworkObjectDetails;
+    /**
+     * Emitted when a network object is disposed in any process. Payload is the disposed object's
+     * ID.
+     */
+    'object:onDidDisposeNetworkObject': string;
+    /**
+     * Emitted when the set of available projects changes (a project is added or removed) or when a
+     * project's display metadata (name/fullName/language/languageTag/isEditable) changes. Consumers
+     * refetch cheap project metadata; there is no payload. Multi-source so any project-providing
+     * process/factory may announce it (the .NET data provider emits it today). Keep the name in
+     * sync with `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    'platform.onDidChangeProjects': undefined;
+    /**
+     * Emitted when the Scripture reference for a scroll group changes. Multi-source because every
+     * open window navigates its own UI and announces the result — a scroll group is app-wide, so
+     * each window must be able to tell the others where it moved to.
+     */
+    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /**
+     * Emitted when a scroll group's back/forward reference history changes. Multi-source for the
+     * same reason as {@link MultiSourceNetworkEvents['scrollGroup:onDidUpdateScrRef']}.
+     *
+     * @experimental
+     */
+    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
+    /**
+     * Multi-source because web views belong to the window that opened them, so every window
+     * announces its own.
+     *
+     * @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead.
+     */
+    'webView:onDidAddWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is created in any window. */
+    'webView:onDidOpenWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is updated in any window. */
+    'webView:onDidUpdateWebView': UpdateWebViewEvent;
+    /** Emitted when a WebView is closed in any window. */
+    'webView:onDidCloseWebView': CloseWebViewEvent;
+  };
+
+  /**
+   * Mapping of network event names to their payload types. Extensions augment this to declare their
+   * own events. Inherits the platform's multi-source events from {@link MultiSourceNetworkEvents}
+   * automatically.
+   *
+   * To declare a new event for use with `createNetworkEventEmitterAsync`:
+   *
+   * ```ts
+   * declare module 'papi-shared-types' {
+   *   export interface NetworkEvents {
+   *     'myExt.somethingHappened': { foo: string };
+   *   }
+   * }
+   * ```
+   *
+   * Mark a single event as experimental by adding an `@experimental` JSDoc tag in a doc comment
+   * directly above its entry.
+   */
+  export interface NetworkEvents extends MultiSourceNetworkEvents {
+    /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
+    'platform.onDidReloadExtensions': boolean;
+    /**
+     * Emitted by the main process for every mouse-down and every Escape key-down anywhere in the
+     * app window, including inside WebView iframes. Transient overlays (context menus, command
+     * palettes, dismissable popovers) dismiss on it.
+     *
+     * @experimental
+     */
+    'platform.onDidAppWindowInput': AppWindowInputEvent;
+    /**
+     * Emitted by the main process when the window it considers focused changes. Survives the whole
+     * application losing OS focus (alt-tabbing to another application) — the payload keeps naming
+     * the window the user was last working in.
+     *
+     * @experimental
+     */
+    'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
+  }
+
+  /** Union of all known network event names (keys of {@link NetworkEvents}). */
+  export type NetworkEventTypes = keyof NetworkEvents;
 
   // #endregion
 }

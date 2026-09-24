@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react';
-import { Button, Checklist, Label } from 'platform-bible-react';
+import { Button, CheckboxGroup, Label } from 'platform-bible-react';
 import { useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { LocalizeKey } from 'platform-bible-utils';
@@ -7,6 +7,11 @@ import { DIALOG_BASE } from './dialog-base.data';
 import { DialogDefinition, DialogTypes, SELECT_BOOKS_DIALOG_TYPE } from './dialog-definition.model';
 import './select-books-dialog.component.scss';
 
+/**
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
+ */
 function SelectBooksDialog({
   prompt,
   submitDialog,
@@ -32,7 +37,7 @@ function SelectBooksDialog({
     <div className="select-books-dialog">
       <Label>{prompt}</Label>
       <div className="select-books-dialog-scroll">
-        <Checklist
+        <CheckboxGroup
           className="book-list"
           listItems={bookIds}
           createLabel={createBookLabel}
@@ -52,6 +57,11 @@ function SelectBooksDialog({
 
 const localizeSelectBooksKey: LocalizeKey = `%selectBooks_title_selectBooks%`;
 
+/**
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
+ */
 export const SELECT_BOOKS_DIALOG: DialogDefinition<typeof SELECT_BOOKS_DIALOG_TYPE> = Object.freeze(
   {
     ...DIALOG_BASE,

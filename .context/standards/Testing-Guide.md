@@ -1,0 +1,1574 @@
+---
+title: Testing Guide
+description: Vitest, NUnit, TDD, testing trophy model, AI agent test quality guardrails, mocking, and CI.
+---
+
+# Testing Guide for paranext-core
+
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
+An overview of the testing infrastructure in paranext-core and guidelines for writing tests that catch real defects.
+
+---
+
+## Overview
+
+paranext-core uses a **layered testing approach** rather than comprehensive end-to-end testing:
+
+| Layer                 | Framework                | Location            | Purpose                      |
+| --------------------- | ------------------------ | ------------------- | ---------------------------- |
+| TypeScript Unit Tests | Vitest                   | `src/**/*.test.ts`  | Services, utilities, hooks   |
+| React Component Tests | Vitest + Testing Library | `lib/**/*.test.tsx` | UI components                |
+| C# Unit Tests         | NUnit                    | `c-sharp-tests/`    | Data providers, services     |
+| Component Stories     | Storybook + Playwright   | `**/*.stories.tsx`  | Visual testing, interactions |
+
+---
+
+## TDD Discipline
+
+Test-Driven Development is the recommended default for non-trivial backend logic. It's not mandatory everywhere, but when you write tests first, you end up with better-specified code, tests that can actually fail, and fewer regressions.
+
+### The RED-GREEN-REFACTOR Cycle
+
+| Phase        | Action                          |
+| ------------ | ------------------------------- |
+| **RED**      | Write ONE failing test          |
+| **GREEN**    | Write MINIMUM code to pass      |
+| **REFACTOR** | Clean up while tests stay green |
+
+**C# RED phase**: A C# RED commit cannot be test-only — tests won't compile without the types they reference (and on `ai/*` branches with C# changes staged, the pre-commit hook also runs `dotnet build` including the test project; elsewhere the failure surfaces in CI). Commit minimal skeleton type stubs (shape only — no constructors, validation, or constant values) alongside the failing tests so the build passes while the tests fail at runtime. Never reach for `--no-verify`.
+
+### Verifying Tests Can Fail
+
+Every test must be capable of failing when the implementation breaks. How you verify depends on context:
+
+| Context                         | Verification Method                                                |
+| ------------------------------- | ------------------------------------------------------------------ |
+| TDD (test-first)                | The RED phase proves it — test fails before implementation exists. |
+| Adding tests to existing code   | Revert Test required (see below).                                  |
+| Bug fix                         | Revert Test required — prove the test catches the bug.             |
+
+#### The Revert Test (for non-TDD contexts)
+
+```bash
+# 1. Comment out or revert the implementation
+git stash  # or comment out the code
+
+# 2. Run the test — it MUST fail
+npm test -- path/to/test.ts  # or: dotnet test --filter "TestName"
+
+# 3. Verify it failed for the RIGHT reason (assertion, not compilation error)
+
+# 4. Restore implementation
+git stash pop
+
+# 5. Run test again — it MUST pass
+```
+
+**If a test passes without the implementation, it proves nothing and must be rewritten.**
+
+#### Exception: `test.fails` tripwires for a KNOWN, deliberately unfixed defect
+
+A `test.fails` case inverts Vitest's verdict: the case passes while the body throws and turns **red
+the moment the defect it names is fixed**. That makes it a tripwire, not a broken test — the way to
+record a defect you have deliberately chosen not to fix yet so that fixing it cannot pass unnoticed.
+It is the one place where "a case that goes green without an implementation change" is the intended
+alarm rather than a bug in the test.
+
+Use it only for a defect that is **known, reproduced, and deferred to a named ticket**, and only with
+all three of:
+
+- A `TODO(PT-XXXX)` on the case itself naming the specific defect it pins — not only on the
+  `describe` block, and not only in the production file. Whoever fixes the ticket must meet the
+  reference in the case they are about to turn red.
+- An instruction in that comment to **drop the `.fails`, not delete the case**, once the defect is
+  fixed. Deleting it throws away the coverage the tripwire was standing in for.
+- An assertion specific enough that the documented failure is the one being pinned. `test.fails`
+  passes when the body throws for **any** reason, so a case can stay green while no longer pinning
+  the bug it names — prefer asserting on the specific failure over letting an arbitrary throw count.
+
+Do NOT reach for it to park a test that is merely inconvenient, flaky, or unfinished. A test with no
+named defect and no ticket is a skipped test wearing a disguise; skip it explicitly instead.
+
+Live example: the three reconnect blockers in
+`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4435.
+
+### Continuous Testing Frequency
+
+| Trigger               | Scope                   | Time Budget |
+| --------------------- | ----------------------- | ----------- |
+| After every file save | Current test            | < 5s        |
+| Every 3–5 edits       | Feature tests           | < 30s       |
+| Before any commit     | Full suite              | < 5 min     |
+| Before push           | Full + lint + typecheck | < 10 min    |
+
+### Outside-In TDD (Double Loop)
+
+For non-trivial features, [Outside-In TDD](https://outsidein.dev/concepts/outside-in-tdd/) constrains the implementation by starting from the behavior the feature must deliver:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  OUTER LOOP (Acceptance Test)                               │
+│                                                             │
+│  Write the acceptance test FIRST                           │
+│  This test defines WHAT the feature must do                │
+│  It constrains the implementation scope                     │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  INNER LOOP (Unit Tests)                             │   │
+│  │                                                      │   │
+│  │  Write unit tests that drive HOW to implement        │   │
+│  │  These guide the internal structure                  │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Principle**: The **outer acceptance test** is the done signal. When it passes, the feature is complete. The outer test source is your acceptance/E2E test for the feature.
+
+#### Acceptance Test Characteristics
+
+An acceptance test should:
+
+1. Call the **public API** of the feature.
+2. Verify the **complete outcome**, not an intermediate step.
+3. Be marked so it can be selected and run as a group (e.g. `[Test]` + `[Category("Acceptance")]` in NUnit).
+4. Include **side-effect verification** for methods with effects (create, update, delete).
+
+```csharp
+[Test]
+[Category("Acceptance")]
+[Description("Acceptance test: create project with valid settings succeeds and persists")]
+public async Task CreateProject_WithValidSettings_AcceptanceTest()
+{
+    // This test passes when the feature is COMPLETE.
+    // It calls the public API and verifies the expected outcome.
+}
+```
+
+#### Side-Effect Verification
+
+For methods with side effects, verify the **observable effect** — not just the return value:
+
+| Method Type | Verification                                                       |
+| ----------- | ------------------------------------------------------------------ |
+| Create      | Verify created item is findable via `ScrTextCollection` or on disk |
+| Update      | Verify changed property is reflected when re-queried               |
+| Delete      | Verify item is no longer findable                                  |
+
+**Anti-stub guidance**: A stub that returns `{ Success = true, Guid = NewGuid() }` passes return-value-only tests. Always include at least one test that verifies persistence.
+
+##### The Restart Test (detecting stubs)
+
+For each side-effect method (create, update, delete, add), ask: **"If I call this method successfully and then restart the application, will the effect still be there?"** If no, the method is a stub, and a return-value-only test will pass against it while the world never actually changes.
+
+A **stub** is code that:
+
+- Returns hardcoded or fabricated data without calling ParatextData APIs.
+- Only stores data in memory (a `Dictionary`/`List`) instead of writing to disk.
+- Uses `Task.FromResult(...)` with a fabricated result instead of performing the real operation.
+- Generates an ID without creating the corresponding persistent artifact.
+
+If a stub is intentional (the feature is not yet available in ParatextData), document it with a comment — `// STUB: {reason} — tracked in {issue}` — rather than leaving it to masquerade as a working implementation. Otherwise, replace it with real ParatextData integration before proceeding.
+
+##### Effect-verification test pattern
+
+An effect-verification test **reloads from the real data source** (ParatextData / disk) rather than trusting in-memory state, then asserts the effect persisted:
+
+```csharp
+[Test]
+public async Task CreateMethod_WhenSuccessful_ActuallyPersistsData()
+{
+    var result = await Service.CreateAsync(CreateValidRequest());
+
+    // What return-value-only tests do:
+    Assert.That(result.Success, Is.True);
+
+    // What effect-verification adds — reload from ParatextData, NOT in-memory state:
+    var reloaded = LoadFromParatextData(result.Id);
+    Assert.That(reloaded, Is.Not.Null, "Data should be loadable after create");
+    Assert.That(reloaded.Name, Is.EqualTo(request.Name));
+}
+```
+
+The distinction: TDD tests verify "the method returns success with the right shape"; effect tests verify "after calling the method, the world has changed." For each side-effect method, add at least one test that reloads from the real source.
+
+#### TDD Variant Selection (Outside-In vs Classic)
+
+| TDD Variant              | When to Use                                                       |
+| ------------------------ | ---------------------------------------------------------------- |
+| **Outside-In** (default) | Clear contracts, well-understood behavior, ParatextData-heavy features |
+| **Classic**              | Exploratory implementation, complex algorithms, interface emerges from extraction |
+
+---
+
+## Test Strategy: The Testing Trophy
+
+We adopt the **Testing Trophy** model rather than the traditional Test Pyramid.
+
+### Why Not the Pyramid?
+
+The Test Pyramid (many unit tests, fewer integration, few E2E) tends to produce:
+
+- Unit tests that assert implementation details
+- Tests that break on every refactor (opposite of fearless refactoring)
+- Over-mocking that hides real integration issues, giving false confidence
+
+This is especially problematic when AI is generating tests, because AI readily produces tests that mirror implementation.
+
+### The Testing Trophy Model
+
+```
+        ▲ E2E (few, high-value critical journeys)
+       ╱ ╲
+      ╱   ╲
+     ╱     ╲ Integration tests (MOST VALUABLE)
+    ╱       ╲ Test at service boundaries
+   ╱─────────╲
+  ╱           ╲ Unit tests (complex algorithms, pure functions only)
+ ╱─────────────╲
+╱               ╲ Static analysis (TypeScript, linting)
+```
+
+| Test Type       | When to Use                        | Coverage Focus               |
+| --------------- | ---------------------------------- | ---------------------------- |
+| **Integration** | Service boundaries, API contracts  | Behavior, not implementation |
+| **Unit**        | Complex algorithms, pure functions | Edge cases, calculations     |
+| **E2E**         | Critical user journeys             | Smoke tests only             |
+
+### Key Principle: Test Behavior, Not Implementation
+
+> "If a refactor breaks the test but not the behavior, the test is wrong."
+
+**Good test:** Calls public API, verifies output matches the expected value.
+**Bad test:** Verifies an internal method was called with specific arguments.
+
+### Prefer Real Dependencies
+
+| Approach           | Use When                                                      |
+| ------------------ | ------------------------------------------------------------ |
+| Real ParatextData  | Always for features with ParatextData logic — it's the oracle |
+| In-memory database | Integration tests needing data persistence                   |
+| Real services      | Whenever feasible and fast enough                            |
+| Mocks              | Only for external APIs, network, slow dependencies           |
+
+Real dependencies enable **fearless refactoring** — change internals without updating tests.
+
+---
+
+## AI Agent Test Quality Guardrails
+
+Apply these when AI agents (or humans moving fast) generate tests. They target the most common anti-patterns.
+
+### What NOT to Test
+
+| Category                | Examples                                  | Why Prohibited                 |
+| ----------------------- | ----------------------------------------- | ------------------------------ |
+| Trivial accessors       | Getter/setter, `getName()` returns name   | Zero defect-detection value    |
+| Implementation details  | Internal variables, private method calls  | Couples test to implementation |
+| Framework behavior      | `Array.push()` adds items                 | Testing someone else's code    |
+| Constructor assignments | `new User(name).name === name`            | Tautological                   |
+
+### Prohibited Test Patterns
+
+#### 1. Implementation-Mirroring Tests
+
+```typescript
+// BAD: expected value computed the same way as the implementation
+test('calculateTotal sums items', () => {
+  const items = [{ price: 10 }, { price: 20 }];
+  const expected = items.reduce((sum, i) => sum + i.price, 0); // this IS the implementation
+  expect(calculateTotal(items)).toBe(expected);
+});
+
+// GOOD: expected value is a literal
+test('calculateTotal returns sum of item prices', () => {
+  expect(calculateTotal([{ price: 10 }, { price: 20 }, { price: 5 }])).toBe(35);
+});
+```
+
+#### 2. Over-Mocking
+
+If you need more than 3 mocks for a test, reconsider:
+
+- Is the unit too large? Split it.
+- Is this actually an integration test? Use real dependencies.
+- Are mocks hiding real issues?
+
+#### 3. Non-Deterministic Tests
+
+| Source        | Required Mitigation                      |
+| ------------- | ---------------------------------------- |
+| System time   | Use `vi.useFakeTimers()` or inject clock |
+| Random values | Seed RNG or mock `Math.random()`         |
+| Network calls | Mock all HTTP/WebSocket calls            |
+| GUIDs         | Inject a generator or use fixed values   |
+
+### Mocking Decision Matrix
+
+| Dependency       | Unit Tests    | Integration Tests |
+| ---------------- | ------------- | ----------------- |
+| ParatextData.dll | **Keep real** | **Keep real**     |
+| Network services | Mock          | Mock or real      |
+| File system      | Mock          | Temp files        |
+| External APIs    | Mock          | Mock              |
+| System time      | Mock          | Mock              |
+
+**ParatextData Exception:** For features with ParatextData logic, NEVER mock ParatextData — it is the shared oracle that defines correct behavior. Run tests against the real `ScrTextCollection`.
+
+### Test Quality Checklist
+
+Before accepting AI-generated tests, verify:
+
+- [ ] **Falsifiable** — Test fails when the implementation is broken (Revert Test).
+- [ ] **Independent** — Passes/fails independently of other tests.
+- [ ] **Behavior-focused** — Tests WHAT, not HOW.
+- [ ] **Meaningful assertions** — Checks business value, not artifacts.
+- [ ] **Deterministic** — Same result on every run.
+
+### Stop and Ask Triggers
+
+AI agents should pause and ask when:
+
+1. Specification is ambiguous or contradictory.
+2. Domain-specific rules are involved (Bible versification, USFM semantics, Paratext conventions).
+3. Architecture decisions are needed (creating new utilities, modifying test infrastructure).
+4. Multiple interpretations of an edge case exist.
+
+### Test Scenario Coverage Mix
+
+When planning the scenarios for a feature (not just the happy path), aim for a healthy distribution rather than a wall of happy-path cases. Useful heuristics:
+
+- **At least ~15% edge cases and ~5% error scenarios.** A scenario set that is almost entirely happy-path is under-specified — the defects live in the edges.
+- **Don't blanket-assign the logic layer.** When every scenario shares one classification (all `ParatextData`, or all `UI`), it usually signals a feature-level guess rather than per-behavior analysis; cross-check each scenario against where the logic actually lives.
+- **Inputs and expected outputs must be concrete enough to implement.** An expected output that is only a boolean flag or a vague description isn't testable — pin specific values so a test can be written without re-deriving the intent.
+
+---
+
+## General Style Guidelines
+
+### Making Tests Readable
+
+- Make it obvious what the SUT (Software Under Test) is.
+  - For simple tests, separate the Arrange / Act / Assert sections with blank lines.
+  - Alternatively, comment `// SUT` above the line where the SUT is invoked.
+
+### Best Practices
+
+- Follow [Unit testing best practices](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-best-practices). Though written for C#, the principles apply to any language.
+
+### Naming
+
+- **C#**: Use the [naming conventions](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-best-practices#naming-your-tests) from the link above.
+- **TypeScript**: Use Vitest `test` blocks for simple tests and `describe`/`it` for structured groups. See [describe vs it vs test](https://webtips.dev/webtips/jest/describe-vs-test-vs-it).
+
+### When to Add Tests
+
+Add tests when they speed up development or make a critical part of the code more robust. You do not need 100% coverage — you need tests that would actually catch regressions.
+
+---
+
+## TypeScript/JavaScript Testing
+
+### Framework: Vitest (3.x — see `package.json` for the exact version)
+
+Vitest is a Jest-compatible test runner optimized for Vite projects.
+
+### Configuration Files
+
+| File                                        | Purpose                  |
+| ------------------------------------------- | ------------------------ |
+| `vitest.config.ts`                          | Root configuration       |
+| `lib/platform-bible-react/vitest.config.ts` | Component library config |
+
+**Root Configuration:**
+
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig(async () => {
+  const tsconfigPaths = (await import('vite-tsconfig-paths')).default;
+  return {
+    plugins: [tsconfigPaths()],
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      // Warms the lazy one-time ICU init behind Intl.* so it never lands inside a test's
+      // timeout window on a slow CI worker. See vitest.setup.ts for the rationale.
+      setupFiles: ['./vitest.setup.ts'],
+      // Must stay comfortably above vitest.setup.ts's asyncUtilTimeout — see note below.
+      testTimeout: 15000,
+      include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    },
+  };
+});
+```
+
+> The workspace configs (`extensions/vitest.config.ts`, `lib/platform-bible-utils/vite.config.ts`,
+> `lib/platform-bible-react/vitest.config.ts`) reference this same repo-root `vitest.setup.ts` via a
+> relative `setupFiles` path, so every vitest worker warms Intl once before any timed test.
+
+> **`testTimeout` vs. `asyncUtilTimeout`.** `vitest.setup.ts` also raises testing-library's own
+> `asyncUtilTimeout` — the deadline a bare `waitFor`/`findBy*` gives up at — independently of
+> vitest's per-test `testTimeout`. `testTimeout`'s clock starts at the beginning of the test body,
+> while a given `waitFor` call only starts its own `asyncUtilTimeout` countdown when that call is
+> reached, so whichever deadline elapses first wins. Every project that loads this shared setup
+> file must keep its own `testTimeout` comfortably above `asyncUtilTimeout` — not just nominally
+> above it, since any work a test does before reaching the `waitFor` call eats into that margin —
+> or a failing `waitFor` is reported as vitest's bare timeout instead of testing-library's richer
+> error (with its DOM dump), silently losing the more useful failure message.
+
+### Key Dependencies
+
+```json
+{
+  "vitest": "^3.x",
+  "@testing-library/react": "^16.2.0",
+  "@testing-library/jest-dom": "^6.6.3",
+  "@testing-library/dom": "^10.4.0",
+  "jsdom": "^26.0.0"
+}
+```
+
+### Test File Locations
+
+```
+src/
+├── shared/
+│   ├── utils/papi-util.test.ts
+│   └── services/shared-store.service.test.ts
+├── node/
+│   └── services/*.test.ts
+├── extension-host/
+│   └── services/extension-storage.service.test.ts
+└── renderer/
+    └── components/*.test.tsx
+
+lib/
+├── platform-bible-utils/
+│   └── src/*.test.ts
+└── platform-bible-react/
+    └── src/components/**/*.test.ts
+
+extensions/
+└── src/platform-scripture/
+    └── src/*.test.ts
+```
+
+### Running TypeScript Tests
+
+```bash
+# Run all tests (non-watch mode)
+npm test
+
+# Run core tests in watch mode
+npm run test:core
+
+# Run tests for a specific workspace
+npm run test --workspace=lib/platform-bible-react
+
+# Run tests with coverage
+npm run test:core -- --coverage
+```
+
+**`npm test` needs Playwright's browsers installed.** `lib/platform-bible-react`'s vitest config
+includes a `storybook (chromium)` project that runs stories in a real browser, so a checkout that
+has never run `npx playwright install` fails there rather than in any `.test.ts` file. CI installs
+them before running tests; locally, run it once.
+
+That project is also the repo's main source of flaky test runs: its story files are timing-sensitive
+under parallel load, and a full `npm test` can fail a different handful of them each time while every
+one passes in isolation. Before chasing a story failure, re-run that project on its own with
+`--no-file-parallelism` — if it goes green, the failure was contention, not a regression.
+
+---
+
+## C# Testing
+
+### Framework: NUnit 4.0.1
+
+### Project Configuration
+
+**File:** `c-sharp-tests/c-sharp-tests.csproj`
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+  <PackageReference Include="NUnit" Version="4.0.1" />
+  <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+  <PackageReference Include="coverlet.collector" Version="6.0.0" />
+  <PackageReference Include="ParatextData" Version="…" /> <!-- see c-sharp-tests/c-sharp-tests.csproj for current versions -->
+</ItemGroup>
+```
+
+### Test Directory Structure
+
+```
+c-sharp-tests/
+├── Checks/
+│   ├── CheckRunResultTests.cs
+│   ├── CheckRunnerCheckDetailsTests.cs
+│   ├── InputRangeTests.cs
+│   ├── InputRangesFilterTests.cs
+│   └── UsfmLocationTests.cs
+├── FixtureSetup.cs              # Assembly-level setup (repo: c-sharp-tests root)
+├── JsonUtils/
+│   ├── PlatformCommentConverterTests.cs
+│   └── InventoryOptionValueConverterTests.cs
+├── Projects/
+│   ├── LocalParatextProjectsTests.cs
+│   ├── ParatextDataProviderTests.cs
+│   ├── ParatextProjectDataProviderCommentTests.cs
+│   └── ParatextProjectDataProviderFactoryTests.cs
+├── Services/
+│   └── SettingsServiceTests.cs
+├── NetworkObjects/
+│   └── DummySettingsService.cs
+├── PapiTestBase.cs                  # Base class for tests
+├── DummyPapiClient.cs               # Mock PAPI client
+├── DummyParatextProjectDataProvider.cs
+├── DummyScrText.cs
+└── DummyLocalParatextProjects.cs
+```
+
+### Running C# Tests
+
+```bash
+# Run all C# tests
+dotnet test c-sharp-tests/c-sharp-tests.csproj
+
+# Verbose output
+dotnet test c-sharp-tests/c-sharp-tests.csproj --verbosity=detailed
+
+# Specific test class
+dotnet test c-sharp-tests/c-sharp-tests.csproj --filter "FullyQualifiedName~ParatextDataProviderTests"
+
+# With coverage
+dotnet test c-sharp-tests/c-sharp-tests.csproj --collect:"XPlat Code Coverage"
+```
+
+### Base Test Class
+
+`c-sharp-tests/PapiTestBase.cs` provides a shared base class for data-provider tests. It creates a `DummyPapiClient` and `DummyLocalParatextProjects`, and its `TestTearDown` cleans up `ScrTextCollection` with full index removal — see [ScrTextCollection Index Accumulation](#scrtextcollection-index-accumulation) below for why that matters.
+
+```csharp
+[TestFixture]
+[ExcludeFromCodeCoverage]
+internal abstract class PapiTestBase
+{
+    private DummyPapiClient? _client;
+    private DummyLocalParatextProjects? _projects;
+
+    [SetUp]
+    public virtual Task TestSetupAsync()
+    {
+        _projects = new DummyLocalParatextProjects();
+        _client = new DummyPapiClient();
+        return Task.CompletedTask;
+    }
+
+    [TearDown]
+    public virtual void TestTearDown()
+    {
+        // Clean up ScrTextCollection. The second parameter of Remove is `notify`;
+        // the codebase convention — including PapiTestBase itself — is
+        // `Remove(project, false)` in teardown (no change notifications needed
+        // while tearing tests down).
+        List<ScrText> projects = ScrTextCollection
+            .ScrTexts(IncludeProjects.Everything)
+            .ToList();
+        foreach (ScrText project in projects)
+            ScrTextCollection.Remove(project, false);
+
+        _client?.Dispose();
+    }
+
+    protected DummyPapiClient Client => _client!;
+    protected DummyLocalParatextProjects ParatextProjects => _projects!;
+
+    // Helper methods for test data creation
+    protected static JsonNode CreateVerseRefNode(int bookNum, int chapterNum, int verseNum);
+    protected static JsonElement CreateRequestMessage(string function, params object[] parameters);
+    protected static void VerifyUsfmSame(string usfm1, string usfm2, ScrText scrText, int bookNum);
+}
+```
+
+### Assembly-Level Setup
+
+**File:** `c-sharp-tests/FixtureSetup.cs`
+
+```csharp
+[SetUpFixture]
+[ExcludeFromCodeCoverage]
+public class FixtureSetup
+{
+    private static readonly string s_testFolder = Path.Combine(
+        Path.GetTempPath(),
+        "Platform.Bible.Tests"
+    );
+
+    public static string TestFolderPath => s_testFolder;
+
+    [OneTimeSetUp]
+    public void RunBeforeAnyTests()
+    {
+        if (!Directory.Exists(s_testFolder))
+            Directory.CreateDirectory(s_testFolder);
+        ParatextGlobals.Initialize(s_testFolder);
+    }
+
+    [OneTimeTearDown]
+    public void RunAfterAnyTests()
+    {
+        if (Directory.Exists(s_testFolder))
+            Directory.Delete(s_testFolder, true);
+    }
+}
+```
+
+### Test Doubles
+
+paranext-core uses hand-crafted test doubles rather than mocking frameworks like Moq:
+
+| Test Double                        | Purpose                             |
+| ---------------------------------- | ----------------------------------- |
+| `DummyPapiClient`                  | Simulates JSON-RPC WebSocket client |
+| `DummyParatextProjectDataProvider` | In-memory project data              |
+| `DummyScrText`                     | Mock scripture text                 |
+| `DummySettingsService`             | Mock settings service               |
+| `DummyLocalParatextProjects`       | Mock project collection             |
+
+See `c-sharp-tests/DummyPapiClient.cs` and peers for examples.
+
+### Forcing Non-Virtual ParatextData Outcomes via a Type-Name Seam
+
+Some ParatextData outcomes can't be reached from a test without a real precondition, and the API that produces them is **non-virtual** so it can't be overridden in a test double — e.g. `WriteLockManager.ObtainLock` returning null (a lock failure), `ScrText.DeleteBooks`, or `ScrText.PutText` raising. Mocking is impossible, and standing up the real failure condition is impractical.
+
+In that narrow case, gate the simulated outcome on the **runtime type name** of a purpose-built test double:
+
+```csharp
+// In the orchestrator (production code), fenced with a comment explaining the seam:
+private const string LockNotObtainedMarkerTypeName = "LockNotObtainedScrText";
+// ...
+if (scrText.GetType().Name == LockNotObtainedMarkerTypeName)
+    return /* the lock-not-obtained result the real API would produce */;
+```
+
+The test then passes a `LockNotObtainedScrText : DummyScrText` instance and gets the simulated outcome.
+
+This is a documented deviation from the "use real ParatextData — never mock it" rule, justified only because the underlying API is non-virtual and the real precondition is unreachable in a unit test. Keep the seam narrow: a private/internal `const` type-name string, with an inline comment at each call site explaining why it exists. Prefer wrapping the call behind a virtual provider interface when a feature touches that API broadly enough to warrant the larger seam.
+
+---
+
+## Component Testing with Storybook
+
+### Location
+
+`lib/platform-bible-react/.storybook/`
+
+### Capabilities
+
+- **70+ component stories** with visual documentation.
+- **Interactive play functions** for automated interaction testing.
+- **Accessibility testing** via axe-playwright.
+- **Vitest browser integration** with Playwright.
+
+### Story with Play Function Example
+
+```typescript
+// book-chapter-control.stories.tsx
+import { expect, fn, userEvent, within } from 'storybook/test';
+
+export const Default: Story = {
+  args: {
+    scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    handleSubmit: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button'));
+    await expect(canvas.getByRole('dialog')).toBeInTheDocument();
+
+    await userEvent.click(canvas.getByText('Exodus'));
+    await expect(args.handleSubmit).toHaveBeenCalled();
+  },
+};
+```
+
+### Stateful Harnesses for Callback-Heavy Components
+
+When a component's primary surface is callbacks — mutations, pickers, dialogs — `args`-only mock controls cannot exercise its real behavior. A reviewer opening such a story should be able to click through the full happy path and observe real state transitions, not just see a static screenshot.
+
+For these components, write a `StatefulHarness` render component that owns in-memory state and wires every callback to a state-mutating handler. Give each scenario its own story that renders the harness:
+
+```typescript
+function StatefulHarness(props: Partial<ManageBooksDialogProps>) {
+  const [selectedBooks, setSelectedBooks] = useState<string[]>([]);
+  // ...holds the in-memory state the component would normally receive from PAPI
+  return (
+    <ManageBooksDialog
+      {...props}
+      selectedBooks={selectedBooks}
+      onSelectBooks={setSelectedBooks} // every callback mutates harness state
+    />
+  );
+}
+
+export const Default: Story = { render: () => <StatefulHarness /> };
+export const PreSelected: Story = {
+  render: () => <StatefulHarness selectedBooks={['GEN', 'EXO']} />,
+};
+```
+
+**Avoid:**
+
+- Inline mock controls in `args:` for callback-heavy components — reviewers cannot observe state transitions.
+- Render-only stories with no callback wiring — they give a misleading static screenshot of a component that never reacts.
+
+Rationale: in-memory state plus callback-to-state wiring lets the story demonstrate the component's actual behavior. See `extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.stories.tsx` (`StatefulHarness`) and `extensions/src/platform-scripture/src/greek-esther-template-picker.stories.tsx` (`StatefulPickerHarness`).
+
+### Avoid Animation-Sensitive Assertions in Story Interaction Tests
+
+Story interaction tests can fire their next assertion before a CSS animation has finished playing. When that happens, assertions that read the **visual end-state of an animation** (`opacity: 1`, `toBeVisible()`, etc.) intermittently fail — even though the component is logically open and ready for interaction. Prefer semantic attributes that flip synchronously with the state change instead.
+
+**Don't** assert on animation-driven properties:
+
+```typescript
+// Fragile — opacity is animated from 0 → 1 by tw:fade-in-0; the assertion can fire before
+// the animation is done and `getComputedStyle().opacity` reaches 1.
+const popoverContent = await screen.findByRole('dialog');
+await waitFor(() => expect(popoverContent).toHaveStyle('opacity: 1'));
+await expect(popoverContent).toBeVisible(); // also opacity-driven
+```
+
+**Do** assert on a semantic attribute that flips synchronously, or on the inner content the test actually needs:
+
+```typescript
+// Robust — Radix flips data-state synchronously when open changes
+const popoverContent = await screen.findByRole('dialog');
+await waitFor(() => expect(popoverContent).toHaveAttribute('data-state', 'open'));
+
+// Even better — wait for the inner content the test will use next
+await within(popoverContent).findByRole('combobox');
+```
+
+For non-Radix animated components, the same principle applies: assert on the **content the animation reveals** (`findByRole`, `findByText`) rather than on the animation's terminal style. Anywhere `tailwindcss-animate` utilities, Radix's `tw:data-[state=open]:animate-in`, or a custom CSS keyframe would otherwise gate visibility, switching to a content-presence assertion sidesteps the timing race.
+
+### Chromatic Visual Review
+
+The `storybook-review` GitHub label triggers a Chromatic CI workflow that publishes the Storybook build for visual regression review by UX.
+
+- Triggers on PRs where the `storybook-review` label is applied.
+- By default snapshots `extensions/src/**/*.stories.tsx`; `.chromatic-story-filter` can override.
+- Uses TurboSnap (`onlyChanged`) to minimize snapshot count on subsequent pushes.
+- **Cost awareness**: Chromatic charges per snapshot — only apply the label when visual review is genuinely needed.
+
+---
+
+## CI/CD Pipeline
+
+`.github/workflows/test.yml` runs both test suites on every PR:
+
+```yaml
+jobs:
+  test:
+    steps:
+      - name: dotnet unit tests
+        run: dotnet test c-sharp-tests/c-sharp-tests.csproj
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: npm unit tests
+        run: npm test
+```
+
+---
+
+## Mocking Strategies
+
+### TypeScript (Vitest)
+
+| Method               | Use Case                  |
+| -------------------- | ------------------------- |
+| `vi.mock()`          | Module-level mocking      |
+| `vi.fn()`            | Individual function mocks |
+| `vi.mocked()`        | Type-safe mock access     |
+| `vi.spyOn()`         | Spy on existing methods   |
+| `vi.useFakeTimers()` | Control time in tests     |
+
+```typescript
+// Module mock
+vi.mock('@shared/services/network.service', () => ({
+  request: vi.fn(),
+}));
+
+// Function mock with implementation
+const mockFn = vi.fn().mockImplementation((x) => x * 2);
+
+// Spy on method
+vi.spyOn(console, 'log');
+
+// Fake timers
+vi.useFakeTimers();
+vi.advanceTimersByTime(1000);
+vi.useRealTimers();
+```
+
+### C#
+
+Use the hand-crafted test doubles listed under [C# Testing](#c-testing). Example `DummyPapiClient` implementation:
+
+```csharp
+internal class DummyPapiClient : PapiClient
+{
+    private readonly Queue<(string eventType, object? eventParameters)> _sentEvents = [];
+
+    public override Task<bool> ConnectAsync() => Task.FromResult(true);
+    public override Task DisconnectAsync() => Task.CompletedTask;
+
+    public override Task SendEventAsync(string eventType, object? eventParameters)
+    {
+        _sentEvents.Enqueue((eventType, eventParameters));
+        return Task.CompletedTask;
+    }
+
+    public int SentEventCount => _sentEvents.Count;
+    public (string eventType, object? eventParameters) NextSentEvent => _sentEvents.Dequeue();
+}
+```
+
+---
+
+## Test Patterns and Examples
+
+### TypeScript: Service Testing with Mocks
+
+> This example is executable and is meant to stay that way — it has shipped broken repeatedly
+> while being corrected by eye. `npm run verify:testing-guide` extracts the fence **verbatim**
+> and typechecks, lints and runs it; lint-staged runs it automatically whenever this file is
+> staged, so it does not depend on anyone remembering.
+
+```typescript
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStore } from '@shared/services/shared-store.service';
+
+// Mock EVERY member the code under test touches, not just the one being asserted on — a missing
+// member is `undefined` at the call site, and the resulting throw is usually swallowed by the
+// service's own try/catch and surfaces only as a rejected promise.
+vi.mock('@shared/services/network.service', () => ({
+  createCoreMultiSourceEventEmitter: vi.fn(),
+  getNetworkEvent: vi.fn(),
+  request: vi.fn(),
+  registerRequestHandler: vi.fn(),
+}));
+
+// The same rule applies to collaborators, not just the module under assertion. `initialize` logs,
+// and the real logger module configures transports at import time, so leaving it unmocked gives a
+// copied test load-time side effects it never asked for.
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+describe('sharedStoreService', () => {
+  // `event` matters as much as `emit`: the service subscribes through it during initialization.
+  const mockEmitter = {
+    emit: vi.fn(),
+    event: vi.fn(),
+    subscribe: vi.fn(),
+    subscribeOnce: vi.fn(),
+    dispose: vi.fn(),
+    emitLocal: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    // The factory returns the emitter alongside a promise for its central registration; the
+    // service consumes that promise in the background, so a mock must supply both. The cast is
+    // unavoidable: `PlatformEventEmitter` has private fields, so no object literal is assignable
+    // to it and the mock will not typecheck without it.
+    vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue(
+      // Needed for testing
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      {
+        emitter: mockEmitter,
+        registeredEmitterPromise: Promise.resolve(mockEmitter),
+      } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>,
+    );
+  });
+
+  it('should initialize with network event emitter', async () => {
+    await initializeSharedStore(networkService);
+    expect(networkService.createCoreMultiSourceEventEmitter).toHaveBeenCalledWith(
+      'shared-store:change',
+      expect.anything(),
+    );
+  });
+});
+```
+
+### TypeScript: React Hook Testing
+
+```typescript
+import { renderHook, act } from '@testing-library/react';
+import { vi } from 'vitest';
+import { useQuickNavButtons } from './book-chapter-control.navigation';
+
+vi.mock('./book-chapter-control.utils', () => ({
+  fetchEndChapter: vi.fn(),
+}));
+
+describe('useQuickNavButtons', () => {
+  const mockHandleSubmit = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('returns correct number of navigation buttons', () => {
+    const { result } = renderHook(() =>
+      useQuickNavButtons({ book: 'GEN', chapterNum: 1, verseNum: 1 }, availableBooks, 'ltr', mockHandleSubmit),
+    );
+    expect(result.current).toHaveLength(4);
+  });
+});
+```
+
+### C#: Parameterized Tests
+
+```csharp
+[TestCase(1, 1, 0, @"\id GEN \ip intro \c 1 ")]
+[TestCase(1, 2, 1, @"\v 1 verse one ")]
+[TestCase(1, 2, 6, @"\v 6 verse six ")]
+[TestCase(1, 2, 10, "")]  // Missing verse
+[TestCase(1, 6, 1, "")]   // Missing chapter
+public void GetVerseUsfm_ValidResults(int bookNum, int chapterNum, int verseNum, string expected)
+{
+    _scrText.PutText(1, 0, false, TestUsfmContent, null);
+    var provider = new DummyParatextProjectDataProvider("test", Client, CreateProjectDetails(_scrText), ParatextProjects);
+
+    var verseRef = new VerseRef(bookNum, chapterNum, verseNum);
+    var result = provider.GetVerseUsfm(verseRef);
+
+    VerifyUsfmSame(result, expected, _scrText, bookNum);
+}
+```
+
+---
+
+## Invariant Testing
+
+Invariant testing verifies that **business rules and properties always hold** for specific test inputs.
+
+### When to Use Invariant Tests
+
+| Scenario                | Example Invariant                     |
+| ----------------------- | ------------------------------------- |
+| Data transformations    | `Deserialize(Serialize(x)) == x`      |
+| Business rules          | "Project GUID is always unique"       |
+| Mathematical operations | "Result is always within valid range" |
+| Parsing/formatting      | "Round-trip preserves content"        |
+
+### C# Invariant Tests
+
+Use regular NUnit tests with the `[Category("Invariant")]` attribute.
+
+```csharp
+[TestFixture]
+public class VerseRefInvariantTests
+{
+    [Test]
+    [Category("Invariant")]
+    [TestCase(1, 1, 1)]
+    [TestCase(66, 150, 176)]
+    [TestCase(40, 28, 20)]  // Matthew 28:20
+    public void VerseRef_ComponentsAlwaysValid(int bookNum, int chapterNum, int verseNum)
+    {
+        var verseRef = new VerseRef(bookNum, chapterNum, verseNum);
+
+        Assert.That(verseRef.BookNum, Is.InRange(1, 66));
+        Assert.That(verseRef.ChapterNum, Is.GreaterThanOrEqualTo(0));
+        Assert.That(verseRef.VerseNum, Is.GreaterThanOrEqualTo(0));
+    }
+
+    [Test]
+    [Category("Invariant")]
+    [TestCase("Project1", "Project2")]
+    [TestCase("Test", "AnotherTest")]
+    [TestCase("A", "B")]
+    public void ProjectGuid_IsAlwaysUnique(string name1, string name2)
+    {
+        var project1 = CreateProject(name1);
+        var project2 = CreateProject(name2);
+
+        Assert.That(project1.Guid, Is.Not.EqualTo(Guid.Empty));
+        Assert.That(project2.Guid, Is.Not.EqualTo(Guid.Empty));
+        Assert.That(project1.Guid, Is.Not.EqualTo(project2.Guid));
+    }
+}
+```
+
+### TypeScript Invariant Tests
+
+```typescript
+describe('VerseRef Invariants', () => {
+  test.each([
+    [1, 1, 1],
+    [66, 150, 176],
+    [40, 28, 20],
+  ])('verse reference components are always valid (%i, %i, %i)', (book, chapter, verse) => {
+    const ref = createVerseRef(book, chapter, verse);
+    expect(ref.bookNum).toBeGreaterThanOrEqual(1);
+    expect(ref.bookNum).toBeLessThanOrEqual(66);
+    expect(ref.chapterNum).toBeGreaterThanOrEqual(0);
+    expect(ref.verseNum).toBeGreaterThanOrEqual(0);
+  });
+});
+```
+
+### Best Practices for Invariant Tests
+
+1. **Choose representative inputs** — include typical values, boundary values, and edge cases.
+2. **Test multiple scenarios** — use `[TestCase]` or `test.each` for multiple inputs.
+3. **Keep tests focused** — one invariant per test method.
+
+For more thorough invariant verification with random input generation, see [Property-Based Testing](#property-based-testing) below.
+
+---
+
+## Test Categorization
+
+Test categorization enables fast feedback during development: run the subset of tests that covers what you just changed instead of the whole suite.
+
+### Categories
+
+C# categories describe **what a test verifies**, not a speed tier. The ones that exist in `c-sharp-tests/` are `Contract` (API/behavior contracts — the bulk of the suite), `Acceptance`, `GoldenMaster`, `Integration`, `Critical`, `Invariant`, `Regression`, `EdgeCase`, `Infrastructure`, `ErrorPath`, and `DiskVerification`. There is no `Smoke`, `Full`, `Unit`, `Fast`, or `Slow` category — confirm a name with `git grep '\[Category(' c-sharp-tests/` before filtering on it. `.claude/skills/test-runner/categories.md` documents what each category covers and the full filter syntax; during TDD the useful order is `Contract`, then `Integration`, then `Acceptance`, then the whole suite.
+
+### Tagging Tests
+
+**C# (NUnit):**
+
+```csharp
+[Test]
+[Category("Contract")]
+public void BasicOperation_Works() { }
+
+[Test]
+[Category("Critical")]
+public void ImportantFeature_HandlesEdgeCase() { }
+```
+
+**TypeScript (Vitest):**
+
+```typescript
+describe.concurrent('Smoke tests', () => {
+  test('basic operation works', () => {});
+});
+```
+
+### Running by Category
+
+```bash
+# C# — run one category (there is no root solution, so name the test project)
+dotnet test c-sharp-tests/ --filter "Category=Critical"
+
+# TypeScript — run a specific test name pattern
+npm run test:core -- --run -t "Smoke"
+```
+
+---
+
+## Property-Based Testing
+
+Property-based testing verifies that **invariants hold for all possible inputs**, not just the cases you imagined. Humans define the invariant; the tool generates the inputs.
+
+It complements [Invariant Testing](#invariant-testing): start with regular invariant tests using specific inputs, then promote high-value invariants to property tests when random input generation would catch more.
+
+### When to Use Property Tests
+
+| Scenario                | Example Property                      |
+| ----------------------- | ------------------------------------- |
+| Data transformations    | `Deserialize(Serialize(x)) == x`      |
+| Business rules          | "Project GUID is always unique"       |
+| Mathematical operations | "Result is always within valid range" |
+| Parsing/formatting      | "Round-trip preserves content"        |
+
+### C# (no property-based framework)
+
+The C# test suite does **not** include a property-based testing framework — `c-sharp-tests/c-sharp-tests.csproj` references NUnit (with `NUnit3TestAdapter` and `coverlet.collector`) but no FsCheck or equivalent. Verify invariants in C# with ordinary NUnit `[Test]`/`[TestCase]` methods, supplying representative and boundary inputs by hand, and tag them with `[Category("Invariant")]`:
+
+```csharp
+[TestFixture]
+public class VerseRefInvariantTests
+{
+    [TestCase(1, 1, 1)]
+    [TestCase(66, 150, 176)]
+    [TestCase(40, 28, 20)]
+    [Category("Invariant")]
+    public void VerseRef_ComponentsAlwaysValid(int book, int chapter, int verse)
+    {
+        var verseRef = new VerseRef(book, chapter, verse);
+
+        Assert.That(verseRef.BookNum, Is.InRange(1, 66));
+        Assert.That(verseRef.ChapterNum, Is.GreaterThanOrEqualTo(0));
+        Assert.That(verseRef.VerseNum, Is.GreaterThanOrEqualTo(0));
+    }
+}
+```
+
+For random input generation in TypeScript, `fast-check` is the standard library — **not currently installed in this repo** (adding it is a dependency decision that needs approval first). The hand-supplied-inputs invariant pattern above is what the repo uses today.
+
+### TypeScript with fast-check (aspirational — not yet in this repo)
+
+If/when `fast-check` + `@fast-check/vitest` are added, property tests look like:
+
+```typescript
+import fc from 'fast-check';
+
+describe('VerseRef Properties', () => {
+  test.prop([fc.nat({ max: 65 }), fc.nat({ max: 149 }), fc.nat({ max: 175 })])(
+    'verse reference components are always non-negative',
+    (book, chapter, verse) => {
+      const ref = createVerseRef(book + 1, chapter + 1, verse);
+      expect(ref.bookNum).toBeGreaterThanOrEqual(1);
+      expect(ref.chapterNum).toBeGreaterThanOrEqual(0);
+      expect(ref.verseNum).toBeGreaterThanOrEqual(0);
+    },
+  );
+});
+```
+
+### Iteration Requirements
+
+| Invariant Criticality      | Minimum Iterations |
+| -------------------------- | ------------------ |
+| Critical (data integrity)  | 1000               |
+| Important (business logic) | 500                |
+| Standard                   | 100                |
+
+---
+
+## Mutation Testing
+
+Mutation testing verifies **test quality** by checking whether tests detect small code changes (mutations). A high mutation score means the tests catch real defects rather than just exercising the code.
+
+### When to Use
+
+- **Critical business logic** — merge algorithms, conflict resolution, data persistence.
+- **Threshold:** ≥70% mutation score for critical paths.
+
+### Tooling status (verified 2026-08-03)
+
+**No mutation-testing tooling is set up in paranext-core** — there is no Stryker/Stryker.NET config, dependency, or npm script in the repo. Treat mutation testing as a manual/aspirational practice: if the team adopts it, the standard tools are Stryker (TypeScript) and Stryker.NET (C#), and this section should then be rewritten around the real configs and scripts.
+
+### Interpreting Results (when tooling exists)
+
+- **Survived mutants** — code changes not caught by tests (bad).
+- **Killed mutants** — code changes caught by tests (good).
+- **Timeout/Error** — mutant caused an infinite loop or crash.
+
+---
+
+## E2E Testing
+
+End-to-end testing verifies complete user workflows across all processes (Electron main, renderer, extension host, and .NET data provider).
+
+### Tools
+
+- **Playwright** — browser automation for Electron apps.
+
+### Intended Use
+
+- **Critical user journeys** — project creation, editing, synchronization.
+- **Cross-process integration** — verify all processes communicate correctly.
+- **Smoke tests** — quick verification that the app starts and basic features work.
+
+### UI-Only Interaction Rule
+
+E2E tests that verify user flows MUST interact through visible UI only:
+
+- Pick the fixture from how the test gets its app: `isolated.fixture` for a spec under
+  `tests/isolated/` (a fresh Electron per test), `cdp.fixture` for one under `tests/attached/`
+  (attaches to an app you started yourself).
+- Click menu items, buttons, and fill forms through the UI.
+- NEVER use `papi.fixture` or `app.fixture` for per-feature tests.
+- NEVER send JSON-RPC commands to set up UI state.
+- NEVER import `sendPapiCommand` from helpers in per-feature tests.
+
+Note: `app.fixture` is retained for CI smoke tests only (launches standalone Electron).
+
+**Isolated-suite setup exception:** specs under `e2e-tests/tests/isolated/` run against a fresh
+temp profile with no projects and no project-open UI, so their *setup* necessarily goes through
+PAPI (`sendPapiCommandWhenRegistered` to open an editor, flip `platform.isEditable`, etc.). The
+rule still governs the behavior under test: once setup completes, the asserted user flow itself
+must be driven and observed through visible UI only.
+
+### Opening a Project and Its Tool Menus (PT10 Navigation Pattern)
+
+Tools that need a project context (Markers Checklist, Markers Inventory, Checks side panel, etc.) are **NOT** exposed via the main app menu — they live in the **scripture editor's hamburger menu**. The main app menu (`%product_shortName%` — labeled "Platform") only hosts project-agnostic items (Open…, Settings, Exit, Help).
+
+The reason: when a command fires from a web-view's topMenu, the platform passes that web-view's `webViewId` to the command handler. The handler reads the active `projectId` from the web-view definition. Main-menu commands receive no web-view context, so they cannot resolve a project.
+
+**Navigation pattern** (copy-paste for Playwright/CDP tests):
+
+```typescript
+import { expect } from '../../fixtures/cdp.fixture';
+import type { Page } from '@playwright/test';
+
+const PROJECT_NAME = 'wgPIDGIN'; // any existing project in the dev env
+
+// 1. Open a project from Home (if not already open)
+async function openProject(page: Page, projectName: string): Promise<void> {
+  const existing = page.locator('.dock-tab', { hasText: new RegExp(projectName, 'i') });
+  if ((await existing.count()) > 0) return;
+  const homeFrame = page.frameLocator('iframe[title="Home"]');
+  await homeFrame
+    .locator('tr', { hasText: new RegExp(projectName, 'i') })
+    .locator('button', { hasText: /Open/i })
+    .click();
+  await expect(page.locator('.dock-tab', { hasText: new RegExp(projectName, 'i') }))
+    .toBeVisible({ timeout: 15_000 });
+}
+
+// 2. Click a menu item in the scripture editor's hamburger menu
+async function clickEditorMenuItem(page: Page, projectName: string, itemLabel: RegExp): Promise<void> {
+  // Scripture editor's iframe title follows: "{PROJECT_NAME} (Editable)" or "{PROJECT_NAME} (Read-only)"
+  const editorFrame = page.frameLocator(
+    `iframe[title*="${projectName}" i][title*="Editable" i]`,
+  );
+  // Hamburger button in top-left of the editor, aria-label="Project" INSIDE the iframe.
+  // WARNING: an identically-named button (aria-label="Project") exists OUTSIDE the iframe —
+  // that one opens a small dock-tab project menu with only 2 items, NOT the full topMenu.
+  await editorFrame.locator("button[aria-label='Project']").first().click();
+  // Radix portals the menu into the iframe's own document.body, so use editorFrame for
+  // menuitem selectors, not the top-level page.
+  await editorFrame.getByRole('menuitem', { name: itemLabel }).first().click();
+}
+```
+
+**Gotchas**:
+
+1. **Two buttons named "Project"** — one inside the editor iframe (the hamburger, opens the full topMenu with ~15 items), one outside in the dock tab bar (a dock-tab project menu with only "Open Project Settings..." and "Settings..."). They are indistinguishable via the CDP accessibility tree alone — always pick the one via `editorFrame.locator(...)`, not `page.locator(...)`.
+2. **Menu items render inside the iframe**, not at the top-level page. Radix's `DropdownMenu` portals to `document.body`, which in an iframe context means the iframe's body. Use `editorFrame.getByRole('menuitem', ...)`, NOT `page.getByRole('menuitem', ...)`.
+3. **Newly opened tool tabs are at the main-page level.** Dock tabs are rendered in the outer dock layout, not in any iframe. After clicking a menuitem that opens a new web view, `expect(page.locator('.dock-tab'))` is correct; `editorFrame.locator('.dock-tab')` is not.
+4. **Resolve iframe titles pragmatically.** A project opened in Edit mode has iframe title `"{PROJECT_NAME} (Editable)"`; Read-only is `"{PROJECT_NAME} (Read-only)"`. Use a broad `title*="${projectName}" i` plus `title*="Editable" i` (or relax to just the project name if you don't care which mode).
+5. **`openProject` must come BEFORE the editor-menu click** in each `beforeEach`. Without a project open, there's no scripture editor, so no hamburger menu, so no menu items.
+6. **Pass a precise `itemLabel` regex** — the helper calls `.first()` after `getByRole('menuitem', { name: itemLabel })`, which silently masks Playwright's strict-mode multi-match error. A broad pattern like `/markers/i` would match both "Markers Checklist" and "Markers Inventory" and click whichever appears first in DOM order. Anchor the regex (`/^Markers Checklist$/i`) when the menu has similarly-named items.
+
+**Related code pointers**:
+
+- The scripture editor's menu JSON lives at `extensions/src/platform-scripture-editor/contributions/menus.json`. That extension OWNS the topMenu declarations. Other extensions (e.g., `platform-scripture`) add their tool entries by editing that file — NOT by contributing from their own `menus.json`. The inventory-group items (`openCharactersInventory`, `openMarkersInventory`, etc.) are declared there with commands from other extensions, confirming this cross-extension pattern.
+- Main-menu contribution restrictions: extensions can only add items to existing extensible groups (`platform.projectProjects`, `platform.projectResources`, `platform.helpRegistration`). Base columns (`platform.app`, `platform.help`) are NOT extensible by default, so new top-level groups cannot be added from extensions.
+- Menu schema (`lib/platform-bible-utils/src/extension-contributions/menus.model.ts`): column/group IDs must match `^[\w\-]+\.[\w\-]+$` (single period; no nested `ext.ns.name`). Column orders must not conflict with existing base menu entries (`defaultWebViewTopMenu.platform.app` has `order: 1`, so custom columns should use `order: 2+`).
+
+### Test Location
+
+Where a spec lives is decided by how it gets its app, and that choice also picks its config:
+
+- `tests/isolated/{feature}/` — the default. Each test launches its own Electron, so specs are
+  self-contained and can run in CI. Uses `isolated.fixture` and `playwright.config.ts`.
+- `tests/attached/` — for specs that must attach to an app you started yourself (`refresh.sh`),
+  because they cannot own its lifecycle. Uses `cdp.fixture` and `playwright-cdp.config.ts`.
+  Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
+  port 8876 is bound, which is exactly the state these specs need.
+- `tests/enhanced-resources/`, `tests/manage-books/`, `tests/markers-checklist/` — older
+  local-only suites that also use `cdp.fixture` and the CDP config. They are not part of any
+  standard run (see their READMEs for what collects each and why), so put new work in one of the
+  three directories above rather than extending them.
+- `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
+  tests.
+
+```
+e2e-tests/
+├── fixtures/
+│   ├── cdp.fixture.ts           # Connects to running app via CDP (for tests/attached/)
+│   ├── app.fixture.ts           # Launches fresh Electron (CI smoke tests only)
+│   ├── papi.fixture.ts          # @deprecated — CI smoke tests only
+│   ├── papi-live.fixture.ts     # Connects to already-running app's WebSocket (command-surface verification)
+│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (DEFAULT for features)
+│   ├── comment.fixture.ts       # Comment-testing fixture (+ comment-test-helpers.ts)
+│   └── helpers.ts               # waitForAppReady(), sendPapiCommand()  (tree non-exhaustive)
+├── playwright-cdp.config.ts     # Config for CDP mode (no setup/teardown)
+├── playwright.config.ts         # Config for standalone mode (with setup/teardown)
+└── tests/
+    ├── isolated/                 # Default: one Electron per test (playwright.config.ts)
+    │   └── {feature}/
+    │       └── {feature}.spec.ts
+    ├── attached/                 # Attaches to an app you started (playwright-cdp.config.ts)
+    ├── smoke/                    # What CI runs
+    └── _example/                 # Templates
+```
+
+### Fixture Selection
+
+| Fixture       | Mode                               | When to Use                               | Provides                  |
+| ------------- | ---------------------------------- | ----------------------------------------- | ------------------------- |
+| `cdp.fixture`      | Connects to running app (CDP 9223)        | Specs that attach to an app you started   | `mainPage`                |
+| `app.fixture`      | Launches fresh Electron                   | CI smoke tests, standalone testing        | `electronApp`, `mainPage` |
+| `papi.fixture`     | Extends app.fixture + WebSocket           | **Deprecated** — CI smoke tests only      | `papiClient` + app.fixture |
+| `papi-live.fixture`| Connects to already-running app (WS 8876) | Command-surface verification only (see below) | `papiLive`                |
+| `isolated.fixture` | Launches an isolated Electron per test    | **Default for all per-feature E2E tests** | fresh app per test        |
+
+### Command-Surface Verification (papi-live.fixture)
+
+This is a **separate test category** from the per-feature UI flows above — it verifies that a feature's PAPI command surface is registered, routed, and reachable on the wire, not that a user can drive the feature through the UI. The [UI-Only Interaction Rule](#ui-only-interaction-rule) ("never send JSON-RPC commands") applies to user-flow tests; it does **not** apply here, where sending JSON-RPC is the whole point.
+
+`papi-live.fixture` connects to an already-running instance over the PAPI WebSocket (port 8876) and exposes a `papiLive` client with `request`/`requestRaw` (raw JSON-RPC methods, e.g. `object:*` NetworkObject calls) and `sendCommand`/`sendCommandRaw` (the `*Raw` variants return the full response so you can inspect the error code). Pattern:
+
+1. **Skip guard** — gate the suite in `test.beforeAll` on `canConnectToPapi()` so it skips cleanly when the app is down or in CI:
+
+   ```typescript
+   import { test, expect, canConnectToPapi } from '../../fixtures/papi-live.fixture';
+
+   test.beforeAll(async () => {
+     test.skip(!(await canConnectToPapi()), 'PAPI server not running on ws://localhost:8876');
+   });
+   ```
+
+2. **Discovery test** — call `rpc.discover` once and assert every documented method name is present (the NetworkObject root itself is also registered, so it makes a good sentinel):
+
+   ```typescript
+   const schema = await papiLive.request<{ methods: { name: string }[] }>('rpc.discover', []);
+   const methodNames = new Set(schema.methods.map((m) => m.name));
+   expect(methodNames).toContain('object:myFeature.someMethod');
+   ```
+
+3. **One test per method** — call each method with `requestRaw` (`object:*` NetworkObject methods) or `sendCommandRaw` (`command:*` methods) and inspect the error code instead of catching an exception.
+
+**Reachability heuristic.** You can verify the whole command surface without real preconditions (an open project, a real project id, etc.) by distinguishing *where* an error originates:
+
+- A JSON-RPC error code **inside** the reserved/protocol range (`-32700`, or `-32600`..`-32603`) means the handler was never reached — missing registration, wrong parameter shape, or a serialization crash. **FAIL.**
+- A business error **outside** that range (e.g. `-32000` NOT_FOUND from a deliberately bogus id) proves the command is registered, routed, and executed before failing on the business precondition. **PASS.**
+
+So each per-method test sends a well-formed payload with a bogus id and asserts only that the error code is *outside* the reserved/protocol range — no real project required. For the full code table, see [papi-client/reference.md](../../.claude/skills/papi-client/reference.md#error-codes).
+
+```typescript
+const RESERVED = new Set([-32700, -32600, -32601, -32602, -32603]);
+const res = await papiLive.requestRaw('object:myFeature.someMethod', ['__bogus_id__']);
+if (res.error) expect(RESERVED, res.error.message).not.toContain(res.error.code);
+```
+
+**Run this against the live app early, per command — not only at the end.** Unit tests invoke service methods directly and bypass the JSON-RPC wire, so they never exercise serialization. A whole class of cross-cutting bugs surfaces only on the wire: the canonical one is a missing `JsonStringEnumConverter(JsonNamingPolicy.CamelCase)` registration in `SerializationOptions.cs`, which makes every C#↔TS enum-boundary call fail with `-32602 Invalid params` even though all unit tests are green. Verifying each command against the running app as it lands (rather than waiting for an end-of-feature smoke pass) catches these the moment they're introduced.
+
+### E2E Test Templates
+
+**UI Interaction Tests (cdp.fixture — for specs under `tests/attached/`):**
+
+```typescript
+import { test, expect } from '../../fixtures/cdp.fixture';
+import { waitForAppReady } from '../../fixtures/helpers';
+
+test.describe('{Feature} E2E Tests', () => {
+  test('should {action} - happy path', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
+    // Navigate via visible UI — click menu, then click feature entry
+    const menuTrigger = mainPage.getByRole('menuitem', { name: /Menu Name/i });
+    await menuTrigger.click();
+    const featureItem = mainPage.getByRole('menuitem', { name: /Feature Name/i });
+    await featureItem.click();
+    // Verify
+    await expect(mainPage.locator('.dock-tab', { hasText: /Feature Name/i })).toBeVisible({ timeout: 15_000 });
+  });
+});
+```
+
+**Render Smoke Test (cdp.fixture — for specs under `tests/attached/`):**
+
+```typescript
+import { test, expect } from '../../fixtures/cdp.fixture';
+import { waitForAppReady } from '../../fixtures/helpers';
+
+test.describe('{Feature} Render Smoke Tests', () => {
+  test('component renders without errors', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
+    const consoleErrors: string[] = [];
+    mainPage.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+
+    const menuTrigger = mainPage.getByRole('menuitem', { name: /Menu Name/i });
+    await menuTrigger.click();
+    const featureItem = mainPage.getByRole('menuitem', { name: /Feature Name/i });
+    await featureItem.click();
+    await expect(mainPage.locator('.dock-tab', { hasText: /Feature Name/i })).toBeVisible({ timeout: 15_000 });
+
+    // Standard noise filter — keep in sync with e2e-tests/tests/_example/
+    const criticalErrors = consoleErrors.filter(
+      (e) =>
+        !e.includes('DevTools') &&
+        !e.includes('favicon') &&
+        !e.includes('source map') &&
+        !e.includes('net::ERR_'),
+    );
+    expect(criticalErrors).toHaveLength(0);
+  });
+});
+```
+
+### Journey/E2E Assertion Quality
+
+A cross-screen journey test that only checks `toBeVisible()` proves the page rendered — not that data flowed correctly across screens. For journey/E2E tests:
+
+- **Include at least one DATA assertion** beyond visibility — `toHaveValue(...)`, `toContainText(...)`, `not.toBe('')`, or a count check. Verify the value/state that crossed the boundary, e.g. fill a field in screen A and assert its value appears in screen B, or perform an action in one panel and assert the change is reflected in another.
+- **Span 2+ work packages.** A journey test that touches only one screen/feature belongs in that feature's own functional tests; a true journey test exercises two or more pieces working together.
+
+### E2E Test Best Practices
+
+| DO                                            | DON'T                                          |
+| --------------------------------------------- | ---------------------------------------------- |
+| Click buttons, fill forms, navigate via UI    | Call PAPI commands directly to change state    |
+| Use Playwright locators for real DOM elements | Mock PAPI responses (that's for unit tests)    |
+| Verify user-visible state changes             | Skip UI interactions by manipulating state     |
+| Use `data-testid` for stable selectors        | Use brittle selectors (class names, tag names) |
+| Handle timing with explicit waits             | Use `sleep()` without assertions               |
+
+### Running E2E Tests
+
+**IMPORTANT**: Always use the `--config` flag when running Playwright from the repo root. Without `--config`, Playwright uses defaults — the `--project` flag won't work, no dev server is started, and bare `npx playwright test` (without a test path) will discover vitest `.test.ts` files and fail.
+
+```bash
+# CDP mode (app already running via ./.erb/scripts/refresh.sh)
+# Swap tests/attached/ for tests/enhanced-resources/, tests/manage-books/ or
+# tests/markers-checklist/ to run one of the local-only suites.
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
+
+# CDP mode with HTML report
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
+npx playwright show-report e2e-tests/playwright-report
+
+# Standalone mode (launches its own Electron, port 8876 must be free). Each project in
+# playwright.config.ts has its own testDir, so path-filter inside it: `isolated` →
+# tests/isolated/** (most feature tests), `smoke` → tests/smoke/** (what CI runs, via
+# `npm run test:e2e:smoke`), `enhanced-resources` → tests/enhanced-resources/**.
+npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated --reporter=list
+
+# WSL2: wrap a standalone-mode run so its Electron windows do not take over the Windows desktop.
+# Only works when the app is launched inside the wrap — CDP mode attaches to an app started by
+# ./.erb/scripts/refresh.sh, which on Linux already runs it under its own Xvfb.
+# A bare Xvfb has no window manager, so compositor-dependent suites can behave differently.
+e2e-tests/run-e2e-wsl.sh --wrap npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated
+```
+
+### Failure Analysis
+
+| Failure Type          | Diagnosis                       | Fix                                |
+| --------------------- | ------------------------------- | ---------------------------------- |
+| Selector not found    | Check actual DOM structure      | Update selector, add `data-testid` |
+| Command not registered| Check `main.ts` registration    | Add command registration           |
+| Data shape mismatch   | Compare response to contracts   | Fix types                           |
+| Timeout               | Operation takes too long        | Increase timeout or add waits       |
+| Fixture issue         | Wrong fixture for test type     | Switch to correct fixture           |
+
+---
+
+## Known Platform Constraints
+
+These constraints affect test authoring and are easy to miss.
+
+### PAPI Async Timing
+
+PAPI command responses are asynchronous and may not be immediately reflected in the UI. When writing E2E tests that verify data changes:
+
+- Always use Playwright `expect(...).toBeVisible({ timeout: ... })` or `expect.poll()` rather than asserting immediately after an action.
+- The default 5s timeout is often insufficient for PAPI round-trips. Use 10–15s for data operations, 5s for UI-only interactions.
+- Command execution order is not guaranteed across processes. If Test A sends a command and Test B reads the result, add explicit waits.
+- Sequential E2E tests sharing state must use `test.describe.serial()` and include polling for the expected state.
+
+### CDP Connection Exhaustion
+
+When running multiple sequential Playwright tests against the same CDP endpoint:
+
+- Always call `browser.close()` in test teardown. The CDP fixture handles this, but custom fixtures must include it.
+- Without explicit close, each test leaks a browser connection, eventually exhausting the CDP endpoint's connection limit.
+- Symptom: first N tests pass, then tests fail with connection/timeout errors.
+
+### Persisted Dock Layout
+
+Platform.Bible persists the dock/tab layout across sessions. When running E2E tests:
+
+- Stale tabs from previous runs may be open when your test starts.
+- Always include `beforeEach` cleanup to close any pre-existing tabs for the feature.
+- Pattern: loop to close matching tabs before each test, with a brief wait for UI settle.
+
+### ScrTextCollection Index Accumulation
+
+When C# tests create many `DummyScrText` instances with unique HexIds:
+
+- Always use `ScrTextCollection.Remove(scrText, true)` in test teardown — the second parameter triggers full internal index cleanup.
+- With `false`, stale index entries accumulate. After ~50 tests, `ScrTextCollection.RefreshScrTextsInternal` throws `"Sequence contains more than one matching element"`.
+- Symptom: first N tests pass, then tests fail with LINQ duplicate-key errors.
+- `PapiTestBase` handles this correctly; any custom test fixtures must also use `true`.
+
+### Global Mutable Statics Must Be Restored
+
+Some ParatextData entry points are global mutable statics — `Alert.Implementation` is the recurring one. A test that assigns one (e.g. `Alert.Implementation = new DummyAlert()`) must restore the previous value in a `try/finally`:
+
+```csharp
+var previous = Alert.Implementation;
+try
+{
+    Alert.Implementation = new DummyAlert();
+    // ... exercise the code under test ...
+}
+finally
+{
+    Alert.Implementation = previous;
+}
+```
+
+- Unrestored, the assignment leaks into every later test in the same process.
+- Symptom: the test that mutated the static passes in isolation, but a **later-added** test (often one that relies on the default implementation) fails only under a full-suite run — making the failure look unrelated to the test that actually broke it.
+- This is hard to diagnose because the offending test and the failing test are different files. When a test fails only in the full suite, suspect an unrestored global static.
+
+---
+
+## Quick Reference
+
+### Run All Tests
+
+```bash
+# TypeScript
+npm test
+
+# C#
+dotnet test c-sharp-tests/c-sharp-tests.csproj
+```
+
+### Run Specific Tests
+
+```bash
+# TypeScript — specific file
+npm run test:core -- src/shared/services/shared-store.service.test.ts
+
+# C# — specific class
+dotnet test c-sharp-tests/c-sharp-tests.csproj --filter "FullyQualifiedName~ParatextDataProviderTests"
+```
+
+### Watch Mode
+
+```bash
+# TypeScript
+npm run test:core
+
+# C#
+dotnet watch test --project c-sharp-tests/c-sharp-tests.csproj
+```
+
+### Coverage Reports
+
+```bash
+# TypeScript
+npm run test:core -- --coverage
+
+# C#
+dotnet test c-sharp-tests/c-sharp-tests.csproj --collect:"XPlat Code Coverage"
+```
+
+---
+
+## Related Documentation
+
+- [Code-Style-Guide.md](Code-Style-Guide.md) — coding conventions
+- [Git-Guide.md](Git-Guide.md) — branch and merge practices
+- [Security-Guide.md](Security-Guide.md) — CSP and extension sandboxing

@@ -1,0 +1,676 @@
+import { Alert, AlertDescription } from '@/components/shadcn-ui/alert';
+import { EmptyState } from '@/components/basics/empty-state.component';
+import { RetryableErrorView } from '@/components/basics/retryable-error-view.component';
+import { DialogDescription, DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
+import { Label } from '@/components/shadcn-ui/label';
+import { Table, TableBody, TableCell, TableRow } from '@/components/shadcn-ui/table';
+import {
+  MultiSelectComboBox,
+  MultiSelectComboBoxEntry,
+} from '@/components/advanced/multi-select-combo-box.component';
+import { SearchBar } from '@/components/basics/search-bar.component';
+import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
+import { Check, CloudOff, SearchX } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { Spinner } from '@/components/basics/spinner.component';
+import {
+  buildLanguageFilterOptions,
+  matchesResourceType,
+  partitionFilterSelection,
+  useProgressiveList,
+} from './resource-picker-dialog.utils';
+
+/**
+ * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
+ * the result as the `localizedStrings` prop.
+ */
+export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
+  '%resourcePicker_title%',
+  '%resourcePicker_description%',
+  '%resourcePicker_section_already_selected%',
+  '%resourcePicker_section_installed%',
+  '%resourcePicker_section_available_to_download%',
+  '%resourcePicker_no_results%',
+  '%resourcePicker_search_placeholder%',
+  '%resourcePicker_language_filter_any%',
+  '%resourcePicker_language_filter_multipleSelected%',
+  '%resourcePicker_language_filter_search_placeholder%',
+  '%resourcePicker_language_filter_no_results%',
+  '%resourcePicker_showing_count%',
+  '%resourcePicker_load_error%',
+  '%resourcePicker_retry%',
+  '%resourcePicker_no_results_filtered%',
+  '%resourcePicker_clear_filters%',
+  '%resourcePicker_downloads_unavailable%',
+] as const);
+
+/**
+ * Map of localized strings required by {@link ResourcePickerDialog}. Derive from
+ * {@link RESOURCE_PICKER_DIALOG_STRING_KEYS}.
+ */
+export type ResourcePickerDialogLocalizedStrings = {
+  [key in (typeof RESOURCE_PICKER_DIALOG_STRING_KEYS)[number]]?: string;
+};
+
+const localizeString = (
+  strings: ResourcePickerDialogLocalizedStrings,
+  key: keyof ResourcePickerDialogLocalizedStrings,
+) => strings[key] ?? key;
+
+/** Props for {@link ResourcePickerDialog} */
+export interface ResourcePickerDialogProps {
+  /** Full list of DBL resources fetched by the caller via PAPI */
+  allResources: DblResourceData[];
+  /** Whether the `allResources` is still loading */
+  isResourcesLoading?: boolean;
+  /**
+   * Whether loading `allResources` failed. Distinct from an empty `allResources`: without it the
+   * dialog can only report "no results", which reads as a truthful empty catalog and leaves the
+   * user nothing to act on.
+   */
+  hasResourcesError?: boolean;
+  /**
+   * Re-runs the caller's resource fetch. Omit when the caller has no way to re-drive it; the error
+   * state then renders its message without a retry rather than an inert button.
+   */
+  onRetryResources?: () => void;
+  /**
+   * Whether this installation cannot download resources at all, so the list is empty for a reason
+   * that has nothing to do with the user's filters and that no retry can change.
+   *
+   * Distinct from `hasResourcesError`: that state offers a retry because trying again might work.
+   * This one deliberately offers none, and says why the list is empty instead of leaving the user
+   * to infer it from "no results".
+   */
+  areDownloadsUnavailable?: boolean;
+  /**
+   * If provided, only resources of this type (or any of the listed types) are shown. Omitting it
+   * shows everything, and so does an empty array — that is what a multi-select with nothing chosen
+   * hands over, and {@link matchesResourceType} treats the two the same. There is no value that
+   * means "show nothing".
+   */
+  resourceType?: ResourceType | ResourceType[];
+  /**
+   * Already-localized sentence shown above the resource list explaining why the list is INCOMPLETE
+   * but still usable — for example that the online catalog could not be reached, so only the
+   * resources already on this computer are listed. Omit when the list is complete.
+   *
+   * Distinct from `hasResourcesError`, which is for having nothing to show at all: a notice keeps
+   * the user working against a partial list, where the error state replaces it.
+   */
+  notice?: string;
+  /**
+   * When false, rows in the "Installed" section are shown but cannot be picked. Use it when the
+   * caller can act on a resource that still needs installing but has nothing to do with one that is
+   * already on disk, so an installed row would accept a click and then silently do nothing.
+   * Defaults to true.
+   */
+  allowSelectingInstalled?: boolean;
+  /** IDs of resources already selected in the calling panel */
+  selectedResourceIds?: string[];
+  /** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
+  localizedStrings: ResourcePickerDialogLocalizedStrings;
+  /**
+   * When true, clicking an "Already Selected" row calls `onSelect` just like any other row, letting
+   * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
+   * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
+   */
+  allowDeselect?: boolean;
+  /** Called when the user clicks a resource row to select it */
+  onSelect: (resource: DblResourceData) => void;
+  /**
+   * Ref to the search input, for a host that decides where focus lands when the dialog opens.
+   *
+   * Without it a host can only order its JSX and hope: the picker disables its search box whenever
+   * there is nothing to filter, so "render the close button last so focus lands on search" silently
+   * lands on whatever is tabbable instead — the Retry button, or the close button itself. A host
+   * holding this ref can state the intent directly and stay correct when the box is disabled.
+   */
+  searchInputRef?: RefObject<HTMLInputElement | null>;
+}
+
+/**
+ * Component to list filtered resources entries for one of the resource picker sections. Optionally
+ * allows clicking and selecting when `onSelect` is not undefined for the cases that the resource
+ * can be picked and is not already picked.
+ */
+function ResourceSection({
+  label,
+  resources,
+  onSelect,
+  showCheckmark,
+}: {
+  label: string;
+  resources: DblResourceData[];
+  onSelect?: (resource: DblResourceData) => void;
+  showCheckmark?: boolean;
+}) {
+  if (resources.length === 0) return undefined;
+  return (
+    <>
+      <TableRow className="tw:border-0 tw:hover:bg-transparent">
+        <TableCell colSpan={4} className="tw:border-0 tw:pt-4 tw:pb-0">
+          <Label className="tw:text-xs tw:tracking-wider tw:text-muted-foreground tw:uppercase">
+            {label}
+          </Label>
+        </TableCell>
+      </TableRow>
+      {resources.map((r) => (
+        <TableRow
+          key={r.dblEntryUid}
+          className={
+            onSelect ? 'tw:cursor-pointer tw:border-0' : 'tw:pointer-events-none tw:border-0'
+          }
+          role={onSelect ? 'button' : undefined}
+          aria-label={onSelect ? r.displayName : undefined}
+          onClick={onSelect ? () => onSelect(r) : undefined}
+          onKeyDown={
+            onSelect
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect(r);
+                  }
+                }
+              : undefined
+          }
+        >
+          {/* `px-1` rather than `TableCell`'s default `p-2`: under `table-fixed` the `<col>` below
+              is a hard width the column cannot grow past, and the base 8px start padding leaves the
+              14px glyph too little room to sit in. The two have to be read together. */}
+          <TableCell className="tw:border-0 tw:px-1 tw:py-1">
+            {showCheckmark && (
+              <>
+                <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
+                <span className="tw:sr-only">{label}</span>
+              </>
+            )}
+          </TableCell>
+          {/* Every name cell truncates instead of widening the table, and carries its untruncated
+              text as a native hover label so nothing becomes unreadable.
+
+              What allows a cell to be narrower than its content is `table-fixed` plus the
+              `<colgroup>` below — under fixed layout the `<col>` widths are the column widths, and
+              per-cell `max-width` is not consulted at all. `max-w-0` is belt-and-braces for anyone
+              who renders these rows under the default auto layout; removing `table-fixed` or the
+              colgroup is what brings the horizontal scrollbar back. */}
+          {/* `text-start` is the table default, and stated anyway: it is the one invariant of the
+              picker row layout contract that has no class of its own to point at, so a test can
+              only assert its absence otherwise — and "not end-aligned" stays green against a column
+              centred, indented, or realigned some other way. See
+              `.claude/rules/ux/picker-row-layout.md`. */}
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pe-2 tw:text-start tw:font-normal">
+            <span title={r.displayName}>{r.displayName}</span>
+          </TableCell>
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-2">
+            <span title={r.fullName}>{r.fullName}</span>
+          </TableCell>
+          {/* `text-end`, not `text-right`: the language sits on the trailing edge of the row, which
+              is the left one in an RTL layout.
+
+              End alignment does not strand the ellipsis. Once the text overflows, the line is
+              wider than the box and `text-align` has nothing left to position, so the ellipsis
+              renders at the inline-end edge either way — measured in Chromium against a
+              `table-fixed` + `colgroup` reproduction, where an end-aligned and a start-aligned
+              `max-width:0` truncating cell render identically. The `title` below is the
+              belt-and-braces half: whatever the ellipsis does, the untruncated language stays
+              reachable on hover. */}
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-4 tw:text-end tw:text-muted-foreground">
+            <span title={r.bestLanguageName}>{r.bestLanguageName}</span>
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Which of the picker body's mutually exclusive states to render.
+ *
+ * - `loading` — the catalog has not settled; show a spinner.
+ * - `error` — nothing loaded and the fetch failed; say so and offer a retry, which can genuinely
+ *   re-drive it. A fetch that failed but still left something on screen is a `notice`, not this.
+ * - `filteredEmpty` — the user's own filters excluded everything; offer to clear them.
+ * - `downloadsUnavailable` — this installation cannot download resources; say so, offer nothing,
+ *   because nothing the user does here can change it.
+ * - `empty` — the catalog genuinely holds nothing for this picker.
+ * - `list` — there is something to show.
+ */
+export type ResourcePickerBodyState =
+  | 'loading'
+  | 'error'
+  | 'filteredEmpty'
+  | 'downloadsUnavailable'
+  | 'empty'
+  | 'list';
+
+/**
+ * Decides which body state the picker is in.
+ *
+ * Derived once rather than re-spelled as a guard on each branch: the states are mutually exclusive
+ * by construction here, where five overlapping boolean expressions leave that exclusivity to be
+ * verified by eye — and a sixth state added later has to be threaded correctly through all of them.
+ * Mirrors `getResourcePanelReadiness` on the panels' side of this same handoff.
+ *
+ * @param input The independent signals the state is derived from.
+ * @returns The single state to render.
+ */
+export function getResourcePickerBodyState(input: {
+  isResourcesLoading: boolean;
+  hasResourcesError: boolean;
+  hasNoResults: boolean;
+  canClearFiltersHelp: boolean;
+  areDownloadsUnavailable: boolean;
+}): ResourcePickerBodyState {
+  if (input.isResourcesLoading) return 'loading';
+  // Anything on screen outranks every failure. A fetch can fail partially — one source of several —
+  // and replacing a usable list with an error card would throw away resources the user can act on.
+  // The `notice` prop is the channel for explaining an incomplete list; these states are for having
+  // nothing to show at all.
+  if (!input.hasNoResults) return 'list';
+  // The user's own filters emptied it, so say that rather than blaming a fetch: clearing them is
+  // the one empty state the user can act on directly.
+  if (input.canClearFiltersHelp) return 'filteredEmpty';
+  // Nothing loaded AND the fetch broke: an empty list caused by a fetch that never arrived is not
+  // an answer about the catalog.
+  if (input.hasResourcesError) return 'error';
+  if (input.areDownloadsUnavailable) return 'downloadsUnavailable';
+  return 'empty';
+}
+
+function matchesSearch(resource: DblResourceData, searchText: string): boolean {
+  if (!searchText) return true;
+  const lower = searchText.toLowerCase();
+  return (
+    resource.displayName.toLowerCase().includes(lower) ||
+    resource.fullName.toLowerCase().includes(lower) ||
+    resource.bestLanguageName.toLowerCase().includes(lower)
+  );
+}
+
+/**
+ * Presentational dialog content for picking a DBL resource. Renders three sections — Already
+ * Selected, Installed, and Available to Download — derived from `allResources` and
+ * `selectedResourceIds`. Supports text search and language filtering.
+ *
+ * Does not include an outer `Dialog` or `DialogContent` wrapper; the host (paranext-core dialog
+ * infrastructure or a Storybook decorator) is responsible for providing that context.
+ *
+ * Obtain localized strings by passing {@link RESOURCE_PICKER_DIALOG_STRING_KEYS} to
+ * `useLocalizedStrings` and forwarding the result as `localizedStrings`.
+ *
+ * @param props See {@link ResourcePickerDialogProps}
+ */
+export default function ResourcePickerDialog({
+  allResources,
+  isResourcesLoading,
+  hasResourcesError,
+  onRetryResources,
+  areDownloadsUnavailable,
+  resourceType,
+  selectedResourceIds,
+  notice,
+  allowSelectingInstalled = true,
+  localizedStrings,
+  allowDeselect,
+  onSelect,
+  searchInputRef: externalSearchInputRef,
+}: ResourcePickerDialogProps) {
+  const [searchText, setSearchText] = useState('');
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+
+  // React writes `null` into a detached DOM ref itself, so there is no `undefined` equivalent here.
+  // eslint-disable-next-line no-null/no-null
+  const ownSearchInputRef = useRef<HTMLInputElement | null>(null);
+  // A host that owns where focus lands on open needs to reach this input; see `searchInputRef`'s
+  // TSDoc. Its ref replaces the internal one outright rather than being merged with it, so there is
+  // only ever one answer to "where is the search box".
+  const searchInputRef = externalSearchInputRef ?? ownSearchInputRef;
+
+  // Resets BOTH filters: clearing only the one the user is looking at leaves the list still
+  // filtered by the other, which reads as the control having done nothing.
+  //
+  // Focus moves to the search box because this button is inside the region it removes: without a
+  // deliberate move, activating it drops focus to `<body>` and a keyboard user restarts from the top
+  // of the dialog. The search box is the nearest control that survives the change.
+  const clearFilters = useCallback(() => {
+    setSearchText('');
+    setSelectedLanguages([]);
+    searchInputRef.current?.focus();
+  }, [searchInputRef]);
+
+  /**
+   * The catalogue narrowed to the requested type, and the single source of "in play" for everything
+   * below: the rendered rows, the language options and the total. Deriving all three from one list
+   * is what keeps them from disagreeing about which resources count.
+   *
+   * The narrowing is kept apart from the user’s own filters because only the latter are clearable.
+   * Counting or offering to clear against `allResources` would describe a set this dialog was never
+   * allowed to show.
+   */
+  const typeScopedResources = useMemo(
+    () => allResources.filter((r) => matchesResourceType(r, resourceType)),
+    [allResources, resourceType],
+  );
+
+  const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
+    () => buildLanguageFilterOptions(typeScopedResources),
+    [typeScopedResources],
+  );
+
+  /**
+   * The selection split into the languages the filter offers and the ones it is holding.
+   *
+   * A language picked under one `resourceType` or catalogue survives in state when either changes,
+   * but its row is gone from the options, so there is nothing left to un-toggle — and this dialog
+   * does not enable the combo box's clear-all button. Filtering the rows on the raw selection would
+   * strand the user on an empty list with no way back, so only `effectiveLanguages` filters rows or
+   * reaches the combo box. Held languages are written back on every change and apply again once the
+   * options offer them.
+   */
+  const { offered: effectiveLanguages, held: heldLanguages } = useMemo(
+    () => partitionFilterSelection(selectedLanguages, languageOptions),
+    [selectedLanguages, languageOptions],
+  );
+  const handleLanguagesChange = useCallback(
+    (languages: string[]) => setSelectedLanguages([...heldLanguages, ...languages]),
+    [heldLanguages],
+  );
+
+  const filteredResources = useMemo(
+    () =>
+      typeScopedResources
+        .filter((r) => matchesSearch(r, searchText))
+        .filter(
+          (r) => effectiveLanguages.length === 0 || effectiveLanguages.includes(r.bestLanguageName),
+        ),
+    [typeScopedResources, searchText, effectiveLanguages],
+  );
+
+  const alreadySelected = useMemo(
+    () => filteredResources.filter((r) => selectedResourceIds?.includes(r.dblEntryUid)),
+    [filteredResources, selectedResourceIds],
+  );
+
+  const installed = useMemo(
+    () =>
+      filteredResources.filter((r) => r.installed && !selectedResourceIds?.includes(r.dblEntryUid)),
+    [filteredResources, selectedResourceIds],
+  );
+
+  const toDownload = useMemo(
+    () =>
+      filteredResources.filter(
+        (r) => !r.installed && !selectedResourceIds?.includes(r.dblEntryUid),
+      ),
+    [filteredResources, selectedResourceIds],
+  );
+
+  const { visibleItems: visibleToDownload, sentinelRef, hasMore } = useProgressiveList(toDownload);
+
+  const hasNoResults =
+    alreadySelected.length === 0 && installed.length === 0 && toDownload.length === 0;
+
+  const titleText = localizeString(localizedStrings, '%resourcePicker_title%');
+  const descriptionText = localizeString(localizedStrings, '%resourcePicker_description%');
+  const searchPlaceholder = localizeString(localizedStrings, '%resourcePicker_search_placeholder%');
+  const anyLanguageText = localizeString(localizedStrings, '%resourcePicker_language_filter_any%');
+  const languageSearchPlaceholder = localizeString(
+    localizedStrings,
+    '%resourcePicker_language_filter_search_placeholder%',
+  );
+  const noLanguagesText = localizeString(
+    localizedStrings,
+    '%resourcePicker_language_filter_no_results%',
+  );
+  const alreadySelectedLabel = localizeString(
+    localizedStrings,
+    '%resourcePicker_section_already_selected%',
+  );
+  const installedLabel = localizeString(localizedStrings, '%resourcePicker_section_installed%');
+  const toDownloadLabel = localizeString(
+    localizedStrings,
+    '%resourcePicker_section_available_to_download%',
+  );
+  const noResultsText = localizeString(localizedStrings, '%resourcePicker_no_results%');
+  const loadErrorText = localizeString(localizedStrings, '%resourcePicker_load_error%');
+  const retryText = localizeString(localizedStrings, '%resourcePicker_retry%');
+  const noResultsFilteredText = localizeString(
+    localizedStrings,
+    '%resourcePicker_no_results_filtered%',
+  );
+  const clearFiltersText = localizeString(localizedStrings, '%resourcePicker_clear_filters%');
+  const downloadsUnavailableText = localizeString(
+    localizedStrings,
+    '%resourcePicker_downloads_unavailable%',
+  );
+  const showingCountTemplate = localizeString(localizedStrings, '%resourcePicker_showing_count%');
+
+  // Whether the language selection actually excludes something THIS picker would otherwise show.
+  // Measured against the type-scoped set, because that is the set the predicate is applied to:
+  // counting selections against every language in the whole catalog calls a selection a filter when
+  // it excludes nothing of this resource type (a "showing 4 of 4" count, and an offer to clear a
+  // filter that is not filtering).
+  const isLanguageFiltered =
+    effectiveLanguages.length > 0 &&
+    typeScopedResources.some((r) => !effectiveLanguages.includes(r.bestLanguageName));
+  const isFiltered = searchText.length > 0 || isLanguageFiltered;
+
+  const customLanguageSelectText = useMemo(() => {
+    // Reads "Any language" whenever the selection is not narrowing anything, so the trigger and the
+    // "Clear filters" affordance never disagree about whether a filter is in effect.
+    if (!isLanguageFiltered) return anyLanguageText;
+    // `effectiveLanguages` only holds values the options offer, so the lookup always finds one; the
+    // fallback is there for the type checker.
+    if (effectiveLanguages.length === 1)
+      return (
+        languageOptions.find((option) => option.value === effectiveLanguages[0])?.label ??
+        effectiveLanguages[0]
+      );
+    return formatReplacementString(
+      localizeString(localizedStrings, '%resourcePicker_language_filter_multipleSelected%'),
+      {
+        selectCount: effectiveLanguages.length,
+      },
+    );
+  }, [isLanguageFiltered, effectiveLanguages, languageOptions, anyLanguageText, localizedStrings]);
+
+  // Offering "Clear filters" is only honest when clearing would actually reveal something. With a
+  // `resourceType` that matches nothing in the catalog the list is empty no matter what the user
+  // clears, and routing them through a control that provably cannot change the result just returns
+  // them to the same dead end by a longer path.
+  const canClearFiltersHelp = isFiltered && typeScopedResources.length > 0;
+
+  // Filtering cannot change what is on screen when there is nothing to filter — a catalog that has
+  // not arrived, one whose fetch failed, and an installation that can download none of it all leave
+  // the same empty set. `GetResources` disables its own filters in the same situation, and leaving
+  // these live invites the user to narrow an empty list and conclude their search was at fault.
+  const areFiltersInert =
+    !!isResourcesLoading || !!hasResourcesError || typeScopedResources.length === 0;
+
+  // Opening focus is only half-answered at open time. `focusResourcePickerOnOpen` parks focus on
+  // the dialog shell while there is nothing to type into — but "nothing to filter" is the ordinary
+  // state for the first moment after a host opens this, because the catalog fetch is still in
+  // flight. Without this the catalog arrives, the search box enables, and focus stays on the shell.
+  //
+  // Only claimed back from the shell itself: once focus is on a real control the user put it there,
+  // and moving it out from under them mid-fetch is worse than the stranding this fixes.
+  const wereFiltersInert = useRef(areFiltersInert);
+  useEffect(() => {
+    const filtersJustBecameUsable = wereFiltersInert.current && !areFiltersInert;
+    wereFiltersInert.current = areFiltersInert;
+    if (!filtersJustBecameUsable) return;
+
+    const searchInput = searchInputRef.current;
+    if (!searchInput || searchInput.disabled) return;
+
+    const { activeElement } = document;
+    const isParkedOnShell =
+      !activeElement ||
+      activeElement === document.body ||
+      activeElement.getAttribute('data-slot') === 'dialog-content';
+    if (isParkedOnShell) searchInput.focus();
+  }, [areFiltersInert, searchInputRef]);
+
+  const bodyState = getResourcePickerBodyState({
+    isResourcesLoading: !!isResourcesLoading,
+    hasResourcesError: !!hasResourcesError,
+    hasNoResults,
+    canClearFiltersHelp,
+    areDownloadsUnavailable: !!areDownloadsUnavailable,
+  });
+
+  return (
+    <>
+      <DialogHeader className="tw:px-4 tw:pt-4">
+        <DialogTitle>{titleText}</DialogTitle>
+        {/* Visually hidden rather than absent: Radix warns when dialog content has no description,
+            and a screen-reader user opening this needs to be told what the list is and that picking
+            a row downloads. Living here rather than at each host keeps one localized answer instead
+            of one per host — but it only reaches the user if the host renders no description of its
+            own. Radix derives the id from the `Dialog.Root` context, so a host that also renders one
+            ships the id twice and `aria-describedby` resolves to whichever is first in document
+            order. A host that wraps this in its own `Dialog.Root` (the embedded pickers in Share
+            Layout) is fine; a host that shares one must suppress its own — see
+            `providesOwnDescription` on paranext-core's `DialogDefinition`. */}
+        <DialogDescription className="tw:sr-only">{descriptionText}</DialogDescription>
+      </DialogHeader>
+      <div className="tw:flex tw:gap-2 tw:p-4">
+        <SearchBar
+          ref={searchInputRef}
+          value={searchText}
+          onSearch={setSearchText}
+          placeholder={searchPlaceholder}
+          isFullWidth
+          isDisabled={areFiltersInert}
+        />
+        <MultiSelectComboBox
+          entries={languageOptions}
+          selected={effectiveLanguages}
+          onChange={handleLanguagesChange}
+          customSelectedText={customLanguageSelectText}
+          placeholder={anyLanguageText}
+          searchPlaceholder={languageSearchPlaceholder}
+          commandEmptyMessage={noLanguagesText}
+          variant="outline"
+          isDisabled={areFiltersInert}
+          sortSelected
+          showScrollCue
+        />
+      </div>
+      {/* The live region stays mounted and only its content changes: assistive tech announces
+          mutations to a region already in the accessibility tree, and a region inserted together
+          with its text usually announces nothing. `Alert` sets its own assertive `role`, which
+          would nest a second live region inside this one, so it is cleared here. */}
+      <div role="status">
+        {notice && (
+          <Alert
+            role={undefined}
+            className="tw:mx-4 tw:mb-2 tw:w-auto tw:bg-muted tw:text-muted-foreground"
+          >
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        )}
+      </div>
+      {/* Shown only where a count describes something the user can act on. Every other body state
+          renders its own explanation of why the list is empty, and a count above one of those reads
+          as a confident "0 of 0" contradicting it — the catalog never loaded, or this installation
+          cannot download any of it. The total is the type-scoped set, not the whole catalog:
+          reporting entries this picker filters out anyway implies candidates the user could reach by
+          clearing something. */}
+      {isFiltered && (bodyState === 'list' || bodyState === 'filteredEmpty') && (
+        <p className="tw:px-4 tw:pb-1 tw:text-end tw:text-xs tw:text-muted-foreground">
+          {formatReplacementString(showingCountTemplate, {
+            filtered: filteredResources.length,
+            total: typeScopedResources.length,
+          })}
+        </p>
+      )}
+      {/* `overflow-x-hidden` is load-bearing, not tidying: asking only for `overflow-y: auto` leaves
+          the other axis computing from `visible` to `auto`, so any row wider than the dialog earns a
+          horizontal scrollbar nobody chose. The columns below truncate instead.
+
+          This is one surface's half of the shared picker-row contract; the invariants and the other
+          two surfaces are in `.claude/rules/ux/picker-row-layout.md`. */}
+      <div className="tw:min-h-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:px-4 tw:pb-4">
+        {bodyState === 'loading' && (
+          <p className="tw:py-8 tw:text-center">
+            <Spinner />
+          </p>
+        )}
+        {bodyState === 'error' && (
+          <RetryableErrorView
+            icon={<CloudOff />}
+            message={loadErrorText}
+            retryLabel={retryText}
+            onRetry={onRetryResources}
+          />
+        )}
+        {bodyState === 'filteredEmpty' && (
+          <RetryableErrorView
+            role="status"
+            icon={<SearchX />}
+            message={noResultsFilteredText}
+            retryLabel={clearFiltersText}
+            onRetry={clearFilters}
+          />
+        )}
+        {bodyState === 'downloadsUnavailable' && (
+          <RetryableErrorView
+            role="status"
+            icon={<CloudOff />}
+            message={downloadsUnavailableText}
+          />
+        )}
+        {bodyState === 'empty' && (
+          <EmptyState className="tw:py-8 tw:text-center" message={noResultsText} />
+        )}
+        {/* Fixed layout so the columns cannot be widened by their content: under the default `auto`
+            layout a single long resource name sets the table's width and pushes the language column
+            out of the dialog. The proportions come from the colgroup rather than per-cell widths,
+            because the section-heading rows span all four columns and so cannot carry them. */}
+        {bodyState === 'list' && (
+          <Table className="tw:table-fixed">
+            {/* Proportions, not pixels, so the same table reads correctly in the 640px Share
+                Layout host and at full dialog width. The language column gets a sixth rather than
+                a quarter: it holds one short word, while the full name beside it is the column a
+                user actually reads and is the one that has to truncate last. The checkmark column
+                is a fixed width because its content is one fixed-size glyph — see the padding note
+                on that cell. */}
+            <colgroup>
+              <col className="tw:w-7" />
+              <col className="tw:w-1/4" />
+              <col />
+              <col className="tw:w-1/6" />
+            </colgroup>
+            <TableBody>
+              <ResourceSection
+                label={alreadySelectedLabel}
+                resources={alreadySelected}
+                onSelect={allowDeselect ? onSelect : undefined}
+                showCheckmark
+              />
+              <ResourceSection
+                label={installedLabel}
+                resources={installed}
+                onSelect={allowSelectingInstalled ? onSelect : undefined}
+              />
+              <ResourceSection
+                label={toDownloadLabel}
+                resources={visibleToDownload}
+                onSelect={onSelect}
+              />
+              {hasMore && (
+                <TableRow className="tw:border-0">
+                  <TableCell colSpan={4} className="tw:border-0 tw:p-0">
+                    <div ref={sentinelRef} aria-hidden />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+    </>
+  );
+}

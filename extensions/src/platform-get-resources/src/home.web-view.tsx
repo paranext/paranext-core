@@ -1,6 +1,7 @@
+import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useData, useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
-import { CardTitle, useEvent } from 'platform-bible-react';
+import { useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
+import { CardTitle, useEvent, usePromise } from 'platform-bible-react';
 import { Home as HomeIcon } from 'lucide-react';
 
 import {
@@ -9,15 +10,26 @@ import {
   isErrorMessageAboutRegistryAuthFailure,
   isPlatformError,
   newGuid,
+  retryUntil,
 } from 'platform-bible-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Home, HOME_STRING_KEYS, LocalProjectInfo } from './home.component';
+import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
+import { useLocalProjects } from './use-local-projects.hook';
 
-const defaultExcludePdpFactoryIds: string[] = [];
 const defaultInterfaceLanguages: string[] = ['en'];
 
-globalThis.webViewComponent = function HomeWebView() {
+// Bounded retries for the two send/receive-dependent calls below, sized to outlast the remaining
+// extension activations (~1.5s in a Paratext 10 build).
+const SEND_RECEIVE_ATTEMPTS = 4;
+const SEND_RECEIVE_RETRY_MS = 2000;
+
+globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
+  // Seeded by the web view provider from the caller's open options, and scrubbed back to `false` on
+  // every open that does not ask for it — so a projects-only launch cannot survive into a later
+  // menu open or a restored layout. See `buildHomeWebViewState`.
+  const [shouldShowProjectsOnly] = useWebViewState<boolean>('shouldShowProjectsOnly', false);
+
   const isMounted = useRef(false);
   useEffect(() => {
     isMounted.current = true;
@@ -53,26 +65,58 @@ globalThis.webViewComponent = function HomeWebView() {
     fetchAvailability();
   }, [dblResourcesProvider]);
 
-  const [resourcesList] = useData('platformGetResources.dblResourcesProvider').DblResources(
+  const [resourcesList] = usePromise(
+    useCallback(
+      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      [],
+    ),
     undefined,
-    [],
   );
 
   const openGetResources = useCallback(() => {
     papi.commands.sendCommand('platformGetResources.openGetResources');
   }, []);
 
-  const openProject = (projectId: string, isEditable: boolean) =>
-    papi.commands.sendCommand(
-      isEditable
-        ? 'platformScriptureEditor.openScriptureEditor'
-        : 'platformScriptureEditor.openResourceViewer',
+  const openProject = async (projectId: string, isPublished: boolean) => {
+    await papi.commands.sendCommand(
+      isPublished
+        ? 'platformScriptureEditor.openResourceViewer'
+        : 'platformScriptureEditor.openScriptureEditor',
       projectId,
     );
+
+    // Recorded for editable projects only, matching what the title bar's picker lists. Home is the
+    // title bar's route to a project that is not in that list yet, so a project opened here has to
+    // join it — otherwise the escape hatch for finding a non-recent project never makes it recent.
+    if (isPublished) return;
+    try {
+      const recentlyOpenedProjects = await papi.dataProviders.get(
+        'platformScripture.recentlyOpenedProjects',
+      );
+      await recentlyOpenedProjects?.recordProjectOpened(projectId);
+    } catch (e) {
+      // The project did open; failing to remember it is not worth reporting to the user.
+      logger.warn(
+        `Home web view could not record project ${projectId} as recently opened: ${getErrorMessage(e)}`,
+      );
+    }
+  };
 
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
   );
+  /**
+   * Whether the availability check ran out of attempts without an answer, as opposed to not having
+   * answered yet. Separate from `isSendReceiveAvailable` because `undefined` there is both states
+   * at once, and only the settled one should reach the user.
+   */
+  const [didAvailabilityCheckGiveUp, setDidAvailabilityCheckGiveUp] = useState<boolean>(false);
+  /**
+   * Identifies the newest availability check. Mount and `onDidReloadExtensions` can both start one,
+   * and each runs for several seconds, so two can be in flight at once — without this, an older run
+   * exhausting its attempts would overwrite a newer run's answer.
+   */
+  const availabilityCheckRunRef = useRef(0);
 
   const getStarted = useCallback(() => {
     papi.commands.sendCommand(
@@ -82,12 +126,38 @@ globalThis.webViewComponent = function HomeWebView() {
   }, []);
 
   const checkIfSendReceiveAvailable = useCallback(async () => {
-    const isAvailable = await papi.commands.sendCommand(
-      'platformGetResources.isSendReceiveAvailable',
+    availabilityCheckRunRef.current += 1;
+    const thisRun = availabilityCheckRunRef.current;
+    // A throw means the extension host couldn't answer yet, not that send/receive is missing, so
+    // retry: without one the answer stays unknown for the session, since
+    // `platform.onDidReloadExtensions` — the only other thing that re-checks — does not fire on a
+    // cold start. `undefined` marks an attempt that threw, which is what keeps the retries going.
+    const isAvailable = await retryUntil(
+      async () => {
+        try {
+          return await papi.commands.sendCommand('platformGetResources.isSendReceiveAvailable');
+        } catch (e) {
+          logger.warn(
+            `Home web view could not determine send/receive availability: ${getErrorMessage(e)}`,
+          );
+          return undefined;
+        }
+      },
+      (isAvailableResult) => isAvailableResult !== undefined || !isMounted.current,
+      { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
     );
-    if (isMounted.current) {
-      setIsSendReceiveAvailable(isAvailable);
+
+    if (!isMounted.current || thisRun !== availabilityCheckRunRef.current) return;
+    if (isAvailable === undefined) {
+      // Still unknown after every attempt. This is a third state, distinct from both "send/receive
+      // is absent from this build" (a definite `false`, where a local-only list is the whole truth)
+      // and "the server was reached" — and without saying so it renders exactly like the latter.
+      logger.warn('Home web view gave up determining send/receive availability');
+      setDidAvailabilityCheckGiveUp(true);
+      return;
     }
+    setDidAvailabilityCheckGiveUp(false);
+    setIsSendReceiveAvailable(isAvailable);
   }, []);
 
   useEffect(() => {
@@ -110,8 +180,22 @@ globalThis.webViewComponent = function HomeWebView() {
     }, []),
   );
 
+  // Declared before the first use below: the send/receive failure paths all report through the same
+  // notification id so a repeat failure replaces the previous toast instead of stacking.
+  const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
+
   const sendReceiveProject = async (projectId: string) => {
-    if (!isSendReceiveAvailable) return;
+    if (!isSendReceiveAvailable) {
+      // Say so rather than doing nothing. Availability can still be unknown when a row's Sync
+      // button is reachable, and a click that produces no response and no message just looks
+      // broken.
+      papi.notifications.send({
+        severity: 'warning',
+        message: '%resources_syncUnavailable%',
+        notificationId: sharedProjectErrorNotificationId,
+      });
+      return;
+    }
 
     try {
       setIsSendReceiveInProgress(true);
@@ -124,28 +208,62 @@ globalThis.webViewComponent = function HomeWebView() {
         setIsSendReceiveInProgress(false);
       }
     } catch (e) {
-      logger.warn(
-        `Home web view failed to reload after running S/R for project ${projectId}: ${e}`,
-      );
+      const errorMessage = getErrorMessage(e);
+      logger.warn(`Home web view failed to send/receive project ${projectId}: ${errorMessage}`);
       if (isMounted.current) {
         setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
         setIsSendReceiveInProgress(false);
       }
+
+      // The two failures we can recognize get their own notification with a link to the setting
+      // that fixes them, the same way the shared-projects fetch reports them — their raw messages
+      // are ParatextData internals and say nothing a user can act on.
+      if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
+        papi.notifications.send({
+          severity: 'error',
+          message: '%data_loading_error_internetAccess_disabled_2%',
+          clickCommandLabel: '%general_open%',
+          clickCommand: 'paratextRegistration.showInternetSettings',
+          notificationId: sharedProjectErrorNotificationId,
+        });
+        return;
+      }
+      if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
+        papi.notifications.send({
+          severity: 'error',
+          message: '%data_loading_error_paratextData_auth_failure%',
+          clickCommandLabel: '%general_open%',
+          clickCommand: 'paratextRegistration.showParatextRegistration',
+          notificationId: sharedProjectErrorNotificationId,
+        });
+        return;
+      }
+
+      // Anything else re-throws so Home's own "Sync failed" alert reports it. Swallowing here is
+      // what made a failed send/receive look like nothing happened: Home already catches this
+      // callback's rejection and renders the message, but only ever saw a resolved promise.
+      throw e;
     }
   };
 
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
-  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
-
-  const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
+  /**
+   * How the last fetch of the server's project list ended. Only meaningful once
+   * `isSendReceiveAvailable` is `true` — what Home is told is derived from both below, so that the
+   * combinations that describe no real situation cannot be reached.
+   */
+  const [sharedProjectsFetchState, setSharedProjectsFetchState] = useState<
+    'loading' | 'loaded' | 'unreachable' | 'unavailable'
+  >('loading');
 
   useEffect(() => {
-    if (!isSendReceiveAvailable) {
-      setIsLoadingRemoteProjects(false);
-      return;
-    }
+    if (!isSendReceiveAvailable) return;
 
     let promiseIsCurrent = true;
+    let retryTimeout: ReturnType<typeof setTimeout> | undefined;
+    // Deliberately not `retryUntil`: two error branches below must not retry at all (they notify
+    // instead), and this needs a cancellable timer so a stale effect run stops on cleanup.
+    let remainingRetries = SEND_RECEIVE_ATTEMPTS - 1;
     const getSharedProjects = async () => {
       try {
         const projectsInfo = await papi.commands.sendCommand(
@@ -153,20 +271,26 @@ globalThis.webViewComponent = function HomeWebView() {
         );
 
         if (promiseIsCurrent && isMounted.current) {
-          setIsLoadingRemoteProjects(false);
+          setSharedProjectsFetchState('loaded');
           setSharedProjectsInfo(projectsInfo);
         }
       } catch (e) {
         const errorMessage = getErrorMessage(e);
+        // The server was reached and refused for a reason the user can act on, as opposed to not
+        // answering at all — the banner says so differently, because the notification sent here
+        // already names the cause and the fix.
+        let failureState: 'unreachable' | 'unavailable' = 'unreachable';
         if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
+          failureState = 'unavailable';
           papi.notifications.send({
             severity: 'error',
-            message: '%data_loading_error_internetAccess_disabled%',
+            message: '%data_loading_error_internetAccess_disabled_2%',
             clickCommandLabel: '%general_open%',
             clickCommand: 'paratextRegistration.showInternetSettings',
             notificationId: sharedProjectErrorNotificationId,
           });
         } else if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
+          failureState = 'unavailable';
           papi.notifications.send({
             severity: 'error',
             message: '%data_loading_error_paratextData_auth_failure%',
@@ -174,12 +298,30 @@ globalThis.webViewComponent = function HomeWebView() {
             clickCommand: 'paratextRegistration.showParatextRegistration',
             notificationId: sharedProjectErrorNotificationId,
           });
+        } else if (remainingRetries > 0 && promiseIsCurrent && isMounted.current) {
+          // Availability reports what shipped in this build, not what has finished activating,
+          // so an unclassified failure this early usually means send/receive hasn't
+          // registered its commands yet. Without a retry the list stays empty until a sync completes
+          // or extensions reload.
+          remainingRetries -= 1;
+          logger.warn(`Home web view failed to get shared projects; retrying: ${errorMessage}`);
+          retryTimeout = setTimeout(getSharedProjects, SEND_RECEIVE_RETRY_MS);
+          return;
         } else {
           logger.warn(`Home web view failed to get shared projects: ${errorMessage}`);
         }
 
+        // Every branch that reaches here has given up on the server for this run — the two
+        // notified ones as well as the retries-exhausted one. The notifications name a cause and
+        // offer a fix, but they are dismissible and live outside the list, so Home still has to say
+        // for itself that what it is showing is only the local half.
         if (promiseIsCurrent && isMounted.current) {
-          setIsLoadingRemoteProjects(false);
+          setSharedProjectsFetchState(failureState);
+          // Dropped rather than left on screen: a re-fetch after a completed sync can fail with a
+          // previous run's rows still listed, and the banner's claim that this is only the local
+          // half has to be true of what is actually rendered. Those rows are also unusable — their
+          // Get and Sync buttons reach the same server that just refused.
+          setSharedProjectsInfo(undefined);
         }
       }
     };
@@ -187,15 +329,16 @@ globalThis.webViewComponent = function HomeWebView() {
     if (isSendReceiveInProgress) {
       return;
     }
-    if (!isSendReceiveAvailable) {
-      setIsLoadingRemoteProjects(false);
-      return;
-    }
+    // Each run starts over: without this the gate stays down through a re-fetch, and on the first
+    // run it was never raised at all — a user whose projects are all on the server would be told
+    // "Nothing here" for the seconds the fetch takes.
+    setSharedProjectsFetchState('loading');
     getSharedProjects();
 
     return () => {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
+      clearTimeout(retryTimeout);
     };
   }, [
     isSendReceiveAvailable,
@@ -204,66 +347,13 @@ globalThis.webViewComponent = function HomeWebView() {
     syncsCompletedCount, // triggers a re-fetch each time a sync completes
   ]);
 
-  const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
-  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
-
-  const [excludePdpFactoryIdsInHomePossiblyError] = useSetting(
-    'platformGetResources.excludePdpFactoryIdsInHome',
-    defaultExcludePdpFactoryIds,
-  );
-
-  const excludePdpFactoryIds = useMemo(() => {
-    if (isPlatformError(excludePdpFactoryIdsInHomePossiblyError)) {
-      logger.warn(
-        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
-        excludePdpFactoryIdsInHomePossiblyError,
-      );
-      return defaultExcludePdpFactoryIds;
-    }
-    return excludePdpFactoryIdsInHomePossiblyError;
-  }, [excludePdpFactoryIdsInHomePossiblyError]);
-
-  useEffect(() => {
-    let promiseIsCurrent = true;
-    const getLocalProjects = async () => {
-      const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-        excludePdpFactoryIds,
-      });
-      const projectInfo = await Promise.all(
-        projectMetadata.map(async (data) => {
-          const pdp = await papi.projectDataProviders.get('platform.base', data.id);
-          return {
-            projectId: data.id,
-            isEditable: await pdp.getSetting('platform.isEditable'),
-            fullName: await pdp.getSetting('platform.fullName'),
-            name: await pdp.getSetting('platform.name'),
-            language: await pdp.getSetting('platform.language'),
-          };
-        }),
-      );
-
-      if (promiseIsCurrent && isMounted.current) {
-        setIsLoadingLocalProjects(false);
-        setLocalProjectsInfo(projectInfo);
-      }
-    };
-
-    if (isSendReceiveInProgress) {
-      return;
-    }
-    getLocalProjects();
-
-    return () => {
-      // Mark this promise as old and not to be used
-      promiseIsCurrent = false;
-    };
-  }, [
-    isSendReceiveInProgress,
-    excludePdpFactoryIds,
-    resourcesList,
-    syncsCompletedCount, // triggers a re-fetch each time a sync completes
-  ]);
+  const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects({
+    logLabel: 'Home',
+    // Pause fetching while a Send/Receive runs and resume when it finishes.
+    enabled: !isSendReceiveInProgress,
+    // Re-fetch when the cached resource list changes or a sync completes.
+    refetchTriggers: [resourcesList, syncsCompletedCount],
+  });
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
 
@@ -275,6 +365,18 @@ globalThis.webViewComponent = function HomeWebView() {
 
     return interfaceLanguages;
   }, [interfaceLanguages]);
+
+  /**
+   * The one place the server half's status is decided. Availability outranks the fetch state,
+   * because a fetch state only means anything once there is known to be a server to fetch from —
+   * which is what keeps a give-up on a re-check from raising a banner over rows that loaded fine.
+   */
+  const remoteProjectsState: RemoteProjectsState = useMemo(() => {
+    if (isSendReceiveAvailable === false) return 'absent';
+    if (isSendReceiveAvailable === undefined)
+      return didAvailabilityCheckGiveUp ? 'unknown' : 'loading';
+    return sharedProjectsFetchState;
+  }, [isSendReceiveAvailable, didAvailabilityCheckGiveUp, sharedProjectsFetchState]);
 
   const dialogTitleText: string = localizedStringsWithLoadingState[0]['%home_dialog_title%'];
 
@@ -289,7 +391,8 @@ globalThis.webViewComponent = function HomeWebView() {
       showGetResourcesButton={showGetResourcesButton}
       isSendReceiveInProgress={isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
-      isLoadingRemoteProjects={isLoadingRemoteProjects}
+      remoteProjectsState={remoteProjectsState}
+      shouldShowProjectsOnly={shouldShowProjectsOnly}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}

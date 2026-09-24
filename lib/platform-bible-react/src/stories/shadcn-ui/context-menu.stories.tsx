@@ -16,7 +16,6 @@ import {
   ContextMenuSubTrigger,
   ContextMenuRadioGroup,
 } from '@/components/shadcn-ui/context-menu';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof ContextMenu> = {
   title: 'Shadcn/ContextMenu',
@@ -24,11 +23,9 @@ const meta: Meta<typeof ContextMenu> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:p-8">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:p-8">
+        <Story />
+      </div>
     ),
   ],
   parameters: {

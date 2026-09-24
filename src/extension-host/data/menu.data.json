@@ -41,16 +41,25 @@
         "command": "platform.quit"
       },
       {
+        "label": "%mainMenu_openNewWindow%",
+        "localizeNotes": "Application main menu > Project > Open new window",
+        "group": "platform.projectMisc",
+        "order": 1,
+        "command": "platform.createWindow",
+        "hiddenInterfaceModes": ["simple"]
+      },
+      {
         "label": "%mainMenu_helpInfo_visitGettingStartedPage%",
-        "localizeNotes": "Application main menu > Help > Visit Getting Started Page",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Help > Visit Getting Started Page. Hidden in Simple mode: Simple's Help menu offers one support destination, Community support, rather than several overlapping web pages",
         "group": "platform.helpInfo",
         "order": 1,
         "command": "platform.visitGettingStartedPage",
         "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
       },
       {
-        "label": "%mainMenu_helpInfo_visitFAQsPage%",
-        "localizeNotes": "Application main menu > Help > Visit FAQs Page",
+        "label": "%mainMenu_helpInfo_visitCommunitySupportPage%",
+        "localizeNotes": "Application main menu > Help > Community support (opens the Support.Bible site, where translators find help from the wider community)",
         "group": "platform.helpInfo",
         "order": 2,
         "command": "platform.visitFAQsPage",
@@ -58,29 +67,24 @@
       },
       {
         "label": "%mainMenu_helpInfo_visitFeatureRoadmapPage%",
-        "localizeNotes": "Application main menu > Help > Visit Feature Roadmap Page",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Help > Visit Feature Roadmap Page. Hidden in Simple mode: the roadmap addresses people following the product's development rather than translators doing their work",
         "group": "platform.helpInfo",
         "order": 3,
         "command": "platform.visitFeatureRoadmapPage",
         "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
       },
       {
-        "label": "%mainMenu_feedbackForm_textArea%",
-        "localizeNotes": "Application main menu > Help > Submit an idea",
-        "group": "platform.helpFeedback",
-        "order": 1,
-        "command": "platform.usersnapSubmitIdea"
-      },
-      {
-        "label": "%mainMenu_feedbackForm_screenshot%",
-        "localizeNotes": "Application main menu > Help > Report a bug / Send feedback",
-        "group": "platform.helpFeedback",
-        "order": 2,
-        "command": "platform.usersnapReportIssue"
+        "label": "%mainMenu_helpInfo_showTour%",
+        "localizeNotes": "Application main menu > Help > Show the tour",
+        "group": "platform.helpInfo",
+        "order": 4,
+        "command": "platform.showOnboardingTour"
       },
       {
         "label": "%mainMenu_openDeveloperDocumentation%",
-        "localizeNotes": "Application main menu > Help > Open Developer Documentation",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Help > Open Developer Documentation. Hidden in Simple mode: it addresses extension developers, not translators",
         "group": "platform.helpMisc",
         "order": 2,
         "command": "platform.openDeveloperDocumentationUrl",
@@ -101,7 +105,7 @@
     },
     "groups": {
       "platform.projectTop": { "column": "platform.app", "order": 1, "isExtensible": true },
-      "platform.manageBooks": { "column": "platform.app", "order": 2 },
+      "platform.manageBooks": { "column": "platform.app", "order": 2, "isExtensible": true },
       "platform.deleteProject": { "column": "platform.app", "order": 3 },
       "platform.projectDetails": { "column": "platform.app", "order": 4, "isExtensible": true }
     },
@@ -134,6 +138,57 @@
         "group": "platform.wordList",
         "order": 1,
         "command": "platform.openWordList"
+      }
+    ]
+  },
+  "defaultWebViewTabMenu": {
+    "groups": {
+      "platform.tabZoom": { "order": 50, "isExtensible": false, "isExperimental": true },
+      "platform.tabWindow": { "order": 100, "isExtensible": true, "isExperimental": true }
+    },
+    "items": [
+      {
+        "label": "%tab_contextMenu_zoomIn%",
+        "localizeNotes": "Tab context menu > Zoom in. Enlarges the pane last used in this tab (for a tab with one pane, its whole content); the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 100,
+        "command": "platform.webViewContentZoomIn"
+      },
+      {
+        "label": "%tab_contextMenu_zoomOut%",
+        "localizeNotes": "Tab context menu > Zoom out. Shrinks the pane last used in this tab (for a tab with one pane, its whole content); the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 200,
+        "command": "platform.webViewContentZoomOut"
+      },
+      {
+        "label": "%tab_contextMenu_resetZoom%",
+        "localizeNotes": "Tab context menu > Reset zoom to default. Returns the pane last used in this tab (for a tab with one pane, its whole content) to the default size set in Settings; the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 300,
+        "command": "platform.webViewContentZoomReset"
+      },
+      {
+        "label": "%tab_contextMenu_floatPanel%",
+        "localizeNotes": "Tab context menu > Float tab",
+        "group": "platform.tabWindow",
+        "order": 100,
+        "command": "platform.floatTab"
+      },
+      {
+        "label": "%tab_contextMenu_moveTabToNewWindow%",
+        "localizeNotes": "Tab context menu > Move tab to new window",
+        "group": "platform.tabWindow",
+        "order": 200,
+        "command": "platform.moveWebViewToNewWindow",
+        "hiddenInterfaceModes": ["simple"]
+      },
+      {
+        "id": "platform.moveTabToWindow",
+        "label": "%tab_contextMenu_moveTabToWindow%",
+        "localizeNotes": "Tab context menu > Move tab to window (submenu listing the open windows)",
+        "group": "platform.tabWindow",
+        "order": 300
       }
     ]
   },

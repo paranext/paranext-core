@@ -250,3 +250,52 @@ export const WithCustomClassName: Story = {
     },
   },
 };
+
+export const ShrinkSteps: Story = {
+  render: (args) => (
+    <div className="tw:flex tw:flex-col tw:gap-4">
+      {[560, 470, 380, 300].map((width) => (
+        <div key={width}>
+          <div className="tw:pb-1 tw:text-xs tw:text-muted-foreground">{width}px</div>
+          <div style={{ width }} className="tw:border">
+            <TabToolbar {...args} />
+          </div>
+        </div>
+      ))}
+    </div>
+  ),
+  parameters: {
+    controls: { hideNoControlsWarning: true },
+    docs: {
+      description: {
+        story:
+          'The same toolbar at four pinned container widths. Watch the reference control step down: `Genesis 1:1` → `GEN 1:1` → `GEN 1:…` → `GEN`. No item disappears at any width — the end zone is rigid, so shrinking is taken out of the start and center zones instead. Hover a shortened label to see the full text; the tooltip only opens when something is actually clipped.',
+      },
+    },
+  },
+};
+
+export const UnconvertedChild: Story = {
+  args: {
+    startAreaChildren: (
+      <span className="tw:whitespace-nowrap">
+        An unconverted child with a long label and no shorter form
+      </span>
+    ),
+    centerAreaChildren: undefined,
+  },
+  render: (args) => (
+    <div style={{ width: 320 }} className="tw:border">
+      <TabToolbar {...args} />
+    </div>
+  ),
+  parameters: {
+    controls: { hideNoControlsWarning: true },
+    docs: {
+      description: {
+        story:
+          "A start-zone child that cannot shrink, because it has no `tw:min-w-0` of its own and no shorter label form. The zone's `tw:overflow-clip` keeps it inside the toolbar rather than letting it paint over the end zone — the retained backstop for consumers whose items have not been given a shrink ladder.",
+      },
+    },
+  },
+};

@@ -41,6 +41,32 @@ describe('PAPI Util Functions: serializeRequestType and deserializeRequestType',
     expect(directive).toEqual(DIRECTIVE);
   });
 
+  // These fail if a change converts one of `deserializeRequestType`'s calls and leaves its partner,
+  // mixing a UTF-16 index with a grapheme-indexed substring.
+  it('splits at the separator when the category contains non-BMP characters', () => {
+    const CATEGORY = 'my\u{1F984}Category';
+    const DIRECTIVE = 'myDirective';
+
+    const { category, directive } = deserializeRequestType(
+      serializeRequestType(CATEGORY, DIRECTIVE),
+    );
+
+    expect(category).toEqual(CATEGORY);
+    expect(directive).toEqual(DIRECTIVE);
+  });
+
+  it('splits at the separator when the category contains combining marks', () => {
+    const CATEGORY = 'Ame\u0301lie';
+    const DIRECTIVE = 'my\u{1F469}\u200D\u{1F467}Directive';
+
+    const { category, directive } = deserializeRequestType(
+      serializeRequestType(CATEGORY, DIRECTIVE),
+    );
+
+    expect(category).toEqual(CATEGORY);
+    expect(directive).toEqual(DIRECTIVE);
+  });
+
   it('will throw on deserialize with no separator in request types', () => {
     const CATEGORY = 'myCategory';
 

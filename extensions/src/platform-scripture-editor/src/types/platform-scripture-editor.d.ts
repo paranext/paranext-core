@@ -55,6 +55,15 @@ declare module 'platform-scripture-editor' {
     method: 'toggleFootnotesPaneVisibility';
   };
 
+  /**
+   * Tell the editor to toggle the footnotes-pane auto-show/hide setting (which diverges from PT9)
+   * in standard view (default off; when on, the pane auto-shows/hides based on whether the current
+   * chapter has notes, unless the user has manually overridden it for that chapter)
+   */
+  export type EditorMessageToggleFootnotesAutoShow = {
+    method: 'toggleFootnotesAutoShow';
+  };
+
   /** Tell the editor to change (toggle between bottom and side) footnotes pane location */
   export type EditorMessageChangeFootnotesPaneLocation = {
     method: 'changeFootnotesPaneLocation';
@@ -133,12 +142,17 @@ declare module 'platform-scripture-editor' {
     action: AnnotationAction;
   };
 
-  /** Messages sent to the editor web view */
+  /**
+   * Messages sent to the editor web view
+   *
+   * @experimental The set of editor messages may expand.
+   */
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
     | EditorMessageChangeScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
+    | EditorMessageToggleFootnotesAutoShow
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection
     | EditorMessageInsertCommentAtSelection
@@ -279,7 +293,12 @@ declare module 'platform-scripture-editor' {
 
   // #region editor WebView types
 
-  export type ScriptureEditorViewType = 'formatted' | 'markers';
+  /**
+   * Ways Scripture project text can be viewed in the editor.
+   *
+   * @experimental The set of view types is expected to grow.
+   */
+  export type ScriptureEditorViewType = 'formatted' | 'markers' | 'standard';
 
   /** Options for configuring the editor you are opening */
   export type OpenEditorOptions = {
@@ -289,6 +308,8 @@ declare module 'platform-scripture-editor' {
      * Ways Scripture project text can be viewed in the editor
      *
      * Defaults to 'formatted'.
+     *
+     * @experimental
      */
     viewType?: ScriptureEditorViewType;
     /**
@@ -335,7 +356,26 @@ declare module 'platform-scripture-editor' {
   };
 
   export type PlatformScriptureEditorWebViewController = NetworkableObject<{
-    /** Set the current selection on the editor */
+    /**
+     * Set the current selection on the editor, navigating to the range's book and chapter first if
+     * the editor is showing another, and scroll the range itself into view: a range already fully
+     * on screen stays put; otherwise its first line lands just below the top of the editor. If the
+     * editor's tab is hidden, the selection is made at once and the scroll happens when the tab is
+     * next shown.
+     *
+     * The reference the navigation publishes to the editor's scroll group is the range's full verse
+     * reference, not just its book and chapter, so other views on the same scroll group land on the
+     * same verse.
+     *
+     * The jump is ABANDONED — with no selection and no scroll — if the editor lands on a chapter
+     * other than the one requested before the range's content arrives (e.g. the user navigates away
+     * while the jump is still pending); the returned promise still resolves normally. It also falls
+     * back to scrolling to the verse, rather than the range, when the selection cannot be applied
+     * or its geometry cannot be measured.
+     *
+     * The returned promise resolves once the request has been sent to the editor, not once the
+     * scroll (or the navigation, selection, or fallback it may trigger) has finished.
+     */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
      * Cycle through the Scripture view types in the editor (currently just a toggle between
@@ -344,6 +384,11 @@ declare module 'platform-scripture-editor' {
     changeScriptureView(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
+    /**
+     * Toggle the footnotes-pane auto-show/hide setting (which diverges from PT9) in standard view
+     * (default off)
+     */
+    toggleFootnotesAutoShow(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'>;
     /**
@@ -409,7 +454,13 @@ declare module 'platform-scripture-editor' {
     /**
      * Get the current selection in the editor.
      *
-     * @returns The current selection range, or undefined if there is no selection
+     * If the editor has already reported a selection, resolves immediately with that value (or
+     * `undefined` if the editor reported no selection). If the editor has not yet reported any
+     * selection at the time of the call, waits up to 10 seconds for the first selection and
+     * **rejects** if none arrives in that window — callers should be prepared to handle a rejected
+     * promise as well as a resolved `undefined`.
+     *
+     * @returns The current selection range, or `undefined` if the editor reported no selection
      */
     getSelection(): Promise<ScriptureRangeUsjVerseRefChapterLocation | undefined>;
     /**
@@ -667,9 +718,69 @@ declare module 'papi-shared-types' {
     AnnotationStyleDataProvider,
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
+    SelectionChangeEvent,
   } from 'platform-scripture-editor';
+  import type { ResourceType } from 'platform-bible-utils';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import type { NotificationClickCommandHandler } from '@papi/core';
+
+  export interface NetworkEvents {
+    /**
+     * Emitted when the selection in a Scripture editor changes. Subscribe using
+     * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSelectionChange')`.
+     */
+    'platformScriptureEditor.onDidSelectionChange': SelectionChangeEvent;
+    /**
+     * Emitted to tell the reactive resource/model-text panels to apply the current (synced) admin
+     * layout for a project — i.e. "re-arm" their in-memory hold. Fired on auto-apply and on the
+     * user confirming a buffered layout. Subscribe with
+     * `papi.network.getNetworkEvent('platformScriptureEditor.onSharedLayoutApply')`.
+     */
+    'platformScriptureEditor.onSharedLayoutApply': { projectId: string };
+    /**
+     * Emitted just before a scripture editor web view is opened or replaced with a new project.
+     * `switchId` uniquely identifies this switch and pairs it with the matching
+     * `platformScriptureEditor.onDidSwitchProject` event. Subscribe with
+     * `papi.network.getNetworkEvent('platformScriptureEditor.onWillSwitchProject')`.
+     *
+     * @experimental Recently-added switch-pairing plumbing for the workspace-updating overlay; the
+     *   payload shape and event name are not yet a settled contract and may change.
+     */
+    'platformScriptureEditor.onWillSwitchProject': { switchId: string };
+    /**
+     * Emitted after the scripture editor web view open/replace call resolves. Carries the
+     * `switchId` of the `platformScriptureEditor.onWillSwitchProject` event that started the
+     * switch. Subscribe with
+     * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSwitchProject')`.
+     *
+     * @experimental Recently-added switch-pairing plumbing for the workspace-updating overlay; the
+     *   payload shape and event name are not yet a settled contract and may change.
+     */
+    'platformScriptureEditor.onDidSwitchProject': { switchId: string };
+  }
+
+  export interface SettingTypes {
+    /**
+     * Feature flag (default `true`) that gates the Scripture Text Grid web view. When `false`, the
+     * web view is not registered and cannot be opened or restored.
+     */
+    'platformScriptureEditor.enableScriptureTextGrid': boolean;
+    /**
+     * Delay in milliseconds before the editor settles pending marker edits in place while the user
+     * is idle, in editable marker modes. The default (`1000`) matches the editor's own built-in
+     * idle delay, so an unset setting behaves identically to no setting at all. `0` settles
+     * immediately after each edit; `-1` disables the editor's idle settle clock entirely, so
+     * pending edits settle only on caret departure, Enter, blur, or when the document is read.
+     *
+     * Deliberately typed `number`, never `number | undefined`: an undefined-able member widens the
+     * whole `SettingTypes` union, silently disabling the compile-time guards that catch a settings
+     * mock's implicit-undefined fallthrough for every OTHER setting.
+     *
+     * @experimental A tuning knob for the Standard view marker-settle cadence; the setting name
+     *   and value semantics are not yet a settled contract and may change.
+     */
+    'platformScriptureEditor.markerSettleDelayMs': number;
+  }
 
   export interface CommandHandlers {
     /**
@@ -680,7 +791,9 @@ declare module 'papi-shared-types' {
      *   select a project if this parameter is not provided.
      * @param options Options for configuring the editor you are opening
      * @param existingTabIdToReplace Optional ID of the tab that should be replaced by the scripture
-     *   editor
+     *   editor. Honored in `platform.interfaceMode === 'power'`. Ignored in `platform.interfaceMode
+     *   === 'simple'` — every open routes to the editor column regardless of which tab the caller
+     *   named.
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openScriptureEditor': (
@@ -697,7 +810,9 @@ declare module 'papi-shared-types' {
      *   select a resource if this parameter is not provided.
      * @param options Options for configuring the editor you are opening
      * @param existingTabIdToReplace Optional ID of the tab that should be replaced by the resource
-     *   viewer
+     *   viewer. Honored in `platform.interfaceMode === 'power'`. Ignored in `platform.interfaceMode
+     *   === 'simple'` — every open routes to the editor column regardless of which tab the caller
+     *   named.
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openResourceViewer': (
@@ -720,6 +835,17 @@ declare module 'papi-shared-types' {
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
     'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Toggles the footnotes-pane auto-show/hide setting (which diverges from PT9; default off) for
+     * the given the WebView ID. When on, the footnotes pane automatically shows/hides in standard
+     * view based on whether the current chapter has notes, unless manually overridden.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScriptureEditor.toggleFootnotesAutoShow': (
+      webViewId: string | undefined,
+    ) => Promise<void>;
 
     /**
      * Changes the location of the footnotes pane (if visible) for the given the WebView ID,
@@ -763,6 +889,47 @@ declare module 'papi-shared-types' {
      * receives the `notificationId` when the notification's click action is used.
      */
     'platformScriptureEditor.dismissMarkerNotificationForProjectToday': NotificationClickCommandHandler;
+    /**
+     * Notification "Apply now" handler: applies the buffered shared layout for the project tied to
+     * the given notification id, then dismisses the notification.
+     */
+    'platformScriptureEditor.applySharedLayout': NotificationClickCommandHandler;
+    /**
+     * Replays the project-switch side effects (S/R sync, admin's shared layout auto-apply,
+     * recording recently-opened) for a project whose Scripture Editor tab is already showing
+     * correctly. `openScriptureEditor` cannot be used for this: when the target project already
+     * matches the active editor tab, its dispatch resolves to `focus-existing` and returns before
+     * any of those side effects run. Intended for callers (e.g. Platform.Bible core's Power ->
+     * Simple mode switch) that bake `projectId` directly into a layout instead of routing through
+     * `openScriptureEditor`.
+     *
+     * @param projectId The project now showing in the Scripture Editor.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.finalizeProjectSwitch': (projectId: string) => Promise<void>;
+    /**
+     * Opens the model text panel WebView for a translation project
+     *
+     * @param projectId The project ID of the translation project (not the resource). If not
+     *   provided, the panel opens in a "no project" state.
+     * @returns WebView id for the opened panel, or `undefined` if it could not be opened
+     */
+    'platformScriptureEditor.openModelText': (projectId?: string) => Promise<string | undefined>;
+    /**
+     * Opens the Bible Texts or Commentaries resource panel WebView for a project. If a panel of the
+     * requested type is already open, reloads it with the new project and brings it to front;
+     * otherwise opens a new tab.
+     *
+     * @param resourceType 'ScriptureResource' for the Bible Texts tab, 'CommentaryResource' for the
+     *   Commentaries tab
+     * @param projectId The project ID to display resources for. If not provided, the panel opens
+     *   with whatever project was previously shown (or no project if it is new).
+     * @returns WebView id for the opened panel, or `undefined` if it could not be opened
+     */
+    'platformScriptureEditor.openResourceText': (
+      resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+      projectId?: string,
+    ) => Promise<string | undefined>;
   }
 
   export interface DataProviders {

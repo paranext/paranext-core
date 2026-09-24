@@ -2,6 +2,7 @@ import {
   CommandLineArgs,
   getCommandLineArgument,
   getCommandLineArgumentsGroup,
+  stripWrappingQuotes,
 } from './command-line.util';
 
 describe('getCommandLineArgumentsGroup', () => {
@@ -32,5 +33,44 @@ describe('getCommandLineArgument', () => {
     process.argv = ['node', 'app.js'];
 
     expect(getCommandLineArgument(CommandLineArgs.WindowSize)).toBeUndefined();
+  });
+});
+
+describe('stripWrappingQuotes', () => {
+  test('should strip a matching pair of double quotes', () => {
+    expect(stripWrappingQuotes('"C:\\foo"')).toBe('C:\\foo');
+  });
+
+  test('should strip a matching pair of single quotes', () => {
+    expect(stripWrappingQuotes("'C:\\foo'")).toBe('C:\\foo');
+  });
+
+  test('should return the value unchanged when it has no wrapping quotes', () => {
+    expect(stripWrappingQuotes('C:\\foo')).toBe('C:\\foo');
+  });
+
+  test('should return the value unchanged when the quote characters do not match', () => {
+    expect(stripWrappingQuotes('\'C:\\foo"')).toBe('\'C:\\foo"');
+  });
+
+  test('should return the value unchanged when only the left side is quoted', () => {
+    expect(stripWrappingQuotes('"C:\\foo')).toBe('"C:\\foo');
+  });
+
+  test('should return the value unchanged when only the right side is quoted', () => {
+    expect(stripWrappingQuotes("C:\\foo'")).toBe("C:\\foo'");
+  });
+
+  test('should return an empty string when the value is an empty matching quote pair', () => {
+    expect(stripWrappingQuotes('""')).toBe('');
+  });
+
+  test('should only strip the outermost pair when quotes are nested', () => {
+    expect(stripWrappingQuotes('"\'C:\\foo\'"')).toBe("'C:\\foo'");
+  });
+
+  test('should return the value unchanged when shorter than two characters', () => {
+    expect(stripWrappingQuotes('"')).toBe('"');
+    expect(stripWrappingQuotes('')).toBe('');
   });
 });

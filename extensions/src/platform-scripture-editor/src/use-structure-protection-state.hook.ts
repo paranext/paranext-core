@@ -1,0 +1,223 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  computeEffectiveStructureProtection,
+  isPlatformError,
+  type PlatformError,
+} from 'platform-bible-utils';
+import { logger } from '@papi/frontend';
+import { useProjectDataProvider, useProjectSetting, useSetting } from '@papi/frontend/react';
+
+/** Return type of {@link useStructureProtectionState}. */
+export type StructureProtectionState = {
+  /** Effective enforcement state — what the editor uses to gate structure changes */
+  isStructureProtected: boolean;
+  /**
+   * Whether the structure-protection feature applies in the current interface mode. `false` in
+   * power mode, where the feature is fully inactive (no enforcement, no toggles).
+   */
+  isProtectionActive: boolean;
+  /** Raw project setting — `true` means the admin has set a structure lock */
+  isProtectedByAdmin: boolean;
+  /**
+   * Set when the admin (project-level) `structureProtected` setting failed to load (e.g. a
+   * transient connection error). While this is set, `isStructureProtected` and `isProtectedByAdmin`
+   * fall back to treating the admin layer as unset — callers should surface an error/disabled state
+   * rather than trusting the protection values.
+   */
+  adminSettingError: PlatformError | undefined;
+  /**
+   * Whether the current user has write permission on project settings, and so may change the
+   * project-level lock — in the Team layout dialog, which is now its only control.
+   *
+   * Named to match {@link computeEffectiveStructureProtection}'s input of the same name in
+   * `platform-bible-utils`, which this value feeds and which the Scripture Finder PDP also passes:
+   * the three have to agree, so the name is that shared contract's rather than this hook's.
+   */
+  canAdminToggle: boolean;
+  /**
+   * Whether every input to the state above has been delivered at least once.
+   *
+   * `false` during the initial load, when the returned values are mode-aware DEFAULTS rather than
+   * the project's real state. A caller that reacts to a _change_ in this state — the toolbar button
+   * auto-opens a tooltip on one — must ignore transitions while this is `true`, or the settings
+   * merely arriving reads as the user having changed something.
+   */
+  isLoading: boolean;
+  /**
+   * Update the user's personal preference. Always available regardless of role.
+   *
+   * Note: a successful write does not necessarily change `isStructureProtected`. While the project
+   * is admin-LOCKED and the caller is a non-admin (`canAdminToggle` is `false`), the admin lock
+   * dominates, so the stored user preference has no effect on `isStructureProtected` until the lock
+   * is lifted.
+   */
+  setUserProtection: (value: boolean) => void;
+};
+
+/**
+ * Returns the effective structure-protection state for a project, combining the admin
+ * (project-level) setting with the user's personal preference.
+ *
+ * Truth table:
+ *
+ * - Project LOCKED + non-admin user → always locked (project wins)
+ * - Project LOCKED + admin user (`canAdminToggle=true`) → the project lock does NOT force protection;
+ *   the admin's own user setting decides (an admin who can toggle the lock is not bound by it)
+ * - Project allows changes → follows user setting for all roles
+ * - User setting absent → true (locked) in Simple mode, false in Power mode
+ * - Power mode → feature inactive: `isStructureProtected` is always `false`, `isProtectionActive` is
+ *   `false`, no toggles are shown, and the admin/user settings have no effect
+ *
+ * @param projectId The project to query. Pass `undefined` while the project is loading.
+ */
+export function useStructureProtectionState(
+  projectId: string | undefined,
+): StructureProtectionState {
+  const [adminSettingPossiblyError, , , isAdminSettingLoading] = useProjectSetting(
+    projectId,
+    'platformScripture.structureProtected',
+    false,
+  );
+
+  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+  const interfaceMode = isPlatformError(interfaceModePossiblyError)
+    ? 'simple'
+    : interfaceModePossiblyError;
+
+  // Use the project data provider directly (subscribe + direct setter) rather than the useProjectData
+  // data hook. The data hook's setter always calls `set<DataType>(selector, newData)` with two
+  // positional args, but the C# `SetUserStructureProtected` handler takes a single `value` parameter,
+  // so a data-hook write fails over JSON-RPC with -32602. A direct PDP method call sends exactly one
+  // arg, matching the handler — this mirrors how the sibling user settings (UserModelTexts) are set.
+  const userEditorSettingsPdp = useProjectDataProvider(
+    'platformScripture.userEditorSettings',
+    projectId,
+  );
+
+  // The user's structure-protection preference. `undefined` means not yet loaded or never set — the
+  // mode-aware default applies below.
+  const [userSettingState, setUserSettingState] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (!userEditorSettingsPdp) {
+      setUserSettingState(undefined);
+      return undefined;
+    }
+    // Reset to `undefined` while (re)subscribing so a project switch falls back to the mode-aware
+    // default instead of briefly showing the previous project's preference until the first callback
+    // arrives.
+    setUserSettingState(undefined);
+    let disposed = false;
+    let unsubscribe: (() => Promise<boolean>) | undefined;
+    const logUnsubscribeError = (err: unknown) => {
+      logger.error(`Failed to unsubscribe from user structure protection: ${err}`);
+    };
+    (async () => {
+      try {
+        const unsub = await userEditorSettingsPdp.subscribeUserStructureProtected(
+          undefined,
+          (value) => {
+            setUserSettingState(isPlatformError(value) ? undefined : value);
+          },
+        );
+        // The subscription may resolve after this effect was torn down; unsubscribe immediately so
+        // we don't leak it.
+        if (disposed) unsub().catch(logUnsubscribeError);
+        else unsubscribe = unsub;
+      } catch (err) {
+        logger.error(`Failed to subscribe to user structure protection: ${err}`);
+      }
+    })();
+    return () => {
+      disposed = true;
+      unsubscribe?.().catch(logUnsubscribeError);
+    };
+  }, [userEditorSettingsPdp]);
+
+  // The admin (project-level) `structureProtected` setting lives on the `platform.base` PDP, which
+  // has no per-setting write-permission check. We gate the toggle on
+  // `canUserWriteProjectTextConnectionSettings()` because in C# it resolves to
+  // `IsUserProjectAdministrator()` — i.e. it is the project-admin check, which is the correct
+  // authority for an admin/project-level setting. The coupling is implicit: if that method is ever
+  // narrowed to a connection-specific permission, this gate's meaning changes with no compile-time
+  // signal, so revisit this if a dedicated `canUserWriteStructureProtected` check is added. This
+  // hook only READS the admin setting; the same coupling applies to `team-layout.dialog.tsx`, which
+  // is now its only writer and runs the same check.
+  const textConnectionsPdp = useProjectDataProvider(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
+
+  const [canAdminToggle, setCanAdminToggle] = useState(false);
+  const [hasCanAdminToggleSettled, setHasCanAdminToggleSettled] = useState(false);
+  useEffect(() => {
+    if (!textConnectionsPdp) {
+      setCanAdminToggle(false);
+      setHasCanAdminToggleSettled(false);
+      return;
+    }
+    let disposed = false;
+    textConnectionsPdp
+      .canUserWriteProjectTextConnectionSettings()
+      .then((can) => {
+        if (!disposed) {
+          setCanAdminToggle(can);
+          setHasCanAdminToggleSettled(true);
+        }
+        return undefined;
+      })
+      .catch(() => {
+        if (!disposed) {
+          setCanAdminToggle(false);
+          setHasCanAdminToggleSettled(true);
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [textConnectionsPdp]);
+
+  // `!isPlatformError(...)` narrows the value to `boolean` in the right-hand operand, so this
+  // expression is already typed `boolean` (it is `false` on error or while the setting is loading).
+  // On error the admin layer is treated as unset and the error is surfaced via `adminSettingError`
+  // so callers can decide how to handle it rather than silently trusting the fallback.
+  const adminSettingError = isPlatformError(adminSettingPossiblyError)
+    ? adminSettingPossiblyError
+    : undefined;
+  const isAdminProtected = !isPlatformError(adminSettingPossiblyError) && adminSettingPossiblyError;
+  // The feature applies in simple mode only. In power mode it is fully inactive: enforcement is off
+  // and no toggles are shown, regardless of the admin or user settings (which are left untouched so
+  // returning to simple mode restores prior behavior).
+  const isProtectionActive = interfaceMode === 'simple';
+  // Effective enforcement state is computed by the shared algebra in platform-bible-utils so the
+  // editor and the Scripture Finder PDP (which cannot import each other) stay in lockstep. In simple
+  // mode with no stored user preference it defaults to locked; in power mode it is always inactive.
+  const isStructureProtected = computeEffectiveStructureProtection({
+    interfaceMode,
+    isAdminProtected,
+    canAdminToggle,
+    userSetting: userSettingState,
+  });
+
+  const setUserProtection = useCallback(
+    (value: boolean) => {
+      if (!isProtectionActive) return;
+      userEditorSettingsPdp?.setUserStructureProtected(value).catch((err) => {
+        logger.error(`Failed to set user structure protection: ${err}`);
+      });
+    },
+    [isProtectionActive, userEditorSettingsPdp],
+  );
+
+  return {
+    isStructureProtected,
+    isProtectedByAdmin: isProtectionActive && isAdminProtected,
+    adminSettingError: isProtectionActive ? adminSettingError : undefined,
+    canAdminToggle: isProtectionActive && canAdminToggle,
+    isProtectionActive,
+    // `userSettingState === undefined` covers both "still subscribing" and "never set"; the latter
+    // is a legitimate settled state, so it cannot gate this on its own. The admin setting and the
+    // permission check are the two that genuinely arrive late.
+    isLoading: isAdminSettingLoading || !hasCanAdminToggleSettled,
+    setUserProtection,
+  };
+}

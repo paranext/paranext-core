@@ -132,6 +132,200 @@ internal static class CommentTestHelper
     }
 
     /// <summary>
+    /// Creates a verseText merge-conflict Comment for testing rejected/accepted/result decoding.
+    /// The rejected (losing) side inserted "small"; the accepted (winning) side inserted "big".
+    /// </summary>
+    internal static Comment CreateVerseTextConflictComment()
+    {
+        // Reuse the base conflict comment's identity (Thread/VerseRef/Date/Status/Type/…) and override
+        // only the verseText-specific fields: a rejected-side diff Contents (the losing side inserted
+        // "small"), the VerseTextConflict type, the accepted-side diff (the winning side inserted
+        // "big"), and the resulting Verse.
+        Comment testComment = CreateConflictComment();
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p>\v 1 When Jesus was born in the <bold><color name="red">small </color></bold>village of Bethlehem in Judea, Herod was king.</p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+        testComment.Contents = contentsDoc.DocumentElement;
+        testComment.ConflictType = NoteConflictType.VerseTextConflict;
+        testComment.AcceptedChangeXmlStr =
+            """<p><language name="es-015-vaidika"><p>\v 1 When Jesus was born in the <bold><color name="red">big </color></bold>village of Bethlehem in Judea, Herod was king.</p></language></p>""";
+        testComment.Verse =
+            @"\v 1 When Jesus was born in the big village of Bethlehem in Judea, Herod was king.";
+        return testComment;
+    }
+
+    /// <summary>
+    /// A verseText merge-conflict Comment whose two sides edited INDEPENDENT (non-overlapping) words
+    /// of the same verse, so the two diffs against the base do not touch the same region and
+    /// <c>CommentEditHelper.GetMergedUsfm</c> returns non-null (PT9's "Merge all changes" is offered).
+    /// Contrast with <see cref="CreateVerseTextConflictComment"/>, whose sides both edit the SAME word
+    /// (before "village") so the merge is null. Here:
+    ///   base     = "\v 1 ...born in the village of Bethlehem in Judea, Herod was king."
+    ///   rejected = base + "small " before "village" (an early word; carried in Contents as &lt;bold&gt;)
+    ///   accepted = base + "great " before "king"    (a late word; carried in AcceptedChangeXml as &lt;bold&gt;)
+    /// The merged verse therefore contains BOTH "small" and "great".
+    /// </summary>
+    internal static Comment CreateIndependentVerseTextConflictComment()
+    {
+        // Reuse the base conflict comment's identity (Thread/VerseRef/Date/Status/Type/…) and override
+        // only the verseText-specific fields, exactly like CreateVerseTextConflictComment - but place
+        // the accepted-side change on a DIFFERENT, non-overlapping word than the rejected-side change.
+        Comment testComment = CreateConflictComment();
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p>\v 1 When Jesus was born in the <bold><color name="red">small </color></bold>village of Bethlehem in Judea, Herod was king.</p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+        testComment.Contents = contentsDoc.DocumentElement;
+        testComment.ConflictType = NoteConflictType.VerseTextConflict;
+        // Accepted (winning) side inserted "great " before "king." - a different word than the
+        // rejected side's "small " before "village", so the two diffs are independent.
+        testComment.AcceptedChangeXmlStr =
+            """<p><language name="es-015-vaidika"><p>\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was <bold><color name="red">great </color></bold>king.</p></language></p>""";
+        testComment.Verse =
+            @"\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was great king.";
+        return testComment;
+    }
+
+    /// <summary>
+    /// Creates a verseText merge-conflict Comment where BOTH sides replaced a word, so both
+    /// strikethrough (deletion) and bold (insertion) tokens appear in the accepted AND rejected
+    /// diffs. Distinct from <see cref="CreateVerseTextConflictCommentReplacement"/>, which is
+    /// loser-only (no common ancestor, <c>AcceptedChangeXmlStr == null</c>).
+    /// Common ancestor word: "town". Loser replaced it with "village"; winner replaced it with "city".
+    /// Contents (parent→loser diff): town struck through, village bolded.
+    /// AcceptedChangeXmlStr (parent→winner diff): town struck through, city bolded.
+    /// Verse: winner plain USFM (city).
+    /// </summary>
+    internal static Comment CreateVerseTextConflictCommentBothSidesReplaced()
+    {
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p>\v 1 When Jesus was born in the <strikethrough><color name="red">town </color></strikethrough><bold><color name="red">village </color></bold>of Bethlehem in Judea, Herod was king.</p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+
+        DummyUser user = new DummyUser("Tim Steenwyk");
+        Comment testComment = new Comment(user);
+        testComment.Thread = "a1b2c3d4";
+        testComment.VerseRefStr = "MAT 2:1";
+        testComment.Date = "2011-08-16T15:49:18.4019847-04:00";
+        testComment.Status = NoteStatus.Todo;
+        testComment.HideInTextWindow = false;
+        testComment.Contents = contentsDoc.DocumentElement;
+        testComment.Type = NoteType.Conflict;
+        testComment.ConflictType = NoteConflictType.VerseTextConflict;
+        testComment.AcceptedChangeXmlStr =
+            """<p><language name="es-015-vaidika"><p>\v 1 When Jesus was born in the <strikethrough><color name="red">town </color></strikethrough><bold><color name="red">city </color></bold>of Bethlehem in Judea, Herod was king.</p></language></p>""";
+        testComment.Verse =
+            @"\v 1 When Jesus was born in the city of Bethlehem in Judea, Herod was king.";
+        return testComment;
+    }
+
+    /// <summary>
+    /// A verseText merge-conflict Comment with NO common ancestor (parent == null in the merger),
+    /// mirroring two people independently drafting the same previously-absent verse. In that case
+    /// <c>BookFileMerger.AppendDiffXml</c> diffs <c>""</c> against the losing side, so the Contents
+    /// diff paragraph is insertion-only (all <c>&lt;bold&gt;</c>, no common text, no
+    /// <c>&lt;strikethrough&gt;</c>), and <c>AcceptedChangeXmlStr</c> is never set (DiffToken's diff
+    /// string requires a parent). This keeps the no-ancestor test meaningful: acceptedText is absent
+    /// while rejectedText, resultText, and rejectedResultText are all present.
+    /// </summary>
+    internal static Comment CreateVerseTextConflictCommentNoAncestor()
+    {
+        Comment c = CreateVerseTextConflictComment();
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p><bold><color name="red">\v 1 When Jesus was born in the small village of Bethlehem in Judea, Herod was king.</color></bold></p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+        c.Contents = contentsDoc.DocumentElement;
+        c.AcceptedChangeXmlStr = null; // no common ancestor → no accepted-side diff
+        return c;
+    }
+
+    /// <summary>
+    /// A verseText merge-conflict Comment where the losing side REPLACED a word: the diff paragraph
+    /// mixes a <c>&lt;strikethrough&gt;</c> (removed) run and a <c>&lt;bold&gt;</c> (added) run around
+    /// common text. Exercises <c>&lt;s&gt;</c> markup at the converter layer: rejectedText renders
+    /// both <c>&lt;s&gt;</c> and <c>&lt;u&gt;</c>, while the changed-version decode (rejectedResultText)
+    /// keeps the inserted word and drops the deleted one.
+    /// </summary>
+    internal static Comment CreateVerseTextConflictCommentReplacement()
+    {
+        Comment c = CreateVerseTextConflictComment();
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p>\v 1 When Jesus was born in the <strikethrough><color name="red">village </color></strikethrough><bold><color name="red">town </color></bold>of Bethlehem in Judea, Herod was king.</p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+        c.Contents = contentsDoc.DocumentElement;
+        c.AcceptedChangeXmlStr = null;
+        c.Verse = @"\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.";
+        return c;
+    }
+
+    /// <summary>
+    /// A verseText merge-conflict Comment where the losing side DELETED the verse content. The
+    /// parent-vs-loser diff is all-Remove, so the Contents diff paragraph is strikethrough-only (no
+    /// plain text, no <c>&lt;bold&gt;</c>). Consequently the rejected side still renders visible
+    /// <c>&lt;s&gt;</c> markup (so <c>rejectedText</c> is present), but the changed-version decode of
+    /// the note is empty (so <c>rejectedResultText</c> is absent) — the case where the two fields are
+    /// independently optional.
+    /// </summary>
+    internal static Comment CreateVerseTextConflictCommentDeletion()
+    {
+        Comment c = CreateVerseTextConflictComment();
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml(
+            """
+            <Contents>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.<p>
+                <language name="es-015-vaidika">
+                <p><strikethrough><color name="red">\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.</color></strikethrough></p>
+                </language>
+            </p>
+            </Contents>
+            """
+        );
+        c.Contents = contentsDoc.DocumentElement;
+        c.AcceptedChangeXmlStr = null; // winner kept the verse; no accepted-side change
+        c.Verse = @"\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.";
+        return c;
+    }
+
+    /// <summary>
     /// Internal dummy user class for testing purposes
     /// </summary>
     private class DummyUser : ParatextUser

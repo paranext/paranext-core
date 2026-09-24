@@ -12,19 +12,11 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from '@/components/shadcn-ui/drawer';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Drawer> = {
   title: 'Shadcn/Drawer',
   component: Drawer,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     direction: { control: 'select', options: ['top', 'right', 'bottom', 'left'] },
   },

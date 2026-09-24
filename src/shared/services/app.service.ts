@@ -1,30 +1,15 @@
 import { appServiceNetworkObjectName, IAppService } from '@shared/services/app.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let networkObject: IAppService;
-let initializationPromise: Promise<void>;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          const localAppService = await networkObjectService.get<IAppService>(
-            appServiceNetworkObjectName,
-          );
-          if (!localAppService)
-            throw new Error(`${appServiceNetworkObjectName} is not available as a network object`);
-          networkObject = localAppService;
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+const initialize = createCachedInitializer(async () => {
+  const localAppService = await networkObjectService.get<IAppService>(appServiceNetworkObjectName);
+  if (!localAppService)
+    throw new Error(`${appServiceNetworkObjectName} is not available as a network object`);
+  networkObject = localAppService;
+});
 
 /**
  * JSDOC SOURCE appService

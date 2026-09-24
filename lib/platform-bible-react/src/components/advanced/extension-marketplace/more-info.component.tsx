@@ -58,27 +58,31 @@ export function MoreInfo({
     window.scrollTo(0, document.body.scrollHeight);
   };
 
+  // Tailwind v4's `divide-x` adds the divider border to the inline-end of each non-last child (v3
+  // added it to the inline-start of each non-first child). Use symmetric horizontal padding
+  // (`tw:px-4`) on the children instead of a parent `tw:gap-4` + per-child `tw:ps-4` so dividers
+  // stay centered between columns rather than hugging the end of each column's content.
   return (
     <div
       id={id}
-      className="pr-twp tw:flex tw:items-center tw:justify-center tw:gap-4 tw:divide-x tw:border-b tw:border-t tw:py-2 tw:text-center"
+      className="pr-twp tw:flex tw:items-center tw:justify-center tw:divide-x tw:border-b tw:border-t tw:py-2 tw:text-center"
     >
       {category && (
-        <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
+        <div className="tw:flex tw:flex-col tw:items-center tw:gap-1 tw:px-4">
           <div className="tw:flex">
             <span className="tw:text-xs tw:font-semibold tw:text-foreground">{category}</span>
           </div>
           <span className="tw:text-xs tw:text-foreground">CATEGORY</span>
         </div>
       )}
-      <div className="tw:flex tw:flex-col tw:items-center tw:gap-1 tw:ps-4">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-1 tw:px-4">
         <div className="tw:flex tw:gap-1">
           <User className="tw:h-4 tw:w-4" />
           <span className="tw:text-xs tw:font-semibold tw:text-foreground">{numberFormatted}</span>
         </div>
         <span className="tw:text-xs tw:text-foreground">USERS</span>
       </div>
-      <div className="tw:flex tw:flex-col tw:items-center tw:gap-1 tw:ps-4">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-1 tw:px-4">
         <div className="tw:flex tw:gap-2">
           {languages.slice(0, 3).map((locale) => (
             <span key={locale} className="tw:text-xs tw:font-semibold tw:text-foreground">
@@ -97,7 +101,7 @@ export function MoreInfo({
         )}
       </div>
       {(moreInfoUrl || supportUrl) && (
-        <div className="tw:flex tw:flex-col tw:gap-1 tw:ps-4">
+        <div className="tw:flex tw:flex-col tw:gap-1 tw:px-4">
           {moreInfoUrl && (
             <div className="tw:flex tw:gap-1">
               <Button

@@ -1,0 +1,1121 @@
+import { vi } from 'vitest';
+import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
+import { settingsService } from '@shared/services/settings.service';
+import * as networkService from '@shared/services/network.service';
+import {
+  getAllOpenWebViewDefinitionsWithReachability,
+  getOpenWebViewDefinitionsForWindow,
+} from '@main/services/web-view.service-router';
+import { logger } from '@shared/services/logger.service';
+import { RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE } from '@main/scheduled-session-sync.util';
+import type { SettingTypes } from 'papi-shared-types';
+import {
+  performShutdownTasks,
+  performWindowCloseTasks,
+  startWindowCloseTasksWithoutWaiting,
+} from './shutdown-tasks';
+
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: { get: vi.fn() },
+}));
+
+vi.mock('@shared/services/network.service', () => ({
+  requestNoRetry: vi.fn(),
+}));
+
+vi.mock('@main/services/web-view.service-router', () => ({
+  getAllOpenWebViewDefinitionsWithReachability: vi.fn(),
+  getOpenWebViewDefinitionsForWindow: vi.fn(),
+}));
+
+vi.mock('@shared/services/logger.service', () => ({
+  // `debug` matches the sibling startup-tasks.test.ts mock; logShutdownSyncOutcome logs a scheduled
+  // skip at debug, so leaving it out would throw "logger.debug is not a function".
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+const mockSettingsGet = vi.mocked(settingsService.get);
+const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
+const mockGetOpenWebViews = vi.mocked(getAllOpenWebViewDefinitionsWithReachability);
+const mockGetOpenWebViewsForWindow = vi.mocked(getOpenWebViewDefinitionsForWindow);
+const mockLoggerDebug = vi.mocked(logger.debug);
+const mockLoggerInfo = vi.mocked(logger.info);
+const mockLoggerWarn = vi.mocked(logger.warn);
+const mockLoggerError = vi.mocked(logger.error);
+
+/**
+ * What the WebView fan-out answers: the definitions the windows that answered reported, the windows
+ * that could not be asked, and the windows nothing will ever run in again (whose editors are
+ * therefore missing from the list either way).
+ */
+function openWebViews(
+  definitions: object[],
+  unreachableWindowIds: string[] = [],
+  abandonedWindowIds: string[] = [],
+) {
+  // The fan-out's real definitions are `SavedWebViewDefinition`s; these fixtures carry only the
+  // three fields the shutdown selection reads
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { definitions, unreachableWindowIds, abandonedWindowIds } as Awaited<
+    ReturnType<typeof getAllOpenWebViewDefinitionsWithReachability>
+  >;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockRequestNoRetry.mockResolvedValue(undefined);
+});
+
+describe('performShutdownTasks', () => {
+  it('fires runScheduledSessionSync("shutdown") and logs "complete" when the command reports "synced"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue('synced');
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('runScheduledSessionSync'),
+      'shutdown',
+    );
+    // Power mode selects by schedule, not open editors/cancelSync — neither Simple-mode call fires.
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+    expect(mockGetOpenWebViews).not.toHaveBeenCalled();
+    // A reported "synced" is the only thing that produces the truthful "complete" log.
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('treats a legacy void resolution as "synced" (logs "complete")', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue(undefined);
+    await performShutdownTasks();
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('warns (does not log "complete") when the command reports "failed"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue('failed');
+    await performShutdownTasks();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('reported failure'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('logs a debug-only skip (no info, no warn) when the command reports "skipped"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue('skipped');
+    await performShutdownTasks();
+    expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('skipped'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('swallows a missing/failing runScheduledSessionSync command in power mode without throwing, and does not log "complete"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockRejectedValue(new Error('command not registered'));
+    await expect(performShutdownTasks()).resolves.toBeUndefined();
+    // The bounded wait settled (the rejection was caught, not a timeout), so the failure is warned
+    // and the misleading "complete" is never logged.
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('failed or skipped'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('returns after the timeout when runScheduledSessionSync never settles, logs the timeout, and never logs "complete"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    // Never-resolving promise: simulates a genuinely hung sync. `performSync` never settles, so the
+    // AsyncVariable's timeout rejects `syncComplete.promise` and runBoundedShutdownSync takes its
+    // `timedOut` branch — the one path AUTO_SYNC_MAX_DURATION_MS exists to bound. (An unregistered
+    // command does NOT reach here; it rejects fast and settles as `failed`, covered above.)
+    mockRequestNoRetry.mockImplementation(() => new Promise(() => {}));
+    vi.useFakeTimers();
+    try {
+      const shutdownPromise = performShutdownTasks();
+      await vi.advanceTimersByTimeAsync(AUTO_SYNC_MAX_DURATION_MS);
+      await expect(shutdownPromise).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith(expect.stringContaining('complete'));
+  });
+
+  it('cancels sync but skips S/R when no Scripture Editor is open', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(expect.stringContaining('cancelSync'));
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('sendReceiveProjects'),
+    );
+  });
+
+  it('skips S/R when the only open Scripture Editor is read-only', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: true },
+          projectId: 'p1',
+        }, // matches SCRIPTURE_EDITOR_WEBVIEW_TYPE
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('sendReceiveProjects'),
+    );
+  });
+
+  it('calls sendReceiveProjects with the writable editor project id', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'test-project',
+        },
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['test-project'],
+    );
+  });
+
+  it('syncs every distinct writable editor project when several windows are open', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    // The main-process WebView service router fans getAllOpenWebViewDefinitions out across every
+    // window and merges the results, so this one list represents two windows' editors.
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'window-1-project',
+        },
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: true },
+          projectId: 'read-only-project',
+        },
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'window-2-project',
+        },
+      ]),
+    );
+    await performShutdownTasks();
+    // Both windows' projects sync; the read-only one is still excluded.
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['window-1-project', 'window-2-project'],
+    );
+  });
+
+  it('sends a project shared by two windows only once', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'shared-project',
+        },
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'shared-project',
+        },
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['shared-project'],
+    );
+  });
+
+  it('ignores a writable editor with no project id', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
+        { webViewType: 'platformScriptureEditor.react', state: { isReadOnly: false } },
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'real-project',
+        },
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['real-project'],
+    );
+  });
+
+  it('skips S/R when every writable editor lacks a project id', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
+        { webViewType: 'platformScriptureEditor.react', state: { isReadOnly: false } },
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('sendReceiveProjects'),
+    );
+  });
+
+  it('warns that the sync covers only part of the app when a window could not be asked', async () => {
+    // This read happens once, at quit, with no event stream to correct it afterwards. A window that
+    // failed to answer looks exactly like one with nothing open, so the projects it was editing
+    // drop out of the sync silently — reporting that as a completed sync is the dangerous part.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews(
+        [
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'answered-project',
+          },
+        ],
+        ['2'],
+      ),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['answered-project'],
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('2'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('records partial coverage, not a skip, when the window that did not answer was the only one that could have had editors', async () => {
+    // Nothing was selected, so nothing syncs — but "nothing writable was open" was never
+    // established, and a debug-only skip is the quietest line in the log on precisely the run most
+    // likely to have dropped a user's unsynced work
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([], ['1']));
+    await performShutdownTasks();
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('sendReceiveProjects'),
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('1'));
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('only the part of the app that could be read'),
+    );
+    expect(mockLoggerDebug).not.toHaveBeenCalledWith(expect.stringContaining('skipped'));
+  });
+
+  it('records partial coverage when the only window that could have had editors was given up on', async () => {
+    // A window whose renderer died for good takes its editors' unsynced work with it just as
+    // surely as one that merely failed to answer — more so, since nothing is coming back to sync
+    // them later. Reporting that run as a clean skip would put the quietest line in the log on the
+    // session most likely to have lost the user's work.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([], [], ['4']));
+
+    await performShutdownTasks();
+
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('sendReceiveProjects'),
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('4'));
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('only the part of the app that could be read'),
+    );
+    expect(mockLoggerDebug).not.toHaveBeenCalledWith(expect.stringContaining('skipped'));
+  });
+
+  it('does not report a sync that ran alongside a given-up window as complete', async () => {
+    // The projects that did surface still go out — some coverage beats none while the app is
+    // closing — but "Sync on shutdown complete" would claim the app's whole picture was covered
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews(
+        [
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'answered-project',
+          },
+        ],
+        [],
+        ['4'],
+      ),
+    );
+
+    await performShutdownTasks();
+
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['answered-project'],
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('4'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('says so rather than exiting silently when it cannot establish what was open', async () => {
+    // Every window's unsynced work goes out unsynced here, and this is the app's last chance to know
+    // it. A support engineer reading the log after a data-loss report must not find a clean
+    // shutdown with nothing at all between "quitting" and process exit.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockRejectedValue(new Error('service unavailable'));
+
+    await performShutdownTasks();
+
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('sendReceiveProjects'),
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('service unavailable'));
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('could not be established'),
+    );
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('records a skip when nothing writable was open anywhere', async () => {
+    // Every exit path from the shutdown sync leaves a line, so the log distinguishes "nothing to
+    // sync" from "the sync never got as far as choosing anything"
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+
+    await performShutdownTasks();
+
+    expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('skipped'));
+  });
+
+  it('skips the automatic shutdown S/R and warns when settings service throws (no open-editor fallback)', async () => {
+    // Symmetric with startup: an unreadable mode must not fall through to Simple's open-editor S/R,
+    // which could sync a project a Power user excluded from their schedule. Do nothing and warn.
+    mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'fallback-project',
+        },
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockGetOpenWebViews).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read platform.interfaceMode'),
+    );
+  });
+
+  it('swallows unexpected errors and does not throw (exercises the outer try/catch)', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    // A WRITABLE editor so the flow runs past the `if (!projectId) return` early return and into
+    // performSimpleModeShutdownSync's unguarded region (an empty list would return early and never
+    // exercise the outer catch — the whole point of this test).
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'p1',
+        },
+      ]),
+    );
+    // Inject an unexpected error from an UNGUARDED spot — the "Syncing project on shutdown..." log,
+    // which is not wrapped in an inner try/catch. It escapes the inner handlers so that only
+    // performShutdownTasks's outer try/catch can swallow it. (Verified falsifiable: deleting that
+    // outer try/catch makes performShutdownTasks reject and this `resolves` assertion fail.)
+    mockLoggerInfo.mockImplementationOnce(() => {
+      throw new Error('unexpected logging failure');
+    });
+    await expect(performShutdownTasks()).resolves.toBeUndefined();
+    // The outer catch handled it via logger.error.
+    expect(mockLoggerError).toHaveBeenCalled();
+  });
+
+  it('drains an in-flight window-close sync even when the shutdown mode read fails', async () => {
+    // A closing window's sync is the only thing that can ever cover its editors, and an unreadable
+    // mode at quit must not skip waiting for it any more than either mode branch does.
+    mockSettingsGet.mockResolvedValueOnce('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      asWindowWebViews([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'p1',
+        },
+      ]),
+    );
+    let releaseWindowCloseSync = () => {};
+    mockRequestNoRetry.mockImplementation(async (requestType) => {
+      if (`${requestType}`.includes('sendReceiveProjects'))
+        await new Promise<void>((resolve) => {
+          releaseWindowCloseSync = resolve;
+        });
+      return undefined;
+    });
+
+    startWindowCloseTasksWithoutWaiting(['2']);
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      ),
+    );
+
+    // The shutdown's own mode read fails this time
+    mockSettingsGet.mockRejectedValue(new Error('extension host is going away'));
+    let shutdownSettled = false;
+    const shutdownTasks = performShutdownTasks().then(() => {
+      shutdownSettled = true;
+      return undefined;
+    });
+    try {
+      // Give the shutdown every chance to finish while the window's sync is still held open
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      expect(shutdownSettled).toBe(false);
+    } finally {
+      // Always release, even when the assertion above throws — an unreleased hold here would leave
+      // a promise permanently pending in the module-level in-flight set, hanging every later test
+      // that drains it.
+      releaseWindowCloseSync();
+      await shutdownTasks;
+    }
+    expect(shutdownSettled).toBe(true);
+  });
+});
+
+/**
+ * A window's own open definitions. Real ones are `SavedWebViewDefinition`s; these fixtures carry
+ * only the three fields the selection reads.
+ */
+function asWindowWebViews(definitions: object[]) {
+  // The real definitions carry far more than the selection under test reads; keeping the fixtures
+  // to the three fields that matter is what makes them readable
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return definitions as Awaited<ReturnType<typeof getOpenWebViewDefinitionsForWindow>>;
+}
+
+/** An open writable Scripture Editor on a project — what the sync selection is looking for */
+const writableEditor = (projectId: string) => ({
+  webViewType: 'platformScriptureEditor.react',
+  state: { isReadOnly: false },
+  projectId,
+});
+
+/** An open read-only Resource Viewer on a project — open, and nothing the sync should select */
+const readOnlyViewer = (projectId: string) => ({
+  webViewType: 'platformScriptureEditor.react',
+  state: { isReadOnly: true },
+  projectId,
+});
+
+/** A sendReceiveProjects that hangs until the returned release is called */
+function holdTheSync(): () => void {
+  let release = () => {};
+  mockRequestNoRetry.mockImplementation(async (requestType) => {
+    if (`${requestType}`.includes('sendReceiveProjects'))
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    return undefined;
+  });
+  return () => release();
+}
+
+/** Every sendReceiveProjects call made so far, whichever windows it was made for */
+function sendReceiveCalls() {
+  return mockRequestNoRetry.mock.calls.filter(([requestType]) =>
+    `${requestType}`.includes('sendReceiveProjects'),
+  );
+}
+
+/** Let work started without being awaited run to the end of its bounded wait */
+async function settleSyncs(): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+describe('performWindowCloseTasks', () => {
+  it('syncs the projects the closing window was editing, asking that window and no other', async () => {
+    // Nothing else can answer for this window: once it is gone the shutdown fan-out only reaches the
+    // windows that are still there, so whatever it had open would never be sent
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      asWindowWebViews([writableEditor('p1'), writableEditor('p2')]),
+    );
+
+    await performWindowCloseTasks('2');
+
+    expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledWith('2');
+    expect(mockGetOpenWebViews).not.toHaveBeenCalled();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['p1', 'p2'],
+    );
+    // A batch of one names the single window it is, in singular, rather than reading as a list
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Syncing the projects of closing window 2: p1, p2');
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Sync for closing window 2 complete');
+  });
+
+  it('does not cancel a sync another window may have started', async () => {
+    // The app is staying up, unlike a shutdown — an in-progress sync belongs to a window that is not
+    // going anywhere
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+  });
+
+  it('deduplicates projects and ignores read-only viewers', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      asWindowWebViews([
+        writableEditor('p1'),
+        writableEditor('p1'),
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: true },
+          projectId: 'p9',
+        },
+        { webViewType: 'someOther.webView', projectId: 'p8' },
+      ]),
+    );
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['p1'],
+    );
+  });
+
+  it('syncs nothing when the closing window had no writable editor open', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([]));
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+  });
+
+  it('does not run the session-boundary sync in power mode', async () => {
+    // One window of several closing is not the end of a session, so the scheduled set of projects
+    // has nothing to do with the window going away
+    mockSettingsGet.mockResolvedValue('power');
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockGetOpenWebViewsForWindow).not.toHaveBeenCalled();
+  });
+
+  it('skips the sync and warns when the interface mode cannot be read', async () => {
+    mockSettingsGet.mockRejectedValue(new Error('extension host is going away'));
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read platform.interfaceMode'),
+    );
+  });
+
+  it('warns rather than silently syncing nothing when the closing window cannot be asked', async () => {
+    // This is the last moment anything can know what the window had open, so an unanswered read is
+    // not the same as "nothing was open"
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockRejectedValue(new Error('window is unreachable'));
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read what closing window 2 had open'),
+    );
+  });
+
+  it('swallows a missing or failing S/R command so the window can still close', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+    mockRequestNoRetry.mockRejectedValue(new Error('command not registered'));
+
+    await expect(performWindowCloseTasks('2')).resolves.toBeUndefined();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('failed or skipped'));
+  });
+
+  it('swallows unexpected errors and does not throw (exercises the outer try/catch)', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+    mockLoggerInfo.mockImplementationOnce(() => {
+      throw new Error('unexpected logging failure');
+    });
+
+    await expect(performWindowCloseTasks('2')).resolves.toBeUndefined();
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'Unexpected error while syncing the projects of closing window 2:',
+      expect.anything(),
+    );
+  });
+
+  it('is not cancelled out from under the closing window when the app quits mid-sync', async () => {
+    // The closing window's editors only ever existed in it, so its sync is the only thing that can
+    // ever cover them. A quit arriving while it runs used to cancel it with nothing left to sync
+    // those projects.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      asWindowWebViews([writableEditor('closing-window-project')]),
+    );
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+    let releaseWindowCloseSync = () => {};
+    mockRequestNoRetry.mockImplementation(async (requestType) => {
+      if (`${requestType}`.includes('sendReceiveProjects'))
+        await new Promise<void>((resolve) => {
+          releaseWindowCloseSync = resolve;
+        });
+      return undefined;
+    });
+
+    const windowCloseTasks = performWindowCloseTasks('2');
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['closing-window-project'],
+      ),
+    );
+
+    const shutdownTasks = performShutdownTasks();
+    // Give the quit every chance to reach its cancel while the window's sync is still running
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+
+    releaseWindowCloseSync();
+    await windowCloseTasks;
+    await shutdownTasks;
+
+    // Only once the window's sync had finished
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+  });
+});
+
+describe('startWindowCloseTasksWithoutWaiting', () => {
+  it('reads what the window had open before its first await, so a caller that destroys the window right after calling this cannot race that read', async () => {
+    // The window may be destroyed the instant this function first yields control back to its
+    // caller, so the request for what it had open must already be in flight before that — reading
+    // it only after learning the interface mode would let the window disappear first.
+    let resolveModeRead: (mode: SettingTypes['platform.interfaceMode']) => void = () => {};
+    mockSettingsGet.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveModeRead = resolve;
+        }),
+    );
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+
+    startWindowCloseTasksWithoutWaiting(['2']);
+
+    try {
+      expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledWith('2');
+    } finally {
+      // Always let the sync settle, even when the assertion above throws — an unresolved mode read
+      // here would leave a promise permanently pending in the module-level in-flight set, hanging
+      // every later test that drains it.
+      resolveModeRead('simple');
+      await vi.waitFor(() =>
+        expect(mockRequestNoRetry).toHaveBeenCalledWith(
+          expect.stringContaining('sendReceiveProjects'),
+          ['p1'],
+        ),
+      );
+    }
+  });
+
+  it('lets the window go before the sync settles', async () => {
+    // A window that is only changing mode comes back, so it must not sit on screen for as long as a
+    // send/receive takes — once per window
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+    const release = holdTheSync();
+
+    // Nothing to await: the contract is what makes the window close promptly, so a caller cannot
+    // turn this back into a wait by accident. A version that returned its sync would hand one back.
+    expect(startWindowCloseTasksWithoutWaiting(['2'])).toBeUndefined();
+
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      ),
+    );
+    // …and the sync it started is still running while the caller has already moved on
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    release();
+  });
+
+  it('registers the sync as in flight, so a quit waits for it rather than cancelling it', async () => {
+    // This is what keeps a sync nobody is awaiting from being lost: the shutdown waits on the
+    // in-flight set before it cancels anything
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+    const release = holdTheSync();
+
+    startWindowCloseTasksWithoutWaiting(['2']);
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      ),
+    );
+
+    const shutdownTasks = performShutdownTasks();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    // Nothing cancelled while the unawaited sync is still going
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+
+    release();
+    await shutdownTasks;
+
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+  });
+
+  it('a quit taken in power mode waits for it too', async () => {
+    // A closing window's sync belongs to the window, not to a mode: it is started under whichever
+    // mode was in force when the window closed, and the user can switch back before quitting. The
+    // power branch then runs a scheduled sync of its own — against projects the held sync may still
+    // be writing — and the shutdown ends without the window's edits ever going out.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+    const release = holdTheSync();
+
+    startWindowCloseTasksWithoutWaiting(['2']);
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      ),
+    );
+
+    // The user switched back to power before quitting
+    mockSettingsGet.mockResolvedValue('power');
+    const shutdownTasks = performShutdownTasks();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).not.toContainEqual(
+      expect.stringContaining(RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE),
+    );
+
+    release();
+    await shutdownTasks;
+
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
+      expect.stringContaining(RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE),
+    );
+  });
+
+  it('waits for a second window-close sync that registers while the drain is already waiting on the first', async () => {
+    // The drain exists precisely so a shutdown cannot cancel a closing window's sync out from under
+    // it. A snapshot taken once at the start misses any sync that registers afterward — which is
+    // exactly the sync most likely to still be running, since it is the one whose window closing
+    // triggered this shutdown in the first place.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews([writableEditor(`project-${windowId}`)]),
+    );
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+    const releasers = new Map<string, () => void>();
+    mockRequestNoRetry.mockImplementation(async (requestType, ...params) => {
+      if (`${requestType}`.includes('sendReceiveProjects')) {
+        // requestNoRetry's params are generic (unknown[] here); sendReceiveProjects always takes a
+        // single project-id array.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const [projectIds] = params as [string[]];
+        await new Promise<void>((resolve) => {
+          releasers.set(projectIds[0], resolve);
+        });
+      }
+      return undefined;
+    });
+
+    startWindowCloseTasksWithoutWaiting(['2']);
+    await vi.waitFor(() => expect(releasers.has('project-2')).toBe(true));
+
+    let shutdownSettled = false;
+    const shutdownTasks = performShutdownTasks().then(() => {
+      shutdownSettled = true;
+      return undefined;
+    });
+    // Registered right after the drain's synchronous first snapshot — the window whose sync a
+    // single-snapshot drain would miss.
+    startWindowCloseTasksWithoutWaiting(['3']);
+    await vi.waitFor(() => expect(releasers.has('project-3')).toBe(true));
+
+    try {
+      releasers.get('project-2')?.();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      // The shutdown must still be waiting on the second window's sync
+      expect(shutdownSettled).toBe(false);
+    } finally {
+      releasers.get('project-3')?.();
+      await shutdownTasks;
+    }
+    expect(shutdownSettled).toBe(true);
+  });
+});
+
+describe('startWindowCloseTasksWithoutWaiting with several windows', () => {
+  it('sends one request covering every closing window, with a project two of them share only once', async () => {
+    // The send/receive runs one call at a time and refuses the rest outright, so a request per
+    // window would cover whichever window got there first and silently drop every sibling — each of
+    // them already closed and unable to be asked again.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews([
+        writableEditor('shared-project'),
+        writableEditor(`window-${windowId}-project`),
+      ]),
+    );
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+
+    await vi.waitFor(() =>
+      // The exact list, not a subset: collapsing the project two windows share is half of what one
+      // request buys
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['shared-project', 'window-2-project', 'window-3-project', 'window-4-project'],
+      ),
+    );
+    expect(sendReceiveCalls()).toHaveLength(1);
+  });
+
+  it('asks every closing window, and asks each of them once', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews([writableEditor(`window-${windowId}-project`)]),
+    );
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+
+    await vi.waitFor(() => expect(sendReceiveCalls()).toHaveLength(1));
+    expect(mockGetOpenWebViewsForWindow.mock.calls).toEqual([['2'], ['3'], ['4']]);
+  });
+
+  it('a window with nothing writable open contributes nothing and blocks nothing', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews(
+        windowId === '3'
+          ? [readOnlyViewer('read-only-project'), { webViewType: 'someOther.webView' }]
+          : [writableEditor(`window-${windowId}-project`)],
+      ),
+    );
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['window-2-project', 'window-4-project'],
+      ),
+    );
+    expect(sendReceiveCalls()).toHaveLength(1);
+  });
+
+  it('syncs nothing when no closing window had a writable editor open', async () => {
+    // The ordinary empty case, not a failure: every window answered, and none of them had anything
+    // a send/receive could push.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      asWindowWebViews([readOnlyViewer('read-only-project')]),
+    );
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+    // The quit drains the batch, so this settles only once every window's read has been consumed
+    await performShutdownTasks();
+
+    expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledTimes(3);
+    expect(sendReceiveCalls()).toHaveLength(0);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('warns by name for a window that cannot be asked, and still syncs the others', async () => {
+    // Each failed read is the last moment anything could know what that window had open, so it is
+    // said on its own and naming the window it cost — and one window that cannot answer must not
+    // take its siblings' editors down with it.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) => {
+      if (windowId === '3') throw new Error('window is unreachable');
+      return asWindowWebViews([writableEditor(`window-${windowId}-project`)]);
+    });
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['window-2-project', 'window-4-project'],
+      ),
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read what closing window 3 had open'),
+    );
+  });
+
+  it('is waited for by the quit drain rather than cancelled', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews([writableEditor(`window-${windowId}-project`)]),
+    );
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+    const release = holdTheSync();
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['window-2-project', 'window-3-project', 'window-4-project'],
+      ),
+    );
+
+    const shutdownTasks = performShutdownTasks();
+    await settleSyncs();
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+    // The positive control for the empty-list case below, which asserts this line's absence
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining('closing window sync(s) before the shutdown'),
+    );
+
+    release();
+    await shutdownTasks;
+
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+  });
+
+  it('syncs nothing for a batch closing in power mode', async () => {
+    // One window of several closing is not the end of a session, and neither is a whole batch of
+    // them: the scheduled set of projects has nothing to do with the windows going away.
+    mockSettingsGet.mockResolvedValue('power');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+    await settleSyncs();
+
+    // Every window was still asked — the reads go out before the mode is known, since a window that
+    // has gone can no longer be asked — and the answers are simply dropped
+    expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledTimes(3);
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+  });
+
+  it('drops a failed read in power mode silently, with nothing said about a window nobody asked about', async () => {
+    // Every read goes out before the mode is known, so a power-mode batch always has answers it
+    // never looks at — including failures. Nothing is warned or requested for them: the mode, not
+    // the read, is why this batch syncs nothing.
+    //
+    // What this canNOT pin is the handler `readOpenWebViewDefinitionsEagerly` attaches to each read
+    // so a rejection nothing consumes is not an unhandled rejection. Vitest's own spy attaches a
+    // handler to every promise a mocked function returns, so a rejection arriving through
+    // `getOpenWebViewDefinitionsForWindow` counts as handled here whether or not that code does it.
+    mockSettingsGet.mockResolvedValue('power');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) => {
+      if (windowId === '3') throw new Error('window is unreachable');
+      return asWindowWebViews([writableEditor(`window-${windowId}-project`)]);
+    });
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+    await settleSyncs();
+
+    // The failing window was asked — the control for the two absences below, which would otherwise
+    // pass just as happily against a batch that never read anything
+    expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledWith('3');
+    expect(sendReceiveCalls()).toHaveLength(0);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+    expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it('skips the whole batch with one warning when the interface mode cannot be read', async () => {
+    // The mode is read once for the batch, so an unreadable one is said once and names every window
+    // it covered rather than once per window.
+    mockSettingsGet.mockRejectedValue(new Error('extension host is going away'));
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+    await vi.waitFor(() =>
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('skipping the sync for closing windows 2, 3, 4'),
+      ),
+    );
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failed batch once, for the batch', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews([writableEditor(`window-${windowId}-project`)]),
+    );
+    mockRequestNoRetry.mockRejectedValue(new Error('S/R is busy'));
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+    await vi.waitFor(() =>
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('windows 2, 3, 4 close sync failed'),
+      ),
+    );
+
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    // The control for the negative below: this is the line the batch produces on its way to the
+    // request that then failed
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining('Syncing the projects of closing windows 2, 3, 4'),
+    );
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith(expect.stringContaining('complete'));
+  });
+
+  it('does nothing at all for an empty list, and registers nothing for the quit to wait on', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+
+    startWindowCloseTasksWithoutWaiting([]);
+    await performShutdownTasks();
+
+    expect(mockGetOpenWebViewsForWindow).not.toHaveBeenCalled();
+    expect(sendReceiveCalls()).toHaveLength(0);
+    // The drain names what it is waiting for whenever it has anything, so the absence of that line
+    // is what nothing registered looks like in the log
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith(
+      expect.stringContaining('closing window sync(s) before the shutdown'),
+    );
+  });
+});

@@ -1,0 +1,3 @@
+# remark's MDX serializer reformats JSX inside attribute values (e.g. preview={...} props),
+# removing intentional indentation. Files listed here are excluded from remark --output.
+src/stories/guidelines/design-principles.mdx

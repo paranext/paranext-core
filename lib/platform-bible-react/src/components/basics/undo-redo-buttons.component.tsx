@@ -7,8 +7,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
+import { isMacOs } from '@/utils/platform.util';
 import { Redo, Undo } from 'lucide-react';
-import { useMemo } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -69,7 +69,7 @@ export function UndoRedoButtons({
   className = 'tw:h-6 tw:w-6',
   variant = 'ghost',
 }: UndoRedoButtonsProps) {
-  const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
+  const isMac = isMacOs();
   const undoLocalized = localizeString(localizedStrings, '%undoButton_tooltip%');
   const redoLocalized = localizeString(localizedStrings, '%redoButton_tooltip%');
   const getsSeparator = variant === 'secondary' || variant === 'default';

@@ -6,7 +6,7 @@ public static class DblResourceWhiteList
 {
     public static bool IsValidResource(InstallableResource resource)
     {
-        return s_validResourceIds.Contains(resource.DBLEntryUid.ToString().ToUpperInvariant());
+        return s_validResourceIds.Contains(resource.DBLEntryUid.Id.ToUpperInvariant());
     }
 
     private static readonly HashSet<string> s_validResourceIds =
@@ -71,7 +71,9 @@ public static class DblResourceWhiteList
         "085DEFAC6E17B9EB",
         "08C66B989FA5FA17",
         "08EBDAC929584A89",
-        "090F7CBF7924B245",
+        // "090F7CBF7924B245" is intentionally absent: DBL reassigned this UID to a different
+        // resource, so keeping it caused syncInstalledFlags to match TNN's project ID via the
+        // startsWith path and incorrectly exclude TNN from the non-DBL resource list.
         "091988FDE60272D7",
         "0A0927A2E4C58318",
         "0A19B175A7F803A4",
@@ -234,6 +236,7 @@ public static class DblResourceWhiteList
         "1F2E7F3DAF3C47FA",
         "1FB6AFF33E7B3C31",
         "1FD99B0D5841E19B",
+        "1FF24938918BD69E", // HBKESP — UBS Translator's Handbook (Spanish); added with PT-3086 commentary styling
         "1FF6ADA8C35ABF5A",
         "20314A36CCDE603B",
         "2048238EEE3592F8",
@@ -841,6 +844,7 @@ public static class DblResourceWhiteList
         "728722451FD29659",
         "72B5C125A759A2B1",
         "72BB7D6157FB36D7",
+        "72DD0B9B0F2B4024",
         "72F4E6DC683324DF",
         "734DED0B4CD9214C",
         "736B4AEBA7AF8A5F",

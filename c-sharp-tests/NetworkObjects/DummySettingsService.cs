@@ -55,7 +55,7 @@ internal class DummySettingsService : DataProvider
                 {
                     return true;
                 }
-            )
+            ),
         ];
     }
 }

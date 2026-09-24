@@ -1,12 +1,15 @@
 import { CommandItem } from '@/components/shadcn-ui/command';
 import { getLocalizedBookId, getLocalizedBookName } from '@/components/shared/book.utils';
+import { LIST_ITEM_KEYBOARD_FOCUS_RING } from '@/utils/focus.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
 import { Check } from 'lucide-react';
 import { Section } from 'platform-bible-utils';
-import { forwardRef, MouseEvent, useMemo, useRef } from 'react';
+import { MouseEvent, Ref, useMemo, useRef } from 'react';
 
 type BookItemProps = {
+  /** Forwarded to the underlying CommandItem (a `<div>` rendered by cmdk). */
+  ref?: Ref<HTMLDivElement>;
   /** The book ID (e.g., 'GEN', 'EXO') */
   bookId: string;
   /** Whether this book is currently selected */
@@ -28,6 +31,45 @@ type BookItemProps = {
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
   /** Value to use for Command component matching */
   commandValue?: string;
+  /**
+   * When true, the item paints no keyboard focus ring even while cmdk still marks it
+   * `data-selected`. Set it while a control outside the list holds focus, so the list and that
+   * control never show a focus indicator at the same time — two at once leave the user no way to
+   * tell which surface the next keystroke reaches.
+   *
+   * Suppresses the paint, not the state: cmdk keeps its highlighted item, so the ring returns to
+   * exactly where the user left it. Clearing the highlight instead would hand it to cmdk's
+   * select-first-item fallback, which moves it rather than removing it.
+   */
+  suppressKeyboardHighlight?: boolean;
+  /** When true, renders the item as disabled: suppresses onSelect and dims the visuals. */
+  disabled?: boolean;
+  /**
+   * Short localized label naming why this item is greyed (e.g. "Not in project"). Passing a value
+   * renders the item greyed but fully selectable — the state for an item that is reachable yet
+   * outside the current context, such as a book present in an open resource but not in the active
+   * project.
+   *
+   * Distinct from `disabled`, which also suppresses selection; `disabled` takes precedence and a
+   * disabled item is never additionally dimmed. The label renders as visible text beside the book
+   * id, so the greying is never a colour-only signal and stays readable while the row is
+   * highlighted — the state and its explanation are one prop precisely so they cannot drift apart.
+   *
+   * An empty string counts as no reason, so the item renders undimmed. Callers resolving this from
+   * a localized string should fall back with `||` rather than `??`, since `??` passes an empty
+   * translation through and would silently drop the dimming.
+   */
+  dimmedReason?: string;
+  /**
+   * Complete localized sentence describing why this item is greyed, e.g. "Hebrews is not in this
+   * project" — used as the item's accessible name so a screen reader hears a full sentence rather
+   * than the bare `dimmedReason` label. Resolve it from a localized template that places the book
+   * name itself (`formatReplacementString`) rather than concatenating around a fragment, so
+   * translations control word order and punctuation.
+   *
+   * Ignored unless `dimmedReason` is also set. Falls back to `dimmedReason` when absent.
+   */
+  dimmedDescription?: string;
 };
 
 /**
@@ -39,90 +81,148 @@ type BookItemProps = {
  * selection), implement custom `onSelect` and `onMouseDown` handlers that manage the logic
  * externally.
  */
-export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
-  (
-    {
-      bookId,
-      isSelected,
-      onSelect,
-      onMouseDown,
-      section,
-      className,
-      showCheck = false,
-      localizedBookNames,
-      commandValue,
-    },
-    ref,
-  ) => {
-    const isMouseClick = useRef(false);
+export function BookItem({
+  ref,
+  bookId,
+  isSelected,
+  onSelect,
+  onMouseDown,
+  section,
+  className,
+  showCheck = false,
+  localizedBookNames,
+  commandValue,
+  suppressKeyboardHighlight = false,
+  disabled = false,
+  dimmedReason,
+  dimmedDescription,
+}: BookItemProps) {
+  const isMouseClick = useRef(false);
 
-    const handleSelect = () => {
-      if (!isMouseClick.current) {
-        onSelect?.(bookId);
-      }
-      // Reset the mouse flag after a short delay
-      setTimeout(() => {
-        isMouseClick.current = false;
-      }, 100);
-    };
+  const handleSelect = () => {
+    if (disabled) return;
+    if (!isMouseClick.current) {
+      onSelect?.(bookId);
+    }
+    // Reset the mouse flag after a short delay
+    setTimeout(() => {
+      isMouseClick.current = false;
+    }, 100);
+  };
 
-    const handleMouseDown = (e: MouseEvent) => {
-      isMouseClick.current = true;
+  const handleMouseDown = (e: MouseEvent) => {
+    if (disabled) {
+      e.preventDefault();
+      return;
+    }
+    isMouseClick.current = true;
 
-      if (onMouseDown) {
-        onMouseDown(e);
-      } else {
-        // If no custom mouse handler, fall back to calling onSelect
-        onSelect?.(bookId);
-      }
-    };
+    if (onMouseDown) {
+      onMouseDown(e);
+    } else {
+      // If no custom mouse handler, fall back to calling onSelect
+      onSelect?.(bookId);
+    }
+  };
 
-    const bookDisplayName = useMemo(
-      () => getLocalizedBookName(bookId, localizedBookNames),
-      [bookId, localizedBookNames],
-    );
+  const bookDisplayName = useMemo(
+    () => getLocalizedBookName(bookId, localizedBookNames),
+    [bookId, localizedBookNames],
+  );
 
-    const bookDisplayId = useMemo(
-      () => getLocalizedBookId(bookId, localizedBookNames),
-      [bookId, localizedBookNames],
-    );
+  const bookDisplayId = useMemo(
+    () => getLocalizedBookId(bookId, localizedBookNames),
+    [bookId, localizedBookNames],
+  );
 
-    return (
-      <div
+  const isDimmed = !!dimmedReason && !disabled;
+  // Built from the same localized values the row renders, not from the English canon name, so a
+  // localized name is never announced next to an English one. Both fall back to English when the
+  // caller passes no localized names, so the undimmed case is unchanged.
+  const baseAriaLabel = `${bookDisplayName} (${bookDisplayId})`;
+  // A dimmed row announces the caller's whole localized sentence instead of this name plus an
+  // appended fragment: the qualifier's position, punctuation, and any inflection of the book name
+  // belong to the translation, not to string concatenation here.
+  const ariaLabel = isDimmed
+    ? dimmedDescription || `${baseAriaLabel}, ${dimmedReason}`
+    : baseAriaLabel;
+
+  const commandItem = (
+    <CommandItem
+      ref={ref}
+      value={commandValue || `${bookId} ${Canon.bookIdToEnglishName(bookId)}`}
+      onSelect={handleSelect}
+      onMouseDown={handleMouseDown}
+      role="option"
+      aria-selected={isSelected}
+      aria-disabled={disabled || undefined}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      className={cn(
+        !suppressKeyboardHighlight && LIST_ITEM_KEYBOARD_FOCUS_RING,
+        // Suppress CommandItem's own data-selected background and text color so the keyboard
+        // highlight is the ring alone. Book rows and grid cells belong to one control and share one
+        // highlight language; a background here would make the same keyboard state look different
+        // depending on which view the user is in.
+        'tw:data-selected:bg-transparent tw:data-selected:text-inherit',
+        // Hover keeps its own background so pointer feedback stays distinct from the ring, which
+        // marks the item Enter will submit.
+        'tw:hover:bg-muted',
+        // Hide CommandItem's own trailing check icon — this component's own `showCheck` icon
+        // (rendered as the first child below, so it is never the last child) is the one shown.
+        'tw:[&>svg:last-child]:hidden',
+        className,
+        disabled && 'tw:cursor-not-allowed tw:opacity-50',
+        // Mirrors NumberedItemGrid's dimmed-vs-disabled split — same tokens, so chapter/verse cells
+        // and book rows grey identically inside one popover: dimmed is presentation only, so it
+        // never sets aria-disabled or blocks onSelect, and it yields to disabled. Restated under
+        // data-selected so a dimmed row keeps its dimming while the keyboard highlight is on it,
+        // rather than losing it to the suppression rule above.
+        isDimmed &&
+          'tw:bg-muted/50 tw:text-muted-foreground/50 tw:data-selected:bg-muted/50 tw:data-selected:text-muted-foreground/50',
+      )}
+    >
+      {showCheck && (
+        <Check
+          className={cn(
+            'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
+            isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
+          )}
+        />
+      )}
+      <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
+      {isDimmed && (
+        // Visible rather than hover-only: cmdk never moves DOM focus onto an item (the input keeps
+        // it and highlights via data-selected), so a tooltip would never open for a keyboard user.
+        // Rendered text also survives the highlight, which recolours the row.
+        <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:italic">{dimmedReason}</span>
+      )}
+      <span
         className={cn(
-          'tw:mx-1 tw:my-1 tw:border-b-0 tw:border-e-0 tw:border-s-2 tw:border-t-0 tw:border-solid',
-          {
-            'tw:border-s-red-200': section === Section.OT,
-            'tw:border-s-purple-200': section === Section.NT,
-            'tw:border-s-indigo-200': section === Section.DC,
-            'tw:border-s-amber-200': section === Section.Extra,
-          },
+          'tw:ms-2 tw:shrink-0 tw:text-xs',
+          // Inherits the row's dimmed colour instead of setting its own, so the whole row dims
+          // evenly rather than leaving the id at full strength beside a dimmed name.
+          !isDimmed && 'tw:text-muted-foreground',
         )}
       >
-        <CommandItem
-          ref={ref}
-          value={commandValue || `${bookId} ${Canon.bookIdToEnglishName(bookId)}`}
-          onSelect={handleSelect}
-          onMouseDown={handleMouseDown}
-          role="option"
-          aria-selected={isSelected}
-          aria-label={`${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`}
-          className={className}
-        >
-          {showCheck && (
-            <Check
-              className={cn(
-                'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
-                isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
-              )}
-            />
-          )}
-          <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
-          <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:text-muted-foreground">
-            {bookDisplayId}
-          </span>
-        </CommandItem>
-      </div>
-    );
-  },
-);
+        {bookDisplayId}
+      </span>
+    </CommandItem>
+  );
+
+  return (
+    <div
+      className={cn(
+        'tw:mx-1 tw:my-1 tw:border-b-0 tw:border-e-0 tw:border-s-2 tw:border-t-0 tw:border-solid',
+        {
+          'tw:border-s-red-200': section === Section.OT,
+          'tw:border-s-purple-200': section === Section.NT,
+          'tw:border-s-indigo-200': section === Section.DC,
+          'tw:border-s-amber-200': section === Section.Extra,
+        },
+      )}
+    >
+      {commandItem}
+    </div>
+  );
+}

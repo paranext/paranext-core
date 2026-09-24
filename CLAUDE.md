@@ -1,0 +1,280 @@
+# Project Instructions
+
+This file provides guidance to Claude Code when working with code in the paranext-core repository.
+
+## Project Overview
+
+Platform.Bible is extensible Bible translation software built on Electron with a TypeScript/React frontend and .NET 8 backend data provider. The core platform provides a minimal framework with functionality delivered primarily through extensions, giving developers flexibility to create and share their desired Bible translation experience.
+
+## Reference Documentation
+
+Read these when you need depth on a topic. Keep them in mind when writing or reviewing code.
+
+| Topic                   | File                                                                      | Key Content                                                  |
+| ----------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Architecture            | [Architecture.md](.context/standards/Architecture.md)                     | Multi-process architecture, core services, IPC, key patterns |
+| Architecture Decisions  | [Architecture-Decisions.md](.context/standards/Architecture-Decisions.md) | Add-only log of significant architecture decisions + rationale — entries are added, not deleted (one carve-out, stated in the log), and inserted in byte-order slug position; **update it whenever you make one** (see "Recording Architecture Decisions") |
+| Code Style              | [Code-Style-Guide.md](.context/standards/Code-Style-Guide.md)             | TypeScript/C# conventions, API-surface TSDoc, localization, components, shadcn/ui |
+| Implementation Patterns | [Paranext-Core-Patterns.md](.context/standards/Paranext-Core-Patterns.md) | C# service/DataProvider/NetworkObject patterns, PAPI event registration, concurrency, extension structure, command naming |
+| Testing                 | [Testing-Guide.md](.context/standards/Testing-Guide.md)                   | Vitest/NUnit, TDD (outside-in), testing trophy, mutation/coverage, E2E, mocking, CI, platform gotchas |
+| Extensions              | [Extension-Development-Guide.md](.context/standards/Extension-Development-Guide.md) | Extension anatomy, PAPI, data providers, WebViews, contributions, type declarations |
+| Entry Points            | [Entry-Point-Guide.md](.context/standards/Entry-Point-Guide.md)           | Menus, commands, command handlers, WebView layout options    |
+| UI Components           | [Component-Selection-Quick-Reference.md](.context/standards/Component-Selection-Quick-Reference.md) · [Component-Builder-Patterns.md](.context/standards/Component-Builder-Patterns.md) | platform-bible-react component selection, styling, forms; web-view/provider/PAPI/styling patterns |
+| Standard View           | [Standard-View-Invariants.md](.context/standards/Standard-View-Invariants.md) | **Read before touching anything Standard view depends on here** — the USJ/USFM writer contract, the markers map, the marker palette key table, the footnote editor, the C# serialization approval gate. The editor engine's own invariants live in the `scripture-editors` repo at `docs/standard-view-invariants.md`; each half is readable alone |
+| Localization            | [Localization-Guide.md](.context/standards/Localization-Guide.md)         | i18n store/APIs, fallback chain, RTL, immutable strings, C# localization |
+| Git and GitHub          | [Git-Guide.md](.context/standards/Git-Guide.md)                           | Branch structure, squash-merge, template merges              |
+| Code Review             | [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md)           | Reviewable, code-steward, review workflow, auto-merge        |
+| Current Epic            | [Current-Epic.md](.context/standards/Current-Epic.md)                     | What the current epic is, where it is articulated (roadmap, JIRA sprint board, Discord), is work item in epic? |
+| Security                | [Security-Guide.md](.context/standards/Security-Guide.md)                 | CSP, module import restrictions, extension sandboxing        |
+| PT9 Feature Inventory   | [paratext-9-features/](.context/research/paratext-9-features/README.md) | Catalogue of Paratext 9 features (entry points, forms, classes, sources) — used by `/investigate-prd` |
+| Capability Designs      | [designs/](.context/designs/)                                             | Design specs + implementation plans for capabilities (e.g. `/investigate-prd`) |
+| Startup performance     | [README.md](README.md#startup-performance-timing)                         | Enable `PT_STARTUP_MARKS`, capture marks, render the waterfall (`npm run startup-waterfall`), packaged-vs-dev caveat |
+
+## Terminology
+
+- **Platform.Bible**: The open-source, extensible Bible translation platform (paranext-core repository)
+- **paranext-core**: The GitHub repository containing Platform.Bible source code
+- **PAPI**: The Platform API — the service layer connecting frontend, extensions, and backend
+- **Data Provider**: A backend service (typically C#/.NET) that provides data to the frontend via PAPI
+- **WebView**: An extension-provided React UI that runs in an iframe within the renderer process
+
+## Tech Stack
+
+| Layer              | Technology                            |
+| ------------------ | ------------------------------------- |
+| Desktop Framework  | Electron                              |
+| Frontend           | React, TypeScript, SCSS, Tailwind CSS |
+| Backend (Node)     | TypeScript, WebSocket (JSON-RPC 2.0)  |
+| Backend (Data)     | .NET 8 / C#                           |
+| Build System       | Webpack                               |
+| Testing            | Vitest, Storybook                     |
+| Package Management | npm workspaces (monorepo)             |
+
+## Architecture
+
+### Multi-Process Architecture
+
+The application runs as four separate processes that communicate via JSON-RPC over WebSocket:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Main Process (Electron)               │
+│  • Window management & app lifecycle                     │
+│  • Spawns and manages child processes                    │
+└────────────────┬────────────────────────────────────────┘
+                 │ JSON-RPC over WebSocket (port 8876)
+    ┌────────────┼────────────┬───────────────────┐
+    │            │            │                   │
+┌───▼────────┐ ┌─▼──────────┐ ┌▼────────────────┐
+│ Renderer   │ │ Extension  │ │ .NET Data       │
+│ (React UI) │ │ Host       │ │ Provider        │
+│            │ │            │ │                 │
+│ • Web UI   │ │ • Loads    │ │ • Project data  │
+│ • Dialogs  │ │  extensions│ │ • Paratext     │
+│ • WebViews │ │ • PAPI     │ │   integration   │
+└────────────┘ └────────────┘ └─────────────────┘
+```
+
+### Key Codebase Locations
+
+| Path                        | Purpose                                         |
+| --------------------------- | ----------------------------------------------- |
+| `src/main/`                 | Main process (app lifecycle, window management)  |
+| `src/renderer/`             | Renderer (React UI, PAPI hooks)                  |
+| `src/extension-host/`       | Extension host (runs extensions, PAPI backend)   |
+| `c-sharp/`                  | .NET data provider (Paratext data, Bible text)   |
+| `src/shared/`               | Code shared across all processes                 |
+| `src/node/`                 | Code shared between Node.js processes            |
+| `extensions/src/`           | Core extensions                                  |
+| `lib/papi-dts/papi.d.ts`    | **Auto-generated** PAPI type declarations — NEVER edit by hand; run `npm run build:types` to regenerate |
+| `lib/platform-bible-react/` | React components and hooks for extensions        |
+| `lib/platform-bible-utils/` | Utility functions and classes                    |
+| `.erb/configs/`             | Webpack configurations                           |
+| `e2e-tests/`                | End-to-end Playwright tests (CDP-based)          |
+
+### Path Aliases (`tsconfig.json`)
+
+`@main/*` → `src/main/`, `@node/*` → `src/node/`, `@extension-host/*` → `src/extension-host/`, `@renderer/*` → `src/renderer/`, `@shared/*` → `src/shared/`
+
+## Common Commands
+
+### Development
+
+```bash
+# Start development (headless with CDP enabled)
+./.erb/scripts/refresh.sh
+
+# Start development (visible window - for manual development)
+npm start
+
+# Build the entire project (TypeScript, extensions, .NET, types)
+npm run build
+```
+
+### Testing
+
+```bash
+# Run all TypeScript tests
+npm test
+
+# Run single TypeScript test with watch mode
+npm test -- path/to/test-file.test.ts --watch
+
+# Run C# unit tests
+cd c-sharp-tests
+dotnet test
+
+# Run C# tests with watch mode
+cd c-sharp-tests
+dotnet watch test
+```
+
+### Code Quality
+
+```bash
+# Format code (happens automatically on commit)
+npm run format
+
+# Lint TypeScript
+npm run lint
+
+# Fix linting issues automatically
+npm run lint-fix
+
+# Format C# code
+cd c-sharp
+dotnet tool restore
+dotnet csharpier .
+
+# Type checking (runs typecheck:core, typecheck:erb, typecheck:e2e, typecheck:workspaces
+# concurrently so one failing check doesn't hide the others)
+npm run typecheck
+```
+
+## Development Workflow
+
+1. Changes to renderer or main TypeScript code hot-reload automatically
+2. Extension changes are watched and rebuilt automatically
+3. .NET changes require manual rebuild or running `npm run start:data` in a separate terminal
+4. Use VS Code "Debug Platform" compound configuration to debug both frontend and backend
+
+## Coding Discipline
+
+- Read existing code before suggesting modifications.
+- If multiple interpretations of a task exist, present them — do not pick silently.
+- Frame tasks as verifiable goals: "Fix the bug" → "Write a test that reproduces it, then make it pass."
+- When any code quality tool flags your code (ESLint, TypeScript, Prettier, Stylelint), fix the code first. Only suppress warnings if the fix would be significantly worse.
+- Don't add features, refactor code, or make "improvements" beyond what was asked.
+- Avoid indecipherable [initialisms and abbreviations](.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations).
+- Write forward-facing comments, not backward-facing ones. Strip the PR/development context: if a comment only explains how the code reached its current state during this PR — a ticket/PR ID for in-PR work, a review-finding ID, a stage/epic tag, a dated dev note, or bare change narration with no ID ("previously", "used to", "the review found") — cut it and put it in the commit message instead. See [forward-facing-comments.md](.claude/rules/code-quality/forward-facing-comments.md).
+
+## Send/Receive Write Gate
+
+Any new C# code path that **mutates project data** (`ScrText` writes — `PutText`,
+`Settings.Save`/`SetSetting`/`RemoveSetting`, `FileManager` operations, comment/note mutations,
+extension data) MUST wrap the mutation in `using var _ = SendReceiveWriteLock.EnterWrite(projectId);`
+as the first statement of its entry-point method (see
+`c-sharp/Projects/SendReceive/SendReceiveWriteLock.cs`). The gate works in both directions: an
+armed automatic Send/Receive rejects the write fail-fast (the `(SR_EDIT_BLOCKED)` sentinel),
+while a starting sync waits, bounded, for open write scopes to drain before it replaces files on
+disk.
+
+The gate has **no thread affinity** (its state is a single atomic word — an armed flag, an
+in-flight write count, and an arm generation — not an OS lock): a scope may be disposed on a
+different thread, holding one across an `await` is safe, and `SetSyncing`/`Clear` may run on any
+threads. `SetSyncing` returns a token; end the bracket with `Clear(token)` (a stale token is a
+logged no-op, so a late Clear can never disarm a newer sync) and keep parameterless `Clear()` for
+crash recovery — it force-disarms unconditionally and is idempotent. Nested `EnterWrite` calls do
+not crash, but they are NOT safe: if a sync arms while the outer scope is open, the inner call
+throws the sentinel mid-mutation — keep one scope per mutation (delegate to an un-gated core
+inside a single scope, as `SetBookUsfmInScope` does). Keep scopes **tight** — the mutation and
+nothing else — because every open scope delays a starting sync's bounded drain toward its timeout.
+
+This is an **in-process** gate, distinct from the S/R server-side repository lock
+(`lockrepo`/`unlockrepo` between clients) — do not conflate the two. `SendReceiveWriteLockCoverageTests`
+(`c-sharp-tests/Projects/SendReceive/`) scans the source tree (excluding `bin`/`obj`) for direct
+project-write call patterns (a general `.Save(` heuristic, `PutText`, comment `SaveUser`/`SaveEdits`,
+and `File`/`FileManager` deletes) and fails on any hit that isn't covered per site by ONE of: gate
+evidence (an `EnterWrite`/`EnterSyncWriteScope` call above it in the same method); an inline
+`// SR-write-gate: exempt — <reason>` marker on/above the write (for writes reached only through an
+already-gated caller — the un-gated `SetBookUsfmInScope` core and the ManageBooks orchestrators,
+each citing its gated caller + `TODO(PT-4210)`); or a whole-file entry on the test's exempt list,
+which is reserved for **not-project-data** files only. Per-site (not whole-file), so a NEW ungated
+write added to an already-gated file is still caught.
+
+## Recording Architecture Decisions
+
+When any code work surfaces a **significant architecture decision** — choosing among viable
+approaches, introducing a new pattern or top-level structure, deferring a platform capability, or
+deciding where a feature lives — record it in
+[`Architecture-Decisions.md`](.context/standards/Architecture-Decisions.md). This applies to **all**
+work, not just `/investigate-prd`.
+
+- **Capture the decision** as an entry (date · status · context · decision · alternatives ·
+  consequences) inserted in its **byte-order slug position** (`LC_ALL=C sort`), not at the end of the
+  file. Mark superseded decisions rather than deleting them — with the one carve-out the log itself
+  states: delete a superseded entry when leaving it would keep a dead approach readable as available
+  prior art, retire its slug instead of reusing it, and leave a stub explaining the gap.
+- **Resolving a merge conflict in the log:** take the union of both sides **keyed by slug**, never
+  "keep both sides" — the same entry can appear on both sides at different offsets, so keeping both
+  duplicates it silently, and nothing checks for that. See the log's "How to use it" section.
+- **Promote settled conventions:** when a decision hardens into a rule everyone should follow, also
+  fold it into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
+  `.claude/rules/` file — that is what the agents read and enforce on the next feature. The log keeps
+  the *why* and the history; the standards keep the *current rule*.
+- **Don't over-record:** skip routine/local choices; capture the cross-cutting ones that would
+  otherwise be re-litigated or re-derived on the next PRD.
+
+## Never Commit Secrets
+
+This is an open-source repository. Never introduce secrets into the codebase:
+
+- **No hardcoded credentials**: API keys, tokens, passwords, connection strings, private keys.
+- **No secret files**: `.env`, `.env.*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `credentials.json`, `service-account.json`.
+- **No secrets in commit messages or PR descriptions.**
+- **No base64-encoded or obfuscated secrets** — encoding is not encryption.
+
+If a feature needs a secret at runtime, use environment variables or Platform.Bible's settings system. Never provide a default value that is an actual secret.
+
+Never skip pre-commit hooks (`--no-verify`, `-n`, `HUSKY=0`) — they run the secret-detection linters. If a hook fails, fix the underlying issue. If you suspect you've staged a file containing secrets, unstage it before committing.
+
+## Git & PR Conventions
+
+- **Authorship**: The human developer is the author. Attribute AI assistance as a generator, not an author:
+  ```
+  Co-authored-by: <AI Tool> <noreply@example.com>
+  Session-URL: <session URL>
+  ```
+  PR body: `AI-assisted — [session 1](<url>), [session 2](<url>)`
+- Use squash-merge for PRs.
+- Keep PR titles short (under 70 characters) with a descriptive body.
+- Run `npm run typecheck && npm run lint && npm test && dotnet test c-sharp-tests/` before committing.
+- When committing, include ALL related files (plans, docs, configs) — never exclude supporting files unless they are gitignored or you are explicitly told to.
+- When git reports warnings about untracked or uncommitted files, investigate what they are before dismissing them. Never claim a file is unrelated without reading it first.
+- After completing file changes, push all relevant branches before reporting completion.
+- For rebases with many conflicts, prefer incremental conflict resolution over a single direct rebase. If a direct rebase produces massive conflicts, pause and discuss strategy with the user before attempting fixes.
+
+## WebView Special Imports
+
+- `import file from './path?inline'` — Imports as string (transformed by Webpack)
+- `import file from './path?raw'` — Imports as raw string (no transformation)
+
+## Platform-Specific Notes
+
+**Linux**: May need `--no-sandbox` flag for Electron on Ubuntu 24.04 with AppArmor.
+
+**macOS**: Requires MacPorts with icu4c libraries. The .NET build automatically copies dylibs to output directory.
+
+**Windows**: Use WSL2 for cross-platform testing.
+
+## Version Management
+
+- Use Node.js version specified in `package.json` → `volta.node` (recommend using Volta)
+- Requires .NET 8 SDK
+
+## Links
+
+- [PAPI Documentation](https://paranext.github.io/paranext-core/papi-dts)
+- [React Components Docs](https://paranext.github.io/paranext-core/platform-bible-react)
+- [Utilities Docs](https://paranext.github.io/paranext-core/platform-bible-utils)
+- [Extension Template](https://github.com/paranext/paranext-extension-template/wiki)

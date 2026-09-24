@@ -5,27 +5,14 @@ import {
   localizationServiceProviderName,
   localizationServiceObjectToProxy,
 } from '@shared/services/localization.service-model';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 
 let dataProvider: ILocalizationService;
-let initializationPromise: Promise<void>;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          const provider = await dataProviderService.get(localizationServiceProviderName);
-          if (!provider) throw new Error('Localization service undefined');
-          dataProvider = provider;
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
+const initialize = createCachedInitializer(async () => {
+  const provider = await dataProviderService.get(localizationServiceProviderName);
+  if (!provider) throw new Error('Localization service undefined');
+  dataProvider = provider;
+});
 
 export const localizationService = createSyncProxyForAsyncObject<ILocalizationService>(
   async () => {

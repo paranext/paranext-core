@@ -1,6 +1,24 @@
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
   /**
+   * Source (no anchors, no flags) of the hex-grouped shape a durable window id has. Shared so every
+   * matcher that needs to recognize a window id by shape (a scoped web view id's suffix, a per-window
+   * storage key's prefix) spells the shape out once rather than once per matcher.
+   *
+   * Deliberately NOT an RFC-4122 pattern, and it has to stay that way even though every id minted now
+   * comes from `createUuid()` and is RFC-4122. A window id reaches disk only on builds that persist
+   * one, and the first of those minted it with `newGuid()` (`platform-bible-utils`), which does not
+   * constrain the variant nibble: measured over 20,000 samples, about half of its output fails an
+   * RFC-4122 pattern. Profiles carrying those ids are in use, so tightening this would stop
+   * recognizing about half of what they hold — orphaning the per-window storage those keys name,
+   * since the prune matches positively on this shape, and breaking suffix stripping on scoped web
+   * view ids. Tightening it needs a migration of persisted ids first.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const WINDOW_ID_SHAPE_PATTERN_SOURCE =
+    '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  /**
    * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
    * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
    *
@@ -66,7 +84,38 @@ declare module 'shared/services/scroll-group.service-model' {
   import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
   /** Name to use when creating a network event that is fired when webViews are updated */
-  export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: 'scrollGroup:onDidUpdateScrRef';
+  /**
+   * Name to use when creating a network event that is fired when a tracked project's versification
+   * changes. Host↔hook INTERNAL: intentionally NOT declared in the public `NetworkEvents` map (not
+   * part of the `@papi/*` surface).
+   */
+  export const EVENT_NAME_ON_DID_CHANGE_VERSIFICATION: 'scrollGroup:onDidChangeVersification';
+  /**
+   * Name to use when creating a network event that is fired when a scroll group's reference history
+   * changes
+   */
+  export const EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY: 'scrollGroup:onDidChangeReferenceHistory';
+  /**
+   * `localStorage` key the scroll group state is persisted under: every group's Scripture reference.
+   *
+   * Named here rather than in the host because two processes spell it: main's host, which owns the
+   * store, and the renderer, whose one-time handover reads the copy left in its own `localStorage`
+   * from when a renderer held this state. Those are two different stores under one key name, and the
+   * handover only finds anything if the name stays identical in both.
+   *
+   * @experimental
+   */
+  export const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
+  /**
+   * `localStorage` key the scroll group state is persisted under: the project whose versification
+   * each group's reference is expressed in. Spelled in two processes for the same reason as
+   * {@link SCR_REFS_STORAGE_KEY}.
+   *
+   * @experimental
+   */
+  export const SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY =
+    'scroll-group.service-host.scrRefSourceProjectIds';
   /**
    * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
    * means this should be synced with the scroll group sharing that number. If this value is an
@@ -77,18 +126,103 @@ declare module 'shared/services/scroll-group.service-model' {
   /**
    * Information about an update to a scroll group. Informs about the new SerializedVerseRef at a
    * {@link ScrollGroupId}
+   *
+   * @param scrRef The new Scripture reference for the scroll group
+   * @param scrollGroupId The scroll group that was updated
+   * @param sourceProjectId Project whose versification the `scrRef` is expressed in. `undefined` =
+   *   unknown
    */
   export type ScrollGroupUpdateInfo = {
     scrRef: SerializedVerseRef;
     scrollGroupId: ScrollGroupId;
+    sourceProjectId?: string;
+  };
+  /**
+   * One visited location in a scroll group's reference history
+   *
+   * @experimental
+   */
+  export type ReferenceHistoryEntry = {
+    /** The visited Scripture reference */
+    scrRef: SerializedVerseRef;
+    /**
+     * Project whose versification `scrRef` is expressed in. `undefined` = unknown. Preserved so
+     * navigating back restores the reference in its original versification context
+     */
+    sourceProjectId?: string;
+  };
+  /**
+   * Back/forward reference history for one scroll group. Session-only (in-memory; resets on app
+   * restart)
+   *
+   * @experimental
+   */
+  export type ReferenceHistory = {
+    /** The current location, or `undefined` when nothing has been recorded yet */
+    current: ReferenceHistoryEntry | undefined;
+    /** Entries strictly behind the current location, nearest first (offsets -1, -2, ...) */
+    back: ReferenceHistoryEntry[];
+    /** Entries strictly ahead of the current location, nearest first (offsets +1, +2, ...) */
+    forward: ReferenceHistoryEntry[];
+  };
+  /**
+   * Information about a change to a scroll group's reference history
+   *
+   * @experimental
+   */
+  export type ReferenceHistoryUpdateInfo = {
+    /** The scroll group whose history changed */
+    scrollGroupId: ScrollGroupId;
+    /** The new history state (a copy, safe to keep) */
+    history: ReferenceHistory;
+  };
+  /**
+   * Per-scroll-group values keyed by {@link ScrollGroupId}. Serialized as a plain object, so a group
+   * that has never been touched is simply absent rather than present-and-`undefined`.
+   *
+   * @experimental
+   */
+  export type ScrollGroupMap<T> = {
+    [scrollGroupId: ScrollGroupId]: T | undefined;
+  };
+  /**
+   * The scroll group state that survives an app restart: each group's Scripture reference and the
+   * project whose versification that reference is expressed in. Reference history is deliberately NOT
+   * here — it is session-only (see {@link ReferenceHistory}).
+   *
+   * @experimental
+   */
+  export type PersistedScrollGroupState = {
+    scrRefs: ScrollGroupMap<SerializedVerseRef>;
+    scrRefSourceProjectIds: ScrollGroupMap<string>;
+  };
+  /**
+   * The whole scroll group state at one instant, for a consumer that keeps a local cache of it and
+   * needs to (re)seed that cache in one round trip rather than asking per group.
+   *
+   * @experimental
+   */
+  export type ScrollGroupSnapshot = PersistedScrollGroupState & {
+    referenceHistories: ScrollGroupMap<ReferenceHistory>;
   };
   /** Parts of the Scroll Group Service that are exposed through the network object */
   export interface IScrollGroupRemoteService {
     /**
-     * Get the SerializedVerseRef associated with the provided scroll group
+     * Get the SerializedVerseRef associated with the provided scroll group, in the versification of
+     * whichever project last set it (see {@link ScrollGroupUpdateInfo.sourceProjectId}).
+     *
+     * NOTE: this returns the raw stored reference without versification conversion. If your consumer
+     * displays or navigates in a specific project's versification, use {@link getScrRefForProject}
+     * instead so mixed-versification projects land on the right verse.
+     *
+     * NOTE: a window's own synchronous writers move that window's UI before the host has answered, so
+     * a caller in another process can read a reference the window it is looking at has already left.
+     * The host's `onDidUpdateScrRef` is what everything converges on; subscribe to it rather than
+     * polling if you need to follow a group.
      *
      * @param scrollGroupId Scroll group whose Scripture reference to get. Defaults to 0
-     * @returns Scripture reference associated with the provided scroll group
+     * @returns Scripture reference associated with the provided scroll group, in its source project's
+     *   versification
      */
     getScrRef(scrollGroupId?: ScrollGroupId): Promise<SerializedVerseRef>;
     /**
@@ -97,20 +231,115 @@ declare module 'shared/services/scroll-group.service-model' {
      * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
      *   0
      * @param scrRef Scripture reference to which to set the scroll group
-     * @returns `true` if the Scripture reference changed. `false` otherwise
+     * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
+     *   unknown
+     * @returns `true` if the scroll group's reference or its versification source changed. `false`
+     *   otherwise
      */
     setScrRef(
       scrollGroupId: ScrollGroupId | undefined,
       scrRef: SerializedVerseRef,
+      sourceProjectId?: string,
     ): Promise<boolean>;
+    /**
+     * Get the SerializedVerseRef associated with the provided scroll group, converted into the
+     * versification of `projectId`. The scroll group stores its reference in the versification of
+     * whichever project last set it; this converts it into `projectId`'s versification so any
+     * consumer gets a reference it can use directly. Returns the raw reference when no conversion is
+     * needed.
+     *
+     * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
+     *   0
+     * @param projectId Project into whose versification to convert the reference
+     * @returns Scripture reference in `projectId`'s versification
+     */
+    getScrRefForProject(
+      scrollGroupId: ScrollGroupId | undefined,
+      projectId: string,
+    ): Promise<SerializedVerseRef>;
+    /**
+     * Get a copy of the reference history for the provided scroll group
+     *
+     * @param scrollGroupId Scroll group whose history to get
+     * @returns Copy of the scroll group's reference history
+     * @experimental
+     */
+    getReferenceHistory(scrollGroupId: ScrollGroupId): Promise<ReferenceHistory>;
+    /**
+     * Navigate within the reference history of the provided scroll group, browser-`history.go` style:
+     * negative offset = back that many steps, positive = forward that many steps.
+     *
+     * @param scrollGroupId Scroll group whose history to navigate
+     * @param offset Signed number of steps. -1 = back one, +1 = forward one
+     * @returns `true` if navigation happened; `false` if the offset was 0 or out of range
+     * @experimental
+     */
+    navigateReferenceHistory(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>;
   }
+  /**
+   * Scroll group operations that exist for the platform's own cache-keeping rather than for
+   * consumers. They are deliberately kept off {@link IScrollGroupService}, so `papi.scrollGroups` does
+   * not offer them.
+   *
+   * That is the whole guarantee, and it is a discoverability one rather than a privacy one: these
+   * ride on the same network object as {@link IScrollGroupRemoteService} under the same name, so any
+   * process that resolves the object itself can call them. That reachability is why they are
+   * `@experimental` on both surfaces (TSDoc here, `x-experimental` in the registration's OpenRPC
+   * document) rather than pretending to be private.
+   *
+   * @experimental
+   */
+  export interface IScrollGroupInternalService {
+    /**
+     * Get every scroll group's current reference, source project, and reference history at once, so a
+     * process keeping a local cache can (re)seed it in one round trip rather than one per group.
+     *
+     * @returns Copy of the whole scroll group state, safe to keep
+     * @experimental
+     */
+    getScrollGroupSnapshot(): Promise<ScrollGroupSnapshot>;
+    /**
+     * Hand over scroll group state persisted somewhere the host cannot read, so the host can adopt it
+     * into its own store. Idempotent: the first offer to be adopted wins and every later one is
+     * refused, so several callers offering their own copies cannot interleave into a mixture of
+     * them.
+     *
+     * Resolving is terminal for the caller either way: `true` means the state now lives in the host's
+     * store, `false` means the host already has state that beats the offer. In both cases the
+     * caller's copy is dead and should be discarded. A rejection means neither — the offer can be
+     * made again.
+     *
+     * @param state Previously persisted scroll group state
+     * @returns `true` if the offer was adopted, `false` if it was refused
+     * @experimental
+     */
+    migrateStoredScrollGroupState(state: PersistedScrollGroupState): Promise<boolean>;
+  }
+  /**
+   * Everything the scroll group service host registers on its network object: what consumers call
+   * plus the platform's own cache-keeping operations.
+   *
+   * @experimental
+   */
+  export type IScrollGroupHostService = IScrollGroupRemoteService & IScrollGroupInternalService;
   /**
    *
    * Provides functions related to scroll groups and Scripture references at those scroll groups
    */
   export interface IScrollGroupService extends IScrollGroupRemoteService {
-    /** Event that emits with information about a changed Scripture Reference for a scroll group */
+    /**
+     * Event that emits with information about a changed Scripture Reference for a scroll group. The
+     * emitted `scrRef` is in the source project's versification (see
+     * {@link ScrollGroupUpdateInfo.sourceProjectId}); a consumer that needs it in a specific project's
+     * versification should call {@link getScrRefForProject} for that project.
+     */
     onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+    /**
+     * Event that emits when a scroll group's reference history changes
+     *
+     * @experimental
+     */
+    onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
   }
 }
 declare module 'shared/models/web-view.model' {
@@ -332,6 +561,17 @@ declare module 'shared/models/web-view.model' {
      * @default false
      */
     shouldShowToolbar?: boolean;
+    /**
+     * Whether this WebView's tab can be closed by the user (shows the tab's close button and allows
+     * closing the tab with a middle click anywhere on its header). Set to `false` for tabs that must
+     * always remain open, such as views that are part of the default layout.
+     *
+     * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
+     * true`), not enforced by the type.
+     *
+     * @default true
+     */
+    isClosable?: boolean;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
@@ -389,6 +629,133 @@ declare module 'shared/models/web-view.model' {
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
   /**
+   * Id of one zoom area — a named part of a web view's content that zooms as one and keeps its own
+   * content zoom level. Ids are lower-case letters, digits and hyphens, starting with a letter
+   * (`[a-z][a-z0-9-]*`), and are stable strings a web view chooses once (for example `main` for a
+   * view's primary content; a view that has several independently zoomable parts gives each its own
+   * id).
+   *
+   * `default` is reserved: its CSS custom property is the pane-wide default every other area falls
+   * back to, so an area of that name would set the default for the whole pane. The platform ignores
+   * an area marked with it — pick any other id.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ContentZoomAreaId = string;
+  /**
+   * Id of the zoom area a web view marks without naming one. Every web view that opts into content
+   * zoom has at least this area.
+   *
+   * Three attribute values name it: an empty value (`data-platform-content-zoom-root=""`), the id
+   * itself (`="main"`), and `="true"` — the value React serializes a bare JSX prop (`<div
+   * data-platform-content-zoom-root />`) to. Because `"true"` names this area, an area genuinely
+   * called `true` is not available.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'main'` itself and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const MAIN_CONTENT_ZOOM_AREA = 'main';
+  /**
+   * Web-view definition `state` key holding the pane's own content zoom levels: a map from zoom area
+   * id to factor. An area with no entry follows the default from Settings. Written only by the
+   * platform; web views may read it.
+   *
+   * A web view whose `getWebViewDefinition` rebuilds its own definition on re-point (a
+   * `reloadWebView` pointed at another project through the same web view id) must carry its saved
+   * `state` through wholesale, by spreading it rather than copying only the keys the view itself
+   * uses: the platform stores a companion identity stamp next to this key, and a view that drops the
+   * stamp while keeping the levels has the platform silently re-attribute the previous project's
+   * level to the new one, rather than losing it.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
+   * equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
+  /**
+   * Attribute a web view puts on each element that wraps one zoom area's content (below its own
+   * toolbar, outside dividers and headers). The attribute value is the area id. Three values name the
+   * {@link MAIN_CONTENT_ZOOM_AREA} area instead: an empty value
+   * (`data-platform-content-zoom-root=""`), `="main"`, and the `="true"` React serializes a bare JSX
+   * prop (`<div data-platform-content-zoom-root />`) to. Write the empty value in static markup and
+   * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
+   * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
+   * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
+   * never compounds one area's zoom into another's. Web views without this attribute ignore per-area
+   * zoom input and are scaled whole at the Settings default.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
+   * constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
+  /**
+   * Attribute that marks an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} as pop-up content
+   * opened from that zoom area (a popover, menu or tooltip portaled out of the area element) rather
+   * than a pane. The platform scales such an element with its area but never reports it as an area of
+   * its own and never places the zoom indicator on it. `platform-bible-react`'s `PopoverContent`,
+   * `DropdownMenuContent` and `TooltipContent` set it automatically; `SelectContent`,
+   * `ContextMenuContent`, `MenubarContent` and `DropdownMenuSubContent` do not yet.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that marks its own pop-up content writes the literal `'data-platform-content-zoom-popup'` itself
+   * and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_POPUP_ATTRIBUTE = 'data-platform-content-zoom-popup';
+  /**
+   * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
+   * zoom area, with that area's effective factor (own level, else the Settings default):
+   * `--platform-content-zoom-main`, `--platform-content-zoom-<area>`, …
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that reads its own zoom variable writes the literal `'--platform-content-zoom-'` itself and keeps
+   * it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = '--platform-content-zoom-';
+  /**
+   * CSS custom property holding the Settings default, the fallback for any zoom area without its own
+   * variable.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that reads the default zoom variable writes the literal `'--platform-content-zoom-default'`
+   * itself and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = '--platform-content-zoom-default';
+  /**
+   * The `webViewType` of the Scripture editor web views provided by the `platform-scripture-editor`
+   * extension. Must match `SCRIPTURE_EDITOR_WEBVIEW_TYPE` in `platform-scripture-editor.utils.ts` —
+   * core code cannot import extension source, so the value is mirrored here as the single core-side
+   * copy.
+   */
+  export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+  /**
+   * The `webViewType` of the Find web view provided by the `platform-scripture` extension. Must match
+   * `findWebViewType` in `extensions/src/platform-scripture/src/find.web-view-provider.ts` — core
+   * code cannot import extension source, so the value is mirrored here as the single core-side copy.
+   */
+  export const FIND_WEBVIEW_TYPE = 'platformScripture.find';
+  /**
+   * Finds the first open Scripture editor web view that has a project (first match in the given
+   * order, which is dock-layout order for the open web view lists) — the shared "current project
+   * editor" rule used by the project picker and by BCV navigation-target resolution so the two can
+   * never disagree on which editor is primary.
+   */
+  export function findFirstEditorWebViewDefinition(
+    definitions: SavedWebViewDefinition[],
+  ): SavedWebViewDefinition | undefined;
+  /**
    * The keys of properties on a WebViewDefinition that may be updated when that webview is already
    * displayed
    */
@@ -399,6 +766,7 @@ declare module 'shared/models/web-view.model' {
     'projectId',
     'scrollGroupScrRef',
     'state',
+    'isClosable',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
@@ -464,7 +832,7 @@ declare module 'shared/models/web-view.model' {
    *
    * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
    *
-   * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+   * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
    *
    * - `scrRef`: The current value for the Scripture reference this web view is on
    * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -472,11 +840,16 @@ declare module 'shared/models/web-view.model' {
    * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
    *   synced to a scroll group, this is `undefined`
    * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+   * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+   *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+   *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+   *   the active Scripture reference
    *
    * _＠example_
    *
    * ```typescript
-   * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+   * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+   *   useWebViewScrollGroupScrRef();
    * ```
    */
   export type UseWebViewScrollGroupScrRefHook = () => [
@@ -484,6 +857,7 @@ declare module 'shared/models/web-view.model' {
     setScrRef: (newScrRef: SerializedVerseRef) => void,
     scrollGroupId: ScrollGroupId | undefined,
     setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+    sourceProjectId: string | undefined,
   ];
   /**
    *
@@ -565,7 +939,7 @@ declare module 'shared/models/web-view.model' {
      *
      * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
      *
-     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
      *
      * - `scrRef`: The current value for the Scripture reference this web view is on
      * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -573,11 +947,16 @@ declare module 'shared/models/web-view.model' {
      * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
      *   synced to a scroll group, this is `undefined`
      * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+     * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+     *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+     *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+     *   the active Scripture reference
      *
      * _＠example_
      *
      * ```typescript
-     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+     *   useWebViewScrollGroupScrRef();
      * ```
      */
     useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
@@ -623,6 +1002,18 @@ declare module 'shared/models/web-view.model' {
      */
     existingId?: string | '?';
     /**
+     * Limit an `existingId: '?'` search to web views showing this project.
+     *
+     * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
+     * view, so combining it with a project filter is contradictory and is rejected as an error.
+     * Without this, `'?'` matches any web view of the type regardless of project. Providing this
+     * without any `existingId` at all is the same contradiction — there is no `'?'` search for it to
+     * limit — and is rejected the same way.
+     *
+     * @experimental
+     */
+    existingProjectId?: string;
+    /**
      * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
      * relevant if `existingId` is provided. If `existingId` is not provided, this property is
      * ignored.
@@ -637,8 +1028,31 @@ declare module 'shared/models/web-view.model' {
      * Defaults to `true`
      *
      * If a new WebView is created, it is always brought to the front, regardless of this option.
+     *
+     * When the existing WebView is in a window other than the one this call is otherwise headed for,
+     * this also determines whether that other window is raised to the front of the OS window order.
+     * Set this to `false` for a call that should not disturb whatever window the user is currently
+     * looking at.
      */
     bringToFront?: boolean;
+    /**
+     * Id of the application window to open the web view in, instead of the window the user is working
+     * in. Applies to `tab`, `panel`, and `float` layouts; combining it with a `'window'` layout
+     * (which asks for a NEW window) is an error. The open fails if no such window is serving web
+     * views — a caller that names a window wants that window, not a guess.
+     *
+     * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
+     * names the window.
+     *
+     * Window ids are assigned by the platform and never reused within a profile, in this run of the
+     * app or any later one, so an id names one window and only ever that window. Get the id of the
+     * window this code is running in with `papi.window.getWindowId()` — not
+     * `platform.getFocusedWindowId`, which answers with a different window's id whenever this one is
+     * not the focused window.
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    targetWindowId?: string;
   };
   /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
   export type GetWebViewOptions = OpenWebViewOptions;
@@ -647,6 +1061,7 @@ declare module 'shared/global-this.model' {
   import type { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
   import {
+    ContentZoomAreaId,
     GetSavedWebViewDefinition,
     SavedWebViewDefinition,
     UpdateWebViewDefinition,
@@ -726,7 +1141,7 @@ declare module 'shared/global-this.model' {
      *
      * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
      *
-     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
      *
      * - `scrRef`: The current value for the Scripture reference this web view is on
      * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -734,11 +1149,16 @@ declare module 'shared/global-this.model' {
      * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
      *   synced to a scroll group, this is `undefined`
      * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+     * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+     *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+     *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+     *   the active Scripture reference
      *
      * _＠example_
      *
      * ```typescript
-     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+     *   useWebViewScrollGroupScrRef();
      * ```
      */
     var useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
@@ -788,8 +1208,87 @@ declare module 'shared/global-this.model' {
      * ```
      */
     var updateWebViewDefinition: UpdateWebViewDefinition;
+    /**
+     * Zoom one area of a web view by `deltaSteps` (+1 in, −1 out). Omit `areaId` to zoom the web
+     * view's active area.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var adjustContentZoomById: (
+      webViewId: string,
+      deltaSteps: number,
+      areaId?: ContentZoomAreaId,
+    ) => void;
+    /**
+     * Return one area of a web view to the Settings default. Omit `areaId` to reset the web view's
+     * active area.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var resetContentZoomById: (webViewId: string, areaId?: ContentZoomAreaId) => void;
+    /**
+     * Report the zoom areas a web view's bootstrap discovered, in document order.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var reportContentZoomAreasById: (webViewId: string, areaIds: ContentZoomAreaId[]) => void;
+    /**
+     * Report the zoom area a web view's bootstrap last saw clicked or focused.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var reportContentZoomActiveAreaById: (webViewId: string, areaId: ContentZoomAreaId) => void;
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
+    /**
+     * Whether to emit startup timing marks (see `markStartup`). Off by default; enabled per launch
+     * via the `PT_STARTUP_MARKS=true` environment variable. Propagated to all processes the same way
+     * as `isNoisyDevModeEnabled`.
+     */
+    var startupMarks: boolean;
+    /**
+     * Id of the window this code is running in, as the platform assigns them. Set from the URL search
+     * params in the renderer process, and `undefined` outside a window — which is how code shared
+     * with the extension host tells the two apart, so test it against `undefined` rather than for
+     * truthiness.
+     *
+     * The same id names this window everywhere else: in `platform.getWindows`, in a move's
+     * `targetWindowId`, and in main. No window is ever given an id another window has had, in this
+     * run of the app or any earlier one on the same profile.
+     *
+     * @experimental
+     */
+    var windowId: string | undefined;
+    /**
+     * Whether this window was created without being activated, as of the moment it was created. Set
+     * in the renderer process from the URL search params; no other process assigns it, so it reads
+     * `undefined` there.
+     *
+     * This is the window's state at creation, not now: what content should do about it also depends
+     * on whether the user has since done anything in the window, which the renderer tracks
+     * separately.
+     *
+     * @experimental
+     */
+    var wasWindowCreatedWithoutActivation: boolean | undefined;
+    /**
+     * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
+     * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
+     * lives in the OS-level menu bar rather than in-window, so this flag does not remove it there —
+     * every window can still reach it through the system menu bar, which is process-global and cannot
+     * differ per window.
+     *
+     * Set from the URL search params in the renderer process, and `undefined` everywhere else: the
+     * main process and the extension host never assign it, and neither does the web view prelude, so
+     * code outside a renderer must not read this as a reliable `false`.
+     *
+     * Fixed at window creation and never updated, so it cannot describe a window becoming the main
+     * one later (for instance after the main window closes). PT-4278's window-manager service is the
+     * durable answer; replace this when it lands.
+     *
+     * @experimental
+     */
+    var isMainWindow: boolean | undefined;
   }
   /** Type of Platform.Bible process */
   export enum ProcessType {
@@ -868,6 +1367,30 @@ declare module 'shared/data/rpc.model' {
   /** Port to use for the WebSocket */
   export const WEBSOCKET_PORT = 8876;
   /**
+   * Largest message the WebSocket transport carries. A message over this is not a failed request: the
+   * receiver closes the connection with 1009, taking down every request in flight on it and, for the
+   * C# data provider, the process itself. Declared here rather than left to the `ws` default so a
+   * producer sizing a response against it - see `Pt9InterlinearReader.MaxPt9InterlinearDataBytes` -
+   * is measuring against a number this repository states.
+   */
+  export const MAX_WEBSOCKET_PAYLOAD_BYTES: number;
+  /**
+   * How many times to try sending a request before giving up if the request is not yet registered.
+   * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
+   * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of
+   * re-declaring the literal and silently diverging if it is ever retuned.
+   *
+   * @experimental
+   */
+  export const MAX_REQUEST_ATTEMPTS = 10;
+  /**
+   * How long in ms to wait between request attempts if the request is not yet registered. Exported
+   * for the same derive-don't-duplicate reason as {@link MAX_REQUEST_ATTEMPTS}.
+   *
+   * @experimental
+   */
+  export const REQUEST_ATTEMPT_WAIT_TIME_MS = 1000;
+  /**
    * Whether an RPC object is setting up or has finished setting up its connection and is ready to
    * communicate on the network
    */
@@ -933,6 +1456,98 @@ declare module 'shared/data/rpc.model' {
     errorCode?: JSONRPCErrorCode,
     requestId?: RequestId,
   ): JSONRPCErrorResponse;
+  /**
+   * Maximum characters retained from a single logged detail that can originate from a remote peer (a
+   * close `reason`, an error `message`)
+   */
+  export const MAX_LOGGED_DETAIL_LENGTH = 200;
+  /**
+   * Maximum characters retained from a logged stack trace.
+   *
+   * Far more generous than {@link MAX_LOGGED_DETAIL_LENGTH} because a stack is generated locally
+   * rather than supplied by a peer, so the flood-protection rationale does not apply — and because a
+   * stack bounded to a couple of hundred characters is one or two frames, which is rarely the frame
+   * that explains a disconnect.
+   */
+  export const MAX_LOGGED_STACK_LENGTH = 4000;
+  /**
+   * Close code used when we close a PAPI socket on purpose (shutdown, teardown). The WebSocket spec
+   * reserves 3000-4999 for application use, so carrying intent in the code itself lets a close
+   * handler tell a deliberate shutdown from a connection that died, with no extra state to keep in
+   * sync.
+   */
+  export const INTENTIONAL_CLOSE_CODE = 4000;
+  /**
+   * Whether a WebSocket close `code` represents a clean, expected shutdown rather than a connection
+   * that died.
+   *
+   * Clean codes: 1000 (normal), 1001 (going away — a page or window navigating away or closing), 1005
+   * (no status code was present in the close frame, which a plain `close()` with no arguments
+   * produces), and {@link INTENTIONAL_CLOSE_CODE}, this codebase's own marker for a close we initiated
+   * on purpose. What all four have in common is that a closing handshake completed. The code that
+   * matters is 1006: no close frame was ever received, the fingerprint of a connection that died
+   * rather than being closed — the shape a suspend produces.
+   *
+   * Shared so the client and server close handlers cannot independently drift on which codes count as
+   * clean. {@link isCleanCloseEvent} is the predicate to use where the event itself is in hand.
+   *
+   * @param code `code` from a WebSocket `close` event
+   * @returns `true` if the code indicates a completed closing handshake, `false` otherwise (including
+   *   for a non-numeric code)
+   */
+  export function isCleanCloseCode(code: unknown): boolean;
+  /**
+   * Whether a close event represents an orderly shutdown rather than a connection that died.
+   *
+   * `wasClean` is the authoritative answer — it reports whether a closing handshake completed — so it
+   * wins whenever the event carries it. Both Chromium and the `ws` library always set it; the
+   * {@link isCleanCloseCode} fallback covers a partial or foreign event shape that does not.
+   *
+   * Deciding on the code alone would misreport a close frame that carried no status: that arrives as
+   * 1005 with `wasClean` true, which a plain `close()` produces on every window close and page
+   * reload. Marking those abnormal would bury a genuine socket death under routine noise.
+   *
+   * @param ev A WebSocket `close` event, or anything at all — a non-event is reported as not clean
+   * @returns Whether a closing handshake completed
+   */
+  export function isCleanCloseEvent(ev: unknown): boolean;
+  /**
+   * Describe a WebSocket `close` event for a log line.
+   *
+   * Chromium and the `ws` library deliver structurally different close events, and both keep
+   * `code`/`reason`/`wasClean` as accessors on the prototype rather than own properties — so
+   * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
+   *
+   * `code` is the single most diagnostic field: 1006 (no close frame) means the connection died
+   * rather than being closed politely. A reader should not need the WebSocket code table memorized to
+   * see that, so an event that {@link isCleanCloseEvent} rejects also carries an `abnormal=true` pair.
+   * The marker is its own pair rather than a parenthetical inside `code=` so the whole detail stays a
+   * sequence of space-separated `key=value` pairs.
+   *
+   * @param ev A WebSocket `close` event, or anything at all
+   * @returns Space-separated `key=value` pairs — `code`, `abnormal` (only when the connection died),
+   *   `reason` (JSON-quoted, so a reason containing a quote or a bracket cannot forge the surrounding
+   *   log line) and `wasClean`. A field that cannot be read is reported as `n/a`, so a non-event
+   *   yields `code=n/a reason=n/a wasClean=n/a` rather than throwing.
+   */
+  export function describeWebSocketCloseEvent(ev: unknown): string;
+  /**
+   * Describe a WebSocket `error` event for a log line.
+   *
+   * The `ws` library's `ErrorEvent` keeps `message` and `error` as accessors on the prototype, so
+   * `JSON.stringify` on the event yields `{}` — only own properties are serialized. Read the fields
+   * explicitly.
+   *
+   * Note a browser `WebSocket` fires a plain `Event` on error, carrying no detail at all by
+   * specification, so `message=unknown` is the expected result on the renderer end.
+   *
+   * @param ev A WebSocket `error` event, or anything at all
+   * @returns A single log line holding `message=`, `code=` and, when the error carried one, a
+   *   `stack:` section. Never contains a line break, so an error keeps the one-record-per-line shape
+   *   every other line here has; a field that cannot be read is reported as `unknown`/`n/a` rather
+   *   than throwing.
+   */
+  export function describeWebSocketErrorEvent(ev: unknown): string;
   /** Serialize a payload, if needed, and send it over the provided WebSocket */
   export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void;
   /**
@@ -980,145 +1595,112 @@ declare module 'shared/data/rpc.model' {
    */
   export const UNREGISTER_METHOD = 'network:unregisterMethod';
   /**
+   * Tell main which peer is on the other end of this socket, so main's connection log lines can be
+   * joined to the client's own. Main labels each socket with an incrementing id, which appears
+   * nowhere in the client's logs; the client labels itself with a name it alone knows.
+   */
+  export const ANNOUNCE_PEER = 'network:announcePeer';
+  /**
+   * Register a network event emitter with the main process so that the event is tracked centrally.
+   * Multi-source vs. single-source semantics are determined by looking up the event name in
+   * `MULTI_SOURCE_EVENT_NAMES`.
+   */
+  export const REGISTER_EVENT = 'network:registerEvent';
+  /**
+   * Unregister a network event emitter from the main process so that the event is no longer tracked
+   * centrally.
+   */
+  export const UNREGISTER_EVENT = 'network:unregisterEvent';
+  /**
    * Get all methods that are currently registered on the network. Required to be 'rpc.discover' by
    * the OpenRPC specification.
    */
   export const GET_METHODS = 'rpc.discover';
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
-}
-declare module 'shared/services/shared-store.service' {
-  type NetworkService = typeof import('shared/services/network.service');
   /**
-   * Initialize the shared store service, setting up request handlers and event listeners. This
-   * function should be called by each of our JS processes early during start up.
+   * Builds the exact prefix that `network.service`'s `doRequest` embeds in the message it throws for
+   * a JSON-RPC _error response_ with the given `code` — the full thrown message is this prefix
+   * followed by `: <error message>`.
    *
-   * @param networkService The network service to use for communication between processes
-   * @returns A promise that resolves when the service is initialized
+   * Exported so the few callers that must classify these thrown errors by message (there is no richer
+   * machine-readable marker for a "method not found" response) derive the format from this single
+   * producer instead of hand-copying the literal. Hand-copied copies silently drift: reformat the
+   * producer and a separate matcher/fixture keeps matching its old string while real errors stop
+   * matching, and the tests stay green. Everything routing through this function stays in lockstep.
+   *
+   * @param code The JSON-RPC error code from the error response being classified
+   * @returns The exact message prefix `doRequest` uses for an error response with that `code`
+   * @experimental
    */
-  export function initialize(networkService: NetworkService): Promise<void>;
+  export function getJsonRpcRequestErrorMessagePrefix(code: number): string;
   /**
-   * Reset the shared store service state for testing. This function is only exported for testing
-   * purposes and should not be used in production code.
+   * Whether `error` is what `networkService`'s request plumbing (`doRequest` in `network.service.ts`)
+   * throws for a JSON-RPC "method not found" response — i.e. no handler for the requested method has
+   * registered anywhere on the network.
+   *
+   * Callers that want to treat "nobody is listening" as a benign outcome must key off the JSON-RPC
+   * error _code_, never off the human-readable text that follows it. The two producers of a
+   * method-not-found response word that text differently (`'<method>' not found` in `rpc-server.ts`,
+   * `No handler found for <method>` in `rpc-websocket-listener.ts`), and matching the text alone also
+   * matches an unrelated failure from a handler that _did_ run and threw a message with the same
+   * words in it — turning "no validator, allow it" into "the validator rejected this, allow it
+   * anyway". The code is the only part that distinguishes the two.
+   *
+   * The code has to be read back out of the message because `doRequest` flattens every RPC-level
+   * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
+   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker: a "no
+   * handler yet" response has no `error.data` at all, and the `platformErrorCode` field is no help
+   * either, because it is never populated from C#. `JsonRpc.ExceptionStrategy` is left at its
+   * `CommonErrorData` default, which serializes no `Exception.Data`, so `error.data.data` is always
+   * absent whatever `PlatformErrorCodes.WithCode` set. Deriving the format from
+   * {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
+   * with, keeps this matcher in lockstep with any reformat there.
+   *
+   * @param error Error thrown by a `networkService` request
+   * @param requestType If provided, additionally require the error to name this request type, so a
+   *   method-not-found response for some _other_ request cannot be mistaken for this one's. Both
+   *   producers embed the raw request type in their message.
+   * @returns Whether `error` is a method-not-found response (for `requestType`, when given)
+   * @experimental
    */
-  export function resetForTesting(): void;
+  export function isJsonRpcMethodNotFoundError(error: unknown, requestType?: string): boolean;
   /**
-   * Get a value from the shared store with proper typing
+   * Prefix that `network.service`'s `doRequest` embeds in the message it throws when a request times
+   * out client-side before any response arrives. Exported for the same drift-prevention reason as
+   * {@link getJsonRpcRequestErrorMessagePrefix}.
    *
-   * @param key The key of the value to retrieve
-   * @returns A cloned copy of the value associated with the key, or undefined if not found
+   * @experimental
    */
-  function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefined;
+  export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';
   /**
-   * Set a value in the shared store and notify other processes. Note that if a value with the given
-   * key already exists, it can only be set again by the process that created it. This is to prevent
-   * race conditions between processes setting values that don't incorporate each others' updates.
+   * Whether `error` is what `network.service`'s request plumbing throws when a request expires
+   * client-side before any answer arrives (`doRequest` builds `JSON-RPC Request timed out:
+   * <requestType> <args>` when its per-request wait runs out). Matched by message substring — no
+   * richer machine-readable marker exists for this failure — deriving the format from its one
+   * producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}), so a reformat there cannot silently
+   * stop this matcher from matching.
    *
-   * @param key The key to set
-   * @param value The value to set. Note that the stored value is a cloned copy of the provided value,
-   *   so changes to the original value will not affect the stored value. Also, any non-serializable
-   *   data will removed from the value during the cloning process.
+   * @experimental
    */
-  function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void;
-  /**
-   * Remove a value from the shared store and notify other processes of the change.
-   *
-   * Note that removing a key sets its value to undefined in the store. The key-value pair isn't
-   * actually deleted. This is done to avoid race conditions if a value for this key is set again
-   * quickly.
-   *
-   * @param key The key to remove
-   */
-  function remove<K extends SharedStoreKeys>(key: K): void;
-  /**
-   * Keys for timeout lengths for network requests. Keys are dynamically constructed by adding this
-   * prefix to the `requestType`.
-   */
-  export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${string}`;
-  /**
-   * Defines the keys and types of values held in key-value pairs within the shared store service.
-   * Since this service is not part of the public API, the keys and types are not included in
-   * `papi-shared-types.ts`. If the platform needs more key-value pairs, they should be added here.
-   */
-  export interface SharedStoreValues {
-    [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
-  }
-  export type SharedStoreKeys = keyof SharedStoreValues;
-  /**
-   * This provides an in-memory, key-value store that can be read without a network call but updates
-   * automatically in the background using network events. This allows synchronous reading of shared,
-   * non-persisted key-value pairs between processes. It can be thought of as a distributed key-value
-   * store. It relies only on the network service, not other services like network objects or
-   * settings.
-   *
-   * This uses {@link https://en.wikipedia.org/wiki/Lamport_timestamp | Lamport logical clocks} for
-   * conflict resolution to ensure consistency across processes.
-   *
-   * This service is not intended to be accessed directly by extensions. It was created as a utility
-   * for the platform and is not part of the public API. Extensions should use settings and other data
-   * providers for sharing data.
-   */
-  export const sharedStoreService: {
-    get: typeof get;
-    set: typeof set;
-    remove: typeof remove;
-  };
-}
-declare module 'shared/models/papi-network-event-emitter.model' {
-  import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
-  /**
-   * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
-   * callbacks when the event is emitted. Events on NetworkEventEmitters can be emitted across
-   * processes. They are coordinated between processes by their type. Use eventEmitter.event(callback)
-   * to subscribe to the event. Use eventEmitter.emit(event) to run the subscriptions. Generally, this
-   * EventEmitter should be private, and its event should be public. That way, the emitter is not
-   * publicized, but anyone can subscribe to the event.
-   *
-   * WARNING: Do not use this class directly outside of NetworkService, or it will not do what you
-   * expect. Use NetworkService.createNetworkEventEmitter.
-   *
-   * WARNING: You cannot emit events with complex types on the network.
-   */
-  export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
-    /** Callback that sends the event to other processes on the network when it is emitted */
-    private networkSubscriber;
-    /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
-    private networkDisposer;
-    /**
-     * Creates a NetworkEventEmitter
-     *
-     * @param networkSubscriber Callback that accepts the event and emits it to other processes
-     * @param networkDisposer Callback that unlinks this emitter from the network
-     */
-    constructor(
-      /** Callback that sends the event to other processes on the network when it is emitted */
-      networkSubscriber: PlatformEventHandler<T>,
-      /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
-      networkDisposer: () => void,
-    );
-    emit: (event: T) => void;
-    /**
-     * Runs only the subscriptions for the event that are on this process. Does not send over network
-     *
-     * @param event Event data to provide to subscribed callbacks
-     */
-    emitLocal(event: T): void;
-    dispose: () => Promise<boolean>;
-  }
-  export default PapiNetworkEventEmitter;
+  export function isRequestTimedOutError(error: unknown): boolean;
 }
 declare module 'shared/models/openrpc.model' {
   import type { JSONSchema7 } from 'json-schema';
   /**
    * Describes APIs available to call using JSON-RPC 2.0
    *
-   * See https://github.com/open-rpc/meta-schema/releases - Release 1.14.2 aligns with OpenRPC 1.2.6.
-   * https://github.com/open-rpc/meta-schema/releases/download/1.14.2/open-rpc-meta-schema.json
+   * See https://github.com/open-rpc/meta-schema/releases - Release 1.14.3 aligns with OpenRPC 1.3.0.
+   * https://github.com/open-rpc/meta-schema/releases/download/1.14.3/open-rpc-meta-schema.json
    *
-   * We don't want to go past 1.2.6 because https://playground.open-rpc.org/ doesn't support anything
-   * past 1.2.6 for now. See https://github.com/open-rpc/playground/issues/606.
+   * We declare OpenRPC `1.3.0` because notifications (a method with no `result`) were introduced in
+   * 1.3.0 — `result` was required in 1.2.6, so a document with notifications is invalid under the
+   * 1.2.6 meta-schema. The OpenRPC playground (https://playground.open-rpc.org/) is still capped at
+   * 1.2.6 (https://github.com/open-rpc/playground/issues/606), but it renders a 1.3.0 document fine
+   * in practice; it lists notifications under the same "Methods" heading (without a results field),
+   * which we mitigate by prefixing notification summaries with {@link NOTIFICATION_OPENRPC_PREFIX}.
    *
-   * Note that the types from https://www.npmjs.com/package/@open-rpc/meta-schema/v/1.14.2 are not
+   * Note that the types from https://www.npmjs.com/package/@open-rpc/meta-schema/v/1.14.3 are not
    * very good. For example, all the properties of `Components` are of type `any` instead of the
    * specific types they should be, and they redefine types for JSON Schema. So we're using our own
    * types here instead.
@@ -1127,7 +1709,7 @@ declare module 'shared/models/openrpc.model' {
     openrpc: string;
     info: Info;
     servers?: Server[];
-    methods: Method[];
+    methods: (Method | OpenRpcNotification)[];
     components?: Components;
     externalDocs?: ExternalDocumentation;
   };
@@ -1213,6 +1795,12 @@ declare module 'shared/models/openrpc.model' {
     name: string;
     params: (ContentDescriptor | Reference)[];
     result: ContentDescriptor | Reference;
+    /**
+     * Set to `true` to mark this method as experimental — its shape may change without notice.
+     * Informational only; does not affect runtime behavior. See the
+     * {@link https://github.com/paranext/paranext-extension-template/wiki/Experimental-APIs | experimental APIs wiki page}.
+     */
+    'x-experimental'?: boolean;
     /** A short summary of what the method does. */
     summary?: string;
     /**
@@ -1254,17 +1842,50 @@ declare module 'shared/models/openrpc.model' {
     externalDocs?: ExternalDocumentation;
   };
   export type MethodDocumentationWithoutName = Omit<Method, 'name'>;
-  /** Documentation about a single method */
+  /**
+   * Documentation about a single {@link Method}.
+   *
+   * Set `method['x-experimental']: true` to mark this method as experimental. Informational only;
+   * appears in the generated OpenRPC document.
+   */
   export type SingleMethodDocumentation = {
     method: MethodDocumentationWithoutName;
     components?: Components;
   };
-  /** Documentation about all methods on a network object */
+  /**
+   * An OpenRPC notification — same shape as a {@link Method}, but without `result`. Used for events /
+   * one-way messages from server to client. Per the OpenRPC convention (no `result` ⇒ notification),
+   * these are serialized into the same root `methods` array as Methods on the wire.
+   *
+   * Set `'x-experimental': true` on the notification object to mark it as experimental. Informational
+   * only; appears in the generated OpenRPC document.
+   */
+  export type OpenRpcNotification = Omit<Method, 'result'>;
+  /**
+   * Documentation about a single {@link OpenRpcNotification}.
+   *
+   * Set `notification['x-experimental']: true` to mark this notification as experimental.
+   * Informational only; appears in the generated OpenRPC document.
+   */
+  export type SingleNotificationDocumentation = {
+    notification: Omit<OpenRpcNotification, 'name'>;
+    components?: Components;
+  };
+  /**
+   * Documentation about a network object — what it is, and OpenRPC documentation for each of its
+   * methods.
+   */
   export type NetworkObjectDocumentation = {
     summary?: string;
     description?: string;
     methods?: Method[];
     components?: Components;
+    /**
+     * Set to `true` to mark every {@link Method} registered for this network object as experimental.
+     * The marker is fanned out onto each method's `'x-experimental'` field inside
+     * `networkObjectService.set`.
+     */
+    'x-experimental'?: boolean;
   };
   /** Create an object of type {@link OpenRpc} to hold documentation for PAPI websocket methods */
   export function createEmptyOpenRpc(papiVersion: string): OpenRpc;
@@ -1273,6 +1894,290 @@ declare module 'shared/models/openrpc.model' {
    * methods that didn't have their own documentation provided.
    */
   export function getEmptyMethodDocs(): MethodDocumentationWithoutName;
+  /**
+   * Get an empty {@link OpenRpcNotification} documentation object. Useful for surfacing events that
+   * didn't have their own documentation provided so that every registered event still appears in the
+   * OpenRPC document (mirroring how undocumented methods are surfaced via
+   * {@link getEmptyMethodDocs}).
+   */
+  export function getEmptyNotificationDocs(): Omit<MethodDocumentationWithoutName, 'result'>;
+  /** Prefix prepended to the `summary` and `description` of experimental methods and notifications. */
+  export const EXPERIMENTAL_OPENRPC_PREFIX = '[EXPERIMENTAL] ';
+  /**
+   * Returns a shallow copy of an OpenRPC {@link Method} or {@link OpenRpcNotification} with
+   * {@link EXPERIMENTAL_OPENRPC_PREFIX} prepended to its `summary` and `description` when the entry is
+   * marked `'x-experimental'`. Both fields are always set on an experimental entry — even a missing
+   * or empty summary/description becomes the bare prefix so the marker is never lost. Idempotent: an
+   * entry already starting with the prefix is left unchanged. Returns the entry untouched when it is
+   * not experimental.
+   */
+  export function withExperimentalPrefix<T extends Method | OpenRpcNotification>(entry: T): T;
+  /**
+   * Prefix prepended to a notification's `summary`. OpenRPC carries notifications in the same root
+   * `methods` array as methods, so tooling that lists both together (e.g. the OpenRPC playground)
+   * shows them under one "Methods" heading. This prefix makes notifications distinguishable at a
+   * glance, the same way {@link EXPERIMENTAL_OPENRPC_PREFIX} marks experimental entries.
+   */
+  export const NOTIFICATION_OPENRPC_PREFIX = '(Notification) ';
+  /**
+   * Returns a shallow copy of an OpenRPC {@link OpenRpcNotification} with
+   * {@link NOTIFICATION_OPENRPC_PREFIX} prepended to its `summary` so it is distinguishable from
+   * methods in tooling that lists both together. Applied to every notification (unlike the
+   * experimental prefix). Idempotent: an entry whose summary already starts with the prefix is left
+   * unchanged.
+   */
+  export function withNotificationPrefix(entry: OpenRpcNotification): OpenRpcNotification;
+}
+declare module 'shared/services/shared-store.service' {
+  type LamportClock = {
+    counter: number;
+    processId: string;
+  };
+  type StoreEntry = {
+    value?: unknown;
+    clock: LamportClock;
+    deleted?: boolean;
+  };
+  export type StoreChangeEvent = StoreEntry & {
+    key: string;
+  };
+  type NetworkService = typeof import('shared/services/network.service');
+  /**
+   * Initialize the shared store service, setting up request handlers and event listeners. Idempotent:
+   * subsequent calls return the same promise as the first call.
+   *
+   * @param networkService The network service module.
+   * @returns A promise that resolves when the service is initialized
+   */
+  export function initialize(networkService: NetworkService): Promise<void>;
+  /**
+   * Wait for the shared store service to be ready.
+   *
+   * - If {@link initialize} has already been called, returns the existing in-flight promise (no timeout
+   *   — we wait as long as init takes).
+   * - Otherwise waits for {@link initialize} to be called, then returns the resulting promise.
+   *
+   * @param startTimeoutMs Time to wait for initialize() to be called before throwing. A non-positive
+   *   value (the default, `0`) waits indefinitely. A positive value throws if initialize() is not
+   *   called within that many milliseconds. Callers that can tolerate the absence of a ready shared
+   *   store should pass a positive timeout and catch/fall back.
+   * @throws If `startTimeoutMs` is positive and initialize() is not called within that window.
+   */
+  export function waitForInitialization(startTimeoutMs?: number): Promise<void>;
+  /**
+   * Reset the shared store service state for testing. This function is only exported for testing
+   * purposes and should not be used in production code.
+   */
+  export function resetForTesting(): void;
+  /**
+   * Get a value from the shared store with proper typing.
+   *
+   * This runs synchronously and does not wait for initialization: it may return `undefined` if the
+   * shared store service has not yet been populated (e.g. during the bootstrap window, before initial
+   * sync completes). Use {@link getAsync} if you need to wait for a populated value. Note that even
+   * after the store is populated, the returned value may not reflect the most up-to-date value, since
+   * changes from other processes arrive asynchronously.
+   *
+   * @param key The key of the value to retrieve
+   * @returns A cloned copy of the value associated with the key, or `undefined` if not found, not yet
+   *   populated, or the value could not be cloned
+   */
+  function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefined;
+  /**
+   * Set a value in the shared store and notify other processes. Note that if a value with the given
+   * key already exists, it can only be set again by the process that created it. This is to prevent
+   * race conditions between processes setting values that don't incorporate each others' updates.
+   *
+   * This runs synchronously and throws if the shared store service has not started initializing (it
+   * must be able to broadcast the change). Use {@link setAsync} if you need to wait for initialization
+   * before setting.
+   *
+   * @param key The key to set
+   * @param value The value to set. Note that the stored value is a cloned copy of the provided value,
+   *   so changes to the original value will not affect the stored value. Also, any non-serializable
+   *   data will removed from the value during the cloning process.
+   */
+  function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void;
+  /**
+   * Remove a value from the shared store and notify other processes of the change.
+   *
+   * After removal the key is treated as absent — reads return no value (a removed key is distinct
+   * from a key whose value is `undefined`). The entry and its Lamport clock are retained internally
+   * for conflict resolution (so the removal can win against concurrent sets and the key can be re-set
+   * quickly), but they are not exposed as a value.
+   *
+   * This runs synchronously and throws if the shared store service has not started initializing. Use
+   * {@link removeAsync} if you need to wait for initialization before removing.
+   *
+   * @param key The key to remove
+   */
+  function remove<K extends SharedStoreKeys>(key: K): void;
+  /**
+   * Get a value from the shared store, waiting for the shared store service to be initialized first.
+   *
+   * Unlike {@link get}, this waits (via {@link waitForInitialization}) until the shared store service
+   * is initialized, then reads synchronously. A key with a live value returns that value — which may
+   * legitimately be `undefined`. A key that is absent or has been removed has no value: with no
+   * `defaultValue` argument this throws; with a `defaultValue` (which may itself be `undefined`) it
+   * returns that default.
+   *
+   * If the shared store service is already initialized, the awaited promise is already settled, so
+   * execution continues here on the next microtask without yielding to timers or other queued
+   * macrotasks — effectively synchronous from the caller's perspective. Note the returned value may
+   * not reflect the most up-to-date value, since changes from other processes arrive asynchronously.
+   *
+   * @param key The key of the value to retrieve
+   * @param defaultValue Returned when the key has no value. Omit to throw instead.
+   * @returns A cloned copy of the stored value, or `defaultValue` if the key has no value
+   * @throws If the key has no value and no `defaultValue` was provided
+   */
+  function getAsync<K extends SharedStoreKeys>(key: K): Promise<SharedStoreValues[K]>;
+  function getAsync<K extends SharedStoreKeys>(
+    key: K,
+    defaultValue: SharedStoreValues[K],
+  ): Promise<SharedStoreValues[K]>;
+  /**
+   * Set a value in the shared store, waiting for the shared store service to be initialized first.
+   *
+   * Unlike {@link set}, this waits (via {@link waitForInitialization}) until the shared store service
+   * has been initialized, then performs the set synchronously. See {@link set} for the per-key
+   * ownership and cloning semantics.
+   *
+   * If the shared store service is already initialized, the awaited promise is already settled, so
+   * execution continues here on the next microtask without yielding to timers or other queued
+   * macrotasks — effectively synchronous from the caller's perspective.
+   *
+   * @param key The key to set
+   * @param value The value to set
+   */
+  function setAsync<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): Promise<void>;
+  /**
+   * Remove a value from the shared store, waiting for the shared store service to be initialized
+   * first.
+   *
+   * Unlike {@link remove}, this waits (via {@link waitForInitialization}) until the shared store
+   * service has been initialized, then performs the removal synchronously.
+   *
+   * If the shared store service is already initialized, the awaited promise is already settled, so
+   * execution continues here on the next microtask without yielding to timers or other queued
+   * macrotasks — effectively synchronous from the caller's perspective.
+   *
+   * @param key The key to remove
+   */
+  function removeAsync<K extends SharedStoreKeys>(key: K): Promise<void>;
+  /**
+   * Returns `true` once {@link initialize} has fully completed (process ID assigned, emitter ready,
+   * and — outside the main process — initial store data synced). Used to distinguish "value genuinely
+   * absent" from "shared store not initialized yet" for optional reads that have a sensible default.
+   */
+  function isInitialized(): boolean;
+  /**
+   * Keys for timeout lengths for network requests. Keys are dynamically constructed by adding this
+   * prefix to the `requestType`.
+   */
+  export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${string}`;
+  /**
+   * Defines the keys and types of values held in key-value pairs within the shared store service.
+   * Since this service is not part of the public API, the keys and types are not included in
+   * `papi-shared-types.ts`. If the platform needs more key-value pairs, they should be added here.
+   */
+  export interface SharedStoreValues {
+    [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
+  }
+  export type SharedStoreKeys = keyof SharedStoreValues;
+  /**
+   * This provides an in-memory, key-value store that can be read without a network call but updates
+   * automatically in the background using network events. This allows synchronous reading of shared,
+   * non-persisted key-value pairs between processes. It can be thought of as a distributed key-value
+   * store. It relies only on the network service, not other services like network objects or
+   * settings.
+   *
+   * This uses {@link https://en.wikipedia.org/wiki/Lamport_timestamp | Lamport logical clocks} for
+   * conflict resolution to ensure consistency across processes.
+   *
+   * This service is not intended to be accessed directly by extensions. It was created as a utility
+   * for the platform and is not part of the public API. Extensions should use settings and other data
+   * providers for sharing data.
+   */
+  export const sharedStoreService: {
+    get: typeof get;
+    set: typeof set;
+    remove: typeof remove;
+    getAsync: typeof getAsync;
+    setAsync: typeof setAsync;
+    removeAsync: typeof removeAsync;
+    isInitialized: typeof isInitialized;
+  };
+}
+declare module 'shared/models/papi-network-event-emitter.model' {
+  import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
+  /**
+   * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
+   * callbacks when the event is emitted. Events on NetworkEventEmitters can be emitted across
+   * processes. They are coordinated between processes by their type. Use eventEmitter.event(callback)
+   * to subscribe to the event. Use eventEmitter.emit(event) to run the subscriptions. Generally, this
+   * EventEmitter should be private, and its event should be public. That way, the emitter is not
+   * publicized, but anyone can subscribe to the event.
+   *
+   * WARNING: Do not use this class directly outside of NetworkService, or it will not do what you
+   * expect. Use NetworkService.createNetworkEventEmitter.
+   *
+   * WARNING: You cannot emit events with complex types on the network.
+   */
+  export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
+    /** Callback that sends the event to other processes on the network when it is emitted */
+    private networkSubscriber;
+    /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
+    private networkDisposer;
+    /**
+     * Creates a NetworkEventEmitter
+     *
+     * @param networkSubscriber Callback that accepts the event and emits it to other processes
+     * @param networkDisposer Callback that unlinks this emitter from the network
+     */
+    constructor(
+      /** Callback that sends the event to other processes on the network when it is emitted */
+      networkSubscriber: PlatformEventHandler<T>,
+      /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
+      networkDisposer: () => void,
+    );
+    emit: (event: T) => void;
+    /**
+     * Sends the event to the other processes and runs this process's subscriptions for it, keeping
+     * each of those subscribers' failures to itself. See {@link PlatformEventEmitter.emitIsolated}.
+     *
+     * @param event Event data to provide to subscribed callbacks
+     * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+     *   position in the subscription order. Must not throw. Only local subscribers are reported here;
+     *   a failure to reach the network is reported where the network callback was supplied.
+     * @experimental
+     */
+    emitIsolated: (
+      event: T,
+      handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+    ) => void;
+    /**
+     * Runs only the subscriptions for the event that are on this process. Does not send over network
+     *
+     * @param event Event data to provide to subscribed callbacks
+     */
+    emitLocal(event: T): void;
+    /**
+     * Runs only the subscriptions for the event that are on this process, keeping each subscriber's
+     * failure to itself. Does not send over network. See {@link PlatformEventEmitter.emitIsolated}.
+     *
+     * @param event Event data to provide to subscribed callbacks
+     * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+     *   position in the subscription order. Must not throw.
+     * @experimental
+     */
+    emitLocalIsolated(
+      event: T,
+      handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+    ): void;
+    dispose: () => Promise<boolean>;
+  }
+  export default PapiNetworkEventEmitter;
 }
 declare module 'shared/models/rpc.interface' {
   import {
@@ -1281,9 +2186,26 @@ declare module 'shared/models/rpc.interface' {
     InternalRequestHandler,
     RequestParams,
   } from 'shared/data/rpc.model';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import {
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
   import { JSONRPCResponse } from 'json-rpc-2.0';
+  import { PlatformEvent } from 'platform-bible-utils';
+  /**
+   * What a process took with it when its connection to the network went away
+   *
+   * @experimental
+   */
+  export type RpcClientDisconnectEvent = {
+    /**
+     * Names of the methods that were registered by the departed process and have now been removed
+     * from the central registry, in registration order. Nothing has interpreted these names; a
+     * subscriber that knows how a given kind of name is formed is the one that can say what died.
+     */
+    removedMethodNames: string[];
+  };
   /**
    * Defines how to support sending requests on the network and emitting events on the network
    *
@@ -1306,9 +2228,21 @@ declare module 'shared/models/rpc.interface' {
      * - On clients: connecting to the server
      * - On servers: opening an endpoint for clients to connect
      *
+     * An implementation that opens an endpoint MUST NOT resolve `true` until that endpoint is
+     * actually accepting connections. Callers treat this resolving as permission to start processes
+     * that immediately connect, and those clients may get a single attempt with no retry — so
+     * reporting ready optimistically surfaces as a client that was refused, whose symptoms appear in
+     * a different process entirely. See `adr-papi-websocket-hostname-bind`.
+     *
      * @param localEventHandler Function that handles events from the server by accepting an eventType
      *   and an event and emitting the event locally. Used when receiving an event over the network.
-     * @returns Promise that resolves when finished connecting
+     * @returns `true` once the connection is established and usable — for a server, once its endpoint
+     *   is accepting connections. `false` if the connection could not be established.
+     *
+     *   TODO(PT-4495): implementations disagree on what they return when this handler was already
+     *   connected or connecting, so a caller can neither rely on that case nor tell a benign
+     *   double-connect from a real failure. PT-4495 replaces the boolean with a result type that
+     *   distinguishes the three outcomes; until then, only the two states above are contractual.
      */
     connect: (localEventHandler: EventHandler) => Promise<boolean>;
     /**
@@ -1359,11 +2293,81 @@ declare module 'shared/models/rpc.interface' {
     ) => Promise<boolean>;
     /** Unregister a method so it is no longer available to RPC requests */
     unregisterMethod: (methodName: string) => Promise<boolean>;
+    /**
+     * Register a centrally-tracked network event with the main process. Multi-source vs single-source
+     * semantics is determined by looking up the event name in `MULTI_SOURCE_EVENT_NAMES`. See
+     * {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
+     *
+     * Returns `true` if the registration was accepted, `false` otherwise. Used by
+     * `createNetworkEventEmitterAsync`; not for direct caller use.
+     */
+    registerEvent: (
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ) => Promise<boolean>;
+    /** Unregister a network event emitter so it is no longer tracked centrally */
+    unregisterEvent: (eventName: string) => Promise<boolean>;
+    /**
+     * Event that fires when a process disconnects from the network, carrying the method names its
+     * departure removed from the central registry.
+     *
+     * This is platform-internal core plumbing between the process that owns the websocket server and
+     * the services that know how their own registered names are formed, not part of the `@papi/*`
+     * surface.
+     *
+     * This is a local, in-process event: only the process that owns the connections can observe one
+     * being lost, so it fires exclusively in the process holding the websocket server. Everywhere
+     * else it is a real event that simply never fires.
+     *
+     * @experimental
+     */
+    onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Event that fires when this process's own connection to the network is lost unexpectedly — the
+     * websocket closed without the app having asked it to.
+     *
+     * This is platform-internal core plumbing between the process that holds a client connection and
+     * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+     * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+     *
+     * This is a local, in-process event. Only a process that holds a client connection can lose one,
+     * so it fires exclusively on clients; in the process that owns the websocket server it is a real
+     * event that simply never fires. A deliberate disconnect does not fire it: intent travels in the
+     * close code, and a close the app asked for is not a loss.
+     *
+     * Nor does a connection that was never established. A socket that dies during the opening
+     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
+     * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
+     * event is only for losing a connection that was up.
+     *
+     * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
+     * to react to the loss rather than to classify it.
+     *
+     * @experimental
+     */
+    onDidLoseConnection: PlatformEvent<void>;
   }
   export type RegisteredRpcMethodDetails = {
     handler: IRpcHandler;
     methodDocs?: SingleMethodDocumentation;
   };
+  /**
+   * Minimal interface for event registries so that {@link RpcServer} can participate in event
+   * registration without importing from `rpc-websocket-listener.ts` (which would create a circular
+   * dependency).
+   *
+   * @internal
+   */
+  export interface IRpcEventRegistry {
+    tryRegister(
+      handler: unknown,
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): boolean;
+    tryUnregister(handler: unknown, eventName: string): boolean;
+    /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
+    unregisterAll(handler: unknown): void;
+  }
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -1435,15 +2439,19 @@ declare module 'client/services/web-socket.factory' {
 }
 declare module 'client/services/rpc-client' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+  import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
   import {
     ConnectionStatus,
     EventHandler,
     InternalRequestHandler,
     RequestParams,
   } from 'shared/data/rpc.model';
+  import { PlatformEvent } from 'platform-bible-utils';
   import { SerializedRequestType } from 'shared/utils/util';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import {
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
   /**
    * Manages the JSON-RPC protocol on the client end of a websocket that connects to main
    *
@@ -1451,6 +2459,33 @@ declare module 'client/services/rpc-client' {
    */
   export class RpcClient implements IRpcMethodRegistrar {
     connectionStatus: ConnectionStatus;
+    /**
+     * Never fires here. Only the process that owns the websocket server sees a connection being lost;
+     * this end of the seam exists so shared code can subscribe in any process without asking which
+     * one it is running in.
+     *
+     * @experimental
+     */
+    readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Fires when this client's established websocket closes without the app having asked it to. A
+     * socket that dies before it ever opened is a failed connection attempt rather than a loss, and
+     * is silent here. See {@link IRpcMethodRegistrar.onDidLoseConnection}.
+     *
+     * @experimental
+     */
+    readonly onDidLoseConnection: PlatformEvent<void>;
+    /**
+     * Whether {@link onWebSocketClose} has already run for the current socket.
+     *
+     * A closed socket's listener is already removed, but a caller holding a stale reference to the
+     * bound handler could still invoke it directly; this makes a second call a no-op rather than
+     * double-logging and re-running teardown. Deliberately its own field rather than a read of
+     * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+     * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+     * permanently leak everything the socket had registered.
+     */
+    private hasCompletedTeardown;
     private ws;
     private requestId;
     /** Refers to the current process that created this object (i.e., not main) */
@@ -1461,9 +2496,32 @@ declare module 'client/services/rpc-client' {
     private readonly connectionMutex;
     private readonly registrationMutexMap;
     private readonly connectionComplete;
-    constructor();
+    private readonly clientDisconnectEmitter;
+    private readonly connectionLostEmitter;
+    /**
+     * Label identifying this process in connection log lines, so multi-window logs stay readable.
+     *
+     * The logger already prefixes every line with a per-process-type tag (`[rend]`/`[exth]`), so
+     * `peerName` alone (e.g. plain `'renderer'`) would add nothing. Each `BrowserWindow` is its own
+     * renderer process, so two windows would otherwise emit identical lines; a per-instance
+     * discriminator is appended so they can be told apart.
+     */
+    private readonly peerName;
+    constructor(peerName?: string);
     private static handleError;
-    private static onError;
+    /**
+     * A discriminator distinguishing this client from another of the same type, for the `peerName`
+     * label.
+     *
+     * Prefers `globalThis.windowId`, the id main assigns each `BrowserWindow` and passes in by query
+     * parameter, because it is the only one of the three that is STABLE: it survives a reload, so
+     * "the same window reconnected" reads differently from "a second window appeared". The renderer
+     * has no access to `process` (see `identifyCaller` in `logger.utils.ts`), so a pid would never be
+     * reached there anyway; it is kept for the extension host, which has a pid and no window. The
+     * random id is a last resort so the label never reads `undefined`; being per-instance, it cannot
+     * be correlated across a reload.
+     */
+    private static getPeerDiscriminator;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;
     request(
@@ -1477,9 +2535,38 @@ declare module 'client/services/rpc-client' {
       methodDocs?: SingleMethodDocumentation,
     ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
+    registerEvent(
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): Promise<boolean>;
+    unregisterEvent(eventName: string): Promise<boolean>;
     private createNextRequestId;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
+    /**
+     * Tell main which peer owns this socket. Main labels sockets with an incrementing id that appears
+     * nowhere in this process's logs, so without this a close line on each end cannot be joined to
+     * the other.
+     *
+     * Deliberately not awaited: this is diagnostic metadata, so neither a slow response nor a peer
+     * that does not implement the method may delay or fail a connection that is already up.
+     */
+    private announcePeerToServer;
+    /**
+     * An error event is usually the FIRST symptom of a socket going bad, so it needs the peer label
+     * as much as the close line does — in the renderer the event carries no detail at all by
+     * specification, leaving the peer as the only thing separating one window's error from another's.
+     * An instance method (bound by `bindClassMethods`) rather than a static one for that reason.
+     */
+    private onError;
+    /**
+     * Reports a failure to whichever connection attempt is still waiting, if any.
+     *
+     * An `AsyncVariable` is single-use and freezes once settled, so this is a no-op after the attempt
+     * has already succeeded or failed. That is what makes it safe to call from both the `error` and
+     * the `close` handler, since a refused socket fires both.
+     */
+    private failConnectionAttempt;
     private onWebSocketOpen;
     private onWebSocketClose;
     private onMessageReceivedByWebSocket;
@@ -1488,11 +2575,29 @@ declare module 'client/services/rpc-client' {
 }
 declare module 'main/services/rpc-server' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcHandler, RegisteredRpcMethodDetails } from 'shared/models/rpc.interface';
+  import {
+    IRpcEventRegistry,
+    IRpcHandler,
+    RegisteredRpcMethodDetails,
+  } from 'shared/models/rpc.interface';
   import { ConnectionStatus, RequestParams } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import {
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
+  /**
+   * Tell socket-close severity how to ask whether the app is shutting down.
+   *
+   * Called once by the process that owns the answer, before the network starts. See
+   * {@link isAppShuttingDown} for why this is wired in rather than imported.
+   *
+   * @param signal Returns whether the app is currently coming down
+   */
+  export function setAppShutdownSignal(signal: () => boolean): void;
   type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
+  /** Called by an RpcServer with the method names its client's departure removed from the registry */
+  type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
   /**
    * Manages the JSON-RPC protocol on the server end of a websocket owned by main. This class is not
    * intended to be instantiated by anything other than RpcWebSocketListener.
@@ -1502,22 +2607,44 @@ declare module 'main/services/rpc-server' {
    */
   export class RpcServer implements IRpcHandler {
     connectionStatus: ConnectionStatus;
+    /**
+     * Whether {@link onWebSocketClose} has already run for the current socket.
+     *
+     * A closed socket's listener is already removed, but a caller holding a stale reference to the
+     * bound handler could still invoke it directly; this makes a second call a no-op rather than
+     * double-logging and re-running teardown. Deliberately its own field rather than a read of
+     * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+     * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+     * permanently leak everything the socket had registered.
+     */
+    private hasCompletedTeardown;
     private ws;
     private requestId;
     /** Only used for logging to differentiate from other RpcServer objects */
     private readonly name;
+    /**
+     * How the peer on the other end of this socket labels itself in its own logs, once it has said so
+     * (see {@link ANNOUNCE_PEER}). Undefined until then, and for a peer that never announces — the
+     * .NET data provider does not.
+     */
+    private peerName;
     /** Refers to the main process */
     private readonly jsonRpcServer;
     /** Refers to any process that connected to main over the websocket */
     private readonly jsonRpcClient;
     private readonly rpcMethodDetailsByMethodName;
+    private readonly rpcEventDetailsByEventName;
     /** Called by an RpcServer when all other RpcServers should emit an event over the network */
     private readonly propagateEventMethod;
+    /** Called by an RpcServer once its client's methods have been removed from the registry */
+    private readonly announceClientDisconnectMethod;
     constructor(
       name: string,
       webSocket: WebSocket,
       propagateEventMethod: PropagateEventMethod,
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
+      rpcEventDetailsByEventName: IRpcEventRegistry,
+      announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -1529,9 +2656,33 @@ declare module 'main/services/rpc-server' {
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean;
     unregisterRemoteMethod(methodName: string): boolean;
+    registerRemoteEvent(
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): boolean;
+    unregisterRemoteEvent(eventName: string): boolean;
+    /**
+     * Record how the peer on the other end labels itself, so this socket's log lines can be joined to
+     * that process's own. Called remotely by a connecting client; see {@link ANNOUNCE_PEER}.
+     *
+     * A socket gets to say this once. Accepting later announcements would let a peer relabel itself
+     * mid-session — so log lines already attributed to one name could be continued under another —
+     * and would let it re-log this line as often as it liked.
+     *
+     * @param peerName The peer's label for itself
+     * @returns Whether a usable label was recorded
+     */
+    setPeerName(peerName: string): boolean;
     private createNextRequestId;
     private addMethodToRpcServer;
     private handleError;
+    /**
+     * How to name this socket in a log line: main's own incrementing id, plus the peer's self-applied
+     * label once it has announced one. Both halves are needed — the id is what main's other lines
+     * use, and the label is the only thing that ties a line here to the same disconnect as reported
+     * by the process that owns the other end.
+     */
+    private describePeer;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
     private onWebSocketClose;
@@ -1541,6 +2692,70 @@ declare module 'main/services/rpc-server' {
   }
   export default RpcServer;
 }
+declare module 'shared/data/network-event-names' {
+  /**
+   * Source of truth for which event names use multi-source semantics at the central registry. Must
+   * stay in sync with `MultiSourceNetworkEvents` (the public events) plus the platform-internal
+   * multi-source events — the test `network.service.shared-events.test.ts` checks the contents.
+   *
+   * Add entries to {@link PUBLIC_MULTI_SOURCE_EVENT_NAMES} when adding a new public multi-source event
+   * to `MultiSourceNetworkEvents`, or to {@link INTERNAL_MULTI_SOURCE_EVENT_NAMES} for a new internal
+   * one.
+   */
+  export const MULTI_SOURCE_EVENT_NAMES: ReadonlySet<string>;
+}
+declare module 'main/services/rpc-event-registry' {
+  import { SingleNotificationDocumentation } from 'shared/models/openrpc.model';
+  interface EventRegistrant {
+    handler: unknown;
+    documentation?: SingleNotificationDocumentation;
+  }
+  /**
+   * Tracks registered network event emitters, enforcing shared vs. exclusive ownership policy.
+   *
+   * @internal Exported for unit-testing only; not part of the public API.
+   */
+  export class RpcEventRegistry {
+    private byName;
+    /**
+     * Try to register an event. Returns `true` if accepted, `false` if rejected.
+     *
+     * - Name in `MULTI_SOURCE_EVENT_NAMES` (multi-source): multiple handlers may register; same handler
+     *   twice rejected.
+     * - Name not in `MULTI_SOURCE_EVENT_NAMES` (single-source): first registrant wins; any subsequent
+     *   registration from any handler is rejected.
+     */
+    tryRegister(
+      handler: unknown,
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): boolean;
+    /**
+     * Classify an attempt to announce (emit) an event on the network against the registry. Used to
+     * warn about misuse without blocking the announcement.
+     *
+     * - `'ok'` — the announcement is valid: the event is multi-source (any process may announce it,
+     *   whether or not it registered), or it is single-source and announced by its registrant.
+     * - `'unregistered'` — the event is single-source and no process has registered this name
+     *   centrally. Emitting a single-source event that was never registered is deprecated (it does
+     *   not appear in the OpenRPC document).
+     * - `'foreign-single-source'` — the event is single-source but is being announced by a handler that
+     *   did not register it; only the registering process should emit a single-source event.
+     */
+    checkAnnouncement(
+      handler: unknown,
+      eventName: string,
+    ): 'ok' | 'unregistered' | 'foreign-single-source';
+    /** Whether any handler has centrally registered this event name. */
+    has(eventName: string): boolean;
+    /** Remove a registrant. Returns `true` if the handler had registered this event. */
+    tryUnregister(handler: unknown, eventName: string): boolean;
+    /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
+    unregisterAll(handler: unknown): void;
+    entries(): IterableIterator<[string, EventRegistrant[]]>;
+  }
+  export default RpcEventRegistry;
+}
 declare module 'main/services/rpc-websocket-listener' {
   import {
     ConnectionStatus,
@@ -1548,10 +2763,17 @@ declare module 'main/services/rpc-websocket-listener' {
     InternalRequestHandler,
     RequestParams,
   } from 'shared/data/rpc.model';
-  import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+  import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
+  import {
+    OpenRpc,
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
+  import { PlatformEvent } from 'platform-bible-utils';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   import { SerializedRequestType } from 'shared/utils/util';
-  import { OpenRpc, SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { RpcEventRegistry } from 'main/services/rpc-event-registry';
+  export { RpcEventRegistry };
   /**
    * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
    * connects, an RpcServer is created in this same process to service that connection.
@@ -1564,7 +2786,24 @@ declare module 'main/services/rpc-websocket-listener' {
    * Created by the main process on start up when the network service initializes
    */
   export class RpcWebSocketListener implements IRpcMethodRegistrar {
+    private readonly port;
     connectionStatus: ConnectionStatus;
+    /**
+     * Event that fires when a connected process goes away, carrying the method names its departure
+     * removed from the registry. Local to this process: it is announced as part of tearing the
+     * connection down, so it cannot outrun the teardown the way anything the departing process sent
+     * can.
+     *
+     * @experimental
+     */
+    readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Never fires here. Only a process holding a client connection can lose one; this end of the seam
+     * exists so shared code can subscribe in any process without asking which one it is running in.
+     *
+     * @experimental
+     */
+    readonly onDidLoseConnection: PlatformEvent<void>;
     private localEventHandler;
     private webSocketServer;
     private nextSocketNumber;
@@ -1572,7 +2811,26 @@ declare module 'main/services/rpc-websocket-listener' {
     private readonly rpcServerBySocket;
     private readonly rpcMethodDetailsByMethodName;
     private readonly localMethodsByMethodName;
-    constructor();
+    private readonly rpcEventDetailsByEventName;
+    /**
+     * Event names we've already warned about being announced while unregistered. Deduped so a
+     * high-frequency unregistered event does not flood the log — the deprecation notice only needs to
+     * be surfaced once per event name.
+     */
+    private readonly warnedUnregisteredAnnouncements;
+    /**
+     * Event names we've already warned about being announced from a process that did not register the
+     * single-source event. Deduped for the same reason as {@link warnedUnregisteredAnnouncements}.
+     */
+    private readonly warnedForeignAnnouncements;
+    private readonly clientDisconnectEmitter;
+    private readonly connectionLostEmitter;
+    /**
+     * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
+     *   overridden only by tests that need to bind a real socket without colliding with a running
+     *   app.
+     */
+    constructor(port?: number);
     get nextSocketId(): string;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -1587,10 +2845,33 @@ declare module 'main/services/rpc-websocket-listener' {
       methodDocs?: SingleMethodDocumentation,
     ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
+    registerEvent(
+      eventName: string,
+      documentation?: SingleNotificationDocumentation,
+    ): Promise<boolean>;
+    unregisterEvent(eventName: string): Promise<boolean>;
     generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
+    /**
+     * Warn (once per event name) when an event is announced (emitted) on the network that the central
+     * registry would flag as misuse:
+     *
+     * - The event is single-source and was never registered centrally — emitting an unregistered event
+     *   is deprecated and the ability to do so will be removed in a future release.
+     * - The event is single-source but is being announced from a process that did not register it,
+     *   which is also deprecated.
+     *
+     * Announcements are never blocked; this only surfaces a warning to help authors migrate to
+     * `createNetworkEventEmitterAsync` or `createCoreMultiSourceEventEmitter` for core code.
+     *
+     * @param handler The handler announcing the event (an {@link RpcServer} for a client, or `this`
+     *   for main's own emissions).
+     * @param eventType The event name being announced.
+     */
+    private warnIfInvalidEventAnnouncement;
     private onClientConnect;
+    private announceClientDisconnect;
     private onClientDisconnect;
   }
   export default RpcWebSocketListener;
@@ -1618,9 +2899,59 @@ declare module 'shared/services/network.service' {
    */
   import { InternalRequestHandler } from 'shared/data/rpc.model';
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
+  import { StoreChangeEvent } from 'shared/services/shared-store.service';
   import { SerializedRequestType } from 'shared/utils/util';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
+  import {
+    SingleMethodDocumentation,
+    SingleNotificationDocumentation,
+  } from 'shared/models/openrpc.model';
   import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
+  import type {
+    MultiSourceNetworkEvents,
+    NetworkEvents,
+    NetworkEventTypes,
+  } from 'papi-shared-types';
+  import { MULTI_SOURCE_EVENT_NAMES } from 'shared/data/network-event-names';
+  export { MULTI_SOURCE_EVENT_NAMES };
+  /**
+   * Event that fires when a process disconnects from the network, carrying the names of the methods
+   * its departure removed from the central registry.
+   *
+   * This is platform-internal core plumbing between the process that owns the websocket server and
+   * the services that know how their own registered names are formed, not part of the `@papi/*`
+   * surface.
+   *
+   * A process that goes away abruptly — most commonly a window the user closed — announces nothing on
+   * its way out, so this is derived from the connection teardown itself: it is emitted only once the
+   * departed process's methods are out of the registry, and therefore cannot report a death that has
+   * not finished happening. Only the process holding the websocket server can observe a connection
+   * being lost, so this only ever fires there; elsewhere it is a real event that never fires, which
+   * lets shared code subscribe without knowing which process it is running in.
+   *
+   * @experimental
+   */
+  export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Fires when this process's own connection to the network is lost unexpectedly — the websocket
+   * closed without the app having asked it to.
+   *
+   * This is platform-internal core plumbing between the process that holds a client connection and
+   * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+   * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+   *
+   * This is a local, in-process event. Only a process that holds a client connection can lose one, so
+   * it fires exclusively on clients; in the process that owns the websocket server it is a real event
+   * that simply never fires. A deliberate disconnect does not fire it: intent travels in the close
+   * code, and a close the app asked for is not a loss. Neither does a connection that never opened —
+   * only an established connection can be lost, so a failed startup attempt is silent here.
+   *
+   * Relayed through this service's own emitter so subscribers can subscribe before there is an RPC
+   * handler to subscribe to. Carries no payload; the close detail is logged where it is observed.
+   *
+   * @experimental
+   */
+  export const onDidLoseConnection: PlatformEvent<void>;
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -1641,6 +2972,14 @@ declare module 'shared/services/network.service' {
    * Send a request on the network without retrying if the handler is not yet registered. Use for
    * requests where immediate failure is preferable to waiting, such as commands sent during app
    * shutdown.
+   *
+   * WARNING: the no-retry flag only holds in the main process (whose `RpcServer` /
+   * `RpcWebSocketListener` honor it). From any other process the flag does not cross the wire:
+   * `RpcClient.request` drops it, and main re-dispatches the incoming request through its
+   * registration-race retry loop (`requestWithRetry` in `shared/data/rpc.model.ts` —
+   * `MAX_REQUEST_ATTEMPTS` attempts, `REQUEST_ATTEMPT_WAIT_TIME_MS` apart) before failing. So a
+   * renderer-side `requestNoRetry` to an unregistered handler still costs ~9 s and one `debug` log
+   * per attempt in main before it rejects.
    *
    * @param requestType The type of request
    * @param args Arguments to send in the request (put in request.contents)
@@ -1678,25 +3017,179 @@ declare module 'shared/services/network.service' {
     requestType: SerializedRequestType,
   ) => (...args: TParam) => Promise<TReturn>;
   /**
-   * Creates an event emitter that works properly over the network. Other connections receive this
-   * event when it is emitted.
+   * Creates an event emitter that works properly over the network.
    *
-   * WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
-   * emitters.
+   * @deprecated 8 June 2026. Use `createNetworkEventEmitterAsync`. Events created via the sync API
+   *   are not centrally registered and do not appear in the OpenRPC document. The async version
+   *   restricts central _registration_ of an event name to a single source (unless the event is
+   *   declared in {@link MultiSourceNetworkEvents}, in which case it accepts multiple registrants by
+   *   design). Note this restricts central _registration_, not emission: the registry does not block
+   *   emits today, but it warns when an event is announced without a matching registration or from a
+   *   process that did not register it. That tolerance is transitional — announcing an unregistered
+   *   or cross-process single-source event is deprecated and is expected to become an error (with the
+   *   registry gating emission) in a future release, so treat the warning as something to fix, not as
+   *   the permanent behavior.
    *
+   *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
+   *   emitters.
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event emitter whose event works between connections
    */
   export const createNetworkEventEmitter: <T>(eventType: string) => PlatformEventEmitter<T>;
   /**
-   * Gets the network event with the specified type. Creates the emitter if it does not exist
+   * Create a network event emitter that participates in central registration. Every centrally
+   * registered event appears in the OpenRPC document; providing `documentation` fills in its summary,
+   * params, and `x-experimental` flag, otherwise it is surfaced with placeholder docs.
    *
+   * If the event name is in {@link MultiSourceNetworkEvents}, the central registry uses multi-source
+   * semantics: multiple processes may register the same name (each process registers once); all
+   * corresponding emitters are valid sources.
+   *
+   * Otherwise the registry uses single-source semantics: only one process may register a given name;
+   * subsequent registrations from any process are rejected.
+   *
+   * Intra-process duplicate registration is always rejected regardless of the event's domain.
+   *
+   * See {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
+   *
+   * @param eventType The name of the event to register. Must be a key of {@link NetworkEvents}.
+   * @param documentation Optional notification documentation. Carries
+   *   `notification['x-experimental']: true` to mark the event as experimental.
+   */
+  export const createNetworkEventEmitterAsync: <EventType extends NetworkEventTypes>(
+    eventType: EventType,
+    documentation?: SingleNotificationDocumentation,
+  ) => Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
+  /**
+   * How to buffer emits made before a buffered network event finishes registering.
+   *
+   * - `'queue'` — keep every buffered event and flush them in emit order.
+   * - `{ latestByKey }` — keep only the most recent buffered event per key, flushed in first-seen key
+   *   order. Use for "only the latest matters" events (e.g. a scroll reference per scroll group, or a
+   *   web view update per web view id).
+   *
+   * @experimental
+   */
+  export type NetworkEventBufferStrategy<T> =
+    | 'queue'
+    | {
+        latestByKey: (event: T) => string;
+      };
+  /**
+   * Buffers network events emitted before their emitter is ready, per a
+   * {@link NetworkEventBufferStrategy}. Exported only for unit testing.
+   *
+   * @experimental
+   * @internal
+   */
+  export class NetworkEventBuffer<T> {
+    private readonly strategy;
+    private readonly queued;
+    private readonly latest;
+    constructor(strategy: NetworkEventBufferStrategy<T>);
+    add(event: T): void;
+    /** Returns the buffered events in flush order and empties the buffer. */
+    drain(): T[];
+    clear(): void;
+  }
+  /**
+   * Synchronously create a buffered emitter for a single-source network event. Use this for events
+   * that may be emitted before the network emitter finishes registering — e.g. from a UI handler or a
+   * command that can fire during extension activation, where the eager
+   * {@link createNetworkEventEmitterAsync} would leave a module-level emitter `undefined`.
+   *
+   * The returned `emit` is usable immediately. Emits made before central registration completes are
+   * buffered per `options.bufferStrategy` and flushed once registration succeeds; after that `emit`
+   * passes straight through. If registration fails, buffered events are dropped (with a warning) and
+   * `registeredEmitter` rejects so the caller can respond.
+   *
+   * @param eventType A key of {@link NetworkEvents}.
+   * @param documentation Optional notification documentation. Carries
+   *   `notification['x-experimental']: true` to mark the event as experimental.
+   * @param options.bufferStrategy How to buffer pre-registration emits. Defaults to `'queue'`.
+   * @returns `emit` (usable immediately), `registeredEmitter` (resolves to the underlying emitter, or
+   *   rejects if registration failed), and `dispose`.
+   * @experimental
+   */
+  export const createBufferedNetworkEventEmitter: <EventType extends NetworkEventTypes>(
+    eventType: EventType,
+    documentation?: SingleNotificationDocumentation,
+    options?: {
+      bufferStrategy?: NetworkEventBufferStrategy<NetworkEvents[EventType]>;
+    },
+  ) => {
+    emit: (event: NetworkEvents[EventType]) => void;
+    registeredEmitter: Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
+    dispose: () => void;
+  };
+  /**
+   * Core-internal map of multi-source network events. Extends the public
+   * {@link MultiSourceNetworkEvents} with platform-internal multi-source events that are intentionally
+   * NOT advertised on the PAPI — the shared store change event, for example, because the shared store
+   * service is not part of the public API. Used to type {@link createCoreMultiSourceEventEmitter}.
+   */
+  export type InternalMultiSourceNetworkEvents = MultiSourceNetworkEvents & {
+    'shared-store:change': StoreChangeEvent;
+  };
+  /**
+   * Synchronously create a network event emitter for one of the pre-approved multi-source events —
+   * those listed in {@link MULTI_SOURCE_EVENT_NAMES}. Throws synchronously if `eventType` is not such
+   * an event.
+   *
+   * This is core-internal (not exposed on `papiNetworkService`, hence the `Core` in the name):
+   * multi-source events are platform events, not for extensions to create.
+   *
+   * Unlike {@link createNetworkEventEmitterAsync}, the emitter is returned immediately so callers can
+   * use it without awaiting. Central registration with the RPC handler is performed in the
+   * background; the returned `registeredEmitterPromise` resolves to the same emitter once
+   * registration completes. If registration fails, the promise logs a warning and rejects with the
+   * underlying error.
+   *
+   * Multi-source emitters are NOT unregistered on dispose (multiple emitters for the same name can
+   * coexist); the central registry cleans them up when the process disconnects. See
+   * {@link disposeNetworkEventEmitter}.
+   *
+   * @param eventType The name of the multi-source event to create. Must be a key of
+   *   {@link InternalMultiSourceNetworkEvents}.
+   * @param documentation Optional notification documentation. Carries
+   *   `notification['x-experimental']: true` to mark the event as experimental.
+   * @returns An object with the synchronously-created `emitter` and a `registeredEmitterPromise` that
+   *   resolves to that same emitter when central registration completes.
+   */
+  export const createCoreMultiSourceEventEmitter: <
+    EventType extends keyof InternalMultiSourceNetworkEvents,
+  >(
+    eventType: EventType,
+    documentation?: SingleNotificationDocumentation,
+  ) => {
+    emitter: PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>;
+    registeredEmitterPromise: Promise<
+      PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>
+    >;
+  };
+  /**
+   * Subscribe to a typed network event. The payload type is inferred from the event's declaration in
+   * {@link NetworkEvents}.
+   *
+   * @param eventType The name of the event to subscribe to. Must be a key of {@link NetworkEvents}.
+   * @returns Event for the event type that runs the callback provided when the event is emitted
+   */
+  export function getNetworkEvent<EventType extends NetworkEventTypes>(
+    eventType: EventType,
+  ): PlatformEvent<NetworkEvents[EventType]>;
+  /**
+   * Subscribe to a network event with an explicit payload type.
+   *
+   * @deprecated 8 June 2026. Use the typed signature: declare the event in {@link NetworkEvents} and
+   *   call `getNetworkEvent('your.event.name')` without an explicit type parameter.
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event for the event type that runs the callback provided when the event is emitted
    */
-  export const getNetworkEvent: <T>(eventType: string) => PlatformEvent<T>;
+  export function getNetworkEvent<T>(eventType: string): PlatformEvent<T>;
   export interface PapiNetworkService {
     createNetworkEventEmitter: typeof createNetworkEventEmitter;
+    createNetworkEventEmitterAsync: typeof createNetworkEventEmitterAsync;
+    createBufferedNetworkEventEmitter: typeof createBufferedNetworkEventEmitter;
     getNetworkEvent: typeof getNetworkEvent;
   }
   /**
@@ -1717,6 +3210,22 @@ declare module 'shared/services/network-object.service' {
   import { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
+  /**
+   * The request type one method of a network object is served under.
+   *
+   * This module decides that format, so anything that has to name a single method of a network object
+   * from the outside — attaching a custom request timeout to it, for instance — derives the name here
+   * rather than spelling it a second time somewhere a change to the format would never reach.
+   *
+   * @param networkObjectId ID the network object was registered under
+   * @param methodName Method on that object to name
+   * @returns The request type that method's calls travel on
+   * @experimental This export is unstable and may change shape or disappear without notice
+   */
+  export const getNetworkObjectMethodRequestType: (
+    networkObjectId: string,
+    methodName: string,
+  ) => `${string}:${string}`;
   /**
    * Search locally known network objects for the given ID. Don't look on the network for more
    * objects.
@@ -1768,6 +3277,12 @@ declare module 'shared/services/network-object.service' {
    *   object did not already define a `dispose` function, one will be added.
    *
    *   WARNING: setting a network object mutates the provided object.
+   * @param objectType String identifier for the network object type (e.g. `'object'`,
+   *   `'dataProvider'`)
+   * @param objectAttributes Optional key-value metadata attached to the network object registration.
+   * @param objectDocumentation Optional {@link NetworkObjectDocumentation} for this network object.
+   *   Set `objectDocumentation['x-experimental']: true` to mark all methods on this network object as
+   *   experimental.
    * @returns `objectToShare` modified to be a network object
    */
   const set: <T extends NetworkableObject>(
@@ -1897,6 +3412,12 @@ declare module 'shared/models/network-object.model' {
    * If an object of type T had `dispose` on it, `networkObjectService.get` will remove the ability to
    * call that method. This is because we don't want users of network objects to dispose of them. Only
    * the caller of `networkObjectService.set` should be able to dispose of the network object.
+   *
+   * WARNING: this object's proxy is revoked as soon as the `onDidDispose` handlers return — the
+   * handlers are not awaited. An `async` handler may therefore read and call the object freely before
+   * its first `await`, but everything it touches afterward throws `TypeError: Cannot perform 'get' on
+   * a proxy that has been revoked`. Capture whatever you need (property values, results of calls you
+   * start immediately) before awaiting anything.
    *
    * @see {@link networkObjectService}
    */
@@ -2576,128 +4097,6 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
             : never;
   export default ExtractDataProviderDataTypes;
 }
-declare module 'shared/models/web-view-provider.model' {
-  import {
-    WebViewDefinition,
-    SavedWebViewDefinition,
-    OpenWebViewOptions,
-  } from 'shared/models/web-view.model';
-  import {
-    DisposableNetworkObject,
-    NetworkObject,
-    NetworkableObject,
-  } from 'shared/models/network-object.model';
-  /**
-   * An object associated with a specific `webViewType` that provides a {@link WebViewDefinition} when
-   * the PAPI wants to open a web view with that `webViewType`. An extension registers a web view
-   * provider with `papi.webViewProviders.register`.
-   *
-   * Web View Providers provide the contents of all web views in Platform.Bible.
-   *
-   * If you want to provide {@link WebViewControllers} to facilitate interaction between your web views
-   * and extensions, you can extend the abstract class {@link WebViewFactory} to make the process
-   * easier. Alternatively, if you want to manage web view controllers manually, you can register them
-   * in {@link IWebViewProvider.getWebView}.
-   */
-  export interface IWebViewProvider extends NetworkableObject {
-    /**
-     * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
-     * providing the contents of the web view and other properties that are important for displaying
-     * the web view.
-     *
-     * The PAPI calls this method as part of opening a new web view or (re)loading an existing web
-     * view. If you want to create {@link WebViewControllers} for the web views the PAPI creates from
-     * this method, you should register it using `papi.webViewProviders.registerWebViewController`
-     * before returning from this method (resolving the returned promise). The {@link WebViewFactory}
-     * abstract class handles this for you, so please consider extending it.
-     *
-     * @param savedWebViewDefinition The saved web view information from which to build a complete web
-     *   view definition. Filled out with all {@link SavedWebViewDefinition} properties of the existing
-     *   web view if an existing webview is being called for (matched by ID). Just provides the
-     *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
-     *   the web view with the existing ID was not found.
-     * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
-     *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
-     *   on the options, then those options are passed directly through to this method. That way, if
-     *   you want to adjust what this method does based on the contents of the options passed to
-     *   `papi.WebViews.openWebView`, you can. You can even read other properties on these options if
-     *   someone passes options with other properties to `papi.webViews.openWebView`.
-     * @param webViewNonce Nonce used to perform privileged interactions with the web view created
-     *   from this method's returned {@link WebViewDefinition} such as
-     *   `papi.webViewProviders.postMessageToWebView`. The web view service generates this nonce and
-     *   sends it _only here_ to this web view provider that creates the web view with this id. It is
-     *   generally recommended that this web view provider not share this nonce with anyone else but
-     *   only use it within itself and in the web view controller created for this web view if
-     *   applicable (See `papi.webViewProviders.registerWebViewController`).
-     * @returns Full {@link WebViewDefinition} including the content and other important display
-     *   properties based on the {@link SavedWebViewDefinition} provided
-     */
-    getWebView(
-      savedWebViewDefinition: SavedWebViewDefinition,
-      openWebViewOptions: OpenWebViewOptions,
-      webViewNonce: string,
-    ): Promise<WebViewDefinition | undefined>;
-  }
-  /**
-   * A web view provider that has been registered with the PAPI.
-   *
-   * This is what the papi gives on `webViewProviderService.get` (not exposed on the PAPI). Basically
-   * a layer over NetworkObject
-   *
-   * This type is internal to core and is not used by extensions
-   */
-  export interface IRegisteredWebViewProvider extends NetworkObject<IWebViewProvider> {}
-  /**
-   * A web view provider that has been registered with the PAPI and returned to the extension that
-   * registered it. It is able to be disposed with `dispose`.
-   *
-   * The PAPI returns this type from `papi.webViewProviders.register`.
-   */
-  export interface IDisposableWebViewProvider extends DisposableNetworkObject<IWebViewProvider> {}
-}
-declare module 'shared/models/network-object-status.service-model' {
-  import { NetworkObjectDetails } from 'shared/models/network-object.model';
-  export interface NetworkObjectStatusRemoteServiceType {
-    /**
-     * Get details about all available network objects
-     *
-     * @returns Object whose keys are the names of the network objects and whose values are the
-     *   {@link NetworkObjectDetails} for each network object
-     */
-    getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
-  }
-  /**
-   *
-   * Provides functions related to the set of available network objects
-   */
-  export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
-    /**
-     * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
-     *
-     * @param objectDetailsToMatch Subset of object details on the network object to wait for.
-     *   Compared to object details using {@link isSubset}
-     * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
-     *   indefinitely
-     * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
-     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-     *   reached before the network object is registered
-     */
-    waitForNetworkObject: (
-      objectDetailsToMatch: Partial<NetworkObjectDetails>,
-      timeoutInMS?: number,
-    ) => Promise<NetworkObjectDetails>;
-  }
-  export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
-}
-declare module 'shared/services/network-object-status.service' {
-  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
-  /**
-   *
-   * Provides functions related to the set of available network objects
-   */
-  export const networkObjectStatusService: NetworkObjectStatusServiceType;
-  export default networkObjectStatusService;
-}
 declare module 'shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
   import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
@@ -2745,6 +4144,8 @@ declare module 'shared/models/docking-framework.model' {
     /** Data needed to load the tab */
     data?: unknown;
   };
+  /** {@link SavedTabInfo.tabType} for web view tabs. A web view tab's id matches its `WebViewId` */
+  export const TAB_TYPE_WEBVIEW = 'webView';
   /**
    * Information that Platform.Bible uses to create a tab in the dock layout.
    *
@@ -2775,6 +4176,17 @@ declare module 'shared/models/docking-framework.model' {
     minHeight?: number;
     /** Last known focused element. Used for restoring focus in the tab */
     lastFocusedElement?: HTMLElement;
+    /**
+     * Whether this tab can be closed by the user (shows the tab's close button and allows closing it
+     * with a middle click anywhere on its header). Set to `false` for tabs that must always remain
+     * open, such as views that are part of the default layout.
+     *
+     * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
+     * true`), not enforced by the type.
+     *
+     * @default true
+     */
+    isClosable?: boolean;
   };
   /**
    * Function that takes a {@link SavedTabInfo} and creates a Platform.Bible tab out of it. Each type
@@ -2951,8 +4363,27 @@ declare module 'shared/models/docking-framework.model' {
     /** The ID of the tab to replace */
     targetTabId: string;
   }
+  /**
+   * Information about opening a tab in its own application window.
+   *
+   * In Simple mode — which is single-window by design — this degrades to `'tab'`: the web view opens
+   * as a normal tab in the window the user is working in. An interface mode that cannot be read takes
+   * the same degraded path rather than failing the open, so a caller in Power mode can get a tab
+   * instead of a window when the mode read fails.
+   *
+   * It degrades the same way for an open that also passed `existingId: '?'` whose reuse search could
+   * not be answered because some window was unreachable. Such an open goes ahead rather than failing,
+   * accepting that it may be making a second copy of a web view that already exists somewhere — and a
+   * duplicate as a tab is one the user can see and close, where a duplicate as a window takes the
+   * screen and OS focus and can hide the original behind it.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export interface WindowLayout {
+    type: 'window';
+  }
   /** Information about how a Platform.Bible tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
+  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout | WindowLayout;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
   /**
@@ -2988,10 +4419,16 @@ declare module 'shared/models/docking-framework.model' {
      * Find the ID of the first open web view whose `webViewType` matches the one supplied.
      *
      * @param webViewType The web view type to search for
+     * @param projectId Optionally limits the search to web views showing a given project
      * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
      *   type is open
+     * @experimental The optional `projectId` filter is new; the rest of this member is
+     *   long-established.
      */
-    findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
+    findFirstWebViewDefinitionByType: (
+      webViewType: string,
+      projectId?: string,
+    ) => WebViewDefinition | undefined;
     /**
      * Add or update a tab in the layout
      *
@@ -3014,13 +4451,23 @@ declare module 'shared/models/docking-framework.model' {
      * @param layout Information about where to put a new webview
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `true`
+     * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+     *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
+     *   window that does not hold OS focus sets that document's active element without activating the
+     *   window — latently, until the window is next activated — so a window opened deliberately in
+     *   the background docks its content without taking that latent focus, leaving who owns the caret
+     *   to be decided when the window is actually raised. Left unspecified, this defaults to whether
+     *   this window is still awaiting its first activation.
      * @returns If WebView added, final layout used to display the new webView. If existing webView
      *   updated, `undefined`
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
     addWebViewToDock: (
       webView: WebViewTabProps,
       layout: Layout,
       shouldBringToFront?: boolean,
+      activateWithoutDocumentFocus?: boolean,
     ) => Layout | undefined;
     /**
      * Remove a tab in the layout
@@ -3035,11 +4482,26 @@ declare module 'shared/models/docking-framework.model' {
      */
     floatTabById: (tabId: string) => void;
     /**
-     * Gets all WebView definitions for all currently open web view tabs
+     * Get the WebView definitions for every open WebView tab across the dock layout.
      *
-     * @returns Array of WebView definitions for all open web view tabs
+     * Used by consumers (e.g. ProjectSelector) that need to seed initial state at mount time.
+     * `papi.webViews.onDidOpenWebView` does not replay for tabs already open at subscription time, so
+     * subscribers that mount after some tabs are already open need this enumeration to bootstrap.
+     *
+     * @returns Array of WebView definitions, one per currently-open WebView tab. Empty array when the
+     *   dock layout has no WebView tabs.
      */
     getAllWebViewDefinitions: () => WebViewDefinition[];
+    /**
+     * Counts every open tab in the dock layout, of any type — not only web views.
+     *
+     * Used to tell whether moving a tab out of a window would leave that window with nothing at all,
+     * which depends on every tab it holds, not only on its web views.
+     *
+     * @returns The number of tabs open anywhere in the layout, whatever its docking state
+     * @experimental
+     */
+    getOpenTabCount: () => number;
     /**
      * Gets the WebView definition for the web view with the specified ID
      *
@@ -3077,12 +4539,22 @@ declare module 'shared/models/docking-framework.model' {
      *   doesn't always work well) or merged (so we can remove properties from `state`).
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `false`
+     * @param activateWithoutDocumentFocus If true, a tab brought to the front is made active without
+     *   being given document focus. For content arriving in a window the user has not activated:
+     *   focusing the tab focuses its iframe, and a `focus()` call inside a window that does not hold
+     *   OS focus sets that document's active element without raising the window — so without this,
+     *   whichever tab's content focuses last would claim the caret the moment the window is finally
+     *   raised, rather than the tab the raise is actually showing. Left unspecified, this defaults to
+     *   whether this window is still awaiting its first activation.
      * @returns True if successfully found the WebView to update; false otherwise
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
     updateWebViewDefinition: (
       webViewId: string,
       updateInfo: WebViewDefinitionUpdateInfo,
       shouldBringToFront?: boolean,
+      activateWithoutDocumentFocus?: boolean,
     ) => boolean;
     /**
      * Gets info for a tab in a direction from the source tab.
@@ -3115,23 +4587,501 @@ declare module 'shared/models/docking-framework.model' {
      */
     getTabInfoById: (tabId: string) => TabInfo | undefined;
     /**
+     * Whether this dock holds the tab or tab group with the given ID.
+     *
+     * Tabs and tab groups are looked up the same way, so one question answers for either kind of ID.
+     * Every kind of tab counts, not only WebView tabs.
+     *
+     * @param tabOrTabGroupId ID of the tab or tab group to look for
+     * @returns `true` if this dock holds it, `false` otherwise
+     * @experimental
+     */
+    containsTab: (tabOrTabGroupId: string) => boolean;
+    /**
      * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
      * tabs, and sets the document focus in that tab
      *
      * @param tabId ID of the tab to set active and focused
+     * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+     *   taking document focus. Every mounted panel and every loaded web view asks to be focused, and
+     *   a `focus()` call inside a window that does not hold OS focus only sets that document's active
+     *   element — it does not raise the window — so without this, whichever tab's content focuses
+     *   last would claim the caret the moment a window still awaiting its first activation is finally
+     *   raised. Left unspecified, this defaults to whether this window is still awaiting its first
+     *   activation.
      * @returns `true` if successfully found tab to update, `false` otherwise
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
-    focusTab: (tabId: string) => boolean;
+    focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) => boolean;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
      * TODO: This should be removed and the `testLayout` imported directly in this file once this
      * service is refactored to split the code between processes. The only reason this is passed from
      * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
-     * service is currently all shared code. Refactor should happen in #203
+     * service is currently all shared code. Refactor should happen in PT-2799
      */
     testLayout: LayoutInfo;
+    /**
+     * The layout to load when `platform.interfaceMode` is `'simple'`.
+     *
+     * TODO: Same as `testLayout` — should be imported directly once PT-2799 is resolved.
+     */
+    simpleLayout: LayoutInfo;
   };
+}
+declare module 'shared/services/window.service-model' {
+  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { DirectionFromTab } from 'shared/models/docking-framework.model';
+  /**
+   *
+   * This name identifies the window data provider on the papi. Every window registers a provider of
+   * its own under a window-scoped name — this name with the window's id appended — and what you get
+   * from this property depends on where you read it.
+   *
+   * From a renderer or a web view, it is that window's own scoped name, so the provider found by it
+   * — with the useData hook, for instance — both reports and changes the focus of the window you
+   * are in. Read it from `papi.window` and use it as it comes.
+   *
+   * From the extension host, which runs in no window, it is the bare unscoped name. That name
+   * resolves to whichever window the router is currently targeting, so two reads can answer for
+   * different windows. The bare {@link windowServiceProviderName} constant behaves the same way
+   * wherever it is imported. To act on one particular window from there,
+   * `platform.getFocusedWindowId` reports which window has focus.
+   */
+  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
+  export const windowServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name identifies the window data provider on the papi. Every window registers a provider of
+     * its own under a window-scoped name — this name with the window's id appended — and what you get
+     * from this property depends on where you read it.
+     *
+     * From a renderer or a web view, it is that window's own scoped name, so the provider found by it
+     * — with the useData hook, for instance — both reports and changes the focus of the window you
+     * are in. Read it from `papi.window` and use it as it comes.
+     *
+     * From the extension host, which runs in no window, it is the bare unscoped name. That name
+     * resolves to whichever window the router is currently targeting, so two reads can answer for
+     * different windows. The bare {@link windowServiceProviderName} constant behaves the same way
+     * wherever it is imported. To act on one particular window from there,
+     * `platform.getFocusedWindowId` reports which window has focus.
+     */
+    dataProviderName: 'platform.windowServiceDataProvider';
+    /**
+     * Get the id of the window this code is currently running in.
+     *
+     * Works from the renderer and from inside a web view. A web view's iframe has no window id of its
+     * own; it reaches this through the `papi` object it shares with the renderer hosting it, and this
+     * code runs as part of that renderer — so it answers with the id of the window the web view is
+     * in. Returns `undefined` in the extension host, which has no window of its own.
+     *
+     * This answers a different question than `platform.getFocusedWindowId`, which reports which
+     * window the user is currently looking at — that call returns a _different_ window's id whenever
+     * this one is not the focused window.
+     *
+     * @returns The id of the current window, or `undefined` if there is no current window (e.g. in
+     *   the extension host)
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    getWindowId(): string | undefined;
+  }>;
+  /** A window's focus is on a WebView iframe with the specified id */
+  export type FocusSubjectWebView = {
+    focusType: 'webView';
+    /** ID of the WebView in focus (its tab ID is the same) */
+    id: string;
+  };
+  /**
+   * A window's focus is somewhere in a tab (header, toolbar, menu, content, etc.)
+   *
+   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
+   * focused in the WebView's iframe
+   */
+  export type FocusSubjectTab = {
+    focusType: 'tab';
+    /** The type of tab. `webView` if it is a WebView tab. */
+    tabType: 'webView' | string;
+    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
+    id: string;
+  };
+  /** A window's focus is somewhere not in a tab (app menu, app toolbar, etc.) */
+  export type FocusSubjectOther = {
+    focusType: 'other';
+  };
+  /** Current item that is the subject of top-level focus in a window */
+  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /**
+   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
+   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
+   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
+   * for focus subjects that do not refer to a web view.
+   *
+   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
+   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
+   * focus subject shapes change.
+   */
+  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
+  /**
+   * A raw input gesture in the app window that transient overlays (context menus, command palettes,
+   * dismissable popovers) treat as a request to dismiss.
+   *
+   * - `'mouseDown'` — a mouse button went down anywhere in the window
+   * - `'escape'` — the Escape key went down anywhere in the window
+   *
+   * These two gestures are deliberately the ONLY inputs this type can describe. Do not add other keys
+   * or richer mouse detail — see the security note on {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}.
+   *
+   * @experimental
+   */
+  export type AppWindowInputKind = 'mouseDown' | 'escape';
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} network event.
+   *
+   * Deliberately carries nothing but which of the two gestures happened — no key identity, no mouse
+   * coordinates, button, or target. See the security note on
+   * {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} before adding fields.
+   *
+   * @experimental
+   */
+  export type AppWindowInputEvent = {
+    /** Which input gesture happened */
+    kind: AppWindowInputKind;
+  };
+  /**
+   * Name of the network event the main process emits for every mouse-down and every Escape key-down
+   * in the app window.
+   *
+   * The main process's `before-mouse-event`/`before-input-event` hooks see input in EVERY frame,
+   * including WebView iframes whose events never reach the parent document. Overlays render in the
+   * parent document, so this event is the only way they learn that a click landed inside a WebView.
+   * Escape is announced without `preventDefault`, so the focused frame still receives the key and can
+   * act on it too.
+   *
+   * SECURITY: network events are visible to every process and every extension, and the hooks feeding
+   * this one see ALL input in the window — including keystrokes typed into other extensions' web
+   * views. The announcement is therefore restricted to the two overlay-dismissal gestures, with no
+   * key identity, coordinates, or any other detail, so the event cannot be used as a keylogger or to
+   * surveil user input. Do not broaden what is announced here without a security review.
+   */
+  export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID} network event.
+   *
+   * @experimental
+   */
+  export type FocusedWindowIdEvent = {
+    /**
+     * The window the main process considers focused, or `undefined` if no window of this application
+     * currently does. Survives the whole application losing OS focus (e.g. the user alt-tabbing to
+     * another application) — it names the window the user was last working in, not whether any window
+     * currently holds OS focus. See `getFocusedWindowId`.
+     */
+    focusedWindowId: string | undefined;
+  };
+  /**
+   * Name of the network event the main process emits when the window it considers focused changes.
+   *
+   * Fires when a window takes focus (including the first window at startup) and when the focused
+   * window closes, leaving none. Deliberately does NOT fire when the application loses OS focus
+   * without a new window taking it (e.g. alt-tabbing away) — the payload keeps naming the window the
+   * user was last in, matching `getFocusedWindowId`'s survive-blur semantic, so a renderer that shows
+   * per-window UI (e.g. an active-tab focus ring) based on this event keeps showing it on the window
+   * the user will land back in rather than clearing it everywhere the moment the app is
+   * backgrounded.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID = 'platform.onDidChangeFocusedWindowId';
+  /** Specific item that is intended to be focused in the top-level app window */
+  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
+  /** Instructions that indicate how to change the focus within a window */
+  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
+  export type WindowDataTypes = {
+    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+    /**
+     *
+     * Get the `projectId` of the web view that BCV navigation (the top toolbar's book/chapter/verse
+     * controls and the `platform.goTo*` commands) currently drives in this window, or `undefined`
+     * when there is nothing to navigate.
+     *
+     * Which web view that is depends on the interface mode:
+     *
+     * - Simple mode: always the main Scripture editor, so this is the project the user is working in.
+     * - Power mode: the Scripture-navigable web view the user most recently focused — which may be a
+     *   resource or other reference panel rather than an editor, and whose `projectId` may be
+     *   `undefined` — falling back to the first open Scripture editor that has a project. So it
+     *   changes as focus moves between tabs, and is not necessarily an editor's project.
+     *
+     * Use this to learn which project is active, not to interpret a Scripture reference's
+     * versification frame (that is what a scroll group's own source project is for).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns The project id, or `undefined`
+     * @experimental
+     */
+    ActiveEditorProjectId: DataProviderDataType<undefined, string | undefined, never>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [windowServiceProviderName]: IWindowService;
+    }
+  }
+  /**
+   *
+   * Service for interacting with an application window. Every window hosts its own, so a call from a
+   * renderer acts on the window it runs in.
+   *
+   * The extension host is in no window, so a call made there acts on the window that most recently
+   * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+   * background. Two calls can answer for different windows, and a subscription binds to the window
+   * focused when it was made rather than following focus afterwards. If there is no focused window,
+   * or the focused window has not registered its window service — either because it is still starting
+   * or because it has just gone away — the call throws rather than falling back to another window.
+   *
+   * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+   * unscoped name goes through the router; `papi.window` does not.
+   */
+  export type IWindowService = {
+    /**
+     *
+     * Get information about the current subject of focus in the current window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the current window's current subject of focus
+     */
+    getFocus(selector: undefined): Promise<FocusSubject>;
+    /**
+     *
+     * Get information about the current subject of focus in the current window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the current window's current subject of focus
+     */
+    getFocus(): Promise<FocusSubject>;
+    /**
+     * Sets the subject of focus in the current window.
+     *
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
+     *   that window to update its current focus based on what is actually focused in it (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Sets the subject of focus in the current window.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
+     *   that window to update its current focus based on what is actually focused in it (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     *
+     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
+     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
+     *   `'detect'`.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      selector: undefined,
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the current window's subject of focus is changed
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the window's updated subject of focus. If there is an
+     *   error while retrieving the updated data, the function will run with a {@link PlatformError}
+     *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
+     *   error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeFocus(
+      selector: undefined,
+      callback: (focusSubject: FocusSubject | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Get the `projectId` of the web view that BCV navigation (the top toolbar's book/chapter/verse
+     * controls and the `platform.goTo*` commands) currently drives in this window, or `undefined`
+     * when there is nothing to navigate.
+     *
+     * Which web view that is depends on the interface mode:
+     *
+     * - Simple mode: always the main Scripture editor, so this is the project the user is working in.
+     * - Power mode: the Scripture-navigable web view the user most recently focused — which may be a
+     *   resource or other reference panel rather than an editor, and whose `projectId` may be
+     *   `undefined` — falling back to the first open Scripture editor that has a project. So it
+     *   changes as focus moves between tabs, and is not necessarily an editor's project.
+     *
+     * Use this to learn which project is active, not to interpret a Scripture reference's
+     * versification frame (that is what a scroll group's own source project is for).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns The project id, or `undefined`
+     * @experimental
+     */
+    getActiveEditorProjectId(selector: undefined): Promise<string | undefined>;
+    /**
+     *
+     * Get the `projectId` of the web view that BCV navigation (the top toolbar's book/chapter/verse
+     * controls and the `platform.goTo*` commands) currently drives in this window, or `undefined`
+     * when there is nothing to navigate.
+     *
+     * Which web view that is depends on the interface mode:
+     *
+     * - Simple mode: always the main Scripture editor, so this is the project the user is working in.
+     * - Power mode: the Scripture-navigable web view the user most recently focused — which may be a
+     *   resource or other reference panel rather than an editor, and whose `projectId` may be
+     *   `undefined` — falling back to the first open Scripture editor that has a project. So it
+     *   changes as focus moves between tabs, and is not necessarily an editor's project.
+     *
+     * Use this to learn which project is active, not to interpret a Scripture reference's
+     * versification frame (that is what a scroll group's own source project is for).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns The project id, or `undefined`
+     * @experimental
+     */
+    getActiveEditorProjectId(): Promise<string | undefined>;
+    /**
+     * This data cannot be changed. Trying to use this setter will always throw. The project follows
+     * whichever web view BCV navigation drives; see `getActiveEditorProjectId`.
+     *
+     * @throws Always
+     * @experimental
+     */
+    setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the project `getActiveEditorProjectId` reports
+     * changes.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the new active project id. If there is an error while
+     *   retrieving the updated data, the function will run with a {@link PlatformError} instead of the
+     *   data. You can call {@link isPlatformError} on this value to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     * @experimental
+     */
+    subscribeActiveEditorProjectId(
+      selector: undefined,
+      callback: (projectId: string | undefined | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof windowServiceObjectToProxy &
+    IDataProvider<WindowDataTypes>;
+  /**
+   * One open application window, as a caller choosing a window to act on needs to see it.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type WindowSummary = {
+    /**
+     * The window's durable id: persisted in its layout entry and handed back to whichever window
+     * restores that entry, so it is stable across restarts.
+     */
+    windowId: string;
+    /**
+     * The window's title, which follows its own content. Two windows showing the same thing carry the
+     * same label, and nothing disambiguates them.
+     */
+    label: string;
+    /**
+     * Whether this window is the one answering for the application's lifetime right now — the window
+     * whose close asks about closing everything, and which docks Home rather than closing when it is
+     * emptied.
+     *
+     * This is the live answer, not the persisted flag of the same name. Usually they agree, but when
+     * no open window holds the marked entry the role falls to one of the windows that are open while
+     * the flag stays where it is, and this reports the window that actually answers.
+     *
+     * At most one window carries it, and possibly none — the window holding the role may be absent
+     * from the list it appears in, because a window whose close has begun and one whose renderer has
+     * been given up on are both left out. So a caller must not read "no window is flagged" as "then
+     * it must be me".
+     */
+    isMain: boolean;
+  };
+}
+declare module 'shared/models/network-object-status.service-model' {
+  import { NetworkObjectDetails } from 'shared/models/network-object.model';
+  export interface NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get details about all available network objects
+     *
+     * @returns Object whose keys are the names of the network objects and whose values are the
+     *   {@link NetworkObjectDetails} for each network object
+     */
+    getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
+  }
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
+     *
+     * @param objectDetailsToMatch Subset of object details on the network object to wait for.
+     *   Compared to object details using {@link isSubset}
+     * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
+     *   indefinitely
+     * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
+     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
+     *   reached before the network object is registered, or if the current set of network objects
+     *   could not be read. Rejections carry a reason string, not an `Error`
+     */
+    waitForNetworkObject: (
+      objectDetailsToMatch: Partial<NetworkObjectDetails>,
+      timeoutInMS?: number,
+    ) => Promise<NetworkObjectDetails>;
+  }
+  export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
+}
+declare module 'shared/utils/cached-initializer' {
+  /**
+   * Creates a function that runs an asynchronous initializer at most once, caching the promise so
+   * concurrent and subsequent calls share the same initialization attempt. If the initializer fails,
+   * the cached promise is cleared so the next call starts a fresh attempt instead of failing forever
+   * with the same error. This is useful for initializing access to a resource that may not be
+   * available yet, like a network object owned by a process that is still starting up.
+   *
+   * Note that calls that awaited the failed attempt all reject with its error; only calls arriving
+   * after the rejection settles retry. The initializer must therefore be safe to run again after a
+   * failure, e.g. it should not leave partial registrations behind.
+   *
+   * @param initializer Asynchronous function that performs the initialization
+   * @returns Function that returns the cached initialization promise, starting a new initialization
+   *   attempt if there is no cached promise
+   */
+  export function createCachedInitializer<T = void>(
+    initializer: () => Promise<T>,
+  ): () => Promise<T>;
+}
+declare module 'shared/services/network-object-status.service' {
+  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  export const networkObjectStatusService: NetworkObjectStatusServiceType;
+  export default networkObjectStatusService;
 }
 declare module 'shared/services/web-view.service-model' {
   import {
@@ -3229,16 +5179,36 @@ declare module 'shared/services/web-view.service-model' {
      * @param webViewId The ID of the WebView whose saved properties to get
      * @returns Saved properties of the WebView definition with the specified ID or undefined if not
      *   found
+     * @throws If no window claimed the WebView and some window could not be asked. The WebView may be
+     *   in the window that did not answer, so `undefined` there would be indistinguishable from the
+     *   WebView genuinely not existing.
      */
     getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
     /**
-     * Gets the saved properties on all currently open WebView definitions
+     * Get the saved properties on every currently-open WebView definition. Returns the same
+     * representation `getOpenWebViewDefinition` does, just for every open WebView in one call.
+     *
+     * Use this at mount time to seed initial state for subscribers of `onDidOpenWebView` /
+     * `onDidUpdateWebView` / `onDidCloseWebView` — those events do not replay for tabs already open
+     * at subscription time. Combined with the live event stream, this gives a complete picture of the
+     * WebView landscape from any point in the app's lifetime.
      *
      * Note: this only returns a representation of the current WebView definitions, not the actual web
-     * view definitions themselves. Changing properties on the returned definitions does not affect
-     * the actual WebView definitions.
+     * view definitions themselves. Changing properties on returned definitions does not affect the
+     * actual WebView definitions.
      *
-     * @returns Promise that resolves to an array of saved properties for all open WebView definitions
+     * @returns Saved properties of every open WebView, each listed once under the id it was minted
+     *   with — a web view keeps that id for its whole life, across any number of moves. Empty array
+     *   if no WebViews are open. A WebView being moved between windows is included even though it is
+     *   docked in neither of them for the length of the move, so it is not left out of the result
+     *   while a move is open; treat the result as what is open in the app, not as what is docked in
+     *   some window right now.
+     *
+     *   Do not deduplicate this list by web view type plus project: two open WebViews can genuinely
+     *   share both, and collapsing them would lose one.
+     * @throws If any window could not be asked what it has open. Callers read this as the complete
+     *   picture, and a window that could not answer is indistinguishable in the result from one with
+     *   nothing open, so a short list is refused rather than passed off as the whole landscape.
      */
     getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**
@@ -3284,27 +5254,106 @@ declare module 'shared/services/web-view.service-model' {
     webViewId: WebViewId,
   ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
   /** @deprecated 13 November 2024. Renamed to {@link EVENT_NAME_ON_DID_OPEN_WEB_VIEW} */
-  export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: 'webView:onDidAddWebView';
   /** Name to use when creating a network event that is fired when webViews are created */
-  export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW: 'webView:onDidOpenWebView';
   /** Event emitted when webViews are created */
   export type OpenWebViewEvent = {
     webView: SavedWebViewDefinition;
     layout: Layout;
   };
   /** Name to use when creating a network event that is fired when webViews are updated */
-  export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: 'webView:onDidUpdateWebView';
   /** Event emitted when webViews are updated */
   export type UpdateWebViewEvent = {
     webView: SavedWebViewDefinition;
   };
   /** Name to use when creating a network event that is fired when webViews are closed */
-  export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW: `${string}:${string}`;
+  export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW: 'webView:onDidCloseWebView';
   /** Event emitted when webViews are closed */
   export type CloseWebViewEvent = {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+}
+declare module 'shared/models/web-view-provider.model' {
+  import {
+    WebViewDefinition,
+    SavedWebViewDefinition,
+    OpenWebViewOptions,
+  } from 'shared/models/web-view.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  /**
+   * An object associated with a specific `webViewType` that provides a {@link WebViewDefinition} when
+   * the PAPI wants to open a web view with that `webViewType`. An extension registers a web view
+   * provider with `papi.webViewProviders.register`.
+   *
+   * Web View Providers provide the contents of all web views in Platform.Bible.
+   *
+   * If you want to provide {@link WebViewControllers} to facilitate interaction between your web views
+   * and extensions, you can extend the abstract class {@link WebViewFactory} to make the process
+   * easier. Alternatively, if you want to manage web view controllers manually, you can register them
+   * in {@link IWebViewProvider.getWebView}.
+   */
+  export interface IWebViewProvider extends NetworkableObject {
+    /**
+     * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
+     * providing the contents of the web view and other properties that are important for displaying
+     * the web view.
+     *
+     * The PAPI calls this method as part of opening a new web view or (re)loading an existing web
+     * view. If you want to create {@link WebViewControllers} for the web views the PAPI creates from
+     * this method, you should register it using `papi.webViewProviders.registerWebViewController`
+     * before returning from this method (resolving the returned promise). The {@link WebViewFactory}
+     * abstract class handles this for you, so please consider extending it.
+     *
+     * @param savedWebViewDefinition The saved web view information from which to build a complete web
+     *   view definition. Filled out with all {@link SavedWebViewDefinition} properties of the existing
+     *   web view if an existing webview is being called for (matched by ID). Just provides the
+     *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
+     *   the web view with the existing ID was not found.
+     * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+     *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
+     *   on the options, then those options are passed directly through to this method. That way, if
+     *   you want to adjust what this method does based on the contents of the options passed to
+     *   `papi.WebViews.openWebView`, you can. You can even read other properties on these options if
+     *   someone passes options with other properties to `papi.webViews.openWebView`.
+     * @param webViewNonce Nonce used to perform privileged interactions with the web view created
+     *   from this method's returned {@link WebViewDefinition} such as
+     *   `papi.webViewProviders.postMessageToWebView`. The web view service generates this nonce and
+     *   sends it _only here_ to this web view provider that creates the web view with this id. It is
+     *   generally recommended that this web view provider not share this nonce with anyone else but
+     *   only use it within itself and in the web view controller created for this web view if
+     *   applicable (See `papi.webViewProviders.registerWebViewController`).
+     * @returns Full {@link WebViewDefinition} including the content and other important display
+     *   properties based on the {@link SavedWebViewDefinition} provided
+     */
+    getWebView(
+      savedWebViewDefinition: SavedWebViewDefinition,
+      openWebViewOptions: OpenWebViewOptions,
+      webViewNonce: string,
+    ): Promise<WebViewDefinition | undefined>;
+  }
+  /**
+   * A web view provider that has been registered with the PAPI.
+   *
+   * This is what the papi gives on `webViewProviderService.get` (not exposed on the PAPI). Basically
+   * a layer over NetworkObject
+   *
+   * This type is internal to core and is not used by extensions
+   */
+  export interface IRegisteredWebViewProvider extends NetworkObject<IWebViewProvider> {}
+  /**
+   * A web view provider that has been registered with the PAPI and returned to the extension that
+   * registered it. It is able to be disposed with `dispose`.
+   *
+   * The PAPI returns this type from `papi.webViewProviders.register`.
+   */
+  export interface IDisposableWebViewProvider extends DisposableNetworkObject<IWebViewProvider> {}
 }
 declare module 'shared/services/web-view.service' {
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
@@ -3321,6 +5370,7 @@ declare module 'shared/services/web-view-provider.service' {
     IWebViewProvider,
     IRegisteredWebViewProvider,
   } from 'shared/models/web-view-provider.model';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
   import { DisposableNetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
@@ -3334,11 +5384,20 @@ declare module 'shared/services/web-view-provider.service' {
    *   of it.
    *
    *   WARNING: setting a webView provider mutates the provided object.
+   * @param attributes Optional additional attributes to attach to the network object. The platform
+   *   overwrites the `webViewType` field — that field is always the platform-canonical value.
+   * @param documentation Optional {@link NetworkObjectDocumentation} for this web view provider. Set
+   *   `documentation['x-experimental']: true` to mark all methods on this web view provider as
+   *   experimental.
    * @returns `webViewProvider` modified to be a network object and able to be disposed with `dispose`
    */
   function registerWebViewProvider(
     webViewType: string,
     webViewProvider: IWebViewProvider,
+    attributes?: {
+      [property: string]: unknown;
+    },
+    documentation?: NetworkObjectDocumentation,
   ): Promise<IDisposableWebViewProvider>;
   /**
    * Get a web view provider that has previously been set up
@@ -3460,6 +5519,16 @@ declare module 'shared/models/web-view-factory.model' {
     private readonly webViewControllersMutexMap;
     private readonly webViewControllersCleanupList;
     private readonly webViewControllersById;
+    /**
+     * Whether {@link dispose} has run, so nothing this factory registers will ever be cleaned up
+     * again.
+     *
+     * `dispose` cannot take the per-web-view locks — it is not about any one web view — so a
+     * controller already being created can finish after it and land on a cleanup list that has
+     * already been drained, which tears that controller down on arrival. Returning a web view
+     * definition at that point would produce a web view whose controller is already dead.
+     */
+    private isDisposed;
     constructor(webViewType: WebViewType);
     /**
      * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
@@ -3563,9 +5632,22 @@ declare module 'papi-shared-types' {
     IDisposableDataProvider,
   } from 'shared/models/data-provider.interface';
   import type { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
-  import type { NetworkableObject } from 'shared/models/network-object.model';
-  import { WebViewId } from 'shared/models/web-view.model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import type { NetworkableObject, NetworkObjectDetails } from 'shared/models/network-object.model';
+  import type {
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupUpdateInfo,
+  } from 'shared/services/scroll-group.service-model';
+  import type {
+    AppWindowInputEvent,
+    FocusedWindowIdEvent,
+    WindowSummary,
+  } from 'shared/services/window.service-model';
+  import type {
+    CloseWebViewEvent,
+    OpenWebViewEvent,
+    UpdateWebViewEvent,
+  } from 'shared/services/web-view.service-model';
+  import { ContentZoomAreaId, WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -3602,10 +5684,78 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
-    /** Increase the zoom level of the entire UI */
+    /**
+     * Create a new application window.
+     *
+     * Rejects in simple interface mode, which is single-window and has no chrome that could reach a
+     * second window. The first window of a launch is never refused.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.createWindow': () => Promise<void>;
+    /**
+     * Get the ID of the currently focused window, or undefined if no window is focused
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getFocusedWindowId': () => Promise<string | undefined>;
+    /**
+     * List every open window with the title it is currently showing, for offering the user a choice
+     * of window. Titles follow each window's own content, so two windows showing the same thing
+     * carry the same label and nothing distinguishes them.
+     *
+     * Only windows that can still take the work are listed: a window whose close has begun, and one
+     * whose renderer has been given up on, are both left out. Either can be the window holding the
+     * primary role, so the list can carry no `isMain` at all — absence is not evidence that some
+     * other window holds it.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getWindows': () => Promise<WindowSummary[]>;
+    /**
+     * Increase the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomIn`.
+     */
     'platform.zoomIn': () => Promise<void>;
-    /** Decrease the zoom level of the entire UI */
+    /**
+     * Decrease the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomOut`.
+     */
     'platform.zoomOut': () => Promise<void>;
+    /**
+     * Zoom one area of a web view's content in by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area (the one
+     * last clicked or focused). Only web views that mark at least one zoom area respond.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomIn': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Zoom one area of a web view's content out by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomOut': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Return one area of a web view's content to the default zoom set in Settings. Without an id,
+     * the focused window's last focused tab is the target; without an area, the pane's active
+     * area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomReset': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -3623,11 +5773,95 @@ declare module 'papi-shared-types' {
      * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
+    /**
+     * Open the Terms of Service document that ships beside the application - the terms the
+     * distributed application is licensed to the user under, rather than this repository's AGPL
+     * source (see LICENSING.md).
+     *
+     * The document is a self-contained HTML file, shown in a window the application owns rather
+     * than handed to the operating system. One window at a time: a second request focuses the one
+     * already open. Every link in the document leaves through the browser, so the window only ever
+     * shows the document.
+     *
+     * @throws If the document could not be loaded. A caller that offers this as a link needs to be
+     *   able to tell the user the document did not open, so the failure is reported rather than
+     *   only logged.
+     */
+    'platform.openTermsOfService': () => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /**
+     * Move a web view to a window created for it.
+     *
+     * A move closes the web view in the window that holds it and reopens it — same
+     * `useWebViewState` state — in the target window. Consumers see a close event in the source and
+     * an open event in the target, and the web view controller is disposed and re-created: a held
+     * controller reference must be re-acquired after a move. The returned id is the authoritative
+     * id of the web view after the move — the same id as `webViewId`, since a web view keeps the id
+     * it was minted with for its whole life, across any number of moves — so use the returned id
+     * for anything after the move. In Simple mode — single-window by design — there is no other
+     * window to move to, and this does nothing.
+     *
+     * A failed move says where it left the web view, as a machine-readable marker at the front of
+     * the error message: `[webViewMoveFailure:<where>]`, where `<where>` is
+     * `reopened-in-source-window` (nothing about where it lives changed),
+     * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
+     * `not-reopened` (it is open in no window, and only the log holds what it was),
+     * `reached-new-window-unconfirmed` (the window created for the move is holding it, but the move
+     * could not get that confirmed), `possibly-closed` (taking it out of its window is what failed,
+     * so where it is cannot be told), or `already-moving` (this call was refused before it started,
+     * because another move of the same web view was already running — the web view is wherever that
+     * other move leaves it). The marker rides in the message because a rejection that crosses
+     * processes reaches its caller as a code and a message and nothing else. A failure decided
+     * before the move touches the web view for any other reason — an unknown target window, a
+     * target on its way out, an interface mode that could not be read — carries no marker. Strip
+     * the marker before showing the message to a user — it is there to be classified on, not read.
+     *
+     * @param webViewId Web view to move
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   above
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
+     */
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
+    /**
+     * Move a web view to an existing window, named by its window id (see
+     * `papi.window.getWindowId()` for the id of the window the caller is in, or
+     * `platform.getFocusedWindowId` for whichever window the user is looking at). Ids are
+     * platform-assigned and never reused within a profile.
+     *
+     * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
+     * carries to say where it left the web view — and: moving a web view to the window it is
+     * already in does nothing, and naming a window that does not exist is an error that leaves the
+     * web view where it is.
+     *
+     * @param webViewId Web view to move
+     * @param targetWindowId Window to move it to
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own. A target window the platform opened without activation and the user has not yet
+     *   been in stays backgrounded unless this is `true`: naming it is the user asking to go there,
+     *   which is what raises it. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   `platform.moveWebViewToNewWindow`
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
+     */
+    'platform.moveWebViewToWindow': (
+      webViewId: WebViewId,
+      targetWindowId: string,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
     /** Open Usersnap feedback form to submit an idea */
@@ -3638,6 +5872,91 @@ declare module 'papi-shared-types' {
     'platform.isUsersnapFormCurrentlyOpen': () => Promise<boolean>;
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
+    /**
+     * Show the orientation tour again from its first stop, in the window the user is working in.
+     * Available in both interface modes: in Power mode the tour reduces to the stops whose anchors
+     * exist there, which today is the toolbar's profile button.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.showOnboardingTour': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next chapter (rolls into the next book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextChapter': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous chapter (rolls into the previous book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousChapter': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextBook': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousBook': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextVerse': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousVerse': () => Promise<void>;
+    /**
+     * Open the appropriate Book Chapter Control (the active tab's if it shows one, else the top
+     * toolbar's) and focus its input, ready for typing a reference
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openBookChapterControl': () => Promise<void>;
+    /**
+     * Navigate the reference history in the physical "left" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: left = back in
+     * LTR, forward in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
+     * @experimental
+     */
+    'platform.navigateLeftInReferenceHistory': () => Promise<boolean>;
+    /**
+     * Navigate the reference history in the physical "right" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: right = forward
+     * in LTR, back in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
+     * @experimental
+     */
+    'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -3649,34 +5968,6 @@ declare module 'papi-shared-types' {
    * @example 'platform.quit';
    */
   type CommandNames = keyof CommandHandlers;
-  /**
-   * Event data types for each network event available on the papi. Each extension can extend this
-   * interface to add events it emits with `papi.network.createNetworkEventEmitter`.
-   *
-   * Note: Event names must consist of two strings separated by at least one period. We recommend
-   * one period and lower camel case in case we expand the api in the future to allow dot notation.
-   *
-   * An extension can extend this interface to add types for the network events it emits by adding
-   * the following to its `.d.ts` file:
-   *
-   * @example
-   *
-   * ```typescript
-   * declare module 'papi-shared-types' {
-   *   export interface NetworkEventHandlers {
-   *     'myExtension.onSomethingChanged': { someData: string };
-   *   }
-   * }
-   * ```
-   */
-  interface NetworkEventHandlers {}
-  /**
-   * Names for each network event available on the papi.
-   *
-   * Automatically includes all extensions' network events that are added to
-   * {@link NetworkEventHandlers}.
-   */
-  type NetworkEventNames = keyof NetworkEventHandlers;
   /**
    * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
    * and values are setting data types. Extensions can add more user setting types with
@@ -3700,11 +5991,6 @@ declare module 'papi-shared-types' {
    * ```
    */
   interface SettingTypes {
-    /**
-     * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
-     * `useWebViewScrollGroupScrRef`
-     */
-    'platform.verseRef': SerializedVerseRef;
     /**
      * List of locales to use when localizing the interface. First in the list receives highest
      * priority. Please always add 'en' (English) at the end when using this setting so everything
@@ -3734,8 +6020,60 @@ declare module 'papi-shared-types' {
      */
     'platform.requestTimeout': number;
     /**
-     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
-     * 0.5 to 3.0.
+     * Default content zoom applied to every zoom area of a web view pane that has no level of its
+     * own (shown in Settings as "Tab content default zoom"). A factor: 1.0 = 100 %. Allowed range
+     * is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area its own level; Ctrl+`0` returns that area to
+     * this default. This factor multiplies with any font size a view sets for itself (for example a
+     * project's font size) and never replaces it; resetting a pane returns it to this default, not
+     * to that font size.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoom': number;
+    /**
+     * Per-project memory of content zoom levels, keyed `<kind>:<identity>:<area>` (kind is
+     * `editor`, `resource` or `notes`; identity is the project id, or the resource id for views
+     * without a project; area is the zoom area id, `main` for a view with one area). Written by the
+     * platform when an area's own level changes; read when a pane for that project opens. Local to
+     * this machine.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.ptxUtilsMementoData`: settings already give cross-window persistence and change
+     * notification for free. Writes are best-effort last-write-wins across windows, and a direct
+     * `papi.settings.set` on this key is tolerated rather than guarded against.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomMemory': {
+      [key: string]: number;
+    };
+    /**
+     * Which web view types mark at least one content-zoom area, keyed by web view type. An absent
+     * key means the platform has no evidence yet that the type marks any area. Written by the
+     * platform the first time a pane of a type reports an area (the record only ever gains `true`
+     * entries; a type recorded `true` is never downgraded); read when a pane opens, before its
+     * content loads, so the platform knows whether to scale the whole view at the Settings default
+     * or to wait for the areas the view is about to mark. Without it every newly opened pane would
+     * show at the wrong scale for a moment. Local to this machine, and self-correcting in the
+     * `false`→`true` direction: a type that starts marking an area is re-recorded on its next
+     * open.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.webViewContentZoomMemory`. Deliberately separate from that key, which holds the
+     * user's remembered levels: this one is a capability cache, and clearing the user's levels must
+     * not clear it.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomTypesWithAreas': {
+      [webViewType: string]: boolean;
+    };
+    /**
+     * The zoom factor that applies to the entire application, including menus and toolbars (shown
+     * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
+     * from Settings and by the `platform.zoomIn` and `platform.zoomOut` commands; no keyboard
+     * shortcut changes it — the zoom chords drive per-pane content zoom, which is
+     * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
@@ -3749,13 +6087,33 @@ declare module 'papi-shared-types' {
      * @default `simple`
      */
     'platform.interfaceMode': 'simple' | 'power';
+    /**
+     * Whether the simple-mode first-run setup wizard has been completed. Hidden; managed by the
+     * first-run state machine, not user-configurable. `false` (default) means onboarding has not
+     * finished and the wizard should gate the app on the next simple-mode startup.
+     */
+    'platform.firstRunComplete': boolean;
+    /**
+     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
+     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
+     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
+     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     */
+    'platform.syncOnStartup': boolean;
+    /**
+     * Whether to re-show the registration reminder at startup for an already-onboarded Simple-mode
+     * user whose Paratext registration has become invalid. `true` (default) keeps showing the
+     * reminder; `false` suppresses it (set by the wizard's "Don't show this on startup again"
+     * checkbox). Only consulted for completed users; the fresh-user onboarding flow ignores it.
+     */
+    'platform.showRegistrationReminderOnStartup': boolean;
   }
   /**
    * Names for each user setting available on the papi.
    *
    * Automatically includes all extensions' user settings that are added to {@link SettingTypes}.
    *
-   * @example 'platform.verseRef'
+   * @example 'platform.interfaceLanguage'
    */
   type SettingNames = keyof SettingTypes;
   /**
@@ -3809,12 +6167,78 @@ declare module 'papi-shared-types' {
      */
     'platform.fullName': string;
     /**
-     * Whether or not the project is editable. This is a general "editable", not necessarily that it
-     * is editable by the current user.
+     * Whether or not the primary content of the project is currently editable. If this is `false`,
+     * ancillary data may still be editable. This is a project-wide "editable"; if this is `true`,
+     * that does not necessarily mean it is editable by the current user.
      *
-     * Projects that are not editable are sometimes called "resources".
+     * This setting is intended to be used as a central location to turn off all editing of the
+     * primary content of the project temporarily. For example, an administrator of a Scripture
+     * project may want to disable editing the Scripture text while allowing users to comment on the
+     * project for a period of review.
+     *
+     * Each project may implement this differently. For Paratext Scripture projects, not editable
+     * means the following are not editable:
+     *
+     * - Scripture text
+     * - Inventory approval statuses
+     * - Biblical terms renderings
+     *
+     * While most everything else on the project is still editable such as the following
+     * (non-exhaustive):
+     *
+     * - Project comments
+     * - Biblical terms renderings descriptions
+     * - Project settings
+     * - Project plan
+     * - User permissions
+     *
+     * Note: not all of these editable rules are necessarily enforced on an API level for Paratext
+     * Scripture projects; some rules may be enforced only in UI.
+     *
+     * This is a coarse, project-level approximation of "the user can edit the primary content of
+     * this project" and currently doubles as our user-permissions proxy for editing primary project
+     * data. In the future, using it to check for editing permissions will be replaced by
+     * fine-grained user permissions.
+     *
+     * Use this setting when you need to determine whether **a project's primary content may be
+     * edited**.
+     *
+     * For determining whether a project should be treated as a fully read-only published reference
+     * / resource, use {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`}.
+     * If the project is read-only or a published resource, this setting should be `false` and
+     * {@link ProjectSettingTypes['platform.isPublished'] | `platform.isPublished`} should be
+     * `true`.
+     *
+     * If `isPublished` is `true`, then `isEditable` should always be `false`.
+     *
+     * Defaults to `true`.
      */
     'platform.isEditable': boolean;
+    /**
+     * Whether this project has been published and is therefore not currently writeable in any way.
+     *
+     * A "published" project is one that has been packaged or delivered for use as a reference (e.g.
+     * a Bible resource downloaded from DBL, a global-note-type resource). Nothing on a published
+     * project is writeable — not the primary content or ancillary data.
+     *
+     * Use this setting when you need to:
+     *
+     * - Determine whether a project has been packaged/delivered in a way that it is intended to be
+     *   used as a reference for consultation rather than a project that is actively being worked
+     *   on.
+     * - Determine whether ancillary data on a project (extension data, settings, etc.) may be
+     *   modified. On a published project the answer is always "no"; on a non-published project it
+     *   may still be "no" for other reasons but is at least not gated by publication.
+     *
+     * Do **not** use this setting as the sole gate on editing the primary content of a project —
+     * that is what {@link ProjectSettingTypes['platform.isEditable'] | `platform.isEditable`} is
+     * for. A non-published project may still have non-editable primary content for other reasons.
+     *
+     * If `isPublished` is `true`, then `isEditable` should always be `false`.
+     *
+     * Defaults to `false`.
+     */
+    'platform.isPublished': boolean;
     /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is
@@ -4228,6 +6652,108 @@ declare module 'papi-shared-types' {
    * @example 'platform.placeholderWebView'
    */
   type WebViewControllerTypes = keyof WebViewControllers;
+  /**
+   * Network events emitted from multiple processes (each process emits its own local event under
+   * the same name). Declared by the platform; not extensible by extensions.
+   *
+   * The names listed here are the source of truth for which event names use multi-source semantics
+   * at the central registry. An event name in this type allows registration from multiple processes
+   * (each process registers once, all emitters are valid sources). Any other event name uses
+   * single-source semantics (one registrant ever).
+   *
+   * Subscribers do not need to know which events are multi-source — `getNetworkEvent` handles both
+   * kinds identically.
+   *
+   * See {@link NetworkEvents} for the full registry of known event names.
+   */
+  type MultiSourceNetworkEvents = {
+    /**
+     * Emitted when a network object is created in any process. Payload includes the new object's
+     * details.
+     */
+    'object:onDidCreateNetworkObject': NetworkObjectDetails;
+    /**
+     * Emitted when a network object is disposed in any process. Payload is the disposed object's
+     * ID.
+     */
+    'object:onDidDisposeNetworkObject': string;
+    /**
+     * Emitted when the set of available projects changes (a project is added or removed) or when a
+     * project's display metadata (name/fullName/language/languageTag/isEditable) changes. Consumers
+     * refetch cheap project metadata; there is no payload. Multi-source so any project-providing
+     * process/factory may announce it (the .NET data provider emits it today). Keep the name in
+     * sync with `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    'platform.onDidChangeProjects': undefined;
+    /**
+     * Emitted when the Scripture reference for a scroll group changes. Multi-source because every
+     * open window navigates its own UI and announces the result — a scroll group is app-wide, so
+     * each window must be able to tell the others where it moved to.
+     */
+    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /**
+     * Emitted when a scroll group's back/forward reference history changes. Multi-source for the
+     * same reason as {@link MultiSourceNetworkEvents['scrollGroup:onDidUpdateScrRef']}.
+     *
+     * @experimental
+     */
+    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
+    /**
+     * Multi-source because web views belong to the window that opened them, so every window
+     * announces its own.
+     *
+     * @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead.
+     */
+    'webView:onDidAddWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is created in any window. */
+    'webView:onDidOpenWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is updated in any window. */
+    'webView:onDidUpdateWebView': UpdateWebViewEvent;
+    /** Emitted when a WebView is closed in any window. */
+    'webView:onDidCloseWebView': CloseWebViewEvent;
+  };
+  /**
+   * Mapping of network event names to their payload types. Extensions augment this to declare their
+   * own events. Inherits the platform's multi-source events from {@link MultiSourceNetworkEvents}
+   * automatically.
+   *
+   * To declare a new event for use with `createNetworkEventEmitterAsync`:
+   *
+   * ```ts
+   * declare module 'papi-shared-types' {
+   *   export interface NetworkEvents {
+   *     'myExt.somethingHappened': { foo: string };
+   *   }
+   * }
+   * ```
+   *
+   * Mark a single event as experimental by adding an `@experimental` JSDoc tag in a doc comment
+   * directly above its entry.
+   */
+  interface NetworkEvents extends MultiSourceNetworkEvents {
+    /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
+    'platform.onDidReloadExtensions': boolean;
+    /**
+     * Emitted by the main process for every mouse-down and every Escape key-down anywhere in the
+     * app window, including inside WebView iframes. Transient overlays (context menus, command
+     * palettes, dismissable popovers) dismiss on it.
+     *
+     * @experimental
+     */
+    'platform.onDidAppWindowInput': AppWindowInputEvent;
+    /**
+     * Emitted by the main process when the window it considers focused changes. Survives the whole
+     * application losing OS focus (alt-tabbing to another application) — the payload keeps naming
+     * the window the user was last working in.
+     *
+     * @experimental
+     */
+    'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
+  }
+  /** Union of all known network event names (keys of {@link NetworkEvents}). */
+  type NetworkEventTypes = keyof NetworkEvents;
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -4297,7 +6823,31 @@ declare module 'shared/services/internet.service' {
 declare module 'shared/models/notification.service-model' {
   import { CommandHandlers } from 'papi-shared-types';
   import { LocalizeKey } from 'platform-bible-utils';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
+  import type { WebViewId } from 'shared/models/web-view.model';
   export type Severity = 'info' | 'warning' | 'error';
+  /**
+   * The placements a notification can appear in, as a frozen array so it can be the single source of
+   * truth for both the {@link NotificationPosition} type and the notification service's OpenRPC
+   * `position` enum ({@link NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS} spreads from this).
+   *
+   * @experimental
+   */
+  export const NOTIFICATION_POSITIONS: readonly [
+    'top-left',
+    'top-center',
+    'top-right',
+    'bottom-left',
+    'bottom-center',
+    'bottom-right',
+  ];
+  /**
+   * Where a notification is shown on screen. Mirrors the placements the host toast library supports.
+   * Omit to use the app's default placement.
+   *
+   * @experimental
+   */
+  export type NotificationPosition = (typeof NOTIFICATION_POSITIONS)[number];
   /** Data needed to display a notification to the user */
   export interface PlatformNotification {
     /**
@@ -4309,7 +6859,9 @@ declare module 'shared/models/notification.service-model' {
     /** Severity of the notification */
     severity: Severity;
     /**
-     * Optional label for users to click when the notification shows.
+     * Optional label for users to click when the notification shows. Always rendered as the
+     * notification's PRIMARY action button - the visually emphasized one - while
+     * {@link secondaryClickCommandLabel} always gets the muted secondary styling.
      *
      * Automatically localized if this is a {@link LocalizeKey}.
      */
@@ -4323,7 +6875,99 @@ declare module 'shared/models/notification.service-model' {
      * The command handler should have the type signature {@link NotificationClickCommandHandler}.
      */
     clickCommand?: keyof CommandHandlers;
-    /** Optional ID of a previous notification to update instead of showing a new notification */
+    /**
+     * Optional label for a second action button, shown alongside {@link clickCommandLabel}. Provide
+     * this together with {@link secondaryClickCommand} to give the notification two actions.
+     *
+     * Always rendered as the visually SECONDARY button (muted styling, like the shadcn `secondary`
+     * button variant) so the {@link clickCommandLabel} button keeps the emphasis - the platform
+     * decides each button's styling from which field it came from, never from ordering.
+     *
+     * Automatically localized if this is a {@link LocalizeKey}.
+     *
+     * @experimental
+     */
+    secondaryClickCommandLabel?: string | LocalizeKey;
+    /**
+     * Optional command to run if users click on the secondary label in the notification. Like
+     * {@link clickCommand}, the command is sent one argument:
+     *
+     * - NotificationId: The ID of the notification that was clicked
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     *
+     * @experimental
+     */
+    secondaryClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional command to run if the user dismisses the notification themselves - by swiping/dragging
+     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
+     * other than the notification id, like {@link clickCommand}:
+     *
+     * - NotificationId: The ID of the notification that was dismissed
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     *
+     * IMPORTANT: this fires when the user dismisses the notification themselves (swiping/dragging it
+     * away, or clicking a close button if the host ever enables one) AND when the notification
+     * auto-closes because its `duration` elapsed - a timeout is treated as an implicit dismissal, so
+     * a must-answer toast that times out still runs this command instead of vanishing silently. It
+     * does NOT fire when the notification is dismissed programmatically via
+     * {@link INotificationService.dismiss}, nor when the user clicks {@link clickCommand} /
+     * {@link secondaryClickCommand}. Use this to treat a swipe-away (or timeout) as an explicit
+     * decision - e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
+     * keep {@link dismissible} `true` (see the warning on {@link dismissible}). If you need the toast
+     * to persist until the user actually answers, also set `duration` to `0`.
+     *
+     * @experimental
+     */
+    dismissClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional placement of the notification on screen. When omitted, the app's default placement is
+     * used.
+     *
+     * @experimental
+     */
+    position?: NotificationPosition;
+    /**
+     * Whether the user can dismiss the notification directly (e.g. by swiping/dragging it away, or
+     * via a close button). Defaults to `true`.
+     *
+     * The host toast library (Sonner) gates both the {@link secondaryClickCommand} button and the
+     * user-dismiss gesture that fires {@link dismissClickCommand} on this same flag, so a naive
+     * `dismissible: false` would silently turn those controls into dead buttons. To prevent that, the
+     * platform IGNORES `dismissible: false` when the notification renders a secondary action button
+     * (a {@link secondaryClickCommand} paired with its {@link secondaryClickCommandLabel}) or has a
+     * {@link dismissClickCommand} - the notification stays user-dismissible so those controls keep
+     * working. `dismissible: false` therefore only takes effect on a notification with no secondary
+     * button and no dismiss command. For a notification the user must explicitly answer, prefer
+     * leaving `dismissible: true` and using {@link dismissClickCommand} so a swipe-away still counts
+     * as a real (e.g. "postpone") decision.
+     *
+     * NOTE: `dismissible: false` does not keep the notification on screen. Auto-close is governed
+     * solely by `duration` (when omitted, 10-35 seconds computed from message length), so a
+     * non-dismissible notification still auto-closes on that timer. Also set `duration` to `0` (or
+     * less) if the notification must stay up until it is answered or programmatically dismissed via
+     * {@link INotificationService.dismiss}.
+     *
+     * @experimental
+     */
+    dismissible?: boolean;
+    /**
+     * Optional ID of a previous notification to update instead of showing a new notification.
+     *
+     * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
+     * the value it had on the previous `send` for that id - omitting a field never clears it. Pass
+     * the field explicitly to change it.
+     *
+     * The one exception is {@link webViewId}: which window a `send` runs in is decided in the main
+     * process before the renderer ever sees the notification to merge it, so omitting `webViewId` on
+     * an update does NOT keep routing to the window the original send resolved to - it always routes
+     * by the rules {@link webViewId} documents, using only what this call passed. An update that lands
+     * in a different window updates nothing: that window has never seen the id, so it opens a second
+     * notification with no merge applied, and the original stays up in the window it was routed to.
+     * Pass the same `webViewId` on every `send` that shares an id.
+     */
     notificationId?: string | number;
     /**
      * Optional duration in milliseconds for how long the notification is displayed. To make the
@@ -4333,6 +6977,23 @@ declare module 'shared/models/notification.service-model' {
      * seconds).
      */
     duration?: number;
+    /**
+     * Optional id of a web view this notification is about. When provided, the notification is routed
+     * to the window that owns that web view instead of the focused window — for a notification or
+     * prompt raised about a specific project or editor that may not be the one the user is currently
+     * looking at. Falls back to the focused window whenever the web view's window cannot be
+     * determined — it is open nowhere, a window that might have it could not be asked, or it is
+     * moving between windows.
+     *
+     * Omit for a generic notice, which should keep routing to the focused window — where the user is
+     * looking is the right place for something that is not about anything in particular.
+     *
+     * The narrowest key available: a notification about a project with no web view currently open has
+     * no `webViewId` to name, and routes to the focused window like a generic notice would.
+     *
+     * @experimental
+     */
+    webViewId?: WebViewId;
   }
   /**
    * Type signature for a command handler that is called when a user clicks on a notification.
@@ -4364,6 +7025,18 @@ declare module 'shared/models/notification.service-model' {
     dismiss(notificationId: string | number): Promise<void>;
   }
   export const NotificationServiceNetworkObjectName = 'NotificationService';
+  /**
+   * OpenRPC documentation for the notification service network object.
+   *
+   * Attached in two places: each window's renderer registers its window-scoped name (e.g.
+   * `NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) with these docs, and the main process
+   * attaches the same docs when it registers its service router under the generic
+   * {@link NotificationServiceNetworkObjectName} — the name consumers actually call — so the public
+   * name does not show undocumented in `rpc.discover`.
+   *
+   * @experimental
+   */
+  export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentation;
 }
 declare module 'shared/services/notification.service' {
   import { type INotificationService } from 'shared/models/notification.service-model';
@@ -4388,6 +7061,18 @@ declare module 'shared/services/data-provider.service' {
     DisposableDataProviders,
   } from 'papi-shared-types';
   import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
+  /**
+   * Gets the id for the data provider network object with the given name Don't add the suffix to the
+   * provider name if it's already there to avoid duplication
+   *
+   * Exported because anything that has a provider NAME and needs to recognize that provider's network
+   * object — `useDataProvider`'s re-lookup listener, for one — has to derive the id the same way this
+   * service does rather than assume the name is the id.
+   *
+   * @experimental
+   */
+  export const getDataProviderObjectId: (providerName: string) => string;
   /**
    *
    * Indicate if we are aware of an existing data provider with the given name. If a data provider
@@ -4588,6 +7273,9 @@ declare module 'shared/services/data-provider.service' {
    *   providers), a unique type name should be used to distinguish from generic data providers.
    * @param dataProviderAttributes Optional object that will be sent in a network event to provide
    *   additional metadata about the data provider represented by this engine.
+   * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+   *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+   *   tagged as experimental in the OpenRPC document.
    *
    *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
    *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -4603,6 +7291,7 @@ declare module 'shared/services/data-provider.service' {
           [property: string]: unknown;
         }
       | undefined,
+    documentation?: NetworkObjectDocumentation | undefined,
   ): Promise<DisposableDataProviders[DataProviderName]>;
   /**
    * Creates a data provider to be shared on the network layering over the provided data provider
@@ -4621,6 +7310,9 @@ declare module 'shared/services/data-provider.service' {
    *   providers), a unique type name should be used to distinguish from generic data providers.
    * @param dataProviderAttributes Optional object that will be sent in a network event to provide
    *   additional metadata about the data provider represented by this engine.
+   * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+   *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+   *   tagged as experimental in the OpenRPC document.
    *
    *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
    *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -4636,6 +7328,7 @@ declare module 'shared/services/data-provider.service' {
           [property: string]: unknown;
         }
       | undefined,
+    documentation?: NetworkObjectDocumentation | undefined,
   ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>>;
   /**
    *
@@ -4683,6 +7376,9 @@ declare module 'shared/services/data-provider.service' {
      *   providers), a unique type name should be used to distinguish from generic data providers.
      * @param dataProviderAttributes Optional object that will be sent in a network event to provide
      *   additional metadata about the data provider represented by this engine.
+     * @param documentation Optional OpenRPC-style documentation for the data provider network object.
+     *   When `documentation['x-experimental']` is `true`, the provider's methods will be automatically
+     *   tagged as experimental in the OpenRPC document.
      *
      *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
      *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -4751,6 +7447,51 @@ declare module 'shared/models/project-metadata.model' {
      * project.
      */
     projectInterfaces: ProjectInterfaces[];
+    /**
+     * Short display name of the project. Absent when the producing Project Data Provider Factory does
+     * not supply it; consumers should fall back to {@link id}.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    name?: string;
+    /**
+     * Full display name of the project. Absent when not supplied; consumers should fall back to
+     * {@link name}, then {@link id}.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    fullName?: string;
+    /**
+     * Language of the project (raw setting value). Absent when not supplied (no language to show).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    language?: string;
+    /**
+     * BCP-47 language tag of the project. Absent when not supplied (no language to show).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    languageTag?: string;
+    /**
+     * Whether the project's primary content (e.g. Scripture text) is editable.
+     *
+     * **Absence is NOT the same as `false`.** An absent value means the registered default of
+     * `platform.isEditable`, which is `true` - i.e. a factory that omits this field means "editable".
+     * Only an explicit `false` (e.g. a read-only published resource) marks a project non-editable.
+     * Consumers must treat missing as editable (test `isEditable !== false`), never `isEditable ??
+     * false`.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    isEditable?: boolean;
+    /**
+     * Whether the project is a published (read-only) resource. An absent value means the registered
+     * default of `platform.isPublished`, which is `false` (not a published resource).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    isPublished?: boolean;
   };
   export type ProjectDataProviderFactoryMetadataInfo = {
     /**
@@ -4857,12 +7598,13 @@ declare module 'shared/models/project-lookup.service-model' {
   } from 'shared/models/project-metadata.model';
   import { ProjectInterfaces } from 'papi-shared-types';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  import { normalizeProjectId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
   /**
    * Transform the well-known pdp factory id into an id for its network object to use
    *
    * @param pdpFactoryId Id extensions use to identify this pdp factory
-   * @returns Id for then network object for this pdp factory
+   * @returns Id for the network object for this pdp factory
    */
   export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string): string;
   /**
@@ -5012,6 +7754,7 @@ declare module 'shared/models/project-lookup.service-model' {
     includeProjectInterfaces: string | undefined;
     includePdpFactoryIds: string | undefined;
   };
+  export { normalizeProjectId };
   /**
    * Determines whether the given project interfaces are included based on specified inclusion and
    * exclusion rules.
@@ -5065,7 +7808,38 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
   import { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
   import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   import { ProjectInterfaces } from 'papi-shared-types';
+  /**
+   * Envelope that {@link IProjectDataProviderEngineFactory.createProjectDataProviderEngine} may return
+   * instead of the engine directly, carrying per-PDP network object metadata alongside the engine.
+   *
+   * WARNING: `projectDataProviderEngine` is a reserved discriminating property — do not expose a
+   * property by that name on a raw engine, or the platform will treat the engine as an envelope.
+   */
+  export interface ProjectDataProviderEngineEnvelope<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  > {
+    projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>;
+    attributes?: {
+      [property: string]: unknown;
+    };
+    documentation?: NetworkObjectDocumentation;
+  }
+  /**
+   * Type guard: whether a `createProjectDataProviderEngine` return value is a
+   * {@link ProjectDataProviderEngineEnvelope} rather than a raw engine. Guards against `typeof null
+   * === 'object'` and against a raw engine that merely exposes a `projectDataProviderEngine` property
+   * of a non-object type. Written as a user-defined type guard so the value check doesn't defeat the
+   * narrowing at call sites.
+   */
+  export function isProjectDataProviderEngineEnvelope<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  >(
+    value:
+      | IProjectDataProviderEngine<SupportedProjectInterfaces>
+      | ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>,
+  ): value is ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>;
   /**
    * A factory object registered with the papi that creates a Project Data Provider Engine for each
    * project with the factory's specified `projectInterface`s when the papi requests. Used by the papi
@@ -5126,17 +7900,25 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
       layeringFilters?: ProjectMetadataFilterOptions,
     ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
     /**
-     * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
-     * {@link IProjectDataProvider} for the project. This project will have the same
-     * `projectInterface`s as this Project Data Provider Engine Factory
+     * Create an {@link IProjectDataProviderEngine} for the project requested so the papi can create an
+     * {@link IProjectDataProvider} for the project.
      *
-     * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-     * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
-     *   in
+     * The return value may be either the engine directly, or an envelope containing the engine and
+     * PDP network metadata (per-PDP attributes and documentation).
+     *
+     * The platform overwrites `projectId` and `projectInterfaces` in any supplied per-PDP attributes
+     * — those fields are always the platform-canonical values.
+     *
+     * @param projectId Id of the project for which to create an {@link IProjectDataProviderEngine}
+     * @returns Either the {@link IProjectDataProviderEngine} or an envelope containing the engine and
+     *   per-PDP network object metadata (attributes and documentation).
      */
     createProjectDataProviderEngine(
       projectId: string,
-    ): Promise<IProjectDataProviderEngine<SupportedProjectInterfaces>>;
+    ): Promise<
+      | IProjectDataProviderEngine<SupportedProjectInterfaces>
+      | ProjectDataProviderEngineEnvelope<SupportedProjectInterfaces>
+    >;
   }
   /**
    *
@@ -5395,15 +8177,20 @@ declare module 'shared/services/project-data-provider.service' {
   import { ProjectInterfaces, ProjectDataProviderInterfaces } from 'papi-shared-types';
   import { Dispose } from 'platform-bible-utils';
   import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   /**
    * Add a new Project Data Provider Factory to PAPI that uses the given engine.
    *
-   * @param pdpFactoryId Unique id for this PDP factory
+   * @param pdpFactoryId Unique id for this PDP factory.
    * @param projectInterfaces The standardized sets of methods (`projectInterface`s) supported by the
    *   Project Data Provider Engines produced by this factory. Indicates what sort of project data
    *   should be available on the PDPEs created by this factory.
-   * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
-   * @returns Promise that resolves to a disposable object when the registration operation completes
+   * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders.
+   * @param attributes Optional registration-level attributes. The platform overwrites the
+   *   `projectInterfaces` field — that field is always the platform-canonical value.
+   * @param documentation Optional {@link NetworkObjectDocumentation} for the factory itself. Set
+   *   `documentation['x-experimental']: true` to mark all methods on this factory as experimental.
+   * @returns Promise that resolves to a disposable object when the registration operation completes.
    */
   export function registerProjectDataProviderEngineFactory<
     SupportedProjectInterfaces extends ProjectInterfaces[],
@@ -5411,6 +8198,10 @@ declare module 'shared/services/project-data-provider.service' {
     pdpFactoryId: string,
     projectInterfaces: SupportedProjectInterfaces,
     pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>,
+    attributes?: {
+      [property: string]: unknown;
+    },
+    documentation?: NetworkObjectDocumentation,
   ): Promise<Dispose>;
   /**
    * Get a Project Data Provider for the given project ID.
@@ -5537,6 +8328,13 @@ declare module 'node/utils/util' {
    * @returns True if the process is running in noisy dev mode, false otherwise
    */
   export const isNoisyDevModeEnvVariableSet: () => boolean;
+  /**
+   * Determines if startup timing marks are requested for this launch
+   *
+   * @returns True if the `PT_STARTUP_MARKS` environment variable requests startup timing marks, false
+   *   otherwise
+   */
+  export const isStartupMarksEnvVariableSet: () => boolean;
 }
 declare module 'node/services/node-file-system.service' {
   /** File system calls from Node */
@@ -5846,7 +8644,7 @@ declare module 'shared/models/dialog-options.model' {
     'okLabel',
     'cancelLabel',
   ];
-  /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
+  /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-shard.ts` */
   export type DialogData = DialogOptions & {
     isDialog: true;
   };
@@ -5889,6 +8687,34 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
      */
     dialogRole?: 'dialog' | 'alertdialog';
     /**
+     * Whether this dialog's own `Component` renders a `DialogTitle`.
+     *
+     * When it does, the modal shell must not also render its fallback title: Radix derives the id
+     * from the `Dialog.Root` context, so a second title reuses the same id. The duplicate id is a
+     * `duplicate-id-aria` accessibility violation, and `aria-labelledby` resolves to whichever
+     * element comes first in document order — the shell's generic text, not the component's specific,
+     * localized text.
+     *
+     * Independent of {@link providesOwnDescription} on purpose: a dialog that renders a title but no
+     * description (or the reverse) still needs the shell's fallback for the half it omits, and a
+     * single combined flag would make it choose between a duplicate id and no accessible description
+     * at all.
+     *
+     * Defaults to `false`, which keeps the fallback title for dialogs that render none.
+     */
+    providesOwnTitle?: boolean;
+    /**
+     * Whether this dialog's own `Component` renders a `DialogDescription`.
+     *
+     * The description half of {@link providesOwnTitle}, with the same duplicate-id consequence. Set it
+     * only when the component renders a description for EVERY state it can be opened in — a
+     * description that renders conditionally (from an optional `prompt`, say) leaves the dialog with
+     * no description at all whenever the value is absent, because the shell's fallback is gone.
+     *
+     * Defaults to `false`, which keeps the fallback description for dialogs that render none.
+     */
+    providesOwnDescription?: boolean;
+    /**
      * The function used to load the dialog into the dock layout. Default uses the `Component` field
      * and passes in the `DialogProps`
      */
@@ -5922,10 +8748,10 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
   };
   /**
    * Set the functionality of submitting and canceling dialogs. This should be called specifically by
-   * `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
+   * `dialog.service-shard.ts` immediately on startup and by nothing else. This is only here to
    * mitigate a dependency cycle
    *
-   * @param dialogServiceFunctions Functions from the dialog service host for resolving and rejecting
+   * @param dialogServiceFunctions Functions from the dialog service shard for resolving and rejecting
    *   dialogs
    */
   export function hookUpDialogService({
@@ -5954,19 +8780,47 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
   import { ReactElement } from 'react';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
-  import { LocalizeKey } from 'platform-bible-utils';
+  import { DblResourceData, LocalizeKey, ResourceType } from 'platform-bible-utils';
   /** The tabType for the about dialog in `about-dialog.component.tsx` */
   export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
   /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
-  /** The tabType for the select books dialog in `select-books.dialog.tsx` */
+  /**
+   * The tabType for the select books dialog in `select-books-dialog.component.tsx`
+   *
+   * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+   *   later version. To let users select books, use the `SelectBooks` component from
+   *   `platform-bible-react` instead.
+   */
   export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
   /** The dialogType for alert dialogs rendered via overlay */
   export const ALERT_DIALOG_TYPE = 'platform.alert';
   /** The dialogType for confirm dialogs rendered via overlay */
   export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
+  /**
+   * The tabType for the resource picker dialog in `resource-picker.dialog.tsx`
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
+  export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
+  /**
+   * The tabType for the project picker dialog in `project-picker.dialog.tsx`
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
+  export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
+  /**
+   * The tabType for the Team layout dialog in `team-layout.dialog.tsx`.
+   *
+   * The `shareLayout` spelling here, in `SHARE_LAYOUT_DIALOG_TYPE` and in the `%shareLayoutDialog_*%`
+   * localization keys is deliberately frozen: these are published contracts, and renaming them would
+   * break saved layouts and translator catalogs for a cosmetic gain.
+   */
+  export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -5975,7 +8829,13 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** Project IDs that should start selected in the dialog */
     selectedProjectIds?: string[];
   };
-  /** Options to provide when showing the Select Books dialog */
+  /**
+   * Options to provide when showing the Select Books dialog
+   *
+   * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+   *   later version. To let users select books, use the `SelectBooks` component from
+   *   `platform-bible-react` instead.
+   */
   export type SelectBooksDialogOptions = DialogOptions & {
     /** Books IDs that should start selected in the dialog */
     selectedBookIds?: string[];
@@ -5986,6 +8846,42 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     prompt: string | LocalizeKey;
     /** Custom label for the OK button. Defaults to a localized "OK". */
     okLabel?: string | LocalizeKey;
+  };
+  /**
+   * Options to provide when showing the Resource Picker dialog
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
+  export type ResourcePickerDialogOptions = DialogOptions & {
+    /** If provided, only resources of this type (or any of the listed types) are shown */
+    resourceType?: ResourceType | ResourceType[];
+    /** IDs of resources already selected in the calling panel */
+    selectedResourceIds?: string[];
+    /**
+     * Already-localized sentence shown above the resource list explaining something the caller knows
+     * that limits what picking a resource will do. Shown ahead of any explanation the dialog itself
+     * has for an incomplete list.
+     */
+    notice?: string;
+    /**
+     * When false, resources already installed on this computer are shown but cannot be picked. Use it
+     * when the caller can act on a resource that still needs installing but has nothing to do with
+     * one that is already on disk. Defaults to true.
+     */
+    allowSelectingInstalled?: boolean;
+  };
+  /**
+   * Options to provide when showing the Project Picker dialog (no extra options needed)
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
+  export type ProjectPickerOptions = DialogOptions;
+  /** Options to provide when showing the Team layout dialog */
+  export type ShareLayoutDialogOptions = DialogOptions & {
+    /** The project whose layout is being shared */
+    projectId: string;
   };
   /** Options to provide when showing a confirm dialog */
   export type ConfirmDialogOptions = DialogOptions & {
@@ -6010,9 +8906,25 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
       SelectMultipleProjectsDialogOptions,
       string[]
     >;
+    /**
+     * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in
+     *   a later version. To let users select books, use the `SelectBooks` component from
+     *   `platform-bible-react` instead.
+     */
     [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
     [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
     [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
+    /**
+     * @experimental This dialog was recently added, and its shape may change as we learn how it is
+     *   used. It is not yet a stable contract.
+     */
+    [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
+    /**
+     * @experimental This dialog was recently added, and its shape may change as we learn how it is
+     *   used. It is not yet a stable contract.
+     */
+    [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerOptions, string>;
+    [SHARE_LAYOUT_DIALOG_TYPE]: DialogDataTypes<ShareLayoutDialogOptions, boolean>;
   }
   /** All dialog types that have DialogDefinition entries */
   export type DialogTabTypes = keyof DialogTypes;
@@ -6402,6 +9314,12 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     /**
      * Extensions that are explicitly bundled to be part of the application. They cannot be disabled.
      * At runtime no extensions can be added or removed from the set of packaged extensions.
+     *
+     * Reflects the bundled extensions with code to run that were discovered for this build, not what
+     * is currently running: an extension appears here even if it has not finished activating or
+     * failed to activate. So this answers "did this ship with the application?", asked at any time,
+     * and never "can I call its commands right now?" A bundled extension that contributes no code to
+     * run (its manifest has an empty `main`) is not in this list.
      */
     packaged: ExtensionIdentifier[];
     /**
@@ -6752,7 +9670,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   export default useDialogCallback;
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
-  import { NetworkObject } from 'shared/models/network-object.model';
+  import { NetworkObject, NetworkObjectDetails } from 'shared/models/network-object.model';
   /**
    * This function takes in a getNetworkObject function and creates a hook with that function in it
    * which will return a network object
@@ -6765,6 +9683,16 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
    *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
    *       (result of this hook, if you want this hook to just return the network object again)
    *
+   * @param doesCreatedNetworkObjectMatchSource Function that decides whether a network object that
+   *   was just created on the network means the hook should look its source up again. Defaults to
+   *   comparing the new object's id to the `networkObjectSource`.
+   *
+   *   - MUST be supplied by any caller whose `networkObjectSource` is not literally the id the object is
+   *       registered under — a data provider name becomes `{name}-data`, a web view id becomes
+   *       `webViewController{id}`, and so on. Left at the default, such a hook's re-lookup listener
+   *       compares two strings that can never be equal, so it never fires and the hook is left with
+   *       the single re-lookup a disposal drives.
+   *
    * @returns A function that takes in a networkObjectSource and returns a NetworkObject
    */
   export function createUseNetworkObjectHook<THookParams extends unknown[]>(
@@ -6772,6 +9700,10 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
     mapParametersToNetworkObjectSource?: (
       ...args: THookParams
     ) => string | NetworkObject<object> | undefined,
+    doesCreatedNetworkObjectMatchSource?: (
+      networkObjectDetails: NetworkObjectDetails,
+      networkObjectSource: string,
+    ) => boolean,
   ): (...args: THookParams) => NetworkObject<object> | undefined;
   export default createUseNetworkObjectHook;
 }
@@ -6800,6 +9732,21 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
   import { IDataProvider } from 'shared/models/data-provider.interface';
   import { PlatformError } from 'platform-bible-utils';
   import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
+  /**
+   * Events of one kind within {@link RUNAWAY_WINDOW_MS} that trip the runaway guard. The threshold is
+   * arbitrary, chosen by observing a dev environment; the guard trips ON this many events, so this
+   * many is one more than it tolerates.
+   */
+  export const RUNAWAY_EVENTS_PER_WINDOW = 100;
+  /** Rolling window the runaway guard measures over */
+  export const RUNAWAY_WINDOW_MS = 1000;
+  /**
+   * How long the guard stays tripped before it re-arms and resubscribes. Long enough that a genuine
+   * loop is throttled to a small fraction of its free-running rate, short enough that a legitimate
+   * burst — a Send/Receive or bulk import — heals without the user closing the tab. See
+   * `adr-runaway-data-hook-guard` for why the trip expires rather than latching.
+   */
+  export const RUNAWAY_COOLDOWN_MS = 5000;
   /**
    * The final function called as part of the `useData` hook that is the actual React hook
    *
@@ -6848,6 +9795,8 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
       ...args: TUseDataProviderParams
     ): UseDataProxy<TDataProvider>;
   };
+  /** Longest selector description included in the runaway-render warning. Exported for tests. */
+  export const MAX_SELECTOR_DESCRIPTION_LENGTH = 80;
   /**
    * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
    * data providers as supported by `useDataProviderHook`
@@ -6961,9 +9910,63 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *   data.
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
    *   provider
+   *
+   * **Throttling.** This hook stops a runaway loop that would otherwise lock up the web view. If one
+   * subscription receives — or resubscribes — about 100 times within a second, the hook drops its
+   * subscription for a few seconds, then re-arms and resubscribes on its own. While throttled it
+   * reports `data` as a {@link PlatformError} whose `code` is `RESOURCE_EXHAUSTED`, `setData` as
+   * `undefined`, and `isLoading` as `true`, and it logs a warning naming the data type. Handle it as
+   * you would any other unresolved state; the usual cause is a `selector` or `dataProviderSource`
+   * that is rebuilt every render instead of being memoized. (`subscriberOptions` is held as a ref and
+   * cannot cause this.) The error's `message` is developer-facing English and is not localized —
+   * branch on the `RESOURCE_EXHAUSTED` code and supply your own localized text rather than rendering
+   * `message` to users.
    */
   export const useData: UseDataHook;
   export default useData;
+}
+declare module 'shared/services/reference-history.util' {
+  import {
+    ReferenceHistory,
+    ReferenceHistoryEntry,
+  } from 'shared/services/scroll-group.service-model';
+  /**
+   * Maximum number of entries a scroll group's history keeps in total, counting the current location
+   * (matches Paratext 9). The back stack therefore holds at most this many minus one.
+   *
+   * @experimental
+   */
+  export const REFERENCE_HISTORY_MAX_DEPTH = 20;
+  /**
+   * Create a new, empty reference history
+   *
+   * @experimental
+   */
+  export function createEmptyReferenceHistory(): ReferenceHistory;
+  /**
+   * Record a navigation to `entry` in `history` (mutates `history`). Matches Paratext 9
+   * `WindowCollectionBase.AddVerseRefToHistory`: a move within the current book+chapter replaces the
+   * current entry in place (preserving the forward stack); a genuinely new chapter pushes the old
+   * current onto the back stack, clears the forward stack, caps same-book runs, and trims to
+   * {@link REFERENCE_HISTORY_MAX_DEPTH} total entries.
+   *
+   * @experimental
+   */
+  export function recordNavigation(history: ReferenceHistory, entry: ReferenceHistoryEntry): void;
+  /**
+   * Navigate within `history` by a signed `offset` (mutates `history`), browser-`history.go` style:
+   * negative = back that many steps, positive = forward that many steps. The entries passed over
+   * transfer to the opposite stack, and the old current moves one step in the opposite direction
+   * (matches Paratext 9's dropdown jump).
+   *
+   * @returns The destination entry (the new current), or `undefined` (history unchanged) when
+   *   `offset` is 0, non-integer, or out of range
+   * @experimental
+   */
+  export function navigateHistory(
+    history: ReferenceHistory,
+    offset: number,
+  ): ReferenceHistoryEntry | undefined;
 }
 declare module 'shared/data/platform.data' {
   /**
@@ -6975,14 +9978,403 @@ declare module 'shared/data/platform.data' {
   export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /**
+   * Query parameter key used to pass a window's platform id to its renderer process. Durable: on a
+   * restored window this is the id its persisted layout entry already carries (see
+   * `WindowLayoutEntry.windowId`), so the renderer's per-window storage keyed by it survives a
+   * restart under the same id.
+   *
+   * @experimental
+   */
+  export const WINDOW_ID = 'windowId';
+  /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
+  export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
+  /**
+   * Query parameter passed to the renderer. Present only on the main window, absent on every
+   * secondary window, so the renderer can tell which chrome to draw — on Windows and Linux the main
+   * window keeps the top-level menu and secondary windows do not. On macOS the top-level menu lives
+   * in the OS-level menu bar, which is process-global and reachable from every window regardless of
+   * this flag.
+   *
+   * Fixed at window creation, which is a deliberate limitation: it cannot describe a window becoming
+   * the main one later. PT-4278's window-manager service is the durable answer; replace this when it
+   * lands.
+   *
+   * @experimental
+   */
+  export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
+  /**
+   * Query parameter passed to the renderer. Present when the window was created without being
+   * activated. Written once, at creation, and never removed — whether the user has been in the window
+   * since is the renderer's own to track.
+   *
+   * A window told to stay in the background still has its own content calling `focus()` as it lands:
+   * every mounted panel and every loaded web view asks this window's service to focus it, and
+   * focusing a tab focuses its web view's iframe. A `focus()` inside a window that does not hold OS
+   * focus sets that document's active element without activating the window, latently, until the
+   * window is next activated — so left unchecked, whichever call lands last would decide who owns the
+   * caret once the window is finally raised. Those calls resolve this window's own service shard by
+   * name and never reach the main process, so this is how the fact gets to them. The renderer stops
+   * honouring it the first time the window is activated.
+   *
+   * @experimental
+   */
+  export const WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER = 'awaitingFirstActivation';
+  /**
+   * Query parameter key used to pass the serialized scroll group state main holds at the moment a
+   * window is created, so that window's synchronous readers are right on its first render instead of
+   * showing the default reference until a round trip returns.
+   *
+   * Absent when main has nothing to pass — a profile that has never navigated, or one whose state is
+   * still only in a renderer's own store awaiting its one-time handover. A renderer that does not
+   * find it falls back to what it can read for itself, and then to the default.
+   *
+   * @experimental
+   */
+  export const SCROLL_GROUP_STATE_QUERY_PARAMETER = 'scrollGroupState';
+  /**
+   * Query parameter key used to pass the serialized current theme main holds at the moment a window
+   * is created, so that window paints its first frame — and bakes its web views' stylesheets — with
+   * the theme the app is actually on instead of the default followed by a flash.
+   *
+   * Absent when main has nothing to pass — a profile that has never chosen a theme, or one whose
+   * theme is still only in a renderer's own store awaiting its one-time handover. A renderer that
+   * does not find it falls back to what it can read for itself, and then to the default.
+   *
+   * @experimental
+   */
+  export const THEME_STATE_QUERY_PARAMETER = 'themeState';
+  /** How a query parameter's text maps to the value the app uses. */
+  type UrlParameterKind = 'flag' | 'integer' | 'enum' | 'string' | 'serialized';
+  /** What a reader needs to turn one query parameter's text into a value it can trust. */
+  type UrlParameterSpec = {
+    kind: UrlParameterKind;
+    default?: string;
+    allowed?: readonly string[];
+  };
+  /**
+   * Every query parameter passed to a renderer, keyed by its parameter name, and what its text means:
+   * a `flag` is present-or-absent (any value, including none, means true), an `integer` or `enum` is
+   * a single value read at face value, a `string` is a single opaque value used as-is, and
+   * `serialized` is the output of platform-bible-utils' `serialize`, opaque to this table.
+   *
+   * Declarative on purpose, not a table of encode/decode functions: this module is import-free so the
+   * `ts-node` startup-waterfall CLI can read it without pulling in the logger, and codec functions
+   * would need `serialize`/`deserialize` from platform-bible-utils, a runtime import. `deserialize`
+   * returns `any`, so a `serialized` entry is exactly as much of an unchecked cast at its read site
+   * as an `enum` one — the table exists so both kinds of drift are visible in the same place instead
+   * of only the ones a linter happens to flag.
+   *
+   * @experimental
+   */
+  export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>>;
+  /**
+   * Prefix that identifies a startup timing mark in the logs (see
+   * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
+   * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without
+   * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
+   */
+  export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
+  /**
+   * Name of the mark each process emits first, right after start. The main process's copy is the
+   * run-boundary the startup-waterfall parser uses to slice a multi-launch log down to the latest run
+   * (see `.erb/scripts/startup-waterfall.util.ts`'s `selectLatestRun`). Emitters: `src/main/main.ts`
+   * and `src/extension-host/extension-host.ts`.
+   */
+  export const STARTUP_MARK_PROCESS_START = 'process-start';
+  /**
+   * Process tag (the `<proc>` field of a mark) of the main process - the value of `ProcessType.Main`.
+   * Lives here as a bare literal (not `ProcessType.Main`) so the import-free startup-waterfall CLI
+   * can identify the run boundary without importing `global-this.model` (which pulls in React and
+   * aliases the CLI can't resolve). Keep in sync with `ProcessType.Main` in
+   * `src/shared/global-this.model.ts`.
+   */
+  export const STARTUP_MARK_MAIN_PROCESS_TAG = 'main';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */
   export const DEFAULT_THEME_TYPE = 'light';
+  /**
+   * Usersnap client key of the space that holds the in-app feedback forms (Usersnap projects). Like
+   * the project keys below, it is write-only: it can only SUBMIT reports to a Usersnap project, not
+   * RETRIEVE any information from it.
+   *
+   * The Usersnap keys are intentionally empty in Platform.Bible. A product built on top of core
+   * (Paratext 10 Studio) sets them at build time through its repository patch, together with the Help
+   * menu items that open the forms. While this key is empty, Usersnap is never initialized and makes
+   * no network request.
+   *
+   * Typed as `string` rather than the literal `''` so a build that sets it still type-checks.
+   *
+   * @experimental
+   */
+  export const USERSNAP_SPACE_API_KEY: string;
+  /**
+   * Usersnap client key of the "report a bug / send feedback" form. Write-only, and empty in
+   * Platform.Bible; see {@link USERSNAP_SPACE_API_KEY}.
+   *
+   * @experimental
+   */
+  export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string;
+  /**
+   * Usersnap client key of the "submit an idea" form. Write-only, and empty in Platform.Bible; see
+   * {@link USERSNAP_SPACE_API_KEY}.
+   *
+   * @experimental
+   */
+  export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string;
   /** Constants related to zoom factor of entire application */
   export const DEFAULT_ZOOM_FACTOR = 1;
   export const MIN_ZOOM_FACTOR = 0.5;
   export const MAX_ZOOM_FACTOR = 3;
+  /**
+   * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
+   * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
+   * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
+   * deliberately long.
+   *
+   * Consumed by the main process (`shutdown-tasks.ts`), which uses it to bound how long app shutdown
+   * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
+   * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
+   * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
+   * when the backend says so rather than on a renderer-side timer.
+   *
+   * @experimental
+   */
+  export const AUTO_SYNC_MAX_DURATION_MS: number;
+}
+declare module 'renderer/services/window-creation-state.util' {
+  /**
+   * Record the state this window now holds under the query parameter main created it with, so a
+   * reload of this document seeds from it rather than from the state the window was created with.
+   *
+   * Call from wherever the cache is updated — by the host's events, and by a locally predicted write.
+   *
+   * Written straight through rather than coalesced the way the host's store is: this is a
+   * same-document history entry, not an fsync, and not on the event loop the whole app's JSON-RPC
+   * traffic shares. It is skipped when the query already says this, which is what keeps a predicted
+   * write and the host's echo of it from writing twice, and a run of changes that really are
+   * different (dragging a colour picker through a user theme) costs one serialize and one
+   * `replaceState` per change in each window — the same order as re-rendering the change itself.
+   *
+   * @param parameterName Query parameter main passes this state on, e.g.
+   *   `SCROLL_GROUP_STATE_QUERY_PARAMETER`
+   * @param state State to serialize into that parameter
+   * @experimental
+   */
+  export function refreshWindowCreationState(parameterName: string, state: unknown): void;
+}
+declare module 'renderer/services/scroll-group.service' {
+  import {
+    IScrollGroupService,
+    ReferenceHistory,
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupUpdateInfo,
+  } from 'shared/services/scroll-group.service-model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
+  /**
+   * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
+   * placeholder and will be refactored significantly in
+   * https://github.com/paranext/paranext-core/issues/788
+   */
+  export const availableScrollGroupIds: (number | undefined)[];
+  /**
+   * Event that emits with information about a changed Scripture Reference for a scroll group. Note it
+   * also fires on a source-only change — a same-numbered reference set by a different-versification
+   * project (the `sourceProjectId` changes while the verse numbers do not) — so consumers must not
+   * assume it fires only when the verse numbers change; use the payload's `sourceProjectId` to tell a
+   * frame change from a verse change.
+   */
+  export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+  /** Event that emits when a scroll group's reference history changes */
+  export const onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
+  /** See {@link IScrollGroupRemoteService.getScrRef} */
+  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
+  /**
+   * Get the id of the project whose versification the scroll group's `scrRef` is expressed in.
+   *
+   * @param scrollGroupId Scroll group whose source project id to read. If `undefined`, defaults to 0
+   * @returns The source project id, or `undefined` when the source frame is unknown — e.g. the group
+   *   was never set with a source, or its ref came from an external writer whose versification is not
+   *   known
+   */
+  export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
+  /** See {@link IScrollGroupRemoteService.getReferenceHistory} */
+  export function getReferenceHistorySync(scrollGroupId?: ScrollGroupId): ReferenceHistory;
+  /**
+   * See {@link IScrollGroupRemoteService.setScrRef}
+   *
+   * Predicts the host's answer from this window's copy and returns it immediately, so a caller that
+   * branches on "did it change" (e.g. `use-scroll-group-scr-ref.hook.ts`) does not have to await. The
+   * prediction can only be wrong while a change from another window is still in flight — the same
+   * instant-race the single host has always resolved by arrival order — and the loser converges on
+   * the host's next event either way.
+   *
+   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
+   *   unknown / canonical English.
+   */
+  export function setScrRefSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    scrRef: SerializedVerseRef,
+    sourceProjectId?: string,
+  ): boolean;
+  /**
+   * See {@link IScrollGroupRemoteService.navigateReferenceHistory}
+   *
+   * Predicted from this window's copy of the history the same way {@link setScrRefSync} predicts a
+   * reference change, so the back/forward buttons move the moment they are clicked. The host runs the
+   * same navigation against the authoritative history and announces the result; if it declines the
+   * move — its history is not where this window thought it was — the group is resynced from it.
+   */
+  export function navigateReferenceHistorySync(
+    scrollGroupId: ScrollGroupId | undefined,
+    offset: number,
+  ): boolean;
+  /**
+   * Navigate a scroll group's reference history in a PHYSICAL direction (`'left'` / `'right'`),
+   * resolving it to a logical back/forward for the current UI layout direction (RTL swaps the pair,
+   * via {@link resolveReferenceHistoryDirection}). Backs the top toolbar's history buttons, which know
+   * which way the user pointed rather than which way that is through the history.
+   *
+   * The mapping is made here because layout direction is renderer state: `readDirection` reads the
+   * document, which only this process has. The host exposes logical back/forward only. The
+   * `platform.navigateLeft/RightInReferenceHistory` commands make the same mapping in the main
+   * process, from the layout direction the window reports in its navigation context.
+   */
+  export function navigateReferenceHistoryPhysicalSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    physicalDirection: 'left' | 'right',
+  ): boolean;
+  /**
+   * Event that emits when a tracked project's versification changes mid-session (see
+   * {@link ensureVersificationSubscribed}). Does NOT emit for the initial subscription load — only for
+   * a genuine change.
+   */
+  export const onDidChangeVersification: PlatformEvent<{
+    projectId: string;
+  }>;
+  /**
+   * Synchronous, best-effort companion to {@link getScrRefForProject}: returns the already-computed
+   * conversion into `projectId`'s versification if one is cached, otherwise the raw stored reference.
+   * Never fires a round-trip. Used for the initial displayed value and when detaching a web view so
+   * callers never block on the async conversion. Returns the raw reference when no conversion is
+   * needed (source frame unknown or already `projectId`) or when a conversion has not been computed
+   * yet.
+   *
+   * @param scrollGroupId Scroll group whose reference to read. If `undefined`, defaults to 0
+   * @param projectId Project into whose versification the reference should be converted
+   * @returns The cached converted reference, or the raw reference when none is available
+   */
+  export function getScrRefForProjectSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): SerializedVerseRef;
+  /**
+   * Get the scroll group's Scripture reference converted into the versification of `projectId`.
+   *
+   * The group stores its reference in the versification of whichever project last set it (see
+   * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
+   * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer
+   * gets a reference it can use directly. Returns the raw reference unchanged when no conversion is
+   * needed: the source frame is unknown, or already matches `projectId`. On any conversion failure it
+   * falls back to the raw reference (and does not permanently suppress the project — the failure may
+   * be transient).
+   *
+   * Converts the reference this window currently holds, so a conversion started right after a
+   * predicted navigation describes the verse actually on screen rather than one the host has not
+   * caught up to yet.
+   *
+   * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
+   * @param projectId Project into whose versification to convert the reference
+   * @returns The reference in `projectId`'s versification
+   */
+  export function getScrRefForProject(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): Promise<SerializedVerseRef>;
+  /**
+   * Start this window's scroll group service: subscribe to the host's announcements, hand over any
+   * state stored before the host existed, then seed from the host.
+   *
+   * Subscribing first so a change made while the rest is in flight is not lost, and handing over
+   * before seeding so the first seed after an upgrade carries the reference the user left off at.
+   *
+   * Nothing here is allowed to fail this window's startup. The cache is already usable — it was
+   * filled from what came with the window before React rendered, and the subscription above keeps it
+   * current — so a host that is slow or missing costs freshness, not correctness, and must not take
+   * down the unrelated services that start alongside this one. Until the seed succeeds every write is
+   * sent to the host regardless of what the cache predicts (see {@link setScrRefSync}), which is what
+   * keeps a never-seeded window honest.
+   *
+   * Call once at renderer startup.
+   */
+  export function startScrollGroupService(): Promise<void>;
+  /**
+   * This window's scroll group service — what `papi.scrollGroups` resolves to in the renderer.
+   *
+   * Deliberately NOT the shared network proxy: inside one window there is one answer about where a
+   * scroll group is, and it is this module's. A web view holds both this and the hooks (`window.papi`
+   * comes from the window that hosts it), so serving the two from different places would let
+   * `papi.scrollGroups.getScrRef` report a verse the same web view's own UI has already moved away
+   * from, for as long as a predicted write is in flight. Other processes read the host directly,
+   * which is the authority both of these agree with.
+   *
+   * @experimental
+   */
+  export const rendererScrollGroupService: IScrollGroupService;
+}
+declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
+  import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { ScrollGroupId } from 'platform-bible-utils';
+  /**
+   * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
+   * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
+   * `scrollGroupScrRef`. Use similarly to `useState`.
+   *
+   * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
+   *   reference. Defaults to 0 meaning synced with scroll group 0 (A in English)
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param setScrollGroupScrRef Function to run to set `scrollGroupScrRef`. Should return `true` if
+   *   actually updated any properties; `false` otherwise
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because this is just used when needed and doesn't have any
+   *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
+   *   always set using the latest value of this callback
+   * @param projectId Optional project id for the consuming web view. When provided, the returned
+   *   `scrRef` is converted into this project's versification for display. `setScrRef` stamps the
+   *   scroll group with this project as the source.
+   * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
+   *
+   *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents,
+   *       converted into `projectId`'s versification when a `projectId` is provided
+   *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
+   *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
+   *   - `scrollGroupId`: The current value for the scroll group this `scrollGroupScrRef` is synced with.
+   *       If not synced to a scroll group, this is `undefined`
+   *   - `setScrollGroupId`: Function to use to update the scroll group with which this
+   *       `scrollGroupScrRef` is synced
+   *   - `sourceProjectId`: The id of the project that last set this scroll group's reference (the source
+   *       frame of `scrRef`); this web view's own `projectId` when not synced to a scroll group.
+   *       `undefined` when unknown
+   */
+  export function useScrollGroupScrRef(
+    scrollGroupScrRef: ScrollGroupScrRef | undefined,
+    setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
+    projectId?: string,
+  ): [
+    scrRef: SerializedVerseRef,
+    setScrRef: (newScrRef: SerializedVerseRef) => void,
+    scrollGroupId: ScrollGroupId | undefined,
+    setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+    sourceProjectId: string | undefined,
+  ];
+  export default useScrollGroupScrRef;
 }
 declare module 'shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
@@ -7035,6 +10427,8 @@ declare module 'shared/services/localization.service-model' {
       Record<string, LanguageInfo>,
       never
     >;
+    /** @experimental */
+    SetupDialogLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -7075,6 +10469,15 @@ declare module 'shared/services/localization.service-model' {
      */
     retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
+     * Get the interface languages that have setup-dialog localizations (used by the first-run
+     * language picker). A language qualifies when it has ≥90% of the English setup-dialog
+     * (`%firstRun_*%`) keys.
+     *
+     * @returns Qualifying user-interface languages, keyed by raw locale tag
+     * @experimental
+     */
+    getSetupDialogLanguages: () => Promise<Record<string, LanguageInfo>>;
+    /**
      * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
      * provide localized strings in contributions
      */
@@ -7091,6 +10494,13 @@ declare module 'shared/services/localization.service-model' {
     setAvailableInterfaceLanguages(): Promise<
       DataProviderUpdateInstructions<LocalizationDataDataTypes>
     >;
+    /**
+     * This data cannot be changed. Trying to use this setter will always throw. It is derived from
+     * the loaded localization data.
+     *
+     * @experimental
+     */
+    setSetupDialogLanguages(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
   } & OnDidDispose &
     typeof localizationServiceObjectToProxy & {
       /**
@@ -7336,78 +10746,6 @@ declare module 'shared/services/settings.service' {
   export const settingsService: ISettingsService;
   export default settingsService;
 }
-declare module 'renderer/services/scroll-group.service-host' {
-  import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { ScrollGroupId } from 'platform-bible-utils';
-  /**
-   * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
-   * placeholder and will be refactored significantly in
-   * https://github.com/paranext/paranext-core/issues/788
-   */
-  export const availableScrollGroupIds: (number | undefined)[];
-  /** Event that emits with information about a changed Scripture Reference for a scroll group */
-  export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
-  /** See {@link IScrollGroupRemoteService.getScrRef} */
-  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
-  /**
-   * See {@link IScrollGroupRemoteService.setScrRef}
-   *
-   * @param shouldSetVerseRefSetting If `true`: if scroll group 0's reference changes, update the
-   *   `platform.verseRef` setting to keep it in sync for backwards compatibility. Defaults to `true`.
-   *   Only set to `false` when running this from subscription to updates to the setting
-   */
-  export function setScrRefSync(
-    scrollGroupId: ScrollGroupId | undefined,
-    scrRef: SerializedVerseRef,
-    shouldSetVerseRefSetting?: boolean,
-  ): boolean;
-  /** Register the network object that backs the scroll group service */
-  export function startScrollGroupService(): Promise<void>;
-}
-declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
-  import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { ScrollGroupId } from 'platform-bible-utils';
-  /**
-   * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
-   * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
-   * `scrollGroupScrRef`. Use similarly to `useState`.
-   *
-   * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
-   *   reference. Defaults to 0 meaning synced with scroll group 0 (A in English)
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param setScrollGroupScrRef Function to run to set `scrollGroupScrRef`. Should return `true` if
-   *   actually updated any properties; `false` otherwise
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because this is just used when needed and doesn't have any
-   *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
-   *   always set using the latest value of this callback
-   * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
-   *
-   *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents
-   *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
-   *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
-   *   - `scrollGroupId`: The current value for the scroll group this `scrollGroupScrRef` is synced with.
-   *       If not synced to a scroll group, this is `undefined`
-   *   - `setScrollGroupId`: Function to use to update the scroll group with which this
-   *       `scrollGroupScrRef` is synced
-   */
-  export function useScrollGroupScrRef(
-    scrollGroupScrRef: ScrollGroupScrRef | undefined,
-    setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
-  ): [
-    scrRef: SerializedVerseRef,
-    setScrRef: (newScrRef: SerializedVerseRef) => void,
-    scrollGroupId: ScrollGroupId | undefined,
-    setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
-  ];
-  export default useScrollGroupScrRef;
-}
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';
   import {
@@ -7435,7 +10773,9 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *
    *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
    *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
-   *   - `setSetting`: Function that updates the setting to a new value
+   *   - `setSetting`: Function that updates the setting to a new value, or `undefined` while there is
+   *       nothing to write through — including while the underlying subscription is throttled, see
+   *       {@link useData} for that state.
    *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
    *
    * @throws When subscription callback function is called with an update that has an unexpected
@@ -7447,9 +10787,11 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
     setting: SettingTypes[SettingName] | PlatformError,
-    setSetting: (
-      newData: SettingTypes[SettingName],
-    ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+    setSetting:
+      | ((
+          newData: SettingTypes[SettingName],
+        ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>)
+      | undefined,
     resetSetting: () => void,
     isLoading: boolean,
   ];
@@ -7605,15 +10947,24 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *   successfully updates data.
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
    *   provider
+   *
+   * Subject to the same runaway-loop throttling as {@link useData} — see its docs for what the
+   * returned values look like while throttled.
    */
   export const useProjectData: UseProjectDataHook;
   export default useProjectData;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';
-  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
+  import { PROJECT_INTERFACE_PLATFORM_BASE } from 'shared/models/project-data-provider.model';
   import {
     IBaseProjectDataProvider,
+    ProjectInterfaceDataTypes,
     ProjectSettingNames,
     ProjectSettingTypes,
   } from 'papi-shared-types';
@@ -7647,13 +10998,18 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    *       {@link PlatformError} if the Project Data Provider throws an error. You can call
    *       {@link isPlatformError} on this value to check if it is an error.
    *   - `setSetting`: asynchronous function to request that the Project Data Provider update the project
-   *       setting with the specified key. Returns `true` if successful. Note that this function does
-   *       not update the data. The Project Data Provider sends out an update to this subscription if
-   *       it successfully updates data.
+   *       setting with the specified key. Returns a promise that resolves to the update instructions
+   *       once the write completes, and rejects if the write is rejected (e.g. by the Send/Receive
+   *       write-gate) — await it (or attach a `.catch`) to observe write failures. Note that this
+   *       function does not update the data. The Project Data Provider sends out an update to this
+   *       subscription if it successfully updates data.
    *   - `resetSetting`: asynchronous function to request that the Project Data Provider reset the project
-   *       setting
+   *       setting. Returns a promise that resolves to `true` if successfully reset, and rejects if
+   *       the reset is rejected.
    *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
    *
+   *   Subject to the same runaway-loop throttling as {@link useData} — see its docs for what the
+   *   returned values look like while throttled.
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
@@ -7664,8 +11020,18 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
     setting: ProjectSettingTypes[ProjectSettingName] | PlatformError,
-    setSetting: ((newSetting: ProjectSettingTypes[ProjectSettingName]) => void) | undefined,
-    resetSetting: (() => void) | undefined,
+    setSetting:
+      | ((
+          newSetting: ProjectSettingTypes[ProjectSettingName],
+        ) => Promise<
+          DataProviderUpdateInstructions<
+            ExtractDataProviderDataTypes<
+              ProjectInterfaceDataTypes[typeof PROJECT_INTERFACE_PLATFORM_BASE]
+            >
+          >
+        >)
+      | undefined,
+    resetSetting: (() => Promise<boolean>) | undefined,
     isLoading: boolean,
   ];
   export default useProjectSetting;
@@ -7845,6 +11211,23 @@ declare module 'renderer/services/overlays/overlay-store' {
   /** Get a specific overlay by id, or undefined if not found */
   export function getOverlayById(id: string): OverlayEntry | undefined;
   /**
+   * Determine whether at least one active overlay has the given type
+   *
+   * @param type The overlay type to check for (e.g. 'modalDialog')
+   * @returns True if an overlay of that type is currently active; false otherwise
+   */
+  export function hasOverlayOfType(type: OverlayEntry['type']): boolean;
+  /**
+   * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
+   * accepts, since a newer overlay always renders over an older one.
+   *
+   * @param predicate Which overlays to consider
+   * @returns The newest matching overlay, or undefined if none match
+   */
+  export function getTopmostOverlay(
+    predicate: (overlay: OverlayEntry) => boolean,
+  ): OverlayEntry | undefined;
+  /**
    * Removes all overlays from the store and notifies listeners.
    *
    * WARNING: Test-only. Does not resolve or reject pending overlay promises. Using this in production
@@ -7859,6 +11242,86 @@ declare module 'renderer/services/overlays/overlay-store' {
    * @returns True if the overlay was found and updated, false otherwise
    */
   export function updateOverlayContent(id: string, content: PopoverContent): boolean;
+  /**
+   * Updates the mutable `filterText`/`selectedIndex` state of a command palette overlay and notifies
+   * subscribers. `selectedIndex` is always clamped to `[0, itemCount - 1]` (or `0` when `itemCount`
+   * is `0`) — both when moved by `selectedIndexDelta` and when left alone, since a `filterText`
+   * change can shrink the filtered list out from under the previous index.
+   *
+   * @param id The overlay id to update
+   * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged; the empty
+   *   string is normalized to undefined so the entry never stores `''`); `selectedIndex` sets the
+   *   highlighted index ABSOLUTELY (the active palette mirrors cmdk's arrow-key highlight this way —
+   *   it knows the resulting index, not a delta); `selectedIndexDelta` moves the current index by
+   *   this many items; both clamp; `itemCount` is the length of the filtered item list used to clamp
+   *   `selectedIndex`
+   * @returns True if the overlay was found and updated, false otherwise
+   */
+  export function updateCommandPaletteState(
+    id: string,
+    patch: {
+      filterText?: string;
+      selectedIndex?: number;
+      selectedIndexDelta?: number;
+      itemCount: number;
+    },
+  ): boolean;
+}
+declare module 'renderer/components/overlays/overlay-content-zoom.util' {
+  import { CSSProperties } from 'react';
+  /** The Radix primitives whose content the platform draws for a web view. */
+  type ZoomablePrimitive = 'popover' | 'dropdown-menu';
+  /**
+   * The style that draws a platform overlay at the scale of the pane that asked for it.
+   *
+   * `zoom` goes inside the popper wrapper Radix positions — on the Radix `Content` element, or on an
+   * inner wrapper when an arrow must stay unzoomed — never on the wrapper itself: the wrapper stays
+   * in unzoomed viewport pixels, so Radix keeps measuring the drawn size and placing it correctly.
+   * The available-space variables Radix publishes are in those same unzoomed pixels, so dividing them
+   * by the scale is what keeps a zoomed pop-up inside the window rather than letting it grow past the
+   * edge.
+   *
+   * A scale of 1 - or anything that is not a usable positive number - contributes nothing at all, so
+   * an overlay from an unzoomed pane is drawn at interface scale.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function contentZoomOverlayStyle(
+    scale: number,
+    primitive: ZoomablePrimitive,
+  ): CSSProperties;
+}
+declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
+  import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+  import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
+  /**
+   * Recursively collects every LocalizeKey label in a tree of context menu items.
+   *
+   * Shared rather than owned by the overlay context menu because the tab menu renders the same item
+   * union through its own ContextMenu primitives, and both have to resolve their labels before
+   * rendering them — a contributed menu can arrive carrying raw keys.
+   *
+   * @param items Context menu items to walk, submenus included
+   * @returns Every LocalizeKey found, in the order encountered
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function collectContextMenuKeys(items: OverlayContextMenuItem[]): LocalizeKey[];
+  /**
+   * Recursively resolves LocalizeKey labels in context menu items using localized strings.
+   *
+   * Used as a pair with {@link collectContextMenuKeys}: collect the keys, resolve them through
+   * `useLocalizedStrings`, then map the items through this. A label with no resolution is left as it
+   * is, so a missing string shows the key rather than nothing.
+   *
+   * @param items Context menu items to resolve, submenus included
+   * @param localizedStrings Resolved strings, keyed by LocalizeKey
+   * @returns The items with their labels resolved
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function localizeContextMenuItems(
+    items: OverlayContextMenuItem[],
+    localizedStrings: LanguageStrings,
+  ): OverlayContextMenuItem[];
 }
 declare module 'renderer/components/overlays/overlay-context-menu.component' {
   import { OverlayEntry } from 'renderer/services/overlays/overlay.service-model';
@@ -7886,6 +11349,14 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
       }
     | {
         type: 'submenu';
+        /**
+         * Id of the contributed menu item this submenu was built from, when it came from a
+         * contribution. Lets a consumer recognize a particular submenu — for one whose contents are
+         * only known at the moment the menu opens, for instance — without matching on its label.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
+         */
+        id?: string;
         label: string | LocalizeKey;
         icon?: PlatformIconName;
         items: OverlayContextMenuItem[];
@@ -7903,6 +11374,13 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
       x: number;
       y: number;
     };
+    /**
+     * The scale the requesting pane draws its content at. The menu is drawn at the same scale, so it
+     * matches the text it belongs to. 1 leaves the rendered output exactly as it is.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    contentScale?: number;
     /** Called when the user selects a menu item */
     onSelect: (result: OverlayContextMenuResult) => void;
     /** Called when the menu is dismissed without a selection */
@@ -7919,6 +11397,7 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
   export function OverlayContextMenuPresentational({
     items,
     position,
+    contentScale,
     onSelect,
     onDismiss,
   }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
@@ -7929,6 +11408,14 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
         type: 'contextMenu';
       }
     >;
+    /**
+     * The requesting pane's content scale, read and supplied by `OverlayHost` — see
+     * {@link OverlayContextMenuPresentationalProps.contentScale}. Undefined draws at interface scale,
+     * matching the presentational component's own default.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    contentScale?: number;
   };
   /**
    * Production context menu component. Resolves LocalizeKey values in menu items via
@@ -7941,6 +11428,7 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
    */
   export function OverlayContextMenu({
     overlay,
+    contentScale,
   }: OverlayContextMenuProps): import('react/jsx-runtime').JSX.Element;
 }
 declare module 'renderer/services/overlays/overlay.service-model' {
@@ -7951,7 +11439,9 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * so this service provides a way for them to request overlays that the renderer hosts on their
    * behalf.
    */
-  import { LocalizeKey, PlatformError } from 'platform-bible-utils';
+  import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+  import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
+  import type { PaletteFilterMode } from 'platform-bible-react/experimental';
   import type { ReactElement } from 'react';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   /**
@@ -8027,33 +11517,63 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     dismissAfterMs?: number;
     /** Maximum width of the popover in pixels. If omitted, uses a default max width. */
     maxWidth?: number;
+    /**
+     * Maximum height of the popover in pixels. Content taller than this scrolls inside the popover.
+     * If omitted, uses a default max height.
+     */
+    maxHeight?: number;
     /** Whether to display an arrow pointing from the popover toward the anchor. Defaults to `true`. */
     showArrow?: boolean;
   }
   /**
    * A single item in a command palette. Items are displayed in a searchable, filterable list. The
    * user types to filter and selects one item.
+   *
+   * Extends the shared {@link PaletteItem} contract (id/label/description/badge/disabled/muted) with
+   * the presentation extras only this overlay renders.
    */
-  export type CommandPaletteItem = {
-    /** Unique identifier returned when this item is selected */
-    id: string;
-    /** Primary display text (e.g., marker code like "ft" or command name) */
-    label: string | LocalizeKey;
-    /** Secondary description text displayed below the label */
-    description?: string | LocalizeKey;
+  export type CommandPaletteItem = PaletteItem & {
     /** Optional icon displayed to the left of the label */
     icon?: string;
-    /** Optional badge text (e.g., "Deprecated", "Disallowed") */
-    badge?: string | LocalizeKey;
     /** Optional group key for visual sectioning with group headers */
     group?: string;
-    /** Whether the item is grayed out and non-selectable. Defaults to false. */
-    disabled?: boolean;
   };
+  /**
+   * A {@link CommandPaletteItem} text field that palette filtering may match against. See
+   * {@link CommandPaletteRequest.searchFields}.
+   */
+  export type PaletteSearchField = 'label' | 'description' | 'badge';
   /** Request payload for {@link IOverlayService.showCommandPalette}. */
   export interface CommandPaletteRequest {
     /** The selectable items to display */
     items: CommandPaletteItem[];
+    /**
+     * Which item text fields the filter text matches against. Defaults to `['label', 'description',
+     * 'badge']` — every text field the palette displays — which suits general command palettes (a
+     * command is often found by a word from its description). Palettes whose label is the whole
+     * identity opt into `['label']`: for marker palettes the label IS the marker code, and
+     * description matching buried exact typed markers under description hits.
+     *
+     * Matching and ranking: label matches come first, ranked exact-first (see
+     * {@link PaletteFilterMode}); items matching only on the OTHER searched fields follow in their
+     * original order. Passive palettes prefix-match the label only regardless of this option (PT9
+     * marker-dropdown semantics — the passive flavor exists for in-document marker typing).
+     */
+    searchFields?: readonly PaletteSearchField[];
+    /**
+     * When `true`, the palette matches by plain CONTAINMENT only (whole-phrase, then all-words),
+     * never by cmdk's per-character fuzzy scoring. Defaults to `false`: an ordinary focused palette
+     * fuzzy-matches, so `gcb` finds "Git: Create Branch".
+     *
+     * Set this when an exact, predictable match list matters more than forgiving lookup — marker
+     * palettes do, because the rendered list participates in commit semantics (typing a marker and
+     * pressing Space must agree byte-for-byte with what is displayed). Palettes with
+     * {@link CommandPaletteRequest.keyForwarding} and passive palettes always match by containment
+     * regardless of this option: their filtered list is resolved by the HOST (commits and forwarded
+     * keys are answered from it), and the host's filter must agree exactly with what is on screen —
+     * cmdk's scorer is not reimplemented host-side.
+     */
+    disableFuzzyMatching?: boolean;
     /**
      * Anchor position in pixels relative to the requesting WebView's iframe origin. The palette is
      * positioned adjacent to this point. If omitted, centers in the viewport.
@@ -8074,7 +11594,67 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     maxHeight?: number;
     /** Whether clicking outside dismisses the palette. Defaults to true. */
     dismissOnClickOutside?: boolean;
+    /**
+     * When true, renders without a search input and without stealing focus from the requesting
+     * WebView. Filter text and the highlighted selection are driven externally via
+     * {@link IOverlayService.updateCommandPalette} and committed via
+     * {@link IOverlayService.commitCommandPaletteSelection} instead of the palette's own search box
+     * and keyboard handling. Defaults to false (the palette owns its own search input and focus, as
+     * today).
+     *
+     * @remarks
+     * Passive-palette filtering and commit resolution match the externally supplied filter text
+     * case-insensitively against the PREFIX of each item's `label`: a leading `+` in the filter is
+     * stripped first (so `"+w"` matches the same items as `"w"`), and an empty or omitted filter
+     * shows every item. `LocalizeKey` labels are resolved to localized text when the palette is
+     * shown, so matching always runs against the same label text the palette displays.
+     */
+    passive?: boolean;
+    /**
+     * Keys the REQUESTING session claims while this palette is open, and where to send them.
+     *
+     * The palette and the session that opened it live in different documents, so whichever holds
+     * focus is the only one that sees a keystroke. A palette that takes focus therefore silently
+     * takes the session's keys with it: its commit semantics stop running, and a local default (e.g.
+     * cmdk's own navigation) answers instead. Declaring the claimed keys closes that — the palette
+     * forwards exactly those to {@link PaletteKeyForwarding.onKey} and acts on none of them itself.
+     *
+     * A focus-stealing (non-passive) palette is what makes this necessary; a passive one never takes
+     * focus, so its requester already receives every key and forwarding is inert there. Requesters
+     * still declare it for both, so one code path covers a palette that unexpectedly receives a key.
+     * Omit it entirely and the palette behaves exactly as it did before forwarding existed.
+     *
+     * @remarks
+     * The handler is called synchronously, in the palette's own document. This is a direct function
+     * reference rather than serialized data: the overlay service is renderer-only and a requesting
+     * WebView is a same-origin iframe sharing the renderer's `papi`, so no boundary is crossed. The
+     * forwarded value is a plain `ForwardedPaletteKeyEvent` rather than a live DOM event, which keeps
+     * it free of the requester's realm.
+     */
+    keyForwarding?: PaletteKeyForwarding;
   }
+  /**
+   * How `filterPaletteItems` (overlay-palette-filter.util.ts) matches filter text against items — one
+   * mode per palette flavor:
+   *
+   * - `'passive'` — case-insensitive PREFIX match on `label` only, whatever
+   *   {@link CommandPaletteRequest.searchFields} says. Passive palettes show bare marker codes (`f`,
+   *   `fe`, `fig`) filtered by the marker prefix the user has typed into the document, mirroring
+   *   PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in the filter
+   *   text is stripped before matching, so `"+w"` matches the same items as `"w"`.
+   * - `'active'` — case-insensitive CONTAINMENT match over the request's
+   *   {@link CommandPaletteRequest.searchFields} (default: label, description, and badge). Label
+   *   matches rank first, exact-first, so an exact marker match cannot be buried under items whose
+   *   descriptions happen to contain the typed letter; marker palettes additionally opt into
+   *   label-only matching.
+   *
+   * Label matches rank exact-first in both modes — see `filterPaletteItems`.
+   *
+   * Re-exported from `platform-bible-react`, the home of the `filterAndRankPaletteItems` that
+   * `filterPaletteItems` delegates label matching to, so the mode this service accepts and the mode
+   * that function implements cannot drift apart.
+   */
+  export type { PaletteFilterMode };
   /**
    *
    * Service for showing overlays (context menus, popovers, command palettes) that render outside
@@ -8095,6 +11675,10 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * Shows a context menu from menu.json contributions registered for the given webViewType. Fetches
      * menu data, renders the menu, and auto-executes the selected command. Returns the command string
      * that was executed, or undefined if dismissed.
+     *
+     * The menu is drawn at the content zoom of the requesting WebView's pane — of its active area,
+     * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
+     * in and nothing to compensate for.
      *
      * @param webViewType The webViewType to look up in the menu data service
      * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
@@ -8119,6 +11703,10 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * return immediately with an overlay ID rather than waiting for dismissal. Use
      * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
      * {@link dismissPopover} to close it programmatically.
+     *
+     * The popover is drawn at the content zoom of the requesting WebView's pane — of its active area,
+     * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
+     * in and nothing to compensate for.
      *
      * @param request The popover anchor, content, and behavioral options
      * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
@@ -8162,6 +11750,15 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * Shows a command palette with searchable/filterable items. Returns a promise that resolves with
      * the selected item's `id`, or `undefined` if dismissed.
      *
+     * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
+     * the palette is shown, so all filtering — the palette's own search box and text forwarded via
+     * {@link updateCommandPalette} — matches against the text the user actually sees.
+     *
+     * A palette shown at an anchor is drawn at the content zoom of the requesting WebView's pane — of
+     * its active area, for a pane with several zoom areas; there is nothing to opt in and nothing to
+     * compensate for. A palette shown without an anchor is centred in the window, belongs to no
+     * pane's content, and stays at interface scale.
+     *
      * @param request The items, optional anchor position, and display options
      * @param webViewId The ID of the WebView requesting the command palette
      * @returns The selected item's ID, or `undefined` if dismissed
@@ -8173,6 +11770,51 @@ declare module 'renderer/services/overlays/overlay.service-model' {
       request: CommandPaletteRequest,
       webViewId: string,
     ): Promise<string | undefined>;
+    /**
+     * Updates the filter text and/or moves the highlighted selection of the active command palette
+     * for the given WebView. No-op if no command palette is active for that WebView.
+     *
+     * Unlike the popover family above (keyed by the overlay ID returned from `showPopover`), the
+     * command palette mutators are keyed by `webViewId` instead. The service enforces one command
+     * palette per WebView at a time (see this interface's class docs), so the requesting WebView's
+     * own ID is a sufficient handle — passive-mode callers drive the palette without ever seeing an
+     * overlay ID.
+     *
+     * @param webViewId The ID of the WebView whose command palette should be updated
+     * @param update `filterText` and/or `moveSelection` (clamped to the filtered list's bounds).
+     *   `filterText` drives passive palettes' list directly and, for ACTIVE palettes, the
+     *   (controlled) search input — callers forward keystrokes this way when the cross-frame focus
+     *   handoff loses and the user's typing lands in their WebView instead of the palette.
+     */
+    updateCommandPalette(
+      webViewId: string,
+      update: {
+        filterText?: string;
+        moveSelection?: number;
+      },
+    ): Promise<void>;
+    /**
+     * Commits the currently highlighted item of the active command palette for the given WebView,
+     * resolving its `showCommandPalette` promise with that item's `id` (mirrors how a click on a
+     * command palette item resolves the promise). If the highlighted item is `disabled`, moves
+     * forward to the next enabled item in the filtered list; if none are enabled, no-ops. No-op if no
+     * command palette is active for that WebView.
+     *
+     * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+     *
+     * @param webViewId The ID of the WebView whose command palette selection should be committed
+     */
+    commitCommandPaletteSelection(webViewId: string): Promise<void>;
+    /**
+     * Dismisses the active command palette for the given WebView, resolving its `showCommandPalette`
+     * promise with `undefined`. Works for both active and passive palettes. No-op if no command
+     * palette is active for that WebView.
+     *
+     * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+     *
+     * @param webViewId The ID of the WebView whose command palette should be dismissed
+     */
+    dismissCommandPalette(webViewId: string): Promise<void>;
   }
   /**
    * Internal representation of an active overlay stored in the overlay store. Each entry holds the
@@ -8257,8 +11899,26 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         webViewId: string;
         /** The original request */
         request: CommandPaletteRequest;
-        /** Items to render */
+        /**
+         * Items to render, with any `LocalizeKey` `label`/`description`/`badge` text already resolved
+         * to localized strings at show time — filtering, commit resolution, and rendering all read
+         * from here so they always agree on each item's text.
+         */
         items: CommandPaletteItem[];
+        /**
+         * Current filter text. Mutable — updated in place by `updateCommandPalette` for BOTH passive
+         * and active palettes: a passive palette's list is driven by this filter text directly, while
+         * an active palette uses it to drive its controlled cmdk input from forwarded keystrokes.
+         * Undefined when unset or cleared — never the empty string (the store normalizes `''` to
+         * undefined).
+         */
+        filterText?: string;
+        /**
+         * Index of the highlighted item within `filterPaletteItems(items, filterText)`. Mutable —
+         * updated in place by `updateCommandPalette`'s `moveSelection`, clamped to the filtered
+         * list's bounds. Defaults to 0 at creation.
+         */
+        selectedIndex: number;
         /** Document-relative position (translated + clamped), or undefined for centered */
         position?: {
           x: number;
@@ -8834,138 +12494,99 @@ declare module 'shared/services/project-settings.service-model' {
     [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
   };
 }
-declare module 'shared/services/window.service-model' {
-  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
+declare module 'shared/services/theme-data.service-model' {
+  import {
+    OnDidDispose,
+    UnsubscriberAsync,
+    PlatformError,
+    ThemeFamiliesByIdExpanded,
+  } from 'platform-bible-utils';
   import {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { IDataProvider } from 'shared/models/data-provider.interface';
-  import { DirectionFromTab } from 'shared/models/docking-framework.model';
   /**
    *
-   * This name is used to register the window data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
+   * This name is used to register the theme data data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
    */
-  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
-  export const windowServiceObjectToProxy: Readonly<{
+  export const themeDataServiceProviderName = 'platform.themeDataServiceDataProvider';
+  export const themeDataServiceObjectToProxy: Readonly<{
     /**
      *
-     * This name is used to register the window data provider on the papi. You can use this name to
-     * find the data provider when accessing it using the useData hook
+     * This name is used to register the theme data data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
      */
-    dataProviderName: 'platform.windowServiceDataProvider';
+    dataProviderName: 'platform.themeDataServiceDataProvider';
   }>;
-  /** Focus of the app window is on a WebView iframe with the specified id */
-  export type FocusSubjectWebView = {
-    focusType: 'webView';
-    /** ID of the WebView in focus (its tab ID is the same) */
-    id: string;
-  };
   /**
-   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
+   * Data types this data provider serves
    *
-   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
-   * focused in the WebView's iframe
+   * @experimental
    */
-  export type FocusSubjectTab = {
-    focusType: 'tab';
-    /** The type of tab. `webView` if it is a WebView tab. */
-    tabType: 'webView' | string;
-    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
-    id: string;
-  };
-  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
-  export type FocusSubjectOther = {
-    focusType: 'other';
-  };
-  /** Current item that is the subject of top-level app window focus */
-  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
-  /** Specific item that is intended to be focused in the top-level app window */
-  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
-  /** Instructions that indicate how to change the app window focus */
-  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
-  export type WindowDataTypes = {
-    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  export type ThemeDataDataTypes = {
+    AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
-      [windowServiceProviderName]: IWindowService;
+      [themeDataServiceProviderName]: IThemeDataService;
     }
   }
   /**
+   * Service that provides aggregated theme contributions from the platform and extensions. Serves
+   * theme contribution info to the theme service
    *
-   * Service that allows to interact with the main application window
+   * @experimental
    */
-  export type IWindowService = {
+  export type IThemeDataService = {
     /**
      *
-     * Get information about the current subject of focus in the main app window
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
      *
      * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
+     * @returns Information about the currently selected theme
      */
-    getFocus(selector: undefined): Promise<FocusSubject>;
+    getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
     /**
      *
-     * Get information about the current subject of focus in the main app window
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
      *
      * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
+     * @returns Information about the currently selected theme
      */
-    getFocus(): Promise<FocusSubject>;
+    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
     /**
-     * Sets the subject of focus in the main app window.
-     *
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide themes in contributions
      */
-    setFocus(
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Sets the subject of focus in the main app window.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     *
-     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
-     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
-     *   `'detect'`.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
+    setAllThemes(
       selector: undefined,
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataDataTypes>>;
     /**
-     * Subscribe to run a callback function when the main app window's subject of focus is changed
+     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
+     * callback function is executed.
      *
-     * @param selector `undefined`. Does not have to be provided
-     * @param callback Function to run with the updated localized menuContent for this selector. If
+     * @param selector `undefined`
+     * @param callback The function that will be called when a theme is added/updated/removed. If
      *   there is an error while retrieving the updated data, the function will run with a
      *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
      *   to check if it is an error.
      * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
      */
-    subscribeFocus(
+    subscribeAllThemes(
       selector: undefined,
-      callback: (focusSubject: FocusSubject | PlatformError) => void,
+      callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
   } & OnDidDispose &
-    typeof windowServiceObjectToProxy &
-    IDataProvider<WindowDataTypes>;
+    typeof themeDataServiceObjectToProxy &
+    IDataProvider<ThemeDataDataTypes>;
 }
 declare module '@papi/core' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */
@@ -8999,6 +12620,9 @@ declare module '@papi/core' {
   export type {
     DirectionFromTab,
     DirectionFromTabAdjacent,
+    FloatLayout,
+    Layout,
+    WindowLayout,
   } from 'shared/models/docking-framework.model';
   export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   export type {
@@ -9026,13 +12650,17 @@ declare module '@papi/core' {
     MethodDocumentationWithoutName,
     NetworkObjectDocumentation,
     SingleMethodDocumentation,
+    SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   export type {
     ExtensionDataScope,
     MandatoryProjectDataTypes,
   } from 'shared/models/project-data-provider.model';
   export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
-  export type { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
+  export type {
+    IProjectDataProviderEngineFactory,
+    ProjectDataProviderEngineEnvelope,
+  } from 'shared/models/project-data-provider-engine-factory.model';
   export type {
     IProjectDataProviderFactory,
     ProjectMetadataFilterOptions,
@@ -9043,6 +12671,7 @@ declare module '@papi/core' {
     ProjectMetadataWithoutFactoryInfo,
   } from 'shared/models/project-metadata.model';
   export type {
+    ContentZoomAreaId,
     GetWebViewOptions,
     OpenWebViewOptions,
     SavedWebViewDefinition,
@@ -9056,6 +12685,11 @@ declare module '@papi/core' {
     IDisposableWebViewProvider,
     IWebViewProvider,
   } from 'shared/models/web-view-provider.model';
+  export type {
+    CloseWebViewEvent,
+    OpenWebViewEvent,
+    UpdateWebViewEvent,
+  } from 'shared/services/web-view.service-model';
   export type { AppInfo } from 'shared/services/app.service-model';
   export type {
     NamedSqlParameters,
@@ -9071,12 +12705,26 @@ declare module '@papi/core' {
     SimultaneousProjectSettingsChanges,
     ProjectSettingValidator,
   } from 'shared/services/project-settings.service-model';
-  export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  export type {
+    ReferenceHistory,
+    ReferenceHistoryEntry,
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupScrRef,
+    ScrollGroupUpdateInfo,
+  } from 'shared/services/scroll-group.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type {
+    IThemeDataService,
+    ThemeDataDataTypes,
+  } from 'shared/services/theme-data.service-model';
+  export type {
+    AppWindowInputEvent,
+    AppWindowInputKind,
+    FocusedWindowIdEvent,
     FocusSubject,
     SetFocusSubject,
     SetFocusSpecifier,
+    WindowSummary,
   } from 'shared/services/window.service-model';
 }
 declare module 'shared/services/menu-data.service-model' {
@@ -9128,7 +12776,8 @@ declare module 'shared/services/menu-data.service-model' {
     rebuildMenus(): Promise<void>;
     /**
      *
-     * Get localized menu content for the main menu
+     * Get localized menu content for the main menu. Items hidden in the current interface mode are
+     * left out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of localized main menu content
@@ -9136,7 +12785,8 @@ declare module 'shared/services/menu-data.service-model' {
     getMainMenu(mainMenuType: undefined): Promise<Localized<MultiColumnMenu>>;
     /**
      *
-     * Get localized menu content for the main menu
+     * Get localized menu content for the main menu. Items hidden in the current interface mode are
+     * left out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of localized main menu content
@@ -9168,7 +12818,8 @@ declare module 'shared/services/menu-data.service-model' {
     ): Promise<UnsubscriberAsync>;
     /**
      *
-     * Get unlocalized menu content for the main menu
+     * Get unlocalized menu content for the main menu. Items hidden in the current interface mode are
+     * left out. Items never carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of unlocalized main menu content
@@ -9176,7 +12827,8 @@ declare module 'shared/services/menu-data.service-model' {
     getUnlocalizedMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
     /**
      *
-     * Get unlocalized menu content for the main menu
+     * Get unlocalized menu content for the main menu. Items hidden in the current interface mode are
+     * left out. Items never carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of unlocalized main menu content
@@ -9207,7 +12859,8 @@ declare module 'shared/services/menu-data.service-model' {
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
-     * Get localized menu content for a web view
+     * Get localized menu content for a web view. Items hidden in the current interface mode are left
+     * out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
      *
      * @param webViewType The type of webview for which a menu should be retrieved
      * @returns WebViewMenu object of web view menu content
@@ -9286,6 +12939,31 @@ declare module 'shared/services/theme.service-model' {
    */
   export const USER_THEME_FAMILY_PREFIX = 'user-';
   /**
+   * `localStorage` key the current application theme is persisted under.
+   *
+   * Named here rather than in the host because two processes spell it: main's host, which owns the
+   * store, and the renderer, whose one-time handover reads the copy left in its own `localStorage`
+   * from when a renderer held this state. Those are two different stores under one key name, and the
+   * handover only finds anything if the name stays identical in both.
+   *
+   * @experimental
+   */
+  export const CURRENT_THEME_STORAGE_KEY = 'theme.service-host.currentTheme';
+  /**
+   * `localStorage` key the setting for matching the system-wide light/dark theme is persisted under.
+   * Spelled in two processes for the same reason as {@link CURRENT_THEME_STORAGE_KEY}.
+   *
+   * @experimental
+   */
+  export const SHOULD_MATCH_SYSTEM_STORAGE_KEY = 'theme.service-host.shouldMatchSystem';
+  /**
+   * `localStorage` key the user-defined theme families are persisted under. Spelled in two processes
+   * for the same reason as {@link CURRENT_THEME_STORAGE_KEY}.
+   *
+   * @experimental
+   */
+  export const USER_THEMES_STORAGE_KEY = 'theme.service-host.userThemes';
+  /**
    *
    * This name is used to register the theme service data provider on the papi. You can use this
    * name to find the data provider when accessing it using the useData hook
@@ -9318,6 +12996,22 @@ declare module 'shared/services/theme.service-model' {
      * `shouldMatchSystem` to false
      */
     type?: string;
+  };
+  /**
+   * The theme state that survives an app restart: the current theme, whether the theme type follows
+   * the system-wide light/dark setting, and the user-defined theme families. Every member is optional
+   * because this describes what a store happened to hold, and a store that predates the theme service
+   * host can be missing any of them.
+   *
+   * @experimental
+   */
+  export type PersistedThemeState = {
+    /** The current application theme, or `undefined` if none was stored */
+    currentTheme?: ThemeDefinitionExpanded;
+    /** Whether the theme type follows the system-wide theme, or `undefined` if none was stored */
+    shouldMatchSystem?: boolean;
+    /** The user-defined theme families, or `undefined` if none were stored */
+    userThemes?: ThemeFamiliesById;
   };
   /** ThemeDataTypes handles getting and setting the application theme. */
   export type ThemeDataTypes = {
@@ -9549,6 +13243,42 @@ declare module 'shared/services/theme.service-model' {
      */
     getCurrentThemeSync(): ThemeDefinitionExpanded;
   };
+  /**
+   * Theme operations that exist for the platform's own state-keeping rather than for consumers. They
+   * are deliberately kept off {@link IThemeService}, so `papi.themes` does not offer them.
+   *
+   * That is the whole guarantee, and it is a discoverability one rather than a privacy one: these
+   * ride on the same data provider as {@link IThemeService} under the same name, so any process that
+   * resolves the provider itself can call them. That reachability is why they are `@experimental` on
+   * both surfaces (TSDoc here, `x-experimental` in the registration's OpenRPC document) rather than
+   * pretending to be private.
+   *
+   * @experimental
+   */
+  export interface IThemeServiceInternal {
+    /**
+     * Hand over theme state persisted somewhere the host cannot read, so the host can adopt it into
+     * its own store. Idempotent: the first offer to be adopted wins and every later one is refused,
+     * so several callers offering their own copies cannot interleave into a mixture of them.
+     *
+     * Resolving is terminal for the caller either way: `true` means the state now lives in the host's
+     * store, `false` means the host already has state that beats the offer (or the offer carried
+     * nothing usable). In both cases the caller's copy is dead and should be discarded. A rejection
+     * means neither — the offer can be made again.
+     *
+     * @param state Previously persisted theme state
+     * @returns `true` if the offer was adopted, `false` if it was refused
+     * @experimental
+     */
+    migrateStoredThemeState(state: PersistedThemeState): Promise<boolean>;
+  }
+  /**
+   * Everything the theme service host registers on its data provider: what consumers call plus the
+   * platform's own state-keeping operations.
+   *
+   * @experimental
+   */
+  export type IThemeHostService = IThemeService & IThemeServiceInternal;
 }
 declare module 'shared/services/theme.service' {
   import { IThemeService } from 'shared/services/theme.service-model';
@@ -9970,7 +13700,18 @@ declare module '@papi/backend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the main application window
+     * Service for interacting with an application window. Every window hosts its own, so a call from a
+     * renderer acts on the window it runs in.
+     *
+     * The extension host is in no window, so a call made there acts on the window that most recently
+     * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+     * background. Two calls can answer for different windows, and a subscription binds to the window
+     * focused when it was made rather than following focus afterwards. If there is no focused window,
+     * or the focused window has not registered its window service — either because it is still starting
+     * or because it has just gone away — the call throws rather than falling back to another window.
+     *
+     * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+     * unscoped name goes through the router; `papi.window` does not.
      */
     window: IWindowService;
   };
@@ -10228,7 +13969,18 @@ declare module '@papi/backend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service for interacting with an application window. Every window hosts its own, so a call from a
+   * renderer acts on the window it runs in.
+   *
+   * The extension host is in no window, so a call made there acts on the window that most recently
+   * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+   * background. Two calls can answer for different windows, and a subscription binds to the window
+   * focused when it was made rather than following focus afterwards. If there is no focused window,
+   * or the focused window has not registered its window service — either because it is still starting
+   * or because it has just gone away — the call throws rather than falling back to another window.
+   *
+   * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+   * unscoped name goes through the router; `papi.window` does not.
    */
   export const window: IWindowService;
 }
@@ -10255,6 +14007,80 @@ declare module 'extension-host/extension-types/extension.interface' {
 }
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
+}
+declare module 'renderer/services/overlays/overlay-palette-filter.util' {
+  /**
+   * Renderer-side palette filtering for the overlay service — the IMPLEMENTATION half that
+   * `overlay.service-model.ts` must not carry: the service model is a cross-process CONTRACT, and a
+   * runtime value import from `platform-bible-react` there pulled the component library into every
+   * consumer of the contract's types.
+   */
+  import { type PaletteFilterMode } from 'platform-bible-react/experimental';
+  import type {
+    CommandPaletteItem,
+    PaletteSearchField,
+  } from 'renderer/services/overlays/overlay.service-model';
+  /**
+   * The fields searched when a request declares no `searchFields` of its own: every text field a
+   * palette item displays. This is the historical behavior general command palettes rely on (a
+   * command is often found by a word from its description); palettes whose label is the whole
+   * identity (marker palettes) opt into `['label']` per request instead.
+   */
+  export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[];
+  /**
+   * Filters command palette items by matching `filterText` against each item's text, with
+   * per-{@link PaletteFilterMode} semantics and the request's `searchFields` deciding which fields
+   * participate. Every leg — including the label leg — runs only when the effective search fields
+   * include its field, so a request declaring e.g. `searchFields: ['description']` gets no label
+   * matches.
+   *
+   * - `'passive'` prefix-matches the `label` and never searches the other fields — PT9 marker-dropdown
+   *   semantics for in-document marker typing.
+   * - `'active'` containment-matches over `searchFields` (default
+   *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}): label matches come FIRST, ranked exact-first (exact
+   *   label match, then prefix matches, then containment matches, ties keeping their original context
+   *   order); items matching only on the other searched fields follow in their original order, so an
+   *   exact label match can never be buried under description/badge hits. A MULTI-WORD query
+   *   additionally matches items where every whitespace-separated token is contained in SOME searched
+   *   field ("insert foot" finds an "Insert footnote" whose phrase appears in no single field); those
+   *   token matches follow the whole-phrase matches in their original order.
+   *
+   * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
+   * never be case-picky), and every leg strips the `+` marker-nesting prefix from the filter before
+   * comparing (the label leg strips it from labels too — see `stripMarkerNestingPrefix`), so the legs
+   * all match the same typed text. Returns `items` unchanged when `filterText` is empty or
+   * undefined.
+   *
+   * Label matching delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the
+   * editor package's own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette —
+   * so the host palette and the editor palette can never disagree about label ordering, and the
+   * marker-palette keydown table's zero-match detection counts with the same semantics.
+   *
+   * This is the single filtering implementation shared by the host-side
+   * `commitCommandPaletteSelection` (to resolve the highlighted item) and the command palette
+   * component (to render the filtered list) — using one function for both keeps host-side selection
+   * and on-screen rendering from disagreeing about which items are visible. Callers thread the
+   * request's `searchFields` through so those sites also agree on WHICH fields match.
+   *
+   * @remarks
+   * Matching operates directly on the strings in `items` with no localization of its own. Both
+   * callers pass items whose `LocalizeKey` text was already resolved to localized strings when the
+   * palette was shown (see `IOverlayService.showCommandPalette`), so host-side filtering, commit
+   * resolution, and the rendered list all match against the same display text.
+   * @param items The full, unfiltered list of command palette items
+   * @param filterText The current filter text, or undefined/empty for no filtering
+   * @param mode Which palette flavor's matching semantics to apply
+   * @param searchFields Which item text fields to match against; defaults to
+   *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}
+   * @returns The items matching the filter text under the given mode, label matches ranked
+   *   exact-first ahead of other-field matches
+   */
+  export function filterPaletteItems(
+    items: CommandPaletteItem[],
+    filterText: string | undefined,
+    mode: PaletteFilterMode,
+    searchFields?: readonly PaletteSearchField[],
+  ): CommandPaletteItem[];
 }
 declare module 'renderer/services/overlays/overlay-menu-converter' {
   /**
@@ -10324,8 +14150,39 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    */
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
   /**
+   * Parses the CSS `zoom` inline on an iframe element. Anything that is not a positive finite number
+   * — including the empty string written to clear the zoom, or no iframe at all — means unscaled.
+   *
+   * Exported so {@link getWebViewIframeZoom} and the content zoom service's own iframe-zoom fallback
+   * (which reads its iframe through its own test-only seam, not {@link getWebViewIframe}) share one
+   * parse instead of drifting apart.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): number;
+  /**
+   * Reads the CSS `zoom` the content zoom service has set on a WebView's host `<iframe>` element.
+   *
+   * A zoomed iframe's own `getBoundingClientRect()` is unchanged — only its inner viewport shrinks or
+   * grows — and the inner document measures itself in unscaled inner pixels, so an inner point at `x`
+   * renders `zoom * x` from the iframe's left edge.
+   *
+   * The platform is the only writer of this property, so the inline value is authoritative (and,
+   * unlike computed style, is defined for this non-standard property in every environment the
+   * renderer runs in).
+   *
+   * This does not cover per-area zoom — a pane that marks zoom areas carries no whole-iframe `zoom`
+   * and this always answers `1` for it. For the scale a pane's content is actually drawn at, use
+   * `getContentZoomScaleForWebView` in `web-view-content-zoom.service` instead.
+   *
+   * @param webViewId The webViewId of the iframe
+   * @returns The scale factor the iframe's contents are rendered at
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function getWebViewIframeZoom(webViewId: string): number;
+  /**
    * Translates iframe-relative coordinates to document-relative coordinates using
-   * getBoundingClientRect of the WebView iframe.
+   * getBoundingClientRect of the WebView iframe and the CSS `zoom` applied to it.
    *
    * @param webViewId The webViewId of the iframe
    * @param position The iframe-relative position
@@ -10405,175 +14262,116 @@ declare module 'renderer/services/overlays/overlay.service-host' {
     onOverlayCreated?: (overlayId: string) => void,
     webViewId?: string,
   ): Promise<TReturn | undefined>;
+  /**
+   * Rejects every modal dialog overlay this window is currently showing, for a window that is going
+   * away.
+   *
+   * A modal dialog's promise is handed out by {@link showModalDialogOverlay} and lives nowhere else.
+   * It is not in the dialog service's map of live requests, so the rejection that fails this window's
+   * docked dialogs does not reach it, and the main process lifts the request timeout on `showDialog`,
+   * so nothing expires it either. A window destroyed with a modal on screen therefore leaves its
+   * requestor — usually in a process that outlives the window — waiting on an answer nobody is left
+   * to give.
+   *
+   * Deliberately narrower than the general dismissal this module does internally: the only caller is
+   * the dialog service's unload handler, and what it needs is exactly the modal dialogs this window
+   * will never answer, not an arbitrary set of overlay types.
+   *
+   * @param reason Message the requestors' promises are rejected with
+   * @internal
+   */
+  export function rejectModalDialogOverlaysOnShutdown(reason: string): void;
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
+  /**
+   * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
+   * recorded click cannot correlate with the next test's input signal. @internal
+   */
+  export function resetAppWindowInputState(): void;
   /** Initialize the overlay service. Called during renderer startup. */
   export function startOverlayService(): Promise<void>;
 }
-declare module 'shared/services/theme-data.service-model' {
+declare module 'shared/utils/built-in-themes.util' {
   import {
-    OnDidDispose,
-    UnsubscriberAsync,
-    PlatformError,
-    ThemeFamiliesByIdExpanded,
-  } from 'platform-bible-utils';
-  import {
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from '@papi/core';
-  /**
-   *
-   * This name is used to register the theme data data provider on the papi. You can use this name
-   * to find the data provider when accessing it using the useData hook
-   */
-  export const themeDataServiceProviderName = 'platform.themeDataServiceDataProvider';
-  export const themeDataServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the theme data data provider on the papi. You can use this name
-     * to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.themeDataServiceDataProvider';
-  }>;
-  export type ThemeDataDataTypes = {
-    AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [themeDataServiceProviderName]: IThemeDataService;
-    }
-  }
-  /**
-   * Service that provides aggregated theme contributions from the platform and extensions. Serves
-   * theme contribution info to the theme service
-   */
-  export type IThemeDataService = {
-    /**
-     *
-     * Retrieves information about all themes (including theme families) available in the app. These
-     * are provided by the platform and by extensions.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the currently selected theme
-     */
-    getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
-    /**
-     *
-     * Retrieves information about all themes (including theme families) available in the app. These
-     * are provided by the platform and by extensions.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the currently selected theme
-     */
-    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide themes in contributions
-     */
-    setAllThemes(
-      selector: undefined,
-      value: never,
-    ): Promise<DataProviderUpdateInstructions<ThemeDataDataTypes>>;
-    /**
-     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
-     * callback function is executed.
-     *
-     * @param selector `undefined`
-     * @param callback The function that will be called when a theme is added/updated/removed. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber that should be called whenever the subscription should be deleted
-     */
-    subscribeAllThemes(
-      selector: undefined,
-      callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    typeof themeDataServiceObjectToProxy &
-    IDataProvider<ThemeDataDataTypes>;
-}
-declare module 'shared/services/theme-data.service' {
-  import { IThemeDataService } from 'shared/services/theme-data.service-model';
-  export const themeDataService: IThemeDataService;
-  export default themeDataService;
-}
-declare module 'renderer/services/theme.service-host' {
-  import {
-    ThemeDataTypes,
-    IThemeServiceLocal,
-    CurrentThemeSpecifier,
-  } from 'shared/services/theme.service-model';
-  import {
-    DataProviderEngine,
-    IDataProviderEngine,
-  } from 'shared/models/data-provider-engine.model';
-  import { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
-  import {
-    PlatformEvent,
-    ThemeFamiliesByIdExpanded,
     ThemeDefinitionExpanded,
     ThemeFamiliesById,
-    PlatformEventAsync,
-    PlatformError,
+    ThemeFamiliesByIdExpanded,
+    ThemeFamily,
   } from 'platform-bible-utils';
-  class ThemeDataProviderEngine
-    extends DataProviderEngine<ThemeDataTypes>
-    implements IDataProviderEngine<ThemeDataTypes>
-  {
-    #private;
-    currentTheme: ThemeDefinitionExpanded;
-    shouldMatchSystem: boolean;
-    currentSystemTheme: 'light' | 'dark';
-    userThemes: ThemeFamiliesById;
-    private unsubscribeEventListeners;
-    constructor(
-      currentTheme: ThemeDefinitionExpanded,
-      saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
-      shouldMatchSystem: boolean,
-      saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>,
-      currentSystemTheme: 'light' | 'dark',
-      onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
-      userThemes: ThemeFamiliesById,
-      saveUserThemes: (userThemes: ThemeFamiliesById) => void,
-    );
-    getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
-    setCurrentTheme(
-      newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
-      newThemeSpecifierPossiblyNotProvided?: CurrentThemeSpecifier,
-    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
-    getShouldMatchSystem(): Promise<boolean>;
-    setShouldMatchSystem(
-      newShouldMatchSystemPossiblyUndefinedSelector: boolean | undefined,
-      newShouldMatchSystemPossiblyNotProvided?: boolean,
-    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
-    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
-    setAllThemes(
-      newUserThemesPossiblyUndefinedSelector: Partial<ThemeFamiliesById> | undefined,
-      newUserThemesPossiblyNotProvided?: Partial<ThemeFamiliesById>,
-    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
-    dispose(): Promise<boolean>;
-  }
-  export function initialize(): Promise<void>;
-  /** This is an internal-only export for testing purposes and should not be used in development */
-  export const testingThemeService: {
-    implementThemeDataProviderEngine: (
-      currentTheme: ThemeDefinitionExpanded,
-      saveCurrentTheme: () => void,
-      shouldMatchSystem: boolean,
-      saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded>,
-      currentSystemTheme: 'light' | 'dark',
-      onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
-      userThemes: ThemeFamiliesById,
-      saveUserThemes: (userThemes: ThemeFamiliesById) => void,
-    ) => ThemeDataProviderEngine;
-  };
+  /**
+   * Raw un-expanded themes that are built into the software
+   *
+   * @experimental
+   */
+  export const THEMES_DATA_OBJECT: ThemeFamiliesById;
+  /**
+   * Runs {@link expandThemeContribution} on the provided theme families to expand them. Uses the
+   * default built-in theme family to back up the `cssVariables` of the provided theme families
+   *
+   * @param themeFamiliesById Theme families to expand
+   * @returns Expanded theme families
+   * @experimental
+   */
+  export function expandThemeFamiliesByIdWithDefault(
+    themeFamiliesById: ThemeFamiliesById,
+  ): ThemeFamiliesByIdExpanded;
+  /**
+   * The theme to fall back on when nothing else is known — a profile that has never chosen one, or a
+   * stored choice that could not be read
+   *
+   * @experimental
+   */
+  export const DEFAULT_THEME: ThemeDefinitionExpanded;
+  /**
+   * The user-defined theme family every other user-defined family is filled in from
+   *
+   * @experimental
+   */
+  export const DEFAULT_USER_THEME_FAMILY: ThemeFamily;
+}
+declare module 'renderer/services/theme.service' {
+  import { IThemeServiceLocal } from 'shared/services/theme.service-model';
+  import { PlatformEvent, ThemeDefinitionExpanded } from 'platform-bible-utils';
+  /**
+   * Event that emits with the new current theme whenever it changes.
+   *
+   * For this window's own consumers — the document's theme stylesheet — which need the cache to have
+   * been updated by the time they react, so subscribing to the host separately would be a race
+   * between two deliveries of the same change.
+   *
+   * @experimental
+   */
+  export const onDidChangeCurrentTheme: PlatformEvent<ThemeDefinitionExpanded>;
+  /**
+   * The current application theme, synchronously, for the UI that cannot await a round trip: the
+   * document's stylesheet on first load and the stylesheet baked into a new web view's `srcdoc`.
+   *
+   * @experimental
+   */
+  export function getCurrentThemeSync(): ThemeDefinitionExpanded;
+  /**
+   * Start this window's theme service: hand over any theme state stored before the host existed, then
+   * subscribe to the host so this window's copy stays current.
+   *
+   * Handing over first so the subscription's immediate delivery already carries whatever was adopted,
+   * rather than the state main had a moment before. A handover that fails must not cost this window
+   * the subscription — that would cost it every theme change for the rest of the session, where the
+   * failed handover only costs it the theme the user left off at.
+   *
+   * Neither half is allowed to fail this window's startup. The cache is already usable — it was
+   * filled before React rendered — so a host that is slow or missing costs freshness, not
+   * correctness, and must not take down the unrelated services that start alongside this one.
+   *
+   * Only the FIRST subscribe attempt is awaited. This is one of the promises the renderer's startup
+   * batch waits on (see `index.tsx`), and the retries back off over several seconds — so awaiting
+   * them would put that whole backoff in front of the dock layout in exactly the case where the app
+   * is already slow. Nothing downstream depends on the subscription being live.
+   *
+   * Call once at renderer startup.
+   *
+   * @experimental
+   */
+  export function startThemeService(): Promise<void>;
   /**
    * Theme service that is available locally in the renderer only and can perform synchronous
    * operations
@@ -10816,7 +14614,18 @@ declare module '@papi/frontend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the main application window
+     * Service for interacting with an application window. Every window hosts its own, so a call from a
+     * renderer acts on the window it runs in.
+     *
+     * The extension host is in no window, so a call made there acts on the window that most recently
+     * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+     * background. Two calls can answer for different windows, and a subscription binds to the window
+     * focused when it was made rather than following focus afterwards. If there is no focused window,
+     * or the focused window has not registered its window service — either because it is still starting
+     * or because it has just gone away — the call throws rather than falling back to another window.
+     *
+     * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+     * unscoped name goes through the router; `papi.window` does not.
      */
     window: IWindowService;
     /**
@@ -10985,7 +14794,18 @@ declare module '@papi/frontend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service for interacting with an application window. Every window hosts its own, so a call from a
+   * renderer acts on the window it runs in.
+   *
+   * The extension host is in no window, so a call made there acts on the window that most recently
+   * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+   * background. Two calls can answer for different windows, and a subscription binds to the window
+   * focused when it was made rather than following focus afterwards. If there is no focused window,
+   * or the focused window has not registered its window service — either because it is still starting
+   * or because it has just gone away — the call throws rather than falling back to another window.
+   *
+   * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+   * unscoped name goes through the router; `papi.window` does not.
    */
   export const window: IWindowService;
   /**

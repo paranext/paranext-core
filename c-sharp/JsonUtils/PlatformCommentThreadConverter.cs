@@ -45,9 +45,16 @@ public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThrea
         // Thread ID
         writer.WriteString(ID, value.Id);
 
-        // All comments in the thread
+        // All comments in the thread. Isolated per-comment: a single comment that can't be
+        // serialized is dropped (and logged) rather than taking down the whole thread of otherwise
+        // healthy comments.
         writer.WritePropertyName(COMMENTS);
-        JsonSerializer.Serialize(writer, value.Comments, options);
+        JsonConverterUtils.WriteIsolatedArray(
+            writer,
+            value.Comments,
+            options,
+            comment => $"comment {comment.Id}"
+        );
 
         // Status and Type - convert NoteStatus to CommentStatus for frontend
         string threadStatus = JsonConverterUtils.ConvertNoteStatusToCommentStatus(value.Status);

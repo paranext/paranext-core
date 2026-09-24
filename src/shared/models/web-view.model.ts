@@ -223,6 +223,17 @@ type WebViewDefinitionBase = {
    * @default false
    */
   shouldShowToolbar?: boolean;
+  /**
+   * Whether this WebView's tab can be closed by the user (shows the tab's close button and allows
+   * closing the tab with a middle click anywhere on its header). Set to `false` for tabs that must
+   * always remain open, such as views that are part of the default layout.
+   *
+   * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
+   * true`), not enforced by the type.
+   *
+   * @default true
+   */
+  isClosable?: boolean;
 };
 
 /** WebView representation using React */
@@ -297,6 +308,148 @@ export type SavedWebViewDefinition = (
   Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
 
 /**
+ * Id of one zoom area — a named part of a web view's content that zooms as one and keeps its own
+ * content zoom level. Ids are lower-case letters, digits and hyphens, starting with a letter
+ * (`[a-z][a-z0-9-]*`), and are stable strings a web view chooses once (for example `main` for a
+ * view's primary content; a view that has several independently zoomable parts gives each its own
+ * id).
+ *
+ * `default` is reserved: its CSS custom property is the pane-wide default every other area falls
+ * back to, so an area of that name would set the default for the whole pane. The platform ignores
+ * an area marked with it — pick any other id.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ContentZoomAreaId = string;
+
+/**
+ * Id of the zoom area a web view marks without naming one. Every web view that opts into content
+ * zoom has at least this area.
+ *
+ * Three attribute values name it: an empty value (`data-platform-content-zoom-root=""`), the id
+ * itself (`="main"`), and `="true"` — the value React serializes a bare JSX prop (`<div
+ * data-platform-content-zoom-root />`) to. Because `"true"` names this area, an area genuinely
+ * called `true` is not available.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * writes the literal `'main'` itself and keeps it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const MAIN_CONTENT_ZOOM_AREA = 'main';
+
+/**
+ * Web-view definition `state` key holding the pane's own content zoom levels: a map from zoom area
+ * id to factor. An area with no entry follows the default from Settings. Written only by the
+ * platform; web views may read it.
+ *
+ * A web view whose `getWebViewDefinition` rebuilds its own definition on re-point (a
+ * `reloadWebView` pointed at another project through the same web view id) must carry its saved
+ * `state` through wholesale, by spreading it rather than copying only the keys the view itself
+ * uses: the platform stores a companion identity stamp next to this key, and a view that drops the
+ * stamp while keeping the levels has the platform silently re-attribute the previous project's
+ * level to the new one, rather than losing it.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
+ * equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
+
+/**
+ * Attribute a web view puts on each element that wraps one zoom area's content (below its own
+ * toolbar, outside dividers and headers). The attribute value is the area id. Three values name the
+ * {@link MAIN_CONTENT_ZOOM_AREA} area instead: an empty value
+ * (`data-platform-content-zoom-root=""`), `="main"`, and the `="true"` React serializes a bare JSX
+ * prop (`<div data-platform-content-zoom-root />`) to. Write the empty value in static markup and
+ * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
+ * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
+ * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
+ * never compounds one area's zoom into another's. Web views without this attribute ignore per-area
+ * zoom input and are scaled whole at the Settings default.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
+ * constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
+
+/**
+ * Attribute that marks an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} as pop-up content
+ * opened from that zoom area (a popover, menu or tooltip portaled out of the area element) rather
+ * than a pane. The platform scales such an element with its area but never reports it as an area of
+ * its own and never places the zoom indicator on it. `platform-bible-react`'s `PopoverContent`,
+ * `DropdownMenuContent` and `TooltipContent` set it automatically; `SelectContent`,
+ * `ContextMenuContent`, `MenubarContent` and `DropdownMenuSubContent` do not yet.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that marks its own pop-up content writes the literal `'data-platform-content-zoom-popup'` itself
+ * and keeps it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_POPUP_ATTRIBUTE = 'data-platform-content-zoom-popup';
+
+/**
+ * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
+ * zoom area, with that area's effective factor (own level, else the Settings default):
+ * `--platform-content-zoom-main`, `--platform-content-zoom-<area>`, …
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that reads its own zoom variable writes the literal `'--platform-content-zoom-'` itself and keeps
+ * it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = '--platform-content-zoom-';
+
+/**
+ * CSS custom property holding the Settings default, the fallback for any zoom area without its own
+ * variable.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that reads the default zoom variable writes the literal `'--platform-content-zoom-default'`
+ * itself and keeps it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = '--platform-content-zoom-default';
+
+/**
+ * The `webViewType` of the Scripture editor web views provided by the `platform-scripture-editor`
+ * extension. Must match `SCRIPTURE_EDITOR_WEBVIEW_TYPE` in `platform-scripture-editor.utils.ts` —
+ * core code cannot import extension source, so the value is mirrored here as the single core-side
+ * copy.
+ */
+export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
+/**
+ * The `webViewType` of the Find web view provided by the `platform-scripture` extension. Must match
+ * `findWebViewType` in `extensions/src/platform-scripture/src/find.web-view-provider.ts` — core
+ * code cannot import extension source, so the value is mirrored here as the single core-side copy.
+ */
+export const FIND_WEBVIEW_TYPE = 'platformScripture.find';
+
+/**
+ * Finds the first open Scripture editor web view that has a project (first match in the given
+ * order, which is dock-layout order for the open web view lists) — the shared "current project
+ * editor" rule used by the project picker and by BCV navigation-target resolution so the two can
+ * never disagree on which editor is primary.
+ */
+export function findFirstEditorWebViewDefinition(
+  definitions: SavedWebViewDefinition[],
+): SavedWebViewDefinition | undefined {
+  return definitions.find(
+    (definition) =>
+      definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && definition.projectId,
+  );
+}
+
+/**
  * The keys of properties on a WebViewDefinition that may be updated when that webview is already
  * displayed
  */
@@ -310,6 +463,7 @@ export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'projectId',
   'scrollGroupScrRef',
   'state',
+  'isClosable',
 ] as const;
 
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
@@ -395,7 +549,7 @@ export type UseWebViewStateHook = <T>(
  *
  * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
  *
- * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+ * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
  *
  * - `scrRef`: The current value for the Scripture reference this web view is on
  * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -403,11 +557,16 @@ export type UseWebViewStateHook = <T>(
  * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
  *   synced to a scroll group, this is `undefined`
  * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+ * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+ *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+ *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+ *   the active Scripture reference
  *
  * _＠example_
  *
  * ```typescript
- * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+ * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+ *   useWebViewScrollGroupScrRef();
  * ```
  */
 export type UseWebViewScrollGroupScrRefHook = () => [
@@ -415,6 +574,7 @@ export type UseWebViewScrollGroupScrRefHook = () => [
   setScrRef: (newScrRef: SerializedVerseRef) => void,
   scrollGroupId: ScrollGroupId | undefined,
   setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+  sourceProjectId: string | undefined,
 ];
 
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
@@ -492,6 +652,18 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    */
   existingId?: string | '?';
   /**
+   * Limit an `existingId: '?'` search to web views showing this project.
+   *
+   * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
+   * view, so combining it with a project filter is contradictory and is rejected as an error.
+   * Without this, `'?'` matches any web view of the type regardless of project. Providing this
+   * without any `existingId` at all is the same contradiction — there is no `'?'` search for it to
+   * limit — and is rejected the same way.
+   *
+   * @experimental
+   */
+  existingProjectId?: string;
+  /**
    * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
    * relevant if `existingId` is provided. If `existingId` is not provided, this property is
    * ignored.
@@ -506,8 +678,31 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    * Defaults to `true`
    *
    * If a new WebView is created, it is always brought to the front, regardless of this option.
+   *
+   * When the existing WebView is in a window other than the one this call is otherwise headed for,
+   * this also determines whether that other window is raised to the front of the OS window order.
+   * Set this to `false` for a call that should not disturb whatever window the user is currently
+   * looking at.
    */
   bringToFront?: boolean;
+  /**
+   * Id of the application window to open the web view in, instead of the window the user is working
+   * in. Applies to `tab`, `panel`, and `float` layouts; combining it with a `'window'` layout
+   * (which asks for a NEW window) is an error. The open fails if no such window is serving web
+   * views — a caller that names a window wants that window, not a guess.
+   *
+   * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
+   * names the window.
+   *
+   * Window ids are assigned by the platform and never reused within a profile, in this run of the
+   * app or any later one, so an id names one window and only ever that window. Get the id of the
+   * window this code is running in with `papi.window.getWindowId()` — not
+   * `platform.getFocusedWindowId`, which answers with a different window's id whenever this one is
+   * not the focused window.
+   *
+   * @experimental This option is unstable and may change or disappear without notice
+   */
+  targetWindowId?: string;
 };
 
 /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */

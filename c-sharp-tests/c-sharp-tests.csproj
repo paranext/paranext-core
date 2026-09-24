@@ -23,12 +23,23 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="ParatextData" Version="9.5.0.22" />
+    <!--
+      No ParatextData PackageReference here on purpose: it arrives transitively through the
+      ProjectReference to ParanextDataProvider below, which is the single place the Paratext package
+      version is set (see ParatextPackageVersion there). Re-adding a pin here would reintroduce the
+      possibility of the two projects building against different ParatextData assemblies.
+    -->
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\c-sharp\ParanextDataProvider.csproj" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="EnhancedResources\GoldenMasters\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

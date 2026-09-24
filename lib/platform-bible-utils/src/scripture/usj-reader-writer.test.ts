@@ -2,10 +2,16 @@
 // Disabling no-irregular-whitespace: test data includes irregular whitespace that we test on purpose.
 // Disabling camelcase and naming-convention: test data uses 3_1 to indicate USFM 3.1.
 /* eslint-disable no-useless-escape, no-irregular-whitespace, camelcase, @typescript-eslint/naming-convention */
-import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import {
+  MarkerObject,
+  Usj,
+  USJ_TYPE,
+  USJ_VERSION,
+} from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import fs from 'fs';
 import path from 'path';
+import { vi } from 'vitest';
 import { usjMat1 } from './footnote-util-test.usj.data';
 import { USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0 } from './markers-maps/markers-map-3.0.model';
 import { USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1 } from './markers-maps/markers-map-3.1.model';
@@ -14,6 +20,7 @@ import { LocationUsfmAndUsj } from './usj-reader-writer-test-data/test-data.mode
 import { testUSFM2SaCh1Locations } from './usj-reader-writer-test-data/testUSFM-2SA-1-locations';
 import { matthew1And2Locations } from './usj-reader-writer-test-data/web-matthew-1-and-2-locations';
 import {
+  NO_BOOK_ID,
   UsfmScrRefVerseLocation,
   UsfmVerseRefVerseLocation,
   UsjAttributeKeyLocation,
@@ -32,6 +39,19 @@ import {
   UsjVerseRefBookLocation,
   UsjVerseRefChapterLocation,
 } from './usj-reader-writer.model';
+
+/**
+ * `closed` is a USX/USJ attribute ParatextData records on closer-less char spans (`\fr`, `\ft`,
+ * ...). It is not declared on `MarkerObject`, so build such spans through a widened local type —
+ * scripture-editors models it the same way with its own `ClosableMarkerObject`.
+ */
+type ClosableMarkerObject = MarkerObject & { closed?: string };
+
+/** A char marker span carrying `closed="false"`, i.e. one the source USFM never closed. */
+function closedFalseChar(marker: string, content: string[]): MarkerObject {
+  const char: ClosableMarkerObject = { type: 'char', marker, closed: 'false', content };
+  return char;
+}
 
 // #region set up file path variables
 
@@ -1874,6 +1894,426 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
+  });
+
+  // Pins closing-marker suppression for implicitly closed char markers. ParatextData emits
+  // `closed="false"` on char markers whose closing marker is absent in the source USFM (common for
+  // footnote/cross-reference content like \fr and \ft), and editors that skip rendering those
+  // closing glyphs record the same attribute. Emitting explicit closing markers for such spans
+  // would fabricate closers the original text never had. The `closed` attribute itself must not
+  // leak into the USFM output either. The contrast span without `closed` proves the suppression
+  // comes from `closed="false"` (this markers map sets `shouldOptionalClosingMarkersBePresent`, so
+  // optional closing markers are otherwise emitted).
+  test('omits explicit closing markers for closed="false" char markers but keeps them otherwise', () => {
+    const usjWithImplicitlyClosedChars: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            closedFalseChar('bd', ['implicitly closed']),
+            ' then ',
+            { type: 'char', marker: 'bd', content: ['explicitly closed'] },
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [closedFalseChar('fr', ['1.1 ']), closedFalseChar('ft', ['note text'])],
+            },
+            ' after.',
+          ],
+        },
+      ],
+    };
+    const usjDoc = new UsjReaderWriter(
+      usjWithImplicitlyClosedChars,
+      usjReaderWriterOptionsParatext3_0,
+    );
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(
+      '\\p \\bd implicitly closed then \\bd explicitly closed\\bd*\\f + \\fr 1.1 \\ft note text\\f* after.\n',
+    );
+  });
+
+  // Pins that a note holding consecutive \fp (footnote-paragraph) spans stays a single inline
+  // run: the editor renders each \fp as a paragraph start via a CSS-generated line break only,
+  // so the USFM must keep the whole note on one line with no newline characters anywhere inside
+  // it. \fp spans carry closed="false" (they never have their own closing markers), matching
+  // what ParatextData and the editor record for footnote content.
+  test('keeps a note with \\fp footnote paragraphs on one line with no newline characters', () => {
+    const usjWithFpNote: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [
+                closedFalseChar('fr', ['1:1 ']),
+                closedFalseChar('ft', ['a ']),
+                closedFalseChar('fp', ['b ']),
+                closedFalseChar('fp', ['c']),
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const usjDoc = new UsjReaderWriter(usjWithFpNote, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+
+    expect(resultingUsfm).toBe('\\p \\f + \\fr 1:1 \\ft a \\fp b \\fp c\\f*\n');
+    // The only newline is the paragraph terminator — nothing inside the note.
+    expect(resultingUsfm.slice(0, -1)).not.toContain('\n');
+  });
+
+  // Pins the invariant behind the `\ca`-after-a-chapter-marker special case in
+  // `addMarkerUsfmToString`: the two-character "is the last marker `\c `?" probe and the backslash
+  // index it is taken from MUST be read from the SAME string. That string is the running
+  // `usfmOutput`, never the untouched `usfm` parameter, because branches earlier in the same call
+  // can shorten `usfmOutput` (both by calling `removeEndSpace` on it — the "closing marker is
+  // supposed to be empty" branch and the "marker output starts with a newline" branch). Once one
+  // of them fires the two strings are off by one character, and a probe sliced from `usfm` at an
+  // index computed against `usfmOutput` reads shifted bytes, so the `\c 1\n \ca ...` Standard
+  // View spelling gets emitted (or skipped) for the wrong reason.
+  //
+  // The document below is deliberately odd, because that is the only shape where reading the wrong
+  // string is observable. `removeEndSpace` drops the LAST character, so the mistake only changes
+  // the answer when the probe window straddles the dropped space — i.e. when the trimmed output
+  // ends in exactly `\c`. That takes both of these at once:
+  //   1. a chapter marker with no number, so the output so far is `\c ` rather than `\c 1 `; and
+  //   2. a `ca` marker whose USJ `type` disagrees with the markers map (which types `ca` as
+  //      `char`), sending the writer down its documented "mismatching marker type ... using the
+  //      type from the USJ content" fallback. `chapter` carries `hasNewlineBefore`, so `\ca`'s
+  //      output starts with a newline and the newline branch eats the trailing space first.
+  // Reading the probe from `usfm` then sees `'c '` where `usfmOutput` holds only `'c'`, and the
+  // writer inserts a spurious `\n ` (a line containing a lone space) before the `\ca`.
+  test('reads the last-marker probe from the same string as the index it uses, even after an earlier branch trims the output', () => {
+    const usjWithNumberlessChapterThenMistypedCa: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'chapter', marker: 'c' },
+        // Intentionally mistyped: the markers map types `ca` as `char`. See the comment above.
+        { type: 'chapter', marker: 'ca', content: ['2'] },
+      ],
+    };
+    // The mismatching type is the point of the fixture, so the writer's warning about it is
+    // expected. Silence it to keep the test output readable.
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    let resultingUsfm: string;
+    try {
+      const usjDoc = new UsjReaderWriter(
+        usjWithNumberlessChapterThenMistypedCa,
+        usjReaderWriterOptionsParatext3_0,
+      );
+      resultingUsfm = usjDoc.toUsfm();
+    } finally {
+      consoleWarnSpy.mockRestore();
+    }
+
+    expect(resultingUsfm).toBe('\\c\n\\ca 2\n');
+    // The failure this pins looks like `\c\n \n\ca 2\n`: a line holding nothing but a space,
+    // inserted because the probe answered about the wrong bytes.
+    expect(resultingUsfm).not.toContain('\n \n');
+  });
+});
+
+describe('Marker problems are reported once each, not once per occurrence', () => {
+  // These tests use a 3.0 markers map, so their documents declare 3.0 too — otherwise the
+  // constructor warns that the versions are incompatible, which is not what they are about.
+  // Usj can be any version, but the `Usj` type says only 3.1.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const usjVersion3_0 = '3.0' as typeof USJ_VERSION;
+
+  /**
+   * Builds a book whose content repeats one char marker. Handbook and commentary resources use
+   * markers the markers map does not carry (HBKENG uses `scr` and `ver`; TNNESP uses `li6`, `pi8`
+   * and `brk`), so serializing one of their books takes the unknown-marker path once for every
+   * occurrence.
+   */
+  function usjRepeatingMarker(marker: string, occurrences: number): Usj {
+    return {
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'verse', marker: 'v', number: '1' },
+        ...Array.from(
+          { length: occurrences },
+          (_unused, index): MarkerObject => ({
+            type: 'char',
+            marker,
+            content: [`text ${index}`],
+          }),
+        ),
+      ],
+    };
+  }
+
+  /** Runs `serialize` and returns what it sent to each console channel. */
+  function collectConsoleWhile(serialize: () => void): { debug: string[]; warn: string[] } {
+    const debug: string[] = [];
+    const warn: string[] = [];
+    const consoleDebugSpy = vi
+      .spyOn(console, 'debug')
+      .mockImplementation((message) => debug.push(String(message)));
+    const consoleWarnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation((message) => warn.push(String(message)));
+
+    try {
+      serialize();
+    } finally {
+      consoleDebugSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+    }
+
+    return { debug, warn };
+  }
+
+  /** Serializes `usj` with a fresh reader-writer and returns the marker problems it reported. */
+  function collectReportsFromToUsfm(usj: Usj): string[] {
+    return collectConsoleWhile(() => {
+      new UsjReaderWriter(usj, usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).debug;
+  }
+
+  test('reports an unknown marker the same number of times whether it occurs 10 times or 500', () => {
+    const fewReports = collectReportsFromToUsfm(usjRepeatingMarker('scr', 10));
+    const manyReports = collectReportsFromToUsfm(usjRepeatingMarker('scr', 500));
+
+    // The marker is unknown, so it has to be reported — but reporting it is about the marker, not
+    // about each place it appears. 500 occurrences of one unknown marker is one problem.
+    expect(fewReports.length).toBeGreaterThan(0);
+    expect(manyReports).toHaveLength(fewReports.length);
+  });
+
+  test('never emits the same report twice', () => {
+    const reports = collectReportsFromToUsfm(usjRepeatingMarker('scr', 500));
+
+    // Without this control the de-duplication assertion below holds just as well for an empty
+    // array, so it would still pass with the reporting removed entirely.
+    expect(reports.length).toBeGreaterThan(0);
+    expect([...new Set(reports)]).toHaveLength(reports.length);
+  });
+
+  test('still names the unknown marker so the report stays diagnostic', () => {
+    const reports = collectReportsFromToUsfm(usjRepeatingMarker('scr', 500));
+
+    expect(reports.some((report) => report.includes('scr'))).toBe(true);
+  });
+
+  test('names the book, but not the document, when warning that the markers map version does not match', () => {
+    // Several reader-writers can be alive at once, so the versions alone would not say which
+    // document mismatched. `USJ_VERSION` is 3.1, which these 3.0 options deliberately disagree
+    // with.
+    const textOnlyInTheDocument = 'text found nowhere but this document';
+    const usjForMark: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'book', marker: 'id', code: 'MRK' },
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'para', marker: 'p', content: [textOnlyInTheDocument] },
+      ],
+    };
+
+    const { warn } = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjForMark, usjReaderWriterOptionsParatext3_0).toUsfm();
+    });
+
+    const versionWarning = warn.find((message) => message.includes('USJ for book MRK'));
+    expect(versionWarning).toBeDefined();
+    // Callers pair a whole resource with one markers map, so a warning that carried the document
+    // would be megabytes per line.
+    expect(versionWarning).not.toContain(textOnlyInTheDocument);
+  });
+
+  test('says the book is unknown when warning about a document that names no book', () => {
+    const booklessUsj: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [{ type: 'chapter', marker: 'c', number: '1' }],
+    };
+
+    const { warn } = collectConsoleWhile(() => {
+      new UsjReaderWriter(booklessUsj, usjReaderWriterOptionsParatext3_0).toUsfm();
+    });
+
+    expect(warn.some((message) => message.includes(`USJ for book ${NO_BOOK_ID} has`))).toBe(true);
+  });
+
+  test('reports marker problems at debug level, not as warnings', () => {
+    const usj = usjRepeatingMarker('scr', 500);
+    const { debug, warn } = collectConsoleWhile(() => {
+      new UsjReaderWriter(usj, usjReaderWriterOptionsParatext3_0).toUsfm();
+    });
+
+    // The positive control matters: asserting only that nothing was warned would pass just as
+    // happily if the marker were never reported at all.
+    expect(debug.some((report) => report.includes('Unknown marker scr'))).toBe(true);
+    expect(warn).toHaveLength(0);
+  });
+
+  test('reports a duplicate verse number once however many times it repeats', () => {
+    // This one is reported from the fragment walk rather than from marker serialization, so it is
+    // a separate reporting path that the same de-duplication has to cover.
+    const usjWithRepeatedVerse = (occurrences: number): Usj => ({
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        ...Array.from(
+          { length: occurrences },
+          (): MarkerObject => ({ type: 'verse', marker: 'v', number: '1' }),
+        ),
+      ],
+    });
+
+    const fewReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjWithRepeatedVerse(10), usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).warn;
+    const manyReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjWithRepeatedVerse(200), usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).warn;
+
+    expect(fewReports.some((report) => report.includes('existing number'))).toBe(true);
+    expect(manyReports).toHaveLength(fewReports.length);
+  });
+
+  test('reports an unparseable chapter number once however many times it repeats', () => {
+    const usjWithUnparseableChapters = (occurrences: number): Usj => ({
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: Array.from(
+        { length: occurrences },
+        (): MarkerObject => ({ type: 'chapter', marker: 'c', number: 'one' }),
+      ),
+    });
+
+    const fewReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(
+        usjWithUnparseableChapters(10),
+        usjReaderWriterOptionsParatext3_0,
+      ).toUsfm();
+    }).warn;
+    const manyReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(
+        usjWithUnparseableChapters(200),
+        usjReaderWriterOptionsParatext3_0,
+      ).toUsfm();
+    }).warn;
+
+    expect(fewReports.some((report) => report.includes('could not parse chapter number'))).toBe(
+      true,
+    );
+    expect(manyReports).toHaveLength(fewReports.length);
+  });
+
+  test('reports a verse number with no digits once however many times it repeats', () => {
+    const usjWithDigitlessVerses = (occurrences: number): Usj => ({
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        ...Array.from(
+          { length: occurrences },
+          (): MarkerObject => ({ type: 'verse', marker: 'v', number: 'one' }),
+        ),
+      ],
+    });
+
+    const fewReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjWithDigitlessVerses(10), usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).warn;
+    const manyReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjWithDigitlessVerses(200), usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).warn;
+
+    expect(
+      fewReports.some((report) => report.includes('could not find starting verse number')),
+    ).toBe(true);
+    expect(manyReports).toHaveLength(fewReports.length);
+  });
+
+  test('does not report a marker again after the document changes', () => {
+    const usj = usjRepeatingMarker('scr', 10);
+    const readerWriter = new UsjReaderWriter(usj, usjReaderWriterOptionsParatext3_0);
+    const firstPass = collectConsoleWhile(() => readerWriter.toUsfm()).debug;
+
+    // Add a second unknown marker so the next pass has something it has not reported before.
+    usj.content?.push({ type: 'char', marker: 'brk', content: ['added'] });
+    readerWriter.usjChanged();
+    const secondPass = collectConsoleWhile(() => readerWriter.toUsfm()).debug;
+
+    expect(firstPass.some((report) => report.includes('scr'))).toBe(true);
+    // `brk` proves the second pass really re-serialized the document rather than returning a
+    // cached string — without it, `scr`'s absence below would prove nothing.
+    expect(secondPass.some((report) => report.includes('brk'))).toBe(true);
+    // Reporting describes the marker, not where it appeared, so an edit is no reason to repeat it.
+    expect(secondPass.some((report) => report.includes('scr'))).toBe(false);
+  });
+
+  test('reports each distinct unknown marker', () => {
+    const usjWithTwoUnknownMarkers: Usj = {
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: [
+        ...(usjRepeatingMarker('scr', 50).content ?? []),
+        ...(usjRepeatingMarker('brk', 50).content ?? []),
+      ],
+    };
+
+    const reports = collectReportsFromToUsfm(usjWithTwoUnknownMarkers);
+
+    expect(reports.some((report) => report.includes('scr'))).toBe(true);
+    expect(reports.some((report) => report.includes('brk'))).toBe(true);
+  });
+
+  test('reports a mismatching marker type once however many times it occurs', () => {
+    // The markers map types `ca` as `char`, so typing it as `chapter` takes the
+    // mismatching-marker-type path.
+    const usjWithRepeatedMistypedCa = (occurrences: number): Usj => ({
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: Array.from(
+        { length: occurrences },
+        (_unused, index): MarkerObject => ({
+          type: 'chapter',
+          marker: 'ca',
+          content: [`${index}`],
+        }),
+      ),
+    });
+
+    const fewReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(
+        usjWithRepeatedMistypedCa(10),
+        usjReaderWriterOptionsParatext3_0,
+      ).toUsfm();
+    }).warn;
+    const manyReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(
+        usjWithRepeatedMistypedCa(500),
+        usjReaderWriterOptionsParatext3_0,
+      ).toUsfm();
+    }).warn;
+
+    // Stays a warning, unlike an unknown marker: a type the markers map disagrees with means the
+    // document is malformed, and the writer silently emits the USJ's type instead.
+    expect(fewReports.some((report) => report.includes('Mismatching marker type'))).toBe(true);
+    expect(manyReports).toHaveLength(fewReports.length);
   });
 });
 

@@ -21,7 +21,7 @@ describe('getAppDir', () => {
   it('returns .platform.bible in home directory when packaged', async () => {
     globalThis.isPackaged = true;
     const { getAppDir } = await import('./util');
-    expect(getAppDir()).toBe(path.join(os.homedir(), '/.platform.bible'));
+    expect(getAppDir()).toBe(path.join(os.homedir(), '.platform.bible'));
   });
 
   it('returns resourcesPath/dev-appdata when not packaged', async () => {

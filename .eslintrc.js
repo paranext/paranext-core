@@ -1,4 +1,6 @@
 module.exports = {
+  // TODO: propagate root: true to paranext-multi-extension-template and paranext-extension-template
+  root: true,
   extends: [
     // https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
     'airbnb',
@@ -208,6 +210,9 @@ module.exports = {
         'vitest/env': true,
       },
       rules: {
+        // `vitest/expect-expect` is already enabled by legacy-recommended; this only customizes
+        // `assertFunctionNames` so `expectTypeOf()` counts as an assertion.
+        'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'expectTypeOf'] }],
         // Rules from jest/recommended not included in vitest/legacy-recommended
         'vitest/no-alias-methods': 'error',
         'vitest/no-conditional-expect': 'error',

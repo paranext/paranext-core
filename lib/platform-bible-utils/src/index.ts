@@ -4,6 +4,7 @@ export { Collator } from './intl/intl-collator';
 export { DateTimeFormat } from './intl/intl-date-time-format';
 export { DocumentCombiner } from './document-combiner';
 export { EventRollingTimeCounter } from './event-rolling-time-counter';
+export { GraphemeString, MAX_PADDING_LENGTH } from './grapheme-string';
 export { Mutex } from './promises/mutex';
 export { MutexMap } from './promises/mutex-map';
 export { NonValidatingDocumentCombiner } from './non-validating-document-combiner';
@@ -52,7 +53,7 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
-export { usfmMarkers } from './markers/usfm-markers';
+export { usfmMarkers, isBlockMarker, isCharacterMarker } from './markers/usfm-markers';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -61,6 +62,7 @@ export { Section } from './scripture/scripture-util';
 export {
   createSyncProxyForAsyncObject,
   debounce,
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
   deepClone,
   getAllObjectFunctionNames,
   getErrorMessage,
@@ -69,6 +71,7 @@ export {
   isErrorMessageAboutRegistryAuthFailure,
   isString,
   newGuid,
+  retryUntil,
   wait,
   waitForDuration,
 } from './util';
@@ -81,6 +84,7 @@ export {
 export type { FormatScrRefRangeOptions } from './scripture/scripture-util';
 export {
   areUsjContentsEqualExceptWhitespace,
+  collectUsjMarkers,
   compareScrRefs,
   formatScrRef,
   formatScrRefRange,
@@ -103,6 +107,7 @@ export {
   includes,
   indexOf,
   isLocalizeKey,
+  isolateBidi,
   isWhiteSpace,
   lastIndexOf,
   normalize,
@@ -128,11 +133,36 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl/intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
+export {
+  normalizeProjectId,
+  hasDistinctFullName,
+  normalizeFullName,
+  formatProjectName,
+  PROJECT_NAME_SEPARATOR,
+  compareProjectsByName,
+  compareProjectShortNames,
+  type ProjectNames,
+} from './project-util';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
-export { MODIFIER_KEYS } from './keyboard-util';
+export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
+export { computeEffectiveStructureProtection } from './structure-protection.util';
+export { createContentZoomWheelReader } from './content-zoom-wheel.util';
 
 // Types
-export type { DeepPartial, KebabCase, Prettify, ReplaceType, UnionToIntersection } from './util';
+export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
+export type { NameablePhysicalKey } from './keyboard-util';
+export type {
+  ContentZoomWheelReader,
+  ContentZoomWheelReaderOptions,
+} from './content-zoom-wheel.util';
+export type {
+  DebouncedFunction,
+  DeepPartial,
+  KebabCase,
+  Prettify,
+  ReplaceType,
+  UnionToIntersection,
+} from './util';
 export type {
   Dispose,
   OnDidDispose,
@@ -170,6 +200,7 @@ export type {
   ReferencedItem,
   OrderedItem,
   OrderedExtensibleContainer,
+  InterfaceMode,
   MenuItemBase,
   MenuItemContainingSubmenu,
   MenuItemContainingCommand,
@@ -187,7 +218,15 @@ export type {
   Localized,
 } from './extension-contributions/menus.model';
 export { menuDocumentSchema } from './extension-contributions/menus.model';
+export type { PaletteItem } from './palette.types';
+export {
+  PROJECT_SELECTOR_CUSTOM_DATA_KEYS,
+  makeProjectSelectorCustomData,
+  recencyMapFromOrderedIds,
+} from './project-selector-custom-data';
+export type { ProjectSelectorCustomDataShape } from './project-selector-custom-data';
 export type { DblResourceData, ResourceType } from './resources.model';
+export { doesCatalogRowCoverProject } from './resources.model';
 export type {
   ExtensionControlledProjectSetting,
   ExtensionControlledSetting,
@@ -259,14 +298,18 @@ export type {
   VerseRefOffset,
 } from './scripture/usj-reader-writer.model';
 export { default as UsjReaderWriter } from './scripture/usj-reader-writer';
+// Re-exported so consumers can type the argument to `collectUsjMarkers` (and other USJ utilities)
+// without importing the third-party package directly.
+export type { Usj } from '@eten-tech-foundation/scripture-utilities';
 export type {
   CommentStatus,
   CommentType,
+  ConflictResolutionOptions,
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';
-export type {
-  MarkerCategoryType as CategoryType,
-  Marker,
-  MarkerType,
-} from './markers/usfm-marker.model';
+export type { Marker } from './markers/usfm-marker.model';
+// MarkerType and CategoryType are (string) enums used as runtime values (e.g. comparing
+// `marker.type === MarkerType.Paragraph` or `marker.category === CategoryType.DivisionMarks`), so
+// they must be value exports, not type-only exports.
+export { MarkerType, MarkerCategoryType as CategoryType } from './markers/usfm-marker.model';

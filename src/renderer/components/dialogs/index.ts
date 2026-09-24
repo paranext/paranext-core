@@ -4,7 +4,10 @@ import { CONFIRM_DIALOG } from './confirm-dialog.component';
 import { SELECT_MULTIPLE_PROJECTS_DIALOG } from './select-multiple-projects.dialog';
 import { SELECT_PROJECT_DIALOG } from './select-project.dialog';
 import { DialogDefinition, DialogTabTypes } from './dialog-definition.model';
+import { RESOURCE_PICKER_DIALOG } from './resource-picker.dialog';
 import { SELECT_BOOKS_DIALOG } from './select-books-dialog.component';
+import { PROJECT_PICKER_DIALOG } from './project-picker.dialog';
+import { TEAM_LAYOUT_DIALOG } from './team-layout.dialog';
 
 /**
  * Map of all available dialog definitions used to create dialogs
@@ -17,7 +20,10 @@ export const DIALOGS: { [DialogTabType in DialogTabTypes]: DialogDefinition<Dial
   [CONFIRM_DIALOG.tabType]: CONFIRM_DIALOG,
   [SELECT_PROJECT_DIALOG.tabType]: SELECT_PROJECT_DIALOG,
   [SELECT_MULTIPLE_PROJECTS_DIALOG.tabType]: SELECT_MULTIPLE_PROJECTS_DIALOG,
+  [RESOURCE_PICKER_DIALOG.tabType]: RESOURCE_PICKER_DIALOG,
   [SELECT_BOOKS_DIALOG.tabType]: SELECT_BOOKS_DIALOG,
+  [PROJECT_PICKER_DIALOG.tabType]: PROJECT_PICKER_DIALOG,
+  [TEAM_LAYOUT_DIALOG.tabType]: TEAM_LAYOUT_DIALOG,
 };
 
 /** All tab types for available dialogs */

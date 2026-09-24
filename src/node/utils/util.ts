@@ -4,7 +4,6 @@ import path from 'path';
 import os from 'os';
 import { Uri } from '@shared/data/file-system.model';
 import memoizeOne from 'memoize-one';
-import { includes, split } from 'platform-bible-utils';
 
 // FOR SCHEME DOCUMENTATION, SEE Uri JSDOC
 const APP_SCHEME = 'app';
@@ -15,6 +14,9 @@ const DATA_DIR_NAME = DATA_SCHEME;
 const RESOURCES_SCHEME = 'resources';
 const FILE_SCHEME = 'file';
 const PROTOCOL_PART = '://';
+
+/** Folder name used for the user's Platform.Bible data directory */
+const PRODUCT_FOLDER_NAME = 'platform.bible';
 
 /** Name of the directory in app that should be used to hold extension data */
 export const EXTENSION_DATA_DIR = 'extensions';
@@ -66,7 +68,7 @@ export function resolveHtmlPath(htmlFileName: string) {
  */
 export const getAppDir = memoizeOne((): string => {
   return globalThis.isPackaged
-    ? path.join(os.homedir(), '/.platform.bible')
+    ? path.join(os.homedir(), `.${PRODUCT_FOLDER_NAME}`)
     : path.join(globalThis.resourcesPath, 'dev-appdata');
 });
 
@@ -89,12 +91,15 @@ const getSchemePaths = memoizeOne((): { [scheme: string]: string } => {
 // TODO: Make URI an actual class. Will be challenging when passing through WebSocket
 function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
-  const fullUri = includes(uri, PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
+  const fullUri = uri.includes(PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
 
-  const [scheme, uriPath] = split(fullUri, PROTOCOL_PART);
+  // Split at the FIRST separator only. A plain `split` would drop everything after a second one,
+  // so a cached path that itself holds a URL (`file://C:/cache/https://x/y`) would silently resolve
+  // to `C:/cache/https` rather than failing.
+  const separatorIndex = fullUri.indexOf(PROTOCOL_PART);
   return {
-    scheme,
-    uriPath,
+    scheme: fullUri.substring(0, separatorIndex),
+    uriPath: fullUri.substring(separatorIndex + PROTOCOL_PART.length),
   };
 }
 
@@ -155,3 +160,11 @@ export function joinUriPaths(uri: Uri, ...paths: string[]): Uri {
  */
 export const isNoisyDevModeEnvVariableSet = (): boolean =>
   !!process.env.DEV_NOISY && process.env.DEV_NOISY === 'true';
+
+/**
+ * Determines if startup timing marks are requested for this launch
+ *
+ * @returns True if the `PT_STARTUP_MARKS` environment variable requests startup timing marks, false
+ *   otherwise
+ */
+export const isStartupMarksEnvVariableSet = (): boolean => process.env.PT_STARTUP_MARKS === 'true';

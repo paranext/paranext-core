@@ -4,6 +4,45 @@
 
 Lexical tools integration with Platform.Bible
 
+## Lexical database downloads (forks)
+
+At `npm install` time, this extension's `postinstall` script downloads a prebuilt lexical
+database from `https://github.com/<your-org>/dependencies` (branch `main`, subdirectory
+`lexical-db/`). The download is:
+
+- **Strict** when the detected GitHub org is `paranext`. Missing files (HTTP 404) fail
+  `npm install` — the canonical org is expected to publish the DB.
+- **Lenient** for every other org (including forks). Missing files are logged and skipped,
+  so a fork without its own `dependencies` repo can still install successfully. The
+  extension activates and the Dictionary opens — it just shows no entries until a DB is
+  provided.
+
+Network errors that aren't 404 (e.g. DNS failure, connection refused) still fail in both
+modes — "expected missing" is the only condition treated leniently. Likewise, if the
+GitHub org cannot be detected from the local clone's `origin` remote (no git repository,
+unrecognized remote URL, etc.), the download aborts with an error rather than running
+leniently — a silent skip from an unexpected git/origin problem would be worse than a
+loud failure.
+
+To publish your own DB for a fork, create a `dependencies` repo in your org with
+`lexical-db/lexical.db.xz` and `lexical-db/lexical.db.xz.sha256` on the `main` branch.
+
+### The notice files travel with the DB
+
+`lexical-db/LICENSE.md` and `lexical-db/SOURCE.md` are fetched alongside the database and written
+into the same directory. This is not bookkeeping: the extension's `assets` folder is copied into
+`extensions/dist` and from there into every installer, so those two files are what puts the
+database's terms in front of a user. Portions of the DB are UBS material under CC BY-SA 4.0, whose
+section 3(a)(1) requires the attribution and license notice to accompany the work, and the rest is
+© United Bible Societies under no open license, distributable under UBS's permission to Paratext
+and not by Platform.Bible or anyone else.
+
+They follow the same strict/lenient rule as the DB, applied one step later: for the canonical org a
+missing notice file fails `npm install`, because packaging the data without its attribution is the
+thing this fetch exists to prevent. A fork gets a warning naming the obligation and the install
+continues — so if you publish your own DB, publish `LICENSE.md` and `SOURCE.md` beside it stating
+its terms.
+
 <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
 
 ## Template Info

@@ -1,10 +1,13 @@
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
 import {
+  ALL_BOOK_IDS,
   areUsjContentsEqualExceptWhitespace,
+  collectUsjMarkers,
   compareScrRefs,
   formatScrRefRange,
   formatScrRefWithOptions,
+  getBookIdsFromBooksPresent,
   getLocalizedIdFromBookNumber,
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
@@ -26,6 +29,20 @@ async function mockGetLocalizedString(item: {
   }
   if (localizeKey === 'Book.GEN') {
     if (language === 'zh-hans') return '创';
+    // Shape of the entries that carry a second name in fullwidth parentheses, plus one with the
+    // hyphenated form, so both separators the Chinese branch strips are covered
+    if (language === 'zh-hant') return '創世記（創世紀）';
+    if (language === 'zh-mo') return '創世記-第一卷';
+  }
+  if (localizeKey === 'Book.MAT') {
+    if (language === 'zh-hans') return '马太-福音';
+  }
+  if (localizeKey === 'Book.REV') {
+    if (language === 'zh-hans') return '启示\uff08默示录\uff09';
+  }
+  if (localizeKey === 'Book.JON') {
+    // Surrounding whitespace, which no shipped entry has but a translator can leave behind
+    if (language === 'zh-hans') return '  约拿-书  ';
   }
   return localizeKey;
 }
@@ -44,6 +61,31 @@ describe('getLocalizedIdFromBookNumber', () => {
   it('with khmer which defines a localization with localized.id', async () => {
     const result = await getLocalizedIdFromBookNumber(1, 'kh', mockGetLocalizedString);
     expect(result).toEqual('លប');
+  });
+
+  it('drops a chinese second name in fullwidth parentheses', async () => {
+    const result = await getLocalizedIdFromBookNumber(1, 'zh-hant', mockGetLocalizedString);
+    expect(result).toEqual('創世記');
+  });
+
+  it('drops a chinese hyphenated suffix', async () => {
+    const result = await getLocalizedIdFromBookNumber(1, 'zh-mo', mockGetLocalizedString);
+    expect(result).toEqual('創世記');
+  });
+
+  it('with chinese keeps only the part before a hyphen', async () => {
+    const result = await getLocalizedIdFromBookNumber(40, 'zh-hans', mockGetLocalizedString);
+    expect(result).toEqual('马太');
+  });
+
+  it('with chinese trims whitespace around the result', async () => {
+    const result = await getLocalizedIdFromBookNumber(32, 'zh-hans', mockGetLocalizedString);
+    expect(result).toEqual('约拿');
+  });
+
+  it('with chinese drops a second name in ideographic parentheses', async () => {
+    const result = await getLocalizedIdFromBookNumber(66, 'zh-hans', mockGetLocalizedString);
+    expect(result).toEqual('启示');
   });
 });
 
@@ -489,6 +531,40 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
     expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
   });
 
+  it('should return false when one side has an authored non-breaking space', () => {
+    // Typing `~` beside a space is a real edit: Paratext regularizes spaces while the `~` is still
+    // an ordinary byte, so the resulting NBSP has to survive the comparison or the edit never saves.
+    const before: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff things'] }],
+    };
+    const after: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff \u00a0 things'] }],
+    };
+
+    expect(areUsjContentsEqualExceptWhitespace(before, after)).toBe(false);
+    expect(areUsjContentsEqualExceptWhitespace(after, before)).toBe(false);
+  });
+
+  it('should still collapse ordinary space runs around a non-breaking space', () => {
+    // The NBSP is content; the plain spaces on either side of it are not.
+    const oneSpaceEachSide: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff \u00a0 things'] }],
+    };
+    const manySpacesEachSide: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff   \u00a0\t  things'] }],
+    };
+
+    expect(areUsjContentsEqualExceptWhitespace(oneSpaceEachSide, manySpacesEachSide)).toBe(true);
+  });
+
   it('should return true for one not having space at the end of block marker', () => {
     const usj1: Usj = {
       type: 'USJ',
@@ -706,5 +782,110 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
     };
     expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(false);
     expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(false);
+  });
+});
+
+describe('getBookIdsFromBooksPresent', () => {
+  test('maps 1-flags to canonical book ids by position', () => {
+    // Positions 1 (GEN) and 3 (LEV) flagged
+    expect(getBookIdsFromBooksPresent('101')).toEqual(['GEN', 'LEV']);
+  });
+
+  test('returns empty array for empty or all-zero strings', () => {
+    expect(getBookIdsFromBooksPresent('')).toEqual([]);
+    expect(getBookIdsFromBooksPresent('000')).toEqual([]);
+  });
+
+  test('bounds to the canon length, ignoring flags past the last canonical book', () => {
+    // A '1' past the last canonical book would otherwise become the '***' placeholder id, which
+    // downstream Canon.isObsolete / Canon.bookIdToNumber calls crash on (TypeError). GEN is present;
+    // the trailing stray '1' (one position past the canon) must be ignored, not emitted as '***'.
+    const overlong = `1${'0'.repeat(Canon.allBookIds.length - 1)}1`;
+    expect(overlong.length).toBe(Canon.allBookIds.length + 1);
+
+    const result = getBookIdsFromBooksPresent(overlong);
+    expect(result).toEqual(['GEN']);
+    expect(result).not.toContain('***');
+  });
+});
+
+describe('collectUsjMarkers', () => {
+  function makeUsj(content: Usj['content']): Usj {
+    return { type: 'USJ', version: '3.1', content };
+  }
+
+  it('returns an empty array for undefined or empty USJ', () => {
+    expect(collectUsjMarkers(undefined)).toEqual([]);
+    expect(collectUsjMarkers(makeUsj([]))).toEqual([]);
+  });
+
+  it('collects distinct markers from nested content in first-seen order', () => {
+    const doc = makeUsj([
+      { type: 'book', marker: 'id', code: 'GEN', content: ['Genesis'] },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          'The name ',
+          { type: 'char', marker: 'nd', content: ['LORD'] },
+          ' and ',
+          { type: 'char', marker: 'pn', content: ['Abram'] },
+        ],
+      },
+      // Duplicate marker 'p' must not be repeated.
+      { type: 'para', marker: 'p', content: ['Another paragraph.'] },
+    ]);
+    expect(collectUsjMarkers(doc)).toEqual(['id', 'p', 'nd', 'pn']);
+  });
+
+  it('recurses into notes and other nested markers (e.g. handbook links)', () => {
+    const doc = makeUsj([
+      {
+        type: 'para',
+        marker: 'ip',
+        content: [
+          { type: 'char', marker: 'jmp', content: ['see Genesis 15.6'] },
+          { type: 'char', marker: 'xtSee', content: ['Romans 4.3'] },
+          {
+            type: 'note',
+            marker: 'f',
+            caller: '+',
+            content: [{ type: 'char', marker: 'ft', content: ['a footnote'] }],
+          },
+        ],
+      },
+    ]);
+    expect(collectUsjMarkers(doc)).toEqual(['ip', 'jmp', 'xtSee', 'f', 'ft']);
+  });
+
+  it('omits z-prefixed custom markers (already always valid in the editor)', () => {
+    const doc = makeUsj([
+      { type: 'para', marker: 'p', content: [{ type: 'char', marker: 'zbadge', content: ['x'] }] },
+      { type: 'ms', marker: 'zmilestone' },
+    ]);
+    expect(collectUsjMarkers(doc)).toEqual(['p']);
+  });
+
+  it('ignores marker-less nodes and bare text', () => {
+    const doc = makeUsj(['just text', { type: 'unknown' }, { type: 'para', marker: 'q1' }]);
+    expect(collectUsjMarkers(doc)).toEqual(['q1']);
+  });
+});
+
+describe('ALL_BOOK_IDS', () => {
+  it('lists the canon in canonical order', () => {
+    expect(ALL_BOOK_IDS[0]).toBe('GEN');
+    expect(ALL_BOOK_IDS).toContain('REV');
+    expect(ALL_BOOK_IDS.length).toBeGreaterThan(60);
+  });
+
+  it('leaves out the books Canon considers obsolete', () => {
+    // The fallback book list navigation commands use when a project reports no books present. An
+    // obsolete id here would let a go-to-book step land on a book no project can open.
+    const obsoleteBookIds = ALL_BOOK_IDS.filter((bookId) =>
+      Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+    );
+
+    expect(obsoleteBookIds).toEqual([]);
   });
 });

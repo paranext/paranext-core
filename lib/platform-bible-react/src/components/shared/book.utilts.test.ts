@@ -55,6 +55,53 @@ describe('doesBookMatchQuery', () => {
     expect(doesBookMatchQuery('GEN', 'genesis', localizedBookNames)).toBe(true);
   });
 
+  // English names and canon ids are ASCII, which is what lets the English comparison use native
+  // `includes`: a non-ASCII query has nothing to match in an ASCII haystack either way.
+  test('does not match a non-ASCII query against an English name', () => {
+    expect(doesBookMatchQuery('GEN', 'génesis')).toBe(false);
+    expect(doesBookMatchQuery('GEN', 'gén')).toBe(false);
+    expect(doesBookMatchQuery('GEN', '创世记')).toBe(false);
+  });
+
+  // A search box is filtered on every keystroke, so it is fed prefixes that stop wherever the user
+  // has got to — which for a script that builds characters from several code points is usually
+  // mid-cluster. Rejecting those empties the list while someone is still typing, so this comparison
+  // matches by code unit. Here the accented letter is decomposed (`e` + U+0301), the form macOS and
+  // some input methods produce.
+  test('matches a query that stops mid-cluster in a localized name', () => {
+    // Starts with `x` so the queries below can only reach the localized comparison — nothing in the
+    // English name `Genesis` or the id `GEN` matches them
+    const localizedBookNames = new Map([
+      ['GEN', { localizedId: 'Xe\u0301n', localizedName: 'Xe\u0301nesis' }],
+    ]);
+
+    expect(doesBookMatchQuery('GEN', 'xe', localizedBookNames)).toBe(true);
+    expect(doesBookMatchQuery('GEN', 'xe\u0301nesis', localizedBookNames)).toBe(true);
+  });
+
+  // Khmer builds a character from a base plus vowel and sign code points, so almost every prefix a
+  // user types lands mid-cluster. These are the shipped `km.json` names for Romans and Job, whose
+  // very first keystroke stopped matching once segmentation became UAX #29 conformant.
+  test('matches Khmer book names keystroke by keystroke', () => {
+    const localizedBookNames = new Map([
+      ['ROM', { localizedId: 'រ៉ូម', localizedName: 'រ៉ូម' }],
+      ['JOB', { localizedId: 'យ៉ូប', localizedName: 'យ៉ូប' }],
+    ]);
+
+    const typedPrefixes = (name: string) =>
+      [...name].map((_, index) => [...name].slice(0, index + 1).join(''));
+
+    typedPrefixes('រ៉ូម').forEach((prefix) => {
+      expect(doesBookMatchQuery('ROM', prefix, localizedBookNames)).toBe(true);
+    });
+    typedPrefixes('យ៉ូប').forEach((prefix) => {
+      expect(doesBookMatchQuery('JOB', prefix, localizedBookNames)).toBe(true);
+    });
+
+    // A book whose name shares no prefix with the query still does not match.
+    expect(doesBookMatchQuery('JOB', 'រ៉', localizedBookNames)).toBe(false);
+  });
+
   test('localized book names do not interfere with other books', () => {
     const localizedBookNames = new Map([['GEN', { localizedId: 'Gén', localizedName: 'Génesis' }]]);
 

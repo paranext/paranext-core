@@ -1,13 +1,100 @@
 // Z-INDEX SCALE — see also src/renderer/styles/_vars.scss for SCSS consumers
 // rc-dock floating tabs manage their own z-index up to ~200
 
-/** Z-index for elements that need to appear above rc-dock floating tabs (~200) */
-export const Z_INDEX_ABOVE_DOCK = 250;
-/** Z-index for the footnote editor layer */
-export const Z_INDEX_FOOTNOTE_EDITOR = 300;
-/** Z-index for overlay popovers and context menus */
+/**
+ * Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200)
+ * — the menubar, and every `PopoverContent`.
+ *
+ * At 600 this sits above the overlay and modal layers, which is why content portalled out of a
+ * popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. One consequence is unresolved and
+ * deliberately not papered over here: a popover renders OVER a modal dialog ({@link Z_INDEX_MODAL},
+ * 500). That wants the scale re-ordered rather than another constant raised.
+ */
+export const Z_INDEX_ABOVE_DOCK = 600;
+/**
+ * Z-index for content that is portalled OUT of a popover and must still render over it — a Radix
+ * dropdown, menu, or select opened from inside `PopoverContent`.
+ *
+ * Radix portals such content to `document.body` rather than nesting it inside the popover, so the
+ * two become stacking SIBLINGS: the popover's own {@link Z_INDEX_ABOVE_DOCK} competes directly with
+ * whatever the portalled child asks for, and anything lower renders behind the popover it belongs
+ * to. Must therefore stay above {@link Z_INDEX_ABOVE_DOCK} and below {@link Z_INDEX_FIRST_RUN}, which
+ * gates the whole app. Pinned by `z-index.test.tsx`.
+ *
+ * Note this is only needed because {@link Z_INDEX_ABOVE_DOCK} sits so high; see its own doc.
+ */
+export const Z_INDEX_ABOVE_POPOVER = 650;
+/**
+ * Z-index for in-page overlays that sit above ordinary page content but BELOW modal content — the
+ * renderer's overlay service (`src/renderer/components/overlays/`) plus a handful of
+ * component-level overlays across `lib/` and `extensions/`.
+ *
+ * Deliberately the lowest tier in the scale: anything that must clear a modal, a popover, or the
+ * dock belongs on {@link Z_INDEX_ABOVE_DOCK} instead. No ordering test covers this tier.
+ *
+ * Consumers are deliberately not listed here — an enumerated list in this comment went stale once
+ * already and sent a menu to 400 underneath its own 600-tier host. Grep for the constant to find
+ * them; the `adr-z-index-ordering-invariants` entry in
+ * `.context/standards/Architecture-Decisions.md` records why this tier was left alone.
+ */
 export const Z_INDEX_OVERLAY = 400;
 /** Z-index for the semi-transparent backdrop behind modal dialogs */
 export const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export const Z_INDEX_MODAL = 500;
+/**
+ * Z-index for the backdrop behind a modal opened FROM another modal — a picker that takes the
+ * screen over the dialog that launched it.
+ *
+ * A nested modal cannot reuse {@link Z_INDEX_MODAL_BACKDROP}: at 450 the inner backdrop paints below
+ * the host dialog's own content at {@link Z_INDEX_MODAL}, so it dims the app behind the host but not
+ * the host itself — while Radix's dismissable layer still makes the host inert. The host then looks
+ * live and swallows every click, which is the opposite of what a backdrop is for.
+ *
+ * Must stay above {@link Z_INDEX_MODAL} and below {@link Z_INDEX_NESTED_MODAL}. Pinned by
+ * `z-index.test.tsx`.
+ */
+export const Z_INDEX_NESTED_MODAL_BACKDROP = 510;
+/**
+ * Z-index for the content of a modal opened FROM another modal. See
+ * {@link Z_INDEX_NESTED_MODAL_BACKDROP} for why the nested case needs a tier of its own.
+ *
+ * Must stay above {@link Z_INDEX_NESTED_MODAL_BACKDROP} and below `Z_INDEX_TOOLTIP`, so a tooltip
+ * triggered from inside the nested modal — its close button carries one — still renders over it.
+ * Pinned by `z-index.test.tsx`.
+ *
+ * Deliberately absent from the SCSS twin in `src/renderer/styles/_vars.scss`, which stops at
+ * `$z-index--modal`: no SCSS-styled surface renders a nested modal, and a constant nothing consumes
+ * is one more thing to drift. Add it there if one ever does.
+ */
+export const Z_INDEX_NESTED_MODAL = 520;
+/**
+ * Z-index for tooltips. Must sit above every layer that can contain a tooltip trigger — modal
+ * dialogs, the popover layer, and content portalled out of a popover ({@link Z_INDEX_ABOVE_POPOVER})
+ * — or a tooltip on a control inside one of them renders behind it.
+ */
+export const Z_INDEX_TOOLTIP = 675;
+/**
+ * Z-index for the one-shot onboarding tour spotlight. Sits above {@link Z_INDEX_ABOVE_DOCK},
+ * {@link Z_INDEX_ABOVE_POPOVER} and `Z_INDEX_TOOLTIP` so it can spotlight toolbar buttons and
+ * columns without a tooltip on one of them painting over the spotlight, and below
+ * {@link Z_INDEX_FIRST_RUN} so the wizard always wins if both are mounted. Pinned by
+ * `z-index.test.tsx`.
+ */
+export const Z_INDEX_ONBOARDING_TOUR = 690;
+/**
+ * Z-index for the first-run setup wizard gate. Must sit above every other layer (including
+ * {@link Z_INDEX_ABOVE_POPOVER}, `Z_INDEX_TOOLTIP` and {@link Z_INDEX_ONBOARDING_TOUR}) so the wizard
+ * fully gates the app at startup and nothing behind it remains clickable or focusable.
+ */
+export const Z_INDEX_FIRST_RUN = 700;
+/**
+ * Z-index for the connection-lost state. Sits above every other layer, {@link Z_INDEX_FIRST_RUN}
+ * included.
+ *
+ * When the websocket to the rest of the app dies, every layer beneath this one is inert — the
+ * first-run wizard cannot submit, modals cannot resolve, the toolbar cannot navigate. Anything
+ * rendering over this state would be offering the user a control that silently does nothing. Pinned
+ * by `z-index.test.tsx`.
+ */
+export const Z_INDEX_CONNECTION_LOST = 800;

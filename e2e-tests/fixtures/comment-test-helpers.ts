@@ -12,7 +12,8 @@
  * `createCommentTestProject` copies the bundled WEB project into a temp directory under the
  * Platform.Bible projects folder, gives it a unique random hex "Guid", and adds synthetic test
  * users so the "Assign to" dropdown is populated. Call `cleanupCommentTestProject` in `afterAll` to
- * remove the copy.
+ * remove the copy. `removeRevelationFromProject` shapes a copy's book list, for tests that need one
+ * project to be missing a book another project has.
  *
  * ## Seeding comment threads
  *
@@ -31,8 +32,16 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { expect, type FrameLocator, type Page } from '@playwright/test';
-import { addUsersToProject, sendPapiRequestOnce, waitForPapiMethodRegistered } from './helpers';
+import { expect, type Frame, type FrameLocator, type Page } from '@playwright/test';
+import {
+  addUsersToProject,
+  DEFAULT_WEBSOCKET_PORT,
+  escapeXml,
+  PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  sendPapiRequestOnce,
+  waitForPapiMethodRegistered,
+} from './helpers';
+import { getEditorFrame } from './scripture-editor-helpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -41,7 +50,13 @@ import { addUsersToProject, sendPapiRequestOnce, waitForPapiMethodRegistered } f
 /** Source WEB project bundled with the c-sharp assets */
 const WEB_PROJECT_ASSETS_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
 
-/** Platform.Bible's Paratext 9 projects root (matches LocalParatextProjects constructor) */
+/**
+ * Platform.Bible's Paratext 9 projects root. Must match the folder the app scans at startup —
+ * `LocalParatextProjects`'s constructor hardcodes `~/.platform.bible/projects/Paratext 9 Projects`
+ * (c-sharp/Projects/LocalParatextProjects.cs), where `UserProfile` === `os.homedir()`. The app
+ * scans this folder exactly once at startup (there is no on-demand rescan), so a test project
+ * written here is discoverable only if it exists before the app launches.
+ */
 const PARATEXT_PROJECTS_ROOT = path.join(
   os.homedir(),
   '.platform.bible',
@@ -52,7 +67,13 @@ const PARATEXT_PROJECTS_ROOT = path.join(
 /** Network object name for the Paratext project data provider factory */
 const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProviderId';
 
-const DEFAULT_WEBSOCKET_PORT = 8876;
+/**
+ * Paratext app-data directories are named `Paratext<major><minor>` — `Paratext80` is 8.0,
+ * `Paratext94` is 9.4, `Paratext100` is 10.0 — so the suffix read as a number orders the versions
+ * (minors are single-digit). Anything below 8.0 stored registration information in a different
+ * shape and ParatextData ignores it; see `UpgradeAppDataFiles` in ParatextData's ParatextInfo.
+ */
+const OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION = 80;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -70,6 +91,66 @@ export interface CommentTestProject {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Current Paratext user
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Root the platform's local application data lives under, matching what .NET's
+ * `Environment.SpecialFolder.LocalApplicationData` resolves to for the C# data provider:
+ * `%LOCALAPPDATA%` on Windows, `$XDG_DATA_HOME` (default `~/.local/share`) everywhere else.
+ */
+function localApplicationDataRoot(): string | undefined {
+  if (process.platform === 'win32') return process.env.LOCALAPPDATA;
+  return process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
+}
+
+/**
+ * The name ParatextData reports as the current user (`RegistrationInfo.DefaultUser.Name`), read
+ * from the machine's registration file: the highest-named `Paratext*` app-data directory holding a
+ * `RegistrationInfo.xml`, which is how ParatextData picks one (`ParatextInfo`).
+ *
+ * Read from disk rather than asked of the running app on purpose. A project's
+ * `ProjectUserAccess.xml` is loaded when ParatextData first opens the project, during the app's
+ * startup scan, and the loaded copy is kept for the session — so the current user has to be in the
+ * file BEFORE the app launches. Writing it afterwards has no effect on that session.
+ *
+ * @returns The registered user name, or undefined when this machine has no Paratext registration
+ */
+export function readCurrentParatextUserName(): string | undefined {
+  const root = localApplicationDataRoot();
+  if (!root || !fs.existsSync(root)) return undefined;
+
+  const newest = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      name: entry.name,
+      version: Number(/^Paratext(\d+)$/.exec(entry.name)?.[1]),
+    }))
+    .filter((dir) => dir.version >= OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION)
+    .filter((dir) => fs.existsSync(path.join(root, dir.name, 'RegistrationInfo.xml')))
+    .sort((a, b) => a.version - b.version)
+    .pop();
+  if (!newest) return undefined;
+  const registrationFile = path.join(root, newest.name, 'RegistrationInfo.xml');
+
+  const name = /<Name>([^<]*)<\/Name>/.exec(fs.readFileSync(registrationFile, 'utf8'))?.[1];
+  // Decoded here because the value is scraped straight out of XML and handed to a writer that
+  // escapes it again. Without this, a registered name containing `&` arrives as `&amp;`, is
+  // re-escaped to `&amp;amp;`, and comes back out of the parser as the literal text `&amp;` — which
+  // no longer matches the name ParatextData is looking for.
+  return (
+    name
+      ?.replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim() || undefined
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Project setup / teardown
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -81,10 +162,16 @@ export interface CommentTestProject {
  * via `HexId.FromStr`. This avoids collisions with the real WEB project (or other test copies).
  *
  * @param users Usernames to add as project team members (e.g. ['Alice', 'Bob', 'Charlie'])
+ * @param shortNameSuffix Appended to the generated short name. Pass distinct values when one test
+ *   creates several projects, so their short names (and therefore their folders and dock tab
+ *   titles) stay distinct even when the copies are created within the same millisecond.
  * @returns Metadata about the created project
  */
-export async function createCommentTestProject(users: string[]): Promise<CommentTestProject> {
-  const shortName = `testComment_${Date.now()}`;
+export async function createCommentTestProject(
+  users: string[],
+  shortNameSuffix = '',
+): Promise<CommentTestProject> {
+  const shortName = `testComment_${Date.now()}${shortNameSuffix}`;
   const projectDir = path.join(PARATEXT_PROJECTS_ROOT, shortName);
 
   // 1. Copy the WEB project directory
@@ -95,11 +182,20 @@ export async function createCommentTestProject(users: string[]): Promise<Comment
   //    format that Paratext projects use (e.g. "32664dc3288a28df2e2bb75ded887fc8f17a15fb").
   const projectId = crypto.randomBytes(20).toString('hex');
 
-  // 3. Give the copy a unique short name and new "Guid" so it does not collide with existing projects
+  // 3. Give the copy a unique short name and new "Guid" so it does not collide with existing
+  //    projects, and mark it editable.
+  //
+  //    The bundled WEB assets ship `<Editable>F</Editable>`, which `platform.isEditable` reports
+  //    verbatim (see GetIsEditable in c-sharp/Projects/ScrTextExtensions.cs). A non-editable
+  //    project is a published resource as far as the app is concerned, and the Simple-mode Column 3
+  //    panels — the comment list among them — deliberately do NOT follow the editor onto one
+  //    (`openOrUpdateRelatedPanels` is gated on isEditable in platform-scripture-editor/src/main.ts).
+  //    Comments belong to a translation project the user works in, so these copies model one.
   const settingsXml = fs.readFileSync(path.join(projectDir, 'Settings.xml'), 'utf8');
   const updatedSettings = settingsXml
     .replace(/<Name>[^<]*<\/Name>/, `<Name>${shortName}</Name>`)
-    .replace(/<Guid>[^<]*<\/Guid>/, `<Guid>${projectId}</Guid>`);
+    .replace(/<Guid>[^<]*<\/Guid>/, `<Guid>${projectId}</Guid>`)
+    .replace(/<Editable>[^<]*<\/Editable>/, '<Editable>T</Editable>');
   fs.writeFileSync(path.join(projectDir, 'Settings.xml'), updatedSettings);
 
   // 4. Add test users by writing ProjectUserAccess.xml before the data provider opens the project.
@@ -116,19 +212,182 @@ export async function createCommentTestProject(users: string[]): Promise<Comment
         .filter(Boolean)
     : [];
 
-  const allUsers = [...new Set([...users, ...localUserNames])];
-  if (allUsers.length > 0) {
-    addUsersToProject(projectDir, allUsers);
-  }
+  // The current user matters as much as the synthetic ones: ParatextData grants full access when a
+  // project has NO ProjectUserAccess.xml ("If no project users file, always administrator" —
+  // PermissionManager.HaveRoleNotObserver), but once the file exists a user missing from it has no
+  // role and every comment write is refused. localUsers.txt only exists where Paratext 9 has run,
+  // so the machine's registered name is read directly as well.
+  const allUsers = projectUsersToWrite(users, localUserNames, readCurrentParatextUserName());
+  if (allUsers) addUsersToProject(projectDir, allUsers);
 
   return { shortName, projectDir, projectId, users };
 }
 
-/** Removes a test project created by {@link createCommentTestProject}. Call this in `afterAll`. */
-export function cleanupCommentTestProject(project: CommentTestProject): void {
+/**
+ * The users to write into a project's `ProjectUserAccess.xml`, or `undefined` when none should be
+ * written at all.
+ *
+ * A caller asking for no users is asking for no file. ParatextData grants full access when a
+ * project has NO users file ("If no project users file, always administrator" —
+ * `PermissionManager.HaveRoleNotObserver`), so writing one anyway — merely because the machine
+ * happens to have a registered Paratext user — silently downgrades the project to a TeamMember with
+ * permissions explicitly denied, and does it only on machines that have a registration.
+ *
+ * Once the file does exist, a user missing from it has no role and every comment write is refused.
+ * So a caller that DID ask for users still gets the machine's own name and the local users added,
+ * or its own writes would be refused.
+ */
+export function projectUsersToWrite(
+  requested: string[],
+  localUserNames: string[],
+  currentUser: string | undefined,
+): string[] | undefined {
+  if (requested.length === 0) return undefined;
+  return [...new Set([...requested, ...localUserNames, ...(currentUser ? [currentUser] : [])])];
+}
+
+/**
+ * Removes a test project created by {@link createCommentTestProject}. Call this in `afterAll`.
+ *
+ * No-ops on a falsy argument so a teardown can safely clean up every project even when an earlier
+ * one in the same `beforeAll` failed to create (leaving its variable `undefined`) — otherwise the
+ * first undefined would throw and abort teardown, leaking the already-created project directories
+ * under `~/.platform.bible` where `LocalParatextProjects` would rediscover them on every later
+ * run.
+ */
+export function cleanupCommentTestProject(project: CommentTestProject | undefined): void {
+  if (!project) return;
   if (fs.existsSync(project.projectDir)) {
     fs.rmSync(project.projectDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Revelation's USFM file in the bundled WEB project. The `67` prefix is the USFM file-naming
+ * number, which is one higher than the canon book number for every New Testament book.
+ */
+const REVELATION_SFM_FILE_NAME = '67REVengWEBUS.SFM';
+
+/**
+ * Index of Revelation in `Settings.xml`'s `BooksPresent` bit string. The string is indexed by canon
+ * book number minus one, and Revelation is canon book 66.
+ */
+const REVELATION_BOOKS_PRESENT_INDEX = 65;
+
+/**
+ * Removes Revelation from a project copy: both the book file and the `BooksPresent` bit, because
+ * `platformScripture.booksPresent` is served from `ScrText.BooksPresentSet`, which reconciles the
+ * two. Use it to make a project copy that lacks a book some other project has, so a test can prove
+ * a book is reachable only through the other project.
+ *
+ * Throws if either input does not look the way this expects, so a changed WEB asset surfaces as a
+ * setup failure instead of a test that quietly stops discriminating.
+ *
+ * @param project The test project copy to strip Revelation from
+ */
+export function removeRevelationFromProject(project: CommentTestProject): void {
+  const sfmPath = path.join(project.projectDir, REVELATION_SFM_FILE_NAME);
+  if (!fs.existsSync(sfmPath))
+    throw new Error(`Expected ${REVELATION_SFM_FILE_NAME} in the WEB project copy at ${sfmPath}`);
+  fs.rmSync(sfmPath);
+
+  const settingsPath = path.join(project.projectDir, 'Settings.xml');
+  const settingsXml = fs.readFileSync(settingsPath, 'utf8');
+  const booksPresentMatch = settingsXml.match(/<BooksPresent>([01]+)<\/BooksPresent>/);
+  const booksPresent = booksPresentMatch?.[1];
+  if (!booksPresentMatch || !booksPresent)
+    throw new Error(`No <BooksPresent> bit string found in ${settingsPath}`);
+  if (booksPresent[REVELATION_BOOKS_PRESENT_INDEX] !== '1')
+    throw new Error(
+      `Expected Revelation to be present at index ${REVELATION_BOOKS_PRESENT_INDEX} of BooksPresent, got "${booksPresent}"`,
+    );
+
+  const withoutRevelation = `${booksPresent.slice(0, REVELATION_BOOKS_PRESENT_INDEX)}0${booksPresent.slice(REVELATION_BOOKS_PRESENT_INDEX + 1)}`;
+  // A replacer FUNCTION, not a replacement string — see setReferencedProjectsAndResources's own
+  // comment on the same idiom for why a plain string is unsafe here in general, even though this
+  // particular replacement text is a fixed-width bit string that cannot itself contain one of the
+  // special `$`-patterns.
+  fs.writeFileSync(
+    settingsPath,
+    settingsXml.replace(
+      booksPresentMatch[0],
+      () => `<BooksPresent>${withoutRevelation}</BooksPresent>`,
+    ),
+    'utf8',
+  );
+}
+
+/**
+ * Data-schema version written into a seeded `ReferencedProjectsAndResources` JSON body. Mirrors
+ * `CURRENT_DATA_VERSION` in
+ * `extensions/src/platform-scripture-editor/src/resource-reference-list.const.ts` and
+ * `ResourceReferenceList.CurrentFormatVersion` in `c-sharp/Projects/ResourceReferenceList.cs` —
+ * keep in sync (neither source can be imported into the Playwright Node context).
+ */
+export const REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION = '1.1.0';
+
+/**
+ * Seeds a project's own `platformScripture.referencedProjectsAndResources` admin setting by writing
+ * a `<ReferencedProjectsAndResources>` element directly into its `Settings.xml`
+ * (`c-sharp/Projects/ParatextProjectDataProvider.cs`'s `GetProjectSetting` reads this element's
+ * text as `"<dataVersion> <json>"`, e.g. `1.1.0 {"dataVersion":"1.1.0","items":[...]}`, matching
+ * `ResourceReferenceList.CurrentFormatVersion`'s on-disk shape). Each id in `referencedProjectIds`
+ * is written as a `ProjectReference` naming `project` itself — the only shape current callers need
+ * — so pass `[project.projectId]` for a self-reference.
+ *
+ * The Bible-texts panel (`resource-text-panel.web-view.tsx`) falls back to the first row of this
+ * project's own list unioned with every locally-installed read-only project
+ * (`resolveResourceSelection`'s `rows[0]` fallback in `resource-selection.utils.ts`) whenever the
+ * project's own list is empty. On a machine with a downloaded read-only resource (e.g. WEB), that
+ * fallback silently selects it instead of showing nothing — so a test that reasons about which
+ * books the toolbar's book/chapter/verse control can reach through this project must pin its own
+ * list rather than leave it empty, or the assertion only holds on machines with none installed.
+ *
+ * Must run before the app launches, like {@link removeRevelationFromProject} — ParatextData loads
+ * `Settings.xml` during the app's startup scan and keeps the loaded copy for the session.
+ *
+ * @param project The test project copy whose own reference list to set
+ * @param referencedProjectIds Project ids to reference, each written as a self-naming
+ *   `ProjectReference` for `project`
+ */
+export function setReferencedProjectsAndResources(
+  project: CommentTestProject,
+  referencedProjectIds: string[],
+): void {
+  const settingsPath = path.join(project.projectDir, 'Settings.xml');
+  const settingsXml = fs.readFileSync(settingsPath, 'utf8');
+  if (settingsXml.includes('<ReferencedProjectsAndResources>'))
+    throw new Error(
+      `${settingsPath} already has a <ReferencedProjectsAndResources> element; ` +
+        'setReferencedProjectsAndResources does not support overwriting an existing one',
+    );
+
+  const items = referencedProjectIds.map((id) => ({
+    type: 'project' as const,
+    name: id === project.projectId ? project.shortName : id,
+    id,
+  }));
+  const jsonBody = JSON.stringify({
+    dataVersion: REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION,
+    items,
+  });
+  // Escape the whole text node (not just `name` before stringifying) so a literal `&`/`<`/`>`
+  // inside the JSON — e.g. from a name — round-trips through the XML text node correctly instead
+  // of corrupting the embedded JSON with a premature XML entity.
+  const elementText = escapeXml(`${REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION} ${jsonBody}`);
+  const element = `<ReferencedProjectsAndResources>${elementText}</ReferencedProjectsAndResources>`;
+
+  if (!settingsXml.includes('</ScriptureText>'))
+    throw new Error(`Expected </ScriptureText> closing tag in ${settingsPath}`);
+  // A replacer FUNCTION, not a replacement string: `element` embeds free text (e.g. a project
+  // name), and `String.prototype.replace` gives a STRING replacement its own substitution syntax —
+  // `$&`, `` $` ``, `$'`, `$$` — so a name containing one of those would expand instead of landing
+  // verbatim. A function's return value is always used literally.
+  fs.writeFileSync(
+    settingsPath,
+    settingsXml.replace('</ScriptureText>', () => `  ${element}\n</ScriptureText>`),
+    'utf8',
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -166,7 +425,11 @@ export async function createCommentThreads(
   const resolvedPort = port ?? DEFAULT_WEBSOCKET_PORT;
 
   // 1. Wait for the Paratext PDPF to register getProjectDataProviderId
-  await waitForPapiMethodRegistered(PARATEXT_PDPF_METHOD, resolvedPort, 60_000);
+  await waitForPapiMethodRegistered(
+    PARATEXT_PDPF_METHOD,
+    resolvedPort,
+    PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  );
 
   // 2. Get (or lazily create) the PDP for this project.
   //    The C# factory calls projectID.ToUpperInvariant() internally, so case doesn't matter.
@@ -179,7 +442,11 @@ export async function createCommentThreads(
   );
 
   // 3. Wait for the PDP's createComment method to appear in rpc.discover
-  await waitForPapiMethodRegistered(`object:${pdpId}.createComment`, resolvedPort, 60_000);
+  await waitForPapiMethodRegistered(
+    `object:${pdpId}.createComment`,
+    resolvedPort,
+    PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  );
 
   // 4. Create each thread sequentially (the PDP is not safe to hammer in parallel)
   const threadIds: string[] = [];
@@ -214,7 +481,7 @@ export async function createCommentThreads(
  * 1. Waits for the dock layout's `loadLayout()` to complete (signalled by the first iframe — the Home
  *    webview — appearing). This prevents a race where `addWebViewToDock` runs before
  *    `loadLayout(testLayout)`, causing `loadLayout` to wipe the newly added editor tab.
- * 2. Calls `platformScriptureEditor.openResourceViewer` to open the scripture editor and get its
+ * 2. Calls `platformScriptureEditor.openScriptureEditor` to open the scripture editor and get its
  *    webViewId, then immediately calls `legacyCommentManager.openCommentList` with that webViewId.
  *    Both calls are retried together up to 5 times.
  *
@@ -231,7 +498,7 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
   //
   //    Why: `registerDockLayout` (called from the PlatformDockLayout `useEffect`) calls
   //    `loadLayout()` asynchronously. `loadLayout` calls `getDockLayout()` (an already-resolved
-  //    promise), so its continuation is queued as a *microtask*. If `openResourceViewer` also
+  //    promise), so its continuation is queued as a *microtask*. If `openScriptureEditor` also
   //    resolves `getDockLayout()` around the same time — which happens when the PDP is cached and
   //    the extension-host round-trip is fast — `addWebViewToDock` can run *before* `loadLayout`'s
   //    `dockLayout.loadLayout(testLayout)` does. Then `loadLayout` wipes the newly added editor
@@ -243,7 +510,7 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
 
   // 2. Pre-register both commands so individual PAPI calls don't time out while waiting.
   await waitForPapiMethodRegistered(
-    'command:platformScriptureEditor.openResourceViewer',
+    'command:platformScriptureEditor.openScriptureEditor',
     DEFAULT_WEBSOCKET_PORT,
     30_000,
   );
@@ -277,7 +544,7 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
     // ── Phase A: open the editor and wait for its iframe ──────────────────────
 
     const editorId = await sendPapiRequestOnce<string | undefined>(
-      'command:platformScriptureEditor.openResourceViewer',
+      'command:platformScriptureEditor.openScriptureEditor',
       [project.projectId],
       DEFAULT_WEBSOCKET_PORT,
       60_000,
@@ -285,7 +552,7 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
 
     if (!editorId) {
       console.warn(
-        `[openCommentList] Attempt ${attempt + 1}: openResourceViewer returned no webViewId`,
+        `[openCommentList] Attempt ${attempt + 1}: openScriptureEditor returned no webViewId`,
       );
       continue;
     }
@@ -366,6 +633,118 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
   /* eslint-enable no-await-in-loop, no-continue */
 
   throw new Error(`Failed to open comment list after 5 attempts for project ${project.shortName}`);
+}
+
+/**
+ * Clicks a project-scoped comment-list tab — the Column 3 "Comments" tab in Simple mode
+ * (`comments-tab.spec.ts`) or the per-project Comments panel tab it shares a layout with
+ * (`comments-panel-content-zoom.spec.ts`) — handling the rc-tabs overflow case where the tab is
+ * attached but clipped by the scrollable tab bar: rc-tabs renders every tab node at all times but
+ * clips those outside the visible portion, so `toBeAttached()` succeeds for a clipped tab while a
+ * direct click would miss it.
+ *
+ * @param webViewId The tab's web view id (`data-web-view-id` on `.platform-tab-title`)
+ * @param actionTimeoutMs Bounds the click/hover actions — pass a short value when calling inside a
+ *   retry loop so a blocked click (e.g. the workspace-updating overlay intercepting pointer events)
+ *   fails fast and the loop can retry, instead of burning the default 30 s action timeout
+ */
+export async function clickCommentsTab(
+  mainPage: Page,
+  webViewId: string,
+  actionTimeoutMs = 30_000,
+): Promise<void> {
+  const tabTitle = mainPage.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
+  if (await tabTitle.isVisible()) {
+    await tabTitle.click({ timeout: actionTimeoutMs });
+    return;
+  }
+  // Tab is outside the visible scroll area — open the overflow dropdown and activate it.
+  const dockBar = mainPage.locator('.dock-bar').filter({ has: tabTitle });
+  await dockBar.locator('.dock-nav-more').hover({ timeout: actionTimeoutMs });
+  // rc-tabs re-renders PlatformTabTitle (including our data-web-view-id) in the overflow popup.
+  await mainPage
+    .locator('[role="listbox"] [role="option"]')
+    .filter({ has: mainPage.locator(`[data-web-view-id="${webViewId}"]`) })
+    .click({ timeout: 5_000 });
+}
+
+/**
+ * Points the (worker-scoped, singleton) Comment List Panel — the Column 3 "Comments" tab in Simple
+ * mode — at `projectId`, via the `legacyCommentManager.openCommentListPanel` command. Shared by
+ * `comments-tab.spec.ts` (called inline for each of its test projects) and
+ * `comments-panel-content-zoom.spec.ts` (its own Simple-mode Column 3 panel tab).
+ */
+export async function openCommentListPanel(
+  projectId: string,
+  port = DEFAULT_WEBSOCKET_PORT,
+  registrationTimeoutMs = 60_000,
+  sendTimeoutMs = 150_000,
+): Promise<void> {
+  await waitForPapiMethodRegistered(
+    'command:legacyCommentManager.openCommentListPanel',
+    port,
+    registrationTimeoutMs,
+  );
+  await sendPapiRequestOnce(
+    'command:legacyCommentManager.openCommentListPanel',
+    [projectId],
+    port,
+    sendTimeoutMs,
+  );
+}
+
+/**
+ * Calls {@link openCommentListPanel}, brings its tab to front (which is also what mounts the panel's
+ * iframe the first time — Column 3's tabs render their content lazily, on first activation), and
+ * retries the whole sequence, bounded, until the iframe attaches and `expectedText` appears inside
+ * it — ARRANGEMENT only, for seeding the (fixed, non-closable Simple-mode) singleton Comments panel
+ * with content before a test acts on it. Returns the resolved content frame so the caller doesn't
+ * need a separate {@link getEditorFrame} call.
+ *
+ * TODO(PT-4745): every `openCommentListPanel` call re-points an already-mounted panel rather than
+ * creating a fresh instance (Simple mode's Comments panel is a singleton mounted before any test
+ * code runs), and the re-point sometimes never reaches the mounted component's props — the panel
+ * then keeps showing the previous project (or nothing), with no error. The command is idempotent,
+ * so reissuing it here is safe. Do NOT reach for this to retry an assertion that is itself testing
+ * the re-point path — see `comments-panel-content-zoom.spec.ts`'s "re-pointed panel" step, which is
+ * `test.step.skip`ped for the same underlying bug instead of retried, because retrying there would
+ * retry the very behavior under test.
+ *
+ * @param mainPage The Electron main window page the panel's iframe attaches in
+ * @param panelId The Comment List Panel's web view id (`data-web-view-id`)
+ * @param projectId The project id to point the panel at
+ * @param expectedText Text expected to appear in the panel body once it shows `projectId`'s content
+ * @param attempts Bounded retry count; the call is cheap and idempotent, so a few attempts absorb
+ *   the intermittent re-point failure without masking a persistent one
+ */
+export async function openCommentListPanelUntilVisible(
+  mainPage: Page,
+  panelId: string,
+  projectId: string,
+  expectedText: string,
+  attempts = 3,
+): Promise<Frame> {
+  let lastError: unknown;
+  // Sequential retry loop: each attempt must open the panel, activate its tab, wait for its iframe,
+  // and poll for its content before deciding whether to retry.
+  /* eslint-disable no-await-in-loop */
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    await openCommentListPanel(projectId);
+    await clickCommentsTab(mainPage, panelId);
+    const timeout = attempt < attempts - 1 ? 20_000 : 90_000;
+    try {
+      await mainPage
+        .locator(`iframe[data-web-view-id="${panelId}"]`)
+        .waitFor({ state: 'attached', timeout });
+      const frame = await getEditorFrame(mainPage, panelId);
+      await expect(frame.locator('body')).toContainText(expectedText, { timeout });
+      return frame;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+  throw lastError;
 }
 
 /** Returns the frame locator for the comment list web view iframe. */

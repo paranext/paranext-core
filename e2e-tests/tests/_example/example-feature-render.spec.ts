@@ -1,8 +1,11 @@
 /**
  * === REFERENCE EXAMPLE ===
  *
- * This is a template for per-feature E2E tests using cdp.fixture. Copy this file when creating E2E
- * tests for a new feature.
+ * This is a template for a spec under `tests/attached/` — one that attaches to an app you started
+ * yourself, using cdp.fixture. Per-feature tests default to `tests/isolated/` with
+ * isolated.fixture, which launches its own Electron per test; copy this file only when the test
+ * genuinely cannot own the app's lifecycle. See .context/standards/Testing-Guide.md § Test
+ * Location.
  *
  * Key rules:
  *

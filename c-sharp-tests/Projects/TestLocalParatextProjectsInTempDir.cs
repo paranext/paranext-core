@@ -6,18 +6,21 @@ using SIL.Xml;
 
 namespace TestParanextDataProvider.Projects
 {
-    internal class TestLocalParatextProjectsInTempDir : LocalParatextProjects, IDisposable
+    internal class TestLocalParatextProjectsInTempDir : LocalParatextProjects
     {
         private TemporaryFolder _folder;
 
         public TestLocalParatextProjectsInTempDir()
-            : base(new AppInfo("test-app", "0.0.0", "test-app"))
+            : base()
         {
             _folder = new TemporaryFolder(TestContext.CurrentContext.Test.ID);
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
+            // Dispose the base's FileSystemWatcher and debounce Timer before the temp folder they
+            // watch is torn down.
+            base.Dispose();
             _folder.Dispose();
             // Reset ScrTextCollection's folder to be the global test project folder
             ParatextData.Initialize(FixtureSetup.TestFolderPath, false);
@@ -40,7 +43,7 @@ namespace TestParanextDataProvider.Projects
                 LanguageIsoCode = "en:::",
                 // Baked-in functional Paratext version. Just needed something that worked for ScrText
                 // to load. Feel free to change this for testing purposes
-                MinParatextVersion = "8.0.100.76"
+                MinParatextVersion = "8.0.100.76",
             };
             var settingsPath = Path.Join(folderPath, "Settings.xml");
             XmlSerializationHelper.SerializeToFileWithWriteThrough(settingsPath, settings);

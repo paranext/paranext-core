@@ -1,65 +1,78 @@
+import {
+  USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
+  USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
+  USERSNAP_SPACE_API_KEY,
+} from '@shared/data/platform.data';
 import { appService } from '@shared/services/app.service';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { loadSpace, type InitOptions, type SpaceApi } from '@usersnap/browser';
+import { AsyncVariable, getErrorMessage, type LocalizeKey } from 'platform-bible-utils';
 
 /**
- * These API keys are unique IDs that can be used to interact with our feedback forms on Usersnap. A
- * Project key relates to a specific form can be shown, and the user can submit their feedback
- * through it. Note that these keys can be used only to SUBMIT reports to our Usersnap Projects, and
- * not to RETRIEVE any information related to them.
+ * Milliseconds to wait for Usersnap's `loadSpace` + `init` to finish before giving up.
  *
- * The Space is the container that holds these Projects.
+ * Exported so the test can advance fake timers by exactly this amount.
  */
-export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string = '68df6b26-c519-4829-8d07-2201d31fac9d';
-export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string = 'bd3bc542-1f0c-40e4-85f7-315f5138ea88';
-export const USERSNAP_SPACE_API_KEY: string = '1cf2709b-3ff0-4cff-8952-a2d2bca7590d';
+export const USERSNAP_INIT_TIMEOUT_MS = 5 * 1000;
+
+/** Shown when a configured feedback form cannot be reached, e.g. because Usersnap failed to load */
+const FEEDBACK_UNAVAILABLE_MESSAGE_KEY = '%mainMenu_feedback_unavailable%' satisfies LocalizeKey;
+/** Shown when this build has no Usersnap keys, so there are no feedback forms to open */
+const FEEDBACK_NOT_CONFIGURED_MESSAGE_KEY =
+  '%mainMenu_feedback_notConfigured%' satisfies LocalizeKey;
+/** Shown when the Usersnap widget throws while opening a configured form */
+const FEEDBACK_FAILED_TO_OPEN_MESSAGE_KEY =
+  '%mainMenu_feedback_failed_to_open%' satisfies LocalizeKey;
 
 /** Global UserSnap API instance service */
 
 let globalUsersnapApi: SpaceApi | undefined;
 let isUsersnapFormOpen = false;
 let apiKeyOfOpenForm: string | undefined;
-let shadowRootStylingInterval: ReturnType<typeof setInterval> | undefined;
+let shadowRootWaitInterval: ReturnType<typeof setInterval> | undefined;
+let shadowRootObserver: MutationObserver | undefined;
 
 /**
- * MutationObserver to detect when Usersnap elements are added to the DOM This will attempt to find
- * and style Usersnap shadow DOMs
+ * Applies custom styles to the open form's buttons in the Usersnap widget's shadow root. Runs on
+ * every change to the shadow root, so it must be idempotent: the changes it makes itself trigger it
+ * again and must then find nothing left to do.
+ *
+ * The selectors match the widget's English button labels. The Usersnap space is configured with
+ * English as its only locale; if another locale is ever enabled there, these selectors must
+ * follow.
  */
-let usersnapDomObserver: MutationObserver | undefined;
-
-/** Searches for Usersnap shadow DOM elements and applies custom styles */
-function findAndStyleUsersnapShadowRoots(): boolean {
+function findAndStyleUsersnapShadowRoots(): void {
   try {
-    const usersnapWidget = document.querySelector('us-widget');
-    if (!usersnapWidget) return false;
+    const shadowRoot = document.querySelector('us-widget')?.shadowRoot;
+    if (!shadowRoot) return;
 
-    if (!usersnapWidget.shadowRoot) return false;
-
-    const closeButton = usersnapWidget.shadowRoot.querySelector<HTMLButtonElement>(
+    const closeButton = shadowRoot.querySelector<HTMLButtonElement>(
       'button[title="Close annotation"]',
     );
 
-    if (!closeButton) return false;
-
     if (apiKeyOfOpenForm === USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY) {
+      // The idea form renders this button only once the user starts taking a screenshot.
+      if (!closeButton) return;
       closeButton.style.top = 'unset';
       closeButton.style.right = '22ch';
       closeButton.style.height = '54px';
       closeButton.style.bottom = '0';
     } else if (apiKeyOfOpenForm === USERSNAP_PROJECT_REPORT_ISSUE_API_KEY) {
-      closeButton.remove();
+      closeButton?.remove();
 
-      const collapseButton = usersnapWidget.shadowRoot.querySelector<HTMLButtonElement>(
+      if (shadowRoot.querySelector('button[aria-label="Close feedback form"]')) return;
+
+      const collapseButton = shadowRoot.querySelector<HTMLButtonElement>(
         'button[aria-label="Collapse form"]',
       );
 
-      if (!(collapseButton instanceof HTMLButtonElement)) return false;
+      if (!(collapseButton instanceof HTMLButtonElement)) return;
 
       const newCloseButton = collapseButton.cloneNode(true);
 
-      if (!(newCloseButton instanceof HTMLButtonElement)) return false;
+      if (!(newCloseButton instanceof HTMLButtonElement)) return;
 
       collapseButton.style.right = '36px';
 
@@ -68,7 +81,12 @@ function findAndStyleUsersnapShadowRoots(): boolean {
       newCloseButton.style.display = 'flex';
       newCloseButton.style.alignItems = 'center';
       newCloseButton.style.justifyContent = 'center';
-      newCloseButton.style.color = '#FFFFFF99';
+      // The glyph must read against whichever header colour the widget uses, so take the colour
+      // from the collapse button's own icon rather than hard-coding one.
+      const collapseIcon = collapseButton.querySelector('svg *');
+      newCloseButton.style.color = collapseIcon
+        ? getComputedStyle(collapseIcon).stroke
+        : getComputedStyle(collapseButton).color;
       newCloseButton.style.fontSize = '.8rem';
       newCloseButton.addEventListener('click', async () => {
         await closeOpenUsersnapForm();
@@ -76,97 +94,105 @@ function findAndStyleUsersnapShadowRoots(): boolean {
 
       collapseButton.parentNode?.insertBefore(newCloseButton, collapseButton.nextSibling);
     }
-
-    return true;
   } catch (error) {
-    logger.warn('Failed to find Usersnap close button in shadow roots:', error);
-    return false;
+    logger.warn('Failed to style Usersnap close buttons in the shadow root:', error);
   }
 }
 
-/** Sets up the Usersnap DOM observer, but doesn't start it yet */
-function initializeUsersnapDomObserver(): void {
-  if (usersnapDomObserver) return;
+/** How often to look for the Usersnap widget's shadow root */
+const SHADOW_ROOT_WAIT_INTERVAL_MS = 100;
+/** How long to keep looking for the Usersnap widget's shadow root before giving up */
+const SHADOW_ROOT_WAIT_TIMEOUT_MS = 10 * 1000;
 
-  try {
-    usersnapDomObserver = new MutationObserver((mutations) => {
-      if (!isUsersnapFormOpen) return;
-
-      const shouldSearchForShadowRoots = mutations.some((mutation) => {
-        if (mutation.type !== 'childList') return false;
-        return Array.from(mutation.addedNodes).some((node) => {
-          if (node instanceof Element && node.nodeType === Node.ELEMENT_NODE && node.shadowRoot) {
-            return true;
-          }
-          return false;
-        });
-      });
-
-      if (shouldSearchForShadowRoots) {
-        const startTime = Date.now();
-        const maxDuration = 10000; // 10 seconds
-        shadowRootStylingInterval = setInterval(() => {
-          const success = findAndStyleUsersnapShadowRoots();
-          const elapsed = Date.now() - startTime;
-
-          if (success || elapsed >= maxDuration) {
-            if (!success) {
-              logger.warn(
-                'Timeout reached while waiting for Usersnap shadow DOM elements to appear',
-              );
-            }
-            clearInterval(shadowRootStylingInterval);
-            shadowRootStylingInterval = undefined;
-          }
-        }, 100);
-      }
-    });
-
-    logger.debug('Usersnap DOM observer initialized');
-  } catch (error) {
-    logger.warn('Failed to initialize Usersnap DOM observer:', error);
-    usersnapDomObserver = undefined;
+/** Stops restyling the Usersnap widget's shadow root, and stops waiting for it to appear */
+function stopShadowRootStyling(): void {
+  if (shadowRootWaitInterval) {
+    clearInterval(shadowRootWaitInterval);
+    shadowRootWaitInterval = undefined;
   }
+  shadowRootObserver?.disconnect();
+  shadowRootObserver = undefined;
 }
 
-/** Starts the Usersnap DOM observer */
-function startUsersnapObserver(): void {
-  if (usersnapDomObserver) {
-    try {
-      usersnapDomObserver.observe(document.body, {
-        childList: true,
-        subtree: true,
-      });
-    } catch (error) {
-      logger.warn('Failed to start Usersnap DOM observer:', error);
-    }
-  }
+/** Styles the open form's buttons now, and again whenever the widget's shadow root changes */
+function observeShadowRoot(shadowRoot: ShadowRoot): void {
+  findAndStyleUsersnapShadowRoots();
+  shadowRootObserver = new MutationObserver(findAndStyleUsersnapShadowRoots);
+  shadowRootObserver.observe(shadowRoot, { childList: true, subtree: true });
 }
 
-/** Disconnects the Usersnap DOM observer */
-function stopUsersnapObserver(): void {
-  if (usersnapDomObserver) {
-    try {
-      usersnapDomObserver.disconnect();
-    } catch (error) {
-      logger.warn('Failed to stop Usersnap DOM observer:', error);
-    }
+/**
+ * Keeps the open form's buttons styled for as long as the form is open. The form renders some of
+ * them only later, in response to the user (the idea form's annotation close button appears when
+ * the user starts a screenshot), so the shadow root is observed rather than checked once. The
+ * `<us-widget>` element and its shadow root normally exist from load time; if they do not exist
+ * yet, poll briefly for them.
+ */
+function startShadowRootStyling(): void {
+  stopShadowRootStyling();
+
+  const getShadowRoot = () => document.querySelector('us-widget')?.shadowRoot ?? undefined;
+
+  const shadowRoot = getShadowRoot();
+  if (shadowRoot) {
+    observeShadowRoot(shadowRoot);
+    return;
   }
+
+  const startTime = Date.now();
+  shadowRootWaitInterval = setInterval(() => {
+    const foundShadowRoot = getShadowRoot();
+    if (!foundShadowRoot && Date.now() - startTime < SHADOW_ROOT_WAIT_TIMEOUT_MS) return;
+
+    clearInterval(shadowRootWaitInterval);
+    shadowRootWaitInterval = undefined;
+    if (foundShadowRoot) observeShadowRoot(foundShadowRoot);
+    else logger.warn('Timeout reached while waiting for the Usersnap widget to appear');
+  }, SHADOW_ROOT_WAIT_INTERVAL_MS);
 }
 
 /** Initializes the global UserSnap API instance */
 export async function initializeUsersnapApi() {
+  if (!USERSNAP_SPACE_API_KEY) {
+    logger.info('Usersnap is not configured (no space API key); feedback forms are unavailable');
+    return;
+  }
+
   try {
     const defaultInitParams: InitOptions = {
       enableScreenshot: true,
+      // The DOM-capture screenshot serializes every web view iframe together with its bundle and
+      // exceeds Usersnap's 20 MB payload limit, so the widget takes a real screenshot instead,
+      // served by the display-media request handler in the main process.
+      nativeScreenshot: true,
       collectGeoLocation: 'none',
       useSystemFonts: true,
       useLocalStorage: true,
     };
 
     const startTime = performance.now();
-    const api = await loadSpace(USERSNAP_SPACE_API_KEY);
-    await api.init(defaultInitParams);
+    // Bound the whole load + init: both reach an external server that can hang indefinitely, and
+    // both run on the awaited renderer startup path.
+    const initVar = new AsyncVariable<SpaceApi>('usersnapInit', USERSNAP_INIT_TIMEOUT_MS);
+    // Fire-and-forget: startup awaits `initVar.promise`, so the timeout can win even if this hangs.
+    (async () => {
+      try {
+        const spaceApi = await loadSpace(USERSNAP_SPACE_API_KEY);
+        await spaceApi.init(defaultInitParams);
+        // If load + init finish after the timeout fired, destroy the space to avoid an orphan.
+        if (initVar.hasTimedOut) await spaceApi.destroy();
+        else initVar.resolveToValue(spaceApi);
+      } catch (error) {
+        if (initVar.hasTimedOut)
+          logger.debug('Usersnap load/init failed (or cleanup failed) after timeout:', error);
+        else {
+          // `rejectWithReason` only takes a string, so log the real error here to keep its stack.
+          logger.warn('Usersnap load/init failed:', error);
+          initVar.rejectWithReason(getErrorMessage(error));
+        }
+      }
+    })();
+    const api = await initVar.promise;
     const endTime = performance.now();
     logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
 
@@ -205,7 +231,7 @@ export async function initializeUsersnapApi() {
       isUsersnapFormOpen = true;
       apiKeyOfOpenForm = event.apiKey;
 
-      startUsersnapObserver();
+      startShadowRootStyling();
     });
     api.on('beforeSubmit', async (event) => {
       event.api.setValue('custom', customData);
@@ -214,43 +240,35 @@ export async function initializeUsersnapApi() {
       isUsersnapFormOpen = false;
       apiKeyOfOpenForm = undefined;
 
-      if (shadowRootStylingInterval) {
-        clearInterval(shadowRootStylingInterval);
-        shadowRootStylingInterval = undefined;
-      }
-
-      stopUsersnapObserver();
+      stopShadowRootStyling();
     });
 
     globalUsersnapApi = api;
-
-    initializeUsersnapDomObserver();
   } catch (error) {
-    logger.error('Failed to initialize UserSnap API:', error);
-    logger.warn(
-      'UserSnap functionality will be unavailable. This may be due to network connectivity issues, invalid API keys, or blocked external requests.',
-    );
-
-    // Set globalUsersnapApi to undefined to indicate initialization failed
+    logger.warn('Failed to initialize UserSnap API; feedback forms will be unavailable:', error);
     globalUsersnapApi = undefined;
   }
 }
 
 export async function openUsersnapForm(apiKey: string) {
-  if (!globalUsersnapApi) {
-    logger.warn(
-      'Cannot open Usersnap form: UserSnap API is not initialized. This may be due to network connectivity issues or blocked external requests.',
+  if (!USERSNAP_SPACE_API_KEY || !apiKey) {
+    logger.info(
+      `Cannot open Usersnap form: this build has no Usersnap ${USERSNAP_SPACE_API_KEY ? 'project' : 'space'} key`,
     );
     await notificationService.send({
-      message: '%mainMenu_feedback_unavailable%',
+      message: FEEDBACK_NOT_CONFIGURED_MESSAGE_KEY,
       severity: 'warning',
     });
-
     return;
   }
 
-  if (!apiKey) {
-    logger.error('Cannot open Usersnap form: API key is required');
+  if (!globalUsersnapApi) {
+    logger.warn('Cannot open Usersnap form: UserSnap API is not initialized.');
+    await notificationService.send({
+      message: FEEDBACK_UNAVAILABLE_MESSAGE_KEY,
+      severity: 'warning',
+    });
+
     return;
   }
 
@@ -260,7 +278,7 @@ export async function openUsersnapForm(apiKey: string) {
   } catch (error) {
     logger.warn(`Failed to open Usersnap widget: ${error}`);
     await notificationService.send({
-      message: '%mainMenu_feedback_failed_to_open%',
+      message: FEEDBACK_FAILED_TO_OPEN_MESSAGE_KEY,
       severity: 'warning',
     });
   }

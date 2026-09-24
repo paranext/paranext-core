@@ -9,33 +9,43 @@ import {
   EventHandler,
   fixupResponse,
   GET_METHODS,
+  getJsonRpcRequestErrorMessagePrefix,
   InternalRequestHandler,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
 } from '@shared/data/rpc.model';
 import {
   AsyncVariable,
   getErrorMessage,
-  indexOf,
   isPlatformError,
   Mutex,
   newPlatformError,
   PlatformError,
+  PlatformErrorCode,
   PlatformEvent,
   PlatformEventEmitter,
-  stringLength,
+  Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
   RequestTimeoutSharedStoreKey,
   sharedStoreService,
+  StoreChangeEvent,
 } from '@shared/services/shared-store.service';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
-import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
+import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
-import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import {
+  SingleMethodDocumentation,
+  SingleNotificationDocumentation,
+} from '@shared/models/openrpc.model';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
+import type { MultiSourceNetworkEvents, NetworkEvents, NetworkEventTypes } from 'papi-shared-types';
+import { MULTI_SOURCE_EVENT_NAMES } from '@shared/data/network-event-names';
+
+export { MULTI_SOURCE_EVENT_NAMES };
 
 // #region Local event handling
 
@@ -49,8 +59,23 @@ import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
 // TODO: sync these between processes
 const eventEmittersByEventType = new Map<
   string,
-  { emitter: PapiNetworkEventEmitter<unknown>; isRegistered: boolean }
+  {
+    emitter: PapiNetworkEventEmitter<unknown>;
+    isRegistered: boolean;
+    /**
+     * Whether this emitter's event was registered centrally with the RPC handler (via
+     * `jsonRpc.registerEvent`). When `true`, disposing the emitter also unregisters the event from
+     * the central registry.
+     */
+    isCentrallyRegistered: boolean;
+  }
 >();
+
+/**
+ * Event types this process has already reported dropping because it has no emitter for them. See
+ * {@link handleEventFromNetwork}.
+ */
+const eventTypesDroppedWithNoEmitter = new Set<string>();
 
 /**
  * Emits the appropriate network event on this process according to the event type
@@ -59,7 +84,31 @@ const eventEmittersByEventType = new Map<
  * @param event The event data to emit
  */
 const handleEventFromNetwork: EventHandler = <T>(eventType: string, event: T) => {
-  eventEmittersByEventType.get(eventType)?.emitter.emitLocal(event);
+  const emitterRecord = eventEmittersByEventType.get(eventType);
+  if (!emitterRecord) {
+    // Nothing in this process has asked for this event, so there is nobody to deliver it to. Network
+    // events are one-shot notifications with no replay, so say so rather than dropping it in
+    // silence: an event that mattered here and arrived before something subscribed looks exactly
+    // like this. Every process receives every network event, so most of what lands here is simply
+    // an event this process was never interested in — deduped by type so those cannot flood the
+    // log, since the first drop of a type is the one worth seeing anyway.
+    if (!eventTypesDroppedWithNoEmitter.has(eventType)) {
+      eventTypesDroppedWithNoEmitter.add(eventType);
+      logger.debug(
+        `Discarding network events of type "${eventType}": nothing in this process emits that type`,
+      );
+    }
+    return;
+  }
+  // Isolated, because this hop is the only delivery an event raised in another process ever gets in
+  // this one. There is no replay, and nothing above this frame could act on a throw — the RPC layer
+  // is what called it. Left unisolated, one subscriber throwing costs every subscriber registered
+  // after it an event that will never be sent again.
+  emitterRecord.emitter.emitLocalIsolated(event, (error, subscriberIndex) => {
+    logger.error(
+      `Subscriber ${subscriberIndex} threw while handling a network event of type "${eventType}"; the rest were still told: ${getErrorMessage(error)}`,
+    );
+  });
 };
 
 // #endregion
@@ -68,17 +117,131 @@ const handleEventFromNetwork: EventHandler = <T>(eventType: string, event: T) =>
 
 const connectionMutex = new Mutex();
 let jsonRpc: IRpcMethodRegistrar | undefined;
+const clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
+/** Stops relaying the RPC handler's client disconnects, once there is a handler to stop relaying */
+let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
+const connectionLostEmitter = new PlatformEventEmitter<void>();
+/** Stops relaying the RPC handler's lost connections, once there is a handler to stop relaying */
+let unsubscribeFromConnectionLost: Unsubscriber | undefined;
+
+/**
+ * Event that fires when a process disconnects from the network, carrying the names of the methods
+ * its departure removed from the central registry.
+ *
+ * This is platform-internal core plumbing between the process that owns the websocket server and
+ * the services that know how their own registered names are formed, not part of the `@papi/*`
+ * surface.
+ *
+ * A process that goes away abruptly — most commonly a window the user closed — announces nothing on
+ * its way out, so this is derived from the connection teardown itself: it is emitted only once the
+ * departed process's methods are out of the registry, and therefore cannot report a death that has
+ * not finished happening. Only the process holding the websocket server can observe a connection
+ * being lost, so this only ever fires there; elsewhere it is a real event that never fires, which
+ * lets shared code subscribe without knowing which process it is running in.
+ *
+ * @experimental
+ */
+export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent> =
+  clientDisconnectEmitter.event;
+
+/**
+ * Fires when this process's own connection to the network is lost unexpectedly — the websocket
+ * closed without the app having asked it to.
+ *
+ * This is platform-internal core plumbing between the process that holds a client connection and
+ * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+ * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+ *
+ * This is a local, in-process event. Only a process that holds a client connection can lose one, so
+ * it fires exclusively on clients; in the process that owns the websocket server it is a real event
+ * that simply never fires. A deliberate disconnect does not fire it: intent travels in the close
+ * code, and a close the app asked for is not a loss. Neither does a connection that never opened —
+ * only an established connection can be lost, so a failed startup attempt is silent here.
+ *
+ * Relayed through this service's own emitter so subscribers can subscribe before there is an RPC
+ * handler to subscribe to. Carries no payload; the close detail is logged where it is observed.
+ *
+ * @experimental
+ */
+export const onDidLoseConnection: PlatformEvent<void> = connectionLostEmitter.event;
+// Set once {@link shutdown} has begun so {@link initialize} refuses to re-open a torn-down
+// connection. `jsonRpc` alone can't distinguish "not initialized yet" from "already shut down" —
+// both leave it `undefined` — so a late request after shutdown would otherwise re-connect.
+let hasShutDown = false;
+
+/**
+ * Subscribes to one of the RPC handler's events and re-emits it through this service's own emitter,
+ * but only while this process still considers itself up.
+ *
+ * Both guards it applies are easy to forget on the next event added to `IRpcMethodRegistrar`, and
+ * both matter:
+ *
+ * - The `hasShutDown` check: every socket closes at quit, and the emitters a subscriber would act
+ *   through are already being torn down by {@link shutdown}. Relaying then would report routine
+ *   teardown as the app breaking on its way out, through emitters that throw 'Emitter is disposed'
+ *   as they go.
+ * - `emitIsolated` rather than `emit`: one subscriber that throws must not cost the others the news,
+ *   because this is the only time they are told.
+ *
+ * @param subscribe The handler event to relay from.
+ * @param emitter This service's emitter to relay through.
+ * @param describeError Builds the log line for a throwing subscriber, given the event and the
+ *   error's message.
+ * @returns Unsubscriber for the relay.
+ */
+function relayWhileUp<T>(
+  subscribe: PlatformEvent<T>,
+  emitter: PlatformEventEmitter<T>,
+  describeError: (event: T, error: string) => string,
+): Unsubscriber {
+  return subscribe((event) => {
+    if (hasShutDown) return;
+    emitter.emitIsolated(event, (error) => {
+      logger.error(describeError(event, getErrorMessage(error)));
+    });
+  });
+}
 
 export async function initialize(): Promise<void> {
   if (jsonRpc) return;
+  // Once shutdown has begun (app quit), never re-open the connection. Without this a request still
+  // in flight at quit — e.g. the Power-mode startup boot-race retry loop — would reach
+  // `doRequest` -> `initialize()` after `shutdown()` set `jsonRpc = undefined`, and the `if (jsonRpc)`
+  // guards below would be false, so it would call `createRpcHandler()`/`connect()` again and
+  // resurrect the connection mid-quit.
+  if (hasShutDown) throw new Error('Network service has shut down; not reconnecting');
   await connectionMutex.runExclusive(async () => {
     if (jsonRpc) return;
+    // Re-check inside the mutex in case shutdown ran while we awaited it.
+    if (hasShutDown) throw new Error('Network service has shut down; not reconnecting');
 
     try {
       jsonRpc = await createRpcHandler();
     } catch (e) {
       throw new Error(`ConnectionService: Failed to create NetworkConnector object: ${e}`);
     }
+
+    // Relayed through this service's own emitters so subscribers can subscribe before there is an
+    // RPC handler to subscribe to.
+    unsubscribeFromClientDisconnects = relayWhileUp(
+      jsonRpc.onDidDisconnectClient,
+      clientDisconnectEmitter,
+      (clientDisconnect, error) =>
+        `A subscriber threw while being told a process disconnected, taking ${clientDisconnect.removedMethodNames.length} methods with it; the rest were still told: ${error}`,
+    );
+
+    // TODO(main-renderer-shutdown-relay): `onDidDisconnectClient` above fires only in main, so a
+    // renderer never learns that the extension host went away — its own socket is still alive, and
+    // `onDidLoseConnection` below is deliberately local. Telling a renderer needs a main→renderer
+    // network event carrying that case, plus wording of its own ("extensions have stopped working"
+    // is a different claim than "you are disconnected"). Deferred with the two other sites this
+    // marker names; see `adr-connection-lost-is-renderer-local`.
+    unsubscribeFromConnectionLost = relayWhileUp(
+      jsonRpc.onDidLoseConnection,
+      connectionLostEmitter,
+      (_event, error) =>
+        `A subscriber threw while being told this process lost its connection; the rest were still told: ${error}`,
+    );
 
     const connected = await jsonRpc.connect(handleEventFromNetwork);
     if (!connected) throw new Error(`Unable to connect protocol handler`);
@@ -87,18 +250,30 @@ export async function initialize(): Promise<void> {
 
 /** Closes the network services gracefully */
 export const shutdown = async () => {
+  // Mark shutdown as begun before anything else so a concurrent {@link initialize} can't race in and
+  // re-open the connection we're about to tear down.
+  hasShutDown = true;
   if (!jsonRpc) return;
   await connectionMutex.runExclusive(async () => {
     if (!jsonRpc) return;
 
+    // Stop relaying client disconnects before closing the connection, since closing it is what
+    // disconnects every client: relaying those would announce the whole app's teardown as processes
+    // dying while the emitters that carry the news are themselves being disposed.
+    unsubscribeFromClientDisconnects?.();
+    unsubscribeFromClientDisconnects = undefined;
+    unsubscribeFromConnectionLost?.();
+    unsubscribeFromConnectionLost = undefined;
     await jsonRpc.disconnect();
+    // Tear down the handler reference before disposing emitters so their disposers skip the
+    // now-pointless per-event unregister call — the whole connection is already going away.
+    jsonRpc = undefined;
     await Promise.all(
       [...eventEmittersByEventType.values()].map(async (emitter) => {
         await emitter.emitter.dispose();
       }),
     );
     eventEmittersByEventType.clear();
-    jsonRpc = undefined;
   });
 };
 
@@ -128,7 +303,15 @@ function sharedStoreKeyForRequestType(
 }
 
 function getTimeoutMsForRequestType(requestType: SerializedRequestType): number {
+  // Custom timeouts live in the shared store. The sync `get` returns undefined both when no custom
+  // timeout has been set (normal) and when the shared store has not finished initializing. Only the
+  // latter is noteworthy, so log a debug note when we read undefined before the shared store is
+  // initialized; otherwise undefined just means "no custom timeout" and we use the default silently.
   const sharedVal = sharedStoreService.get(sharedStoreKeyForRequestType(requestType));
+  if (sharedVal === undefined && !sharedStoreService.isInitialized())
+    logger.debug(
+      `Custom timeout for request type ${requestType} requested before the shared store finished initializing; using default ${requestTimeoutMs}ms`,
+    );
   return typeof sharedVal === 'number' && sharedVal >= 0 ? sharedVal : requestTimeoutMs;
 }
 
@@ -151,14 +334,14 @@ function isJsonRpcResponse(response: unknown): response is JSONRPCResponse {
 function validateCommandFormatting(commandName: string) {
   if (!commandName)
     throw new Error(`Invalid command name ${commandName}: must be a non-empty string`);
-  const periodIndex = indexOf(commandName, '.');
+  const periodIndex = commandName.indexOf('.');
   if (periodIndex < 0)
     throw new Error(`Invalid command name ${commandName}: must have at least one period`);
   if (periodIndex === 0)
     throw new Error(
       `Invalid command name ${commandName}: must have non-empty string before a period`,
     );
-  if (periodIndex >= stringLength(commandName) - 1)
+  if (periodIndex >= commandName.length - 1)
     throw new Error(
       `Invalid command name ${commandName}: must have a non-empty string after a period`,
     );
@@ -205,19 +388,39 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
     response = getErrorMessage(e);
   }
 
+  // When the backend service throws `PlatformErrorCodes.WithCode(code, message)`
+  // (see c-sharp/PlatformErrorCodes.cs), the code is serialized into
+  // `error.data.data.platformErrorCode`. Extract it here so it survives the
+  // rethrow as a PlatformError with a machine-readable `code` property.
+  // FN-002, Theme 7 — manage-books feature.
+  //
+  // The double `.data?.data?` indirection mirrors StreamJsonRpc's wire shape
+  // (Theme 12, 2026-04-30):
+  //   - The OUTER `error.data` is the standard JSON-RPC 2.0 error envelope's
+  //     `data` field (where StreamJsonRpc places its serialized error payload
+  //     for thrown C# exceptions).
+  //   - The INNER `.data` is StreamJsonRpc's serialized representation of
+  //     the C# `Exception.Data` IDictionary, where
+  //     `PlatformErrorCodes.WithCode` writes
+  //     `ex.Data["platformErrorCode"] = code` (decision-registry.json
+  //     `patterns.errorHandling.platformErrorCodes`).
+  // Do NOT flatten this access unless StreamJsonRpc's serialization changes —
+  // both levels are intentional.
+  let platformErrorCode: PlatformErrorCode | undefined;
   if (isJsonRpcResponse(response)) {
     if (!response.error) return response.result;
-    response = `JSON-RPC Request error (${response.error.code}): ${response.error.message}`;
+    platformErrorCode = response.error.data?.data?.platformErrorCode;
+    response = `${getJsonRpcRequestErrorMessagePrefix(response.error.code)}: ${response.error.message}`;
   } else if (isPlatformError(response)) {
     logger.debug(response.message);
     throw response;
   } else {
     response = responseAsyncVariable.hasTimedOut
-      ? `JSON-RPC Request timed out: ${requestType} ${JSON.stringify(args)}`
+      ? `${JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX} ${requestType} ${JSON.stringify(args)}`
       : `Invalid JSON-RPC Response: ${response}`;
   }
   logger.debug(response);
-  throw newPlatformError(response);
+  throw newPlatformError(response, platformErrorCode);
 }
 
 /**
@@ -236,6 +439,14 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
  * Send a request on the network without retrying if the handler is not yet registered. Use for
  * requests where immediate failure is preferable to waiting, such as commands sent during app
  * shutdown.
+ *
+ * WARNING: the no-retry flag only holds in the main process (whose `RpcServer` /
+ * `RpcWebSocketListener` honor it). From any other process the flag does not cross the wire:
+ * `RpcClient.request` drops it, and main re-dispatches the incoming request through its
+ * registration-race retry loop (`requestWithRetry` in `shared/data/rpc.model.ts` —
+ * `MAX_REQUEST_ATTEMPTS` attempts, `REQUEST_ATTEMPT_WAIT_TIME_MS` apart) before failing. So a
+ * renderer-side `requestNoRetry` to an unregistered handler still costs ~9 s and one `debug` log
+ * per attempt in main before it rejects.
  *
  * @param requestType The type of request
  * @param args Arguments to send in the request (put in request.contents)
@@ -266,12 +477,28 @@ export async function registerRequestHandler(
   if (!jsonRpc) throw new Error('RPC handler not set');
   const success = await jsonRpc.registerMethod(requestType, requestHandler, requestDocs);
   if (!success) throw new Error(`Could not register request handler for ${requestType}`);
-  if (requestHandlerOptions?.timeoutMilliseconds !== undefined)
-    setTimeoutMsForRequestType(requestType, requestHandlerOptions.timeoutMilliseconds);
+  const customTimeoutMs = requestHandlerOptions?.timeoutMilliseconds;
+  if (customTimeoutMs !== undefined) setTimeoutMsForRequestType(requestType, customTimeoutMs);
   return async () => {
-    if (!jsonRpc) return false;
-    removeTimeoutMsForRequestType(requestType);
-    return jsonRpc.unregisterMethod(requestType);
+    if (!jsonRpc) {
+      // Expected on graceful shutdown: shutdown() clears jsonRpc before disposing emitters so their
+      // disposers skip this now-pointless unregister, so this fires on every normal quit — debug,
+      // not warn, to avoid spurious teardown noise (mirrors disposeNetworkEventEmitter's quiet
+      // !jsonRpc return). The genuine failure to warn about is the unregistered === false case below.
+      logger.debug(
+        `Skipping unregister of request handler for "${requestType}": jsonRpc is not set`,
+      );
+      return false;
+    }
+    // Only what this registration set. A custom timeout is a shared store entry owned by the
+    // process that wrote it, so another process may well own the one on this request type — a
+    // window's dialog methods have theirs set by main, which outlives the window. Removing
+    // unconditionally makes every one of those teardowns an ownership violation the shared store
+    // reports as an error, on a path where nothing is wrong.
+    if (customTimeoutMs !== undefined) removeTimeoutMsForRequestType(requestType);
+    const unregistered = await jsonRpc.unregisterMethod(requestType);
+    if (!unregistered) logger.warn(`Failed to unregister request handler for "${requestType}"`);
+    return unregistered;
   };
 }
 
@@ -306,6 +533,45 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
   jsonRpc.emitEventOnNetwork(eventType, event);
 };
 
+/**
+ * Cleans up the record for an event emitter when it is disposed. If the emitter had been centrally
+ * registered with the RPC handler, also unregister the (single-source) event from the central
+ * registry so it stops appearing in the OpenRPC document and frees the name for re-registration.
+ *
+ * Multi-source events are intentionally NOT unregistered here: multiple emitters for the same name
+ * can exist (even within one process), so unregistering one could disrupt the others. They are
+ * cleaned up centrally when the process disconnects (the RPC server unregisters all of a
+ * connection's events on close), the same way registered methods are.
+ *
+ * `dispose` on {@link PapiNetworkEventEmitter} is synchronous, but `unregisterEvent` is async, so we
+ * cannot await it here. We fire it from an IIFE and log a warning if it rejects.
+ */
+const disposeNetworkEventEmitter = (eventType: string) => {
+  const emitterRecord = eventEmittersByEventType.get(eventType);
+  eventEmittersByEventType.delete(eventType);
+  if (!emitterRecord?.isCentrallyRegistered || !jsonRpc) return;
+  if (MULTI_SOURCE_EVENT_NAMES.has(eventType)) return;
+  const rpc = jsonRpc;
+  (async () => {
+    try {
+      await rpc.unregisterEvent(eventType);
+    } catch (e) {
+      logger.warn(
+        `Failed to unregister event "${eventType}" from the central registry: ${getErrorMessage(e)}`,
+      );
+    }
+  })();
+};
+
+/**
+ * Marks an event emitter's record as centrally registered so that disposing it also unregisters the
+ * event from the central registry. See {@link disposeNetworkEventEmitter}.
+ */
+const markEmitterCentrallyRegistered = (eventType: string) => {
+  const emitterRecord = eventEmittersByEventType.get(eventType);
+  if (emitterRecord) emitterRecord.isCentrallyRegistered = true;
+};
+
 const createNetworkEventEmitterInternal = <T>(
   eventType: string,
   registerEmitter: boolean,
@@ -316,10 +582,29 @@ const createNetworkEventEmitterInternal = <T>(
       // Match the collection type
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       emitter: new PapiNetworkEventEmitter<T>(
-        (event) => emitEventOnNetwork(eventType, event),
-        () => eventEmittersByEventType.delete(eventType),
+        (event) => {
+          // The emitter discards what this returns — it is the local emit that a caller of `emit`
+          // is waiting on — so an event that never left this process would otherwise surface only
+          // as a bare unhandled rejection that cannot name the event it lost. Local subscribers
+          // still get it either way; the processes that needed it do not.
+          emitEventOnNetwork(eventType, event).catch((e) => {
+            // Once the app is quitting the network is going away by design and there is nobody left
+            // waiting on the news, so that is not the failure this is here to report.
+            if (hasShutDown) {
+              logger.debug(
+                `Network event "${eventType}" was not sent: the network service has shut down`,
+              );
+              return;
+            }
+            logger.error(
+              `Network event "${eventType}" was emitted locally but never reached the network, so no other process was told: ${getErrorMessage(e)}`,
+            );
+          });
+        },
+        () => disposeNetworkEventEmitter(eventType),
       ) as PapiNetworkEventEmitter<unknown>,
       isRegistered: false,
+      isCentrallyRegistered: false,
     };
     eventEmittersByEventType.set(eventType, emitterRecord);
   }
@@ -337,12 +622,21 @@ const createNetworkEventEmitterInternal = <T>(
 };
 
 /**
- * Creates an event emitter that works properly over the network. Other connections receive this
- * event when it is emitted.
+ * Creates an event emitter that works properly over the network.
  *
- * WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
- * emitters.
+ * @deprecated 8 June 2026. Use `createNetworkEventEmitterAsync`. Events created via the sync API
+ *   are not centrally registered and do not appear in the OpenRPC document. The async version
+ *   restricts central _registration_ of an event name to a single source (unless the event is
+ *   declared in {@link MultiSourceNetworkEvents}, in which case it accepts multiple registrants by
+ *   design). Note this restricts central _registration_, not emission: the registry does not block
+ *   emits today, but it warns when an event is announced without a matching registration or from a
+ *   process that did not register it. That tolerance is transitional — announcing an unregistered
+ *   or cross-process single-source event is deprecated and is expected to become an error (with the
+ *   registry gating emission) in a future release, so treat the warning as something to fix, not as
+ *   the permanent behavior.
  *
+ *   WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
+ *   emitters.
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event emitter whose event works between connections
  */
@@ -350,22 +644,294 @@ export const createNetworkEventEmitter = <T>(eventType: string): PlatformEventEm
   createNetworkEventEmitterInternal(eventType, true);
 
 /**
- * Gets the network event with the specified type. Creates the emitter if it does not exist
+ * Create a network event emitter that participates in central registration. Every centrally
+ * registered event appears in the OpenRPC document; providing `documentation` fills in its summary,
+ * params, and `x-experimental` flag, otherwise it is surfaced with placeholder docs.
  *
+ * If the event name is in {@link MultiSourceNetworkEvents}, the central registry uses multi-source
+ * semantics: multiple processes may register the same name (each process registers once); all
+ * corresponding emitters are valid sources.
+ *
+ * Otherwise the registry uses single-source semantics: only one process may register a given name;
+ * subsequent registrations from any process are rejected.
+ *
+ * Intra-process duplicate registration is always rejected regardless of the event's domain.
+ *
+ * See {@link MultiSourceNetworkEvents} for multi-source vs single-source semantics.
+ *
+ * @param eventType The name of the event to register. Must be a key of {@link NetworkEvents}.
+ * @param documentation Optional notification documentation. Carries
+ *   `notification['x-experimental']: true` to mark the event as experimental.
+ */
+export const createNetworkEventEmitterAsync = async <EventType extends NetworkEventTypes>(
+  eventType: EventType,
+  documentation?: SingleNotificationDocumentation,
+): Promise<PlatformEventEmitter<NetworkEvents[EventType]>> => {
+  await initialize();
+  if (!jsonRpc) throw new Error('RPC handler not set');
+  const accepted = await jsonRpc.registerEvent(eventType, documentation);
+  if (!accepted) {
+    throw new Error(
+      `Event "${eventType}" was rejected by the central registry (likely already registered from another process).`,
+    );
+  }
+  const emitter = createNetworkEventEmitterInternal<NetworkEvents[EventType]>(eventType, true);
+  // Tie the central registration to this emitter so disposing it also unregisters the event.
+  markEmitterCentrallyRegistered(eventType);
+  return emitter;
+};
+
+/**
+ * How to buffer emits made before a buffered network event finishes registering.
+ *
+ * - `'queue'` — keep every buffered event and flush them in emit order.
+ * - `{ latestByKey }` — keep only the most recent buffered event per key, flushed in first-seen key
+ *   order. Use for "only the latest matters" events (e.g. a scroll reference per scroll group, or a
+ *   web view update per web view id).
+ *
+ * @experimental
+ */
+export type NetworkEventBufferStrategy<T> = 'queue' | { latestByKey: (event: T) => string };
+
+/**
+ * Buffers network events emitted before their emitter is ready, per a
+ * {@link NetworkEventBufferStrategy}. Exported only for unit testing.
+ *
+ * @experimental
+ * @internal
+ */
+export class NetworkEventBuffer<T> {
+  private readonly queued: T[] = [];
+
+  private readonly latest = new Map<string, T>();
+
+  constructor(private readonly strategy: NetworkEventBufferStrategy<T>) {}
+
+  add(event: T): void {
+    if (this.strategy === 'queue') {
+      this.queued.push(event);
+      return;
+    }
+    // `Map.set` on an existing key updates the value but keeps the original insertion position, so
+    // the latest value per key flushes in first-seen key order.
+    this.latest.set(this.strategy.latestByKey(event), event);
+  }
+
+  /** Returns the buffered events in flush order and empties the buffer. */
+  drain(): T[] {
+    if (this.strategy === 'queue') return this.queued.splice(0);
+    const events = [...this.latest.values()];
+    this.latest.clear();
+    return events;
+  }
+
+  clear(): void {
+    this.queued.length = 0;
+    this.latest.clear();
+  }
+}
+
+/**
+ * Synchronously create a buffered emitter for a single-source network event. Use this for events
+ * that may be emitted before the network emitter finishes registering — e.g. from a UI handler or a
+ * command that can fire during extension activation, where the eager
+ * {@link createNetworkEventEmitterAsync} would leave a module-level emitter `undefined`.
+ *
+ * The returned `emit` is usable immediately. Emits made before central registration completes are
+ * buffered per `options.bufferStrategy` and flushed once registration succeeds; after that `emit`
+ * passes straight through. If registration fails, buffered events are dropped (with a warning) and
+ * `registeredEmitter` rejects so the caller can respond.
+ *
+ * @param eventType A key of {@link NetworkEvents}.
+ * @param documentation Optional notification documentation. Carries
+ *   `notification['x-experimental']: true` to mark the event as experimental.
+ * @param options.bufferStrategy How to buffer pre-registration emits. Defaults to `'queue'`.
+ * @returns `emit` (usable immediately), `registeredEmitter` (resolves to the underlying emitter, or
+ *   rejects if registration failed), and `dispose`.
+ * @experimental
+ */
+export const createBufferedNetworkEventEmitter = <EventType extends NetworkEventTypes>(
+  eventType: EventType,
+  documentation?: SingleNotificationDocumentation,
+  options?: { bufferStrategy?: NetworkEventBufferStrategy<NetworkEvents[EventType]> },
+): {
+  emit: (event: NetworkEvents[EventType]) => void;
+  registeredEmitter: Promise<PlatformEventEmitter<NetworkEvents[EventType]>>;
+  dispose: () => void;
+} => {
+  const buffer = new NetworkEventBuffer<NetworkEvents[EventType]>(
+    options?.bufferStrategy ?? 'queue',
+  );
+  let readyEmitter: PlatformEventEmitter<NetworkEvents[EventType]> | undefined;
+  let failed = false;
+  let disposed = false;
+
+  const registeredEmitter = (async () => {
+    let emitter: PlatformEventEmitter<NetworkEvents[EventType]>;
+    try {
+      emitter = await createNetworkEventEmitterAsync(eventType, documentation);
+    } catch (e) {
+      failed = true;
+      buffer.clear();
+      logger.warn(
+        `Buffered network event "${eventType}" failed to register; dropping buffered events: ${getErrorMessage(e)}`,
+      );
+      throw e;
+    }
+    if (disposed) {
+      // Disposed before registration finished — tear down the emitter we just created.
+      emitter.dispose();
+      return emitter;
+    }
+    readyEmitter = emitter;
+    buffer.drain().forEach((event) => emitter.emit(event));
+    return emitter;
+  })();
+  // Consume the rejection internally so a caller that ignores `registeredEmitter` doesn't surface an
+  // unhandled rejection (the failure is already logged above). Callers that want to respond can
+  // still await/catch `registeredEmitter` independently.
+  (async () => {
+    try {
+      await registeredEmitter;
+    } catch {
+      // Already handled above.
+    }
+  })();
+
+  const emit = (event: NetworkEvents[EventType]) => {
+    if (readyEmitter) {
+      readyEmitter.emit(event);
+      return;
+    }
+    if (failed) {
+      logger.warn(`Network event "${eventType}" emit dropped — its emitter failed to register`);
+      return;
+    }
+    buffer.add(event);
+  };
+
+  const dispose = () => {
+    disposed = true;
+    buffer.clear();
+    readyEmitter?.dispose();
+  };
+
+  return { emit, registeredEmitter, dispose };
+};
+
+/**
+ * Core-internal map of multi-source network events. Extends the public
+ * {@link MultiSourceNetworkEvents} with platform-internal multi-source events that are intentionally
+ * NOT advertised on the PAPI — the shared store change event, for example, because the shared store
+ * service is not part of the public API. Used to type {@link createCoreMultiSourceEventEmitter}.
+ */
+export type InternalMultiSourceNetworkEvents = MultiSourceNetworkEvents & {
+  'shared-store:change': StoreChangeEvent;
+};
+
+/**
+ * Synchronously create a network event emitter for one of the pre-approved multi-source events —
+ * those listed in {@link MULTI_SOURCE_EVENT_NAMES}. Throws synchronously if `eventType` is not such
+ * an event.
+ *
+ * This is core-internal (not exposed on `papiNetworkService`, hence the `Core` in the name):
+ * multi-source events are platform events, not for extensions to create.
+ *
+ * Unlike {@link createNetworkEventEmitterAsync}, the emitter is returned immediately so callers can
+ * use it without awaiting. Central registration with the RPC handler is performed in the
+ * background; the returned `registeredEmitterPromise` resolves to the same emitter once
+ * registration completes. If registration fails, the promise logs a warning and rejects with the
+ * underlying error.
+ *
+ * Multi-source emitters are NOT unregistered on dispose (multiple emitters for the same name can
+ * coexist); the central registry cleans them up when the process disconnects. See
+ * {@link disposeNetworkEventEmitter}.
+ *
+ * @param eventType The name of the multi-source event to create. Must be a key of
+ *   {@link InternalMultiSourceNetworkEvents}.
+ * @param documentation Optional notification documentation. Carries
+ *   `notification['x-experimental']: true` to mark the event as experimental.
+ * @returns An object with the synchronously-created `emitter` and a `registeredEmitterPromise` that
+ *   resolves to that same emitter when central registration completes.
+ */
+export const createCoreMultiSourceEventEmitter = <
+  EventType extends keyof InternalMultiSourceNetworkEvents,
+>(
+  eventType: EventType,
+  documentation?: SingleNotificationDocumentation,
+): {
+  emitter: PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>;
+  registeredEmitterPromise: Promise<
+    PlatformEventEmitter<InternalMultiSourceNetworkEvents[EventType]>
+  >;
+} => {
+  if (!MULTI_SOURCE_EVENT_NAMES.has(eventType))
+    throw new Error(
+      `Event "${eventType}" is not a pre-approved multi-source event. Use createNetworkEventEmitterAsync for single-source events.`,
+    );
+
+  // Create the emitter synchronously so the caller can use it right away.
+  const emitter = createNetworkEventEmitterInternal<InternalMultiSourceNetworkEvents[EventType]>(
+    eventType,
+    true,
+  );
+
+  // Register the event centrally in the background. The returned promise resolves to the same
+  // emitter so callers can await registration completion when they need it.
+  const registeredEmitterPromise = (async () => {
+    try {
+      await initialize();
+      if (!jsonRpc) throw new Error('RPC handler not set');
+      const accepted = await jsonRpc.registerEvent(eventType, documentation);
+      if (!accepted)
+        throw new Error(
+          `Event "${eventType}" was rejected by the central registry (likely already registered from this process).`,
+        );
+      // Record that this emitter's event is registered centrally. Disposing it will NOT unregister
+      // (disposeNetworkEventEmitter skips multi-source names); the flag just reflects reality.
+      markEmitterCentrallyRegistered(eventType);
+      return emitter;
+    } catch (e) {
+      logger.warn(
+        `Failed to register multi-source event "${eventType}" with the central registry: ${getErrorMessage(e)}`,
+      );
+      throw e;
+    }
+  })();
+
+  return { emitter, registeredEmitterPromise };
+};
+
+/**
+ * Subscribe to a typed network event. The payload type is inferred from the event's declaration in
+ * {@link NetworkEvents}.
+ *
+ * @param eventType The name of the event to subscribe to. Must be a key of {@link NetworkEvents}.
+ * @returns Event for the event type that runs the callback provided when the event is emitted
+ */
+export function getNetworkEvent<EventType extends NetworkEventTypes>(
+  eventType: EventType,
+): PlatformEvent<NetworkEvents[EventType]>;
+/**
+ * Subscribe to a network event with an explicit payload type.
+ *
+ * @deprecated 8 June 2026. Use the typed signature: declare the event in {@link NetworkEvents} and
+ *   call `getNetworkEvent('your.event.name')` without an explicit type parameter.
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event for the event type that runs the callback provided when the event is emitted
  */
-export const getNetworkEvent = <T>(eventType: string): PlatformEvent<T> => {
-  // Return event with the generic type.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return createNetworkEventEmitterInternal(eventType, false).event as PlatformEvent<T>;
-};
+export function getNetworkEvent<T>(eventType: string): PlatformEvent<T>;
+export function getNetworkEvent(eventType: string): PlatformEvent<unknown> {
+  return createNetworkEventEmitterInternal(eventType, false).event;
+}
 
 // #endregion
 
 // Declare an interface for the object we're exporting so that JSDoc comments propagate
 export interface PapiNetworkService {
   createNetworkEventEmitter: typeof createNetworkEventEmitter;
+  createNetworkEventEmitterAsync: typeof createNetworkEventEmitterAsync;
+  createBufferedNetworkEventEmitter: typeof createBufferedNetworkEventEmitter;
   getNetworkEvent: typeof getNetworkEvent;
 }
 
@@ -376,5 +942,7 @@ export interface PapiNetworkService {
  */
 export const papiNetworkService: PapiNetworkService = {
   createNetworkEventEmitter,
+  createNetworkEventEmitterAsync,
+  createBufferedNetworkEventEmitter,
   getNetworkEvent,
 };

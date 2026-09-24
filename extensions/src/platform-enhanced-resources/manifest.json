@@ -1,0 +1,18 @@
+{
+  "name": "platformEnhancedResources",
+  "version": "0.6.0-alpha.1",
+  "publisher": "paranext",
+  "displayData": "assets/displayData.json",
+  "author": "Paranext",
+  "license": "AGPL-3.0-or-later",
+  "main": "src/main.ts",
+  "extensionDependencies": {},
+  "elevatedPrivileges": [],
+  "types": "src/types/platform-enhanced-resources.d.ts",
+  "menus": "contributions/menus.json",
+  "settings": "contributions/settings.json",
+  "projectSettings": "contributions/projectSettings.json",
+  "localizedStrings": "contributions/localizedStrings.json",
+  "themes": "contributions/themes.json",
+  "activationEvents": []
+}

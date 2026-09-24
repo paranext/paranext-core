@@ -386,6 +386,28 @@ const checkAggregatorServiceProviderName = 'platformScripture.checkAggregator';
 
 let initializationPromise: Promise<void> | undefined;
 let dataProvider: IDisposableDataProvider<ICheckAggregatorService>;
+/**
+ * Buffered emitter for check-results-invalidated events. Created at module load so a
+ * `platformScripture.invalidateCheckResults` command invocation (C# fires this) that arrives before
+ * `initialize()` finishes registering the emitter is queued and flushed, rather than thrown away.
+ */
+const resultsInvalidatedEventEmitter = papi.network.createBufferedNetworkEventEmitter(
+  CHECK_RESULTS_INVALIDATED_EVENT,
+  {
+    notification: {
+      summary:
+        'Emitted when check results are invalidated and subscribers should refresh their data.',
+      params: [
+        {
+          name: 'details',
+          required: true,
+          summary: 'Details describing which check results were invalidated.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+);
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
@@ -406,11 +428,10 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const resultsInvalidatedEventEmitter =
-  papi.network.createNetworkEventEmitter<CheckResultsInvalidated>(CHECK_RESULTS_INVALIDATED_EVENT);
-
 /** Notify all listeners that check results have been invalidated and should be refreshed */
 export function notifyCheckResultsInvalidated(e: CheckResultsInvalidated): void {
+  // Buffered emit — usable immediately. If the C#-invoked `invalidateCheckResults` command fires
+  // before registration completes, the event is queued and flushed rather than thrown away.
   resultsInvalidatedEventEmitter.emit(e);
 }
 
@@ -422,10 +443,8 @@ const serviceObject = createSyncProxyForAsyncObject<ICheckAggregatorService>(asy
 }, checkAggregatorServiceObjectToProxy);
 
 async function dispose(): Promise<boolean> {
-  const disposalResults: boolean[] = await Promise.all([
-    dataProvider.dispose(),
-    resultsInvalidatedEventEmitter.dispose(),
-  ]);
+  resultsInvalidatedEventEmitter.dispose();
+  const disposalResults: boolean[] = await Promise.all([dataProvider.dispose()]);
   return disposalResults.every((result) => result);
 }
 

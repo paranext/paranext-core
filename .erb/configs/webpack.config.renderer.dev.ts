@@ -10,6 +10,7 @@ import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
 import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
 import checkNodeEnv from '../scripts/check-node-env';
+import { buildTailwindCssRule, tailwindEntryTest } from './tailwind-css-rule';
 
 // When an ESLint server is running, we can't set the NODE_ENV so we'll check if it's
 // at the dev webpack config is not accidentally run in a production environment
@@ -30,7 +31,11 @@ if (!skipDLLs && !(fs.existsSync(webpackPaths.dllPath) && fs.existsSync(manifest
       'The DLL files are missing. Sit back while we build them for you with "npm run build-dll"',
     ),
   );
-  execSync('npm run postinstall');
+  // `inherit` so the chain's own diagnostics reach the terminal. `execSync` captures stdout by
+  // default, and the actionable messages here go there - `check-native-dep`'s native-dependency
+  // report, electron-builder's output, the DLL build's. Without this, a chain that exits non-zero
+  // shows only nested "Command failed" wrappers that name no cause.
+  execSync('npm run postinstall', { stdio: 'inherit' });
 }
 
 const configuration: webpack.Configuration = {
@@ -55,6 +60,33 @@ const configuration: webpack.Configuration = {
     },
   },
 
+  // Persistent caching, so the dev server's FIRST compile can reuse the previous run's work. The
+  // window created by the main process is blank until this compile finishes, so this compile is
+  // directly on the path to first paint. Watch rebuilds are unaffected - they run off webpack's
+  // in-memory cache, and `buildDependencies` below invalidates the whole cache when anything
+  // outside the module graph that shapes the output changes.
+  cache: {
+    type: 'filesystem',
+    // Distinct directory per dev config: all three are `mode: 'development'` with no `cache.name`,
+    // so they would share one `default-development` pack if they shared a directory.
+    cacheDirectory: path.join(
+      webpackPaths.rootPath,
+      'node_modules',
+      '.cache',
+      'webpack-renderer-dev',
+    ),
+    buildDependencies: {
+      config: [__filename, path.resolve(__dirname, 'webpack.config.base.ts')],
+      tsconfig: [path.resolve(webpackPaths.rootPath, 'tsconfig.json')],
+      // This config reads the DLL manifest at load time and `DllReferencePlugin` bakes its module
+      // ids into the output, so a rebuilt DLL must invalidate the cache. Omitted when the DLL is
+      // skipped, since `buildDependencies` entries must be files that exist.
+      ...(skipDLLs ? {} : { dll: [manifest] }),
+      patches: webpackPaths.patchFiles,
+    },
+    compression: 'gzip',
+  },
+
   module: {
     rules: [
       {
@@ -74,11 +106,16 @@ const configuration: webpack.Configuration = {
         ],
         include: /\.module\.s?(c|a)ss$/,
       },
+      // Core's Tailwind entry: process through @tailwindcss/postcss so the app emits utilities from
+      // core's own source (PT-3920). `module.rules` is a flat array (not a `oneOf`), so what keeps
+      // this file from also being processed by the general `.css` rule is that rule's
+      // `exclude: [..., tailwindEntryTest]` below — not ordering.
+      buildTailwindCssRule('style-loader'),
       {
         test: /\.css$/,
         resourceQuery: { not: [/raw/] },
         use: ['style-loader', 'css-loader'],
-        exclude: /\.module\.s?(c|a)ss$/,
+        exclude: [/\.module\.s?(c|a)ss$/, tailwindEntryTest],
       },
       {
         test: /\.s(c|a)ss$/,
@@ -140,8 +177,8 @@ const configuration: webpack.Configuration = {
      *
      * NODE_ENV should be production so that modules do not perform certain development checks
      *
-     * By default, use 'development' as NODE_ENV. This can be overriden with 'staging', for example,
-     * by changing the ENV variables in the npm scripts
+     * By default, use 'development' as NODE_ENV. This can be overridden with 'staging', for
+     * example, by changing the ENV variables in the npm scripts
      */
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'development',
@@ -179,6 +216,17 @@ const configuration: webpack.Configuration = {
   },
 
   devServer: {
+    // Loopback-only, so the server is unreachable off-machine and no firewall prompt is raised.
+    // Bind by NAME rather than the `127.0.0.1` literal: webpack-dev-server passes `host` through
+    // verbatim as the injected HMR client's `hostname`, and the page itself is served from
+    // `http://localhost:${port}` (`resolveHtmlPath`). A literal here makes that client dial
+    // `ws://127.0.0.1:${port}/ws`, which the server's own same-origin check rejects with
+    // `Invalid Host/Origin header` and closes — a ~1s reconnect loop whose every close sends the
+    // error overlay a `DISMISS`, wiping genuine compile errors off the screen. The manual client
+    // entry above resolves its socket URL from the page origin, so HMR keeps working and the loop
+    // is easy to miss. Same reasoning as the PAPI websocket's bind — see
+    // `adr-papi-websocket-hostname-bind` in `.context/standards/Architecture-Decisions.md`.
+    host: 'localhost',
     port,
     compress: true,
     hot: true,

@@ -2,7 +2,7 @@ import { DialogOptions } from '@shared/models/dialog-options.model';
 import { DialogDefinitionBase, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import { ReactElement } from 'react';
 import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
-import { LocalizeKey } from 'platform-bible-utils';
+import { DblResourceData, LocalizeKey, ResourceType } from 'platform-bible-utils';
 
 /** The tabType for the about dialog in `about-dialog.component.tsx` */
 export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
@@ -10,12 +10,40 @@ export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
 export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
 export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
-/** The tabType for the select books dialog in `select-books.dialog.tsx` */
+/**
+ * The tabType for the select books dialog in `select-books-dialog.component.tsx`
+ *
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
+ */
 export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
 /** The dialogType for alert dialogs rendered via overlay */
 export const ALERT_DIALOG_TYPE = 'platform.alert';
 /** The dialogType for confirm dialogs rendered via overlay */
 export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
+/**
+ * The tabType for the resource picker dialog in `resource-picker.dialog.tsx`
+ *
+ * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+ *   It is not yet a stable contract.
+ */
+export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
+/**
+ * The tabType for the project picker dialog in `project-picker.dialog.tsx`
+ *
+ * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+ *   It is not yet a stable contract.
+ */
+export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
+/**
+ * The tabType for the Team layout dialog in `team-layout.dialog.tsx`.
+ *
+ * The `shareLayout` spelling here, in `SHARE_LAYOUT_DIALOG_TYPE` and in the `%shareLayoutDialog_*%`
+ * localization keys is deliberately frozen: these are published contracts, and renaming them would
+ * break saved layouts and translator catalogs for a cosmetic gain.
+ */
+export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
@@ -28,7 +56,13 @@ export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
   selectedProjectIds?: string[];
 };
 
-/** Options to provide when showing the Select Books dialog */
+/**
+ * Options to provide when showing the Select Books dialog
+ *
+ * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in a
+ *   later version. To let users select books, use the `SelectBooks` component from
+ *   `platform-bible-react` instead.
+ */
 export type SelectBooksDialogOptions = DialogOptions & {
   /** Books IDs that should start selected in the dialog */
   selectedBookIds?: string[];
@@ -40,6 +74,45 @@ export type AlertDialogOptions = DialogOptions & {
   prompt: string | LocalizeKey;
   /** Custom label for the OK button. Defaults to a localized "OK". */
   okLabel?: string | LocalizeKey;
+};
+
+/**
+ * Options to provide when showing the Resource Picker dialog
+ *
+ * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+ *   It is not yet a stable contract.
+ */
+export type ResourcePickerDialogOptions = DialogOptions & {
+  /** If provided, only resources of this type (or any of the listed types) are shown */
+  resourceType?: ResourceType | ResourceType[];
+  /** IDs of resources already selected in the calling panel */
+  selectedResourceIds?: string[];
+  /**
+   * Already-localized sentence shown above the resource list explaining something the caller knows
+   * that limits what picking a resource will do. Shown ahead of any explanation the dialog itself
+   * has for an incomplete list.
+   */
+  notice?: string;
+  /**
+   * When false, resources already installed on this computer are shown but cannot be picked. Use it
+   * when the caller can act on a resource that still needs installing but has nothing to do with
+   * one that is already on disk. Defaults to true.
+   */
+  allowSelectingInstalled?: boolean;
+};
+
+/**
+ * Options to provide when showing the Project Picker dialog (no extra options needed)
+ *
+ * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+ *   It is not yet a stable contract.
+ */
+export type ProjectPickerOptions = DialogOptions;
+
+/** Options to provide when showing the Team layout dialog */
+export type ShareLayoutDialogOptions = DialogOptions & {
+  /** The project whose layout is being shared */
+  projectId: string;
 };
 
 /** Options to provide when showing a confirm dialog */
@@ -66,9 +139,25 @@ export interface DialogTypes {
     SelectMultipleProjectsDialogOptions,
     string[]
   >;
+  /**
+   * @deprecated 2026-05-13. This dialog is no longer used by Platform.Bible and will be removed in
+   *   a later version. To let users select books, use the `SelectBooks` component from
+   *   `platform-bible-react` instead.
+   */
   [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
   [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
   [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
+  /**
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is
+   *   used. It is not yet a stable contract.
+   */
+  [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
+  /**
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is
+   *   used. It is not yet a stable contract.
+   */
+  [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerOptions, string>;
+  [SHARE_LAYOUT_DIALOG_TYPE]: DialogDataTypes<ShareLayoutDialogOptions, boolean>;
 }
 
 /** All dialog types that have DialogDefinition entries */

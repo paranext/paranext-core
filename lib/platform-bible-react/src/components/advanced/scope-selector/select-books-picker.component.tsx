@@ -1,0 +1,325 @@
+import { BookItem } from '@/components/shared/book-item.component';
+import { Button } from '@/components/shadcn-ui/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandList,
+  CommandSeparator,
+} from '@/components/shadcn-ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import { ChevronsUpDown } from 'lucide-react';
+import { getSectionForBook, Section } from 'platform-bible-utils';
+import { getSectionLongName, doesBookMatchQuery } from '@/components/shared/book.utils';
+import { Fragment, MouseEvent, useCallback, useMemo, useRef, useState } from 'react';
+import { generateCommandValue } from '@/components/shared/book-item.utils';
+import { getAvailableBookIds, getBooksForSection } from './scope-selector.utils';
+import { SelectBooksLocalizedStrings } from './select-books.types';
+
+type SelectBooksPickerProps = {
+  /**
+   * Information about available books, formatted as a 123 character long string as defined in a
+   * projects BooksPresent setting
+   */
+  availableBookInfo: string;
+  /** Array of currently selected book IDs */
+  selectedBookIds: string[];
+  /** Callback function that is executed when the book selection changes */
+  onChangeSelectedBookIds: (books: string[]) => void;
+  /**
+   * Object containing the localized strings for the component. The picker uses a subset of
+   * {@link SelectBooksLocalizedStrings} (the badge and section-button keys are not used here)
+   */
+  localizedStrings: SelectBooksLocalizedStrings;
+  /**
+   * Optional map of localized book IDs/short names and full names. Key is the (English) book ID,
+   * value contains localized versions of the ID and full book name
+   */
+  localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
+  /**
+   * Optional explanations, by section, for why that section has no available books. A section with
+   * no books renders no group at all, so its explanation is shown as a note under the list —
+   * otherwise a search for one of its books lands on the bare "no book found".
+   */
+  disabledSectionExplanations?: Partial<Record<Section, string>>;
+};
+
+/**
+ * A searchable dropdown (combobox) for picking multiple books from the Bible canon. It provides:
+ *
+ * - A trigger button summarizing how many books are selected
+ * - A searchable list of all available books, grouped by section
+ * - "Select all" / "Clear all" shortcuts
+ * - Support for shift-click and shift-Enter range selection
+ *
+ * This is the standalone picker used by {@link SelectBooks}, which additionally renders section
+ * quick-select buttons and badges for the current selection.
+ */
+export function SelectBooksPicker({
+  availableBookInfo,
+  selectedBookIds,
+  onChangeSelectedBookIds,
+  localizedStrings,
+  localizedBookNames,
+  disabledSectionExplanations,
+}: SelectBooksPickerProps) {
+  const booksSelectedText = localizedStrings['%webView_book_selector_books_selected%'];
+  const selectBooksText = localizedStrings['%webView_book_selector_select_books%'];
+  const searchBooksText = localizedStrings['%webView_book_selector_search_books%'];
+  const selectAllText = localizedStrings['%webView_book_selector_select_all%'];
+  const clearAllText = localizedStrings['%webView_book_selector_clear_all%'];
+  const noBookFoundText = localizedStrings['%webView_book_selector_no_book_found%'];
+
+  const { otLong, ntLong, dcLong, extraLong } = {
+    otLong: localizedStrings?.['%scripture_section_ot_long%'],
+    ntLong: localizedStrings?.['%scripture_section_nt_long%'],
+    dcLong: localizedStrings?.['%scripture_section_dc_long%'],
+    extraLong: localizedStrings?.['%scripture_section_extra_long%'],
+  };
+
+  const [isBooksSelectorOpen, setIsBooksSelectorOpen] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const lastSelectedBookRef = useRef<string | undefined>(undefined);
+  const lastKeyEventShiftKey = useRef(false);
+
+  // Empty while the `BooksPresent` project setting is still resolving, and permanently empty if
+  // that read errors — so every control that acts on the whole list has to handle "no books known".
+  const availableBookIds = useMemo(
+    () => getAvailableBookIds(availableBookInfo),
+    [availableBookInfo],
+  );
+
+  const filteredBooksBySection = useMemo(() => {
+    if (!inputValue.trim()) {
+      const allBooks: Record<Section, string[]> = {
+        [Section.OT]: [],
+        [Section.NT]: [],
+        [Section.DC]: [],
+        [Section.Extra]: [],
+      };
+
+      availableBookIds.forEach((bookId) => {
+        const section = getSectionForBook(bookId);
+        allBooks[section].push(bookId);
+      });
+
+      return allBooks;
+    }
+
+    const filteredBooks = availableBookIds.filter((bookId) =>
+      doesBookMatchQuery(bookId, inputValue, localizedBookNames),
+    );
+
+    const matchingBooks: Record<Section, string[]> = {
+      [Section.OT]: [],
+      [Section.NT]: [],
+      [Section.DC]: [],
+      [Section.Extra]: [],
+    };
+
+    filteredBooks.forEach((bookId) => {
+      const section = getSectionForBook(bookId);
+      matchingBooks[section].push(bookId);
+    });
+
+    return matchingBooks;
+  }, [availableBookIds, inputValue, localizedBookNames]);
+
+  const toggleBook = useCallback(
+    (bookId: string, shiftKey = false) => {
+      if (!shiftKey || !lastSelectedBookRef.current) {
+        onChangeSelectedBookIds(
+          selectedBookIds.includes(bookId)
+            ? selectedBookIds.filter((id) => id !== bookId)
+            : [...selectedBookIds, bookId],
+        );
+        lastSelectedBookRef.current = bookId;
+        return;
+      }
+
+      const lastIndex = availableBookIds.findIndex((id) => id === lastSelectedBookRef.current);
+      const currentIndex = availableBookIds.findIndex((id) => id === bookId);
+
+      if (lastIndex === -1 || currentIndex === -1) return;
+
+      const [startIndex, endIndex] = [
+        Math.min(lastIndex, currentIndex),
+        Math.max(lastIndex, currentIndex),
+      ];
+      const booksInRange = availableBookIds.slice(startIndex, endIndex + 1).map((id) => id);
+
+      onChangeSelectedBookIds(
+        selectedBookIds.includes(bookId)
+          ? selectedBookIds.filter((shortname) => !booksInRange.includes(shortname))
+          : [...new Set([...selectedBookIds, ...booksInRange])],
+      );
+    },
+    [selectedBookIds, onChangeSelectedBookIds, availableBookIds],
+  );
+
+  const handleKeyboardSelect = (bookId: string) => {
+    toggleBook(bookId, lastKeyEventShiftKey.current);
+    lastKeyEventShiftKey.current = false;
+  };
+
+  const handleMouseDown = (event: MouseEvent, bookId: string) => {
+    event.preventDefault();
+    toggleBook(bookId, event.shiftKey);
+  };
+
+  const handleSelectAll = () => {
+    onChangeSelectedBookIds(availableBookIds.map((bookId) => bookId));
+  };
+
+  const handleClearAll = () => {
+    onChangeSelectedBookIds([]);
+  };
+
+  // Sections the consumer explained AND that have no books at all — not merely none matching the
+  // current search, which is what the "no book found" empty state already covers.
+  const missingSectionExplanations = useMemo(
+    () =>
+      Object.values(Section)
+        .filter(
+          (section) =>
+            disabledSectionExplanations?.[section] !== undefined &&
+            getBooksForSection(availableBookIds, section).length === 0,
+        )
+        .map((section) => ({ section, explanation: disabledSectionExplanations?.[section] })),
+    [disabledSectionExplanations, availableBookIds],
+  );
+
+  return (
+    <Popover
+      open={isBooksSelectorOpen}
+      onOpenChange={(open) => {
+        setIsBooksSelectorOpen(open);
+        if (!open) {
+          setInputValue(''); // Reset search when closing
+        }
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={isBooksSelectorOpen}
+          className="tw:max-w-64 tw:justify-between"
+        >
+          {selectedBookIds.length > 0
+            ? `${booksSelectedText}: ${selectedBookIds.length}`
+            : selectBooksText}
+          <ChevronsUpDown className="tw:ml-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      {/* Fixed 500px width (clamped to the viewport) so the book grid lays out
+          consistently instead of tracking the trigger width — carried over from
+          the pre-refactor BookSelector (markers-checklist work).
+
+          Height is capped to the space Radix actually has on whichever side it lands.
+          Without the cap, a trigger sitting low in its container makes Radix flip the
+          popover upward, and the full-height content (input + section buttons + a
+          max-h-72 list) overruns the top of the viewport — inside a web view's iframe
+          that clips the search input away entirely, leaving no way to filter.
+          The list below shrinks instead so the input stays put. */}
+      <PopoverContent
+        className="tw:max-h-(--radix-popover-content-available-height) tw:w-[500px] tw:max-w-[calc(100vw-2rem)] tw:p-0"
+        align="start"
+        collisionPadding={8}
+      >
+        <Command
+          className="tw:min-h-0"
+          shouldFilter={false}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              // Store shift state in a ref that will be used by onSelect
+              lastKeyEventShiftKey.current = e.shiftKey;
+            }
+          }}
+        >
+          <CommandInput
+            className="tw:shrink-0"
+            placeholder={searchBooksText}
+            value={inputValue}
+            onValueChange={setInputValue}
+            // Picker semantics: with nothing typed, Space picks the highlighted book (the Enter
+            // UX) — the book list is the whole point here and a leading space is meaningless.
+            spaceSelectsHighlightedItem
+          />
+          <div className="tw:flex tw:shrink-0 tw:justify-between tw:border-b tw:p-2">
+            {/* Selecting all of nothing would commit an empty selection, wiping whatever the user
+                already had — so the control is unavailable until the project's books are known. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSelectAll}
+              disabled={availableBookIds.length === 0}
+            >
+              {selectAllText}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleClearAll}>
+              {clearAllText}
+            </Button>
+          </div>
+          {/* min-h-0 + flex-1 let the list shrink below its content inside the flex column, so it
+              absorbs the height-capped popover's shortfall (and still scrolls) while the search
+              input and section buttons stay put. CommandList's own max-height is kept as the
+              upper bound for when there is room to spare — a max-height never blocks shrinking. */}
+          <CommandList className="tw:max-h-72 tw:min-h-0 tw:flex-1">
+            <CommandEmpty>{noBookFoundText}</CommandEmpty>
+            {Object.values(Section)
+              .filter((section) => filteredBooksBySection[section].length > 0)
+              .map((section, index) => {
+                const sectionBooks = filteredBooksBySection[section];
+
+                return (
+                  <Fragment key={section}>
+                    {/* Separator goes BEFORE each group but the first, counted over the sections
+                    actually rendered. Emitting it after each group instead would leave a dangling
+                    rule below the last one whenever a later section has no books.
+
+                    `alwaysRender` because cmdk hides a separator whenever its search box is
+                    non-empty, on the assumption that cmdk itself did the filtering. This picker sets
+                    `shouldFilter={false}` and filters into sections on its own, so the groups below
+                    are real and still need dividing. */}
+                    {index > 0 && <CommandSeparator alwaysRender />}
+                    <CommandGroup
+                      heading={getSectionLongName(section, otLong, ntLong, dcLong, extraLong)}
+                    >
+                      {sectionBooks.map((bookId) => (
+                        <BookItem
+                          key={bookId}
+                          bookId={bookId}
+                          isSelected={selectedBookIds.includes(bookId)}
+                          onSelect={() => handleKeyboardSelect(bookId)}
+                          onMouseDown={(event) => handleMouseDown(event, bookId)}
+                          section={getSectionForBook(bookId)}
+                          showCheck
+                          localizedBookNames={localizedBookNames}
+                          commandValue={generateCommandValue(bookId, localizedBookNames)}
+                          className="tw:flex tw:items-center"
+                        />
+                      ))}
+                    </CommandGroup>
+                  </Fragment>
+                );
+              })}
+          </CommandList>
+          {/* Explanations for the sections that render no group at all. Inside the popover but
+              outside CommandList so cmdk's filtering can't hide the note behind the very search
+              ("glossary") that makes the omission visible. */}
+          {missingSectionExplanations.length > 0 && (
+            <div className="tw:shrink-0 tw:border-t tw:p-2">
+              {missingSectionExplanations.map(({ section, explanation }) => (
+                <p key={section} className="tw:text-xs tw:text-muted-foreground">
+                  {explanation}
+                </p>
+              ))}
+            </div>
+          )}
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}

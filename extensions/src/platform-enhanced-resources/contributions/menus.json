@@ -1,0 +1,28 @@
+{
+  "mainMenu": {
+    "columns": {},
+    "groups": {},
+    "items": [
+      {
+        "label": "%platformEnhancedResources_mainMenu_openEnhancedResource%",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Platform.bible > Open Enhanced Resource. Hidden in Simple mode: enhanced resources are a Power-mode tool, and this item still opens a hard-coded resource rather than offering a picker",
+        "group": "platform.projectResources",
+        "order": 200,
+        "command": "platformEnhancedResources.openEnhancedResource"
+      }
+    ]
+  },
+  "defaultWebViewTopMenu": {
+    "columns": {},
+    "groups": {},
+    "items": []
+  },
+  "defaultWebViewContextMenu": {
+    "groups": {},
+    "items": []
+  },
+  "webViewMenus": {
+    "platformEnhancedResources.enhancedResource": {}
+  }
+}

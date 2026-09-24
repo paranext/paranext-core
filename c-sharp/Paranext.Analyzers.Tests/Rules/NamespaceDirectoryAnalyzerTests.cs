@@ -152,7 +152,7 @@ public class NamespaceDirectoryAnalyzerTests
     }
 
     [Test]
-    public async Task RootFileClaimmingSubdirectory_Diagnostic()
+    public async Task RootFileClaimingSubdirectory_Diagnostic()
     {
         const string source = """
             namespace {|#0:Paranext.DataProvider.Services|};

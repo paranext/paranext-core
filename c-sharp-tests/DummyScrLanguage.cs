@@ -1,21 +1,20 @@
-using Paratext.Data.Languages;
+using System.Diagnostics.CodeAnalysis;
 using Paratext.Data;
+using Paratext.Data.Languages;
 using PtxUtils;
 using SIL.WritingSystems;
-using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider
 {
     /// <summary>
-    /// Replaces a ScrLanguage for use in testing. Does not use the file system to save/load data. 
+    /// Replaces a ScrLanguage for use in testing. Does not use the file system to save/load data.
     /// </summary>
     /// <remarks>Shamelessly copied from Paratext tests.</remarks>
     [ExcludeFromCodeCoverage]
     public class DummyScrLanguage : ScrLanguage
     {
-        public DummyScrLanguage(ScrText scrText) : base(null, ProjectNormalization.Undefined, scrText)
-        {
-        }
+        public DummyScrLanguage(ScrText scrText)
+            : base(null, ProjectNormalization.Undefined, scrText) { }
 
         protected override WritingSystemDefinition LoadWsDef(ScrText scrText)
         {

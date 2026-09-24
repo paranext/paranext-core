@@ -4,7 +4,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
 using System.Xml.Linq;
+using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
 
 namespace TestParanextDataProvider
@@ -46,6 +48,10 @@ namespace TestParanextDataProvider
                 ScrTextCollection.Remove(project, false);
 
             _client?.Dispose();
+            // LocalParatextProjects is now IDisposable (it owns a project-directory watcher). The
+            // test double never starts a watcher - it has no PapiClient - so this is a no-op, but
+            // dispose it anyway to honor the contract (and satisfy NUnit1032).
+            _projects?.Dispose();
         }
         #endregion
 
@@ -160,6 +166,31 @@ namespace TestParanextDataProvider
                 ["versificationStr"] = "English",
             };
             return jsonObject;
+        }
+
+        /// <summary>
+        /// Creates a <see cref="ParatextProjectSendReceiveService"/> wired to this fixture's
+        /// <see cref="Client"/> and <see cref="ParatextProjects"/> test doubles, so the construction
+        /// shape lives in one place rather than being duplicated per fixture.
+        /// </summary>
+        protected ParatextProjectSendReceiveService CreateSendReceiveService() =>
+            CreateSendReceiveService(Client);
+
+        /// <summary>
+        /// As <see cref="CreateSendReceiveService()"/>, but wired to <paramref name="client"/>. Use
+        /// this whenever a test builds its own <see cref="DummyPapiClient"/>: a service left on the
+        /// fixture's <see cref="Client"/> would send its traffic to a client the test is not
+        /// asserting against, so a later assertion on service-side traffic would read the wrong one.
+        /// </summary>
+        protected ParatextProjectSendReceiveService CreateSendReceiveService(DummyPapiClient client)
+        {
+            var factory = new ParatextProjectDataProviderFactory(client, ParatextProjects);
+            return new ParatextProjectSendReceiveService(
+                client,
+                factory,
+                new AppInfo("test", "1.0.0", "test"),
+                ParatextProjects
+            );
         }
 
         /// <summary>

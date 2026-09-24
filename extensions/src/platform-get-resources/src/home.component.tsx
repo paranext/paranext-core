@@ -1,5 +1,16 @@
-import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, ScrollText } from 'lucide-react';
 import {
+  AlertCircle,
+  BookOpen,
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronUp,
+  CloudOff,
+  ScrollText,
+} from 'lucide-react';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
   Button,
   Card,
   CardContent,
@@ -17,8 +28,9 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
+import type { ProjectMetadata } from '@papi/core';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { formatTimeSpan } from 'platform-bible-utils';
+import { formatTimeSpan, getErrorMessage, normalizeFullName } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
@@ -43,9 +55,14 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_language%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
+  '%resources_noProjectsInstructionWithoutResources%',
   '%resources_noSearchResults%',
   '%resources_open%',
   '%resources_searchedFor%',
+  '%resources_serverProjectsUnavailable_title%',
+  '%resources_serverUnreachable_description%',
+  '%resources_serverUnreachable_title%',
+  '%resources_syncFailed_title%',
   '%resources_sync%',
 ] as const);
 
@@ -54,6 +71,42 @@ type HomeLocalizedStrings = {
   [localizedHomeKey in HomeLocalizedStringKey]?: LocalizedStringValue;
 };
 
+/**
+ * What Home knows about the send/receive server's half of the project list.
+ *
+ * The list Home shows is a merge of two halves, and only one of them can fail — so the component
+ * has to be told which of these it is looking at rather than inferring it from an empty merge. A
+ * single value rather than a pair of booleans because the states are mutually exclusive: the pairs
+ * that do not correspond to any real situation ("failed and still loading", "reached and
+ * unreachable") are then unrepresentable rather than merely untested. See
+ * `adr-async-hook-state-shape`.
+ *
+ * - `loading` — an answer is still on its way; the list is not yet worth reading.
+ * - `absent` — this build has no send/receive at all, so the local list is the whole truth and there
+ *   is no missing half to report.
+ * - `loaded` — the server answered; the merged list is complete.
+ * - `unreachable` — the server was asked and never answered.
+ * - `unavailable` — the server refused for a reason the user can act on (blocked internet access, an
+ *   expired registration), which a notification names alongside this.
+ * - `unknown` — whether this build even has a server was never established.
+ */
+export type RemoteProjectsState =
+  | 'loading'
+  | 'absent'
+  | 'loaded'
+  | 'unreachable'
+  | 'unavailable'
+  | 'unknown';
+
+/**
+ * Stable empty defaults. A default parameter allocates a fresh value on every render, which would
+ * make the merge and sort memos below miss on every keystroke for any caller that omits these —
+ * including every build without send/receive, where `sharedProjectsInfo` is absent all session.
+ */
+const NO_LOCAL_PROJECTS: LocalProjectInfo[] = [];
+const NO_SHARED_PROJECTS: SharedProjectsInfo = {};
+const NO_ACTIVE_SEND_RECEIVE_PROJECTS: string[] = [];
+
 export type SortConfig = {
   key: 'shortName' | 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
@@ -61,18 +114,38 @@ export type SortConfig = {
 
 export type LocalProjectInfo = {
   projectId: string;
-  isEditable: boolean;
-  fullName: string;
+  isPublished: boolean;
+  /**
+   * Absent when the project has no full name. The Full Name column renders it beside a separate
+   * short-name column, so mirroring `name` in would print the same text twice across two columns.
+   */
+  fullName?: string;
   name: string;
   language: string;
 };
 
+/**
+ * Converts project metadata (from `papi.projectLookup.getMetadataForAllProjects`) into the
+ * {@link LocalProjectInfo} shape the Home and New Tab web views render, applying the display
+ * fallbacks the metadata's optional fields require. Shared so the two web views cannot drift.
+ */
+export function metadataToLocalProjectInfo(data: ProjectMetadata): LocalProjectInfo {
+  return {
+    projectId: data.id,
+    isPublished: data.isPublished ?? false,
+    fullName: normalizeFullName(data.fullName),
+    name: data.name ?? data.id,
+    language: data.language ?? '',
+  };
+}
+
 export type MergedProjectInfo = {
   projectId: string;
   name: string;
-  fullName: string;
+  /** Absent when the project has no full name. See {@link LocalProjectInfo.fullName}. */
+  fullName?: string;
   language: string;
-  isEditable: boolean;
+  isPublished: boolean;
   isSendReceivable: boolean;
   isLocallyAvailable?: boolean;
   editedStatus?: EditedStatus;
@@ -98,15 +171,18 @@ export type HomeProps = {
    * Callback function to open a project.
    *
    * @param projectId - The ID of the project to open.
-   * @param isEditable - Whether the project is editable.
+   * @param isPublished - Whether the project is a published resource (read-only reference). Pass
+   *   this through to the open command so the caller can dispatch to the Resource Viewer for
+   *   published projects and the Scripture Editor for non-published projects.
    */
-  onOpenProject?: (projectId: string, isEditable: boolean) => void;
+  onOpenProject?: (projectId: string, isPublished: boolean) => void;
   /**
-   * Callback function to send/receive a project.
+   * Callback function to send/receive a project. May be async; if it rejects, the component shows
+   * the error message in a destructive alert.
    *
    * @param projectId - The ID of the project to send/receive.
    */
-  onSendReceiveProject?: (projectId: string) => void;
+  onSendReceiveProject?: (projectId: string) => void | Promise<void>;
   /** Callback function to open the get started website of platform. */
   onGetStarted?: () => void;
   /** Whether to show the Get Resources button. */
@@ -115,8 +191,20 @@ export type HomeProps = {
   isSendReceiveInProgress?: boolean;
   /** Whether loading local projects is in progress. */
   isLoadingLocalProjects?: boolean;
-  /** Whether loading remote projects is in progress. */
-  isLoadingRemoteProjects?: boolean;
+  /**
+   * What is known about the send/receive server's half of the list. Drives both the loading gate
+   * and the banner: without it, an unreachable server is indistinguishable from a server with no
+   * projects on it, and a user who is offline is told their projects do not exist. See
+   * {@link RemoteProjectsState} for what each value claims.
+   */
+  remoteProjectsState?: RemoteProjectsState;
+  /**
+   * Whether to list editable projects only, leaving out the published resources that otherwise
+   * share the list. Set by entry points that are answering "get me to one of my projects" — the
+   * title bar's project picker footer — where a resource is never a valid answer. Home's own entry
+   * points leave this unset and list both.
+   */
+  shouldShowProjectsOnly?: boolean;
   /** Array of local project information, containing projects and resources. */
   localProjectsInfo?: LocalProjectInfo[];
   /** Object of shared project information, containing projects on the send/receive server. */
@@ -144,7 +232,9 @@ export type HomeProps = {
  * @param {showGetResourcesButton} - Whether to show the Get Resources button.
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
- * @param {isLoadingRemoteProjects} - Whether loading remote projects is in progress.
+ * @param {remoteProjectsState} - What is known about the send/receive server's half of the list.
+ * @param {shouldShowProjectsOnly} - Whether to list editable projects only, leaving out published
+ *   resources.
  * @param {localProjectsInfo} - Array of local project information, containing projects and
  *   resources.
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
@@ -164,10 +254,11 @@ export function Home({
   showGetResourcesButton = true,
   isSendReceiveInProgress = false,
   isLoadingLocalProjects = false,
-  isLoadingRemoteProjects = false,
-  localProjectsInfo = [],
-  sharedProjectsInfo = {},
-  activeSendReceiveProjects = [],
+  remoteProjectsState = 'absent',
+  shouldShowProjectsOnly = false,
+  localProjectsInfo = NO_LOCAL_PROJECTS,
+  sharedProjectsInfo = NO_SHARED_PROJECTS,
+  activeSendReceiveProjects = NO_ACTIVE_SEND_RECEIVE_PROJECTS,
   headerContent,
 }: HomeProps) {
   const getLocalizedString = (localizeKey: HomeLocalizedStringKey) => {
@@ -189,11 +280,53 @@ export function Home({
     : getLocalizedString('%resources_items%');
   const languageText: string = getLocalizedString('%resources_language%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
-  const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
+  // The default instruction ends with "or get resources", naming the button beside it. Callers that
+  // suppress that button (New Tab) would otherwise point the user at something not on screen.
+  const noProjectsInstructionText: string = getLocalizedString(
+    showGetResourcesButton
+      ? '%resources_noProjectsInstruction%'
+      : '%resources_noProjectsInstructionWithoutResources%',
+  );
   const noSearchResultsText: string = getLocalizedString('%resources_noSearchResults%');
   const openText: string = getLocalizedString('%resources_open%');
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
   const syncText: string = getLocalizedString('%resources_sync%');
+  // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
+  // contextual title ("Sync failed") communicates what failed better than the generic "Error".
+  const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
+  const serverUnreachableDescriptionText: string = getLocalizedString(
+    '%resources_serverUnreachable_description%',
+  );
+
+  const isLoading = isLoadingLocalProjects || remoteProjectsState === 'loading';
+
+  /**
+   * Title for the banner that says the server half of the list is missing, or `undefined` when
+   * there is no missing half to report. `unavailable` gets its own title because the server was
+   * reached and refused: the notification beside it names the cause and offers the fix, and a
+   * "can't reach the server" title next to it would contradict it and point at the wrong thing.
+   */
+  let missingServerHalfTitleText: string | undefined;
+  if (remoteProjectsState === 'unavailable')
+    missingServerHalfTitleText = getLocalizedString('%resources_serverProjectsUnavailable_title%');
+  // `unknown` never established that there is a server to reach, which is a weaker claim than
+  // `unreachable` — but the user-facing consequence is the same missing half, and the description
+  // below ("showing only what is on your computer") is accurate for both.
+  else if (remoteProjectsState === 'unreachable' || remoteProjectsState === 'unknown')
+    missingServerHalfTitleText = getLocalizedString('%resources_serverUnreachable_title%');
+
+  // Surfaces a business error (e.g. a project locked by another user) when an async action
+  // callback rejects, so failures are visible in the UI rather than only logged by the webview.
+  const [actionError, setActionError] = useState<string | undefined>(undefined);
+
+  const handleSendReceiveProject = async (projectId: string) => {
+    setActionError(undefined);
+    try {
+      await onSendReceiveProject(projectId);
+    } catch (e) {
+      setActionError(getErrorMessage(e));
+    }
+  };
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
@@ -204,7 +337,8 @@ export function Home({
           name: sharedProject.name,
           fullName: sharedProject.fullName,
           language: sharedProject.language,
-          isEditable: true,
+          // Shared (send/receive) projects are not published resources.
+          isPublished: false,
           isSendReceivable: true,
           isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
           editedStatus: sharedProject.editedStatus,
@@ -221,15 +355,20 @@ export function Home({
           name: project.name,
           fullName: project.fullName,
           language: project.language,
-          isEditable: project.isEditable,
+          isPublished: project.isPublished,
           isSendReceivable: false,
           isLocallyAvailable: true,
         });
       }
     });
 
-    return newMergedProjectInfo;
-  }, [localProjectsInfo, sharedProjectsInfo]);
+    // Filtered here rather than in the sort below so the empty list reads as "you have no
+    // projects" instead of "your search matched nothing" — the no-results message quotes the
+    // query, and nobody typed one.
+    return shouldShowProjectsOnly
+      ? newMergedProjectInfo.filter((project) => !project.isPublished)
+      : newMergedProjectInfo;
+  }, [localProjectsInfo, sharedProjectsInfo, shouldShowProjectsOnly]);
 
   const [textFilter, setTextFilter] = useState<string>('');
 
@@ -243,7 +382,7 @@ export function Home({
     const textFilteredProjects = mergedProjectInfo.filter((project) => {
       const filter = textFilter.toLowerCase();
       return (
-        project.fullName.toLowerCase().includes(filter) ||
+        (project.fullName ?? '').toLowerCase().includes(filter) ||
         project.name.toLowerCase().includes(filter) ||
         project.language.toLowerCase().includes(filter)
       );
@@ -259,14 +398,19 @@ export function Home({
             return sortConfig.direction === 'ascending' ? 1 : -1;
           }
           return 0;
-        case 'fullName':
-          if (a.fullName < b.fullName) {
+        case 'fullName': {
+          // A project with no full name sorts as the empty string, so the nameless rows group
+          // together at one end rather than sorting by a name the column does not show.
+          const aFullName = a.fullName ?? '';
+          const bFullName = b.fullName ?? '';
+          if (aFullName < bFullName) {
             return sortConfig.direction === 'ascending' ? -1 : 1;
           }
-          if (a.fullName > b.fullName) {
+          if (aFullName > bFullName) {
             return sortConfig.direction === 'ascending' ? 1 : -1;
           }
           return 0;
+        }
         case 'language':
           if (a.language < b.language) {
             return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -333,14 +477,14 @@ export function Home({
   const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
     if (isMenuItem)
       return (
-        <DropdownMenuItem onClick={() => onSendReceiveProject(project.projectId)}>
+        <DropdownMenuItem onClick={() => handleSendReceiveProject(project.projectId)}>
           <span>{getSendReceiveButtonContent(project)}</span>
         </DropdownMenuItem>
       );
     return (
       <Button
         disabled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
-        onClick={() => onSendReceiveProject(project.projectId)}
+        onClick={() => handleSendReceiveProject(project.projectId)}
       >
         {getSendReceiveButtonContent(project)}
       </Button>
@@ -350,12 +494,12 @@ export function Home({
   const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
     if (isMenuItem)
       return (
-        <DropdownMenuItem onClick={() => onOpenProject(project.projectId, project.isEditable)}>
+        <DropdownMenuItem onClick={() => onOpenProject(project.projectId, project.isPublished)}>
           <span>{openText}</span>
         </DropdownMenuItem>
       );
     return (
-      <Button onClick={() => onOpenProject(project.projectId, project.isEditable)}>
+      <Button onClick={() => onOpenProject(project.projectId, project.isPublished)}>
         {openText}
       </Button>
     );
@@ -385,14 +529,46 @@ export function Home({
           )}
         </div>
       </CardHeader>
-      {isLoadingLocalProjects || isLoadingRemoteProjects ? (
+      {actionError && (
+        <div className="tw:mx-4 tw:mb-2">
+          <Alert variant="destructive">
+            <AlertCircle className="tw:h-4 tw:w-4" />
+            <AlertTitle>{syncFailedTitleText}</AlertTitle>
+            <AlertDescription>{actionError}</AlertDescription>
+          </Alert>
+        </div>
+      )}
+      {/*
+       * Sits above the list rather than inside its empty state: the server half can be missing
+       * while local projects still fill the table, and that is the case where nothing else on
+       * screen suggests the list is incomplete. Not `destructive` — the list shown is accurate as
+       * far as it goes, which is a narrower claim than the failed sync above. `role="status"`
+       * overrides the polite-by-default `Alert`'s assertive `role="alert"`: this appears when an
+       * async load settles and asks nothing of the user, so interrupting a screen reader mid
+       * sentence to announce it is the wrong register.
+       */}
+      {!isLoading && missingServerHalfTitleText && (
+        <div className="tw:mx-4 tw:mb-2">
+          <Alert role="status">
+            <CloudOff className="tw:h-4 tw:w-4" />
+            <AlertTitle>{missingServerHalfTitleText}</AlertTitle>
+            <AlertDescription>{serverUnreachableDescriptionText}</AlertDescription>
+          </Alert>
+        </div>
+      )}
+      {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
         </CardContent>
       ) : (
         <CardContent className="tw:flex-grow tw:overflow-auto tw:min-h-32 tw:px-0">
           <div className="tw:flex tw:flex-col tw:gap-4">
-            {!localProjectsInfo ? (
+            {/*
+             * Nothing to list at all, as opposed to a search that excluded everything: the two
+             * need different advice, and the no-results message quotes the query, so using it here
+             * would show `Searched for ""` to someone who never searched.
+             */}
+            {mergedProjectInfo.length === 0 ? (
               <div className="tw:flex-grow tw:h-full tw:border tw:border-muted tw:rounded-lg tw:p-6 tw:text-center tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-1">
                 <Label className="tw:text-muted-foreground">{noProjectsText}</Label>
                 <Label className="tw:text-muted-foreground tw:font-normal">
@@ -455,8 +631,9 @@ export function Home({
                           }}
                           onDoubleClick={() =>
                             project.isLocallyAvailable
-                              ? onOpenProject(project.projectId, project.isEditable)
-                              : !isSendReceiveInProgress && onSendReceiveProject(project.projectId)
+                              ? onOpenProject(project.projectId, project.isPublished)
+                              : !isSendReceiveInProgress &&
+                                handleSendReceiveProject(project.projectId)
                           }
                           key={project.projectId}
                           className={cn('tw:rounded-sm', {
@@ -476,10 +653,10 @@ export function Home({
                                 {project.editedStatus === 'edited' && (
                                   <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
                                 )}
-                                {project.isEditable ? (
-                                  <ScrollText className="tw:pr-0" size={18} />
-                                ) : (
+                                {project.isPublished ? (
                                   <BookOpen className="tw:pr-0" size={18} />
+                                ) : (
+                                  <ScrollText className="tw:pr-0" size={18} />
                                 )}
                               </div>
 
@@ -505,7 +682,7 @@ export function Home({
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="tw:hidden tw:md:!table-cell tw:font-medium tw:break-words tw:cursor-default tw:break-all">
+                          <TableCell className="tw:hidden tw:md:!table-cell tw:font-medium tw:whitespace-normal tw:wrap-anywhere tw:cursor-default">
                             {project.fullName}
                           </TableCell>
                           <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">

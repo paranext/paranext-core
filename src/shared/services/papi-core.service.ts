@@ -30,6 +30,9 @@ export type { DialogOptions } from '@shared/models/dialog-options.model';
 export type {
   DirectionFromTab,
   DirectionFromTabAdjacent,
+  FloatLayout,
+  Layout,
+  WindowLayout,
 } from '@shared/models/docking-framework.model';
 export type { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
 export type {
@@ -57,13 +60,17 @@ export type {
   MethodDocumentationWithoutName,
   NetworkObjectDocumentation,
   SingleMethodDocumentation,
+  SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 export type {
   ExtensionDataScope,
   MandatoryProjectDataTypes,
 } from '@shared/models/project-data-provider.model';
 export type { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
-export type { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model.ts';
+export type {
+  IProjectDataProviderEngineFactory,
+  ProjectDataProviderEngineEnvelope,
+} from '@shared/models/project-data-provider-engine-factory.model.ts';
 export type {
   IProjectDataProviderFactory,
   ProjectMetadataFilterOptions,
@@ -74,6 +81,7 @@ export type {
   ProjectMetadataWithoutFactoryInfo,
 } from '@shared/models/project-metadata.model';
 export type {
+  ContentZoomAreaId,
   GetWebViewOptions,
   OpenWebViewOptions,
   SavedWebViewDefinition,
@@ -87,6 +95,11 @@ export type {
   IDisposableWebViewProvider,
   IWebViewProvider,
 } from '@shared/models/web-view-provider.model';
+export type {
+  CloseWebViewEvent,
+  OpenWebViewEvent,
+  UpdateWebViewEvent,
+} from '@shared/services/web-view.service-model';
 export type { AppInfo } from '@shared/services/app.service-model';
 export type {
   NamedSqlParameters,
@@ -102,10 +115,29 @@ export type {
   SimultaneousProjectSettingsChanges,
   ProjectSettingValidator,
 } from '@shared/services/project-settings.service-model';
-export type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-export type { SettingValidator } from '@shared/services/settings.service-model';
 export type {
+  ReferenceHistory,
+  ReferenceHistoryEntry,
+  ReferenceHistoryUpdateInfo,
+  ScrollGroupScrRef,
+  ScrollGroupUpdateInfo,
+} from '@shared/services/scroll-group.service-model';
+export type { SettingValidator } from '@shared/services/settings.service-model';
+// Exported so the `DataProviders` augmentation for `platform.themeDataServiceDataProvider`, which
+// lives in this model, keeps reaching `papi.d.ts`. It used to arrive there only because the
+// renderer's theme service host imported the theme data service, which stopped being true when that
+// host moved to main — an import graph is not a contract, so the type extensions consume is named
+// here instead.
+export type {
+  IThemeDataService,
+  ThemeDataDataTypes,
+} from '@shared/services/theme-data.service-model';
+export type {
+  AppWindowInputEvent,
+  AppWindowInputKind,
+  FocusedWindowIdEvent,
   FocusSubject,
   SetFocusSubject,
   SetFocusSpecifier,
+  WindowSummary,
 } from '@shared/services/window.service-model';

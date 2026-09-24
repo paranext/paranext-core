@@ -2,19 +2,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { Slider } from '@/components/shadcn-ui/slider';
 import { useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Slider> = {
   title: 'Shadcn/Slider',
   component: Slider,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     min: { control: { type: 'number' } },
     max: { control: { type: 'number' } },

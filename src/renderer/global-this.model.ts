@@ -1,7 +1,15 @@
 /** Module to set up globalThis and polyfills in the renderer */
 
 import { ProcessType } from '@shared/global-this.model';
-import { DEV_MODE_QUERY_PARAMETER, LOG_LEVEL_QUERY_PARAMETER } from '@shared/data/platform.data';
+import {
+  DEV_MODE_QUERY_PARAMETER,
+  IS_MAIN_WINDOW_QUERY_PARAMETER,
+  LOG_LEVEL_QUERY_PARAMETER,
+  STARTUP_MARKS_QUERY_PARAMETER,
+  WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
+  URL_PARAMETERS,
+  WINDOW_ID,
+} from '@shared/data/platform.data';
 import type { LogLevel } from 'electron-log';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
@@ -24,13 +32,54 @@ globalThis.resourcesPath = 'resources://';
 
 const searchParams = new URLSearchParams(global.location.search);
 
-// We're setting this logLevel straight from main's logLevel
+// We're setting this logLevel straight from main's logLevel. The permitted values and the default
+// are declared once, in URL_PARAMETERS, and read from there rather than restated here — restating
+// them is how the two drift apart. A value outside the declared set falls back to the default
+// rather than reaching electron-log as a level it never defined.
+const { allowed: allowedLogLevels, default: defaultLogLevel } =
+  URL_PARAMETERS[LOG_LEVEL_QUERY_PARAMETER];
+const requestedLogLevel = searchParams.get(LOG_LEVEL_QUERY_PARAMETER) ?? '';
+const resolvedLogLevel = allowedLogLevels?.includes(requestedLogLevel)
+  ? requestedLogLevel
+  : defaultLogLevel;
+// Narrows a string already checked against the table's `allowed` list, rather than asserting over
+// an unchecked one. platform.data.test.ts pins that list against electron-log's own LogLevel union
+// and pins that every enum entry declares both fields.
 // eslint-disable-next-line no-type-assertion/no-type-assertion
-globalThis.logLevel = (searchParams.get(LOG_LEVEL_QUERY_PARAMETER) as LogLevel) ?? 'info';
+globalThis.logLevel = resolvedLogLevel as LogLevel;
 
 // Check if the main process indicated noisy dev mode is enabled
 // null is used in this API meaning the param is not present
 // eslint-disable-next-line no-null/no-null
 globalThis.isNoisyDevModeEnabled = searchParams.get(DEV_MODE_QUERY_PARAMETER) !== null;
+
+// Check if the main process indicated startup marks are enabled
+// null is used in this API meaning the param is not present
+// eslint-disable-next-line no-null/no-null
+globalThis.startupMarks = searchParams.get(STARTUP_MARKS_QUERY_PARAMETER) !== null;
+
+// Id of the window this renderer is running in. Read here, once, so that everything downstream
+// holds the same id main routes by — and left `undefined` when the parameter is absent or empty,
+// since a window that cannot say which one it is must not claim to be some other one. This id is
+// durable (see `WindowLayoutEntry.windowId`), so it is also what per-window storage
+// (`local-storage.service.ts`) keys by — a restored window is given the same id its entry already
+// carries, and storage works from this render, in every interface mode, before any request to main
+// has been answered.
+const requestedWindowId = searchParams.get(WINDOW_ID);
+globalThis.windowId = requestedWindowId || undefined;
+
+// Whether this renderer is the main window. Presence-only parameter, like the two above:
+// null is used in this API meaning the param is not present
+// eslint-disable-next-line no-null/no-null
+globalThis.isMainWindow = searchParams.get(IS_MAIN_WINDOW_QUERY_PARAMETER) !== null;
+
+// Whether main created this window without activating it. Content arriving in such a window must
+// not focus itself: focusing a tab focuses its web view's iframe, and a `focus()` call inside a
+// window that does not hold OS focus only sets that document's active element without raising the
+// window — so whichever call lands last would claim the caret the moment the window is raised,
+// regardless of which tab the raise is actually showing.
+globalThis.wasWindowCreatedWithoutActivation = searchParams.has(
+  WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
+);
 
 // #endregion

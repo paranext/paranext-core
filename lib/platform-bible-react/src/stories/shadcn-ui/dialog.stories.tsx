@@ -11,20 +11,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/shadcn-ui/dialog';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { useState } from 'react';
 
 const meta: Meta<typeof Dialog> = {
   title: 'Shadcn/Dialog',
   component: Dialog,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
 };
 
 export default meta;

@@ -1,3 +1,6 @@
+// Storybook mock: .storybook/mocks/renderer-papi-hooks.tsx re-exports all hooks except
+// useLocalizedStrings, useSetting, and useData (overridden for first-run language stories).
+// If you add or remove an export here, keep that mock in sync.
 export { default as useDataProvider } from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 export { default as useData } from '@renderer/hooks/papi-hooks/use-data.hook';
 export { default as useScrollGroupScrRef } from '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';

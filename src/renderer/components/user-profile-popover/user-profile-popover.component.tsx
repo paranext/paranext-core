@@ -1,0 +1,544 @@
+import {
+  Button,
+  cn,
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+  Separator,
+  Skeleton,
+  ToggleGroup,
+  ToggleGroupItem,
+  Tooltip,
+  TOOLTIP_DELAY_MS,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  type LanguageInfo,
+} from 'platform-bible-react';
+import { CircleUserRound, Languages, Monitor, Moon, Sun, User, Wifi } from 'lucide-react';
+import {
+  useData,
+  useDataProvider,
+  useLocalizedStrings,
+  useSetting,
+} from '@renderer/hooks/papi-hooks';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { useRegistrationValidity } from '@renderer/hooks/use-registration-validity.hook';
+import { sendCommand } from '@shared/services/command.service';
+import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
+import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
+import {
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+  type ThemeDefinitionExpanded,
+} from 'platform-bible-utils';
+import type { RegistrationData } from 'paratext-registration';
+import { useEffect, useState } from 'react';
+import './user-profile-popover.component.css';
+
+const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  '%toolbar_userProfile_label%',
+  '%toolbar_userProfile_label_registrationNeeded%',
+  '%userProfile_header_defaultName%',
+  '%userProfile_header_notRegistered%',
+  '%userProfile_interfaceMode_simple_label%',
+  '%userProfile_interfaceMode_simple_description%',
+  '%userProfile_interfaceMode_power_label%',
+  '%userProfile_interfaceMode_power_description%',
+  '%userProfile_profileAndRegistration%',
+  '%userProfile_registrationNeeded%',
+  '%userProfile_networkSettings_2%',
+  '%userProfile_language%',
+  '%userProfile_appearance%',
+  '%userProfile_appearance_light%',
+  '%userProfile_appearance_dark%',
+  '%userProfile_appearance_system%',
+];
+
+const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
+  en: { autonym: 'English' },
+};
+
+/**
+ * Placeholder passed as the default value for the `CurrentTheme` data hook so it has something
+ * structurally valid to return while the real theme loads. Nothing on this object is ever surfaced
+ * to the user — the popover only reads `theme.type` and only after `isPlatformError` passes — so
+ * the `label` is irrelevant and just needs to satisfy `ThemeDefinitionExpanded`'s `%${string}%`
+ * shape; reusing the existing `%toolbar_theme_loading%` localize key avoids introducing a bogus
+ * i18n entry purely for this sentinel.
+ */
+const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
+  themeFamilyId: '',
+  type: 'light',
+  id: 'light',
+  label: '%toolbar_theme_loading%',
+  cssVariables: {},
+};
+
+/** Sort entries so 'en' is first, then everything else alphabetically by BCP-47 tag. */
+function sortLanguageEntries<T>(entries: [string, T][]): [string, T][] {
+  return [...entries].sort(([a], [b]) => {
+    if (a === 'en' && b !== 'en') return -1;
+    if (b === 'en' && a !== 'en') return 1;
+    return a.localeCompare(b);
+  });
+}
+
+/**
+ * Small primary dot marking something that needs attention. Decorative on purpose — every caller
+ * pairs it with text carrying the same meaning, so assistive tech is never told twice.
+ *
+ * Local rather than from `platform-bible-react` because neither existing option fits: `Badge`'s
+ * `blueIndicator`/`mutedIndicator` variants hardcode `bg-blue-400`/`bg-zinc-400` and so ignore the
+ * theme, and `AvatarBadge` is sized off `Avatar`'s group data-attributes and is not exported. That
+ * makes this the third dot treatment in the app — promoting a themed, exported indicator (and
+ * fixing those Badge variants) is worth its own change, since it touches every consumer. Until
+ * then, prefer extending this rather than copying the class string.
+ *
+ * TODO(PT-4493): promote a themed, exported indicator into `platform-bible-react` and fix the
+ * `Badge` `blueIndicator`/`mutedIndicator` variants, then delete this local copy.
+ */
+function ReminderDot({ testId, className }: { testId: string; className?: string }) {
+  return (
+    <span
+      data-testid={testId}
+      aria-hidden="true"
+      className={cn(
+        // `shrink-0` is in the base because callers place the dot in a flex row beside text (e.g.
+        // the toolbar trigger, the "Profile & registration" row), where a fixed 8px circle must
+        // never be the item that gives.
+        'tw:size-2 tw:shrink-0 tw:rounded-full tw:bg-primary',
+        // Raw class, not a `tw:forced-colors:` utility — that variant emits no CSS in this build
+        // (verified against the built stylesheet). See the rule in the companion .css file.
+        'user-profile-popover-reminder-dot',
+        className,
+      )}
+    />
+  );
+}
+
+/**
+ * Popover triggered from the top-right of the toolbar that surfaces the user's profile (name,
+ * email), interface mode, registration / network settings shortcuts, language, and appearance
+ * (theme) controls. Replaces the previous standalone theme-toggle, internet-settings, and
+ * Paratext-registration buttons in the toolbar.
+ *
+ * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
+ * on the toolbar trigger and on the "Profile & registration" row. The dot is never the only signal:
+ * the trigger's accessible label and tooltip change to match, and the popover row carries
+ * screen-reader-only text.
+ */
+export function UserProfilePopover() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [registrationData, setRegistrationData] = useState<RegistrationData | undefined>(undefined);
+  const [isRegistrationLoading, setIsRegistrationLoading] = useState(false);
+  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+
+  const { validity: registrationValidity, refresh: refreshRegistration } =
+    useRegistrationValidity();
+  // Only a definitive 'invalid' nags: 'unknown' means the probe could not complete, never that the
+  // registration is bad.
+  const showRegistrationReminder = registrationValidity === 'invalid';
+  const userProfileLabel = showRegistrationReminder
+    ? localizedStrings['%toolbar_userProfile_label_registrationNeeded%']
+    : localizedStrings['%toolbar_userProfile_label%'];
+
+  const [safeInterfaceMode, setInterfaceMode] = useInterfaceMode();
+
+  const handleInterfaceModeChange = (value: string) => {
+    if (value === '') return;
+    if (value !== 'simple' && value !== 'power') return;
+    // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
+    // try/catch around this call cannot see it. A missing setter is a real runtime state, not a
+    // type formality — `useSetting` has no setter while the subscription is throttled — so say so
+    // rather than letting the click do nothing silently.
+    if (!setInterfaceMode) {
+      logger.warn('UserProfilePopover: cannot set interface mode; the setting is unavailable');
+      return;
+    }
+    setInterfaceMode(value).catch((e: unknown) => {
+      logger.warn(`UserProfilePopover: failed to set interface mode: ${getErrorMessage(e)}`);
+    });
+  };
+
+  const handleProfileAndRegistration = async () => {
+    setIsOpen(false);
+    try {
+      await sendCommand('paratextRegistration.showParatextRegistration');
+    } catch (e: unknown) {
+      logger.warn(`UserProfilePopover: failed to open registration: ${getErrorMessage(e)}`);
+    }
+  };
+
+  const handleNetworkSettings = async () => {
+    setIsOpen(false);
+    try {
+      await sendCommand('paratextRegistration.showInternetSettings');
+    } catch (e: unknown) {
+      logger.warn(`UserProfilePopover: failed to open internet settings: ${getErrorMessage(e)}`);
+    }
+  };
+
+  const [interfaceLanguage, setInterfaceLanguage] = useSetting('platform.interfaceLanguage', [
+    'en',
+  ]);
+  const safeInterfaceLanguage =
+    isPlatformError(interfaceLanguage) || interfaceLanguage.length === 0
+      ? ['en']
+      : interfaceLanguage;
+  const primaryLanguage = safeInterfaceLanguage[0] ?? 'en';
+
+  const [availableLanguagesPossiblyError] = useData(
+    localizationService.dataProviderName,
+  ).AvailableInterfaceLanguages(undefined, DEFAULT_AVAILABLE_LANGUAGES);
+  const availableLanguages: Record<string, LanguageInfo> = isPlatformError(
+    availableLanguagesPossiblyError,
+  )
+    ? DEFAULT_AVAILABLE_LANGUAGES
+    : availableLanguagesPossiblyError;
+  const sortedLanguageEntries = sortLanguageEntries(Object.entries(availableLanguages));
+
+  const handleLanguageChange = (value: string) => {
+    if (value === '') return;
+    if (value === primaryLanguage) return;
+    const next = [value, ...safeInterfaceLanguage.filter((l) => l !== value)];
+    // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
+    // try/catch around this call cannot see it. A missing setter is a real runtime state, not a
+    // type formality — `useSetting` has no setter while the subscription is throttled — so say so
+    // rather than letting the click do nothing silently.
+    if (!setInterfaceLanguage) {
+      logger.warn('UserProfilePopover: cannot set interface language; the setting is unavailable');
+      return;
+    }
+    setInterfaceLanguage(next).catch((e: unknown) => {
+      logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
+    });
+  };
+
+  const themeDataProvider = useDataProvider(themeServiceDataProviderName);
+  const [theme, setTheme] = useData<typeof themeServiceDataProviderName>(
+    themeDataProvider,
+  ).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
+  const [shouldMatchSystem, setShouldMatchSystem] = useData<typeof themeServiceDataProviderName>(
+    themeDataProvider,
+  ).ShouldMatchSystem(undefined, false);
+
+  const themeUsable = !isPlatformError(theme);
+  const shouldMatchSystemUsable = !isPlatformError(shouldMatchSystem);
+
+  const appearanceValue: '' | 'light' | 'dark' | 'system' = (() => {
+    if (!themeUsable || !shouldMatchSystemUsable) return '';
+    if (shouldMatchSystem) return 'system';
+    return theme.type === 'dark' ? 'dark' : 'light';
+  })();
+
+  const handleAppearanceChange = (value: string) => {
+    if (value === '') return;
+    if (value !== 'light' && value !== 'dark' && value !== 'system') return;
+    // Theme writes are asynchronous, so a failure arrives as a rejection: a synchronous try/catch
+    // around these calls cannot see it. A missing setter is a real runtime state, not a type
+    // formality — `useData` drops its setter while the theme subscription is throttled — so say so
+    // rather than letting the click do nothing silently.
+    const reportFailure = (e: unknown) => {
+      logger.warn(`UserProfilePopover: failed to set appearance: ${getErrorMessage(e)}`);
+    };
+    const reportUnavailable = () => {
+      logger.warn(
+        'UserProfilePopover: cannot set appearance; the theme subscription is unavailable',
+      );
+    };
+    if (value === 'system') {
+      if (shouldMatchSystemUsable && shouldMatchSystem) return;
+      if (setShouldMatchSystem) setShouldMatchSystem(true).catch(reportFailure);
+      else reportUnavailable();
+      return;
+    }
+    if (shouldMatchSystemUsable && shouldMatchSystem) {
+      if (setShouldMatchSystem) setShouldMatchSystem(false).catch(reportFailure);
+      else reportUnavailable();
+    }
+    if (setTheme) setTheme({ type: value }).catch(reportFailure);
+    else reportUnavailable();
+  };
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    setIsRegistrationLoading(true);
+    (async () => {
+      try {
+        const data = await sendCommand('paratextRegistration.getParatextRegistrationData');
+        if (!cancelled) setRegistrationData(data);
+      } catch (e: unknown) {
+        logger.warn(`UserProfilePopover: failed to fetch registration data: ${getErrorMessage(e)}`);
+      } finally {
+        if (!cancelled) setIsRegistrationLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  // Separate from the profile fetch above: this one owns no state and needs no cleanup, so keeping
+  // it out of that effect keeps the `cancelled` flag's scope obviously limited to the fetch.
+  // Re-checks on EVERY open, which is what makes the dot recoverable: registering from here closes
+  // the popover, and saving normally restarts the app — but that restart is best-effort (the form
+  // only logs a warning if it fails), so when it doesn't happen the dot clears on the next open
+  // rather than this one.
+  useEffect(() => {
+    if (isOpen) refreshRegistration();
+  }, [isOpen, refreshRegistration]);
+
+  // "Not registered" is a state of the whole header — show it only when neither the name nor the
+  // email are populated. When the user has a name but no email, the email line is omitted entirely
+  // so we don't imply the user is unregistered just because the email field happens to be blank.
+  const registeredName = registrationData?.name ?? '';
+  const registeredEmail = registrationData?.email ?? '';
+  const isRegistered = registeredName.length > 0 || registeredEmail.length > 0;
+  const nameText =
+    registeredName.length > 0
+      ? registeredName
+      : localizedStrings['%userProfile_header_defaultName%'];
+  let emailText: string | undefined;
+  if (registeredEmail.length > 0) emailText = registeredEmail;
+  // Suppressed while the reminder shows: the warning line below already says the registration needs
+  // attention, and two near-identical messages read as two separate problems.
+  else if (!isRegistered && !showRegistrationReminder)
+    emailText = localizedStrings['%userProfile_header_notRegistered%'];
+  else emailText = undefined;
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                // `tw:relative` positions the reminder dot below; buttonVariants has no `relative`.
+                className="pr-twp tw:relative tw:h-8 tw:shrink-0"
+                aria-label={userProfileLabel}
+                data-testid="user-profile-popover-trigger"
+              >
+                <CircleUserRound />
+                {showRegistrationReminder && (
+                  // `end-1` (not `right-1`) so the dot mirrors in RTL. The ring separates the dot
+                  // from the icon it overlaps, so it has to match whatever is behind it: the ghost
+                  // button turns `muted` on hover AND stays `muted` while the popover is open
+                  // (`aria-expanded`), so a fixed `ring-background` would sit there as an off-color
+                  // halo for exactly as long as the user is looking at it.
+                  <ReminderDot
+                    testId="user-profile-registration-dot"
+                    className="tw:absolute tw:end-1 tw:top-1 tw:ring-2 tw:ring-background tw:group-hover/button:ring-muted tw:group-aria-expanded/button:ring-muted"
+                  />
+                )}
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="tw:font-light">{userProfileLabel}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <PopoverContent align="end" className={cn('tw:w-80 tw:gap-1.5')}>
+        <PopoverHeader className="tw:gap-0 tw:px-2">
+          {isRegistrationLoading ? (
+            <>
+              <Skeleton data-testid="user-profile-name-skeleton" className="tw:h-4 tw:w-32" />
+              <Skeleton
+                data-testid="user-profile-email-skeleton"
+                className="tw:mt-1 tw:h-3 tw:w-40"
+              />
+            </>
+          ) : (
+            <>
+              <PopoverTitle
+                data-testid="user-profile-name"
+                className="tw:text-xs tw:leading-tight tw:font-bold"
+              >
+                {nameText}
+              </PopoverTitle>
+              {emailText !== undefined && (
+                <PopoverDescription
+                  data-testid="user-profile-email"
+                  className="user-profile-popover-text-2xs tw:leading-tight"
+                >
+                  {emailText}
+                </PopoverDescription>
+              )}
+              {showRegistrationReminder && (
+                // The identity above stays as-is; this line is what keeps the header from implying
+                // all is well while the dots say otherwise. Visible text, not `sr-only`, so a
+                // sighted user who clicks straight into the popover still gets an explanation.
+                <PopoverDescription
+                  data-testid="user-profile-registration-warning"
+                  className="user-profile-popover-text-2xs tw:mt-1 tw:flex tw:items-center tw:gap-1.5 tw:leading-tight"
+                >
+                  <ReminderDot testId="user-profile-registration-warning-dot" />
+                  {localizedStrings['%userProfile_registrationNeeded%']}
+                </PopoverDescription>
+              )}
+            </>
+          )}
+        </PopoverHeader>
+        <Separator />
+        <ToggleGroup
+          type="single"
+          value={safeInterfaceMode}
+          onValueChange={handleInterfaceModeChange}
+          spacing={2}
+          className="tw:mb-0.5 tw:w-full tw:items-stretch tw:px-2"
+        >
+          <ToggleGroupItem
+            value="simple"
+            data-testid="user-profile-interface-mode-simple"
+            variant="outline"
+            className={cn(
+              'tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-0.5 tw:p-2 tw:text-left tw:whitespace-normal',
+              safeInterfaceMode === 'simple' &&
+                'tw:border-2 tw:border-primary tw:bg-accent tw:text-accent-foreground tw:shadow-sm',
+            )}
+          >
+            <span
+              className={cn(
+                'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
+                safeInterfaceMode === 'simple' && 'tw:text-accent-foreground',
+              )}
+            >
+              {localizedStrings['%userProfile_interfaceMode_simple_label%']}
+            </span>
+            <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
+              {localizedStrings['%userProfile_interfaceMode_simple_description%']}
+            </span>
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="power"
+            data-testid="user-profile-interface-mode-power"
+            variant="outline"
+            className={cn(
+              'tw:h-auto tw:flex-1 tw:flex-col tw:items-start tw:gap-0.5 tw:p-2 tw:text-left tw:whitespace-normal',
+              safeInterfaceMode === 'power' &&
+                'tw:border-2 tw:border-primary tw:bg-accent tw:text-accent-foreground tw:shadow-sm',
+            )}
+          >
+            <span
+              className={cn(
+                'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
+                safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
+              )}
+            >
+              {localizedStrings['%userProfile_interfaceMode_power_label%']}
+            </span>
+            <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
+              {localizedStrings['%userProfile_interfaceMode_power_description%']}
+            </span>
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <Separator />
+        <div className="tw:flex tw:flex-col tw:gap-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
+            onClick={handleProfileAndRegistration}
+            data-testid="user-profile-action-registration"
+          >
+            <User className="tw:size-3.5" />
+            {localizedStrings['%userProfile_profileAndRegistration%']}
+            {showRegistrationReminder && (
+              <>
+                <ReminderDot testId="user-profile-action-registration-dot" className="tw:ms-auto" />
+                {/* Puts the state into the row's accessible name, since the dot is hidden from it. */}
+                <span className="tw:sr-only">
+                  {localizedStrings['%userProfile_registrationNeeded%']}
+                </span>
+              </>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
+            onClick={handleNetworkSettings}
+            data-testid="user-profile-action-network"
+          >
+            <Wifi className="tw:size-3.5" />
+            {localizedStrings['%userProfile_networkSettings_2%']}
+          </Button>
+        </div>
+        <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:px-2">
+          <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:pt-1 tw:text-xs tw:text-muted-foreground">
+            <Languages className="tw:size-3.5" />
+            {localizedStrings['%userProfile_language%']}
+          </span>
+          <ToggleGroup
+            type="single"
+            value={primaryLanguage}
+            onValueChange={handleLanguageChange}
+            size="sm"
+            className="tw:min-w-0 tw:flex-1 tw:flex-wrap tw:justify-end"
+          >
+            {sortedLanguageEntries.map(([tag, info]) => (
+              <ToggleGroupItem
+                key={tag}
+                value={tag}
+                variant="outline"
+                data-testid={`user-profile-language-${tag}`}
+                aria-label={info.autonym ?? tag}
+                className="user-profile-popover-text-3xs tw:h-6 tw:min-w-0 tw:px-2"
+              >
+                {tag.toUpperCase()}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+        <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-2">
+          <span className="tw:text-xs tw:text-muted-foreground">
+            {localizedStrings['%userProfile_appearance%']}
+          </span>
+          <ToggleGroup
+            type="single"
+            value={appearanceValue}
+            onValueChange={handleAppearanceChange}
+            size="sm"
+          >
+            <ToggleGroupItem
+              value="light"
+              variant="outline"
+              data-testid="user-profile-appearance-light"
+              aria-label={localizedStrings['%userProfile_appearance_light%']}
+              className="tw:h-6 tw:min-w-0 tw:px-1.5"
+            >
+              <Sun className="tw:size-3" />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="dark"
+              variant="outline"
+              data-testid="user-profile-appearance-dark"
+              aria-label={localizedStrings['%userProfile_appearance_dark%']}
+              className="tw:h-6 tw:min-w-0 tw:px-1.5"
+            >
+              <Moon className="tw:size-3" />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="system"
+              variant="outline"
+              data-testid="user-profile-appearance-system"
+              aria-label={localizedStrings['%userProfile_appearance_system%']}
+              className="tw:h-6 tw:min-w-0 tw:px-1.5"
+            >
+              <Monitor className="tw:size-3" />
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}

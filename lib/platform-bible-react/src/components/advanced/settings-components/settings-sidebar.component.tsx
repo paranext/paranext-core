@@ -1,5 +1,8 @@
-import { ComboBox } from '@/components/basics/combo-box.component';
-import { Z_INDEX_OVERLAY } from '@/components/z-index';
+import {
+  ProjectSelector,
+  type ProjectSelectorLocalizedStrings,
+  type ProjectSelectorProject,
+} from '@/components/advanced/project-selector/project-selector.component';
 import {
   Sidebar,
   SidebarContent,
@@ -12,14 +15,42 @@ import {
 } from '@/components/shadcn-ui/sidebar';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { ScrollText } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 export type SelectedSettingsSidebarItem = {
   label: string;
   projectId?: string;
 };
 
-export type ProjectInfo = { projectId: string; projectName: string };
+/**
+ * A project as this sidebar's consumer supplies it.
+ *
+ * `projectName`/`projectFullName` are the same pair `platform-bible-utils` calls
+ * `ProjectNames.shortName`/`fullName`; the names differ because this type predates that helper and
+ * is exported from the stable barrel, where renaming a field is a breaking change. The two shapes
+ * meet in exactly one adapter — the `projectSelectorProjects` memo below — so the helper's rules
+ * still apply to every project this component renders.
+ */
+export type ProjectInfo = {
+  projectId: string;
+  /**
+   * Short project name — the trigger label for the `<ProjectSelector>` and the primary line of each
+   * popover row. Sourced from the `platform.name` project setting.
+   */
+  projectName: string;
+  /**
+   * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
+   * popover rows. Omit it for a project that has no distinct full name; when it is absent, blank or
+   * equal to `projectName`, the row falls back to a single-line layout (the `hasDistinctFullName`
+   * rule the `ProjectSelector` applies).
+   *
+   * Source it from project metadata (`getMetadataForAllProjects`), NOT from a
+   * `getSetting('platform.fullName')` read: that setting cannot express "no full name" — it
+   * defaults to a localized `%project_full_name_missing%` placeholder, which would render here as a
+   * second name the project does not have.
+   */
+  projectFullName?: string;
+};
 
 export type SettingsSidebarProps = {
   /** Optional id for testing */
@@ -46,6 +77,18 @@ export type SettingsSidebarProps = {
   /** Placeholder text for the button */
   buttonPlaceholderText: string;
 
+  /**
+   * Placeholder text for the project picker's search box. Falls back to the picker's English string
+   * when omitted.
+   */
+  searchPlaceholderText?: string;
+
+  /**
+   * Message the project picker shows when no project matches the search. Falls back to the picker's
+   * English string when omitted.
+   */
+  noResultsText?: string;
+
   /** Additional css classes to help with unique styling of the sidebar */
   className?: string;
 };
@@ -66,6 +109,8 @@ export function SettingsSidebar({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
+  searchPlaceholderText,
+  noResultsText,
   className,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
@@ -82,6 +127,35 @@ export function SettingsSidebar({
     },
     [projectInfo],
   );
+
+  // Adapt the public `ProjectInfo[]` shape to `ProjectSelectorProject[]` for the canonical
+  // <ProjectSelector>. `projectFullName` is passed through as-is rather than falling back to the
+  // short name: the selector suppresses a full name that is absent or equal to the short name, and
+  // mirroring one into the other would make every project look like it has a full name and defeat
+  // searching on it.
+  const projectSelectorProjects = useMemo<ProjectSelectorProject[]>(
+    () =>
+      projectInfo.map((info) => ({
+        id: info.projectId,
+        shortName: info.projectName,
+        fullName: info.projectFullName,
+      })),
+    [projectInfo],
+  );
+
+  // `buttonPlaceholder` and `ariaLabel` are this sidebar's own copy; the popover's two strings are
+  // optional. Unsupplied entries are left off the bag rather than set to `undefined`, because
+  // ProjectSelector layers this bag over its own English defaults with a plain spread — an explicit
+  // `undefined` would blank the default it lands on instead of falling back to it.
+  const projectSelectorStrings = useMemo((): ProjectSelectorLocalizedStrings => {
+    const strings: ProjectSelectorLocalizedStrings = {
+      buttonPlaceholder: buttonPlaceholderText,
+      ariaLabel: projectsSidebarGroupLabel,
+    };
+    if (searchPlaceholderText) strings.searchPlaceholder = searchPlaceholderText;
+    if (noResultsText) strings.commandEmptyMessage = noResultsText;
+    return strings;
+  }, [buttonPlaceholderText, projectsSidebarGroupLabel, searchPlaceholderText, noResultsText]);
 
   const getIsActive: (label: string) => boolean = useCallback(
     (label: string) => !selectedSidebarItem.projectId && label === selectedSidebarItem.label,
@@ -118,25 +192,48 @@ export function SettingsSidebar({
         <SidebarGroup>
           <SidebarGroupLabel className="tw:text-sm">{projectsSidebarGroupLabel}</SidebarGroupLabel>
           <SidebarGroupContent className="tw:pl-3">
-            <ComboBox
-              buttonVariant="ghost"
-              buttonClassName={cn('tw:w-full', {
-                'tw:bg-sidebar-accent tw:text-sidebar-accent-foreground':
-                  selectedSidebarItem?.projectId,
-              })}
-              // TODO: Check if this z-index override is necessary — the PopoverContent default
-              // (Z_INDEX_ABOVE_DOCK = 250) may be sufficient since this dropdown portals to body
-              popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}
-              options={projectInfo.flatMap((info) => info.projectId)}
-              getOptionLabel={getProjectNameFromProjectId}
-              buttonPlaceholder={buttonPlaceholderText}
-              onChange={(projectId: string) => {
-                const selectedProjectName = getProjectNameFromProjectId(projectId);
-                handleSelectItem(selectedProjectName, projectId);
-              }}
-              value={selectedSidebarItem?.projectId ?? undefined}
-              icon={<ScrollText />}
-            />
+            {/*
+              Flex wrapper hosts the leading <ScrollText /> icon outside the ProjectSelector's
+              trigger button. ProjectSelector has no built-in icon slot, and adding one solely for
+              this consumer would expand its API. The icon was decorative on the prior ComboBox
+              (no click handler), so keeping it adjacent to — rather than inside — the trigger
+              preserves the visual affordance without bloating the canonical component.
+
+              No groupings at all are offered here, and that is deliberate rather than an
+              oversight. platform-bible-react is intentionally PAPI-free (see CLAUDE.md
+              "Symlinked Directories" / lib boundaries), so this component cannot reach project
+              settings or the recently-opened-projects service, and its public `ProjectInfo` prop
+              carries only an id and a name — there is no language, type, or recency to group by.
+              `useOpenProjectTabs` likewise lives in the extension layer, so `openTabs={[]}` keeps
+              the ProjectSelector on a flat (non-grouped) list. A consumer that wants grouping
+              passes `openTabs` and richer rows in via new props on this component.
+            */}
+            <div
+              className={cn(
+                'tw:flex tw:w-full tw:items-center tw:gap-2 tw:rounded-md tw:px-2 tw:py-1',
+                {
+                  'tw:bg-sidebar-accent tw:text-sidebar-accent-foreground':
+                    selectedSidebarItem?.projectId,
+                },
+              )}
+            >
+              <ScrollText className="tw:h-4 tw:w-4 tw:shrink-0" />
+              <ProjectSelector
+                mode="project"
+                projects={projectSelectorProjects}
+                openTabs={[]}
+                selection={{ projectId: selectedSidebarItem?.projectId ?? '' }}
+                onChangeSelection={({ projectId: nextId }) => {
+                  if (!nextId) return;
+                  const selectedProjectName = getProjectNameFromProjectId(nextId);
+                  handleSelectItem(selectedProjectName, nextId);
+                }}
+                buttonVariant="ghost"
+                buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
+                localizedStrings={projectSelectorStrings}
+                triggerLabelFormat="shortNameAndFullName"
+              />
+            </div>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

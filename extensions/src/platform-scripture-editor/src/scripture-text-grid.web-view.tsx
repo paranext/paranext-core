@@ -1,0 +1,657 @@
+import type { WebViewProps } from '@papi/core';
+import papi, { logger } from '@papi/frontend';
+import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
+import {
+  Button,
+  ContentZoomRoot,
+  EmptyState,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  RetryableErrorView,
+  useRetryablePromise,
+  useTabIconSelection,
+  type TabIconUrls,
+} from 'platform-bible-react';
+import { CloudOff, Settings2 } from 'lucide-react';
+import {
+  DblResourceData,
+  formatReplacementString,
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+} from 'platform-bible-utils';
+import type { DblResourceReference, ProjectReference } from 'platform-scripture';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useInstallDblResource } from './use-install-dbl-resource.hook';
+import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
+import {
+  getOrderedScriptureTextGridContents,
+  reorderShownIds,
+  reconcileCellOrder,
+} from './scripture-text-grid-order.utils';
+import { resolveDblLongName } from './scripture-text-grid/view-options-long-name.utils';
+import {
+  DOWNLOADED_NO_PROJECT_KEY,
+  resolveLocalizedString,
+  resolvePickerNotice,
+  VIEW_OPTIONS_NOTICE_STRING_KEYS,
+} from './scripture-text-grid/view-options-notice.utils';
+import { planResourcePick } from './scripture-text-grid/resource-pick.utils';
+import {
+  persistCellOrder,
+  persistUserAddition,
+  persistUserDisplay,
+  persistUserRemoval,
+} from './scripture-text-grid-persistence.utils';
+import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
+import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { useTextCollectionProjectId } from './use-text-collection-project-id.hook';
+import {
+  ResourceCollectionOptions,
+  RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  type ResourceCollectionViewMode,
+} from './resource-collection-options/resource-collection-options.component';
+import {
+  ChapterContextResource,
+  ScriptureTextGrid,
+} from './scripture-text-grid/scripture-text-grid.component';
+import { GridResource } from './scripture-text-grid/resource-cell.component';
+import { toGridResources } from './scripture-text-grid/grid-resources.utils';
+import { getGridBodyState } from './scripture-text-grid/grid-body-state.utils';
+import { isNonDblResource } from './resource-reference.utils';
+import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
+import { useResourceZoom } from './scripture-text-grid/use-resource-zoom.hook';
+import {
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
+  type ZoomMenuLabels,
+} from './scripture-text-grid/resource-cell-view.component';
+
+// The tab's visible title, hover tooltip, and accessible name. The title/tooltip themselves are
+// resolved and set by scriptureTextGridWebViewProvider in main.ts (not by this web view); this key
+// is still needed here for the accessible name below.
+const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPanel%';
+// Notification keys are localized by the notification service, so they are NOT fetched via
+// `useLocalizedStrings`; only keys rendered directly in JSX go in `ALL_STRING_KEYS` below.
+const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
+const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
+const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
+const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
+const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
+const CATALOG_ERROR_KEY = '%webView_scriptureTextGrid_catalogUnavailable%';
+const CATALOG_RETRY_KEY = '%webView_scriptureTextGrid_retry%';
+const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
+// Screen-reader announcements for the chapter-context split opening/closing.
+const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
+const ARIA_CLOSED_KEY = '%webView_scriptureTextGrid_aria_chapterContextClosed%';
+const REORDER_ANNOUNCEMENT_KEY = '%webView_scriptureTextGrid_cell_reorderAnnouncement%';
+const REORDER_HANDLE_KEY = '%webView_scriptureTextGrid_cell_reorderHandle%';
+const REORDER_HINT_KEY = '%webView_scriptureTextGrid_cell_reorderHint%';
+
+const ALL_STRING_KEYS: LocalizeKey[] = [
+  TITLE_KEY,
+  VIEW_OPTIONS_BUTTON_KEY,
+  NO_PROJECT_KEY,
+  ...VIEW_OPTIONS_NOTICE_STRING_KEYS,
+  CHAPTER_CONTEXT_CLOSE_KEY,
+  EMPTY_STATE_KEY,
+  CATALOG_ERROR_KEY,
+  CATALOG_RETRY_KEY,
+  CELL_ACCESSIBLE_NAME_KEY,
+  ARIA_OPENED_KEY,
+  ARIA_CLOSED_KEY,
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
+  REORDER_ANNOUNCEMENT_KEY,
+  REORDER_HANDLE_KEY,
+  REORDER_HINT_KEY,
+  ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+];
+
+// Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
+// `currentColor` SVG can't follow the theme. We swap the `iconUrl` based on both the current theme
+// and the tab's selected state (light theme: white when selected, near-black when unselected,
+// mid-slate fallback when selection state is unknown; dark theme: always light).
+const TAB_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://platformScriptureEditor/assets/library.svg',
+  dark: 'papi-extension://platformScriptureEditor/assets/library-dark.svg',
+  lightSelected: 'papi-extension://platformScriptureEditor/assets/library-selected.svg',
+  lightUnselected: 'papi-extension://platformScriptureEditor/assets/library-unselected.svg',
+};
+
+/**
+ * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, the View
+ * Options panel, and the resource body (verse mode / chapter mode).
+ *
+ * The header hosts the View Options icon button + popover wrapping the reusable
+ * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
+ * through the per-user text-connection PDP setters. Below the header, the body renders one
+ * `ResourceCell` per shown resource — the resources come from the
+ * `getOrderedScriptureTextGridContents` selector over the Text Collection sources assembled by
+ * `useTextCollectionSources`. The `viewMode` toggle selects the layout: a vertical list of stacked
+ * verse rows (verse mode), or a horizontal row of side-by-side full-chapter columns (chapter mode).
+ * In chapter mode the columns are reorderable (drag or keyboard); the persisted order is wired via
+ * `handleReorder`.
+ */
+globalThis.webViewComponent = function ScriptureTextGridWebView({
+  id: webViewId,
+  projectId,
+  updateWebViewDefinition,
+  useWebViewScrollGroupScrRef,
+  useWebViewState,
+}: WebViewProps) {
+  const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
+
+  const zoom = useResourceZoom(useWebViewState);
+  const zoomMenuLabels = useMemo<ZoomMenuLabels>(
+    () => ({
+      zoomIn: localizedStrings[ZOOM_IN_KEY],
+      zoomOut: localizedStrings[ZOOM_OUT_KEY],
+      reset: localizedStrings[RESET_ZOOM_KEY],
+      options: localizedStrings[ZOOM_OPTIONS_KEY],
+    }),
+    [localizedStrings],
+  );
+
+  // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
+  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  // The project whose text collection the grid shows. Opened from the default layout the tab carries
+  // no projectId, so this takes the first project the active editor reports and keeps it; only an
+  // explicit `projectId` moves it. See useTextCollectionProjectId.
+  const effectiveProjectId = useTextCollectionProjectId(projectId);
+
+  const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
+
+  // Latest sources for the async callbacks below — reading the render-closure `sources` would let a
+  // rapid second toggle (or a toggle mid-install) compute its next-state from a pre-write snapshot
+  // and clobber the first write. A ref always hands the callbacks the freshest snapshot.
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+
+  // View Options `viewMode` toggle; drives the grid body's verse/chapter layout. Persisted per web
+  // view via useWebViewState so the choice survives an app restart (mirrors resource-text-panel).
+  const [viewMode, setViewMode] = useWebViewState<ResourceCollectionViewMode>('viewMode', 'verse');
+  // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
+  // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
+  const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
+  // Increment to re-fetch cachedResources. The initial fetch runs once at mount; after any resource
+  // installation (including one done in the picker dialog before it returned), the `installed` flag
+  // in the cached list is stale, so `toGridResources` can't resolve the new resource to a projectId.
+  // Bumping this counter triggers a fresh getCachedResources call which re-validates installed flags.
+  const [refreshCounter, setRefreshCounter] = useState(0);
+
+  // Chapter-context overlay opened from a verse cell; Escape closes it. Intentionally NOT cleared on
+  // a view-mode switch: chapter mode ignores it, and keeping it restores the open split when the user
+  // returns to verse mode.
+  const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
+    undefined,
+  );
+  // Live-region message announced when the chapter-context split opens or closes (rendered into the
+  // `role="status"` region below).
+  const [announcement, setAnnouncement] = useState('');
+  const handleChapterContextChange = useCallback(
+    (context: ChapterContextResource) => {
+      setChapterContext(context);
+      setAnnouncement(
+        buildChapterContextOpenedMessage(localizedStrings[ARIA_OPENED_KEY] ?? '', context.label),
+      );
+    },
+    [localizedStrings],
+  );
+  const handleCloseChapterContext = useCallback(() => {
+    setChapterContext(undefined);
+    setAnnouncement(localizedStrings[ARIA_CLOSED_KEY] ?? '');
+  }, [localizedStrings]);
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || chapterContext === undefined) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handleCloseChapterContext();
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [chapterContext, handleCloseChapterContext]);
+
+  // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
+  // installed project id the cell fetches chapter text with; project references need no lookup. It
+  // also supplies the DBL `fullName` shown as the long name in the View Options list.
+  // Re-fetched on `refreshCounter` bumps, which the install path fires only after waiting for the
+  // catalog's flags to be brought up to date — this read itself does not wait for them.
+  const {
+    data: catalog,
+    isLoading: isCatalogLoading,
+    hasError: hasCatalogFetchError,
+    hasSettled: hasCatalogSettled,
+    refetch: refetchCatalog,
+  } = useRetryablePromise(
+    useCallback(
+      () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      // refreshCounter is a refresh-trigger counter: the factory doesn't use its value, but each
+      // bump creates a new function reference so the fetch re-runs and re-validates installed
+      // flags — necessary after any installation completes.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [refreshCounter],
+    ),
+  );
+
+  // `!hasCatalogSettled` counts as loading, not just `isLoading`, so the render between a retry
+  // click and the effect that restarts the fetch cannot paint a settled-looking empty grid.
+  const isLoadingCachedResources = isCatalogLoading || !hasCatalogSettled;
+
+  // An installation with no DBL credentials is a catalog with nothing in it — an answer this grid
+  // can render, because it only reads the catalog to resolve long names and installed project ids.
+  // A rejected fetch and a provider that has not registered yet are NOT that answer: the catalog is
+  // still coming, and folding either into an empty one turns every configured DBL reference into an
+  // unavailable cell under a truthful-looking "add some texts" prompt.
+  const hasCatalogError =
+    hasCatalogFetchError || (catalog?.status === 'unavailable' && catalog.reason === 'notReady');
+
+  useEffect(() => {
+    if (hasCatalogError)
+      logger.warn(
+        'Scripture Text Grid: the DBL resource catalog is unavailable, so DBL references cannot be resolved',
+      );
+  }, [hasCatalogError]);
+
+  const cachedResources = useMemo(
+    () => (catalog?.status === 'available' ? catalog.resources : undefined),
+    [catalog],
+  );
+
+  const { top, bottom } = useMemo(
+    () =>
+      sources
+        ? getViewOptionsTexts(sources, (reference) =>
+            resolveDblLongName(reference, cachedResources ?? []),
+          )
+        : { top: [], bottom: [] },
+    [sources, cachedResources],
+  );
+
+  // The grid body's cells: the `getOrderedScriptureTextGridContents` selector over the Text
+  // Collection sources, resolved to the row's `{ resourceId, projectId, label }` shape. The selector returns
+  // already-filtered, ordered Bible-text refs.
+  const resources = useMemo<GridResource[]>(
+    () =>
+      toGridResources(
+        sources ? getOrderedScriptureTextGridContents(sources) : [],
+        cachedResources ?? [],
+      ),
+    [sources, cachedResources],
+  );
+
+  // Ctrl+F opens Find for the resource the caret is in. Unlike the single-resource reference panels,
+  // this view shows several texts at once, so there is no "displayed resource" to fall back to —
+  // before the user has put the caret in a cell, Ctrl+F is a logged no-op.
+  const displayedProjectIds = useMemo(
+    () =>
+      resources
+        .map((resource) => resource.projectId)
+        .filter((id): id is string => id !== undefined),
+    [resources],
+  );
+  const caretResourceProjectId = useFocusedResourceProjectId(displayedProjectIds);
+  useOpenFindShortcut(webViewId, caretResourceProjectId);
+
+  // The grid is one web view hosting many projects, so its members are invisible to global
+  const gridBodyState = getGridBodyState({
+    hasRows: resources.length > 0,
+    hasSources: sources !== undefined,
+    hasCatalogError,
+    isLoading: isLoadingCachedResources || isLoadingLocalizedStrings,
+  });
+
+  // navigation UI unless declared here.
+  // `resources` — and so `displayedProjectIds` — is transiently empty until the sources and the
+  // cached DBL list have both loaded, which is indistinguishable from "every project was removed".
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    displayedProjectIds,
+    sources !== undefined && !isLoadingCachedResources,
+    // A project switch re-points this panel by reloading it, which reuses the web view id, so the
+    // published list would otherwise outlive the project it was built for.
+    effectiveProjectId,
+  );
+
+  const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
+
+  // Bumping the cache key is what makes the grid re-resolve, so it is this panel's "re-resolve the
+  // resource list" step and belongs in the hook's `onInstalled`.
+  const handleResourceInstalled = useCallback(() => setRefreshCounter((k) => k + 1), []);
+  const installResource = useInstallDblResource(
+    dblResourcesProvider,
+    'scripture text grid',
+    handleResourceInstalled,
+  );
+
+  // Fire first-open overlay init once per resolved projectId. The server-side marker makes repeated
+  // calls safe; this guard just avoids redundant round-trips within a single web-view lifetime.
+  const initializedProjectIds = useRef(new Set<string>());
+  useEffect(() => {
+    if (!effectiveProjectId || !textConnectionPdp) return;
+    if (initializedProjectIds.current.has(effectiveProjectId)) return;
+    initializedProjectIds.current.add(effectiveProjectId);
+    textConnectionPdp.initializeTextCollectionOverlay().catch((error) => {
+      initializedProjectIds.current.delete(effectiveProjectId);
+      logger.error(
+        `Failed to initialize text-collection overlay for ${effectiveProjectId}: ${error}`,
+      );
+    });
+  }, [effectiveProjectId, textConnectionPdp]);
+
+  // "Text Collection" (icon+title when the column is roomy, hidden in favor of the icon alone once
+  // it narrows — same responsive behavior as the other Column 3 tabs) is resolved and set directly
+  // by scriptureTextGridWebViewProvider in main.ts, not here: this web view's own render/effects
+  // don't reliably run promptly while its tab is backgrounded, which previously left the header
+  // blank until the tab was activated once, even though updateWebViewDefinition had already pushed
+  // the correct value. Setting it in the provider means the tab shows the right title/tooltip from
+  // its very first render, independent of this web view's own mount timing.
+
+  // Pick the tab icon variant to match the current theme and selected state. The tab icon is
+  // painted by the platform as a static background-image, so a `currentColor` SVG can't follow the
+  // theme — subscribe to the theme here (PAPI-specific) and let the shared hook handle selection
+  // detection and variant picking.
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    papi.themes
+      .subscribeCurrentTheme(undefined, (theme) => {
+        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
+      })
+      .then((unsub) => {
+        if (disposed) unsub();
+        else unsubscribe = unsub;
+        return undefined;
+      })
+      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
+
+  const gridIconUrl = useTabIconSelection(isDarkTheme, TAB_ICON_URLS);
+  useEffect(() => {
+    updateWebViewDefinition({ iconUrl: gridIconUrl });
+  }, [gridIconUrl, updateWebViewDefinition]);
+
+  const handleCheckedChange = useCallback(
+    (resourceId: string, checked: boolean) => {
+      const { current } = sourcesRef;
+      if (!current || !textConnectionPdp) return;
+      const writes = persistUserDisplay(textConnectionPdp, resourceId, checked, current);
+      // `Promise.all` rejects on the first failed write, so a failed toggle notifies once (not once
+      // per underlying list/overlay write).
+      Promise.all(writes).catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist view-options change: ${getErrorMessage(e)}`);
+      });
+    },
+    [textConnectionPdp],
+  );
+
+  const handleRemoveFromList = useCallback(
+    (resourceId: string) => {
+      const { current } = sourcesRef;
+      if (!current || !textConnectionPdp) return;
+      persistUserRemoval(textConnectionPdp, resourceId, current.userReferenced)?.catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`);
+      });
+    },
+    [textConnectionPdp],
+  );
+
+  const handleReorder = useCallback(
+    (newShownIdSequence: string[]) => {
+      const { current } = sourcesRef;
+      if (!current || !textConnectionPdp) return;
+      const nextOrder = reorderShownIds(current.order, newShownIdSequence);
+      persistCellOrder(textConnectionPdp, nextOrder).catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist cell order: ${getErrorMessage(e)}`);
+      });
+    },
+    [textConnectionPdp],
+  );
+
+  const getReorderHandleLabel = useCallback(
+    (resourceName: string) =>
+      formatReplacementString(localizedStrings[REORDER_HANDLE_KEY] ?? '', { resourceName }),
+    [localizedStrings],
+  );
+  const getReorderAnnouncement = useCallback(
+    (resourceName: string, position: number, total: number) =>
+      formatReplacementString(localizedStrings[REORDER_ANNOUNCEMENT_KEY] ?? '', {
+        resourceName,
+        position,
+        total,
+      }),
+    [localizedStrings],
+  );
+
+  const handleResourceSelect = useCallback(
+    async (resource: DblResourceData) => {
+      const plan = planResourcePick(!!resource.installed, !!textConnectionPdp);
+      if (plan.shouldInstall) {
+        if (!dblResourcesProvider) return;
+        const pending = { id: resource.dblEntryUid, name: resource.displayName };
+        setInstalling((prev) => [...prev, pending]);
+        try {
+          // Installs, waits for the catalog's flags to catch up, then bumps the cache key. The
+          // wait is the point: `getCachedResources` answers from a cache it corrects in the
+          // background, so re-reading without it returns the flags from before this install.
+          await installResource(resource.dblEntryUid);
+        } catch {
+          // `installResource` already logged the cause; this panel's channel for it is the toast.
+          papi.notifications.send({ message: INSTALL_FAILED_KEY, severity: 'error' });
+          return;
+        } finally {
+          setInstalling((prev) => prev.filter((info) => info.id !== resource.dblEntryUid));
+        }
+      }
+
+      if (!textConnectionPdp) {
+        // Nothing in the panel behind the picker reflects a download that could not be added, so
+        // confirm it here — otherwise the "Installing…" row is the only sign it happened, and it
+        // disappears.
+        if (plan.shouldConfirmDownloadOnly)
+          papi.notifications.send({ message: DOWNLOADED_NO_PROJECT_KEY, severity: 'info' });
+        return;
+      }
+
+      // Re-read after the await: the subscription may have advanced during the install.
+      const { current } = sourcesRef;
+      if (!current) return;
+      const isLocalOnly = isNonDblResource(resource);
+      const reference: DblResourceReference | ProjectReference = isLocalOnly
+        ? { type: 'project', name: resource.displayName, id: resource.projectId }
+        : { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };
+      persistUserAddition(textConnectionPdp, reference, current.userReferenced)?.catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`);
+      });
+    },
+    [dblResourcesProvider, installResource, textConnectionPdp],
+  );
+
+  const selectedResourceIds = useMemo(
+    () => [...top, ...bottom].map((entry) => entry.reference.id),
+    [top, bottom],
+  );
+
+  // Reconcile the saved order: drop ids that have left the user's world (X-removed, or an admin
+  // entry no longer shared). `selectedResourceIds` is every resource the user still has (shown AND
+  // hidden), so hidden-but-known ids keep their saved slots. Reads sourcesRef.current for freshness;
+  // `sources` is in the deps only to re-run on subscription updates. reconcileCellOrder persists
+  // only on a real change, so the subscribe→persist→subscribe cycle converges. (A reorder persisted
+  // in the same tick that a resource is removed is a narrow last-writer-wins window; acceptable —
+  // the next delivery reconciles.)
+  useEffect(() => {
+    const { current } = sourcesRef;
+    if (!current || !textConnectionPdp) return;
+    const next = reconcileCellOrder(current.order, selectedResourceIds);
+    if (!next) return;
+    persistCellOrder(textConnectionPdp, next).catch((e) =>
+      logger.warn(`Failed to reconcile cell order: ${getErrorMessage(e)}`),
+    );
+  }, [sources, textConnectionPdp, selectedResourceIds]);
+
+  const showResourcePicker = useDialogCallback(
+    'platform.resourcePicker',
+    useMemo(
+      () => ({
+        resourceType: ['ScriptureResource', 'CommentaryResource'] as const,
+        selectedResourceIds,
+        isModal: true,
+        notice: resolvePickerNotice(localizedStrings, !!textConnectionPdp),
+        // With no text collection to add to, installing is all a pick can accomplish — so an
+        // already-installed resource would take the click and do nothing.
+        allowSelectingInstalled: !!textConnectionPdp,
+      }),
+      [selectedResourceIds, textConnectionPdp, localizedStrings],
+    ),
+    useCallback(
+      (resource: DblResourceData | undefined) => {
+        if (!resource) return;
+        handleResourceSelect(resource).catch((e) =>
+          logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
+        );
+      },
+      [handleResourceSelect],
+    ),
+  );
+
+  const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
+
+  return (
+    <div
+      data-testid="scripture-text-grid"
+      className="tw:flex tw:h-screen tw:flex-col tw:bg-background tw:text-foreground"
+    >
+      {/* Polite live region announcing chapter-context open/close. Placed at the top of the render
+          tree so it exists in the DOM before any announcement fires (a screen reader ignores text
+          present at initial render). */}
+      <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
+        {announcement}
+      </div>
+      <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
+        <Popover>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
+                    // Explicit themed colors so the icon is visible in both light and dark themes; a
+                    // plain ghost button inherits the (un-themed) default color and vanishes on dark
+                    // tabs.
+                    className="tw:text-muted-foreground tw:hover:text-foreground"
+                  >
+                    <Settings2 className="tw:h-4 tw:w-4" />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
+            <ResourceCollectionOptions
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              isChapterEnabled
+              top={top}
+              bottom={bottom}
+              installingResourceNames={installingResourceNames}
+              onCheckedChange={handleCheckedChange}
+              onRemoveFromList={handleRemoveFromList}
+              onGetResources={showResourcePicker}
+              // No project/PDP bound yet → every action would silently no-op, so disable the
+              // controls. Show the "no project" prompt only when there is genuinely no project (not
+              // during the brief load after one is bound).
+              disabled={!sources || !textConnectionPdp}
+              disabledMessage={
+                effectiveProjectId
+                  ? undefined
+                  : resolveLocalizedString(localizedStrings, NO_PROJECT_KEY)
+              }
+              localizedStrings={localizedStrings}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+      {/* Grid body: a message when nothing is renderable, otherwise the verse-cell rows.
+          Gate the message on loading being finished so it can't flash before data arrives —
+          `sources` undefined and `cachedResources` still loading each make `resources` transiently
+          empty (a DBL ref resolves to a cell only once the cached list loads). The
+          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
+
+          Named as its own zoom area ("text-collection") so its remembered level is kept apart from
+          this project's other resource panes, which resolve to the same kind/identity pair and
+          would otherwise all read one remembered level. The View Options row above stays outside so
+          it keeps its size while the grid scales. */}
+      <ContentZoomRoot area="text-collection" className="tw:flex-1 tw:overflow-hidden">
+        {gridBodyState === 'catalogError' && (
+          <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+            <RetryableErrorView
+              icon={<CloudOff />}
+              message={localizedStrings[CATALOG_ERROR_KEY]}
+              retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
+              onRetry={refetchCatalog}
+            />
+          </div>
+        )}
+        {gridBodyState === 'empty' && (
+          // Centered in the grid body; the message names the View Options button by interpolating
+          // its own localized label so a rename can't desync the copy.
+          <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+            <EmptyState
+              id="scripture-text-grid-empty-state"
+              className="tw:text-center"
+              message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
+                viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+              })}
+            />
+          </div>
+        )}
+        {gridBodyState === 'grid' && (
+          <ScriptureTextGrid
+            ariaLabel={localizedStrings[TITLE_KEY]}
+            resources={resources}
+            scrRef={scrRef}
+            setScrRef={setScrRef}
+            viewMode={viewMode}
+            zoom={zoom}
+            zoomMenuLabels={zoomMenuLabels}
+            chapterContext={chapterContext}
+            onChapterContextChange={handleChapterContextChange}
+            onChapterContextClose={handleCloseChapterContext}
+            closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+            cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
+            onReorder={handleReorder}
+            getReorderHandleLabel={getReorderHandleLabel}
+            reorderHint={localizedStrings[REORDER_HINT_KEY]}
+            getReorderAnnouncement={getReorderAnnouncement}
+          />
+        )}
+      </ContentZoomRoot>
+    </div>
+  );
+};

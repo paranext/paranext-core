@@ -170,6 +170,11 @@ export class LexicalReferenceProjectDataProviderEngine
         // TypeScript doesn't realize ProjectSettingName is 'platform.name' in this case for some reason
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         return false as ProjectSettingTypes[ProjectSettingName];
+      case 'platform.isPublished':
+        // Lexical reference texts are published reference materials.
+        // TypeScript doesn't realize ProjectSettingName is 'platform.isPublished' here.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        return true as ProjectSettingTypes[ProjectSettingName];
       default:
         return papi.projectSettings.getDefault(key);
     }

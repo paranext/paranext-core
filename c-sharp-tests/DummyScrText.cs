@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
@@ -21,7 +22,10 @@ namespace TestParanextDataProvider
                 new ProjectName
                 {
                     ShortName = projectDetails.Name,
-                    ProjectPath = projectDetails.HomeDirectory
+                    ProjectPath = EnsureNonEmptyHomeDirectory(
+                        projectDetails.HomeDirectory,
+                        projectDetails.Metadata.Id
+                    ),
                 },
                 RegistrationInfo.DefaultUser
             )
@@ -30,7 +34,10 @@ namespace TestParanextDataProvider
             projectName = new ProjectName
             {
                 ShortName = projectDetails.Name + _id,
-                ProjectPath = projectDetails.HomeDirectory
+                ProjectPath = EnsureNonEmptyHomeDirectory(
+                    projectDetails.HomeDirectory,
+                    projectDetails.Metadata.Id
+                ),
             };
 
             Settings.Editable = true;
@@ -49,13 +56,57 @@ namespace TestParanextDataProvider
         }
 
         public DummyScrText()
-            : this(
-                new ProjectDetails(
-                    "Dummy",
-                    new ProjectMetadata(HexId.CreateNew().ToString(), []),
-                    ""
-                )
-            ) { }
+            : this(CreateUniqueDummyDetails()) { }
+
+        /// <summary>
+        /// Build <see cref="ProjectDetails"/> with a unique, non-empty
+        /// <see cref="ProjectDetails.HomeDirectory"/> per invocation.
+        /// </summary>
+        /// <remarks>
+        /// Using an empty <c>HomeDirectory</c> causes multiple instances to
+        /// share the same <c>ProjectPath</c> on the resulting <c>ScrText</c>.
+        /// When several such instances are added to the global
+        /// <c>ScrTextCollection</c> via <c>FakeAddProject</c>, internal
+        /// path-indexed lookups inside
+        /// <c>ScrTextCollection.RefreshScrTextsInternal</c> fail a
+        /// <c>SingleOrDefault</c> call with "Sequence contains more than one
+        /// matching element" the next time <c>ParatextData.Initialize</c> is
+        /// called — even after the tests that added them have completed and
+        /// called <c>ScrTextCollection.Remove</c>. A unique non-empty path
+        /// per instance sidesteps the collision entirely.
+        /// </remarks>
+        private static ProjectDetails CreateUniqueDummyDetails()
+        {
+            var id = HexId.CreateNew().ToString();
+            return new ProjectDetails("Dummy", new ProjectMetadata(id, []), "testDirectory_" + id);
+        }
+
+        /// <summary>
+        /// Returns <paramref name="homeDirectory"/> when non-empty; otherwise
+        /// returns a unique fake path derived from <paramref name="id"/>.
+        /// </summary>
+        /// <remarks>
+        /// Idempotent: for a given <paramref name="id"/>, multiple calls with
+        /// an empty <paramref name="homeDirectory"/> return the same
+        /// substituted path, so the constructor's two invocations (for the
+        /// <c>base(...)</c> call and the field assignment) stay consistent.
+        /// Protects all callers of the parameterized constructor — not just
+        /// the parameterless overload — from the collision described on
+        /// <see cref="CreateUniqueDummyDetails"/>.
+        /// </remarks>
+        private static string EnsureNonEmptyHomeDirectory(string homeDirectory, string id) =>
+            string.IsNullOrEmpty(homeDirectory) ? "testDirectory_" + id : homeDirectory;
+
+        /// <summary>
+        /// Replaces the stylesheet served for non-canonical (front/back matter) books.
+        /// The constructor points the front/back cache at the same
+        /// <see cref="DummyScrStylesheet"/> as the default cache, so per-book stylesheet
+        /// resolution in <c>ScrText.ScrStylesheet(bookNum)</c> is invisible until a test
+        /// installs a distinct stylesheet here. Canonical books keep resolving to
+        /// <see cref="ScrText.DefaultStylesheet"/>.
+        /// </summary>
+        public void SetFrontBackStylesheet(ScrStylesheet stylesheet) =>
+            cachedFrontBackStylesheet.Set(stylesheet);
 
         protected override void Load(bool ignoreLoadErrors = false)
         {
@@ -74,7 +125,7 @@ namespace TestParanextDataProvider
                 {
                     FullName = "Test ScrText",
                     MinParatextDataVersion = ParatextInfo.MinSupportedParatextDataVersion,
-                    Guid = _id
+                    Guid = _id,
                 };
 
             return settings;
@@ -130,7 +181,30 @@ namespace TestParanextDataProvider
                 string? relDirPath = null
             )
             {
-                return Enumerable.Empty<string>();
+                // Return the in-memory files (written via SetXml / the writers) whose name matches the
+                // glob, non-recursively within relDirPath (project root when null) - the same slice
+                // Directory.GetFiles would give. A prior stub returned nothing, so CommentManager.Load()
+                // - which rebuilds its comment list purely from ProjectFiles("Notes_*.xml") - saw zero
+                // files and dropped every seeded comment whenever a reload was triggered.
+                var regex = new Regex(
+                    "^"
+                        + Regex.Escape(searchPattern).Replace("\\*", ".*").Replace("\\?", ".")
+                        + "$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+                );
+                string dir = relDirPath ?? "";
+                // Snapshot the keys: Load() enumerates this on a worker thread while other comment
+                // operations may mutate _fileSystem.
+                return _fileSystem
+                    .Keys.ToList()
+                    .Where(key =>
+                        string.Equals(
+                            Path.GetDirectoryName(key) ?? "",
+                            dir,
+                            StringComparison.OrdinalIgnoreCase
+                        ) && regex.IsMatch(Path.GetFileName(key))
+                    )
+                    .ToList();
             }
 
             public override IEnumerable<string> ProjectDirectories(
@@ -138,7 +212,30 @@ namespace TestParanextDataProvider
                 string? relDirPath = null
             )
             {
-                return Enumerable.Empty<string>();
+                // Derive directories from the stored file keys, mirroring ProjectFiles' glob
+                // handling, so code that scans directories and then their files works against the
+                // in-memory store.
+                var regex = new Regex(
+                    "^"
+                        + Regex.Escape(searchPattern).Replace("\\*", ".*").Replace("\\?", ".")
+                        + "$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+                );
+                string dir = relDirPath ?? "";
+                return _fileSystem
+                    .Keys.ToList()
+                    .Select(key => Path.GetDirectoryName(key) ?? "")
+                    .Where(parent =>
+                        parent != ""
+                        && string.Equals(
+                            Path.GetDirectoryName(parent) ?? "",
+                            dir,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                        && regex.IsMatch(Path.GetFileName(parent))
+                    )
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
             }
 
             public override void WriteFileCreatingBackup(

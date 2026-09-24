@@ -9,19 +9,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn-ui/table';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Table> = {
   title: 'Shadcn/Table',
   component: Table,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   argTypes: {
     stickyHeader: { control: 'boolean' },
   },

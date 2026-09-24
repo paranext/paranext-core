@@ -4,7 +4,17 @@ import { CardTitle } from 'platform-bible-react';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useEffect, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
-import { Home, HomeProps, LocalProjectInfo, HOME_STRING_KEYS } from './home.component';
+import { alertCommand, rejectingMock } from '../../../../.storybook/story.utils';
+import {
+  Home,
+  HomeProps,
+  LocalProjectInfo,
+  HOME_STRING_KEYS,
+  type RemoteProjectsState,
+} from './home.component';
+
+const GET_STARTED_URL =
+  'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio';
 
 // Get all localized strings needed by the Home component
 const localizedStrings = getLocalizedStrings([...HOME_STRING_KEYS]);
@@ -12,28 +22,30 @@ const localizedStrings = getLocalizedStrings([...HOME_STRING_KEYS]);
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '1',
-    isEditable: false,
+    isPublished: true,
     fullName: 'Resource 1',
     name: 'Res1',
     language: 'myLanguage',
   },
   {
     projectId: '2',
-    isEditable: false,
+    isPublished: true,
     fullName: 'Resource 2',
     name: 'Res2',
     language: 'English',
   },
   {
     projectId: '13',
-    isEditable: true,
+    isPublished: false,
     fullName: 'Project 4 - editable',
     name: 'Pr4',
     language: '2ndLanguage',
   },
   {
     projectId: '14',
-    isEditable: false,
+    // Non-published but non-editable Scripture text (e.g. Paratext Editable=F) — should appear
+    // with the unpublished-project icon, not the published-resource icon.
+    isPublished: false,
     fullName:
       'Project 3 - read-only This_is_a_project_with_a_very_long_name_01234567890_!/"§$%&/()=?_öäüß',
     name: 'Pr3',
@@ -41,14 +53,14 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   },
   {
     projectId: '25',
-    isEditable: true,
+    isPublished: false,
     fullName: 'Project 5 - editable',
     name: 'Pr5',
     language: 'German',
   },
   {
     projectId: '26',
-    isEditable: false,
+    isPublished: true,
     fullName: 'SDBH/SDBG',
     name: 'SdDict',
     language: 'Hebrew/Greek',
@@ -102,11 +114,11 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
   const [sharedProjectsAndResources, setSharedProjectsAndResources] = useState<SharedProjectsInfo>(
     {},
   );
-  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+  const [remoteProjectsState, setRemoteProjectsState] = useState<RemoteProjectsState>('loading');
   useEffect(() => {
     const timeout = setTimeout(() => {
       setSharedProjectsAndResources(staticProjectsAndResources);
-      setIsLoadingRemoteProjects(false);
+      setRemoteProjectsState('loaded');
     }, 2000);
     return () => clearTimeout(timeout);
   }, []);
@@ -118,23 +130,26 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
         localProjectsInfo: localProjectsAndResources,
         isLoadingLocalProjects,
         sharedProjectsInfo: sharedProjectsAndResources,
-        isLoadingRemoteProjects,
+        remoteProjectsState,
         headerContent: (
           <>
             <HomeIcon size="36" />
-            <CardTitle>Home or New Tab</CardTitle>
+            <CardTitle>Home</CardTitle>
           </>
         ),
-        onOpenProject: () => {
-          // Show an alert for demonstration purposes
-          // eslint-disable-next-line no-alert
-          alert('Open project');
-        },
-        onSendReceiveProject: () => {
-          // Show an alert for demonstration purposes
-          // eslint-disable-next-line no-alert
-          alert('Send/Receive project');
-        },
+        onOpenProject: (projectId, isPublished) =>
+          alertCommand(
+            isPublished
+              ? 'platformScriptureEditor.openResourceViewer'
+              : 'platformScriptureEditor.openScriptureEditor',
+            { projectId },
+          ),
+        onSendReceiveProject: (projectId) =>
+          alertCommand('paratextBibleSendReceive.sendReceiveProjects', {
+            projectIds: [projectId],
+          }),
+        onOpenGetResources: () => alertCommand('platformGetResources.openGetResources'),
+        onGetStarted: () => alertCommand('platform.openWindow', { url: GET_STARTED_URL }),
       }}
     />
   );
@@ -152,7 +167,7 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
   const onlyWebProjectList: LocalProjectInfo[] = [
     {
       projectId: '0',
-      isEditable: false,
+      isPublished: true,
       fullName: 'The WEB project',
       name: 'WEB',
       language: 'myLanguage',
@@ -171,4 +186,97 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
 
 export const OnlyWebProject: Story = {
   decorators: [OnlyWebProjectDecorator],
+};
+
+/**
+ * Demonstrates how the component surfaces a _business_ failure: clicking the sync/get button for a
+ * shared project triggers a rejected `onSendReceiveProject`, and the component shows the error in a
+ * destructive alert (not a "backend unavailable" error).
+ */
+function SendReceiveErrorDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        sharedProjectsInfo: staticProjectsAndResources,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+        onOpenProject: (projectId, isPublished) =>
+          alertCommand(
+            isPublished
+              ? 'platformScriptureEditor.openResourceViewer'
+              : 'platformScriptureEditor.openScriptureEditor',
+            { projectId },
+          ),
+        onSendReceiveProject: rejectingMock(
+          'Cannot send/receive: project is locked by another user',
+        ),
+      }}
+    />
+  );
+}
+
+export const SendReceiveError: Story = {
+  decorators: [SendReceiveErrorDecorator],
+};
+
+/**
+ * The send/receive server could not be reached, so the list holds only what is already on this
+ * computer.
+ */
+function ServerUnreachableDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        // Empty on purpose: an unreachable server yields no shared projects.
+        sharedProjectsInfo: {},
+        remoteProjectsState: 'unreachable',
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const ServerUnreachable: Story = {
+  decorators: [ServerUnreachableDecorator],
+};
+
+/**
+ * Home as the title bar's project picker footer opens it: scoped to editable projects, with the
+ * published resources left out. Compare with `Default`, which is the same data unscoped — the
+ * resource rows (`Res1`, `Res2`, `SdDict`) are the difference.
+ */
+function ProjectsOnlyDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        sharedProjectsInfo: staticProjectsAndResources,
+        shouldShowProjectsOnly: true,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const ProjectsOnly: Story = {
+  decorators: [ProjectsOnlyDecorator],
 };

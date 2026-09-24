@@ -36,7 +36,7 @@ export function DomainsDisplay({ domains, domainText }: DomainsDisplayProps) {
         <TooltipProvider key={domain.code}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="tw:rounded tw:bg-accent tw:px-2 tw:py-0.5 tw:text-xs tw:accent-foreground tw:flex tw:items-center tw:gap-1">
+              <span className="tw:rounded tw:bg-accent tw:px-2 tw:py-0.5 tw:text-xs tw:text-accent-foreground tw:flex tw:items-center tw:gap-1">
                 {getDomainIcon(domain.taxonomy)}
                 <span>{domain.code}</span>
                 <span>{domain.label ?? ''}</span>

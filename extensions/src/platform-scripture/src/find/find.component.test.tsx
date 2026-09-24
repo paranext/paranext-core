@@ -1,0 +1,1572 @@
+// @vitest-environment jsdom
+
+import { useRef, useState } from 'react';
+import '@testing-library/jest-dom';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { isProjectSelectorSharedKey, localizedValueFor } from '../project-selector.test-utils';
+import {
+  BookResultEntry,
+  Find,
+  FIND_LOCALIZED_STRING_KEYS,
+  FindProject,
+  FindProps,
+} from './find.component';
+import { LocalizedBookData } from './find-types';
+import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS } from './replace-preview-types';
+
+// jsdom implements none of ResizeObserver, IntersectionObserver, or matchMedia, and the render path
+// touches all three: platform-bible-react's Tooltip/Popover wire ResizeObservers and the shared
+// components query media features. No-op stubs keep rendering from throwing so these tests can
+// assert on what is rendered. The results container also calls scrollIntoView, which is shimmed
+// repo-wide in vitest.setup.ts.
+beforeAll(() => {
+  // `vi.stubGlobal` accepts `unknown`, so these no-op stubs need no type assertion to stand in for
+  // the real constructors — only `observe`/`disconnect` are ever reached from this render path.
+  const stubObserver = () =>
+    vi.fn(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+      takeRecords: vi.fn(() => []),
+    }));
+
+  vi.stubGlobal('ResizeObserver', stubObserver());
+  vi.stubGlobal('IntersectionObserver', stubObserver());
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
+
+  // Radix's PopoverContent calls scrollTo when it focuses children, which the project
+  // selector tests below reach by opening the picker.
+  if (!Element.prototype.scrollTo) Element.prototype.scrollTo = vi.fn();
+});
+
+/**
+ * Find's own keys whose values are merged onto the `ProjectSelector`'s `localizedStrings` bag as
+ * `ariaLabel`, `buttonPlaceholder` and `commandEmptyMessage`. Like the shared `%projectSelector_*%`
+ * block they must resolve to a real value; see the header comment in
+ * `../project-selector.test-utils` for why a stub's choice here decides which path a test takes.
+ */
+const PICKER_BOUND_FIND_KEYS: readonly LocalizeKey[] = [
+  '%webView_find_projectSelector_label%',
+  '%webView_find_projectFilter_noOpenProjectsOrResources%',
+  '%webView_find_projectFilter_noProjectsFound%',
+];
+
+/**
+ * Maps every localized key to the key itself, so assertions can target an exact, stable string
+ * without depending on the shipped English wording (which is free to change).
+ *
+ * The exceptions are the keys the picker reads: the shared `%projectSelector_*%` block (by
+ * membership, see {@link isProjectSelectorSharedKey}) and {@link PICKER_BOUND_FIND_KEYS}, which get a
+ * resolved value instead — see {@link localizedValueFor}. This component's other `%webView_find_*%`
+ * keys are rendered verbatim, so identity is still the clearest stub for them.
+ */
+function stubLocalizedStrings(keys: readonly LocalizeKey[]): LanguageStrings {
+  const strings: LanguageStrings = {};
+  keys.forEach((key) => {
+    strings[key] =
+      isProjectSelectorSharedKey(key) || PICKER_BOUND_FIND_KEYS.includes(key)
+        ? localizedValueFor(key)
+        : key;
+  });
+  return strings;
+}
+
+const NO_OPEN_PROJECTS_KEY = '%webView_find_noOpenProjectsOrResources_results%';
+const SEARCH_PROMPT_KEY = '%webView_find_searchPrompt%';
+/** The status-bar message for a completed search with 1 result and none hidden. */
+const STATUS_MESSAGE_KEY = '%webView_find_result%';
+
+/** Distinctive match text, so a rendered result card is unambiguous to assert on. */
+const RESULT_MATCH_TEXT = 'ZzMatchTextZz';
+
+const VERSE_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+
+const PROJECTS: FindProject[] = [{ id: 'WEB', shortName: 'WEB', fullName: 'World English Bible' }];
+const OPEN_TABS: ProjectSelectorOpenTab[] = [{ projectId: 'WEB', scrollGroupId: 0 }];
+
+const RESULT: HidableFindResult = {
+  text: RESULT_MATCH_TEXT,
+  start: { verseRef: VERSE_REF, offset: 0 },
+  end: { verseRef: VERSE_REF, offset: RESULT_MATCH_TEXT.length },
+};
+
+const RESULTS_BY_BOOK = new Map<string, BookResultEntry[]>([
+  ['GEN', [{ result: RESULT, originalIndex: 0 }]],
+]);
+
+const LOCALIZED_BOOK_DATA = new Map<string, LocalizedBookData>([
+  ['GEN', { localizedId: 'GEN', localizedName: 'Genesis' }],
+]);
+
+function buildProps(overrides: Partial<FindProps> = {}): FindProps {
+  return {
+    localizedStrings: stubLocalizedStrings(FIND_LOCALIZED_STRING_KEYS),
+    scopeSelectorLocalizedStrings: stubLocalizedStrings(SCOPE_SELECTOR_STRING_KEYS),
+    searchResultLocalizedStrings: stubLocalizedStrings(SEARCH_RESULT_LOCALIZED_STRING_KEYS),
+
+    projects: PROJECTS,
+    selectedProjectId: 'WEB',
+    selectedScrollGroupId: 0,
+    openTabs: OPEN_TABS,
+    isLoadingProjects: false,
+    noOpenProjects: false,
+    onSelectProjectScrollGroup: vi.fn(),
+    onSelectProject: vi.fn(),
+    onOpenProjectInGroup: vi.fn(),
+
+    searchTerm: 'God',
+    recentSearches: [],
+    scope: 'chapter',
+    verseRef: VERSE_REF,
+    booksPresent: '1'.repeat(123),
+    hasExcludedExtraMaterial: false,
+    selectedBookIds: [],
+    localizedBookData: LOCALIZED_BOOK_DATA,
+    shouldMatchCase: false,
+    ignoreWhitespaceDifferences: false,
+    ignoreDiacritics: false,
+    searchTextType: 'all',
+    wordRestriction: 'none',
+    isRegexAllowed: false,
+    activeMode: 'find',
+    replaceTerm: '',
+    preserveCase: false,
+    isReplacing: false,
+    isEditable: true,
+
+    results: [],
+    resultsByBook: new Map(),
+    focusedResultIndex: undefined,
+    searchStatus: undefined,
+    searchError: undefined,
+    searchProgress: 0,
+    totalNumberOfResults: 0,
+    numberOfHiddenResults: 0,
+    isPostReplaceSearch: false,
+
+    onSearchTermChange: vi.fn(),
+    onStartSearch: vi.fn(),
+    onStopSearch: vi.fn(),
+    setScope: vi.fn(),
+    onSelectedBookIdsChange: vi.fn(),
+    setSearchTextType: vi.fn(),
+    setWordRestriction: vi.fn(),
+    setShouldMatchCase: vi.fn(),
+    setIgnoreWhitespaceDifferences: vi.fn(),
+    setIgnoreDiacritics: vi.fn(),
+    setIsRegexAllowed: vi.fn(),
+    onToggleMode: vi.fn(),
+    onReplaceTermChange: vi.fn(),
+    onPreserveCaseChange: vi.fn(),
+    onFocusedResultChange: vi.fn(),
+    onHideResult: vi.fn(),
+    onReplace: vi.fn(),
+    onReplaceAll: vi.fn(),
+    onCancelReplace: vi.fn(),
+    onResultsScroll: vi.fn(),
+    getBookUsj: vi.fn().mockResolvedValue(undefined),
+    previewOptions: DEFAULT_REPLACE_PREVIEW_OPTIONS,
+
+    ...overrides,
+  };
+}
+
+describe('Find results area — no-open-projects placeholder', () => {
+  // `searchTerm: ''` is load-bearing: the idle prompt means "nothing has been searched YET", and a
+  // non-empty term with no status now means a search is pending, which shows the loading skeleton
+  // instead (see the results-area placeholder suite below). The shared `buildProps` defaults the
+  // term to 'God' for the result-rendering tests, so it has to be cleared here.
+  it('shows the search prompt when nothing has been searched yet', () => {
+    render(<Find {...buildProps({ searchTerm: '' })} />);
+
+    expect(screen.getByText(SEARCH_PROMPT_KEY)).toBeInTheDocument();
+    expect(screen.queryByText(NO_OPEN_PROJECTS_KEY)).not.toBeInTheDocument();
+  });
+
+  it('shows the no-open-projects placeholder instead of the search prompt when nothing is open', () => {
+    render(<Find {...buildProps({ noOpenProjects: true })} />);
+
+    expect(screen.getByText(NO_OPEN_PROJECTS_KEY)).toBeInTheDocument();
+    expect(screen.queryByText(SEARCH_PROMPT_KEY)).not.toBeInTheDocument();
+  });
+
+  it('renders results normally while a project is open', () => {
+    render(
+      <Find
+        {...buildProps({
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(RESULT_MATCH_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText(NO_OPEN_PROJECTS_KEY)).not.toBeInTheDocument();
+  });
+
+  // The regression this guards: every result-activation callback is gated on a target editor tab, so
+  // once the last tab closes the results still on screen are inert. Leaving them rendered invited
+  // clicks that silently did nothing, with no explanation of why the panel had stopped responding.
+  it('replaces results already on screen with the placeholder when the last tab closes', () => {
+    render(
+      <Find
+        {...buildProps({
+          noOpenProjects: true,
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(NO_OPEN_PROJECTS_KEY)).toBeInTheDocument();
+    // The inert results must be gone, not merely covered.
+    expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
+  });
+
+  it('suppresses the status bar so a stale result count cannot contradict the placeholder', () => {
+    const { rerender } = render(
+      <Find
+        {...buildProps({
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    // Baseline: with a project open, the completed-search status message is rendered. Matched on the
+    // exact key the status bar resolves for 1 result with none hidden — NOT a loose /showing/ regex,
+    // which would also match the scope control's "Showing" prefix in the header and pass vacuously.
+    expect(screen.getByText(STATUS_MESSAGE_KEY)).toBeInTheDocument();
+
+    rerender(
+      <Find
+        {...buildProps({
+          noOpenProjects: true,
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(STATUS_MESSAGE_KEY)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Two tabs of the SAME project in different scroll groups. In power mode this is what produces two
+ * separate rows badged "A" and "B" — precisely the surface simple mode must not show, since simple
+ * mode hides `ScrollGroupSelector` from both toolbars and the letters would name something the user
+ * cannot see or change.
+ */
+const OPEN_TABS_TWO_GROUPS: ProjectSelectorOpenTab[] = [
+  { projectId: 'WEB', scrollGroupId: 0 },
+  { projectId: 'WEB', scrollGroupId: 1 },
+];
+
+const OTHER_PROJECT: FindProject = { id: 'OTH', shortName: 'OTH', fullName: 'Other Bible' };
+
+/** The picker's resolved accessible name — see {@link PICKER_BOUND_FIND_KEYS}. */
+const PROJECT_SELECTOR_LABEL = localizedValueFor('%webView_find_projectSelector_label%');
+
+/**
+ * Radix Popover and cmdk rely on PointerEvent sequences `fireEvent.click` does not synthesize;
+ * `pointerEventsCheck: 0` is the standard jsdom workaround (mirrors the ProjectSelector's own
+ * tests).
+ */
+function setupUser() {
+  return userEvent.setup({ pointerEventsCheck: 0 });
+}
+
+function openProjectSelector(user: ReturnType<typeof setupUser>) {
+  return user.click(
+    screen.getByRole('combobox', { name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`) }),
+  );
+}
+
+/** Opens the Find filters panel, which is where every filter control lives */
+function openFilters(user: ReturnType<typeof setupUser>) {
+  return user.click(screen.getByRole('button', { name: 'Toggle filters' }));
+}
+
+describe("Find project selector — Find's own strings unresolved", () => {
+  // Every key comes back as itself, which is what `useLocalizedStrings` hands over before strings
+  // load and permanently on a platform error. The picker treats those as unresolved, so without
+  // Find supplying its own English the trigger would show the picker's generic "Select a project"
+  // — an instruction to pick, at the moment the placeholder's job is to report there is nothing to
+  // pick.
+  const UNRESOLVED_STRINGS: LanguageStrings = Object.fromEntries(
+    FIND_LOCALIZED_STRING_KEYS.map((key) => [key, key]),
+  );
+
+  it("keeps Find's own placeholder wording rather than the picker's generic English", () => {
+    render(<Find {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />);
+
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('No open projects or resources');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+
+  it("keeps Find's own empty message inside the popover", async () => {
+    // The trigger assertion above cannot reach this: `commandEmptyMessage` only renders once the
+    // popover is open. Any `%…%` key, whatever its prefix — a sweep narrowed to `%webView_find_`
+    // would miss the shared `%projectSelector_*%` block the popover also renders.
+    const RAW_KEY = /%[^%\s]+%/;
+    const user = setupUser();
+    render(<Find {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />);
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    const popover = await screen.findByRole('dialog');
+
+    expect(await within(popover).findByText('No projects found')).toBeInTheDocument();
+    expect(within(popover).queryAllByText(RAW_KEY)).toHaveLength(0);
+    expect(within(popover).queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
+  });
+});
+
+describe('Find project selector — simple interface mode', () => {
+  it('appends the scroll group letter to the trigger in power mode', () => {
+    render(<Find {...buildProps()} />);
+
+    expect(
+      screen.getByRole('combobox', { name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`) }),
+    ).toHaveTextContent('WEB · A');
+  });
+
+  it('shows the bare project short name in the trigger when scroll groups are hidden', () => {
+    render(<Find {...buildProps({ hideScrollGroups: true })} />);
+
+    const trigger = screen.getByRole('combobox', {
+      name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`),
+    });
+    expect(trigger).toHaveTextContent('WEB');
+    // The separator is what carries the group letter in power mode; its absence is the assertion.
+    expect(trigger).not.toHaveTextContent('·');
+  });
+
+  it('renders one unbadged row per project when scroll groups are hidden', async () => {
+    const user = setupUser();
+    render(<Find {...buildProps({ openTabs: OPEN_TABS_TWO_GROUPS, hideScrollGroups: true })} />);
+
+    await openProjectSelector(user);
+    const rows = await screen.findAllByRole('option');
+
+    // One row for the project, not one per open tab.
+    expect(rows).toHaveLength(1);
+    // Badges render the letters 'A'/'B' as their own text nodes, and neither 'WEB' nor 'World
+    // English Bible' contains a bare 'A' or 'B', so their absence pins down that no badge rendered.
+    expect(within(rows[0]).queryByText('A', { exact: true })).toBeNull();
+    expect(within(rows[0]).queryByText('B', { exact: true })).toBeNull();
+  });
+
+  // Falsifies the test above: the same inputs WITHOUT `hideScrollGroups` do render both rows and
+  // both letters, so that test is detecting the flag rather than a query that never matches.
+  it('renders a badged row per open tab in power mode', async () => {
+    const user = setupUser();
+    render(<Find {...buildProps({ openTabs: OPEN_TABS_TWO_GROUPS })} />);
+
+    await openProjectSelector(user);
+    const rows = await screen.findAllByRole('option');
+
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText('A', { exact: true })).toBeInTheDocument();
+    expect(within(rows[1]).getByText('B', { exact: true })).toBeInTheDocument();
+  });
+
+  it('reports only the project id when a row is picked with scroll groups hidden', async () => {
+    const user = setupUser();
+    const onSelectProject = vi.fn();
+    const onSelectProjectScrollGroup = vi.fn();
+    render(
+      <Find
+        {...buildProps({
+          projects: [...PROJECTS, OTHER_PROJECT],
+          openTabs: [...OPEN_TABS, { projectId: 'OTH', scrollGroupId: 0 }],
+          hideScrollGroups: true,
+          onSelectProject,
+          onSelectProjectScrollGroup,
+        })}
+      />,
+    );
+
+    await openProjectSelector(user);
+    await user.click(await screen.findByText('Other Bible'));
+
+    expect(onSelectProject).toHaveBeenCalledWith('OTH');
+    // The scroll group is resolved by the web view, not reported from the picker, in this mode.
+    expect(onSelectProjectScrollGroup).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The picker's grouping menu labels come from the shared `%projectSelector_grouping_*%` keys, which
+ * `buildProps` stubs with a resolved value — see {@link localizedValueFor}.
+ */
+const LANGUAGE_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_language_label%');
+const TYPE_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_type_label%');
+const LAST_USED_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_lastUsed_label%');
+
+const PROJECTS_WITH_LANGUAGES: FindProject[] = [
+  { id: 'WEB', shortName: 'WEB', fullName: 'World English Bible', language: 'English' },
+  { id: 'OTH', shortName: 'OTH', fullName: 'Other Bible', language: 'Spanish' },
+];
+const OPEN_TABS_TWO_PROJECTS: ProjectSelectorOpenTab[] = [
+  ...OPEN_TABS,
+  { projectId: 'OTH', scrollGroupId: 0 },
+];
+
+/**
+ * The picker's group-by menu trigger, found by its menu-popup semantics rather than by its
+ * accessible name: the name comes from the shared `%projectSelector_*%` block, and matching on the
+ * role a dropdown trigger must expose keeps these tests independent of how that string is spelled.
+ * The length assertion keeps the query honest — it is the only menu-opening button in the picker.
+ */
+function getGroupByTrigger(): HTMLElement {
+  const menuTriggers = within(screen.getByRole('dialog'))
+    .getAllByRole('button')
+    .filter((button) => button.getAttribute('aria-haspopup') === 'menu');
+  expect(menuTriggers).toHaveLength(1);
+  return menuTriggers[0];
+}
+
+async function openGroupByMenu(user: ReturnType<typeof setupUser>) {
+  await openProjectSelector(user);
+  await user.click(getGroupByTrigger());
+}
+
+describe('Find project selector — groupings', () => {
+  it('buckets projects by language when the caller supplies it', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({ projects: PROJECTS_WITH_LANGUAGES, openTabs: OPEN_TABS_TWO_PROJECTS })}
+      />,
+    );
+
+    await openGroupByMenu(user);
+    await user.click(await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL }));
+
+    // Section headings, not row text: no project's short or full name is exactly 'English' or
+    // 'Spanish', so these match the language buckets and nothing else.
+    expect(await screen.findByText('English')).toBeInTheDocument();
+    expect(screen.getByText('Spanish')).toBeInTheDocument();
+  });
+
+  it('offers neither Type nor Last used, which Find cannot split into real buckets', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({ projects: PROJECTS_WITH_LANGUAGES, openTabs: OPEN_TABS_TWO_PROJECTS })}
+      />,
+    );
+
+    await openGroupByMenu(user);
+
+    // Falsifies the negative assertions below: the menu did open, and it offers the groupings Find
+    // can actually populate.
+    expect(
+      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: LAST_USED_GROUPING_LABEL }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+// #region PT-4343 lifecycle + permission suites
+
+/**
+ * These suites assert on rendered ENGLISH text rather than on localization keys, so they need real
+ * strings where the suites above deliberately use key-as-value stubs. Kept as their own map plus a
+ * `buildLifecycleProps` adapter so the two conventions coexist in one file without either suite
+ * having to be rewritten.
+ */
+const STRINGS = {
+  '%general_countOfTotal%': '{count} of {total}',
+  '%webView_find_searchPrompt%': 'Enter search text to find results',
+  '%webView_find_selectBooksPrompt%': 'Select at least one book to search',
+  '%webView_find_noResultsFound%': 'No results found',
+  '%webView_find_searchPlaceholder%': 'Enter search text…',
+  '%webView_find_showRecentSearches%': 'Show recent searches',
+  '%webView_find_recent%': 'Recent',
+  '%webView_find_toggleFilters%': 'Toggle filters',
+  '%webView_find_filtersPanel%': 'Search filters',
+  '%webView_find_matchContentIn%': 'Match content in',
+  '%webView_find_allText%': 'Any text',
+  '%webView_find_allText_tooltip%': 'Including introductions, titles, headings, etc.',
+  '%webView_find_verseTextOnly%': 'Verse text only',
+  '%webView_find_restrictions%': 'Match boundaries',
+  '%webView_find_restrictions_none%': 'Anywhere',
+  '%webView_find_restrictions_wholeWord%': 'Whole word',
+  '%webView_find_restrictions_startOfWord%': 'Start of word',
+  '%webView_find_restrictions_endOfWord%': 'End of word',
+  '%webView_find_capitalization%': 'Capitalization',
+  '%webView_find_pattern%': 'Pattern',
+  '%webView_find_matchCase%': 'Match case',
+  '%webView_find_flexibility%': 'Match flexibility',
+  '%webView_find_ignoreDiacritics%': 'Ignore diacritics',
+  '%webView_find_ignoreWhitespaceDifferences%': 'Ignore whitespace differences',
+  '%webView_find_ignoreWhitespaceDifferences_tooltip%':
+    'Match any run of spaces in the text where the search has spaces.',
+  '%webView_find_allowRegex%': 'Allow regex',
+  '%webView_find_showing%': 'Showing',
+  '%webView_find_findTab%': 'Find',
+  '%webView_find_replaceTab%': 'Replace',
+  '%webView_find_replace%': 'Replace',
+  '%webView_find_replaceAll%': 'Replace all',
+  '%webView_find_preserveCase%': 'Preserve case',
+  '%webView_find_preserveCase_tooltip%': 'Adapts replacement to match original casing',
+  '%webView_find_replaceTerm_placeholder%': 'Replace with…',
+  '%webView_find_previousResult%': 'Previous result',
+  '%webView_find_nextResult%': 'Next result',
+  '%webView_find_clearSearch%': 'Clear search',
+  '%webView_find_cancelSearch%': 'Cancel search',
+  '%webView_find_errorOccurred%': 'An error occurred: {error}',
+  '%webView_find_result%': '{totalNumber} results',
+  '%webView_find_showingResults%': 'Showing {visibleNumber} of {totalNumber} results',
+  '%webView_find_showingResultsOfMore%': 'Showing {visibleNumber} of more than {totalNumber}',
+  '%webView_find_replace_structureProtectedMarkerTooltip%':
+    "This replacement adds a paragraph, verse, or chapter marker, which isn't allowed while structure is locked.",
+  '%webView_find_replace_structureProtectedNote%': 'Structure is locked.',
+  '%webView_find_replace_readOnlyNote%':
+    'This project is read-only. Replacements will be rejected.',
+  '%webView_find_replace_readOnlyTooltip%':
+    "This project is read-only, so replacements can't be made.",
+  '%webView_find_previewOptions_toggle%': 'Preview style',
+  '%webView_find_extraMaterialNotSearchedScope%': "Find doesn't search extra material.",
+  '%webView_find_extraMaterialNotSearchedScopeResults%':
+    "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.",
+};
+
+/**
+ * Drains the `setTimeout` Radix returns focus from. The panel is already unmounted a full macrotask
+ * before focus settles, so asserting without this reads the caret mid-flight — still where it was
+ * put — and passes whether or not it is taken away next.
+ */
+async function settleFocus() {
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+}
+
+/** Gets the Find search box, which sits outside the filters panel */
+function getSearchInput() {
+  return screen.getByPlaceholderText(STRINGS['%webView_find_searchPlaceholder%']);
+}
+
+/** `buildProps` with the English string map swapped in, for the suites below. */
+function buildLifecycleProps(overrides: Partial<FindProps>): FindProps {
+  return buildProps({ localizedStrings: STRINGS, ...overrides });
+}
+
+describe('Find — results-area placeholder', () => {
+  it('shows the "type to search" prompt when the search term is empty', () => {
+    render(<Find {...buildLifecycleProps({ searchTerm: '', searchStatus: undefined })} />);
+    expect(screen.getByText('Enter search text to find results')).toBeInTheDocument();
+    expect(screen.queryByText('Select at least one book to search')).not.toBeInTheDocument();
+  });
+
+  it('shows a "select at least one book" placeholder when the term is non-empty but the query is invalid', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          searchTerm: 'God',
+          searchStatus: undefined,
+          scope: 'selectedBooks',
+          selectedBookIds: [],
+        })}
+      />,
+    );
+    expect(screen.getByText('Select at least one book to search')).toBeInTheDocument();
+    expect(screen.queryByText('Enter search text to find results')).not.toBeInTheDocument();
+  });
+
+  it('announces the idle and invalid-query placeholders via role="status" for screen readers', () => {
+    // role="status" doesn't take its accessible NAME from content per the ARIA spec (only an
+    // explicit aria-label would), so the live region is located by role alone and its announced
+    // text is asserted via textContent, not the `name` matcher.
+    const { rerender } = render(
+      <Find {...buildLifecycleProps({ searchTerm: '', searchStatus: undefined })} />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Enter search text to find results');
+
+    rerender(
+      <Find
+        {...buildLifecycleProps({
+          searchTerm: 'God',
+          searchStatus: undefined,
+          scope: 'selectedBooks',
+          selectedBookIds: [],
+        })}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Select at least one book to search');
+  });
+
+  it('shows the loading skeleton (not the idle prompt) when a valid term is pending search', () => {
+    const { container } = render(
+      <Find
+        {...buildLifecycleProps({
+          searchTerm: 'God',
+          searchStatus: undefined,
+        })}
+      />,
+    );
+    expect(screen.queryByText('Enter search text to find results')).not.toBeInTheDocument();
+    expect(screen.queryByText('Select at least one book to search')).not.toBeInTheDocument();
+    expect(container.querySelectorAll('[class*="animate-pulse"]').length).toBeGreaterThan(0);
+  });
+
+  it('still shows the loading skeleton once the search is actually running', () => {
+    const { container } = render(
+      <Find
+        {...buildLifecycleProps({
+          searchTerm: 'God',
+          searchStatus: 'running',
+        })}
+      />,
+    );
+    expect(container.querySelectorAll('[class*="animate-pulse"]').length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * A single result to satisfy `visibleResults.length > 0` / `focusedResultIndex` preconditions for
+ * Replace/Replace All. `resultsByBook` is intentionally left empty since these tests don't exercise
+ * the result-list rendering.
+ */
+const FAKE_RESULT = {
+  start: { verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, offset: 0 },
+  end: { verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, offset: 3 },
+  text: 'God',
+};
+
+describe('Find — permission-blocked Replace', () => {
+  function buildReplaceProps(overrides: Partial<FindProps>): FindProps {
+    return buildLifecycleProps({
+      activeMode: 'replace',
+      searchTerm: 'God',
+      searchStatus: 'completed',
+      results: [FAKE_RESULT],
+      focusedResultIndex: 0,
+      ...overrides,
+    });
+  }
+
+  it('disables Replace and Replace All with a read-only tooltip when isEditable is false', () => {
+    render(<Find {...buildReplaceProps({ isEditable: false })} />);
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Replace all' })).toBeDisabled();
+    expect(
+      screen.getByRole('group', {
+        name: "This project is read-only, so replacements can't be made.",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves Replace and Replace All enabled when isEditable is true and structure is not protected', () => {
+    render(<Find {...buildReplaceProps({ isEditable: true })} />);
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Replace all' })).toBeEnabled();
+  });
+
+  it('shows the read-only tooltip (not the structure-protected one) when both reasons apply', () => {
+    render(
+      <Find
+        {...buildReplaceProps({
+          isEditable: false,
+          isStructureProtected: true,
+          isReplacementStructureChanging: true,
+        })}
+      />,
+    );
+    expect(
+      screen.getByRole('group', {
+        name: "This project is read-only, so replacements can't be made.",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', {
+        name: "This replacement adds a paragraph, verse, or chapter marker, which isn't allowed while structure is locked.",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  // Regression: read-only previously surfaced only a hover tooltip, weaker feedback than
+  // structure-protection's persistent note + tooltip pair. Both reasons now show an always-visible
+  // note in the same slot, not just an on-hover explanation.
+  it('shows a persistent read-only note (not just a hover tooltip) when isEditable is false', () => {
+    render(<Find {...buildReplaceProps({ isEditable: false })} />);
+    expect(
+      screen.getByText('This project is read-only. Replacements will be rejected.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the persistent structure-protected note when structure is locked and the project is editable', () => {
+    render(<Find {...buildReplaceProps({ isEditable: true, isStructureProtected: true })} />);
+    expect(screen.getByText('Structure is locked.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('This project is read-only. Replacements will be rejected.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows only the read-only note (not the structure-protected note) when both reasons apply', () => {
+    render(<Find {...buildReplaceProps({ isEditable: false, isStructureProtected: true })} />);
+    expect(
+      screen.getByText('This project is read-only. Replacements will be rejected.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Structure is locked.')).not.toBeInTheDocument();
+  });
+});
+
+describe('Find — permission-blocked Replace (per-result button)', () => {
+  // Regression test: the per-result Replace button/keyboard-shortcut used to receive neither
+  // isEditable nor isStructureProtected, so it stayed clickable even while the toolbar Replace /
+  // Replace All buttons were correctly disabled — a bypass of the exact gate this component exists
+  // to enforce. Uses a distinct label ("Replace card") from searchResultLocalizedStrings so this
+  // button is unambiguous from the toolbar's "Replace" button in the same render.
+  function buildPerResultProps(overrides: Partial<FindProps>): FindProps {
+    return buildLifecycleProps({
+      activeMode: 'replace',
+      searchTerm: 'God',
+      searchStatus: 'completed',
+      results: [FAKE_RESULT],
+      resultsByBook: new Map([['GEN', [{ result: FAKE_RESULT, originalIndex: 0 }]]]),
+      focusedResultIndex: 0,
+      searchResultLocalizedStrings: { '%webView_find_replace%': 'Replace card' },
+      ...overrides,
+    });
+  }
+
+  it('disables the per-result Replace button when isEditable is false', () => {
+    render(<Find {...buildPerResultProps({ isEditable: false })} />);
+    expect(screen.getByRole('button', { name: 'Replace card' })).toBeDisabled();
+  });
+
+  it('explains why via a tooltip, matching the toolbar buttons, instead of a silent disable', () => {
+    render(<Find {...buildPerResultProps({ isEditable: false })} />);
+    const button = screen.getByRole('button', { name: 'Replace card' });
+    expect(button).toBeDisabled();
+    // The toolbar's Replace/Replace All are also read-only-blocked in this render, so there are
+    // two matching tooltip wrappers — assert this button's own ancestor specifically.
+    expect(button.closest('[role="group"]')).toHaveAccessibleName(
+      "This project is read-only, so replacements can't be made.",
+    );
+  });
+
+  it('disables the per-result Replace button when structure is protected and the replacement would change it', () => {
+    render(
+      <Find
+        {...buildPerResultProps({
+          isEditable: true,
+          isStructureProtected: true,
+          isReplacementStructureChanging: true,
+        })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Replace card' })).toBeDisabled();
+  });
+
+  it('leaves the per-result Replace button enabled when nothing blocks replace', () => {
+    render(<Find {...buildPerResultProps({ isEditable: true })} />);
+    expect(screen.getByRole('button', { name: 'Replace card' })).toBeEnabled();
+  });
+});
+
+// #endregion
+
+describe('Find — clear search button', () => {
+  it('empties the search term when clicked', async () => {
+    const user = setupUser();
+    const onSearchTermChange = vi.fn();
+    render(<Find {...buildLifecycleProps({ searchTerm: 'God', onSearchTermChange })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(onSearchTermChange).toHaveBeenCalledWith('');
+  });
+
+  // Emptying the term is the whole contract: the container's empty-term effect is what clears the
+  // results and abandons a running job. If this button stopped the search itself, the mouse route
+  // would clear results by a path the keyboard routes (select-all + delete, backspacing) do not
+  // have, which is the split this button's behavior was collapsed to avoid.
+  it('leaves stopping the search to the container rather than calling onStopSearch itself', async () => {
+    const user = setupUser();
+    const onStopSearch = vi.fn();
+    render(<Find {...buildLifecycleProps({ searchTerm: 'God', onStopSearch })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(onStopSearch).not.toHaveBeenCalled();
+  });
+
+  // THE REGRESSION THIS EXISTS FOR: the button only renders while there is a term to clear, so
+  // emptying the term unmounts the element the user just activated. Without an explicit focus
+  // return, focus falls to the document body and a keyboard user is left with nothing focused and
+  // no way back to the box but the mouse. Wired like the container — a real ref, real state, and a
+  // callback that actually focuses — so the term genuinely empties, the button genuinely unmounts,
+  // and the assertion is on where focus landed rather than on a callback having been called.
+  it('hands focus back to the search box, which clearing unmounts this button from', async () => {
+    const user = setupUser();
+
+    function ClearingFindHarness() {
+      const [searchTerm, setSearchTerm] = useState('God');
+      // useRef requires null as the initial value when used with a DOM element ref
+      // eslint-disable-next-line no-null/no-null
+      const searchInputRef = useRef<HTMLInputElement>(null);
+      return (
+        <Find
+          {...buildLifecycleProps({
+            searchTerm,
+            onSearchTermChange: setSearchTerm,
+            searchInputRef,
+            onFocusSearchInput: () => searchInputRef.current?.focus(),
+          })}
+        />
+      );
+    }
+
+    render(<ClearingFindHarness />);
+    const searchInput = screen.getByPlaceholderText('Enter search text…');
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(searchInput);
+  });
+
+  // Falsifies the tests above: the same query finds nothing when the box is already empty, so
+  // they are detecting a real button rather than a name that never matches.
+  it('renders no clear button when the box is already empty', () => {
+    render(<Find {...buildLifecycleProps({ searchTerm: '' })} />);
+
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
+
+  // A whitespace-only term is an invalid query, so the results area shows the idle prompt — but the
+  // box still visibly holds characters, and the button is the only way to empty it with a mouse.
+  // Keying the button off the trimmed term instead would strand a mouse user in that state.
+  it('still offers the clear button for a whitespace-only term the box visibly holds', () => {
+    render(<Find {...buildLifecycleProps({ searchTerm: '   ' })} />);
+
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+    expect(screen.getByText('Enter search text to find results')).toBeInTheDocument();
+  });
+});
+
+describe('Find — books-scope summary in the "Showing" trigger', () => {
+  // The real BooksPresent setting is one character per canon book. These tests pin their own
+  // full-length string so the expected summaries don't depend on buildProps' default.
+  const ALL_BOOKS_PRESENT = '1'.repeat(Canon.allBookIds.length);
+
+  // Deliberately NOT overridden per test: the localized strings come from buildProps' stub over the
+  // real FIND_LOCALIZED_STRING_KEYS, so a key the component reads but never declares resolves to
+  // `undefined` and these assertions fail — which is the regression a hand-built strings object
+  // hides, since it can supply a key `find.web-view.tsx` never requests.
+  const ALL_BOOKS_TEXT = '%webView_find_allBooks%';
+
+  function buildBooksScopeProps(selectedBookIds: string[]): FindProps {
+    return buildProps({
+      scope: 'selectedBooks',
+      booksPresent: ALL_BOOKS_PRESENT,
+      selectedBookIds,
+    });
+  }
+
+  it('summarizes a full selection as "All books" instead of listing every book', () => {
+    // Spelled out independently of the component's own decoder, so a decoder that stopped
+    // filtering obsolete books would fail here rather than agree with itself.
+    const everyNonObsoleteBookId = Canon.allBookIds.filter(
+      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+    );
+    render(<Find {...buildBooksScopeProps(everyNonObsoleteBookId)} />);
+    expect(screen.getByText(ALL_BOOKS_TEXT)).toBeInTheDocument();
+    // The regression this guards: every id joined into the trigger, which overflowed the panel.
+    expect(screen.queryByText(/GEN, EXO, LEV/)).not.toBeInTheDocument();
+  });
+
+  it('does not claim "All books" when an available book is missing from the selection', () => {
+    const everyNonObsoleteBookId = Canon.allBookIds.filter(
+      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+    );
+    render(<Find {...buildBooksScopeProps(everyNonObsoleteBookId.slice(0, -1))} />);
+    expect(screen.queryByText(ALL_BOOKS_TEXT)).not.toBeInTheDocument();
+  });
+
+  it('truncates to a canon-order first-last range when more than five books are selected', () => {
+    render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU'])} />);
+    // The regression this guards: every selected id joined into the trigger, which widened the
+    // "Showing" row until the whole panel grew a horizontal scrollbar.
+    expect(screen.getByText('GEN - MRK')).toBeInTheDocument();
+  });
+
+  it('lists the books individually when few enough are selected', () => {
+    render(<Find {...buildBooksScopeProps(['LEV', 'GEN', 'EXO'])} />);
+    expect(screen.getByText('GEN, EXO, LEV')).toBeInTheDocument();
+  });
+
+  it('opens the scope popover from the summarized trigger', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'MAT'])} />);
+    await user.click(screen.getByText('GEN - MRK'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('Find — an unrunnable query with results still on screen', () => {
+  /**
+   * The state this suite covers: a search ran over selected books, then the selection was emptied —
+   * by a project switch pruning it, or by the user clearing it. The results belong to a query Find
+   * would no longer run, but nothing has cleared them.
+   */
+  function buildEmptiedSelectionProps(overrides: Partial<FindProps> = {}): FindProps {
+    return buildLifecycleProps({
+      scope: 'selectedBooks',
+      selectedBookIds: [],
+      results: [RESULT],
+      resultsByBook: RESULTS_BY_BOOK,
+      searchStatus: 'completed',
+      totalNumberOfResults: 1,
+      activeMode: 'replace',
+      replaceTerm: 'replacement',
+      ...overrides,
+    });
+  }
+
+  it('says why nothing will happen instead of dead-ending on stale results', () => {
+    render(<Find {...buildEmptiedSelectionProps()} />);
+
+    expect(screen.getByText('Select at least one book to search')).toBeInTheDocument();
+  });
+
+  // Replace All writes at the character offsets the results carry. Those offsets were resolved by a
+  // query Find would no longer run, and nothing has re-verified them.
+  it('blocks Replace all against results the current query would not produce', () => {
+    render(<Find {...buildEmptiedSelectionProps()} />);
+
+    expect(screen.getByRole('button', { name: 'Replace all' })).toBeDisabled();
+  });
+
+  it('leaves Replace all available once the selection names a book again', () => {
+    render(<Find {...buildEmptiedSelectionProps({ selectedBookIds: ['GEN'] })} />);
+
+    expect(screen.getByRole('button', { name: 'Replace all' })).toBeEnabled();
+    expect(screen.queryByText('Select at least one book to search')).not.toBeInTheDocument();
+  });
+
+  // The placeholder is meant to REPLACE the stale rows, not sit above them. Rendering both says
+  // "this query can't run" while still offering the previous query's results to click.
+  it('replaces the stale result rows rather than rendering the prompt above them', () => {
+    render(<Find {...buildEmptiedSelectionProps()} />);
+
+    expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
+  });
+
+  // THE REGRESSION THIS EXISTS FOR: an emptied box is the other route into an unrunnable query, and
+  // it has to reach the same outcome as an emptied book selection. The container also abandons the
+  // job, but the display must not wait on that effect landing — otherwise there is a window showing
+  // the last query's results under an empty search box, which is the bug this all exists to fix.
+  it('shows the idle prompt instead of stale results when the box is emptied', () => {
+    render(<Find {...buildEmptiedSelectionProps({ scope: 'book', searchTerm: '' })} />);
+
+    expect(screen.getByText('Enter search text to find results')).toBeInTheDocument();
+    expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
+  });
+});
+
+// The reason these exist: the whole point of this pair of options is that they are reachable and
+// default to off. A regression that dropped the wiring — or shipped either one enabled — would
+// silently change every search, and nothing else in this suite would notice.
+describe('Find — whitespace and diacritic tolerance toggles', () => {
+  it.each([
+    ['Ignore whitespace differences', 'setIgnoreWhitespaceDifferences'] as const,
+    ['Ignore diacritics', 'setIgnoreDiacritics'] as const,
+  ])('reports %s being turned on', async (label, setterName) => {
+    const user = setupUser();
+    const setter = vi.fn();
+    render(<Find {...buildLifecycleProps({ [setterName]: setter })} />);
+
+    await openFilters(user);
+    await user.click(screen.getByRole('checkbox', { name: label }));
+
+    expect(setter).toHaveBeenCalledWith(true);
+  });
+
+  it.each([['Ignore whitespace differences'], ['Ignore diacritics']])(
+    'renders %s unchecked, so a search is exact unless the user opts out',
+    async (label) => {
+      const user = setupUser();
+      render(<Find {...buildLifecycleProps({})} />);
+
+      await openFilters(user);
+
+      expect(screen.getByRole('checkbox', { name: label })).not.toBeChecked();
+    },
+  );
+
+  it.each([['ignoreWhitespaceDifferences'] as const, ['ignoreDiacritics'] as const])(
+    'marks the filters button active while %s is on',
+    async (propName) => {
+      render(<Find {...buildLifecycleProps({ [propName]: true })} />);
+
+      expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveClass('tw:bg-muted');
+    },
+  );
+});
+
+// These exist because the filter controls are plain form controls (radio groups, checkboxes), not
+// menu items. Housing them in a Radix menu makes them unreachable by keyboard: menu content calls
+// preventDefault on Tab, and its arrow handling only walks items registered in its roving-focus
+// collection — which plain form controls never join. A regression back to a menu container would
+// leave the panel mouse-only, and nothing else in this suite would notice.
+describe('Find — filters panel keyboard accessibility', () => {
+  it('puts focus on the first filter control as soon as the panel opens', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('radio', { name: 'Any text' })).toHaveFocus();
+  });
+
+  // The explanation beside "Any text" describes the radio itself. A tab stop of its own would sit
+  // inside the radio group, where Tab never reaches it whenever the other radio is the selected one.
+  it('describes "Any text" with its explanation', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('radio', { name: 'Any text' })).toHaveAccessibleDescription(
+      'Including introductions, titles, headings, etc.',
+    );
+  });
+
+  it('describes "Ignore whitespace differences" with its explanation', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Ignore whitespace differences' }),
+    ).toHaveAccessibleDescription(
+      'Match any run of spaces in the text where the search has spaces.',
+    );
+  });
+
+  it.each([['Match content in'], ['Match boundaries']])(
+    'names the "%s" group after its legend',
+    async (name) => {
+      const user = setupUser();
+      render(<Find {...buildLifecycleProps({})} />);
+
+      await openFilters(user);
+
+      expect(screen.getByRole('group', { name })).toBeInTheDocument();
+    },
+  );
+
+  // Each radio group is a single tab stop (roving tabindex), so Tab crosses between groups rather
+  // than visiting every radio.
+  it('moves focus to the next group of controls when the user presses Tab', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+
+    expect(screen.getByRole('radio', { name: 'Anywhere' })).toHaveFocus();
+  });
+
+  // The key is held rather than tapped. Radix moves focus on a timer and selects the newly focused
+  // radio only while an arrow key is still down; a tap releases the key before that timer fires.
+  it('moves to and selects the next radio option when the down arrow is pressed', async () => {
+    const user = setupUser();
+    const setSearchTextType = vi.fn();
+    render(<Find {...buildLifecycleProps({ setSearchTextType })} />);
+
+    await openFilters(user);
+    await user.keyboard('{ArrowDown>}{/ArrowDown}');
+
+    await waitFor(() => expect(setSearchTextType).toHaveBeenCalledWith('verseOnly'));
+    expect(screen.getByRole('radio', { name: 'Verse text only' })).toHaveFocus();
+  });
+
+  // Leaving the panel with Shift+Tab dismisses it, so the question is where focus goes. The panel is
+  // portalled after the rest of the web view, so without help it lands at the bottom of the Find
+  // panel, nowhere near the control the user was on.
+  it('hands focus back to the filters button when Shift+Tab leaves the panel', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab({ shift: true });
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  it('hands focus back to the filters button when Escape closes the panel', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  // A popover is not named by its trigger the way a menu is, so the panel needs a name of its own —
+  // and a noun phrase rather than the trigger's "Toggle filters", which names the control the user
+  // just left rather than the surface a screen reader is announcing they arrived at.
+  it('gives the open panel a name of its own', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('dialog', { name: 'Search filters' })).toBeInTheDocument();
+  });
+
+  // The panel and each tooltip are portalled to the body separately, so they stack as siblings and
+  // the higher z-index paints on top. An explanation that stacks lower renders behind the panel it
+  // sits inside, where it cannot be read.
+  it('stacks a filter explanation above the panel rather than behind it', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.hover(screen.getByTestId('any-text-explanation'));
+    const tooltip = await screen.findByRole('tooltip');
+
+    const declaredZIndexOf = (element: Element) =>
+      element.closest<HTMLElement>('[data-radix-popper-content-wrapper]')?.style.zIndex;
+    const panelZIndex = declaredZIndexOf(screen.getByRole('dialog'));
+    const tooltipZIndex = declaredZIndexOf(tooltip);
+
+    // Check both are actually declared before comparing. `Number('')` is 0, so a bare greater-than
+    // keeps passing against an element that declares no stacking at all — which is precisely the
+    // regression that would put the explanation back behind the panel.
+    expect(panelZIndex).not.toBe('');
+    expect(tooltipZIndex).not.toBe('');
+    expect(Number(tooltipZIndex)).toBeGreaterThan(Number(panelZIndex));
+  });
+
+  // Tab moves between the groups inside the panel — Radix loops it, so forward Tab never leaves.
+  // The two tests below repeat the pair above after such a Tab, because arming the focus return on
+  // the keydown and clearing it only on open would leave it armed for the rest of the visit: the
+  // next dismissal of any kind would then take the caret, which is the bug those two tests exist to
+  // prevent. They are the same assertions from a state a user reaches by using the panel normally.
+  it('leaves focus in the search box when it is clicked after moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    const searchBox = getSearchInput();
+
+    await user.click(searchBox);
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+
+  it('leaves focus in the search box when it takes focus after moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    const searchBox = getSearchInput();
+
+    await act(async () => {
+      searchBox.focus();
+    });
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+
+  // The other side of the same coin: clearing the arming on an in-panel Tab must not clear it for a
+  // later Escape, which is a real exit and still owes the user the trigger.
+  it('hands focus back to the filters button when Escape follows moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    await user.keyboard('{Escape}');
+    await settleFocus();
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  // The pointer counterpart of the test below: clicking into the search box both dismisses the panel
+  // and puts the caret where the user aimed it, so nothing should move afterwards. Without this, the
+  // condition guarding the focus return has only one of its two branches covered and reads as
+  // deletable complexity.
+  it('leaves focus in the search box when the box outside the panel is clicked', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    const searchBox = getSearchInput();
+
+    await user.click(searchBox);
+    await settleFocus();
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(searchBox).toHaveFocus();
+  });
+
+  // The panel is a non-modal popover, so focus landing outside it dismisses it — including focus the
+  // app itself moves. Invoking Find while the panel is open does exactly that: `focusSearchInput`
+  // puts the caret in the search box, which dismisses the panel. The caret must survive that;
+  // returning focus to the trigger belongs to the keyboard exits below, not to every dismissal.
+  it('leaves focus in the search box when the box outside the panel takes focus', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    const searchBox = getSearchInput();
+    // `focus()` rather than a click, so this turns on focus alone rather than on the pointer
+    // interaction that would dismiss the panel regardless.
+    await act(async () => {
+      searchBox.focus();
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+});
+
+// The book and chapter scopes resolve to the CURRENT reference's book rather than to the (already
+// extra-material-free) book list, so nothing else keeps a search in a glossary from producing
+// matches labeled with the meaningless reference the exclusion exists to hide.
+describe('Find — current reference in extra material', () => {
+  const GLOSSARY_VERSE_REF: SerializedVerseRef = { book: 'GLO', chapterNum: 1, verseNum: 1 };
+  // The placeholder and the scope tooltip are separate strings: the placeholder has to name a way
+  // out, the tooltip only has to say why the option is unavailable.
+  const EXTRA_MATERIAL_MESSAGE =
+    "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.";
+  // The scope selector's own strings stay stubbed to their keys — `buildLifecycleProps` swaps in
+  // English only for Find's own strings.
+  const BOOK_SCOPE_LABEL_KEY = '%webView_scope_selector_book%';
+  const CHAPTER_SCOPE_LABEL_KEY = '%webView_scope_selector_chapter%';
+
+  /**
+   * The scope option a label names, found through the label's `for`.
+   *
+   * Not `getByRole('radio', { name })`: the scope selector renders each option as a Radix `<button
+   * role="radio">`, and the accessible-name computation does not pick up a `<label for>` pointing
+   * at a button, so every option comes back nameless.
+   */
+  function getScopeOption(labelKey: string): HTMLElement {
+    const optionId = screen.getByText(labelKey).getAttribute('for');
+    if (!optionId) throw new Error(`Scope label '${labelKey}' has no 'for'`);
+    const option = document.getElementById(optionId);
+    if (!option) throw new Error(`Scope label '${labelKey}' points at missing id '${optionId}'`);
+    return option;
+  }
+
+  it.each(['book', 'chapter'] as const)(
+    'explains why the %s scope cannot run instead of showing results for it',
+    (scope) => {
+      render(
+        <Find
+          {...buildLifecycleProps({
+            scope,
+            verseRef: GLOSSARY_VERSE_REF,
+            searchTerm: 'God',
+            results: [RESULT],
+            resultsByBook: RESULTS_BY_BOOK,
+            searchStatus: 'completed',
+            totalNumberOfResults: 1,
+          })}
+        />,
+      );
+
+      expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+      // The stale results are replaced, not merely covered — they carry the bogus reference.
+      expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
+    },
+  );
+
+  // The rows are suppressed for an invalid query; a count and working arrows left behind read as a
+  // live search over an empty results area, and the arrows still drive the editor.
+  it('drops the result count and navigation along with the results', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('1 of 1')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next result' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Previous result' })).not.toBeInTheDocument();
+  });
+
+  // Before typing is where the reason is most useful, and it is the state a user lands in by
+  // navigating into extra material. The idle "enter search text" prompt would be false here — no
+  // term will run while the scope is blocked.
+  it('explains the block before a search term is entered, rather than prompting for one', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({ scope: 'book', verseRef: GLOSSARY_VERSE_REF, searchTerm: '' })}
+      />,
+    );
+
+    expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText('Enter search text to find results')).not.toBeInTheDocument();
+    // The trigger's de-emphasis and its description are one condition, so it never reads as
+    // unavailable while the reason is nowhere on screen.
+    expect(screen.getByRole('button', { name: /Showing/ })).toHaveAttribute('aria-describedby');
+  });
+
+  // "Select at least one book" would send the user to a picker that cannot fix this: the picker
+  // never offers extra material, and the fix is to move the reference or change scope.
+  it('does not fall back to the select-books wording, which names the wrong remedy', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText('Select at least one book to search')).not.toBeInTheDocument();
+  });
+
+  // The selected books are the user's own choice and already exclude extra material, so where the
+  // reference happens to sit says nothing about them.
+  it('leaves the selectedBooks scope searchable while the reference sits in extra material', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(RESULT_MATCH_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText(EXTRA_MATERIAL_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('disables both current-reference scopes in the picker so neither can be chosen', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeDisabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeDisabled();
+  });
+
+  it('leaves both scopes selectable while the reference is in a scripture book', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({ scope: 'selectedBooks', selectedBookIds: ['GEN'] })} />);
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeEnabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeEnabled();
+  });
+
+  // `localizedStrings` is an open index signature, so an unrequested key reads as `undefined` with
+  // no compile error. Leaving the scopes enabled while the query gate still rejects them would be
+  // worse than showing a raw key, so the explanation falls back to the key rather than vanishing.
+  it('keeps the scopes disabled when the explanation string is missing', async () => {
+    const user = setupUser();
+    // Built by omission rather than by deleting from a copy: `STRINGS`'s inferred type has the key
+    // as required, so `delete` is a type error — one no check in this repo would report, since
+    // `platform-scripture`'s tsconfig excludes test files and the workspace has no typecheck
+    // script.
+    const stringsWithoutExplanation = Object.fromEntries(
+      Object.entries(STRINGS).filter(
+        ([key]) => key !== '%webView_find_extraMaterialNotSearchedScope%',
+      ),
+    );
+    render(
+      <Find
+        {...buildProps({
+          localizedStrings: stringsWithoutExplanation,
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeDisabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeDisabled();
+  });
+
+  // The results area carries the explanation, but it scrolls; the collapsed trigger must not read
+  // as an ordinary active scope on its own.
+  it('points the collapsed scope trigger at the placeholder that explains the block', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    // Asserted from the trigger outwards: the description has to be on the BUTTON, since a button
+    // is atomic to assistive technology and a description on a span inside it is never announced.
+    // Following the id through to the element proves the two sides name the same node — reading the
+    // id off the placeholder instead would pass for any element that merely carries the attribute.
+    const trigger = screen.getByRole('button', { name: /Showing/ });
+    const describedById = trigger.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+    expect(trigger).toHaveTextContent('GLO');
+    expect(document.getElementById(describedById ?? '')).toHaveTextContent(EXTRA_MATERIAL_MESSAGE);
+  });
+
+  // A fixed id would collide wherever two Find components share a document, e.g. a Storybook
+  // autodocs page, and aria-describedby would then resolve to whichever copy came first.
+  it('gives each Find its own placeholder id', () => {
+    const props = buildLifecycleProps({
+      scope: 'book',
+      verseRef: GLOSSARY_VERSE_REF,
+      searchTerm: 'God',
+    });
+    render(
+      <>
+        <Find {...props} />
+        <Find {...props} />
+      </>,
+    );
+
+    const describedByIds = screen
+      .getAllByRole('button', { name: /Showing/ })
+      .map((trigger) => trigger.getAttribute('aria-describedby'));
+
+    expect(describedByIds).toHaveLength(2);
+    expect(new Set(describedByIds).size).toBe(2);
+  });
+});
+
+// `buildProps` stubs every localized string as its own key (see `../project-selector.test-utils`),
+// so `RecentSearches` is on its English fallback path and this — not the key — is the button's
+// accessible name. That fallback is what keeps a `%key%` off the screen when the label is also
+// rendered as visible tooltip text.
+const RECENT_SEARCHES_LABEL = 'Show recent searches';
+
+// `recentSearches: []` in `buildProps` means every other suite in this file renders
+// `RecentSearches` with an empty list, which makes it return `undefined` and never mount — so
+// nothing else here exercises the menu it opens. These are the only tests that do.
+describe('Find — recent searches menu', () => {
+  const RECENT_SEARCH_TERMS = ['first search', 'second search'];
+
+  it('opens the recent searches menu and lists recent search terms', async () => {
+    const user = setupUser();
+    render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS })} />);
+
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL }));
+
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByText('first search')).toBeInTheDocument();
+    expect(within(menu).getByText('second search')).toBeInTheDocument();
+  });
+
+  it('selecting a recent search item applies it and closes the menu', async () => {
+    const user = setupUser();
+    const onSearchTermChange = vi.fn();
+    render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS, onSearchTermChange })} />);
+
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL }));
+    await user.click(await screen.findByText('first search'));
+
+    expect(onSearchTermChange).toHaveBeenCalledWith('first search');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('uses the localized label once the strings arrive', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({
+          recentSearches: RECENT_SEARCH_TERMS,
+          localizedStrings: {
+            ...STRINGS,
+            '%webView_find_showRecentSearches%': 'Mostrar búsquedas recientes',
+            '%webView_find_recent%': 'Recientes',
+          },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Mostrar búsquedas recientes' }));
+
+    expect(await screen.findByRole('menu', { name: 'Recientes' })).toBeInTheDocument();
+  });
+});

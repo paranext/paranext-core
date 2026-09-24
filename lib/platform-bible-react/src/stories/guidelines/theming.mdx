@@ -1,0 +1,153 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { ThemeMatrixDemo } from './theme-matrix-demo';
+import { ExampleBlock } from '../../storybook/example-block.component';
+
+<Meta title="Guidelines/Theming" />
+
+# Theming
+
+Guidance for theming with the shadcn design system in this library: tokens, Storybook toolbar themes,
+CSS variables, and how they line up with the Paranext app. Details below.
+
+A comprehensive guide on theming components using the shadcn design system, including best
+practices for color usage, theme switching, and CSS variable management.
+
+By default we stick to the existing shadcn styles. Components we install from shadcn already
+come with styles that expect design tokens—see which properties and class patterns they use
+so they can set their own appearance and stay themeable.
+
+Token values for Storybook and the app live in
+[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css).
+For a live table of variables for the toolbar-selected theme, see
+[Guides / Theme Colors](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs).
+
+This Storybook has two independent axes:
+
+- **Appearance** — light, dark, or system (when **system** is chosen, light vs dark follows
+  `prefers-color-scheme`)
+- **Theme** — Shadcn Neutral, Platform, or Paratext (the color palette)
+
+Pick each from the Storybook toolbar. Selection is persisted under `localStorage` as
+`{ family, colorScheme }`. Classes on `document.documentElement` come from
+[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css).
+
+The effective row is one of six composite IDs (also used for `parameters.themes.themeOverride`):
+
+| Theme          | Light            | Dark            |
+| -------------- | ---------------- | --------------- |
+| Shadcn Neutral | `shadcn-light`   | `shadcn-dark`   |
+| Platform       | `platform-light` | `platform-dark` |
+| Paratext       | `paratext-light` | `paratext-dark` |
+
+Shadcn Neutral is Storybook-only (not in `themes.data.json`); Platform and Paratext match the
+running app.
+
+## Themes
+
+CSS variables live in
+[index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css)
+(Platform and Paratext) and
+[.storybook/storybook-themes.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/.storybook/storybook-themes.css)
+(Shadcn Neutral, Storybook-only).
+
+**Platform** — the product default (`:root` / `.dark`). Slate-based (blue-gray neutrals), close
+to stock Shadcn Neutral but **not identical**: differs on **popover**, **secondary / muted /
+accent** neutrals, and the full **sidebar-\*** block in both light and dark. The running app
+loads these tokens from
+[themes.data.json](https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json).
+
+**Shadcn Neutral** — the stock shadcn preset (`.theme-shadcn-neutral` / `.dark.theme-shadcn-neutral`).
+Storybook-only — pick it when you need the closest match to
+[shadcn/ui docs](https://ui.shadcn.com/docs/theming#neutral) for development, UX review, or
+debugging. In dark mode, **border** / **input** use semi-transparent white (vs Platform's solid
+grays).
+
+**Paratext** — a separate palette ([Caffeine-inspired in tweakcn](https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74)),
+not vanilla Shadcn. Also loaded from `themes.data.json` in the running app.
+
+## Try it
+
+Use the **Appearance** and **Theme** toolbar controls (not a separate preview-app toggle) to
+switch palettes and confirm your story respects tokens — foreground, background, borders, and
+components that use the same variables should track the selection.
+
+## In the running application
+
+The app's main process loads built-in theme definitions from
+[themes.data.json](https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json)
+(Platform and Paratext families) and applies the same HSL tokens as `index.css` for those (see
+[theme.service-host.ts](https://github.com/paranext/paranext-core/blob/main/src/main/services/theme.service-host.ts)).
+Keep `index.css` and `themes.data.json` in sync when you change theme colors. End-user theme
+selection is handled by the platform theme service, not Storybook.
+
+## Bad example
+
+Manual colors on primitives do not follow the active theme.
+
+<ExampleBlock
+  variant="avoid"
+  preview={
+  <input
+    value="this has manual colors"
+    aria-label="Bad example input with manual colors"
+    readOnly
+    className="tw:file:border-0 tw:flex tw:h-8 tw:rounded-md tw:border tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900 tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
+  />
+}
+  code={`<input
+value="this has manual colors"
+aria-label="Bad example input with manual colors"
+readOnly
+className="tw:file:border-0 tw:flex tw:h-8 tw:rounded-md tw:border
+  tw:border-slate-300 tw:bg-white tw:px-3 tw:py-2 tw:text-sm tw:text-slate-900
+  tw:ring-offset-white tw:file:bg-transparent tw:file:text-sm tw:file:font-medium
+  tw:placeholder:text-slate-400 tw:focus-visible:outline-none tw:focus-visible:ring-2
+  tw:focus-visible:ring-slate-400 tw:focus-visible:ring-offset-2
+  tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
+/>`}
+>
+  Manual styles, unable to be themed.
+</ExampleBlock>
+
+## Overwriting styles
+
+Try not to overwrite styles (colors). When you need to, use Tailwind classes that apply the same
+color variables shadcn uses, in the same way shadcn does. You can see token names on
+[Guides / Theme Colors](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs)
+and in the [shadcn theming docs](https://ui.shadcn.com/docs/theming).
+
+For example, use `className="tw:bg-muted"` on a header-like surface and
+`className="tw:text-muted-foreground"` for supporting text. You can use shades such as
+`tw:bg-muted/50` sparingly, in line with how shadcn applies them.
+
+## Per-story theme override
+
+To lock a story to one palette (for example to show a dark-mode edge case), set a **legacy
+composite ID** such as `parameters: { themes: { themeOverride: 'paratext-dark' } }` on the story
+or meta. You can also pass `themeOverride: { family: 'paratext', colorScheme: 'system' }` for
+system light/dark. The preview decorator reads this in `.storybook/theme-decorator.ts` (toolbar
+changes use `localStorage` and a channel event instead of `globals.theme`).
+
+## Adding a new theme
+
+1. Add a CSS class in `index.css` with `--background`, `--foreground`, and the other variables
+   (see existing blocks).
+2. Update `themes.data.json` in paranext-core if the app should expose the theme.
+3. Register the composite ID in `.storybook/theme-constants.ts` (`STORYBOOK_THEME_IDS` and
+   `STORYBOOK_THEME_LABELS`), map classes in `.storybook/theme-apply.ts` (`CLASS_MAP`,
+   `compositeThemeIdFromFamilyAndEffective`, `themeStateFromLegacyThemeId`, and
+   `ALL_THEME_CLASSES`). Toolbar family and color-scheme options live in
+   `STORYBOOK_THEME_FAMILIES` / `STORYBOOK_COLOR_SCHEMES` in the same file;
+   `.storybook/manager.tsx` reads those lists for the two toolbar tools.
+
+Descriptions of which colors to use in which context are still being expanded. If you are
+unsure, see how [shadcn](https://ui.shadcn.com/) handles a similar pattern or talk to the
+[Paratext UX team](https://discord.com/channels/1064938364597436416/1082713526780575845).
+
+## Theme matrix
+
+Compares Platform and Paratext palettes in one view using scoped wrappers. Useful for visual review
+of theme tokens. For the live token table for the toolbar-selected theme, see [Guides / Theme
+Colors](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs).
+
+<ThemeMatrixDemo />

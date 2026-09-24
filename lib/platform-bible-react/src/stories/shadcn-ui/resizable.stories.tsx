@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -11,11 +10,9 @@ const meta: Meta = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div style={{ width: '600px', height: '300px', border: '1px solid #ccc' }}>
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div style={{ width: '600px', height: '300px', border: '1px solid #ccc' }}>
+        <Story />
+      </div>
     ),
   ],
 };

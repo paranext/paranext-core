@@ -1,46 +1,45 @@
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
+  EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
   IScrollGroupService,
-  ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 
-const onDidUpdateScrRef = getNetworkEvent<ScrollGroupUpdateInfo>(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
+const onDidUpdateScrRef = getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
+const onDidChangeReferenceHistory = getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY);
 
-let networkObject: IScrollGroupService;
-let initializationPromise: Promise<void>;
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          await networkObjectStatusService.waitForNetworkObject(
-            { id: NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE },
-            // Wait 30 seconds for the scroll group service to appear
-            30000,
-          );
+let networkObject: IScrollGroupService | undefined;
 
-          const localWebViewService = await networkObjectService.get<IScrollGroupService>(
-            NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
-          );
-          if (!localWebViewService)
-            throw new Error(
-              `${NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE} is not available as a network object`,
-            );
-          networkObject = localWebViewService;
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
+/**
+ * Cached resolution of the scroll group network object.
+ *
+ * Main hosts the object (`main/services/scroll-group.service-host.ts`) and registers it before any
+ * window is created, so it is there for as long as the app is, and there is nothing to re-arm for:
+ * no window closing can take it away. `createCachedInitializer` still retries a FAILED resolution,
+ * which is the case that remains — a consumer that asks before the object has been announced.
+ */
+const initialize = createCachedInitializer(initializeScrollGroupService);
+
+async function initializeScrollGroupService(): Promise<void> {
+  await networkObjectStatusService.waitForNetworkObject(
+    { id: NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE },
+    // Wait 30 seconds for the scroll group service to appear
+    30000,
+  );
+
+  const scrollGroupNetworkObject = await networkObjectService.get<IScrollGroupService>(
+    NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+  );
+  if (!scrollGroupNetworkObject)
+    throw new Error(
+      `${NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE} is not available as a network object`,
+    );
+  networkObject = scrollGroupNetworkObject;
 }
 
 /**
@@ -51,10 +50,15 @@ async function initialize(): Promise<void> {
 export const scrollGroupService = createSyncProxyForAsyncObject<IScrollGroupService>(
   async () => {
     await initialize();
+    if (!networkObject)
+      throw new Error(
+        `${NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE} is not available as a network object`,
+      );
     return networkObject;
   },
   {
     onDidUpdateScrRef,
+    onDidChangeReferenceHistory,
   },
 );
 

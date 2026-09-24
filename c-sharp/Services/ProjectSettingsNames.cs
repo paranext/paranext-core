@@ -17,11 +17,28 @@ public sealed class ProjectSettingsNames
     public const string PB_LANGUAGE_TAG = "platform.languageTag";
     public const string PT_LANGUAGE_TAG = "LanguageTag";
 
+    /// <summary>
+    /// Paratext-only: the raw colon-delimited language id storage ("code:script:region:variant",
+    /// e.g. "en:::"). Not mapped to a <c>platform.*</c> setting. Read directly during project
+    /// enumeration to derive <c>platform.languageTag</c> without going through the
+    /// <c>ProjectSettings.LanguageID</c> getter, which resolves-and-persists for legacy projects
+    /// (see <c>ScrTextExtensions.GetLanguageTag</c>).
+    /// </summary>
+    public const string PT_LANGUAGE_ISO_CODE = "LanguageIsoCode";
+
     public const string PB_VERSIFICATION = "platformScripture.versification";
     public const string PT_VERSIFICATION = "Versification";
 
     public const string PB_IS_EDITABLE = "platform.isEditable";
     public const string PT_IS_EDITABLE = "Editable";
+
+    /// <summary>
+    /// Whether the project has been published as a read-only reference / resource. This is a
+    /// computed, read-only setting — it is not stored in Settings.xml. Intentionally NOT included
+    /// in s_platformBibleToParatextSettingsNames because no Paratext setting name maps to it; the
+    /// value is computed by ParatextProjectDataProvider's get-setting branch.
+    /// </summary>
+    public const string PB_IS_PUBLISHED = "platform.isPublished";
 
     public const string PB_TEXT_DIRECTION = "platform.textDirection";
     public const string PT_TEXT_DIRECTION = "TextDirection";
@@ -98,6 +115,77 @@ public sealed class ProjectSettingsNames
     public const string PT_REFERENCED_PROJECTS_AND_RESOURCES = "ReferencedProjectsAndResources";
 
     /// <summary>
+    /// Whether the paragraph/verse structure of this project is protected from changes. A project
+    /// Admin may define a structure for the translated Scripture text or adopt the structure of a
+    /// model text to provide consistency and ensure the acceptability of the published text. When
+    /// true, other team members cannot change the structure of the translated text. The Admin can
+    /// set this to false to temporarily allow structural changes. Stored in Paratext's Settings.xml
+    /// as "StructureProtected".
+    /// </summary>
+    public const string PB_STRUCTURE_PROTECTED = "platformScripture.structureProtected";
+    public const string PT_STRUCTURE_PROTECTED = "StructureProtected";
+
+    /// <summary>
+    /// The active tab identifier chosen by a project admin for the shared layout. Stored in
+    /// Paratext's Settings.xml as "SharedLayoutDefaultTab".
+    /// </summary>
+    public const string PB_SHARED_LAYOUT_DEFAULT_TAB = "platformScripture.sharedLayoutDefaultTab";
+    public const string PT_SHARED_LAYOUT_DEFAULT_TAB = "SharedLayoutDefaultTab";
+
+    /// <summary>
+    /// The separator string Paratext inserts between chapter and verse numbers when formatting a
+    /// Scripture reference (e.g. the ":" in "Mt 1:3" — an illustration of where the separator
+    /// appears, not the default value). Stored in Settings.xml as "ChapterVerseSeparator";
+    /// Paratext's default is "." (see ProjectSettings.ChapterVerseSeparator).
+    /// </summary>
+    public const string PB_CHAPTER_VERSE_SEPARATOR = "platformScripture.chapterVerseSeparator";
+    public const string PT_CHAPTER_VERSE_SEPARATOR = "ChapterVerseSeparator";
+
+    /// <summary>
+    /// The separator string Paratext inserts between the start and end verse numbers of a verse
+    /// range (e.g. the "-" in "Mt 1:3-5"). Stored in Settings.xml as "RangeIndicator" (Paratext's
+    /// C# property is named VerseRangeSeparator, but the underlying Settings.xml tag and Setting
+    /// enum member are RangeIndicator).
+    /// </summary>
+    public const string PB_VERSE_RANGE_SEPARATOR = "platformScripture.verseRangeSeparator";
+    public const string PT_VERSE_RANGE_SEPARATOR = "RangeIndicator";
+
+    /// <summary>
+    /// The default caller character Paratext assigns to newly inserted footnotes (\f). Stored in
+    /// Settings.xml as "DefaultFootnoteCaller".
+    /// </summary>
+    public const string PB_DEFAULT_FOOTNOTE_CALLER = "platformScripture.defaultFootnoteCaller";
+    public const string PT_DEFAULT_FOOTNOTE_CALLER = "DefaultFootnoteCaller";
+
+    /// <summary>
+    /// The default caller character Paratext assigns to newly inserted cross-references (\x).
+    /// Stored in Settings.xml as "DefaultCrossRefCaller".
+    /// </summary>
+    public const string PB_DEFAULT_CROSS_REF_CALLER = "platformScripture.defaultCrossRefCaller";
+    public const string PT_DEFAULT_CROSS_REF_CALLER = "DefaultCrossRefCaller";
+
+    /// <summary>
+    /// The auto-generated footnote caller sequence for the project's LANGUAGE: a space-separated
+    /// character-set string (e.g. "a b c ... z"), possibly empty. LANGUAGE-backed — it reads the
+    /// writing system's character set via ScrLanguage.FootnoteCallers (Paratext repo,
+    /// ParatextData/Languages/ScrLanguage.cs:290-300), NOT a Settings.xml tag — so it is
+    /// intentionally not in s_platformBibleToParatextSettingsNames; ParatextProjectDataProvider
+    /// serves it from ScrText.Language, and it is read-only through the settings surface (like
+    /// platform.textDirection). Empty means "no sequence defined": consumers apply PT9's own
+    /// fallback of a-z (UsfmXsltExtensions.GetNthCaller).
+    /// </summary>
+    public const string PB_FOOTNOTE_CALLERS = "platformScripture.footnoteCallers";
+
+    /// <summary>
+    /// The auto-generated cross-reference caller sequence for the project's LANGUAGE: a
+    /// space-separated character-set string, possibly empty. LANGUAGE-backed
+    /// (ScrLanguage.CrossReferenceCallers character set), NOT a Settings.xml tag — see
+    /// PB_FOOTNOTE_CALLERS. Empty means "no sequence defined": consumers apply PT9's own fallback
+    /// of "†" (ViewUsfmXhtmlConverter.cs:73-74).
+    /// </summary>
+    public const string PB_CROSS_REF_CALLERS = "platformScripture.crossRefCallers";
+
+    /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
     private static readonly HashSet<string> s_ptSettingBooleans =
@@ -107,6 +195,7 @@ public sealed class ProjectSettingsNames
         "AllowReadAccess",
         "AllowSharingWithSLDR",
         "AllowInvisibleChars",
+        "StructureProtected",
     ];
 
     // Make sure this dictionary gets updated whenever new settings are added
@@ -132,6 +221,12 @@ public sealed class ProjectSettingsNames
             { PB_ALLOW_INVISIBLE_CHARACTERS, PT_ALLOW_INVISIBLE_CHARACTERS },
             { PB_MODEL_TEXTS, PT_MODEL_TEXTS },
             { PB_REFERENCED_PROJECTS_AND_RESOURCES, PT_REFERENCED_PROJECTS_AND_RESOURCES },
+            { PB_STRUCTURE_PROTECTED, PT_STRUCTURE_PROTECTED },
+            { PB_SHARED_LAYOUT_DEFAULT_TAB, PT_SHARED_LAYOUT_DEFAULT_TAB },
+            { PB_CHAPTER_VERSE_SEPARATOR, PT_CHAPTER_VERSE_SEPARATOR },
+            { PB_VERSE_RANGE_SEPARATOR, PT_VERSE_RANGE_SEPARATOR },
+            { PB_DEFAULT_FOOTNOTE_CALLER, PT_DEFAULT_FOOTNOTE_CALLER },
+            { PB_DEFAULT_CROSS_REF_CALLER, PT_DEFAULT_CROSS_REF_CALLER },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
@@ -169,5 +264,60 @@ public sealed class ProjectSettingsNames
     public static bool IsParatextSettingABoolean(string ptSettingName)
     {
         return s_ptSettingBooleans.Contains(ptSettingName);
+    }
+
+    /// <summary>
+    /// Parses a raw Paratext boolean setting value: "T"/"TRUE" and "F"/"FALSE"
+    /// (case-insensitive). This is the single shared parser for such values; each caller applies
+    /// its own malformed-value policy on a false return (e.g. the project setting getter throws,
+    /// the setter refuses to write, metadata enumeration falls back to a default).
+    /// </summary>
+    /// <param name="rawValue">Raw setting value to parse; null is treated as a malformed
+    /// (non-boolean) value.</param>
+    /// <param name="value">The parsed boolean; false when parsing failed</param>
+    /// <returns>True if <paramref name="rawValue"/> was a well-formed boolean value</returns>
+    public static bool TryParseParatextBoolean(string? rawValue, out bool value)
+    {
+        switch (rawValue?.ToUpperInvariant())
+        {
+            case "T"
+            or "TRUE":
+                value = true;
+                return true;
+            case "F"
+            or "FALSE":
+                value = false;
+                return true;
+            default:
+                value = false;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Raw Paratext settings that back <c>ProjectMetadata</c>'s display fields (see
+    /// <c>ScrTextExtensions.GetProjectDetails</c>): name, fullName, language, languageTag, isEditable.
+    /// A write to one of these changes what the project picker / Home lists show, so the project
+    /// setting setter emits <c>LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE</c> when one of them
+    /// changes. (isPublished has no writable backing setting - it is computed from
+    /// <c>IsResourceProject</c> - so it is not listed.)
+    /// </summary>
+    private static readonly HashSet<string> s_projectMetadataDisplaySettings =
+    [
+        PT_NAME,
+        PT_FULL_NAME,
+        PT_LANGUAGE,
+        PT_LANGUAGE_ISO_CODE,
+        PT_IS_EDITABLE,
+    ];
+
+    /// <summary>
+    /// Whether writing <paramref name="ptSettingName"/> changes a project's display metadata (see
+    /// <see cref="s_projectMetadataDisplaySettings"/>), i.e. whether the project-list caches should
+    /// be invalidated after the write.
+    /// </summary>
+    public static bool IsProjectMetadataDisplaySetting(string ptSettingName)
+    {
+        return s_projectMetadataDisplaySettings.Contains(ptSettingName);
     }
 }

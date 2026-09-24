@@ -1,0 +1,122 @@
+// Unstable API surface for platform-bible-react.
+//
+// Everything exported here is importable from `platform-bible-react/experimental`
+// but carries NO stability guarantee — symbols may change shape, move, or
+// disappear at any time without a deprecation cycle. Extensions may use
+// it, but should accept the maintenance burden of breaking changes.
+//
+// Stable exports live in `./index.ts`. The two entry points are maintained
+// as separate, independent API surfaces with different support levels.
+
+import './index.css';
+
+// ManageBooksDialog moved to extensions/src/platform-scripture/src/manage-books-dialog/ (FN-009).
+// The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
+export {
+  default as ProjectSelector,
+  type ProjectSelectorProps,
+  type ProjectSelectorProject,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProjectPair,
+  type ProjectSelectorGrouping,
+  type ProjectSelectorLocalizedStrings,
+  type ProjectSelectorLocalizedStringKey,
+  type ProjectSelectorStringLookup,
+  type ProjectSelectorFooterAction,
+  type ProjectSelectorIndicator,
+  type BuiltInGroupingStrings,
+  type SelectionGroupingStrings,
+  PROJECT_SELECTOR_STRING_KEYS,
+  PROJECT_SELECTOR_DEFAULT_STRINGS,
+  NO_GROUPING,
+  buildProjectSelectorLocalizedStrings,
+  buildBuiltInGroupingStrings,
+  buildSelectionGroupingStrings,
+  makeBuiltInGroupings,
+  makeSelectionGrouping,
+  defaultGroupings,
+} from './components/advanced/project-selector/project-selector.component';
+// One reader for "can this localized value be shown to a user, or must it fall back?", shared with
+// consumers so a web view merging its own `%webView_…%` lookups onto a component's string bag
+// judges them the same way the component does. A nullish chain cannot: an unresolved lookup arrives
+// as the raw key, which is a defined string, so `?? 'Default'` never fires on it.
+export { resolveLocalizedString } from './utils/localization.util';
+export {
+  default as ResourcePickerDialog,
+  type ResourcePickerDialogProps,
+  type ResourcePickerDialogLocalizedStrings,
+  RESOURCE_PICKER_DIALOG_STRING_KEYS,
+  getResourcePickerBodyState,
+  type ResourcePickerBodyState,
+} from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
+export {
+  buildLanguageFilterOptions,
+  focusResourcePickerOnOpen,
+  matchesResourceType,
+  partitionFilterSelection,
+} from './components/advanced/resource-picker-dialog/resource-picker-dialog.utils';
+export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
+export {
+  getAvailableBookIds,
+  summarizeSelectedBooks,
+} from './components/advanced/scope-selector/scope-selector.utils';
+export { default as SourceLanguageIndexedList } from './components/advanced/source-language-indexed-list/source-language-indexed-list.component';
+export type {
+  IndexedListItem,
+  SourceLanguageIndexedListProps,
+  SemanticDomain,
+  SourceLanguageIndexedListLocalizedStrings,
+} from './components/advanced/source-language-indexed-list/source-language-indexed-list.types';
+export { SOURCE_LANGUAGE_INDEXED_LIST_STRING_KEYS } from './components/advanced/source-language-indexed-list/source-language-indexed-list.types';
+export {
+  default as LinkedScrRefButton,
+  type LinkedScrRefButtonProps,
+} from './components/basics/linked-scr-ref-button.component';
+export type { ScopeWithRange } from './components/utils/scripture.util';
+export { Z_INDEX_TOOLTIP } from './components/z-index';
+// The books-present-aware scripture navigation math (get*Ref, ScriptureBounds) lives in
+// `platform-bible-utils/experimental` (it is pure scripture math, alongside the sibling `offset*`
+// helpers); import it from there. `useQuickNavButtons` (the React hook that wraps it) stays in
+// `./components/advanced/book-chapter-control/book-chapter-control.navigation`.
+export { ALL_BOOK_IDS } from './components/shared/book.utils';
+export { readDirection, persistDirection, type Direction } from './utils/dir-helper.util';
+// The standard-view marker-palette machinery: the shared keydown forwarding table, the shared
+// open-session orchestration, and the shared filter/ranking — one API family, kept together.
+export {
+  clearPaletteSessionIfCurrent,
+  type ForwardedSessionKind,
+  getMarkerPaletteClaimedKeys,
+  handleMarkerPaletteSessionKeyDown,
+  type MarkerPaletteKeyEvent,
+  type MarkerPaletteKeyOutcome,
+  type MarkerPaletteSessionDriver,
+  type MarkerPaletteSessionKind,
+  type MarkerPaletteSessionState,
+} from './components/advanced/marker-palette-keydown.util';
+export {
+  type MarkerPaletteOpenSession,
+  runMarkerPaletteSession,
+  type RunMarkerPaletteSessionOptions,
+} from './components/advanced/marker-palette-session.util';
+export {
+  filterAndRankPaletteItems,
+  stripMarkerNestingPrefix,
+  type PaletteFilterMode,
+} from './components/advanced/marker-palette-filter.util';
+export {
+  default as NavigationHistoryButtons,
+  NAVIGATION_HISTORY_BUTTONS_STRING_KEYS,
+  type NavigationHistoryButtonsProps,
+  type NavigationHistoryButtonsLocalizedStrings,
+  type NavigationHistoryItem,
+} from './components/advanced/navigation-history-buttons/navigation-history-buttons.component';
+export {
+  default as InternetAccessOptionList,
+  INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+} from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export type { InternetAccessOptionListProps } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export {
+  default as DeveloperSection,
+  DEVELOPER_SECTION_STRING_KEYS,
+} from './components/advanced/developer-section/developer-section.component';
+export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';

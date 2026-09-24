@@ -187,59 +187,63 @@ export const inventoryStatusColumn = (
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
       return (
-        <ToggleGroup value={status} variant="outline" type="single" className="tw:gap-0">
-          <ToggleGroupItem
-            onClick={(event) => {
-              event.stopPropagation();
-              statusChangeHandler(
-                [item],
-                'approved',
-                approvedItems,
-                onApprovedItemsChange,
-                unapprovedItems,
-                onUnapprovedItemsChange,
-              );
-            }}
-            value="approved"
-            className="tw:rounded-e-none tw:border-e-0"
-          >
-            <CircleCheckIcon />
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            onClick={(event) => {
-              event.stopPropagation();
-              statusChangeHandler(
-                [item],
-                'unapproved',
-                approvedItems,
-                onApprovedItemsChange,
-                unapprovedItems,
-                onUnapprovedItemsChange,
-              );
-            }}
-            value="unapproved"
-            className="tw:rounded-none"
-          >
-            <CircleXIcon />
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            onClick={(event) => {
-              event.stopPropagation();
-              statusChangeHandler(
-                [item],
-                'unknown',
-                approvedItems,
-                onApprovedItemsChange,
-                unapprovedItems,
-                onUnapprovedItemsChange,
-              );
-            }}
-            value="unknown"
-            className="tw:rounded-s-none tw:border-s-0"
-          >
-            <CircleHelpIcon />
-          </ToggleGroupItem>
-        </ToggleGroup>
+        // Center the status buttons in the cell to match the centered status column header (the
+        // ToggleGroup would otherwise sit left-aligned).
+        <div className="tw:flex tw:justify-center">
+          <ToggleGroup value={status} variant="outline" type="single" className="tw:gap-0">
+            <ToggleGroupItem
+              onClick={(event) => {
+                event.stopPropagation();
+                statusChangeHandler(
+                  [item],
+                  'approved',
+                  approvedItems,
+                  onApprovedItemsChange,
+                  unapprovedItems,
+                  onUnapprovedItemsChange,
+                );
+              }}
+              value="approved"
+              className="tw:rounded-e-none tw:border-e-0"
+            >
+              <CircleCheckIcon />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              onClick={(event) => {
+                event.stopPropagation();
+                statusChangeHandler(
+                  [item],
+                  'unapproved',
+                  approvedItems,
+                  onApprovedItemsChange,
+                  unapprovedItems,
+                  onUnapprovedItemsChange,
+                );
+              }}
+              value="unapproved"
+              className="tw:rounded-none"
+            >
+              <CircleXIcon />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              onClick={(event) => {
+                event.stopPropagation();
+                statusChangeHandler(
+                  [item],
+                  'unknown',
+                  approvedItems,
+                  onApprovedItemsChange,
+                  unapprovedItems,
+                  onUnapprovedItemsChange,
+                );
+              }}
+              value="unknown"
+              className="tw:rounded-s-none tw:border-s-0"
+            >
+              <CircleHelpIcon />
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       );
     },
   };

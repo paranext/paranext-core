@@ -7,30 +7,16 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import {
-  Button,
-  ComboBox,
-  ComboBoxGroup,
-  MultiSelectComboBox,
-  MultiSelectComboBoxEntry,
-  Progress,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Spinner,
-  useEvent,
-  usePromise,
-} from 'platform-bible-react';
+import { useEvent, usePromise } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   deepEqual,
-  formatReplacementString,
   getChaptersForBook,
   getErrorMessage,
   isPlatformError,
   LAST_SCR_BOOK_NUM,
   Mutex,
+  normalizeProjectId,
 } from 'platform-bible-utils';
 import {
   CheckInputRange,
@@ -41,17 +27,26 @@ import {
   CheckRunResult,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  CHECK_SCOPE_FILTER_STRINGS,
-  CheckInfo,
-  CheckScopes,
-  getProjectNames,
-  isValidCheckScope,
-  LOCALIZED_STRINGS,
-  ProjectOption,
-} from './checks-side-panel.utils';
+import { projectNamesFromMetadata } from './project-names.util';
+import { CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
-import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
+import {
+  ChecksSidePanel,
+  ChecksSidePanelProject,
+  CHECKS_SIDE_PANEL_STRING_KEYS,
+} from './checks/checks-side-panel/checks-side-panel.component';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
+import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
+
+/**
+ * Web-view types that should count as "open" project tabs for the picker's "Open Tabs" grouping.
+ * Mirrors `manage-books.web-view.tsx`: only the scripture editor binds a project to a scroll group
+ * in a user-meaningful way. Without this filter, every project-bound web view (including the checks
+ * side panel itself) would falsely mark a project as open.
+ */
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>([SCRIPTURE_EDITOR_WEBVIEW_TYPE]);
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -83,12 +78,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
   useWebViewState,
 }: WebViewProps) {
   const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
-  const [selectedCheckId, setSelectedCheckId] = useState<string>('');
   const [selectedCheckTypeIds, setSelectedCheckTypeIds] = useWebViewState<string[]>(
     'selectedCheckTypes',
     [],
   );
-  const [isCheckTypesOpen, setIsCheckTypesOpen] = useState(false);
   const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
   const [activeRanges, setActiveRanges] = useState<CheckInputRange[]>(() => []);
   const [activeJobStatusReport, setActiveJobStatusReport] =
@@ -98,7 +91,9 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const [checkResults, setCheckResults] = useState<CheckRunResult[]>(() => defaultCheckResults);
   const checkResultsRef = useRef<CheckRunResult[]>(checkResults);
   const [isResultLoadingCancelled, setIsResultLoadingCancelled] = useState(false);
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => [...CHECKS_SIDE_PANEL_STRING_KEYS], []),
+  );
   const [availableChecks, , isLoadingAvailableChecks] = useData(
     'platformScripture.checkAggregator',
   ).AvailableChecks(
@@ -106,6 +101,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useMemo(() => [defaultCheckRunnerCheckDetails], []),
   );
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('ChecksSidePanelWebView');
 
   // Project data loading
   const [projectIdsAndNames]: [{ [projectId: string]: ProjectOption }, boolean] = usePromise(
@@ -117,14 +114,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
         includeProjectInterfaces: ['Scripture', 'Paratext'],
       });
 
-      // Map through all metadata to get ids and names
-      await Promise.all(
-        allMetadata.map(async (metadata) => {
-          const names = await getProjectNames(metadata.id);
-          if (!names) return;
-          projectDict[metadata.id] = names;
-        }),
-      );
+      // Every name this panel shows comes off the metadata already fetched above, so there is no
+      // per-project read left to await.
+      allMetadata.forEach((metadata) => {
+        projectDict[metadata.id] = projectNamesFromMetadata(metadata);
+      });
 
       return projectDict;
     }, []),
@@ -134,7 +128,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
   const editorWebViewController = useWebViewController(
-    'platformScriptureEditor.react',
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     editorWebViewId,
   );
 
@@ -588,14 +582,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [setScrRef, writeCheckId, editorWebViewId, editorWebViewController],
   );
 
-  const handleSelectCheck = useCallback(
-    async (id: string) => {
-      setSelectedCheckId(id);
-      selectCheckReferenceInEditor(id);
-    },
-    [selectCheckReferenceInEditor],
-  );
-
   const setDeniedStatusForResult = useCallback(
     (result: CheckRunResult, isDenied: boolean) => {
       if (!result || !projectId || !checkAggregator) return false;
@@ -621,14 +607,25 @@ global.webViewComponent = function ChecksSidePanelWebView({
     async (result: CheckRunResult) => {
       if (!result || !result.checkId || !projectId || !checkAggregator) return false;
 
-      const denyResultSuccess = await checkAggregator.denyCheckResult(
-        result.checkId,
-        result.checkResultType,
-        projectId,
-        result.verseRef,
-        result.itemText,
-        result.checkResultUniqueId,
-      );
+      let denyResultSuccess: boolean;
+      try {
+        denyResultSuccess = await checkAggregator.denyCheckResult(
+          result.checkId,
+          result.checkResultType,
+          projectId,
+          result.verseRef,
+          result.itemText,
+          result.checkResultUniqueId,
+        );
+      } catch (error) {
+        // The deny/allow buttons are fire-and-forget, so without this catch any rejection becomes
+        // an unhandled promise rejection with no UI. Show the shared "editing paused" warning for a
+        // write-gate rejection during an automatic Send/Receive; log everything else (rethrowing
+        // would land in the void — no caller awaits these handlers).
+        if (isSyncEditBlockedError(error)) notifySyncEditBlocked();
+        else logger.warn(`Could not deny check result: ${getErrorMessage(error)}`);
+        return false;
+      }
       if (!isMountedRef.current) return false;
       if (denyResultSuccess) setDeniedStatusForResult(result, true);
       else logger.debug(`Could not deny check result: ${JSON.stringify(result)}`);
@@ -641,14 +638,25 @@ global.webViewComponent = function ChecksSidePanelWebView({
     async (result: CheckRunResult) => {
       if (!result || !result.checkId || !projectId || !checkAggregator) return false;
 
-      const allowResultStatus = await checkAggregator.allowCheckResult(
-        result.checkId,
-        result.checkResultType,
-        projectId,
-        result.verseRef,
-        result.itemText,
-        result.checkResultUniqueId,
-      );
+      let allowResultStatus: boolean;
+      try {
+        allowResultStatus = await checkAggregator.allowCheckResult(
+          result.checkId,
+          result.checkResultType,
+          projectId,
+          result.verseRef,
+          result.itemText,
+          result.checkResultUniqueId,
+        );
+      } catch (error) {
+        // The deny/allow buttons are fire-and-forget, so without this catch any rejection becomes
+        // an unhandled promise rejection with no UI. Show the shared "editing paused" warning for a
+        // write-gate rejection during an automatic Send/Receive; log everything else (rethrowing
+        // would land in the void — no caller awaits these handlers).
+        if (isSyncEditBlockedError(error)) notifySyncEditBlocked();
+        else logger.warn(`Could not allow check result: ${getErrorMessage(error)}`);
+        return false;
+      }
       if (!isMountedRef.current) return false;
       if (allowResultStatus) setDeniedStatusForResult(result, false);
       else logger.debug(`Could not allow check result: ${JSON.stringify(result)}`);
@@ -665,88 +673,34 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
 
   const handleSelectScope = useCallback(
-    (newScope: string) => {
-      if (isValidCheckScope(newScope)) {
-        setScope(newScope);
-      }
+    (newScope: CheckScopes) => {
+      setScope(newScope);
     },
     [setScope],
   );
 
-  const handleSelectCheckType = (updatedCheckIds: string[]) => {
-    setSelectedCheckTypeIds(updatedCheckIds);
-  };
-
-  type ProjectEntry = {
-    id: string;
-    fullName: string;
-    shortName: string;
-    label: string;
-    secondaryLabel?: string;
-  };
-
-  const projectOptionsGrouped = useMemo<ComboBoxGroup<ProjectEntry>[]>(() => {
-    const allProjects = Object.entries(projectIdsAndNames)
-      .sort(([, a], [, b]) =>
-        a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
-      )
-      .map(([id, project]) => ({
-        id,
-        fullName: project.fullName,
-        shortName: project.shortName,
-        label: project.shortName,
-        secondaryLabel: project.fullName,
-      }));
-    return [
-      {
-        groupHeading:
-          localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
-        options: allProjects,
-      },
-    ];
-  }, [projectIdsAndNames, localizedStrings]);
-
-  const selectedProjectOption = useMemo(
-    () =>
-      projectOptionsGrouped
-        .flatMap((group) => group.options)
-        .find((option) => option.id === projectId),
-    [projectOptionsGrouped, projectId],
-  );
-
-  const getScopeLabel = useCallback(
-    (scopeValue: string) => {
-      if (isValidCheckScope(scopeValue)) {
-        return localizedStrings[CHECK_SCOPE_FILTER_STRINGS[scopeValue]];
-      }
-      return scopeValue; // Fallback for invalid scope values
+  const handleSelectCheckType = useCallback(
+    (updatedCheckIds: string[]) => {
+      setSelectedCheckTypeIds(updatedCheckIds);
     },
-    [localizedStrings],
+    [setSelectedCheckTypeIds],
   );
 
-  // Helper functions for check type filter
-  const checkTypeEntries: MultiSelectComboBoxEntry[] = useMemo(
+  // Filter to scripture editor tabs only — without this filter, every project-bound web view
+  // (e.g. the checks side panel itself) would falsely mark a project as "open" in the popover's
+  // "Open Tabs" grouping.
+  const editorWebViewFilter = useCallback(
+    (webView: { webViewType: string }) => SCRIPTURE_EDITOR_WEB_VIEW_TYPES.has(webView.webViewType),
+    [],
+  );
+  const allOpenProjectTabs = useOpenProjectTabs(editorWebViewFilter);
+  const projectSelectorOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
     () =>
-      checksInfo.map((check) => ({
-        value: check.checkId,
-        label: check.checkName,
-        secondaryLabel: check.isSetup
-          ? undefined
-          : localizedStrings['%webView_checksSidePanel_checkRequiresSetup%'],
-        starred: false,
+      allOpenProjectTabs.map((tab) => ({
+        projectId: tab.projectId,
+        scrollGroupId: tab.scrollGroupId,
       })),
-    [checksInfo, localizedStrings],
-  );
-
-  const selectedChecksCountLabel = useMemo(
-    () =>
-      formatReplacementString(
-        localizedStrings['%webView_checksSidePanel_checkTypeFilter_countLabel%'],
-        {
-          resultsCount: selectedCheckTypeIds.length,
-        },
-      ),
-    [localizedStrings, selectedCheckTypeIds],
+    [allOpenProjectTabs],
   );
 
   const handleCancelOperation = useCallback(async () => {
@@ -755,167 +709,49 @@ global.webViewComponent = function ChecksSidePanelWebView({
     setIsResultLoadingCancelled(true);
   }, [stopActiveJob]);
 
+  // The presentational panel renders results as a plain array; surface an empty list on the
+  // PlatformError sentinel so the panel shows its empty state (matching the original behavior).
+  const safeCheckResults = useMemo(
+    () => (isPlatformError(checkResults) ? [] : checkResults),
+    [checkResults],
+  );
+
+  // Shape the loaded project metadata into the list the panel renders in the project filter.
+  const projects = useMemo<ChecksSidePanelProject[]>(() => {
+    return Object.entries(projectIdsAndNames).map(([id, project]) => ({
+      id,
+      fullName: project.fullName,
+      shortName: project.shortName,
+      language: project.language,
+      lastUsedAt: recencyMap.get(normalizeProjectId(id)),
+    }));
+  }, [projectIdsAndNames, recencyMap]);
+
   // #endregion
 
-  if (isLoadingAvailableChecks || !checkAggregator) {
-    return (
-      <div className="pr-twp tw:h-screen tw:box-border tw:w-full tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-2">
-        <Spinner />
-      </div>
-    );
-  }
-
   return (
-    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:max-h-screen tw:gap-6 tw:p-4 tw:min-w-[10rem]">
-      {/* Check configuration */}
-      <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:w-full">
-        {/* Project Filter */}
-        <ComboBox<ProjectEntry>
-          options={projectOptionsGrouped}
-          value={selectedProjectOption}
-          onChange={(newProject) => handleSelectProject(newProject.id)}
-          getButtonLabel={(project) => project.shortName}
-          buttonPlaceholder={
-            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
-          }
-          commandEmptyMessage={
-            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
-          }
-          ariaLabel={
-            localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-          }
-          buttonVariant="outline"
-          buttonClassName="tw:flex-1 tw:min-w-32 tw:font-normal"
-          popoverContentClassName="tw:w-[300px]"
-          alignDropDown="start"
-        />
-
-        {/* Scope Filter */}
-        <Select value={scope} onValueChange={handleSelectScope}>
-          <SelectTrigger className="tw:flex-1 tw:min-w-32">
-            <SelectValue
-              placeholder={localizedStrings['%webView_checksSidePanel_scopeFilter_label%']}
-            >
-              <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
-                {getScopeLabel(scope)}
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="tw:max-w-sm" align="start">
-            {Object.values(CheckScopes).map((scopeOption) => (
-              <SelectItem key={scopeOption} value={scopeOption}>
-                {getScopeLabel(scopeOption)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {/* Check Type Filter */}
-        <MultiSelectComboBox
-          entries={checkTypeEntries}
-          selected={selectedCheckTypeIds}
-          onChange={handleSelectCheckType}
-          placeholder={localizedStrings['%webView_checksSidePanel_checkTypeFilter_label%']}
-          hasToggleAllFeature
-          selectAllText="Select All"
-          clearAllText="Clear All"
-          customSelectedText={selectedChecksCountLabel}
-          commandEmptyMessage="No checks found"
-          isOpen={isCheckTypesOpen}
-          onOpenChange={setIsCheckTypesOpen}
-          sortSelected={false}
-          className="tw:flex-[2] tw:min-w-32"
-          variant="outline"
-        />
-      </div>
-      {/* Check results */}
-      {
-        // TODO: Display something else if there is an error getting check results
-        !checkResults || isPlatformError(checkResults) || checkResults.length === 0 ? (
-          <div className="tw:min-h-48 tw:flex-1 tw:flex tw:flex-col tw:items-center tw:justify-center tw:w-full">
-            <div className="tw:mb-2">
-              {selectedCheckTypeIds.length === 0
-                ? localizedStrings['%webView_checksSidePanel_noChecksSelected%']
-                : localizedStrings['%webView_checksSidePanel_noCheckResults%']}
-            </div>
-            <Button onClick={() => setIsCheckTypesOpen(true)}>
-              {localizedStrings['%webView_checksSidePanel_selectChecks%']}
-            </Button>
-          </div>
-        ) : (
-          <div className="tw:min-h-48 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2">
-            {checkResults.map((result, index) => (
-              <CheckCard
-                key={writeCheckId(result, index)}
-                checkResult={result}
-                checkId={writeCheckId(result, index)}
-                isSelected={selectedCheckId === writeCheckId(result, index)}
-                handleSelectCheck={handleSelectCheck}
-                checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
-                handleDenyCheck={handleDenyCheck}
-                handleAllowCheck={handleAllowCheck}
-                handleOpenSettingsAndInventories={openSettingsAndInventories}
-                showBadge
-                checkName={getLocalizedCheckDescription(result.checkId ?? result.checkResultType)}
-                isCheckSetup={
-                  checksInfo.find((check) => check.checkId === result.checkId)?.isSetup ?? true
-                }
-                checkCardDescription={result.messageFormatString}
-              />
-            ))}
-          </div>
-        )
-      }
-      {/* Status bar */}
-      {activeJobStatusReport &&
-        activeJobStatusReport !== defaultJobStatusReport &&
-        checkResults && (
-          <div className="tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:border-t tw:pt-4">
-            {/* The job is active */}
-            {activeJobStatusReport.status === 'queued' ||
-              (activeJobStatusReport.status === 'running' &&
-                // While starting up, % complete stays stuck at 0 and looks strange with the Cancel button
-                activeJobStatusReport.percentComplete > 0 && (
-                  <div className="tw:flex tw:items-center tw:gap-4">
-                    <Progress value={activeJobStatusReport.percentComplete} className="tw:w-64" />
-                    <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
-                      {localizedStrings['%general_cancel%']}
-                    </Button>
-                  </div>
-                ))}
-            {/* The job has finished but not all results are loaded into the UI yet */}
-            {(activeJobStatusReport.status === 'completed' ||
-              activeJobStatusReport.status === 'stopped') &&
-              checkResults &&
-              checkResults.length < activeJobStatusReport.totalResultsCount && (
-                <div className="tw:flex tw:items-center tw:gap-4">
-                  <Progress
-                    value={(checkResults.length / activeJobStatusReport.totalResultsCount) * 100}
-                    className="tw:w-64"
-                  />
-                  {checkResults.length.toString()} /{' '}
-                  {activeJobStatusReport.totalResultsCount.toString()}
-                  <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
-                    {localizedStrings['%general_cancel%']}
-                  </Button>
-                </div>
-              )}
-            {/* The job has finished and all results are loaded into the UI */}
-            {(activeJobStatusReport.status === 'completed' ||
-              activeJobStatusReport.status === 'stopped') &&
-              checkResults &&
-              checkResults.length === activeJobStatusReport.totalResultsCount && (
-                <p className="tw:font-light">
-                  {checkResults.length > 0
-                    ? checkResults.length.toString()
-                    : localizedStrings['%webView_find_noResultsFound%']}
-                </p>
-              )}
-            {/* The job encountered an error while running */}
-            {activeJobStatusReport.status === 'errored' && activeJobStatusReport.error && (
-              <p className="tw:font-light"> {activeJobStatusReport.error}</p>
-            )}
-          </div>
-        )}
-    </div>
+    <ChecksSidePanel
+      localizedStrings={localizedStrings}
+      isLoading={isLoadingAvailableChecks || !checkAggregator}
+      projects={projects}
+      selectedProjectId={projectId}
+      scope={scope}
+      selectedCheckTypeIds={selectedCheckTypeIds}
+      checksInfo={checksInfo}
+      checkResults={safeCheckResults}
+      jobStatusReport={activeJobStatusReport}
+      hasActiveJob={activeJobStatusReport !== defaultJobStatusReport}
+      isResultLoadingCancelled={isResultLoadingCancelled}
+      getLocalizedCheckDescription={getLocalizedCheckDescription}
+      openTabs={projectSelectorOpenTabs}
+      onSelectProject={handleSelectProject}
+      onSelectScope={handleSelectScope}
+      onSelectCheckTypes={handleSelectCheckType}
+      onAllowCheck={handleAllowCheck}
+      onDenyCheck={handleDenyCheck}
+      onOpenSettings={openSettingsAndInventories}
+      onNavigateToResult={selectCheckReferenceInEditor}
+      onCancelOperation={handleCancelOperation}
+    />
   );
 };

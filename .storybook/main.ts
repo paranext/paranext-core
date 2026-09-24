@@ -1,7 +1,7 @@
 import { dirname, join } from 'path';
 import type { StorybookConfig } from '@storybook/react-webpack5';
 import { mergeWithCustomize } from 'webpack-merge';
-import { RuleSetRule } from 'webpack';
+import { NormalModuleReplacementPlugin, RuleSetRule } from 'webpack';
 
 const config: StorybookConfig = {
   stories: [
@@ -65,14 +65,29 @@ const config: StorybookConfig = {
         !conflictingPlugins.includes(plugin?.constructor?.name ?? ''),
     );
 
-    // Inject postcss-loader into the renderer's CSS rules for Storybook only.
-    // postcss-loader is intentionally omitted from the shared renderer webpack configs so that
-    // Tailwind CSS is not processed in the Electron app build — only in Storybook.
+    // Inject postcss-loader into the renderer's general CSS rules for Storybook only.
+    // postcss-loader is intentionally omitted from the renderer's general CSS rules so that Tailwind
+    // is not processed in the Electron app build — only in Storybook. The one exception is core's
+    // dedicated Tailwind-entry rule (src/renderer/styles/tailwind.css), which carries its own
+    // postcss-loader for the app build; the guard below skips it so Storybook doesn't add a second.
     if (rendererConfigSanitized.module?.rules) {
       const rendererRules: RuleSetRule[] = rendererConfigSanitized.module.rules;
       rendererConfigSanitized.module.rules = rendererRules.map((rule) => {
         if (!rule || typeof rule !== 'object' || !Array.isArray(rule.use)) return rule;
         const useArr = rule.use;
+        // Skip rules that already include postcss-loader — injecting a second one would run
+        // Tailwind twice on the same file.
+        const hasPostcssLoader = useArr.some(
+          (u) =>
+            u === 'postcss-loader' ||
+            (!!u &&
+              typeof u === 'object' &&
+              typeof u !== 'function' &&
+              'loader' in u &&
+              typeof u.loader === 'string' &&
+              u.loader.includes('postcss-loader')),
+        );
+        if (hasPostcssLoader) return rule;
         const cssIdx = useArr.findIndex(
           (u) =>
             u === 'css-loader' ||
@@ -124,14 +139,85 @@ const config: StorybookConfig = {
       });
     }
 
-    // Add path mapping for platform-bible-react's @/ alias and resolve the package from source
+    // Add path mapping for platform-bible-react's @/ alias and resolve the package from source.
+    // @papi/frontend/react is a virtual runtime module (provided by globalThis in the app); the
+    // mock gives stories a static hook implementation without needing a live PAPI backend.
     if (webpackConfig.resolve) {
       webpackConfig.resolve.alias = {
         ...webpackConfig.resolve.alias,
         '@': join(__dirname, '../lib/platform-bible-react/src'),
-        'platform-bible-react': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
+        // Resolve the package from source. Exact-match ($) keys are required: the bare
+        // `platform-bible-react` rule would otherwise intercept the `platform-bible-react/experimental`
+        // secondary entry point and mangle it to `src/index.ts/experimental`, bypassing the package's
+        // `exports` map. Each entry point is aliased to its own source file.
+        'platform-bible-react/experimental$': join(
+          __dirname,
+          '../lib/platform-bible-react/src/experimental.ts',
+        ),
+        'platform-bible-react$': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
+        // `@papi/*` are runtime externals injected by the extension host - there is no npm package
+        // for webpack to resolve. Extension components/web-views that use PAPI at runtime get pulled
+        // into Storybook via their stories, so alias these to inert stubs. Exact-match ($) keys keep
+        // the more specific `@papi/frontend/react` from being captured by the `@papi/frontend` rule.
+        '@papi/frontend/react$': join(__dirname, 'papi-stubs/frontend-react.ts'),
+        '@papi/frontend$': join(__dirname, 'papi-stubs/frontend.ts'),
+        '@papi/core$': join(__dirname, 'papi-stubs/core.ts'),
       };
     }
+
+    // Renderer app components (startup-wizard shell/steps, dialogs, overlays) import hooks from
+    // `@renderer/hooks/papi-hooks`. The real hooks open a PAPI WebSocket that has no backend in
+    // Storybook, rejecting unhandled after ~10s ("Timeout reached when waiting for websocket
+    // connected to settle") and crashing every startup-wizard story.
+    //
+    // The mock re-exports all real hooks and overrides only the three the first-run language step
+    // needs; stories opt in to drive data via `setFirstRunLanguageMock(...)`.
+    //
+    // This MUST use NormalModuleReplacementPlugin, not `resolve.alias`: the base renderer webpack
+    // config resolves `@renderer/*` via `TsconfigPathsPlugin` (webpack.config.base.ts), which wins
+    // over `resolve.alias`, so an alias entry is silently ignored. The replacement rewrites the
+    // request in `beforeResolve`, before TsconfigPaths runs. The `$`-anchored regex matches only
+    // the exact barrel, so deep-path `@renderer/hooks/papi-hooks/*` imports (used by the mock
+    // itself to re-export the real hooks) still resolve normally.
+    webpackConfig.plugins = webpackConfig.plugins ?? [];
+    webpackConfig.plugins.push(
+      new NormalModuleReplacementPlugin(
+        /^@renderer\/hooks\/papi-hooks$/,
+        join(__dirname, 'mocks/renderer-papi-hooks.tsx'),
+      ),
+      // Stop `networkService.initialize()` from constructing a real renderer RpcClient, which tries
+      // to open a PAPI WebSocket that has no backend in Storybook and rejects unhandled after ~10s,
+      // crashing renderer stories via the dev overlay. The inert handler makes initialize() succeed
+      // with no socket. Same reasoning as above re: NormalModuleReplacementPlugin vs `resolve.alias`
+      // (`@shared/*` is a TsconfigPathsPlugin path).
+      new NormalModuleReplacementPlugin(
+        /^@shared\/services\/rpc-handler\.factory$/,
+        join(__dirname, 'papi-stubs/rpc-handler.factory.ts'),
+      ),
+      // The toolbar's sync status is derived entirely from Send/Receive commands and network events,
+      // none of which Storybook can answer — so without this the button can only ever render `idle`
+      // (then `unknown` a minute later). The mock lets a story name the status directly, and defaults
+      // to the same inert `idle` otherwise. Same reasoning as above re: NormalModuleReplacementPlugin
+      // vs `resolve.alias` (`@renderer/*` is a TsconfigPathsPlugin path).
+      new NormalModuleReplacementPlugin(
+        /^@renderer\/hooks\/use-sync-status\.hook$/,
+        join(__dirname, 'mocks/use-sync-status.hook.ts'),
+      ),
+      // One replacement stands in for the command service in EVERY story. It delegates to the real
+      // service, whose default is to reject — Storybook has no PAPI backend, so
+      // `papi-stubs/rpc-handler.factory.ts` answers with a JSON-RPC error. Two exceptions are
+      // global: the Send/Receive commands whose rejection would make the sync button's
+      // accepted-cancel state unreachable. A story can claim any command for itself by setting a
+      // responder via `mocks/command-service-mock-channel.ts`, which the stub reads at call time;
+      // that channel exists because `spyOn(commandService, 'sendCommand')` cannot work in Storybook
+      // 9 — webpack builds the module namespace with non-configurable getters and tags it
+      // `Symbol.toStringTag = 'Module'`, which is exactly what makes spying throw "Module namespace
+      // is not configurable in ESM". See the stub for details.
+      new NormalModuleReplacementPlugin(
+        /^@shared\/services\/command\.service$/,
+        join(__dirname, 'papi-stubs/command.service.ts'),
+      ),
+    );
 
     // Remove the Storybook Webpack rules that we already have our own rules for
     return mergeWithCustomize({

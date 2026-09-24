@@ -185,6 +185,9 @@ export class MarkersViewNotifier {
           message,
           clickCommand: 'platformScriptureEditor.dismissMarkerNotificationForProjectToday',
           clickCommandLabel: localizedClickLabel,
+          // This prompt is about this editor's project, and the editor may be in a window the user
+          // is not currently looking at.
+          webViewId: webViewDefinition.id,
         });
         this.projectIdsByNotificationId.set(notificationId, projectId);
 

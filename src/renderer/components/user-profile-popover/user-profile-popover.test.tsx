@@ -1,0 +1,581 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+import { logger } from '@shared/services/logger.service';
+import { sendCommand } from '@shared/services/command.service';
+import {
+  publishRegistrationValidity,
+  refreshRegistrationValidity,
+  resetRegistrationValidityStore,
+} from '@renderer/services/registration-validity-store';
+import { UserProfilePopover } from './user-profile-popover.component';
+
+// Radix Popover/Tooltip use ResizeObserver internally; jsdom doesn't provide it, so we stub a
+// no-op implementation. The methods intentionally don't use `this` since they're empty stubs.
+beforeAll(() => {
+  global.ResizeObserver = class {
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    observe() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    unobserve() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    disconnect() {}
+  };
+});
+
+// Closure-referenced mock state, mutated by individual tests via the `setMockSetting` helper
+// below. Using a closure (instead of per-test `mockImplementation` casts) keeps the mock factory
+// strongly typed — the vi.mock factory infers types loosely while still letting tests vary
+// behavior between cases without any `as` assertions.
+type MockState = {
+  interfaceMode: 'simple' | 'power';
+  setInterfaceMode: ReturnType<typeof vi.fn> | undefined;
+  interfaceLanguage: string[];
+  setInterfaceLanguage: ReturnType<typeof vi.fn> | undefined;
+  availableLanguages: Record<string, { autonym: string }>;
+  themeType: 'light' | 'dark';
+  setTheme: ReturnType<typeof vi.fn> | undefined;
+  shouldMatchSystem: boolean;
+  setShouldMatchSystem: ReturnType<typeof vi.fn>;
+};
+
+/**
+ * Stands in for a setting/data setter. These MUST return a promise: the real `useSetting` and
+ * `useData` setters are asynchronous, and the component attaches `.catch` to what they return, so a
+ * bare `vi.fn()` returning `undefined` makes every handler throw `Cannot read properties of
+ * undefined` — an unhandled error vitest reports separately from test results, which is easy to
+ * miss.
+ */
+const mockSetter = () => vi.fn(async () => true);
+
+const DEFAULT_AVAILABLE_LANGUAGES: Record<string, { autonym: string }> = {
+  en: { autonym: 'English' },
+  es: { autonym: 'Español' },
+  fr: { autonym: 'Français' },
+};
+
+const mockState: MockState = {
+  interfaceMode: 'simple',
+  setInterfaceMode: mockSetter(),
+  interfaceLanguage: ['en'],
+  setInterfaceLanguage: mockSetter(),
+  availableLanguages: DEFAULT_AVAILABLE_LANGUAGES,
+  themeType: 'light',
+  setTheme: mockSetter(),
+  shouldMatchSystem: false,
+  setShouldMatchSystem: mockSetter(),
+};
+
+const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
+  mockState[key] = value;
+};
+
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  // Deliberately sentinel values that differ from the production English strings. If the component
+  // ever hard-codes a label instead of rendering the localized string it was handed, these tests
+  // fail — proving the localization wiring is real end to end.
+  useLocalizedStrings: vi.fn(() => [
+    {
+      '%toolbar_userProfile_label%': 'User profile button label',
+      '%toolbar_userProfile_label_registrationNeeded%':
+        'User profile button label needing registration',
+      '%userProfile_registrationNeeded%': 'Registration reminder row text',
+      '%userProfile_header_defaultName%': 'Default display name',
+      '%userProfile_header_notRegistered%': 'Registration needed',
+      '%userProfile_interfaceMode_simple_label%': 'Simplified UI',
+      '%userProfile_interfaceMode_simple_description%': 'Fewer panels',
+      '%userProfile_interfaceMode_power_label%': 'Advanced UI',
+      '%userProfile_interfaceMode_power_description%': 'All panels',
+      '%userProfile_profileAndRegistration%': 'Profile and registration row',
+      '%userProfile_networkSettings_2%': 'Internet and connectivity row',
+      '%userProfile_language%': 'UI language',
+      '%userProfile_appearance%': 'Appearance section',
+      '%userProfile_appearance_light%': 'Light theme',
+      '%userProfile_appearance_dark%': 'Dark theme',
+      '%userProfile_appearance_system%': 'Match OS theme',
+    },
+  ]),
+  useSetting: vi.fn((key: string) => {
+    if (key === 'platform.interfaceMode')
+      return [mockState.interfaceMode, mockState.setInterfaceMode, vi.fn(), false];
+    if (key === 'platform.interfaceLanguage')
+      return [mockState.interfaceLanguage, mockState.setInterfaceLanguage, vi.fn(), false];
+    return [undefined, mockSetter(), vi.fn(), false];
+  }),
+  useData: vi.fn(() => ({
+    CurrentTheme: vi.fn(() => [
+      {
+        type: mockState.themeType,
+        id: mockState.themeType,
+        themeFamilyId: mockState.themeType,
+        label: mockState.themeType,
+        cssVariables: {},
+      },
+      mockState.setTheme,
+    ]),
+    ShouldMatchSystem: vi.fn(() => [mockState.shouldMatchSystem, mockState.setShouldMatchSystem]),
+    AvailableInterfaceLanguages: vi.fn(() => [mockState.availableLanguages]),
+  })),
+  useDataProvider: vi.fn(() => undefined),
+}));
+
+vi.mock('@shared/services/command.service', () => ({
+  sendCommand: vi.fn(async () => ({ name: '', code: '', email: '', supporterName: '' })),
+}));
+
+// A working fake of the registration-validity store rather than bare vi.fn()s, so the component's
+// real useSyncExternalStore wiring is exercised. Mocking the store (not the command service) is also
+// what keeps the resolver's 3x15s retry machinery out of this suite. The state lives inside the
+// factory because vi.mock is hoisted above any module-scope variable it could otherwise close over.
+vi.mock('@renderer/services/registration-validity-store', () => {
+  let validity: 'valid' | 'invalid' | 'unknown' = 'unknown';
+  const listeners = new Set<() => void>();
+  return {
+    getRegistrationValidity: () => validity,
+    subscribeToRegistrationValidity: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    publishRegistrationValidity: (next: 'valid' | 'invalid' | 'unknown') => {
+      validity = next;
+      listeners.forEach((listener) => listener());
+    },
+    refreshRegistrationValidity: vi.fn(async () => validity),
+    // Mirrors the real reset: keeps subscribers and notifies them. Clearing here would let this
+    // fake keep passing even if the real store regressed on that invariant.
+    resetRegistrationValidityStore: () => {
+      validity = 'unknown';
+      listeners.forEach((listener) => listener());
+    },
+  };
+});
+
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { warn: vi.fn(), error: vi.fn() },
+}));
+
+// Reset mock state and call history between tests so each test starts from a known baseline.
+beforeEach(() => {
+  setMockSetting('interfaceMode', 'simple');
+  setMockSetting('setInterfaceMode', mockSetter());
+  setMockSetting('interfaceLanguage', ['en']);
+  setMockSetting('setInterfaceLanguage', mockSetter());
+  setMockSetting('availableLanguages', DEFAULT_AVAILABLE_LANGUAGES);
+  setMockSetting('themeType', 'light');
+  setMockSetting('setTheme', mockSetter());
+  setMockSetting('shouldMatchSystem', false);
+  setMockSetting('setShouldMatchSystem', mockSetter());
+  vi.mocked(sendCommand).mockClear();
+  vi.mocked(logger.warn).mockClear();
+  resetRegistrationValidityStore();
+  vi.mocked(refreshRegistrationValidity).mockClear();
+});
+
+describe('UserProfilePopover', () => {
+  test('renders the trigger button with the user profile aria-label', () => {
+    render(<UserProfilePopover />);
+    expect(screen.getByTestId('user-profile-popover-trigger')).toBeInTheDocument();
+    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+  });
+
+  test('opens the popover when the trigger is clicked', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('UserProfilePopover header', () => {
+  test('shows skeleton placeholders while registration fetch is pending', async () => {
+    let resolveFetch: (v: {
+      name: string;
+      code: string;
+      email: string;
+      supporterName: string;
+    }) => void = () => {};
+    vi.mocked(sendCommand).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-name-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('user-profile-email-skeleton')).toBeInTheDocument();
+    resolveFetch({ name: '', code: '', email: '', supporterName: '' });
+  });
+
+  test('renders registered name and email when fetch resolves with data', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: 'alice@example.com',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+  });
+
+  test('renders fallback "User profile" and "Not registered" when fetch resolves empty', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: '',
+      code: '',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await waitFor(() =>
+      expect(screen.getByTestId('user-profile-name')).toHaveTextContent('Default display name'),
+    );
+    expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Registration needed');
+  });
+
+  test('renders the name and OMITS the email row when name is set but email is blank', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.queryByTestId('user-profile-email')).not.toBeInTheDocument();
+  });
+});
+
+describe('UserProfilePopover interface mode', () => {
+  test('toggles to Power mode when Power is clicked from Simple', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
+    expect(mockState.setInterfaceMode).toHaveBeenCalledWith('power');
+  });
+
+  test('ignores deselect attempt on the already-selected mode', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(screen.getByTestId('user-profile-interface-mode-simple'));
+    expect(mockState.setInterfaceMode).not.toHaveBeenCalled();
+  });
+
+  test('clicking a mode while the setting setter is dropped warns instead of doing nothing', () => {
+    // `useSetting` has no setter while its runaway guard is throttled. The click cannot be honored,
+    // but it must not look honored either — a silent no-op leaves the user clicking a dead control
+    // with nothing in the log to explain it.
+    setMockSetting('setInterfaceMode', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+  });
+});
+
+describe('UserProfilePopover action rows', () => {
+  test('"Profile & registration" click sends the command and closes the popover', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const button = await screen.findByTestId('user-profile-action-registration');
+    fireEvent.click(button);
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showParatextRegistration',
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  test('"Network settings" click sends the command and closes the popover', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const button = await screen.findByTestId('user-profile-action-network');
+    fireEvent.click(button);
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettings',
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});
+
+describe('UserProfilePopover language picker', () => {
+  test('renders one pill per available language with the primary selected', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-language-en')).toBeInTheDocument();
+    expect(screen.getByTestId('user-profile-language-en')).toHaveAttribute('data-state', 'on');
+  });
+
+  test('clicking a non-primary language moves it to the front, preserving fallbacks', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    // 'en' is selectable but already primary - select 'es' instead
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
+  });
+
+  test('clicking a language while the setting setter is dropped warns instead of doing nothing', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    setMockSetting('setInterfaceLanguage', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+  });
+
+  test('clicking the already-primary language is a no-op (deselect attempt ignored)', async () => {
+    setMockSetting('interfaceLanguage', ['en']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-en'));
+    expect(mockState.setInterfaceLanguage).not.toHaveBeenCalled();
+  });
+
+  test('renders English first, then the rest alphabetically by BCP-47 tag', async () => {
+    setMockSetting('availableLanguages', {
+      fr: { autonym: 'Français' },
+      es: { autonym: 'Español' },
+      en: { autonym: 'English' },
+      de: { autonym: 'Deutsch' },
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-language-en');
+    const pills = Array.from(
+      document.querySelectorAll('[data-testid^="user-profile-language-"]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    expect(pills).toEqual([
+      'user-profile-language-en',
+      'user-profile-language-de',
+      'user-profile-language-es',
+      'user-profile-language-fr',
+    ]);
+  });
+});
+
+describe('UserProfilePopover appearance', () => {
+  test('selected pill is "system" when shouldMatchSystem is true', async () => {
+    setMockSetting('shouldMatchSystem', true);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-appearance-system')).toHaveAttribute(
+      'data-state',
+      'on',
+    );
+  });
+
+  test('selected pill is theme.type when shouldMatchSystem is false', async () => {
+    setMockSetting('themeType', 'dark');
+    setMockSetting('shouldMatchSystem', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-appearance-dark')).toHaveAttribute(
+      'data-state',
+      'on',
+    );
+  });
+
+  test('clicking Light while in system mode disables shouldMatchSystem and sets type=light', async () => {
+    setMockSetting('themeType', 'dark');
+    setMockSetting('shouldMatchSystem', true);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-appearance-light'));
+    expect(mockState.setShouldMatchSystem).toHaveBeenCalledWith(false);
+    expect(mockState.setTheme).toHaveBeenCalledWith({ type: 'light' });
+  });
+
+  test('clicking Dark while NOT in system mode only calls setTheme', async () => {
+    setMockSetting('themeType', 'light');
+    setMockSetting('shouldMatchSystem', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-appearance-dark'));
+    expect(mockState.setShouldMatchSystem).not.toHaveBeenCalled();
+    expect(mockState.setTheme).toHaveBeenCalledWith({ type: 'dark' });
+  });
+
+  test('clicking a theme while the theme setter is dropped warns instead of doing nothing', async () => {
+    // `useData` returns `undefined` for its setter while its runaway guard is throttled. The click
+    // cannot be honored, but it must not look honored either — a silent no-op leaves the user
+    // clicking a dead control with nothing in the log to explain it.
+    setMockSetting('themeType', 'light');
+    setMockSetting('shouldMatchSystem', false);
+    setMockSetting('setTheme', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-appearance-dark'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+  });
+
+  test('clicking System calls setShouldMatchSystem(true)', async () => {
+    setMockSetting('themeType', 'light');
+    setMockSetting('shouldMatchSystem', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-appearance-system'));
+    expect(mockState.setShouldMatchSystem).toHaveBeenCalledWith(true);
+    expect(mockState.setTheme).not.toHaveBeenCalled();
+  });
+});
+
+describe('UserProfilePopover registration reminder', () => {
+  test('shows no dot and the plain label while validity is unknown', () => {
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+  });
+
+  test('shows no dot when the registration is valid', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('valid'));
+    expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+  });
+
+  test('shows the dot and swaps the accessible label when the registration is invalid', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
+    // The dot must not be the only signal — the accessible name carries the state too.
+    expect(
+      screen.getByLabelText('User profile button label needing registration'),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('User profile button label')).not.toBeInTheDocument();
+  });
+
+  test('the dot is decorative, so it is hidden from assistive technology', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    expect(screen.getByTestId('user-profile-registration-dot')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+  });
+
+  test('clears the dot once the registration becomes valid', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
+
+    act(() => publishRegistrationValidity('valid'));
+
+    expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+  });
+
+  test('marks the Profile & registration row with a dot and screen-reader text', async () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    expect(await screen.findByTestId('user-profile-action-registration-dot')).toBeInTheDocument();
+    expect(screen.getByTestId('user-profile-action-registration')).toHaveTextContent(
+      'Registration reminder row text',
+    );
+  });
+
+  test('leaves the Profile & registration row unmarked when the registration is valid', async () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('valid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    await screen.findByTestId('user-profile-action-registration');
+    expect(screen.queryByTestId('user-profile-action-registration-dot')).not.toBeInTheDocument();
+  });
+
+  test('forces a registration re-check when the popover opens, so the dot can clear without a restart', async () => {
+    render(<UserProfilePopover />);
+    // The mount probe is unforced; opening must additionally force one past the cache.
+    vi.mocked(refreshRegistrationValidity).mockClear();
+
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    await waitFor(() => expect(refreshRegistrationValidity).toHaveBeenCalledWith({ force: true }));
+  });
+
+  test('resolves validity on mount so the dot works with the popover closed', async () => {
+    render(<UserProfilePopover />);
+    await waitFor(() => expect(refreshRegistrationValidity).toHaveBeenCalled());
+  });
+});
+
+describe('UserProfilePopover header agrees with the reminder dot', () => {
+  test('shows a visible warning line when the registration is invalid but the profile is populated', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: 'alice@example.com',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    // Identity is preserved...
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+    // ...and the header no longer implies all is well while the dots say otherwise.
+    expect(screen.getByTestId('user-profile-registration-warning')).toHaveTextContent(
+      'Registration reminder row text',
+    );
+  });
+
+  test('shows no warning line when the registration is valid', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: 'alice@example.com',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('valid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.queryByTestId('user-profile-registration-warning')).not.toBeInTheDocument();
+  });
+
+  test('replaces "Not registered" with the warning line rather than showing both', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: '',
+      code: '',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    // Two near-identical messages would read as two separate problems.
+    await waitFor(() =>
+      expect(screen.getByTestId('user-profile-registration-warning')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('user-profile-email')).not.toBeInTheDocument();
+  });
+
+  test('keeps "Not registered" when the profile is empty and validity is unknown', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: '',
+      code: '',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    // An unverifiable registration must not silently drop the existing empty-profile message.
+    await waitFor(() =>
+      expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Registration needed'),
+    );
+    expect(screen.queryByTestId('user-profile-registration-warning')).not.toBeInTheDocument();
+  });
+});

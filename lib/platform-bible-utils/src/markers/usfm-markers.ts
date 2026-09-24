@@ -3064,3 +3064,52 @@ export const usfmMarkers: { [marker: string]: Marker } = {
     children: undefined,
   },
 };
+
+/**
+ * True when a marker is a paragraph- or verse-level (block) structure marker — i.e. one whose
+ * insertion, formatting, or renumbering is structurally significant (and is blocked while structure
+ * protection/locking is on).
+ *
+ * Paragraph-level markers are identified by their {@link MarkerType.Paragraph} type in
+ * {@link usfmMarkers} rather than a hand-maintained list, so every paragraph marker (including
+ * poetry lines like `q`, section headings like `s1`, and embedded paragraphs like `pm`) is covered.
+ * Verse (`v`) is a structure marker but is typed as {@link MarkerType.Character}, so it is
+ * special-cased; chapter (`c`) is already {@link MarkerType.Paragraph} and needs no special case.
+ */
+export function isBlockMarker(marker: string): boolean {
+  return usfmMarkers[marker]?.type === MarkerType.Paragraph || marker === 'v';
+}
+
+/**
+ * True when a marker is a character-level marker — one that labels a span of text between an
+ * opening and a closing marker (e.g. `\nd …\nd*`) rather than beginning a block of text.
+ *
+ * Character markers are identified by their {@link MarkerType.Character} type in {@link usfmMarkers}
+ * rather than a hand-maintained list. The chapter and verse numbering markers `v`, `va`, `vp`, and
+ * `ca` are also typed {@link MarkerType.Character} even though they are structure markers, so they
+ * are excluded by their `DivisionMarks` category — they are the only `MarkerType.Character` markers
+ * in that category, and the category is the only thing that separates them, since `va`, `vp`, and
+ * `ca` each have `hasEndMarker: true` like every genuine character marker.
+ *
+ * Note that the note and cross-reference _content_ markers (e.g. `ft`, `xo`, `xt`) are genuine
+ * character markers and return `true`; only the note markers that contain them (`f`, `fe`, `x`) are
+ * {@link MarkerType.Note}. A caller that wants only body-text styling markers must filter further.
+ *
+ * @example
+ *
+ * ```typescript
+ * isCharacterMarker('nd'); // true — labels a span of text
+ * isCharacterMarker('v'); // false — verse is a structure marker typed as a character marker
+ * isCharacterMarker('p'); // false — paragraph is a block marker
+ * ```
+ *
+ * @param marker Marker code to check, without its leading backslash (e.g. `nd`, not `\nd`)
+ * @returns `true` when the marker labels a span of text. `false` for block markers, for the note
+ *   markers `f`/`fe`/`x`, for the numbering markers `v`/`va`/`vp`/`ca`, and for empty or unknown
+ *   marker codes.
+ */
+export function isCharacterMarker(marker: string): boolean {
+  const markerDetails = usfmMarkers[marker];
+  if (markerDetails?.type !== MarkerType.Character) return false;
+  return markerDetails.category !== MarkerCategoryType.DivisionMarks;
+}

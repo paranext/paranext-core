@@ -1,0 +1,1592 @@
+import { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Replace,
+  ReplaceAll,
+  TextSearch,
+  X,
+} from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  DisabledActionTooltip,
+  EmptyState,
+  Input,
+  Label,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Progress,
+  RecentSearches,
+  Scope,
+  SCOPE_SELECTOR_STRING_KEYS,
+  ScopeSelector,
+  Skeleton,
+  Sonner,
+  ToggleGroup,
+  ToggleGroupItem,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
+import {
+  getAvailableBookIds,
+  ProjectSelector,
+  ProjectSelectorLocalizedStrings,
+  ProjectSelectorOpenTab,
+  ProjectSelectorProject,
+  PROJECT_SELECTOR_STRING_KEYS,
+  ScopeWithRange,
+  buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
+  resolveLocalizedString,
+  makeBuiltInGroupings,
+  summarizeSelectedBooks,
+} from 'platform-bible-react/experimental';
+import {
+  formatReplacementString,
+  LanguageStrings,
+  LocalizedStringValue,
+  makeProjectSelectorCustomData,
+  ScrollGroupId,
+  Section,
+} from 'platform-bible-utils';
+import { FindJobStatus, WordRestriction } from 'platform-scripture';
+import React, { useCallback, useId, useMemo, useRef } from 'react';
+import { FindFilters } from './find-filters.component';
+import { LocalizedBookData, SearchTextType } from './find-types';
+import {
+  FIND_AVAILABLE_SCOPES,
+  isFindQueryValid,
+  isScopeBlockedByExtraMaterial,
+} from './find.utils';
+import {
+  FindLogger,
+  HidableFindResult,
+  SEARCH_RESULT_LOCALIZED_STRING_KEYS,
+} from './search-result.component';
+import { SearchResultsInBook } from './search-results-in-book.component';
+import {
+  REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
+  ReplacePreviewOptions,
+  ReplacePreviewOptionsStrings,
+} from './replace-preview-options.component';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
+
+/**
+ * The `openTabs` value handed to the project picker in simple interface mode. Module-level rather
+ * than an inline `[]` so its identity is stable: `ProjectSelector` memoizes its row list on
+ * `openTabs`, and a fresh array each render would recompute the rows on every keystroke and every
+ * streamed result batch.
+ */
+const NO_OPEN_TABS: ProjectSelectorOpenTab[] = [];
+
+/** Localization keys used by the {@link Find} component itself (excludes child component keys). */
+export const FIND_LOCALIZED_STRING_KEYS = [
+  '%general_countOfTotal%',
+  '%webView_find_allBooks%',
+  '%webView_find_allText%',
+  '%webView_find_allText_tooltip%',
+  '%webView_find_allowRegex%',
+  '%webView_find_cancelSearch%',
+  '%webView_find_capitalization%',
+  '%webView_find_flexibility%',
+  '%webView_find_ignoreDiacritics%',
+  '%webView_find_ignoreWhitespaceDifferences%',
+  '%webView_find_ignoreWhitespaceDifferences_tooltip%',
+  '%webView_find_clearSearch%',
+  '%webView_find_errorOccurred%',
+  '%webView_find_extraMaterialNotSearched%',
+  '%webView_find_extraMaterialNotSearchedScope%',
+  '%webView_find_extraMaterialNotSearchedScopeResults%',
+  '%webView_find_findTab%',
+  '%webView_find_matchCase%',
+  '%webView_find_matchContentIn%',
+  '%webView_find_nextResult%',
+  '%webView_find_noOpenProjectsOrResources_results%',
+  '%webView_find_noResultsFound%',
+  '%webView_find_pattern%',
+  '%webView_find_preserveCase%',
+  '%webView_find_preserveCase_tooltip%',
+  '%webView_find_previousResult%',
+  '%webView_find_projectFilter_noOpenProjectsOrResources%',
+  '%webView_find_projectFilter_noProjectsFound%',
+  '%webView_find_projectSelector_label%',
+  '%webView_find_recent%',
+  '%webView_find_replace%',
+  '%webView_find_replaceAll%',
+  '%webView_find_replaceTab%',
+  '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_replace_readOnlyNote%',
+  '%webView_find_replace_readOnlyTooltip%',
+  '%webView_find_replace_structureProtectedError%',
+  '%webView_find_replace_structureProtectedMarkerTooltip%',
+  '%webView_find_replace_structureProtectedNote%',
+  '%webView_find_restrictions%',
+  '%webView_find_restrictions_endOfWord%',
+  '%webView_find_restrictions_none%',
+  '%webView_find_restrictions_startOfWord%',
+  '%webView_find_restrictions_wholeWord%',
+  '%webView_find_result%',
+  '%webView_find_searchPlaceholder%',
+  '%webView_find_searchPrompt%',
+  '%webView_find_selectBooksPrompt%',
+  '%webView_find_showing%',
+  '%webView_find_showingResults%',
+  '%webView_find_showingResultsOfMore%',
+  '%webView_find_showRecentSearches%',
+  '%webView_find_toggleFilters%',
+  '%webView_find_filtersPanel%',
+  '%webView_find_verseTextOnly%',
+  // Preview-options keys live with their component; spread them so the two lists can't drift.
+  ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
+  // Shared ProjectSelector keys — every ProjectSelector in the app resolves the same block, then
+  // the caller merges its own placeholder/ariaLabel on top.
+  ...PROJECT_SELECTOR_STRING_KEYS,
+] as const;
+
+/**
+ * Key for the tooltip explaining why the book picker's Extra section is unavailable.
+ *
+ * Bound to {@link FIND_LOCALIZED_STRING_KEYS} rather than spelled inline at the read site:
+ * `localizedStrings` is an open index signature, so an unrequested key reads as `undefined` with no
+ * compile error and the tooltip would silently vanish.
+ */
+const EXTRA_MATERIAL_NOT_SEARCHED_KEY =
+  '%webView_find_extraMaterialNotSearched%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * Key for the tooltip on the `book` and `chapter` scope options while the current reference sits in
+ * extra material, which those scopes cannot search. Distinct from
+ * {@link EXTRA_MATERIAL_NOT_SEARCHED_KEY}, whose wording is specific to the book picker's list.
+ *
+ * Bound to {@link FIND_LOCALIZED_STRING_KEYS} for the same reason as that key.
+ */
+const EXTRA_MATERIAL_SCOPE_KEY =
+  '%webView_find_extraMaterialNotSearchedScope%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * Key for the results-area placeholder shown in that same state. Separate from
+ * {@link EXTRA_MATERIAL_SCOPE_KEY} because a placeholder has to name a way out — the two ways out
+ * are the `Selected books` scope and moving the reference — while the tooltip sits on the control
+ * the user is already looking at and only has to say why it is unavailable.
+ *
+ * Bound to {@link FIND_LOCALIZED_STRING_KEYS} for the same reason as that key.
+ */
+const EXTRA_MATERIAL_SCOPE_RESULTS_KEY =
+  '%webView_find_extraMaterialNotSearchedScopeResults%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * `data-testid` of the results-area placeholder for the extra-material state.
+ *
+ * The DOM id the collapsed scope trigger points at with `aria-describedby` is derived per instance
+ * from `useId` instead — see {@link ResultsPlaceholder} — because a fixed id is not unique in a
+ * document holding more than one `Find`.
+ */
+const EXTRA_MATERIAL_PLACEHOLDER_TEST_ID = 'find-extra-material-placeholder';
+
+/**
+ * A search result paired with its index in the complete (ungrouped) results array, as produced by
+ * grouping the results by book.
+ */
+export type BookResultEntry = { result: HidableFindResult; originalIndex: number };
+
+/** A project (or resource) the user can select for Find to operate on. */
+export type FindProject = {
+  /** Unique id of the project. */
+  id: string;
+  /** Short display name (e.g. an abbreviation). */
+  shortName: string;
+  /**
+   * Full display name. Optional: a project with no distinct full name omits it rather than
+   * mirroring the short name in, so the picker renders a single line for it.
+   */
+  fullName?: string;
+  /** Language name, used by the picker's Language grouping. Omitted when unknown. */
+  language?: string;
+  /**
+   * Presence flag the picker's Last-used grouping reads: any number puts the project in the
+   * "recently used" bucket. The magnitude is never compared, so it does not order anything. Build
+   * it with `recencyMapFromOrderedIds` over the recently-opened-projects list. Omitted when the
+   * project has not been opened.
+   */
+  lastUsedAt?: number;
+};
+
+/** Props for the {@link Find} presentational component. */
+export type FindProps = {
+  /** Localized strings for the find/replace UI; resolve via {@link FIND_LOCALIZED_STRING_KEYS}. */
+  localizedStrings: LanguageStrings;
+  /** Localized strings for the {@link ScopeSelector}; resolve via `SCOPE_SELECTOR_STRING_KEYS`. */
+  scopeSelectorLocalizedStrings: LanguageStrings;
+  /**
+   * Localized strings for the search-result cards; resolve via
+   * `SEARCH_RESULT_LOCALIZED_STRING_KEYS`.
+   */
+  searchResultLocalizedStrings: {
+    [localizedKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
+  };
+
+  // Project selection
+  /**
+   * Scripture projects/resources the user can select for Find to operate on — only those currently
+   * open in an editor tab; Find has nothing to scroll for a project that isn't open.
+   */
+  projects: FindProject[];
+  /** Id of the project Find currently operates on, or `undefined` if none is selected. */
+  selectedProjectId: string | undefined;
+  /**
+   * The specific open tab (by scroll group) Find currently targets, or `undefined` before an
+   * initial selection has been made.
+   */
+  selectedScrollGroupId: ScrollGroupId | undefined;
+  /** Currently-open scripture editor tabs backing the `projects` list above. */
+  openTabs: ProjectSelectorOpenTab[];
+  /**
+   * True while the project metadata backing `projects` is still being fetched. Distinct from
+   * `noOpenProjects`: until the fetch resolves, `projects` is empty even when tabs ARE open, so
+   * without this the picker would render its "no open projects" placeholder and contradict the
+   * results area. Shows a loading affordance instead.
+   */
+  isLoadingProjects: boolean;
+  /**
+   * True when no scripture project is open in any editor tab. The project selector and the results
+   * area both show a "no open projects" placeholder instead of their normal content.
+   */
+  noOpenProjects: boolean;
+  /**
+   * When true, the project picker presents projects as a flat list with no scroll-group letters —
+   * neither in the trigger nor on any row (simple interface mode). Simple mode hides
+   * `ScrollGroupSelector` from both the app toolbar and the web view toolbar, so a group letter
+   * would name something the user can neither see nor change. `onSelectProject` handles selection
+   * instead of `onSelectProjectScrollGroup` while this is set.
+   */
+  hideScrollGroups?: boolean;
+  /**
+   * Called when the user selects a different open project/tab for Find to operate on. Not used
+   * while `hideScrollGroups` is set — see `onSelectProject`.
+   */
+  onSelectProjectScrollGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+  /**
+   * Called when the user selects a different open project while `hideScrollGroups` is set. Carries
+   * no scroll group: the picker does not surface groups in that mode, so which of the project's
+   * open tabs Find targets is the caller's decision.
+   */
+  onSelectProject: (projectId: string) => void;
+  /**
+   * Required by the underlying project picker but expected never to fire: the picker only ever
+   * lists open projects, so there is nothing for it to open. Not passed while `hideScrollGroups` is
+   * set — `mode="project"` has no "open in group" affordance at all.
+   */
+  onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+
+  // Search/replace input + filter state
+  /**
+   * Ref attached to the search box, so the web view can put the caret there when Find is invoked.
+   * Owned by the caller rather than exposed as an imperative handle, matching how the scripture
+   * editor hands `MarkerMenu` its `searchRef`.
+   */
+  searchInputRef?: React.Ref<HTMLInputElement>;
+  /**
+   * Puts the caret back in the search box. Called after the clear button empties the term, because
+   * that button only renders while there is a term to clear: emptying it unmounts the element the
+   * user just activated, which would otherwise drop focus to the document body and strand a
+   * keyboard user with nothing focused.
+   */
+  onFocusSearchInput?: () => void;
+  /** The current search term. */
+  searchTerm: string;
+  /** Recent search terms shown in the recent-searches dropdown. */
+  recentSearches: string[];
+  /** The currently selected scope (chapter/book/selectedBooks). */
+  scope: Scope;
+  /** The current scroll-group verse ref, used to label the chapter/book scope (e.g. "Genesis 1"). */
+  verseRef: SerializedVerseRef;
+  /**
+   * The string of present books (from the `booksPresent` project setting) for the scope selector.
+   *
+   * Expected to already have extra material cleared — Find does not search it, and the scope
+   * selector builds its book picker straight from this string, so a host passing the project's raw
+   * setting would offer books the search never covers. Callers derive it with
+   * `deriveFindBookLists`.
+   */
+  booksPresent: string;
+  /**
+   * Whether {@link booksPresent} had extra material to withhold, i.e. the project has some. Drives
+   * the explanation on the book picker's disabled Extra section, which would otherwise tell a
+   * project with no extra material why its (nonexistent) extra material is unavailable.
+   */
+  hasExcludedExtraMaterial: boolean;
+  /** Ids of the books selected for the `selectedBooks` scope. */
+  selectedBookIds: string[];
+  /** Map of available book ids to their localized display names. */
+  localizedBookData: Map<string, LocalizedBookData>;
+  /** Whether to match case in the search. */
+  shouldMatchCase: boolean;
+  ignoreWhitespaceDifferences: boolean;
+  ignoreDiacritics: boolean;
+  /** Which text to match (all text / verse text only). */
+  searchTextType: SearchTextType;
+  /** The word-boundary restriction for matches. */
+  wordRestriction: WordRestriction;
+  /** Whether the search string is treated as a regular expression. */
+  isRegexAllowed: boolean;
+
+  // Mode + replace state
+  /** Whether the UI is in find or replace mode. */
+  activeMode: 'find' | 'replace';
+  /**
+   * When true, hide the find/replace toggle entirely (e.g. in simple interface mode, where replace
+   * is not offered). The panel then shows only the find UI. Callers must also keep `activeMode` at
+   * `'find'` while this is set so no replace UI is rendered.
+   */
+  hideModeToggle?: boolean;
+  /** The replacement term entered in replace mode. */
+  replaceTerm: string;
+  /** Whether to preserve the case of the matched text when replacing. */
+  preserveCase: boolean;
+  /** True while a replace operation (and its mandatory re-find) is executing. */
+  isReplacing: boolean;
+  /** Whether the project's structure is currently protected (replace restrictions apply). */
+  isStructureProtected?: boolean;
+  /**
+   * Whether the active project can be edited. When false, Replace / Replace All (and the per-result
+   * replace action) are disabled. Required (no permissive default) so a call site that forgets to
+   * pass it fails to compile rather than silently re-enabling a mutation.
+   */
+  isEditable: boolean;
+  /**
+   * Whether the current replacement text itself contains a paragraph/verse marker — guaranteed to
+   * be rejected while protected, so Replace is proactively disabled.
+   */
+  isReplacementStructureChanging?: boolean;
+
+  // Results state
+  /** All current search results (including hidden/replaced ones). */
+  results: HidableFindResult[];
+  /** Search results grouped by book id, each paired with its original index. */
+  resultsByBook: Map<string, BookResultEntry[]>;
+  /** The index (into `results`) of the focused result, or `undefined`. */
+  focusedResultIndex: number | undefined;
+  /** The current find-job status, or `undefined` when no search has run. */
+  searchStatus: FindJobStatus | undefined;
+  /** The find-job error message, if the status is `errored`. */
+  searchError: string | undefined;
+  /** Percent complete of the running search (0-100). */
+  searchProgress: number;
+  /** Total number of results the job reports (may exceed loaded results). */
+  totalNumberOfResults: number;
+  /** Number of results the user has hidden/dismissed. */
+  numberOfHiddenResults: number;
+  /**
+   * Whether the current search was auto-triggered after a replace. Used to suppress the progress
+   * bar for that housekeeping search.
+   */
+  isPostReplaceSearch: boolean;
+
+  // Action callbacks
+  /** Called when the search term changes. */
+  onSearchTermChange: (term: string) => void;
+  /** Called to start a search. `isExplicitSearch` is true for Enter/Find-button-initiated searches. */
+  onStartSearch: (isExplicitSearch?: boolean) => void;
+  /** Called to stop the running search, leaving the results it has already found on screen. */
+  onStopSearch: () => void;
+  /** Called when the user changes the scope. */
+  setScope: (scope: Scope) => void;
+  /** Called when the selected books for the `selectedBooks` scope change. */
+  onSelectedBookIdsChange: (bookIds: string[]) => void;
+  /** Called when the match-content-in (text type) filter changes. */
+  setSearchTextType: (value: SearchTextType) => void;
+  /** Called when the word-restriction filter changes. */
+  setWordRestriction: (value: WordRestriction) => void;
+  /** Called when the match-case filter changes. */
+  setShouldMatchCase: (value: boolean) => void;
+  setIgnoreWhitespaceDifferences: (value: boolean) => void;
+  setIgnoreDiacritics: (value: boolean) => void;
+  /** Called when the allow-regex filter changes. */
+  setIsRegexAllowed: (value: boolean) => void;
+  /** Called when the user toggles find/replace mode. */
+  onToggleMode: (mode: 'find' | 'replace') => void;
+  /** Called when the replacement term changes. */
+  onReplaceTermChange: (term: string) => void;
+  /** Called when the preserve-case checkbox changes. */
+  onPreserveCaseChange: (value: boolean) => void;
+  /** Called when the user focuses a result (by clicking or keyboard navigation). */
+  onFocusedResultChange: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when a result card receives browser focus (e.g. Tab navigation), by original index. */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user double-clicks a result (jump to editor), by original index. */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user clicks a result's scripture reference (jump to editor), by original index. */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user hides/dismisses a result, by its original index. */
+  onHideResult: (index: number) => void;
+  /** Called when the user replaces a single result, by its original index (defaults to focused). */
+  onReplace: (resultIndex?: number) => void;
+  /** Called when the user replaces all visible results. */
+  onReplaceAll: () => void;
+  /** Called to cancel/revert the pending replace operation. */
+  onCancelReplace: () => void;
+  /** Called when the results container scrolls (drives progressive loading). */
+  onResultsScroll: (event: React.UIEvent<HTMLDivElement>) => void;
+  /** Retrieves the USJ for a book so each result's verse context can be computed. */
+  getBookUsj: (bookId: string) => Promise<Usj | undefined>;
+  /**
+   * Optional logger for unexpected USJ load/parse failures while building verse context. The
+   * webview supplies the PAPI logger; stories may omit it. The component stays `@papi`-free.
+   */
+  logger?: FindLogger;
+  /** Options controlling how the replace preview is displayed in result cards. */
+  previewOptions?: PreviewOptions;
+  /**
+   * Called when the user changes the replace preview options. When omitted, the preview-options
+   * picker is hidden (result cards still render with `previewOptions` or the default).
+   */
+  onPreviewOptionsChange?: (options: PreviewOptions) => void;
+  /** Whether the project has AllowInvisibleChars enabled. Forwarded to the result cards. */
+  allowInvisibleCharacters?: boolean;
+};
+
+/**
+ * The built-in grouping ids Find's project picker offers in the default (scroll-group) branch, in
+ * `makeBuiltInGroupings` order. The Simple-interface branch offers a different list — see
+ * {@link FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS}.
+ *
+ * Two of the four built-ins are left out because Find cannot populate them into more than one
+ * bucket, and a menu item that always yields a single bucket is a dead option:
+ *
+ * - `type`: Find has no project-type source. `FindProject` carries no type and nothing upstream
+ *   supplies one, so every row would land under "Unknown type".
+ * - `lastUsed`: Find lists ONLY projects open in a searchable tab, and opening a project is what
+ *   records it as recently used. The recents list is capped at 5, so the "Other" bucket is
+ *   non-empty only when more than five projects are open at once. The grouping also cannot order by
+ *   recency — the picker sorts every bucket alphabetically by short name.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toFindSelectorRows} actually packs, so adding an id here without adding its
+ * data is a build failure rather than a dead menu item.
+ */
+export const FIND_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['openTabs', 'language'];
+
+/**
+ * The built-in grouping ids Find's project picker offers in the Simple-interface branch, where the
+ * picker is handed an empty `openTabs` list to suppress scroll-group badges.
+ *
+ * It is {@link FIND_PROJECT_SELECTOR_GROUPING_IDS} minus `openTabs`: with no open tabs, the "open
+ * tabs" section has no eligible row, so that grouping collapses the list into one undifferentiated
+ * bucket — the same result as no grouping at all. Offering it would put a dead item at the top of
+ * the menu, and it is the item the picker's initial-grouping resolver picks first when present.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list too, so an id added here without the
+ * row data to back it is a build failure rather than a dead menu item.
+ */
+export const FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['language'];
+
+/**
+ * Maps caller-supplied Find projects onto ProjectSelector rows: sorted by full name, with the
+ * grouping inputs the picker's built-in groupings read packed into `customData`. Exported for
+ * coverage tests.
+ *
+ * `lastUsedAt` is packed even though Find's grouping menu does not currently offer `lastUsed` (see
+ * {@link FIND_PROJECT_SELECTOR_GROUPING_IDS} for why). It costs nothing, and a Find that ever lists
+ * projects beyond the open ones would want it without a second round of plumbing.
+ */
+export function toFindSelectorRows(projects: readonly FindProject[]): ProjectSelectorProject[] {
+  // Deliberately unsorted. `ProjectSelector` sorts every section it renders itself — every
+  // partition path in `project-selector.rows.ts` runs `compareRows`, which leads with
+  // `compareProjectsByName` — so a sort here would order rows nothing ever reads in that order.
+  return projects.map((project) => ({
+    id: project.id,
+    shortName: project.shortName,
+    fullName: project.fullName,
+    customData: makeProjectSelectorCustomData({
+      language: project.language,
+      lastUsedAt: project.lastUsedAt,
+    }),
+  }));
+}
+
+/**
+ * A centered, screen-reader-announced message shown in the results area in place of the results
+ * list (idle prompt, invalid-query prompt). {@link EmptyState} supplies the muted/small text styling
+ * and a `role="status"` region.
+ */
+function ResultsPlaceholder({
+  domId,
+  testId,
+  message,
+}: {
+  domId: string;
+  testId: string;
+  message: string;
+}) {
+  return (
+    // `EmptyState`'s `id` is a `data-testid`, not a DOM id, so the wrapper carries the real one —
+    // without it there is nothing for a control elsewhere in the panel to reference with
+    // `aria-describedby`. The two are separate props because they have different uniqueness
+    // requirements: the test id is a fixed name, while the DOM id has to be unique across the
+    // whole document, and more than one `Find` can share a document — a Storybook autodocs page
+    // renders every story into one.
+    <div id={domId} className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4">
+      <EmptyState id={testId} className="tw:text-center tw:font-light" message={message} />
+    </div>
+  );
+}
+
+/**
+ * Presentational find/replace UI. It owns the rendering and the presentational derivations (visible
+ * results, focused-result navigation, scope display text, results message) but no async logic. The
+ * container (webview or story) owns the find-job lifecycle, replace/revert, version-history
+ * commits, and editor navigation, passing data in as props and operations in as callbacks.
+ */
+export function Find({
+  localizedStrings,
+  scopeSelectorLocalizedStrings,
+  searchResultLocalizedStrings,
+  projects,
+  selectedProjectId,
+  selectedScrollGroupId,
+  openTabs,
+  isLoadingProjects,
+  noOpenProjects,
+  hideScrollGroups = false,
+  onSelectProjectScrollGroup,
+  onSelectProject,
+  onOpenProjectInGroup,
+  searchInputRef,
+  onFocusSearchInput,
+  searchTerm,
+  recentSearches,
+  scope,
+  verseRef,
+  booksPresent,
+  hasExcludedExtraMaterial,
+  selectedBookIds,
+  localizedBookData,
+  shouldMatchCase,
+  ignoreWhitespaceDifferences,
+  ignoreDiacritics,
+  searchTextType,
+  wordRestriction,
+  isRegexAllowed,
+  activeMode,
+  hideModeToggle = false,
+  replaceTerm,
+  preserveCase,
+  isReplacing,
+  isStructureProtected = false,
+  isReplacementStructureChanging = false,
+  isEditable,
+  results,
+  resultsByBook,
+  focusedResultIndex,
+  searchStatus,
+  searchError,
+  searchProgress,
+  totalNumberOfResults,
+  numberOfHiddenResults,
+  isPostReplaceSearch,
+  onSearchTermChange,
+  onStartSearch,
+  onStopSearch,
+  setScope,
+  onSelectedBookIdsChange,
+  setSearchTextType,
+  setWordRestriction,
+  setShouldMatchCase,
+  setIgnoreWhitespaceDifferences,
+  setIgnoreDiacritics,
+  setIsRegexAllowed,
+  onToggleMode,
+  onReplaceTermChange,
+  onPreserveCaseChange,
+  onFocusedResultChange,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
+  onHideResult,
+  onReplace,
+  onReplaceAll,
+  onCancelReplace,
+  onResultsScroll,
+  getBookUsj,
+  logger,
+  previewOptions = DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  onPreviewOptionsChange,
+  allowInvisibleCharacters = false,
+}: FindProps) {
+  // useRef requires null as the initial value when used with a DOM element ref
+  // eslint-disable-next-line no-null/no-null
+  const resultsContainerRef = useRef<HTMLDivElement>(null);
+
+  const areFiltersActive =
+    shouldMatchCase ||
+    wordRestriction !== 'none' ||
+    searchTextType !== 'all' ||
+    isRegexAllowed ||
+    ignoreWhitespaceDifferences ||
+    ignoreDiacritics;
+
+  const visibleResults = useMemo(
+    () =>
+      results
+        .map((result, index) => ({ result, originalIndex: index }))
+        .filter(({ result }) => !result.isHidden),
+    [results],
+  );
+
+  const focusedVisibleIndex = useMemo(
+    () =>
+      focusedResultIndex === undefined
+        ? -1
+        : visibleResults.findIndex((vr) => vr.originalIndex === focusedResultIndex),
+    [visibleResults, focusedResultIndex],
+  );
+
+  const handlePreviousResult = useCallback(() => {
+    if (visibleResults.length === 0) return;
+    if (focusedVisibleIndex <= 0) {
+      // No result focused (index -1) or already at first → wrap to last
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const last = visibleResults.at(-1)!;
+      onFocusedResultChange(last.result, last.originalIndex);
+      return;
+    }
+    const prev = visibleResults[focusedVisibleIndex - 1];
+    onFocusedResultChange(prev.result, prev.originalIndex);
+  }, [focusedVisibleIndex, visibleResults, onFocusedResultChange]);
+
+  const handleNextResult = useCallback(() => {
+    if (visibleResults.length === 0) return;
+    if (focusedVisibleIndex >= visibleResults.length - 1) {
+      // Already at last result → wrap to first
+      onFocusedResultChange(visibleResults[0].result, visibleResults[0].originalIndex);
+      return;
+    }
+    const next = visibleResults[focusedVisibleIndex + 1];
+    onFocusedResultChange(next.result, next.originalIndex);
+  }, [focusedVisibleIndex, visibleResults, onFocusedResultChange]);
+
+  const handleFirstResult = useCallback(() => {
+    if (visibleResults.length === 0) return;
+    onFocusedResultChange(visibleResults[0].result, visibleResults[0].originalIndex);
+  }, [visibleResults, onFocusedResultChange]);
+
+  const handleLastResult = useCallback(() => {
+    if (visibleResults.length === 0) return;
+    // `at(-1)` returns `undefined` only on an empty array; the early return above guarantees
+    // that the array is non-empty
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const last = visibleResults.at(-1)!;
+    onFocusedResultChange(last.result, last.originalIndex);
+  }, [visibleResults, onFocusedResultChange]);
+
+  const getPageSize = useCallback(() => {
+    const container = resultsContainerRef.current;
+    if (!container) return 1;
+    const containerRect = container.getBoundingClientRect();
+    const cards = container.querySelectorAll<HTMLElement>('[role="button"]:not([hidden])');
+    const count = Array.from(cards).filter((card) => {
+      const rect = card.getBoundingClientRect();
+      return rect.bottom > containerRect.top && rect.top < containerRect.bottom;
+    }).length;
+    return Math.max(1, count);
+  }, []);
+
+  const handlePageUpResult = useCallback(() => {
+    if (visibleResults.length === 0) return;
+    const pageSize = getPageSize();
+    const currentIndex = Math.max(0, focusedVisibleIndex);
+    const newIndex = Math.max(0, currentIndex - pageSize);
+    const target = visibleResults[newIndex];
+    onFocusedResultChange(target.result, target.originalIndex);
+  }, [focusedVisibleIndex, visibleResults, onFocusedResultChange, getPageSize]);
+
+  const handlePageDownResult = useCallback(() => {
+    if (visibleResults.length === 0) return;
+    const pageSize = getPageSize();
+    const currentIndex = Math.max(0, focusedVisibleIndex);
+    const newIndex = Math.min(visibleResults.length - 1, currentIndex + pageSize);
+    const target = visibleResults[newIndex];
+    onFocusedResultChange(target.result, target.originalIndex);
+  }, [focusedVisibleIndex, visibleResults, onFocusedResultChange, getPageSize]);
+
+  const handleResultsKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          handlePreviousResult();
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          handleNextResult();
+          break;
+        case 'Home':
+          e.preventDefault();
+          handleFirstResult();
+          break;
+        case 'End':
+          e.preventDefault();
+          handleLastResult();
+          break;
+        case 'PageUp':
+          e.preventDefault();
+          handlePageUpResult();
+          break;
+        case 'PageDown':
+          e.preventDefault();
+          handlePageDownResult();
+          break;
+        default:
+          break;
+      }
+    },
+    [
+      handlePreviousResult,
+      handleNextResult,
+      handleFirstResult,
+      handleLastResult,
+      handlePageUpResult,
+      handlePageDownResult,
+    ],
+  );
+
+  // Derived here (not received as a prop) so there is exactly one place that computes this rule —
+  // the container previously passed its own copy as isSearchQueryValid, which drifted from the
+  // Storybook harness's copy and let impossible prop combinations exist in tests. Find already
+  // receives every input the rule needs.
+  const isSearchQueryValid = isFindQueryValid({
+    searchTerm,
+    scope,
+    selectedBookIds,
+    currentBookId: verseRef.book,
+  });
+
+  // Whether the invalid query is invalid *because* the current reference sits in extra material,
+  // which the `book` and `chapter` scopes cannot search. Read only to pick which placeholder the
+  // results area shows; `isSearchQueryValid` above is what actually blocks the search.
+  const isBlockedByExtraMaterial = isScopeBlockedByExtraMaterial(scope, verseRef.book);
+
+  // Single source of truth for which (if any) results-area placeholder shows, so the four states
+  // are mutually exclusive by construction instead of by four separately-maintained boolean
+  // expressions. 'none' covers both "results are present" and "a search finished with 0 results" —
+  // in the latter case the status bar's message (see resultsMessage) handles the feedback instead.
+  // 'noOpenProjectsPrompt' is checked FIRST, ahead of even `results.length > 0`: with no project
+  // open in any editor tab there is nothing to search, and every result-activation callback is
+  // gated on a target editor tab, so results left on screen would be inert. They are replaced
+  // rather than merely covered.
+  const resultsAreaState:
+    | 'noOpenProjectsPrompt'
+    | 'skeleton'
+    | 'idlePrompt'
+    | 'invalidQueryPrompt'
+    | 'extraMaterialPrompt'
+    | 'none' = useMemo(() => {
+    if (noOpenProjects) return 'noOpenProjectsPrompt';
+    // Outranks the results still on screen. They belong to the last query that DID run, so leaving
+    // them up with no message dead-ends a query the user has since emptied — the state reads as a
+    // working search that simply stopped responding. Deciding it here, ahead of the results, is what
+    // makes an invalid query show the right thing by construction: no container effect has to land
+    // first, so there is no window in which stale results are on screen under a query that cannot
+    // produce them.
+    if (!isSearchQueryValid) {
+      // Ranked ahead of the empty-term idle prompt as well as the generic invalid-query prompt.
+      // Ahead of idle because "type to search" is false here — no term will run while the scope is
+      // blocked, and the state before typing is exactly where the reason is most useful. Ahead of
+      // the generic prompt because its "select books" wording sends the user to a picker that
+      // cannot fix this; only moving the reference or switching scope can.
+      if (isBlockedByExtraMaterial) return 'extraMaterialPrompt';
+      if (searchTerm.trim() === '') return 'idlePrompt';
+      return 'invalidQueryPrompt';
+    }
+    if (results.length > 0) return 'none';
+    if (searchStatus === 'running') return 'skeleton';
+    if (searchStatus !== undefined) return 'none';
+    if (searchTerm.trim() === '') return 'idlePrompt';
+    return 'skeleton';
+  }, [
+    noOpenProjects,
+    results.length,
+    searchStatus,
+    searchTerm,
+    isSearchQueryValid,
+    isBlockedByExtraMaterial,
+  ]);
+
+  /**
+   * Namespace for this `Find`'s results-area placeholder DOM ids.
+   *
+   * A fixed id would collide wherever two `Find` components share a document — a Storybook autodocs
+   * page renders every story into one — and a duplicate id makes `aria-describedby` resolve to
+   * whichever copy comes first.
+   */
+  const instanceId = useId();
+  const extraMaterialPlaceholderDomId = `${instanceId}-extra-material-placeholder`;
+
+  /**
+   * Whether the extra-material explanation is on screen in the results area.
+   *
+   * The one condition behind both halves of the scope trigger's unavailable presentation. Keying
+   * the de-emphasis off `isBlockedByExtraMaterial` instead would let the trigger render as
+   * unavailable in states that show a different placeholder — and `aria-describedby` has to key off
+   * this, since the id it names only exists while that placeholder is rendered.
+   */
+  const isExtraMaterialExplained = resultsAreaState === 'extraMaterialPrompt';
+
+  const resultsMessage = useMemo(() => {
+    if (results.length === 0) {
+      return localizedStrings['%webView_find_noResultsFound%'];
+    }
+    const l10nKey =
+      searchStatus === 'exceeded'
+        ? '%webView_find_showingResultsOfMore%'
+        : (numberOfHiddenResults > 0 && '%webView_find_showingResults%') || '%webView_find_result%';
+
+    return formatReplacementString(localizedStrings[l10nKey], {
+      visibleNumber: (results.length - numberOfHiddenResults).toString(),
+      totalNumber: totalNumberOfResults.toString(),
+    });
+  }, [results, numberOfHiddenResults, totalNumberOfResults, searchStatus, localizedStrings]);
+
+  // Only offered when the project actually has extra material. Telling a project with none that
+  // Find "can't include" it explains an absence that isn't Find's doing.
+  const extraMaterialNotSearchedExplanation = useMemo(
+    () =>
+      hasExcludedExtraMaterial
+        ? { [Section.Extra]: localizedStrings[EXTRA_MATERIAL_NOT_SEARCHED_KEY] }
+        : undefined,
+    [hasExcludedExtraMaterial, localizedStrings],
+  );
+
+  // Asks the same predicate the query gate asks, for each scope Find offers, rather than restating
+  // which scopes the rule covers. Extending the rule then reaches the picker and the gate together;
+  // a second copy here would let Find keep offering a scope the gate has started rejecting.
+  // Supplied only while something is blocked: an always-present explanation would disable scopes
+  // everywhere.
+  //
+  // Falls back to the key itself, as the library's own `localizeString` does. `localizedStrings` is
+  // an open index signature, so a key that went unrequested reads as `undefined` with no compile
+  // error — and an `undefined` explanation here would leave both scopes ENABLED while the query
+  // gate still rejects them, which is the one outcome worse than showing a raw key.
+  const disabledScopeExplanations = useMemo(() => {
+    const blockedScopes = FIND_AVAILABLE_SCOPES.filter((availableScope) =>
+      isScopeBlockedByExtraMaterial(availableScope, verseRef.book),
+    );
+    if (blockedScopes.length === 0) return undefined;
+    const explanation = localizedStrings[EXTRA_MATERIAL_SCOPE_KEY] ?? EXTRA_MATERIAL_SCOPE_KEY;
+    return Object.fromEntries(blockedScopes.map((blockedScope) => [blockedScope, explanation]));
+  }, [verseRef.book, localizedStrings]);
+
+  /** Text shown in the scope popover trigger, e.g. "GEN 1", "GEN, EXO, JHN", or "All books" */
+  const scopeDisplayText = useMemo(() => {
+    switch (scope) {
+      case 'chapter': {
+        const bookName = localizedBookData.get(verseRef.book)?.localizedId ?? verseRef.book;
+        return `${bookName} ${verseRef.chapterNum}`;
+      }
+      case 'book':
+        return localizedBookData.get(verseRef.book)?.localizedId ?? verseRef.book;
+      case 'selectedBooks':
+        // Listing every book outgrows this row past a handful of books and forces a horizontal
+        // scrollbar on the whole panel, so the summary collapses to "All books" or to a canon-order
+        // range of its first and last books, e.g. "GEN - HOS".
+        return (
+          summarizeSelectedBooks(
+            selectedBookIds,
+            getAvailableBookIds(booksPresent),
+            localizedStrings['%webView_find_allBooks%'],
+            localizedBookData,
+          ) ?? '…'
+        );
+      default:
+        return '';
+    }
+  }, [scope, selectedBookIds, verseRef, localizedBookData, booksPresent, localizedStrings]);
+
+  // Configuration for the per-result replace preview. Present whenever in replace mode — including
+  // an empty replacement term, so the "replace with nothing" (deletion) preview can render its
+  // deletion bar rather than silently showing no preview.
+  const replaceConfig = activeMode === 'replace' ? { term: replaceTerm, preserveCase } : undefined;
+
+  // Replace/Replace All (and the per-result replace action) are blocked for two independent
+  // reasons: the project is read-only, or structure is locked and the replacement itself would
+  // change it. When both apply, the read-only reason takes precedence since it is the more
+  // fundamental blocker. The two buttons additionally disable for their own busy/precondition
+  // reasons (see isReplaceUnavailable below).
+  const isReplaceActionBlocked =
+    !isEditable || (isStructureProtected && isReplacementStructureChanging);
+  // Only meaningful while isReplaceActionBlocked; kept empty otherwise so a future consumer of this
+  // value (e.g. an aria-label) can't inherit a tooltip for a reason that doesn't apply.
+  let replaceBlockedTooltipText = '';
+  if (isReplaceActionBlocked) {
+    replaceBlockedTooltipText = !isEditable
+      ? localizedStrings['%webView_find_replace_readOnlyTooltip%']
+      : localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%'];
+  }
+  // Both Replace and Replace All additionally disable while a search is running, a replace is
+  // already in flight, or the action is blocked (above) — only their own precondition differs.
+  //
+  // An unrunnable query counts as blocked too. Results outlive the query that produced them, so
+  // emptying the book selection leaves rows on screen that no longer correspond to a search Find
+  // would run; replacing against them writes to character offsets nothing has re-verified.
+  const isReplaceUnavailable =
+    searchStatus === 'running' || isReplacing || isReplaceActionBlocked || !isSearchQueryValid;
+
+  // Map the flat localized-string bag into the shape the preview-options picker expects.
+  const previewOptionsStrings: ReplacePreviewOptionsStrings = {
+    togglePreviewOptions: localizedStrings['%webView_find_previewOptions_toggle%'],
+    layout: localizedStrings['%webView_find_previewOptions_layout%'],
+    layoutArrow: localizedStrings['%webView_find_previewOptions_layout_arrow%'],
+    layoutInline: localizedStrings['%webView_find_previewOptions_layout_inline%'],
+    layoutBlock: localizedStrings['%webView_find_previewOptions_layout_block%'],
+    highlightShape: localizedStrings['%webView_find_previewOptions_shape%'],
+    highlightShapeBar: localizedStrings['%webView_find_previewOptions_shape_bar%'],
+    highlightShapeRounded: localizedStrings['%webView_find_previewOptions_shape_rounded%'],
+    highlightShapePlain: localizedStrings['%webView_find_previewOptions_shape_plain%'],
+    color: localizedStrings['%webView_find_previewOptions_color%'],
+    colorRedCyan: localizedStrings['%webView_find_previewOptions_color_redCyan%'],
+    colorRedGreen: localizedStrings['%webView_find_previewOptions_color_redGreen%'],
+    colorGreyBlue: localizedStrings['%webView_find_previewOptions_color_greyBlue%'],
+    monospace: localizedStrings['%webView_find_previewOptions_monospace%'],
+    monospaceDescription: localizedStrings['%webView_find_previewOptions_monospaceDescription%'],
+    showInvisible: localizedStrings['%webView_find_previewOptions_showInvisible%'],
+    showInvisibleDescription:
+      localizedStrings['%webView_find_previewOptions_showInvisibleDescription%'],
+    swatchOld: localizedStrings['%webView_find_previewOptions_swatchOld%'],
+    swatchNew: localizedStrings['%webView_find_previewOptions_swatchNew%'],
+  };
+
+  const sortedProjects = useMemo<ProjectSelectorProject[]>(
+    () => toFindSelectorRows(projects),
+    [projects],
+  );
+
+  // Every ProjectSelector across the app resolves the shared `%projectSelector_*%` keys, then
+  // merges Find-specific overrides (placeholder, empty message, aria-label) on top.
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
+    () => ({
+      ...buildProjectSelectorLocalizedStrings(localizedStrings),
+      // Each override falls back to Find's own English, not the picker's. The picker's generic
+      // "Select a project" would be actively wrong here: this placeholder reports that there is
+      // nothing to pick, so instructing the user to pick something contradicts it.
+      buttonPlaceholder: resolveLocalizedString(
+        localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
+        'No open projects or resources',
+      ),
+      commandEmptyMessage: resolveLocalizedString(
+        localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
+        'No projects found',
+      ),
+      ariaLabel: resolveLocalizedString(
+        localizedStrings['%webView_find_projectSelector_label%'],
+        'Project',
+      ),
+    }),
+    [localizedStrings],
+  );
+
+  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys. Each branch
+  // is narrowed to the ids it can populate; see FIND_PROJECT_SELECTOR_GROUPING_IDS and
+  // FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
+  const builtInGroupings = useMemo(
+    () => makeBuiltInGroupings(buildBuiltInGroupingStrings(localizedStrings)),
+    [localizedStrings],
+  );
+  const projectSelectorGroupings = useMemo(
+    () =>
+      builtInGroupings.filter((grouping) =>
+        FIND_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [builtInGroupings],
+  );
+  const simpleProjectSelectorGroupings = useMemo(
+    () =>
+      builtInGroupings.filter((grouping) =>
+        FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [builtInGroupings],
+  );
+
+  // Presentation shared by both project-picker configurations, so the `hideScrollGroups` branch
+  // below differs only in the parts that actually vary: the mode, the selection shape, the offered
+  // groupings, and the change/open callbacks.
+  const sharedProjectSelectorProps = {
+    localizedStrings: projectSelectorLocalizedStrings,
+    isLoading: isLoadingProjects,
+  };
+
+  return (
+    // Scrolling here keeps `max-h-screen` from ever handing overflow to the document. If the document
+    // scrolled, the search re-run that follows every filter change would move the results across the
+    // viewport boundary and toggle its scrollbar, and each toggle narrows the viewport by the
+    // scrollbar's width — shifting this right-aligned toolbar, and the filters popover anchored to it,
+    // sideways. The loading skeleton above the results list gives way entirely, and the list itself
+    // down to its floor, so at normal panel heights nothing reaches this container and it shows no
+    // scrollbar of its own. Once a panel is short enough that the header, that floor and the status
+    // bar no longer fit, this container does scroll — which is what keeps the status bar's Cancel
+    // button reachable, at the cost of the toolbar shifting while a search runs.
+    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
+      {/* Header with searchbar and filters */}
+      <div className="tw:space-y-3">
+        {/* Project selector + Find/Replace toggle share one row. The responsiveness guideline caps a
+            filter toolbar at two–three rows and expects a 300px min width, and these were two
+            full-width rows of a four-row header; `flex-wrap` lets them fall back to stacking when
+            the panel is too narrow to fit both. */}
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+          {/* Always visible; lets the user see and change which project Find operates on (and, by
+              extension, which open tab a result click will scroll). */}
+          <div className="tw:min-w-[8rem] tw:flex-1" data-testid="find-project-trigger">
+            {hideScrollGroups ? (
+              /* Simple interface mode: a flat project list with no scroll-group letters anywhere.
+                 `openTabs={[]}` is what suppresses them — `mode="project"` derives each row's
+                 group badges from `openTabs`, so passing Find's real tabs here would still badge
+                 every open project with its group letter. It also leaves no row eligible for the
+                 "open tabs" section, which is why this branch offers
+                 `FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS` instead. Matches the `ProjectSelector`
+                 "Simple Flat List" story. */
+              <ProjectSelector
+                mode="project"
+                projects={sortedProjects}
+                openTabs={NO_OPEN_TABS}
+                selection={{ projectId: selectedProjectId }}
+                onChangeSelection={({ projectId: nextId }) => onSelectProject(nextId)}
+                availableGroupings={simpleProjectSelectorGroupings}
+                {...sharedProjectSelectorProps}
+              />
+            ) : (
+              <ProjectSelector
+                mode="projectScrollGroup"
+                projects={sortedProjects}
+                openTabs={openTabs}
+                selection={{ projectId: selectedProjectId, scrollGroupId: selectedScrollGroupId }}
+                onChangeSelection={({ projectId: nextId, scrollGroupId: nextScrollGroupId }) =>
+                  onSelectProjectScrollGroup(nextId, nextScrollGroupId)
+                }
+                onOpenProjectInGroup={onOpenProjectInGroup}
+                availableGroupings={projectSelectorGroupings}
+                {...sharedProjectSelectorProps}
+              />
+            )}
+          </div>
+
+          {/* Find/Replace mode toggle — hidden in simple interface mode, where replace is not
+              offered and the panel is find-only. */}
+          {!hideModeToggle && (
+            <ToggleGroup
+              type="single"
+              value={activeMode}
+              onValueChange={(value) => {
+                if (value === 'find' || value === 'replace') onToggleMode(value);
+              }}
+              className="tw:w-fit tw:shrink-0 tw:rounded-lg tw:bg-muted tw:p-1"
+            >
+              <ToggleGroupItem
+                value="find"
+                className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+              >
+                {localizedStrings['%webView_find_findTab%']}
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="replace"
+                className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+              >
+                {localizedStrings['%webView_find_replaceTab%']}
+              </ToggleGroupItem>
+            </ToggleGroup>
+          )}
+        </div>
+
+        {/* Find input row */}
+        <div className="tw:flex tw:gap-2 tw:flex-wrap">
+          <div className="tw:relative tw:flex-1">
+            <TextSearch className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:text-muted-foreground" />
+            <Input
+              id="search-term"
+              ref={searchInputRef}
+              value={searchTerm}
+              onChange={(e) => onSearchTermChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  onStartSearch(true);
+                }
+              }}
+              placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
+              className={`tw:w-full tw:min-w-16 tw:text-ellipsis tw:!pl-8 scripture-font ${searchTerm ? 'tw:!pe-8' : 'tw:!pr-4'}`}
+            />
+            {searchTerm && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={localizedStrings['%webView_find_clearSearch%']}
+                      // Emptying the term is itself what clears the results and abandons a running
+                      // job, so every route to an empty box behaves the same — see the container's
+                      // invalid-query effect. Focus is handed back to the search box because
+                      // emptying the term unmounts this button.
+                      onClick={() => {
+                        onSearchTermChange('');
+                        onFocusSearchInput?.();
+                      }}
+                      className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
+                    >
+                      <X className="tw:h-4 tw:w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{localizedStrings['%webView_find_clearSearch%']}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+          <RecentSearches
+            classNameForItems="scripture-font"
+            recentSearches={recentSearches}
+            onSearchItemSelect={onSearchTermChange}
+            ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
+            groupHeading={localizedStrings['%webView_find_recent%']}
+            buttonClassName="tw:h-10 tw:w-10"
+            buttonVariant="outline"
+          />
+
+          <FindFilters
+            areFiltersActive={areFiltersActive}
+            searchTextType={searchTextType}
+            setSearchTextType={setSearchTextType}
+            wordRestriction={wordRestriction}
+            setWordRestriction={setWordRestriction}
+            shouldMatchCase={shouldMatchCase}
+            setShouldMatchCase={setShouldMatchCase}
+            ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}
+            setIgnoreWhitespaceDifferences={setIgnoreWhitespaceDifferences}
+            ignoreDiacritics={ignoreDiacritics}
+            setIgnoreDiacritics={setIgnoreDiacritics}
+            isRegexAllowed={isRegexAllowed}
+            setIsRegexAllowed={setIsRegexAllowed}
+            localizedStrings={{
+              toggleFilters: localizedStrings['%webView_find_toggleFilters%'],
+              filtersPanel: localizedStrings['%webView_find_filtersPanel%'],
+              matchContentIn: localizedStrings['%webView_find_matchContentIn%'],
+              allText: localizedStrings['%webView_find_allText%'],
+              allTextTooltip: localizedStrings['%webView_find_allText_tooltip%'],
+              verseTextOnly: localizedStrings['%webView_find_verseTextOnly%'],
+              restrictions: localizedStrings['%webView_find_restrictions%'],
+              restrictionNone: localizedStrings['%webView_find_restrictions_none%'],
+              restrictionWholeWord: localizedStrings['%webView_find_restrictions_wholeWord%'],
+              restrictionStartOfWord: localizedStrings['%webView_find_restrictions_startOfWord%'],
+              restrictionEndOfWord: localizedStrings['%webView_find_restrictions_endOfWord%'],
+              capitalization: localizedStrings['%webView_find_capitalization%'],
+              matchCase: localizedStrings['%webView_find_matchCase%'],
+              flexibility: localizedStrings['%webView_find_flexibility%'],
+              ignoreWhitespaceDifferences:
+                localizedStrings['%webView_find_ignoreWhitespaceDifferences%'],
+              ignoreWhitespaceDifferencesTooltip:
+                localizedStrings['%webView_find_ignoreWhitespaceDifferences_tooltip%'],
+              ignoreDiacritics: localizedStrings['%webView_find_ignoreDiacritics%'],
+              pattern: localizedStrings['%webView_find_pattern%'],
+              allowRegex: localizedStrings['%webView_find_allowRegex%'],
+            }}
+          />
+        </div>
+
+        {/* Replace input row — shown in Replace mode */}
+        {activeMode === 'replace' && (
+          <>
+            <div className="tw:relative tw:flex-1">
+              <ArrowRight className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:text-muted-foreground" />
+              <Input
+                id="replace-term"
+                value={replaceTerm}
+                onChange={(e) => onReplaceTermChange(e.target.value)}
+                placeholder={localizedStrings['%webView_find_replaceTerm_placeholder%']}
+                className="tw:w-full tw:min-w-16 tw:!pl-8 tw:!pr-4 scripture-font"
+              />
+            </div>
+            {/* Persistent note, not just a hover tooltip — matches the two-signal feedback pattern
+                below (note + tooltip) for whichever reason currently blocks replace. Read-only
+                takes precedence when both apply, same as the tooltip precedence below. */}
+            {!isEditable ? (
+              <p className="tw:text-xs tw:text-muted-foreground">
+                {localizedStrings['%webView_find_replace_readOnlyNote%']}
+              </p>
+            ) : (
+              isStructureProtected && (
+                <p className="tw:text-xs tw:text-muted-foreground">
+                  {localizedStrings['%webView_find_replace_structureProtectedNote%']}
+                </p>
+              )
+            )}
+            <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:flex-wrap">
+              <div className="tw:flex tw:items-center tw:gap-2">
+                <Checkbox
+                  id="preserve-case"
+                  checked={preserveCase}
+                  onCheckedChange={(checked) => onPreserveCaseChange(checked === true)}
+                />
+                <Label htmlFor="preserve-case" className="tw:cursor-pointer">
+                  {localizedStrings['%webView_find_preserveCase%']}
+                </Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground tw:cursor-default" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="tw:max-w-xs tw:whitespace-pre-line">
+                        {localizedStrings['%webView_find_preserveCase_tooltip%']}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {onPreviewOptionsChange && (
+                  <ReplacePreviewOptions
+                    previewOptions={previewOptions}
+                    setPreviewOptions={onPreviewOptionsChange}
+                    localizedStrings={previewOptionsStrings}
+                  />
+                )}
+              </div>
+              <DisabledActionTooltip
+                className="tw:flex tw:gap-2"
+                disabled={isReplaceActionBlocked}
+                tooltipText={replaceBlockedTooltipText}
+              >
+                <Button
+                  variant="outline"
+                  onClick={onReplaceAll}
+                  disabled={visibleResults.length === 0 || isReplaceUnavailable}
+                >
+                  <ReplaceAll className="tw:h-4 tw:w-4" />
+                  {localizedStrings['%webView_find_replaceAll%']}
+                </Button>
+                <Button
+                  onClick={() => onReplace()}
+                  disabled={focusedResultIndex === undefined || isReplaceUnavailable}
+                >
+                  <Replace className="tw:h-4 tw:w-4" />
+                  {localizedStrings['%webView_find_replace%']}
+                </Button>
+              </DisabledActionTooltip>
+            </div>
+          </>
+        )}
+
+        {/* Scope selector row. The summary is short by construction, but a long localized book
+            name or an unresolved string can still outrun a narrow panel, so the trigger is built to
+            clip rather than widen the row: `tw:shrink` overrides the `tw:shrink-0` every shadcn
+            `Button` carries in its base class (without it `tw:min-w-0` is inert and the row grows a
+            horizontal scrollbar), and `tw:min-w-0` then lets the summary span's `tw:truncate`
+            actually clip. The label, chevron and the result-count block opposite keep their
+            intrinsic width so the summary is the only thing that gives. */}
+        <div className="tw:flex tw:min-w-0 tw:items-center tw:justify-between">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="tw:h-auto tw:min-w-0 tw:shrink tw:gap-1 tw:overflow-hidden tw:px-2 tw:py-1 tw:font-normal"
+                // On the Button, not on the summary span inside it: a button is atomic to
+                // assistive technology, so a description on a role-less descendant is never
+                // announced — the span's text would only fold into the button's NAME.
+                aria-describedby={
+                  isExtraMaterialExplained ? extraMaterialPlaceholderDomId : undefined
+                }
+              >
+                <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
+                  {localizedStrings['%webView_find_showing%']}
+                </span>
+                {/* While the scope is blocked the trigger would otherwise read as a normal,
+                    active scope — "XXB 1" with nothing to say it cannot run. The results area
+                    carries the full explanation, but it can be scrolled away, so the summary drops
+                    its emphasis here too. Both the de-emphasis and the description above key off
+                    the same condition, so the trigger never renders as unavailable while the
+                    reason is nowhere on screen — and the id can only be pointed at while the
+                    element carrying it is rendered. */}
+                <span
+                  className={
+                    isExtraMaterialExplained
+                      ? 'tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:text-muted-foreground tw:italic'
+                      : 'tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:font-medium'
+                  }
+                >
+                  {scopeDisplayText}
+                </span>
+                <ChevronDown className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            {/* Height-capped and scrollable for the same reason as the books picker inside it: in a
+                narrow panel this popover can flip above its trigger, and anything taller than the
+                space there is clipped off past the top of the web view's iframe. overflow-x-hidden
+                keeps the y-axis scroller from computing the x-axis to `auto` and adding a second,
+                horizontal scrollbar. */}
+            <PopoverContent
+              align="start"
+              className="tw:max-h-(--radix-popover-content-available-height) tw:w-auto tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
+              collisionPadding={8}
+            >
+              <ScopeSelector
+                scope={scope}
+                availableScopes={FIND_AVAILABLE_SCOPES}
+                // ScopeSelector's onScopeChange takes the wider ScopeWithRange (the
+                // markers-checklist work added a 'range' scope). Find never enables
+                // 'range' (not in availableScopes), so this narrowing wrapper just
+                // guards that contract before forwarding to the narrow setScope.
+                onScopeChange={(newScope: ScopeWithRange) => {
+                  if (newScope === 'range') return;
+                  setScope(newScope);
+                }}
+                availableBookInfo={booksPresent}
+                selectedBookIds={selectedBookIds}
+                onSelectedBookIdsChange={onSelectedBookIdsChange}
+                localizedStrings={scopeSelectorLocalizedStrings}
+                localizedBookNames={localizedBookData}
+                // Find withholds extra material from `availableBookInfo`, which leaves the Extra
+                // quick-select button disabled on a project that has some. Say why, so it doesn't
+                // read as "this project has no extra material".
+                disabledSectionExplanations={extraMaterialNotSearchedExplanation}
+                // Find cannot search extra material, and both these scopes resolve to the current
+                // reference's book. Disabling them keeps the user from choosing a scope that would
+                // only produce the blocked-query placeholder.
+                disabledScopeExplanations={disabledScopeExplanations}
+              />
+            </PopoverContent>
+          </Popover>
+          {/* Gated on the query as well as on the results: the rows below are suppressed for an
+              invalid query, and a count with working arrows left behind reads as a live search —
+              "1 of 12" over an empty results area, with navigation that still drives the editor.
+              Navigating the scroll group into extra material makes that the common path. */}
+          {isSearchQueryValid && visibleResults.length > 0 && (
+            <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1">
+              <span className="tw:text-sm tw:text-muted-foreground tw:tabular-nums">
+                {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
+                  count: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
+                  total: String(visibleResults.length),
+                })}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw:h-7 tw:w-7"
+                disabled={visibleResults.length === 0}
+                onClick={handlePreviousResult}
+                aria-label={localizedStrings['%webView_find_previousResult%']}
+              >
+                <ChevronUp className="tw:h-4 tw:w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw:h-7 tw:w-7"
+                disabled={visibleResults.length === 0}
+                onClick={handleNextResult}
+                aria-label={localizedStrings['%webView_find_nextResult%']}
+              >
+                <ChevronDown className="tw:h-4 tw:w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Search Results Placeholder: shown while actually running, and while a valid non-empty term
+          is about to auto-search (debounce pending, or waiting on the data provider) — otherwise a
+          restored/carried-over term would flash the idle prompt below before the search starts. */}
+      {resultsAreaState === 'skeleton' && (
+        // `overflow-hidden` lets these placeholder cards give way in a short panel instead of pushing
+        // the root past its height cap, where the root would grow its own scrollbar for the length of
+        // the search and narrow the toolbar, sliding the filters popover anchored to it sideways.
+        // `p-px` keeps that clip from cutting off each card's 1px ring outline.
+        <div className="tw:space-y-2 tw:overflow-hidden tw:p-px">
+          {Array.from({ length: 5 }).map((_value, index) => (
+            // As this is a placeholder, it is safe to use the index as a key
+            // eslint-disable-next-line react/no-array-index-key
+            <Card key={index}>
+              <CardContent className="tw:flex tw:items-center tw:space-x-4 tw:p-4">
+                <div className="tw:space-y-2">
+                  <Skeleton className="tw:h-4 tw:w-[250px]" />
+                  <Skeleton className="tw:h-4 tw:w-[200px]" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Search Results */}
+      {/* This div is a scroll container that handles keyboard navigation (arrow keys) between search
+          results. It needs onKeyDown for result navigation and onScroll for progressive loading, but
+          it has no single semantic ARIA role (it's not a listbox, grid, etc.) that would satisfy the
+          rule without being misleading. The child result rows are the interactive elements. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      <div
+        ref={resultsContainerRef}
+        // A floor of roughly one and a half result cards, rather than this list's natural minimum
+        // (zero, since a scroll container can always shrink): without one, a short panel squeezes the
+        // list away entirely and its results, and the idle prompt inside it, become unreachable. The
+        // floor is dropped while the loading skeleton is up, where this list is empty and the space
+        // would be blank — and where reserving it pushes the root into scrolling, which shifts the
+        // toolbar. Raising it eats the same budget: the root's height also covers its padding, the
+        // gaps between its children, the header and the status bar.
+        className={`tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2 ${
+          resultsAreaState === 'skeleton' ? '' : 'tw:min-h-24'
+        }`}
+        // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+        tabIndex={0}
+        onScroll={onResultsScroll}
+        onKeyDown={handleResultsKeyDown}
+      >
+        {/* Idle placeholder: no search has run yet (e.g. first open, or after clearing the search),
+            so the results region would otherwise be blank. */}
+        {resultsAreaState === 'idlePrompt' && (
+          <ResultsPlaceholder
+            domId={`${instanceId}-idle-placeholder`}
+            testId="find-idle-placeholder"
+            message={localizedStrings['%webView_find_searchPrompt%']}
+          />
+        )}
+        {/* No-open-projects placeholder: nothing is open in any editor tab, so there is nothing to
+            search. Outranks every other state — every result-activation callback is gated on a
+            target editor tab, so results still on screen would be inert, and leaving them rendered
+            invites clicks that silently do nothing. */}
+        {resultsAreaState === 'noOpenProjectsPrompt' && (
+          <ResultsPlaceholder
+            domId={`${instanceId}-no-open-projects-placeholder`}
+            testId="find-no-open-projects-placeholder"
+            message={localizedStrings['%webView_find_noOpenProjectsOrResources_results%']}
+          />
+        )}
+        {/* Invalid-query placeholder: a term is present but won't run (e.g. `selectedBooks` scope
+            with no books selected — can happen after a project switch invalidates a carried-over
+            selection). Distinct from the idle prompt so the user knows why nothing is happening. */}
+        {resultsAreaState === 'invalidQueryPrompt' && (
+          <ResultsPlaceholder
+            domId={`${instanceId}-invalid-query-placeholder`}
+            testId="find-invalid-query-placeholder"
+            message={localizedStrings['%webView_find_selectBooksPrompt%']}
+          />
+        )}
+        {/* The current reference is in extra material, so the `book`/`chapter` scopes have nothing
+            searchable to resolve to. Separate from the invalid-query placeholder because the fix is
+            different: move the reference or switch scope, not pick books. */}
+        {resultsAreaState === 'extraMaterialPrompt' && (
+          <ResultsPlaceholder
+            domId={extraMaterialPlaceholderDomId}
+            testId={EXTRA_MATERIAL_PLACEHOLDER_TEST_ID}
+            message={
+              localizedStrings[EXTRA_MATERIAL_SCOPE_RESULTS_KEY] ?? EXTRA_MATERIAL_SCOPE_RESULTS_KEY
+            }
+          />
+        )}
+        {(() => {
+          // With no project open in any editor tab there is no target to scroll, so these rows are
+          // inert. The no-open-projects placeholder replaces them rather than rendering alongside,
+          // so a click can't silently do nothing.
+          if (noOpenProjects) return undefined;
+          // Same reasoning for a query that can no longer produce these rows: the placeholder is
+          // meant to replace them, not sit above them.
+          if (!isSearchQueryValid) return undefined;
+          // Only the first book that has a replaced result gets the cancel handler.
+          // All replaced rows share one pending operation, so only one Cancel button
+          // should appear to avoid implying per-row granularity.
+          let cancelHandlerAssigned = false;
+          return [...resultsByBook.entries()].map(([bookId, bookResults]) => {
+            const bookHasReplaced = bookResults.some(({ result }) => result.isReplaced);
+            const cancelReplace =
+              !cancelHandlerAssigned && bookHasReplaced ? onCancelReplace : undefined;
+            if (cancelReplace) cancelHandlerAssigned = true;
+            return (
+              <SearchResultsInBook
+                key={bookId}
+                getBookUsj={getBookUsj}
+                bookId={bookId}
+                results={bookResults.map(({ result }) => result)}
+                localizedBookData={localizedBookData}
+                focusedResultIndex={bookResults.findIndex(
+                  ({ originalIndex }) => originalIndex === focusedResultIndex,
+                )}
+                onResultClick={(result, indexInBookResults) => {
+                  onFocusedResultChange(result, bookResults[indexInBookResults].originalIndex);
+                  // Return focus to the scroll container so arrow-key navigation keeps working
+                  // after a single click selects/previews a result.
+                  setTimeout(() => resultsContainerRef.current?.focus(), 0);
+                }}
+                onResultFocus={(result, indexInBookResults) =>
+                  onResultFocus?.(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultDoubleClick={(result, indexInBookResults) =>
+                  onResultDoubleClick?.(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultReferenceClick={(result, indexInBookResults) =>
+                  onResultReferenceClick?.(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onHideResult={(indexInBookResults) =>
+                  onHideResult(bookResults[indexInBookResults].originalIndex)
+                }
+                onReplace={(indexInBookResults) =>
+                  onReplace(bookResults[indexInBookResults].originalIndex)
+                }
+                onCancelReplace={cancelReplace}
+                localizedStrings={searchResultLocalizedStrings}
+                isReplaceMode={activeMode === 'replace'}
+                isReplacing={isReplacing}
+                isReplaceBlocked={isReplaceActionBlocked}
+                replaceBlockedTooltipText={replaceBlockedTooltipText}
+                replaceConfig={replaceConfig}
+                previewOptions={previewOptions}
+                allowInvisibleCharacters={allowInvisibleCharacters}
+                logger={logger}
+              />
+            );
+          });
+        })()}
+      </div>
+
+      {/* Status bar — suppressed while no project is open, so a stale "Showing N results" cannot
+          contradict the placeholder above. */}
+      {searchStatus && !noOpenProjects && (
+        <div className="tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:border-t tw:pt-4">
+          {searchStatus === 'running' && (activeMode !== 'replace' || !isPostReplaceSearch) && (
+            <div className="tw:flex tw:items-center tw:gap-4">
+              <Progress value={searchProgress} className="tw:w-64" />
+              <Button onClick={() => onStopSearch()}>
+                {localizedStrings['%webView_find_cancelSearch%']}
+              </Button>
+            </div>
+          )}
+          {(searchStatus === 'completed' ||
+            searchStatus === 'stopped' ||
+            searchStatus === 'exceeded') && (
+            <p className="tw:font-light tw:text-center">{resultsMessage}</p>
+          )}
+          {searchStatus === 'errored' && searchError && (
+            <p className="tw:font-light tw:text-center">
+              {formatReplacementString(localizedStrings['%webView_find_errorOccurred%'], {
+                error: searchError,
+              })}
+            </p>
+          )}
+        </div>
+      )}
+      <Sonner />
+    </div>
+  );
+}
+
+export default Find;
+
+// Re-export the scope-selector key constant so the webview/story can resolve those strings.
+export { SCOPE_SELECTOR_STRING_KEYS };

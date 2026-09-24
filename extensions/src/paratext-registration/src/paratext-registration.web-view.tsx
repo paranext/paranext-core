@@ -1,10 +1,11 @@
 import { WebViewProps } from '@papi/core';
+import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
-import { MarkdownRenderer } from 'platform-bible-react';
+import { MarkdownRenderer, usePromise } from 'platform-bible-react';
 import { RegistrationForm } from './components/registration-form.component';
-import { PARATEXT_REGISTRY_LINK } from './utils';
+import { PRODUCTION_REGISTRY_URL } from './utils';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_app_startup_description%',
@@ -13,14 +14,38 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%product_name%',
 ];
 
+/**
+ * Fetches the registry site URL for the selected server environment, falling back to production so
+ * the link always has a target rather than going blank. That is all the fallback guarantees —
+ * whether the target is reachable is a separate matter (a retired host, or access blocked from the
+ * user's network or country, still reads as a broken link). Module-scope so it is a stable
+ * `usePromise` callback.
+ */
+async function fetchRegistryUrl() {
+  try {
+    const url = await papi.commands.sendCommand('paratextRegistration.getParatextRegistryUrl');
+    return url || PRODUCTION_REGISTRY_URL;
+  } catch (error) {
+    logger.warn(
+      `Could not resolve the selected registry URL; falling back to production: ${getErrorMessage(error)}`,
+    );
+    return PRODUCTION_REGISTRY_URL;
+  }
+}
+
 globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+
+  // The registry link follows the selected server. The view reads it on mount; a server change
+  // requires an app restart to take effect, after which the view reopens fresh.
+  const [registryLink] = usePromise(fetchRegistryUrl, PRODUCTION_REGISTRY_URL);
+
   const registrationDetails = useMemo(
     () =>
       formatReplacementString(localizedStrings['%paratextRegistration_registration_details%'], {
-        registryLink: PARATEXT_REGISTRY_LINK,
+        registryLink,
       }),
-    [localizedStrings],
+    [localizedStrings, registryLink],
   );
   const markdownComponent = useMemo(
     () => <MarkdownRenderer anchorTarget="_blank" markdown={registrationDetails} />,

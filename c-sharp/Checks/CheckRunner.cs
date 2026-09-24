@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Checks;
 using Paratext.Data.Checking;
 using PtxUtils;
@@ -159,6 +160,12 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         string? _checkResultUniqueId
     )
     {
+        // Bracket the whole mutation in a write scope — denials.Save() below persists the
+        // error-message denials into the project folder. Rejects (fail-fast) while an automatic
+        // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
+        // mutation completes. Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(projectId);
+
         var check = _checkCache.GetCheck(checkId, projectId);
         var denials = GetOrCreateDenials(projectId);
         denials.AddDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
@@ -176,6 +183,12 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         string? _checkResultUniqueId
     )
     {
+        // Bracket the whole mutation in a write scope — denials.Save() below persists the
+        // error-message denials into the project folder. Rejects (fail-fast) while an automatic
+        // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
+        // mutation completes. Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(projectId);
+
         var check = _checkCache.GetCheck(checkId, projectId);
         var denials = GetOrCreateDenials(projectId);
         denials.RemoveDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);

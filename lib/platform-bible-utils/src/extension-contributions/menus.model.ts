@@ -1,6 +1,8 @@
 //----------------------------------------------------------------------------------------------
 // NOTE: If you change any of the types, make sure the JSON schema at the end of this file gets
 // changed so they align.
+// Deliberate difference: `MenuItemContainingCommand.shortcut` is platform-filled; the schema
+// omits it.
 //----------------------------------------------------------------------------------------------
 
 import { ReplaceType } from '../util';
@@ -16,9 +18,25 @@ export type OrderedItem = {
   order: number;
 };
 
+/**
+ * An interface mode a menu item can be hidden in.
+ *
+ * Keep in sync with `SettingTypes['platform.interfaceMode']` in
+ * `src/declarations/papi-shared-types.ts` — this package can't import that app-level type
+ * (dependency layering runs the other way), so this is an independently declared, structurally
+ * identical union rather than a shared one.
+ */
+export type InterfaceMode = 'simple' | 'power';
+
 export type OrderedExtensibleContainer = OrderedItem & {
   /** Determines whether other items can be added to this after it has been defined */
   isExtensible?: boolean;
+  /**
+   * Set to `true` to mark this extension point as experimental. Experimental menu content may
+   * change or be removed without notice. Extensions reading this should treat the marker as
+   * informational.
+   */
+  isExperimental?: boolean;
 };
 
 /** Group of menu items that belongs in a column */
@@ -50,6 +68,11 @@ export type MenuItemBase = OrderedItem & {
   tooltip?: LocalizeKey;
   /** Additional information provided by developers to help people who perform localization */
   localizeNotes: string;
+  /**
+   * Interface modes in which this menu item should be hidden. Omit (or use an empty array) for
+   * items that should show in every mode — most items need no value here at all.
+   */
+  hiddenInterfaceModes?: InterfaceMode[];
 };
 
 /** Menu item that hosts a submenu */
@@ -72,6 +95,21 @@ export type MenuItemContainingCommand = MenuItemBase & {
    * `papi-extension://helloWorld/assets/icon.png`
    */
   iconPathBefore?: string;
+  /**
+   * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
+   * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
+   * it as a key binding.
+   *
+   * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
+   * the unlocalized main menu never has it. Key names are not localized, and only the first
+   * catalogued alternative is shown.
+   *
+   * A `menus.json` contribution cannot set it: the menus schema rejects it, which rejects the
+   * extension's whole `menus.json`.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  shortcut?: string;
 };
 
 /**
@@ -98,6 +136,12 @@ export type ColumnsWithHeaders = {
   [property: ReferencedItem]: MenuColumnWithHeader;
   /** Defines whether columns can be added to this multi-column menu */
   isExtensible?: boolean;
+  /**
+   * Set to `true` to mark this columns collection as experimental. Experimental menu content may
+   * change or be removed without notice. Extensions reading this should treat the marker as
+   * informational.
+   */
+  isExperimental?: boolean;
 };
 
 /** Menu that contains a column without a header */
@@ -120,12 +164,45 @@ export type MultiColumnMenu = {
 
 /** Menus for one single web view */
 export type WebViewMenu = {
-  /** Indicates whether the platform default menus should be included for this webview */
+  /**
+   * Indicates whether the platform default top and context menus should be included for this web
+   * view.
+   *
+   * This does not govern the tab menu. Its items act on the tab frame rather than on the web view's
+   * contents, so the platform's tab items are included whatever this says — see
+   * {@link WebViewMenu.tabMenu}.
+   */
   includeDefaults: boolean | undefined;
   /** Menu that opens when you click on the top left corner of a tab */
   topMenu: MultiColumnMenu | undefined;
   /** Menu that opens when you right click on the main body/area of a tab */
   contextMenu: SingleColumnMenu | undefined;
+  /**
+   * Menu that opens when you right click on the tab itself, rather than on its contents.
+   *
+   * Items here act on the tab, so they are offered on every tab — including tabs that host no web
+   * view. Absent means this web view contributes nothing of its own, and the tab shows the platform
+   * items alone; unlike the menus above, there is no opting out of those.
+   *
+   * Some platform items in this menu carry a `command` that names an action the tab menu performs
+   * itself rather than a registered PAPI command — `platform.floatTab` moves the tab into a float
+   * panel within its own window, which never leaves the renderer. Treat a `command` here as the
+   * name of the action, not as something to invoke through the command service.
+   *
+   * The platform's own groups here sit at orders 50 and 100, so choose another order for yours. A
+   * single-column menu buckets every group together for the duplicate-order check, so a second
+   * group at 100 throws — and because a failed contribution is rolled back whole, that would cost
+   * this extension its entire `menus.json`, not just its tab items.
+   *
+   * @experimental This menu is unstable and may change or disappear without notice
+   */
+  tabMenu?: SingleColumnMenu;
+  /**
+   * Set to `true` to mark this WebView menu as experimental. Experimental menu content may change
+   * or be removed without notice. Extensions reading this should treat the marker as
+   * informational.
+   */
+  isExperimental?: boolean;
 };
 
 /** Menus for all web views */
@@ -144,6 +221,17 @@ export type PlatformMenus = {
   defaultWebViewContextMenu: SingleColumnMenu;
   /** Default top menu for web views that don't specify their own */
   defaultWebViewTopMenu: MultiColumnMenu;
+  /**
+   * Default tab context menu, offered on every tab. Web views that specify their own tab menu have
+   * this folded into it.
+   *
+   * Optional so that adding it does not break code that already builds a `PlatformMenus`, matching
+   * the per-web-view `tabMenu` on the same channel. A document that omits it simply contributes no
+   * platform tab items.
+   *
+   * @experimental This menu is unstable and may change or disappear without notice
+   */
+  defaultWebViewTabMenu?: SingleColumnMenu;
 };
 
 /**
@@ -170,6 +258,10 @@ export const menuDocumentSchema = {
     },
     defaultWebViewContextMenu: {
       description: "Default context menu for web views that don't specify their own",
+      $ref: '#/$defs/singleColumnMenu',
+    },
+    defaultWebViewTabMenu: {
+      description: 'Default menu that opens when you right click a tab itself',
       $ref: '#/$defs/singleColumnMenu',
     },
     webViewMenus: {
@@ -226,6 +318,11 @@ export const menuDocumentSchema = {
                 'Defines whether contributions are allowed to add menu groups to this column',
               type: 'boolean',
             },
+            isExperimental: {
+              description:
+                'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
+              type: 'boolean',
+            },
           },
           required: ['label', 'order'],
           additionalProperties: false,
@@ -237,7 +334,15 @@ export const menuDocumentSchema = {
             'Defines whether contributions are allowed to add columns to this multi-column menu',
           type: 'boolean',
         },
+        isExperimental: {
+          description:
+            'Set to `true` to mark this columns collection as experimental. Experimental menu content may change or be removed without notice.',
+          type: 'boolean',
+        },
       },
+      // Reject unknown keys at the collection level (e.g. a typo'd `isExperimentl`). Column entries
+      // are still allowed via `patternProperties` above.
+      additionalProperties: false,
     },
     menuGroups: {
       description:
@@ -265,6 +370,11 @@ export const menuDocumentSchema = {
                     'Defines whether contributions are allowed to add menu items to this menu group',
                   type: 'boolean',
                 },
+                isExperimental: {
+                  description:
+                    'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
+                  type: 'boolean',
+                },
               },
               required: ['order'],
               additionalProperties: false,
@@ -283,6 +393,11 @@ export const menuDocumentSchema = {
                 isExtensible: {
                   description:
                     'Defines whether contributions are allowed to add menu items to this menu group',
+                  type: 'boolean',
+                },
+                isExperimental: {
+                  description:
+                    'Set to `true` to mark this extension point as experimental. Experimental menu content may change or be removed without notice.',
                   type: 'boolean',
                 },
               },
@@ -309,6 +424,7 @@ export const menuDocumentSchema = {
           required: ['id'],
         },
         {
+          // No `shortcut`: the platform fills it in, so contributions must not set it
           properties: {
             command: {
               description: 'Name of the PAPI command to run when this menu item is selected.',
@@ -356,6 +472,13 @@ export const menuDocumentSchema = {
           description:
             'Relative order of this menu item compared to other menu items in the same group (sorted ascending)',
           type: 'number',
+        },
+        hiddenInterfaceModes: {
+          description:
+            'Interface modes in which this menu item should be hidden. Omit (or use an empty array) for items that should show in every mode.',
+          type: 'array',
+          items: { enum: ['simple', 'power'] },
+          uniqueItems: true,
         },
       },
       required: ['label', 'group', 'order'],
@@ -417,6 +540,15 @@ export const menuDocumentSchema = {
         contextMenu: {
           description: 'Menu that opens when you right click on the main body/area of a tab',
           $ref: '#/$defs/singleColumnMenu',
+        },
+        tabMenu: {
+          description: 'Menu that opens when you right click the tab itself',
+          $ref: '#/$defs/singleColumnMenu',
+        },
+        isExperimental: {
+          description:
+            'Set to `true` to mark this WebView menu as experimental. Experimental menu content may change or be removed without notice.',
+          type: 'boolean',
         },
       },
       additionalProperties: false,

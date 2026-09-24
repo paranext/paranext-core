@@ -1,6 +1,7 @@
 import type { LogLevel } from 'electron-log';
 import { FunctionComponent } from 'react';
 import {
+  ContentZoomAreaId,
   GetSavedWebViewDefinition,
   SavedWebViewDefinition,
   UpdateWebViewDefinition,
@@ -67,8 +68,87 @@ declare global {
   var getSavedWebViewDefinition: GetSavedWebViewDefinition;
   /** JSDOC DESTINATION UpdateWebViewDefinition */
   var updateWebViewDefinition: UpdateWebViewDefinition;
+  /**
+   * Zoom one area of a web view by `deltaSteps` (+1 in, −1 out). Omit `areaId` to zoom the web
+   * view's active area.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  var adjustContentZoomById: (
+    webViewId: string,
+    deltaSteps: number,
+    areaId?: ContentZoomAreaId,
+  ) => void;
+  /**
+   * Return one area of a web view to the Settings default. Omit `areaId` to reset the web view's
+   * active area.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  var resetContentZoomById: (webViewId: string, areaId?: ContentZoomAreaId) => void;
+  /**
+   * Report the zoom areas a web view's bootstrap discovered, in document order.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  var reportContentZoomAreasById: (webViewId: string, areaIds: ContentZoomAreaId[]) => void;
+  /**
+   * Report the zoom area a web view's bootstrap last saw clicked or focused.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  var reportContentZoomActiveAreaById: (webViewId: string, areaId: ContentZoomAreaId) => void;
   /** Indicates whether test code meant just for developers to see should be run */
   var isNoisyDevModeEnabled: boolean;
+  /**
+   * Whether to emit startup timing marks (see `markStartup`). Off by default; enabled per launch
+   * via the `PT_STARTUP_MARKS=true` environment variable. Propagated to all processes the same way
+   * as `isNoisyDevModeEnabled`.
+   */
+  var startupMarks: boolean;
+  /**
+   * Id of the window this code is running in, as the platform assigns them. Set from the URL search
+   * params in the renderer process, and `undefined` outside a window — which is how code shared
+   * with the extension host tells the two apart, so test it against `undefined` rather than for
+   * truthiness.
+   *
+   * The same id names this window everywhere else: in `platform.getWindows`, in a move's
+   * `targetWindowId`, and in main. No window is ever given an id another window has had, in this
+   * run of the app or any earlier one on the same profile.
+   *
+   * @experimental
+   */
+  var windowId: string | undefined;
+  /**
+   * Whether this window was created without being activated, as of the moment it was created. Set
+   * in the renderer process from the URL search params; no other process assigns it, so it reads
+   * `undefined` there.
+   *
+   * This is the window's state at creation, not now: what content should do about it also depends
+   * on whether the user has since done anything in the window, which the renderer tracks
+   * separately.
+   *
+   * @experimental
+   */
+  var wasWindowCreatedWithoutActivation: boolean | undefined;
+  /**
+   * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
+   * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
+   * lives in the OS-level menu bar rather than in-window, so this flag does not remove it there —
+   * every window can still reach it through the system menu bar, which is process-global and cannot
+   * differ per window.
+   *
+   * Set from the URL search params in the renderer process, and `undefined` everywhere else: the
+   * main process and the extension host never assign it, and neither does the web view prelude, so
+   * code outside a renderer must not read this as a reliable `false`.
+   *
+   * Fixed at window creation and never updated, so it cannot describe a window becoming the main
+   * one later (for instance after the main window closes). PT-4278's window-manager service is the
+   * durable answer; replace this when it lands.
+   *
+   * @experimental
+   */
+  var isMainWindow: boolean | undefined;
 }
 /* eslint-enable */
 

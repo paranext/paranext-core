@@ -48,6 +48,11 @@
             "column": "platformScriptureEditor.options",
             "order": 3
           },
+          "platformScriptureEditor.zoom": {
+            "column": "platformScriptureEditor.options",
+            "order": 4,
+            "isExperimental": true
+          },
           "platformScriptureEditor.insertTextualNotes": {
             "column": "platformScriptureEditor.insert",
             "order": 1
@@ -70,6 +75,14 @@
           }
         },
         "items": [
+          {
+            "label": "%manageBooks_openMenuItem%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; the reserved platform.manageBooks default group places it in the Project section). Hidden in Simple mode: book management is a Power-mode task there, and the Simple book-not-available message tells the user to ask their project administrator — leaving the item visible would contradict that advice in the very same tab. Same gate the sibling comments item uses",
+            "group": "platform.manageBooks",
+            "order": 1,
+            "command": "platformScripture.openManageBooks"
+          },
           {
             "label": "%webView_platformScriptureEditor_openFind%",
             "group": "platformScriptureEditor.find",
@@ -95,6 +108,33 @@
             "command": "platformScriptureEditor.changeFootnotesPaneLocation"
           },
           {
+            "label": "%webView_platformScriptureEditor_toggleFootnotesAutoShow%",
+            "group": "platformScriptureEditor.footnotesPane",
+            "order": 3,
+            "command": "platformScriptureEditor.toggleFootnotesAutoShow"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_zoomIn%",
+            "localizeNotes": "Scripture editor top menu > Options > Zoom in. Enlarges the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected.",
+            "group": "platformScriptureEditor.zoom",
+            "order": 1,
+            "command": "platform.webViewContentZoomIn"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_zoomOut%",
+            "localizeNotes": "Scripture editor top menu > Options > Zoom out. Shrinks the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected.",
+            "group": "platformScriptureEditor.zoom",
+            "order": 2,
+            "command": "platform.webViewContentZoomOut"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_resetZoomToDefault%",
+            "localizeNotes": "Scripture editor top menu > Options > Reset zoom to default. Returns whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane) to the Settings default zoom.",
+            "group": "platformScriptureEditor.zoom",
+            "order": 3,
+            "command": "platform.webViewContentZoomReset"
+          },
+          {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
             "group": "platformScriptureEditor.inventory",
             "order": 1,
@@ -117,6 +157,13 @@
             "group": "platformScriptureEditor.inventory",
             "order": 4,
             "command": "platformScripture.openPunctuationInventory"
+          },
+          {
+            "label": "%markersChecklist_menu_openTool%",
+            "localizeNotes": "Scripture editor top menu > Tools > Markers Checklist... (opens the markers checklist for the editor's active project)",
+            "group": "platformScriptureEditor.inventory",
+            "order": 5,
+            "command": "platformScripture.openMarkersChecklist"
           },
           {
             "label": "%webView_platformScriptureEditor_openChecks%",
@@ -144,6 +191,7 @@
           },
           {
             "label": "%webView_legacyCommentManager_openComments%",
+            "hiddenInterfaceModes": ["simple"],
             "group": "platformScriptureEditor.comments",
             "order": 1,
             "command": "legacyCommentManager.openCommentList"

@@ -302,6 +302,431 @@ export declare class EventRollingTimeCounter {
 	hasViolatedThreshold(minRollingTimeMs: number): boolean;
 }
 /**
+ * Largest padding target the padding methods accept, in graphemes.
+ *
+ * This is the one place the class deliberately stops short of native. Native pads into a compact
+ * character buffer and gives up only at V8's string limit (`2**29 - 24`); padding here builds one
+ * array element per grapheme before joining, so the same target costs considerably more memory and
+ * exhausts the heap well before reaching native's ceiling. Measured on the padding path: `2**16`
+ * costs ~2ms and ~1MB, `2**18` ~3ms and ~1MB, `2**20` ~9ms and ~9MB, and V8's own limit cannot be
+ * reached at all.
+ *
+ * A million graphemes of padding is already far past any display or formatting use, so the limit is
+ * set where the cost is still negligible rather than where the engine finally gives out. Exceeding
+ * it throws `RangeError`, as native does for its own limit.
+ */
+export declare const MAX_PADDING_LENGTH: number;
+/**
+ * A string pre-segmented into Unicode grapheme clusters. Segmentation happens once in the
+ * constructor (the expensive step); every other operation reuses it. Derived values
+ * (substring/slice/etc.) reuse the parent grapheme slice rather than re-segmenting. The single
+ * exception is a regular expression's capture groups, whose text the parent's segmentation does not
+ * cover — a group can match across a boundary the parent never had.
+ *
+ * Every method mirrors its `String.prototype` counterpart exactly — including the edge cases around
+ * negative, fractional, `NaN`, and out-of-range arguments — with one substitution: the unit of
+ * indexing and length is the grapheme cluster rather than the UTF-16 code unit. So `length` counts
+ * what a reader would call characters, `slice` never cuts a cluster in half, and a search only
+ * reports a hit that begins and ends on cluster boundaries.
+ *
+ * The surface is limited to operations that actually need the segmentation: {@link toArray} and
+ * {@link formatReplacement} have no native counterpart but do need it, while `normalize` and
+ * `ordinalCompare` are deliberately absent, because neither reads the string as characters — they
+ * live with the plain string helpers in `string-util` instead.
+ *
+ * Range methods return a `GraphemeString` rather than a `string` so the parent's segmentation
+ * carries into the result instead of being recomputed. Call `toString()` for the text. The padding
+ * methods return text instead, because they are the one pair that adds characters: added text can
+ * fuse with the text it lands against, so there is no segmentation to carry.
+ *
+ * ## Segmentation fidelity
+ *
+ * Clusters come from `unicode-segmenter`, which implements UAX #29 extended grapheme clusters
+ * against Unicode 17. `length` counts what a literate reader of the script would call characters —
+ * for emoji and Latin, and equally for pointed Hebrew, vocalized Arabic and Syriac, Indic
+ * conjuncts, Thai, and Hangul written as decomposed Jamo.
+ *
+ * Two consequences deserve attention, because they are where a conformant segmenter changes an
+ * answer a caller might be relying on.
+ *
+ * **`\r\n` is a single cluster** (rule GB3). Since searches only report boundary-aligned hits,
+ * `'\n'` is therefore NOT findable inside a `\r\n`, and {@link split} on `'\n'` will not break
+ * Windows-style lines apart. Split lines with a regex that matches the whole terminator (`/\r?\n/`)
+ * rather than the bare line feed.
+ *
+ * **A zero-width joiner attaches to the character before it** (rule GB9), not the one after. So
+ * `'a\u200d '` is two clusters — `'a\u200d'` and a space — and that trailing space is a cluster
+ * that is entirely whitespace.
+ *
+ * @example
+ *
+ * ```ts
+ * // Segment once, then run as many operations as you like against that work.
+ * const name = new GraphemeString('👨‍👩‍👧‍👦 Family');
+ * name.length; // 8 — the family emoji counts as one
+ * name.slice(0, 1).toString(); // '👨‍👩‍👧‍👦' — never cuts a cluster in half
+ * name.indexOf('Family'); // 2
+ * ```
+ */
+export declare class GraphemeString {
+	/**
+	 * The raw string. Used for `toString`, the native scans behind search, and regex split. Not
+	 * `readonly` only because {@link fromSegmented} assigns it; treat it as immutable after
+	 * construction, since the cached offsets behind {@link offsets} are derived from it.
+	 */
+	private str;
+	/**
+	 * Grapheme clusters — source of truth for indexing. Not `readonly` only because
+	 * {@link fromSegmented} assigns it; treat it as immutable after construction. Must always satisfy
+	 * `graphemes.join('') === str`, or every index, offset, and search result disagrees with the
+	 * text.
+	 */
+	private graphemes;
+	/**
+	 * Segment `string` into grapheme clusters once, up front. Every operation on the result reuses
+	 * that work rather than re-segmenting.
+	 *
+	 * @param string The raw string.
+	 */
+	constructor(string: string);
+	/**
+	 * Number of grapheme clusters. Mirrors `String.prototype.length` in graphemes.
+	 *
+	 * @returns Count of grapheme clusters. 0 for the empty string.
+	 */
+	get length(): number;
+	/**
+	 * Build an instance from text plus its already-computed segmentation, skipping the segmenter
+	 * entirely. This is how derived instances avoid re-parsing.
+	 *
+	 * Private on purpose: the two arguments carry an invariant that nothing validates —
+	 * `graphemes.join('') === string`. A mismatched pair yields an instance whose `length`, offsets,
+	 * and search results all silently disagree with its own text. Validating would cost an O(n) join
+	 * on every derive, which is exactly the work this class exists to avoid, so the invariant is
+	 * enforced by keeping the door shut instead.
+	 */
+	private static fromSegmented;
+	/**
+	 * The original raw string. Named `toString` rather than exposed as a property so an instance
+	 * drops straight into a template literal or `String(...)` without an accessor.
+	 *
+	 * @returns The raw string this instance was built from, unchanged.
+	 */
+	toString(): string;
+	/**
+	 * The text, for `JSON.stringify`. Without this an instance would serialize its internals — the
+	 * raw string and the grapheme array beside it — at roughly twice the size of the text, and the
+	 * result would not read back as anything useful.
+	 *
+	 * Note that this makes serialization one-way: what comes off the wire is a plain string, not a
+	 * `GraphemeString`. The class is a local segmentation cache rather than a transferable value, so
+	 * a receiver that wants one constructs it from the text.
+	 *
+	 * @returns The raw string this instance was built from, unchanged.
+	 */
+	toJSON(): string;
+	/**
+	 * The grapheme clusters as an array. Returns a fresh copy, so mutating it cannot corrupt this
+	 * instance. Equivalent to spreading this instance, and to spreading a native string except that
+	 * native yields code points rather than clusters.
+	 *
+	 * @returns A new array of the grapheme clusters, in order. Empty for the empty string.
+	 */
+	toArray(): string[];
+	/**
+	 * Iterate the grapheme clusters, so `Array.from(...)` and spreading behave the way they do on a
+	 * native string — with clusters as the unit. Without this an instance would read as array-like,
+	 * and `Array.from` would silently produce a run of `undefined` instead of failing.
+	 *
+	 * @returns An iterator over the grapheme clusters, in order.
+	 */
+	[Symbol.iterator](): IterableIterator<string>;
+	/**
+	 * Replace each `{key}` in this string with `replacers[key]` and unescape `\{`/`\}`. An unknown
+	 * key is replaced by the key text itself. Adjacent strings are concatenated, so a replacer that
+	 * is not a string stays its own entry — which is how a React element survives being substituted
+	 * in.
+	 *
+	 * No native counterpart, but it walks the string character by character, so it belongs here
+	 * rather than beside the plain string helpers: an instance built once from a template can be
+	 * formatted repeatedly without re-segmenting it.
+	 *
+	 * @example
+	 *
+	 * ```tsx
+	 * new GraphemeString('Hi, {name}! I like \\{curly braces\\}!').formatReplacementToArray({
+	 *   name: <b>Alice</b>,
+	 * });
+	 * // ['Hi, ', <b>Alice</b>, '! I like {curly braces}!']
+	 * ```
+	 *
+	 * @param replacers Map from key text to its replacement. A key absent from the map is replaced by
+	 *   the key text itself rather than treated as an error.
+	 * @returns The formatted parts in order. Adjacent strings are merged into one entry, so a
+	 *   non-string replacer is always its own entry. A template with no placeholders yields a single
+	 *   string entry; only the empty string yields an empty array.
+	 */
+	formatReplacementToArray<T = unknown>(replacers: {
+		[key: string | number]: T;
+	} | object): (string | T)[];
+	/**
+	 * {@link formatReplacementToArray} with every part coerced to a string and joined.
+	 *
+	 * @example
+	 *
+	 * ```ts
+	 * new GraphemeString('a{n}b').formatReplacement({ n: 9000 }); // 'a9000b'
+	 * ```
+	 *
+	 * A replacer that cannot be converted to a string degrades to a placeholder rather than throwing,
+	 * because the template is a localized string and the replacers are caller-supplied values — one
+	 * bad value must not take down the whole call. Use {@link formatReplacementToArray} to keep a
+	 * non-string replacer intact instead of coerced.
+	 *
+	 * @param replacers Map from key text to its replacement. A key absent from the map is replaced by
+	 *   the key text itself.
+	 * @returns The formatted string. `''` if this string is empty. A replacer that cannot be
+	 *   converted becomes `[object Object]`, or `[object Unknown]` if even that inspection throws.
+	 */
+	formatReplacement(replacers: {
+		[key: string | number]: unknown;
+	} | object): string;
+	/**
+	 * Mirrors `String.prototype.at`. The grapheme at `index`, or `undefined` if out of bounds.
+	 * Negative indexes count back from the end.
+	 *
+	 * @param index Grapheme index. Negative counts back from the end; fractional truncates toward
+	 *   zero and `NaN` becomes 0.
+	 * @returns The grapheme cluster at `index`, or `undefined` when out of bounds.
+	 */
+	at(index: number): string | undefined;
+	/**
+	 * Mirrors `String.prototype.charAt`. The grapheme at `index`, or `''` if out of bounds. Like
+	 * native — and unlike {@link at} — a negative index is out of bounds rather than counted from the
+	 * end.
+	 *
+	 * @param index Grapheme index. Fractional truncates toward zero and `NaN` becomes 0.
+	 * @returns The grapheme cluster at `index`, or `''` when out of bounds.
+	 */
+	charAt(index: number): string;
+	/**
+	 * Mirrors `String.prototype.codePointAt`, indexed by grapheme. For a grapheme built from several
+	 * code points this reports only the first one.
+	 *
+	 * @param index Grapheme index. Fractional truncates toward zero and `NaN` becomes 0.
+	 * @returns The first code point of the grapheme at `index`, or `undefined` when out of bounds.
+	 */
+	codePointAt(index: number): number | undefined;
+	/**
+	 * Mirrors `String.prototype.slice`. Negative indexes count back from the end and a backwards
+	 * range yields an empty result.
+	 *
+	 * @param indexStart First grapheme to include. Defaults to 0; negative counts back from the end.
+	 * @param indexEnd First grapheme to exclude. Defaults to the end; negative counts back from the
+	 *   end.
+	 * @returns A new instance over `[indexStart, indexEnd)`, reusing this instance's segmentation.
+	 *   Empty when the range is backwards or empty.
+	 */
+	slice(indexStart?: number, indexEnd?: number): GraphemeString;
+	/**
+	 * Mirrors `String.prototype.substring`. Negative indexes clamp to 0 rather than counting from the
+	 * end, and — as in native — the arguments are swapped when `begin` is greater than `end`.
+	 *
+	 * @param begin First grapheme to include. Defaults to 0; negative clamps to 0.
+	 * @param end First grapheme to exclude. Defaults to the end; negative clamps to 0.
+	 * @returns A new instance over the range, reusing this instance's segmentation. Empty when
+	 *   `begin` and `end` resolve to the same index.
+	 */
+	substring(begin?: number, end?: number): GraphemeString;
+	/**
+	 * Mirrors `String.prototype.padStart`, choosing whole graphemes as filler so the result is
+	 * `targetLength` graphemes long — where native fills UTF-16 slots and can leave a broken half of
+	 * a cluster at the seam. Throws `RangeError` above {@link MAX_PADDING_LENGTH}, a lower ceiling
+	 * than native's and the class's one deliberate departure from native behavior.
+	 *
+	 * Returns text rather than a `GraphemeString`, unlike the range methods. Those only ever remove
+	 * clusters, so a range of an honest segmentation is still honest and can be carried into the
+	 * result for free. Padding adds text at a seam, and added text can fuse with what is already
+	 * there — a filler ending in a combining mark joins the character it lands against — so there is
+	 * no segmentation to carry. Constructing one here would mean either re-segmenting on every call
+	 * or handing back an instance whose cluster array disagrees with its own text.
+	 *
+	 * @param targetLength Desired length in graphemes. No padding is added when it is at or below the
+	 *   current length.
+	 * @param padString Text to repeat, truncated at a grapheme boundary. Defaults to a single space;
+	 *   an empty string adds no padding.
+	 * @returns The padded text, or this instance's text unchanged when no padding is needed.
+	 * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+	 *   actually be added. An empty `padString` never pads, so it never throws.
+	 */
+	padStart(targetLength: number, padString?: string): string;
+	/**
+	 * Mirrors `String.prototype.padEnd`. See {@link padStart}, including the `RangeError` ceiling and
+	 * why this returns text rather than a `GraphemeString`.
+	 *
+	 * @param targetLength Desired length in graphemes.
+	 * @param padString Text to repeat. Defaults to a single space.
+	 * @returns The padded text, or this instance's text unchanged when no padding is needed.
+	 * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+	 *   actually be added.
+	 */
+	padEnd(targetLength: number, padString?: string): string;
+	/**
+	 * Mirrors `String.prototype.indexOf`: the first grapheme index at or after `position` where
+	 * `searchString` occurs, or -1. A negative `position` clamps to 0, and an empty needle reports
+	 * the clamped `position` itself. Only a hit that begins and ends on a grapheme boundary counts,
+	 * so searching for a single emoji that forms part of a larger cluster reports -1 rather than
+	 * matching inside it.
+	 *
+	 * Accepts a raw string or a GraphemeString; the needle is used raw and is never segmented.
+	 *
+	 * @param searchString Needle to find. Used raw and never segmented.
+	 * @param position Grapheme index to start from. Defaults to 0; negative clamps to 0.
+	 * @returns The grapheme index of the first match, or `-1` if there is none. An empty needle
+	 *   returns the clamped `position`.
+	 */
+	indexOf(searchString: string | GraphemeString, position?: number): number;
+	/**
+	 * Mirrors `String.prototype.lastIndexOf`: the last grapheme index at or before `position` where
+	 * `searchString` occurs, or -1. As in native, an omitted or `NaN` position searches the whole
+	 * string while a negative one clamps to 0. See {@link indexOf} for the boundary rule.
+	 *
+	 * @param searchString Needle to find. Used raw and never segmented.
+	 * @param position Grapheme index to search at or before. Omitted or `NaN` searches the whole
+	 *   string; negative clamps to 0.
+	 * @returns The grapheme index of the last match, or `-1` if there is none. An empty needle
+	 *   returns the clamped `position`.
+	 */
+	lastIndexOf(searchString: string | GraphemeString, position?: number): number;
+	/**
+	 * Mirrors `String.prototype.includes`. See {@link indexOf} for `position` and boundary rules.
+	 *
+	 * @param searchString Needle to find. Used raw and never segmented.
+	 * @param position Grapheme index to start from. Defaults to 0; negative clamps to 0.
+	 * @returns `true` if `searchString` occurs on grapheme boundaries at or after `position`. An
+	 *   empty needle returns `true`.
+	 */
+	includes(searchString: string | GraphemeString, position?: number): boolean;
+	/**
+	 * Mirrors `String.prototype.startsWith`: whether an occurrence of `searchString` begins at
+	 * `position`. A negative `position` clamps to 0 and an empty needle returns `true`. The match
+	 * must end on a grapheme boundary, so a prefix ending mid-cluster is rejected.
+	 *
+	 * @param searchString Needle to look for. Used raw and never segmented.
+	 * @param position Grapheme index the match must begin at. Defaults to 0; negative clamps to 0.
+	 * @returns `true` if `searchString` begins at `position` and ends on a grapheme boundary. An
+	 *   empty needle returns `true`.
+	 */
+	startsWith(searchString: string | GraphemeString, position?: number): boolean;
+	/**
+	 * Mirrors `String.prototype.endsWith`: whether an occurrence of `searchString` ends exactly at
+	 * `endPosition` (default: the end of the string). A negative `endPosition` clamps to 0 and an
+	 * empty needle returns `true`. The match must begin on a grapheme boundary.
+	 *
+	 * @param searchString Needle to look for. Used raw and never segmented.
+	 * @param endPosition Grapheme index the match must end at. Defaults to the end of the string;
+	 *   negative clamps to 0.
+	 * @returns `true` if `searchString` ends exactly at `endPosition` and begins on a grapheme
+	 *   boundary. An empty needle returns `true`.
+	 */
+	endsWith(searchString: string | GraphemeString, endPosition?: number): boolean;
+	/**
+	 * Mirrors `String.prototype.split`, including the parts that surprise people: a `splitLimit`
+	 * discards everything past the limit rather than keeping it as a final piece, the limit is
+	 * converted with `ToUint32` (so `-1` means "no limit" while `NaN` and `Infinity` mean "empty
+	 * result"), an omitted separator yields the whole string, and a regular expression's capture
+	 * groups are interleaved into the result.
+	 *
+	 * The grapheme substitutions: an empty separator splits into graphemes rather than UTF-16 units,
+	 * and a separator only matches where it begins and ends on grapheme boundaries.
+	 *
+	 * PERF: an empty separator wraps every grapheme in its own instance. When the text is all that is
+	 * wanted, {@link toArray} produces the same clusters as plain strings and skips that entirely.
+	 *
+	 * Entries are `undefined` exactly where native produces `undefined` — a capture group that did
+	 * not participate in the match.
+	 *
+	 * @param separator Literal string to split on, raw or as a GraphemeString. Omitted yields the
+	 *   whole string as a single piece; `''` splits into individual graphemes.
+	 * @param splitLimit Maximum number of entries to return, converted with `ToUint32`. Anything past
+	 *   the limit is discarded rather than kept as a final piece. Omitted means no limit.
+	 * @returns The pieces in order. Empty when `splitLimit` resolves to 0. Never contains `undefined`
+	 *   — only a capture group can produce one, and a literal separator has none.
+	 */
+	split(separator?: string | GraphemeString, splitLimit?: number): GraphemeString[];
+	/**
+	 * Splitting on a regular expression. See the string overload for the shared rules.
+	 *
+	 * @param separator Regular expression to split on. Its capture groups are interleaved into the
+	 *   result.
+	 * @param splitLimit Maximum number of entries to return, converted with `ToUint32`.
+	 * @returns The pieces in order. An entry is `undefined` exactly where a capture group did not
+	 *   participate in its match, as native does.
+	 */
+	split(separator: RegExp, splitLimit?: number): (GraphemeString | undefined)[];
+	/**
+	 * Splitting on a separator whose kind is not known statically — a `string | RegExp` union, which
+	 * is what the free `split` in `string-util` declares. TypeScript matches a union argument against
+	 * one overload at a time rather than distributing it, so without this a caller holding that union
+	 * gets `TS2769` and has to narrow at every call.
+	 *
+	 * @param separator Literal string, GraphemeString, or regular expression to split on.
+	 * @param splitLimit Maximum number of entries to return, converted with `ToUint32`.
+	 * @returns The pieces in order. An entry can be `undefined` only when the separator turns out to
+	 *   be a regular expression with a capture group that did not participate.
+	 */
+	split(separator: string | GraphemeString | RegExp, splitLimit?: number): (GraphemeString | undefined)[];
+	/**
+	 * The scan behind {@link indexOf} and {@link lastIndexOf}.
+	 *
+	 * PERF: native `String.indexOf`/`lastIndexOf` do the scanning (C++); this only validates that a
+	 * hit begins AND ends on grapheme boundaries, and steps one UTF-16 unit past a rejected hit to
+	 * resume. That rejection is what keeps a needle matching inside a cluster from counting.
+	 *
+	 * @param needle Raw, already-unwrapped needle. Never empty — both callers handle that first.
+	 * @param startOffset UTF-16 offset to begin scanning from.
+	 * @param direction `1` to scan forward, `-1` to scan backward.
+	 * @returns The grapheme index of the first hit on boundaries, or `-1`.
+	 */
+	private searchOnBoundaries;
+	/** Split on a literal separator, in grapheme space. See {@link split}. */
+	private splitOnString;
+	/**
+	 * Split on a regular expression, in grapheme space. Follows the same shape as the spec's
+	 * `RegExp.prototype[@@split]`, with two changes: positions advance by whole graphemes, and a
+	 * match that does not begin and end on grapheme boundaries is skipped as if it had not matched.
+	 */
+	private splitOnRegExp;
+	/**
+	 * UTF-16 start offset of each grapheme, where `offsets.length === graphemes.length`.
+	 *
+	 * PERF: built on first use rather than in the constructor. Only the search and range methods need
+	 * it; `length`, the point accessors, and the padding methods do not, and those are both the
+	 * cheapest and the most frequent operations — building it eagerly taxes them for nothing. That
+	 * matters most for derived instances: `split` alone produces one per piece, and most are never
+	 * indexed into. Cached in {@link offsetsByInstance} rather than on the instance.
+	 */
+	private offsets;
+	/** Build the grapheme array a padding method should prepend/append, empty when none is needed. */
+	private buildPadding;
+	/** UTF-16 offset where grapheme `index` starts, or the end of the string for `index === length`. */
+	private offsetAt;
+	/**
+	 * How many graphemes a boundary-aligned occurrence of `needle` starting at grapheme `index`
+	 * occupies.
+	 */
+	private graphemeSpan;
+	/** Build a child from a resolved, clamped grapheme range `[begin, end)`. */
+	private derive;
+	/**
+	 * Binary search `offsets` for a UTF-16 offset. Returns its grapheme index if the offset is a
+	 * grapheme boundary, else -1. `offsets` is strictly increasing.
+	 */
+	private graphemeIndexAtOffset;
+	/** Whether a UTF-16 offset falls on a grapheme boundary (or the very end of the string). */
+	private isBoundary;
+}
+/**
  * Class that allows calling asynchronous functions multiple times at once while only running one at
  * a time.
  *
@@ -491,10 +916,40 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 */
 	emit: (event: T) => void;
 	/**
+	 * Runs the subscriptions for the event, keeping each subscriber's failure to itself: a subscriber
+	 * that throws hands its error to `handleSubscriberError` and the remaining subscribers still
+	 * run.
+	 *
+	 * Use this where the emit is the only time subscribers are told about something that has already
+	 * happened and will not be reported again — one broken subscriber must not cost the rest the
+	 * news. Prefer {@link emit} everywhere else: a caller that can still act on a throw should see
+	 * it.
+	 *
+	 * This does not await `async` subscribers. It routes their rejections — a subscriber whose
+	 * promise rejects reaches `handleSubscriberError` the same way a synchronous throw does — but it
+	 * does not sequence them: this returns as soon as every subscriber has been _started_, with any
+	 * async subscriber still suspended at its first `await`. An emitter that tears something down
+	 * right after emitting therefore tears it down out from under those subscribers.
+	 *
+	 * @param event Event data to provide to subscribed callbacks
+	 * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+	 *   position in the subscription order. Must not throw; a throw from it stops the remaining
+	 *   subscribers, which is the very thing this is here to prevent.
+	 * @experimental
+	 */
+	emitIsolated: (event: T, handleSubscriberError: (error: unknown, subscriberIndex: number) => void) => void;
+	/**
 	 * Function that runs the subscriptions for the event. Added here so children can override emit
 	 * and still call the base functionality. See NetworkEventEmitter.emit for example
 	 */
 	protected emitFn(event: T): void;
+	/**
+	 * Function that runs the subscriptions for the event in isolation from each other. Added here so
+	 * children can override {@link emitIsolated} and still call the base functionality.
+	 *
+	 * @experimental
+	 */
+	protected emitIsolatedFn(event: T, handleSubscriberError: (error: unknown, subscriberIndex: number) => void): void;
 	/** Check to make sure this emitter is not disposed. Throw if it is */
 	protected assertNotDisposed(): void;
 	/**
@@ -502,6 +957,12 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 * override emit and still call the base functionality.
 	 */
 	protected disposeFn(): Promise<boolean>;
+	/**
+	 * Run something for each current subscription. Clones the subscriptions array before iterating
+	 * over the callbacks so the callback index doesn't get messed up if someone subscribes or
+	 * unsubscribes inside one of the callbacks
+	 */
+	private forEachSubscription;
 }
 /**
  * Class that allows you to chain promises for a given key. This is useful when:
@@ -732,23 +1193,60 @@ export declare class SortedSet<T> {
 	 */
 	private findInsertionIndex;
 }
-/** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
+/**
+ * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
+ *
+ * A list is single-use: it collects unsubscribers until {@link runAllUnsubscribers} runs them, and
+ * that run seals it for good. Anything added to a sealed list is unsubscribed immediately instead
+ * of being stored, because whatever these clean up after is already gone. Registration is usually
+ * asynchronous, so an unsubscriber routinely arrives after the teardown that should have run it —
+ * without sealing it would be stored in a list nobody drains again and its subscription would leak
+ * for the rest of the session.
+ */
 export declare class UnsubscriberAsyncList {
 	private name;
 	readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+	/**
+	 * Whether {@link runAllUnsubscribers} has started. Set at the top of the run rather than at the
+	 * end: the run takes a snapshot of the set and then clears it, so an unsubscriber added partway
+	 * through would land in a list that is never drained again.
+	 */
+	private isSealed;
 	constructor(name?: string);
 	/**
 	 * Add unsubscribers to the list. Note that duplicates are not added twice.
+	 *
+	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
+	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
+	 *
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
 	add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
 	/**
-	 * Run all unsubscribers added to this list and then clear the list.
+	 * Run all unsubscribers added to this list, clear the list, and seal it so anything added later
+	 * is unsubscribed on arrival.
 	 *
-	 * @returns `true` if all unsubscribers succeeded, `false` otherwise.
+	 * An unsubscriber that throws (synchronously or asynchronously) does not make this method reject:
+	 * the error is caught and logged via `console.error`, the remaining unsubscribers still run, and
+	 * the thrower counts as a failure in the return value. An unsubscriber that arrives during the
+	 * run is not part of the returned result — nothing is waiting on it by then.
+	 *
+	 * @returns `true` if all unsubscribers succeeded, `false` if any returned `false` or threw.
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
+	/**
+	 * Run an unsubscriber that arrived after the list was sealed. `add` is synchronous and has no
+	 * caller to hand a result to, so the outcome is reported here rather than thrown.
+	 *
+	 * The success path is reported too: from the caller's point of view a subscription it just set up
+	 * has been undone, and without a line here that happens with no record anywhere.
+	 */
+	private unsubscribeImmediately;
 }
 /**
  * Standard platform error codes based on gRPC status codes. These provide machine-readable,
@@ -931,6 +1429,44 @@ export declare function isString(o: unknown): o is string;
  */
 export declare function deepClone<T>(obj: T): T;
 /**
+ * Message of the error with which a pending debounced invocation's promise rejects when
+ * {@link DebouncedFunction.cancel} is called. Compare a caught error's message against this to
+ * distinguish cancellation from real errors.
+ */
+export declare const DEBOUNCE_CANCELED_ERROR_MESSAGE = "Debounced function invocation was canceled";
+/**
+ * A debounced function with `cancel` and `flush` methods to abandon or immediately run any pending
+ * invocation (lodash-style lifecycle controls).
+ *
+ * @template TFunc - The type of the function being debounced.
+ */
+export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>) & {
+	/**
+	 * Cancel any pending debounced invocation. The promise returned by the most recent call rejects
+	 * with an error whose message is {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
+	 *
+	 * IMPORTANT: because cancellation _rejects_ that promise, every call whose result you might later
+	 * cancel MUST handle its rejection (await in a try/catch, or attach a `.catch`, filtering on
+	 * {@link DEBOUNCE_CANCELED_ERROR_MESSAGE} to distinguish cancellation from a real error).
+	 * Fire-and-forget callers that ignore the returned promise will get an unhandled promise
+	 * rejection when `cancel()` runs.
+	 */
+	cancel: () => void;
+	/**
+	 * Run the pending debounced invocation NOW (synchronously, with the most recently passed
+	 * arguments) instead of waiting out the remaining delay, and clear the timer so it does not fire
+	 * a second time.
+	 *
+	 * Useful at lifecycle boundaries where the trailing window would otherwise lose the final
+	 * invocation (unmount, blur, pagehide) or run it against changed context (see the
+	 * platform-scripture-editor extension's debounced PDP save).
+	 *
+	 * @returns The same promise the pending calls received (resolving/rejecting with the flushed
+	 *   invocation's outcome), or `undefined` when nothing was pending (in which case nothing runs).
+	 */
+	flush: () => Promise<ReturnType<TFunc>> | undefined;
+};
+/**
  * Get a function that reduces calls to the function passed in
  *
  * @template TFunc - A function type that takes any arguments and returns void. This is the type of
@@ -938,9 +1474,13 @@ export declare function deepClone<T>(obj: T): T;
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
- * @returns Function that, when called, only calls the function passed in at maximum every delay ms
+ * @returns Function that, when called, only calls the function passed in at maximum every delay ms.
+ *   The returned function also has a `cancel` method to abandon any pending invocation (canceling
+ *   makes the pending invocation's promise reject with an error whose message is
+ *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}) and a `flush` method to run the pending invocation
+ *   immediately instead of waiting out the delay.
  */
-export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>;
+export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): DebouncedFunction<TFunc>;
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *
@@ -987,6 +1527,26 @@ export declare function wait(ms: number): Promise<void>;
  *   longer than the specified wait time
  */
 export declare function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: number): Promise<Awaited<TResult> | undefined>;
+/**
+ * Repeatedly runs an async attempt until its result is accepted or the attempt budget is exhausted,
+ * waiting a fixed delay between tries (never after the last). Always resolves to the last result —
+ * it never throws on exhaustion, so the caller decides what a give-up result means.
+ *
+ * This is the fixed-attempts + fixed-delay retry shape shared by flaky-startup probes (e.g.
+ * `resolveRegistrationValidity`, and the missing-handler retry in `requestWithRetry`). For
+ * deadline- or abort-driven retries with variable backoff (e.g. `requestSessionSyncWithBootRetry`
+ * in startup-tasks), use a bespoke loop instead — this helper deliberately does not cover those.
+ *
+ * @param attempt Runs one try; receives the 1-based attempt number and resolves to a result.
+ * @param isDone Returns `true` when `attempt`'s result is acceptable and retrying should stop.
+ * @param options.maxAttempts Total tries; clamped to at least 1. Defaults to 3.
+ * @param options.delayMs Delay between tries. Defaults to 0.
+ * @returns The first accepted result, or the last attempt's result if none qualified.
+ */
+export declare function retryUntil<TResult>(attempt: (attemptNumber: number) => Promise<TResult>, isDone: (result: TResult) => boolean, options?: {
+	maxAttempts?: number;
+	delayMs?: number;
+}): Promise<TResult>;
 /**
  * Get all functions on an object and its prototype chain (so we don't miss any class methods or any
  * object methods). Note that the functions on the final item in the prototype chain (i.e., Object)
@@ -1103,9 +1663,24 @@ export type OrderedItem = {
 	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
 	order: number;
 };
+/**
+ * An interface mode a menu item can be hidden in.
+ *
+ * Keep in sync with `SettingTypes['platform.interfaceMode']` in
+ * `src/declarations/papi-shared-types.ts` — this package can't import that app-level type
+ * (dependency layering runs the other way), so this is an independently declared, structurally
+ * identical union rather than a shared one.
+ */
+export type InterfaceMode = "simple" | "power";
 export type OrderedExtensibleContainer = OrderedItem & {
 	/** Determines whether other items can be added to this after it has been defined */
 	isExtensible?: boolean;
+	/**
+	 * Set to `true` to mark this extension point as experimental. Experimental menu content may
+	 * change or be removed without notice. Extensions reading this should treat the marker as
+	 * informational.
+	 */
+	isExperimental?: boolean;
 };
 /** Group of menu items that belongs in a column */
 export type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
@@ -1133,6 +1708,11 @@ export type MenuItemBase = OrderedItem & {
 	tooltip?: LocalizeKey;
 	/** Additional information provided by developers to help people who perform localization */
 	localizeNotes: string;
+	/**
+	 * Interface modes in which this menu item should be hidden. Omit (or use an empty array) for
+	 * items that should show in every mode — most items need no value here at all.
+	 */
+	hiddenInterfaceModes?: InterfaceMode[];
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1153,6 +1733,21 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	 * `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathBefore?: string;
+	/**
+	 * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
+	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
+	 * it as a key binding.
+	 *
+	 * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
+	 * the unlocalized main menu never has it. Key names are not localized, and only the first
+	 * catalogued alternative is shown.
+	 *
+	 * A `menus.json` contribution cannot set it: the menus schema rejects it, which rejects the
+	 * extension's whole `menus.json`.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	shortcut?: string;
 };
 /**
  * Group of menu items that can be combined with other groups to form a single context menu/submenu.
@@ -1176,6 +1771,12 @@ export type ColumnsWithHeaders = {
 	[property: ReferencedItem]: MenuColumnWithHeader;
 	/** Defines whether columns can be added to this multi-column menu */
 	isExtensible?: boolean;
+	/**
+	 * Set to `true` to mark this columns collection as experimental. Experimental menu content may
+	 * change or be removed without notice. Extensions reading this should treat the marker as
+	 * informational.
+	 */
+	isExperimental?: boolean;
 };
 /** Menu that contains a column without a header */
 export type SingleColumnMenu = {
@@ -1195,12 +1796,45 @@ export type MultiColumnMenu = {
 };
 /** Menus for one single web view */
 export type WebViewMenu = {
-	/** Indicates whether the platform default menus should be included for this webview */
+	/**
+	 * Indicates whether the platform default top and context menus should be included for this web
+	 * view.
+	 *
+	 * This does not govern the tab menu. Its items act on the tab frame rather than on the web view's
+	 * contents, so the platform's tab items are included whatever this says — see
+	 * {@link WebViewMenu.tabMenu}.
+	 */
 	includeDefaults: boolean | undefined;
 	/** Menu that opens when you click on the top left corner of a tab */
 	topMenu: MultiColumnMenu | undefined;
 	/** Menu that opens when you right click on the main body/area of a tab */
 	contextMenu: SingleColumnMenu | undefined;
+	/**
+	 * Menu that opens when you right click on the tab itself, rather than on its contents.
+	 *
+	 * Items here act on the tab, so they are offered on every tab — including tabs that host no web
+	 * view. Absent means this web view contributes nothing of its own, and the tab shows the platform
+	 * items alone; unlike the menus above, there is no opting out of those.
+	 *
+	 * Some platform items in this menu carry a `command` that names an action the tab menu performs
+	 * itself rather than a registered PAPI command — `platform.floatTab` moves the tab into a float
+	 * panel within its own window, which never leaves the renderer. Treat a `command` here as the
+	 * name of the action, not as something to invoke through the command service.
+	 *
+	 * The platform's own groups here sit at orders 50 and 100, so choose another order for yours. A
+	 * single-column menu buckets every group together for the duplicate-order check, so a second
+	 * group at 100 throws — and because a failed contribution is rolled back whole, that would cost
+	 * this extension its entire `menus.json`, not just its tab items.
+	 *
+	 * @experimental This menu is unstable and may change or disappear without notice
+	 */
+	tabMenu?: SingleColumnMenu;
+	/**
+	 * Set to `true` to mark this WebView menu as experimental. Experimental menu content may change
+	 * or be removed without notice. Extensions reading this should treat the marker as
+	 * informational.
+	 */
+	isExperimental?: boolean;
 };
 /** Menus for all web views */
 export type WebViewMenus = {
@@ -1217,6 +1851,17 @@ export type PlatformMenus = {
 	defaultWebViewContextMenu: SingleColumnMenu;
 	/** Default top menu for web views that don't specify their own */
 	defaultWebViewTopMenu: MultiColumnMenu;
+	/**
+	 * Default tab context menu, offered on every tab. Web views that specify their own tab menu have
+	 * this folded into it.
+	 *
+	 * Optional so that adding it does not break code that already builds a `PlatformMenus`, matching
+	 * the per-web-view `tabMenu` on the same channel. A document that omits it simply contributes no
+	 * platform tab items.
+	 *
+	 * @experimental This menu is unstable and may change or disappear without notice
+	 */
+	defaultWebViewTabMenu?: SingleColumnMenu;
 };
 /**
  * Type that converts any menu type before it is localized to what it is after it is localized. This
@@ -1237,6 +1882,10 @@ export declare const menuDocumentSchema: {
 			$ref: string;
 		};
 		defaultWebViewContextMenu: {
+			description: string;
+			$ref: string;
+		};
+		defaultWebViewTabMenu: {
 			description: string;
 			$ref: string;
 		};
@@ -1288,6 +1937,10 @@ export declare const menuDocumentSchema: {
 							description: string;
 							type: string;
 						};
+						isExperimental: {
+							description: string;
+							type: string;
+						};
 					};
 					required: string[];
 					additionalProperties: boolean;
@@ -1298,7 +1951,12 @@ export declare const menuDocumentSchema: {
 					description: string;
 					type: string;
 				};
+				isExperimental: {
+					description: string;
+					type: string;
+				};
 			};
+			additionalProperties: boolean;
 		};
 		menuGroups: {
 			description: string;
@@ -1321,6 +1979,10 @@ export declare const menuDocumentSchema: {
 								description: string;
 								type: string;
 							};
+							isExperimental: {
+								description: string;
+								type: string;
+							};
 							menuItem?: undefined;
 						};
 						required: string[];
@@ -1336,6 +1998,10 @@ export declare const menuDocumentSchema: {
 								type: string;
 							};
 							isExtensible: {
+								description: string;
+								type: string;
+							};
+							isExperimental: {
 								description: string;
 								type: string;
 							};
@@ -1405,6 +2071,14 @@ export declare const menuDocumentSchema: {
 					description: string;
 					type: string;
 				};
+				hiddenInterfaceModes: {
+					description: string;
+					type: string;
+					items: {
+						enum: string[];
+					};
+					uniqueItems: boolean;
+				};
 			};
 			required: string[];
 			unevaluatedProperties: boolean;
@@ -1471,6 +2145,14 @@ export declare const menuDocumentSchema: {
 					description: string;
 					$ref: string;
 				};
+				tabMenu: {
+					description: string;
+					$ref: string;
+				};
+				isExperimental: {
+					description: string;
+					type: string;
+				};
 			};
 			additionalProperties: boolean;
 		};
@@ -1501,7 +2183,9 @@ export declare const getChaptersForBook: (bookNum: number) => number;
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted book. The chapter and verse numbers are
  *   reset to 1. If the resulting book number exceeds the bounds of available books, it is clamped
- *   to the nearest valid book.
+ *   to the nearest valid book. For books-present-aware stepping that rolls across chapter/book
+ *   boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export declare const offsetBook: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
@@ -1511,7 +2195,9 @@ export declare const offsetBook: (scrRef: SerializedVerseRef, offset: number) =>
  * @param offset The number of chapters to offset the current chapter by. Positive values move
  *   forward, negative values move backward.
  * @returns A new Scripture reference with the adjusted chapter. The verse number is reset to 1. The
- *   chapter number is clamped to stay within valid bounds for the book.
+ *   chapter number is clamped to stay within valid bounds for the book. For books-present-aware
+ *   stepping that rolls across chapter/book boundaries (Paratext 9 style), see the `get*Ref`
+ *   navigation functions in `platform-bible-react/experimental`.
  */
 export declare const offsetChapter: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
@@ -1521,7 +2207,9 @@ export declare const offsetChapter: (scrRef: SerializedVerseRef, offset: number)
  * @param offset The number of verses to offset the current verse by. Positive values move forward,
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted verse. The verse number is clamped to stay
- *   within valid bounds for the chapter.
+ *   within valid bounds for the chapter. For books-present-aware stepping that rolls across
+ *   chapter/book boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export declare const offsetVerse: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
@@ -1739,6 +2427,37 @@ export declare function normalizeScriptureSpaces(str: string): string;
  * are shallow equaled.
  */
 export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
+/**
+ * Collects the distinct markers actually present in a USJ document.
+ *
+ * The scripture editor warns "Unexpected <kind> marker" for any marker in the USJ it doesn't
+ * recognize as a built-in USFM marker. Handbook/commentary resources use extra markers (e.g. `pn`,
+ * `jmp`, `xtSee`) that aren't built-ins, so a consumer can pass this document-derived set to the
+ * editor as `options.nodes.extraValidMarkers` to suppress those warnings — scoped to the resource
+ * actually being displayed, never a global list.
+ *
+ * The editor's `isValidMarker` is additive (a marker is valid if it is built-in OR listed in
+ * `extraValidMarkers`), so returning markers that are already built-in valid is a harmless no-op;
+ * callers therefore don't need the editor's internal built-in list (which it doesn't export) to
+ * compute a "delta". `z`-prefixed markers are omitted because the editor already treats every
+ * `z...` custom marker as unconditionally valid.
+ *
+ * Because this returns every marker the document uses, the editor will not warn about any marker in
+ * these panels — including genuine typos or bad data in the resource. That is an accepted
+ * trade-off: the warning is a `logger.warn` diagnostic (warn-and-continue; rendering is identical
+ * whether or not it fires), and these consumers are read-only resource viewers (`isReadonly:
+ * true`), not the editable authoring editor — so typo-catching still works where authors actually
+ * edit. Do not narrow this to an "extra-only" delta: that would require the editor's internal
+ * built-in marker lists, which it deliberately doesn't export, forcing either a re-coupling to the
+ * editor package or a duplicated list that drifts. Passing everything the document uses is the
+ * correct consequence of core not owning the editor's marker definitions.
+ *
+ * @param usj The USJ document being displayed (e.g. the chapter USJ handed to the editor).
+ * @returns The distinct non-`z` markers found anywhere in the document, in first-seen order. Empty
+ *   when `usj` is undefined or contains no markers, so callers can omit the option (opt-in, no
+ *   behavior change) for content that needs nothing extra.
+ */
+export declare function collectUsjMarkers(usj: Usj | undefined): string[];
 /** WARNING: This file is generated in https://github.com/paranext/usfm-tools. Make changes there */
 /**
  * Information about a USFM marker that is just an attribute in USX/USJ. See {@link MarkerInfo} for
@@ -3266,6 +3985,47 @@ export declare const usfmMarkers: {
 	[marker: string]: Marker;
 };
 /**
+ * True when a marker is a paragraph- or verse-level (block) structure marker — i.e. one whose
+ * insertion, formatting, or renumbering is structurally significant (and is blocked while structure
+ * protection/locking is on).
+ *
+ * Paragraph-level markers are identified by their {@link MarkerType.Paragraph} type in
+ * {@link usfmMarkers} rather than a hand-maintained list, so every paragraph marker (including
+ * poetry lines like `q`, section headings like `s1`, and embedded paragraphs like `pm`) is covered.
+ * Verse (`v`) is a structure marker but is typed as {@link MarkerType.Character}, so it is
+ * special-cased; chapter (`c`) is already {@link MarkerType.Paragraph} and needs no special case.
+ */
+export declare function isBlockMarker(marker: string): boolean;
+/**
+ * True when a marker is a character-level marker — one that labels a span of text between an
+ * opening and a closing marker (e.g. `\nd …\nd*`) rather than beginning a block of text.
+ *
+ * Character markers are identified by their {@link MarkerType.Character} type in {@link usfmMarkers}
+ * rather than a hand-maintained list. The chapter and verse numbering markers `v`, `va`, `vp`, and
+ * `ca` are also typed {@link MarkerType.Character} even though they are structure markers, so they
+ * are excluded by their `DivisionMarks` category — they are the only `MarkerType.Character` markers
+ * in that category, and the category is the only thing that separates them, since `va`, `vp`, and
+ * `ca` each have `hasEndMarker: true` like every genuine character marker.
+ *
+ * Note that the note and cross-reference _content_ markers (e.g. `ft`, `xo`, `xt`) are genuine
+ * character markers and return `true`; only the note markers that contain them (`f`, `fe`, `x`) are
+ * {@link MarkerType.Note}. A caller that wants only body-text styling markers must filter further.
+ *
+ * @example
+ *
+ * ```typescript
+ * isCharacterMarker('nd'); // true — labels a span of text
+ * isCharacterMarker('v'); // false — verse is a structure marker typed as a character marker
+ * isCharacterMarker('p'); // false — paragraph is a block marker
+ * ```
+ *
+ * @param marker Marker code to check, without its leading backslash (e.g. `nd`, not `\nd`)
+ * @returns `true` when the marker labels a span of text. `false` for block markers, for the note
+ *   markers `f`/`fe`/`x`, for the numbering markers `v`/`va`/`vp`/`ca`, and for empty or unknown
+ *   marker codes.
+ */
+export declare function isCharacterMarker(marker: string): boolean;
+/**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
  * @param html - The HTML string to sanitize
@@ -3292,201 +4052,127 @@ export declare function getNthCaller(n: number, callers?: string[]): string;
  */
 export declare function getFormatCallerFunction(footnotes: MarkerObject[], callers: string[] | undefined): (caller: string | undefined, index: number) => string | undefined;
 /**
- * This function mirrors the `at` function from the JavaScript Standard String object. It handles
- * Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `at` function from the JavaScript Standard String object. It operates
+ * on grapheme clusters instead of UTF-16 code units.
  *
- * Finds the Unicode code point at the given index.
+ * Finds the grapheme cluster at the given index.
  *
  * @param string String to index
- * @param index Position of the character to be returned in range of -length(string) to
- *   length(string)
- * @returns New string consisting of the Unicode code point located at the specified offset,
- *   undefined if index is out of bounds
+ * @param index Position of the grapheme cluster to return. Negative values count back from the end
+ * @returns The grapheme cluster at the given index, or `undefined` if the index is out of bounds
  */
 export declare function at(string: string, index: number): string | undefined;
 /**
  * This function mirrors the `charAt` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Returns a new string consisting of the single unicode code point at the given index.
+ * Returns the single grapheme cluster at the given index.
  *
  * @param string String to index
- * @param index Position of the string character to be returned, in the range of 0 to
- *   length(string)-1
- * @returns New string consisting of the Unicode code point located at the specified offset, empty
- *   string if index is out of bounds
+ * @param index Position of the grapheme cluster to return. Unlike {@link at}, a negative index is
+ *   out of bounds rather than counted from the end
+ * @returns The grapheme cluster at the given index, or an empty string if the index is out of
+ *   bounds
  */
 export declare function charAt(string: string, index: number): string;
 /**
  * This function mirrors the `codePointAt` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Returns a non-negative integer that is the Unicode code point value of the character starting at
- * the given index.
+ * Returns the Unicode code point value of the grapheme cluster at the given index. For a cluster
+ * built from several code points, this is the first code point only.
  *
  * @param string String to index
- * @param index Position of the string character to be returned, in the range of 0 to
- *   length(string)-1
- * @returns Non-negative integer representing the code point value of the character at the given
- *   index, or undefined if there is no element at that position
+ * @param index Position of the grapheme cluster to read, in the range 0 to `stringLength(string)-1`
+ * @returns The code point value, or `undefined` if the index is out of bounds
  */
 export declare function codePointAt(string: string, index: number): number | undefined;
 /**
  * This function mirrors the `endsWith` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Determines whether a string ends with the characters of this string.
+ * Determines whether a string ends with the characters of another string.
  *
  * @param string String to search through
  * @param searchString Characters to search for at the end of the string
  * @param endPosition End position where searchString is expected to be found. Default is
- *   `length(string)`
+ *   `stringLength(string)`
  * @returns True if it ends with searchString, false if it does not
  */
 export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
 /**
- * Formats a string into an array of objects (adjacent strings are concatenated in one array entry),
- * replacing `{replacer key}` with the value in the `replacers` at that replacer key (or multiple
- * replacer values if there are multiple in the string). Will also remove \ before curly braces if
- * curly braces are escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this
- * is {name}! I like `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
- *
- * If the key in unescaped braces is not found, returns the key without the braces. Empty unescaped
- * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
- * would return 'I am Nemo'.
- *
- * Note: React elements can be used as replacer values.
- *
- * @example
- *
- * ```tsx
- * <p>
- *   {formatReplacementStringToArray('Hi {other}! I am {name}.', {
- *     other: 'Billy',
- *     name: <span className="tw:text-red-500">Jim</span>,
- *   })}
- * </p>
- * ```
- *
- * @example
- *
- * ```typescript
- * formatReplacementStringToArray(
- *   'Hi, this is {name}! I like \{curly braces\}! I have a {carInfo} car. My favorite food is {food}.',
- *   { name: ['Bill'], carInfo: { year: 2015, color: 'blue' } }
- * );
- *
- * =>
- *
- * ['Hi, this is ', ['Bill'], '! I like {curly braces}! I have a ', { year: 2015, color: 'blue' }, ' car. My favorite food is food.']
- * ```
- *
- * @param str String to format and break out into an array of objects
- * @param replacers Object whose keys are replacer keys and whose values are the values with which
- *   to replace `{replacer key}`s found in the string to format. If the replacer value is a string,
- *   it will be concatenated into existing strings in the array. Otherwise, the replacer value will
- *   be added as a new entry in the array
- * @returns Array of formatted strings and replaced objects
- */
-export declare function formatReplacementStringToArray<T = unknown>(str: string, replacers: {
-	[key: string | number]: T;
-} | object): (string | T)[];
-/**
- * Formats a string, replacing `{replacer key}` with the value in the `replacers` at that replacer
- * key (or multiple replacer values if there are multiple in the string). Will also remove \ before
- * curly braces if curly braces are escaped with a backslash in order to preserve the curly braces.
- * E.g. 'Hi, this is {name}! I like `\{curly braces\}`! would become Hi, this is Jim! I like {curly
- * braces}!
- *
- * If the key in unescaped braces is not found, returns the key without the braces. Empty unescaped
- * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
- * would return 'I am Nemo'.
- *
- * @example
- *
- * ```typescript
- * formatReplacementString(
- *   'Hi, this is {name}! I like \{curly braces\}! I have a {carColor} car. My favorite food is {food}.',
- *   { name: 'Bill', carColor: 'blue' }
- * );
- *
- * =>
- *
- * 'Hi, this is Bill! I like {curly braces}! I have a blue car. My favorite food is food.'
- * ```
- *
- * @param str String to format
- * @param replacers Object whose keys are replacer keys and whose values are the values with which
- *   to replace `{replacer key}`s found in the string to format. Will be coerced to strings using
- *   `${replacerValue}`
- * @returns Formatted string
- */
-export declare function formatReplacementString(str: string, replacers: {
-	[key: string | number]: string | unknown;
-} | object): string;
-/**
  * This function mirrors the `includes` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
  * Performs a case-sensitive search to determine if searchString is found in string.
  *
  * @param string String to search through
  * @param searchString String to search for
- * @param position Position within the string to start searching for searchString. Default is `0`
- * @returns True if search string is found, false if it is not
+ * @param position Position within the string to start searching. Negative values clamp to `0`.
+ *   Default is `0`
+ * @returns True if the search string is found, false if it is not
  */
 export declare function includes(string: string, searchString: string, position?: number): boolean;
 /**
  * This function mirrors the `indexOf` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Returns the index of the first occurrence of a given string.
+ * Returns the index of the first occurrence of a given string, or -1 if it is not found. Only an
+ * occurrence that begins and ends on a grapheme cluster boundary counts as a match.
  *
  * @param string String to search through
  * @param searchString The string to search for
- * @param position Start of searching. Default is `0`
- * @returns Index of the first occurrence of a given string
+ * @param position Where to start searching. Negative values clamp to `0`. Default is `0`
+ * @returns Index of the first occurrence of the given string, or -1
  */
-export declare function indexOf(string: string, searchString: string, position?: number | undefined): number;
+export declare function indexOf(string: string, searchString: string, position?: number): number;
 /**
  * This function mirrors the `lastIndexOf` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Searches this string and returns the index of the last occurrence of the specified substring.
+ * Returns the index of the last occurrence of the specified substring, or -1 if it is not found.
  *
  * @param string String to search through
  * @param searchString Substring to search for
- * @param position The index at which to begin searching. If omitted, the search begins at the end
- *   of the string. Default is `undefined`
- * @returns Index of the last occurrence of searchString found, or -1 if not found.
+ * @param position The index at or before which the occurrence must begin. If omitted, the whole
+ *   string is searched. Negative values clamp to `0`
+ * @returns Index of the last occurrence of searchString, or -1 if not found
  */
 export declare function lastIndexOf(string: string, searchString: string, position?: number): number;
 /**
- * This function mirrors the `length` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes. Since `length` appears to be a
- * reserved keyword, the function was renamed to `stringLength`
+ * This function mirrors the `length` property from the JavaScript Standard String object. It counts
+ * grapheme clusters instead of UTF-16 code units. Since `length` appears to be a reserved keyword,
+ * the function was renamed to `stringLength`.
  *
- * Returns the length of a string.
+ * Counts as a literate reader of the script would, including for pointed Hebrew, vocalized Arabic
+ * and Syriac, Indic conjuncts, Thai, and decomposed Hangul Jamo. `\r\n` counts as one.
  *
  * @param string String to return the length for
- * @returns Number that is length of the starting string
+ * @returns Number of grapheme clusters in the string
  */
 export declare function stringLength(string: string): number;
 /**
- * This function mirrors the `normalize` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `normalize` function from the JavaScript Standard String object, with
+ * one addition: `'none'` returns the string unchanged, where native throws a `RangeError`.
  *
- * Returns the Unicode Normalization Form of this string.
+ * Note this deliberately does not go through {@link GraphemeString}: normalization reads the whole
+ * string and never needs it segmented, so routing it through the class would add segmentation cost
+ * for no benefit.
  *
  * @param string The starting string
- * @param form Form specifying the Unicode Normalization Form. Default is `'NFC'`
- * @returns A string containing the Unicode Normalization Form of the given string.
+ * @param form Form specifying the Unicode Normalization Form, or `'none'` to return the string
+ *   as-is
+ * @returns A string containing the Unicode Normalization Form of the given string
  */
 export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" | "NFKD" | "none"): string;
 /**
  * Compares two strings using an ordinal comparison approach based on the specified collation
  * options. This function uses the built-in `localeCompare` method with the 'en' locale and the
  * provided collation options to compare the strings.
+ *
+ * Note this deliberately does not go through {@link GraphemeString}: collation reads the whole
+ * string and never needs it segmented, so routing it through the class would add segmentation cost
+ * for no benefit.
  *
  * @param string1 The first string to compare.
  * @param string2 The second string to compare.
@@ -3498,100 +4184,170 @@ export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" |
 export declare function ordinalCompare(string1: string, string2: string, options?: Intl.CollatorOptions): number;
 /**
  * This function mirrors the `padEnd` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Pads this string with another string (multiple times, if needed) until the resulting string
- * reaches the given length. The padding is applied from the end of this string.
+ * Pads the string with another string (multiple times, if needed) until the result is
+ * `targetLength` grapheme clusters long. The padding is applied at the end.
  *
- * @param string String to add padding too
- * @param targetLength The length of the resulting string once the starting string has been padded.
- *   If value is less than or equal to length(string), then string is returned as is.
- * @param padString The string to pad the current string with. If padString is too long to stay
- *   within targetLength, it will be truncated. Default is `" "`
- * @returns String with appropriate padding at the end
+ * @param string String to add padding to
+ * @param targetLength Length of the result, in grapheme clusters. If it is less than or equal to
+ *   `stringLength(string)`, the string is returned as is
+ * @param padString The string to pad with, truncated to fit `targetLength`. Default is `" "`
+ * @returns String with the appropriate padding at the end
+ * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+ *   actually be added. This ceiling is lower than native's; see {@link MAX_PADDING_LENGTH}.
  */
 export declare function padEnd(string: string, targetLength: number, padString?: string): string;
 /**
  * This function mirrors the `padStart` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Pads this string with another string (multiple times, if needed) until the resulting string
- * reaches the given length. The padding is applied from the start of this string.
+ * Pads the string with another string (multiple times, if needed) until the result is
+ * `targetLength` grapheme clusters long. The padding is applied at the start.
  *
- * @param string String to add padding too
- * @param targetLength The length of the resulting string once the starting string has been padded.
- *   If value is less than or equal to length(string), then string is returned as is.
- * @param padString The string to pad the current string with. If padString is too long to stay
- *   within the targetLength, it will be truncated from the end. Default is `" "`
- * @returns String with of specified targetLength with padString applied from the start
+ * @param string String to add padding to
+ * @param targetLength Length of the result, in grapheme clusters. If it is less than or equal to
+ *   `stringLength(string)`, the string is returned as is
+ * @param padString The string to pad with, truncated to fit `targetLength`. Default is `" "`
+ * @returns String with the appropriate padding at the start
+ * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+ *   actually be added. This ceiling is lower than native's; see {@link MAX_PADDING_LENGTH}.
  */
 export declare function padStart(string: string, targetLength: number, padString?: string): string;
 /**
- * This function mirrors the `slice` function from the JavaScript Standard String object. It handles
- * Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `slice` function from the JavaScript Standard String object. It
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Extracts a section of this string and returns it as a new string, without modifying the original
- * string.
+ * Extracts a section of the string and returns it as a new string, without modifying the original.
  *
  * @param string The starting string
- * @param indexStart The index of the first character to include in the returned substring.
- * @param indexEnd The index of the first character to exclude from the returned substring.
- * @returns A new string containing the extracted section of the string.
+ * @param indexStart The index of the first grapheme cluster to include. Negative values count back
+ *   from the end
+ * @param indexEnd The index of the first grapheme cluster to exclude. Negative values count back
+ *   from the end. A range that ends before it starts yields an empty string
+ * @returns A new string containing the extracted section of the string
  */
 export declare function slice(string: string, indexStart: number, indexEnd?: number): string;
 /**
- * This function mirrors the `split` function from the JavaScript Standard String object. It handles
- * Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `split` function from the JavaScript Standard String object. It
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Takes a pattern and divides the string into an ordered list of substrings by searching for the
- * pattern, puts these substrings into an array, and returns the array.
+ * Divides the string into an ordered list of substrings by searching for a pattern, and returns
+ * them as an array.
  *
  * @param string The string to split
- * @param separator The pattern describing where each split should occur
- * @param splitLimit Limit on the number of substrings to be included in the array. Splits the
- *   string at each occurrence of specified separator, but stops when limit entries have been placed
- *   in the array.
+ * @param separator The pattern describing where each split should occur. An empty string splits
+ *   into individual grapheme clusters
+ * @param splitLimit Maximum number of substrings to return. As in native, anything past the limit
+ *   is discarded, and the limit is converted with `ToUint32` — so `-1` means "no limit" while `NaN`
+ *   and `Infinity` yield an empty array
  * @returns An array of strings, split at each point where separator occurs in the starting string.
- *   Returns undefined if separator is not found in string.
+ *   A regular expression's capture groups are interleaved into the result, as in native. Every
+ *   entry is a string: a capture group that did not participate in its match is `''` here, where
+ *   native yields `undefined`. That makes it indistinguishable from a group that matched the empty
+ *   string — use {@link GraphemeString.split} where the difference matters
  */
 export declare function split(string: string, separator: string | RegExp, splitLimit?: number): string[];
 /**
  * This function mirrors the `startsWith` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Determines whether the string begins with the characters of a specified string, returning true or
- * false as appropriate.
+ * Determines whether the string begins with the characters of a specified string.
  *
  * @param string String to search through
- * @param searchString The characters to be searched for at the start of this string.
- * @param position The start position at which searchString is expected to be found (the index of
- *   searchString's first character). Default is `0`
+ * @param searchString The characters to search for at the start of the string
+ * @param position The position at which searchString is expected to begin. Negative values clamp to
+ *   `0`. Default is `0`
  * @returns True if the given characters are found at the beginning of the string, including when
- *   searchString is an empty string; otherwise, false.
+ *   searchString is an empty string; otherwise, false
  */
 export declare function startsWith(string: string, searchString: string, position?: number): boolean;
 /**
  * This function mirrors the `substring` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Returns a substring by providing start and end position.
+ * Returns the part of the string between a start and an end index.
  *
  * @param string String to be divided
- * @param begin Start position
- * @param end End position. Default is `End of string`
- * @returns Substring from starting string
+ * @param begin Start position. Negative values clamp to `0` rather than counting from the end
+ * @param end End position. Default is the end of the string. As in native, the two arguments are
+ *   swapped when `begin` is greater than `end`
+ * @returns Substring from the starting string
  */
 export declare function substring(string: string, begin: number, end?: number): string;
 /**
- * This function mirrors the `toArray` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * Converts a string to an array of its grapheme clusters. Mirrors spreading a native string, except
+ * that native yields code points rather than grapheme clusters. Clusters are UAX #29; see the
+ * module note above for the two consequences worth knowing.
  *
- * Converts a string to an array of string characters.
- *
- * @param string String to convert to array
- * @returns An array of characters from the starting string
+ * @param string String to convert to an array
+ * @returns An array of the string's grapheme clusters
  */
 export declare function toArray(string: string): string[];
+/**
+ * Replaces each `{key}` in `str` with `replacers[key]`, and unescapes `\{`/`\}`. An unknown key is
+ * replaced by the key text itself, and empty braces `{}` drop out leaving the surrounding text.
+ * Adjacent strings are concatenated into one array entry, so a replacer that is not a string stays
+ * its own entry — which is how a React element survives being substituted into a localized
+ * template.
+ *
+ * @example
+ *
+ * Substituting a React element — the reason this variant exists.
+ *
+ * ```tsx
+ * <p>
+ *   {formatReplacementStringToArray('Hi {other}! I am {name}.', {
+ *     other: 'Billy',
+ *     name: <span className="tw:text-red-500">Jim</span>,
+ *   })}
+ * </p>
+ * // ['Hi Billy! I am ', <span … >Jim</span>, '.']
+ * ```
+ *
+ * @example
+ *
+ * Escaped braces, a non-string replacer, and an unknown key together.
+ *
+ * ```ts
+ * formatReplacementStringToArray('Hi {name}! I like \\{curly braces\\}. Food: {food}.', {
+ *   name: ['Bill'],
+ * });
+ * // ['Hi ', ['Bill'], '! I like {curly braces}. Food: food.']
+ * ```
+ *
+ * @param str String containing `{key}` placeholders
+ * @param replacers Object whose keys are placeholder names and whose values are the replacements
+ * @returns Array of the string's pieces interleaved with the replacements
+ */
+export declare function formatReplacementStringToArray<T = unknown>(str: string, replacers: {
+	[key: string | number]: T;
+} | object): (string | T)[];
+/**
+ * Replaces each `{key}` in `str` with `replacers[key]`, coerces every part to a string, and joins
+ * them. An unknown key is replaced by the key text itself, and empty braces `{}` drop out leaving
+ * the surrounding text. See {@link formatReplacementStringToArray} to keep non-string replacers
+ * intact — a React element coerced through this function becomes `[object Object]`.
+ *
+ * @example
+ *
+ * An unknown key (`food`) is left as its own text rather than raising.
+ *
+ * ```ts
+ * formatReplacementString(
+ *   'Hi, this is {name}! I like \\{curly braces\\}. I have a {carColor} car. Food: {food}.',
+ *   { name: 'Bill', carColor: 'blue' },
+ * );
+ * // 'Hi, this is Bill! I like {curly braces}. I have a blue car. Food: food.'
+ * ```
+ *
+ * @param str String containing `{key}` placeholders
+ * @param replacers Object whose keys are placeholder names and whose values are the replacements
+ * @returns The formatted string
+ */
+export declare function formatReplacementString(str: string, replacers: {
+	[key: string | number]: string | unknown;
+} | object): string;
 /** Determine whether the string is a `LocalizeKey` meant to be localized in Platform.Bible. */
 export declare function isLocalizeKey(str: string): str is LocalizeKey;
 /**
@@ -3687,6 +4443,33 @@ export declare function toKebabCase(input: string): string;
  *   x tokens, followed by `[...]` and the last x tokens
  */
 export declare function collapseMiddleWords(text: string, numberOfTokensToKeepBeforeAndAfter: number): string;
+/**
+ * Wraps text in Unicode bidi isolates so it cannot reorder the sentence it is interpolated into.
+ *
+ * The Unicode bidirectional algorithm lays out a string by grouping it into directional runs, and
+ * neighboring characters of the same direction join the same run regardless of which variable they
+ * came from. So a right-to-left value dropped bare into a left-to-right sentence (or the reverse)
+ * pulls the punctuation and words next to it into its own run: `Syncing {projectName}.` with an
+ * Arabic name can display the period on the wrong side, and a value that mixes scripts can
+ * rearrange the words around it. Combined with CSS truncation, the visible fragment can even be a
+ * different substring than the one the reader would expect.
+ *
+ * Isolating the value fixes its direction to its own content and hides that direction from the
+ * surrounding text, so the sentence lays out the same way whatever the value turns out to be. These
+ * two code points are the character-level equivalent of HTML's `<bdi>` element, for the cases where
+ * the result has to be a plain string — a button label, an `aria-label`, a notification message, a
+ * log line — rather than markup.
+ *
+ * Use this on any value whose script you do not control before interpolating it into localized
+ * text: project names, user names, file paths, book or resource names. Text you fully control (a
+ * number, an id, a localized string with no interpolation) does not need it. Isolating twice is
+ * harmless but pointless, so isolate at the interpolation site rather than at the source of the
+ * value.
+ *
+ * @param text Text to isolate, typically a name or other value in an unknown script.
+ * @returns `text` surrounded by the isolate code points.
+ */
+export declare function isolateBidi(text: string): string;
 /** Options for calculating resizable pane size limits. */
 export type PaneSizeLimitsOptions = {
 	/**
@@ -3894,6 +4677,122 @@ export declare function formatBytes(fileSize: number, decimals?: number): string
  */
 export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 /**
+ * Normalizes a project id to its canonical, case-insensitive form (UPPERCASE) so it can key a
+ * `Map`/`Set` or be compared for equality without a casing mismatch silently dropping a match.
+ *
+ * Paratext project ids are hex GUIDs that the .NET data provider canonicalizes to uppercase;
+ * callers that join or dedupe ids arriving from mixed sources (e.g. an open-tab's `projectId`
+ * against a project list) must fold case the same way. This is the single shared normalizer so
+ * those callers cannot drift apart.
+ *
+ * @param projectId The project id to normalize.
+ * @returns The uppercase form of the id.
+ */
+export declare function normalizeProjectId(projectId: string): string;
+/** A project's display names. `fullName` is optional because not every project carries one. */
+export type ProjectNames = {
+	/** Short name, e.g. `'arb'`. Always present; this is the identifying field. */
+	shortName: string;
+	/** Longer descriptive name, e.g. `'True Meaning Arabic'`. Absent or empty on many projects. */
+	fullName?: string;
+};
+/**
+ * Whether a project's full name carries information its short name does not, and so is worth
+ * rendering as a second field.
+ *
+ * The comparison is an exact, case-sensitive `!==` on purpose: two names differing only by case are
+ * genuinely different strings a project deliberately carries, and suppressing one would hide data
+ * the user entered. Callers that render the two names in separate slots (a muted second line, a
+ * toolbar label's secondary field) use this rather than repeating the rule.
+ *
+ * Blank is absent, on the same terms as {@link normalizeFullName}: a name of spaces is present but
+ * invisible, so treating it as distinct would render a dangling separator. Applying the rule here
+ * rather than asking every caller to pre-normalize is what keeps {@link formatProjectName} safe for
+ * a raw value — including one arriving from outside the repo through a public prop.
+ *
+ * @param names The project's short and optional full name.
+ * @returns `true` when the full name is present, non-blank, and different from the short name.
+ */
+export declare function hasDistinctFullName(names: ProjectNames): boolean;
+/**
+ * Joins a project's short name to its full name in {@link formatProjectName}.
+ *
+ * Exported because a consumer that renders the two names in separate elements — a toolbar label
+ * with its own separator node, say — has to draw the same character the joined string uses, or the
+ * visible label and its own tooltip disagree the moment this changes.
+ *
+ * Not localized: it joins two proper nouns rather than translatable prose.
+ *
+ * Bidi caveat: the hyphen is direction-neutral, so it sits wherever the surrounding run puts it.
+ * Which remedy a caller needs depends on how the joined name reaches the screen:
+ *
+ * - **The joined string is an element's whole text** (a tooltip line, a trigger label): set
+ *   `dir="auto"` on that element.
+ * - **The two names are separate elements**: each gets its own direction only when it is a
+ *   block-level or flex-item box. Plain inline spans do NOT isolate — they join the surrounding run
+ *   like any other inline text — so an inline pair needs `dir="auto"` per name as well.
+ * - **The joined string is interpolated into a longer sentence** (a subtitle, a notification): an
+ *   attribute cannot help, because `dir="auto"` reads the direction of the SENTENCE's first strong
+ *   character rather than the name's. Wrap the name with {@link isolateBidi} before interpolating,
+ *   which is the character-level form of HTML's `<bdi>` and travels inside the string.
+ * - **An `aria-label`**: carries no direction at all, so the caveat does not reach it.
+ */
+export declare const PROJECT_NAME_SEPARATOR = " - ";
+/**
+ * Formats a project for display as `"{shortName} - {fullName}"`, or as the short name alone when
+ * {@link hasDistinctFullName} is false.
+ *
+ * The short name leads because it is the field that identifies a project to a Paratext user, so it
+ * is the half that must survive ellipsis truncation in a narrow container. The separator is
+ * {@link PROJECT_NAME_SEPARATOR}.
+ *
+ * @param names The project's short and optional full name.
+ * @returns The display string.
+ */
+export declare function formatProjectName(names: ProjectNames): string;
+/**
+ * Compares two project short names for display order: alphabetical, case- and accent-insensitive.
+ *
+ * The string-level form of {@link compareProjectsByName}, for a caller whose list rows are not
+ * {@link ProjectNames} objects and would otherwise allocate a throwaway one per comparison.
+ *
+ * @param a First short name.
+ * @param b Second short name.
+ * @returns Negative, zero or positive, as `Array.prototype.sort` expects.
+ */
+export declare function compareProjectShortNames(a: string, b: string): number;
+/**
+ * Compares two projects for display order: alphabetical by short name, case- and
+ * accent-insensitive.
+ *
+ * Short name rather than full name because the short name is the field that leads every project
+ * label, and a list ordered by a field the user cannot see reads as unsorted. Compares names only —
+ * a caller with its own tie-break (a scroll group, a project id) layers it on top of this result.
+ *
+ * @param a First project.
+ * @param b Second project.
+ * @returns Negative, zero or positive, as `Array.prototype.sort` expects.
+ */
+export declare function compareProjectsByName(a: ProjectNames, b: ProjectNames): number;
+/**
+ * Narrows a raw `platform.fullName` project setting to the full name, or `undefined` when the
+ * project effectively has none.
+ *
+ * The setting is typed `string`, but a project data provider yields `null` or `undefined` for a
+ * setting that was never written, and legacy projects carry `''` or a run of spaces. This is the
+ * single place that decides which of those counts as absent, so a reader can hand the raw value
+ * straight through rather than writing its own guard.
+ *
+ * Whitespace-only counts as absent: a name of spaces renders as a full name that is there but
+ * invisible, so {@link formatProjectName} would emit `'ABC - '` with a dangling separator. The
+ * returned name is not trimmed otherwise — leading or trailing space in a real name is the
+ * project's own data, and this function narrows rather than edits.
+ *
+ * @param fullName The raw setting value.
+ * @returns The full name, or `undefined` when it is absent, blank, or not a string.
+ */
+export declare function normalizeFullName(fullName: unknown): string | undefined;
+/**
  * Get a localized string representation of the time between two dates
  *
  * @example
@@ -3929,6 +4828,111 @@ export declare function formatRelativeDate(date: Date, todayString: string, yest
  * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
  */
 export declare const MODIFIER_KEYS: Set<string>;
+/**
+ * Physical keys (`KeyboardEvent.key` values) that {@link getLocalizeKeyForPhysicalKey} can name. Add
+ * to this union as UI needs to display more key names.
+ *
+ * Adding a member here requires adding a matching `%physicalKey_<camelCaseName>%` entry to every
+ * locale file under `assets/localization/` (see `en.json`/`es.json`) — this union alone doesn't
+ * guarantee the translation exists.
+ */
+export type NameablePhysicalKey = "Backspace" | "Delete";
+/**
+ * Gets the localized string key naming a physical keyboard key, for UI that needs to display a
+ * translated key name (e.g. a "press {key} again to confirm" hint). The platform's core
+ * localization assets (`assets/localization/*.json`) provide the translations, so any caller can
+ * use this without an extension having to declare its own copy of the string.
+ */
+export declare function getLocalizeKeyForPhysicalKey(key: NameablePhysicalKey): LocalizeKey;
+/** Inputs to {@link computeEffectiveStructureProtection}. */
+export type EffectiveStructureProtectionInputs = {
+	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
+	interfaceMode: string | undefined;
+	/** Project-level `platformScripture.structureProtected` admin setting. */
+	isAdminProtected: boolean;
+	/** Whether the current user can toggle the admin/project lock. */
+	canAdminToggle: boolean;
+	/** The user's personal preference; `undefined` when never set. */
+	userSetting: boolean | undefined;
+};
+/**
+ * Computes whether structure protection (a.k.a. structure locking) is effectively active.
+ *
+ * This is the single source of truth for the effective-protection algebra, shared across extensions
+ * that cannot import each other directly: the `platform-scripture-editor` structure-protection hook
+ * and the `platform-scripture` Scripture Finder PDP both call it.
+ *
+ * The feature applies in simple interface mode only; in power mode it is always inactive. Within
+ * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
+ * the user's own preference governs (defaulting to on when never set).
+ */
+export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
+/**
+ * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
+ * a trackpad pinch. Both the platform's per-pane zoom and the Text Collection grid's per-resource
+ * zoom read a wheel this way; the platform's copy is inlined in its injected bootstrap script,
+ * which imports nothing, and a parity test keeps the two in step.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomWheelReader = {
+	/**
+	 * How many zoom steps `event` means: positive zooms IN, negative zooms OUT, 0 means the event's
+	 * travel has not yet crossed a step boundary. `scopeId` is whatever opaque string the caller uses
+	 * to key its own zoomable region — a pane's zoom area for the platform, a resource id for the
+	 * Text Collection grid — and the reader resets its accumulated travel whenever it changes.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	read(event: WheelEvent, scopeId: string): number;
+	/**
+	 * Removes every listener the reader installed to track physically-held modifier keys. A reader
+	 * with no window to listen on (see {@link ContentZoomWheelReaderOptions.window}) has nothing to
+	 * remove.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	dispose(): void;
+};
+/**
+ * Options for {@link createContentZoomWheelReader}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomWheelReaderOptions = {
+	/**
+	 * Largest number of steps one event may ask for. Default: the platform's 0.5–3.0 zoom range
+	 * expressed in units of the effective {@link ContentZoomWheelReaderOptions.zoomStep} (25 at the
+	 * default step of 0.1) — so overriding `zoomStep` scales this default with it.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	maxSteps?: number;
+	/**
+	 * Zoom step the pinch calibration is derived from. Default 0.1. Must be a positive, finite
+	 * number; the reader does not validate it, and a zero or negative step yields a meaningless
+	 * calibration.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	zoomStep?: number;
+	/**
+	 * Window the modifier listeners attach to. Default `globalThis.window`; tests pass jsdom's. When
+	 * neither exists (a reader created outside a DOM, such as under Node) the reader still reads
+	 * notch and pinch counts from the events it is handed — it just cannot tell a synthesized pinch
+	 * from a real one held down by a physically-pressed Ctrl or Cmd key.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	window?: Window;
+};
+/**
+ * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
+ * a trackpad pinch — see {@link ContentZoomWheelReader} for the full contract.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function createContentZoomWheelReader(options?: ContentZoomWheelReaderOptions): ContentZoomWheelReader;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
@@ -4092,7 +5096,126 @@ export declare const localizedStringsDocumentSchema: {
 		};
 	};
 };
-export type ResourceType = "ScriptureResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
+/**
+ * One selectable item in a command/marker palette. The dependency-free shared shape consumed by
+ * every layer that handles palette items — the renderer overlay service's `CommandPaletteItem`
+ * extends it, `platform-bible-react`'s `FootnoteEditor` marker palette uses it directly, and
+ * extensions build items in this shape — so the item contract exists exactly once.
+ *
+ * Note for passive palettes (driven by forwarded keystrokes rather than their own input): filter
+ * matching runs on the RAW `label`, so passive-palette items must use plain-string labels — a
+ * `LocalizeKey` label would make the on-screen (localized) filtering diverge from the host's commit
+ * resolution.
+ */
+export interface PaletteItem {
+	/** Unique identifier returned when this item is selected */
+	id: string;
+	/** Primary display text (e.g. a marker code like "ft" or a command name) */
+	label: string | LocalizeKey;
+	/** Secondary description text displayed below the label */
+	description?: string | LocalizeKey;
+	/** Optional badge text (e.g. "Deprecated", "End"). Localized when given as a `LocalizeKey`. */
+	badge?: string | LocalizeKey;
+	/** Whether the item is grayed out and non-selectable. Defaults to false. */
+	disabled?: boolean;
+	/**
+	 * Whether the item's text is rendered de-emphasized (reduced opacity) while remaining fully
+	 * selectable — e.g. PT9's grey cue for non-basic markers. Unlike {@link PaletteItem.disabled}, a
+	 * muted item can still be highlighted and selected. Defaults to false.
+	 */
+	muted?: boolean;
+}
+/**
+ * Well-known keys the ProjectSelector's built-in groupings (`language`, `type`, `lastUsed`) read
+ * from `ProjectSelectorProject.customData`. Reference these constants rather than typing the key
+ * strings inline so a rename here surfaces at every callsite.
+ */
+export declare const PROJECT_SELECTOR_CUSTOM_DATA_KEYS: Readonly<{
+	readonly language: "language";
+	readonly type: "type";
+	readonly typeName: "typeName";
+	readonly lastUsedAt: "lastUsedAt";
+}>;
+/**
+ * The typed shape of the well-known {@link PROJECT_SELECTOR_CUSTOM_DATA_KEYS} entries. Every field
+ * is optional — a grouping whose key is missing routes that project into its "unknown" bucket (or
+ * is elided per the grouping's `unknownSectionHeading` config).
+ */
+export type ProjectSelectorCustomDataShape = {
+	/**
+	 * Language name — bucketed by exact equality by the built-in `language` grouping and used as the
+	 * section heading verbatim. Consumer supplies a localized human-readable name.
+	 */
+	language?: string;
+	/**
+	 * Locale-stable type key — bucketed by exact equality by the built-in `type` grouping. Free form;
+	 * consumers pair it with `typeName` for display.
+	 */
+	type?: string;
+	/**
+	 * Human-readable label for {@link type}. The built-in `type` grouping uses the first non-empty
+	 * `typeName` observed in a bucket as the section heading (falls back to the raw `type` key when
+	 * no row in the bucket carries one).
+	 */
+	typeName?: string;
+	/**
+	 * Millisecond-epoch timestamp of the last time the caller-relevant "use" of this project
+	 * happened.
+	 *
+	 * The built-in `lastUsed` grouping reads this as a PRESENCE FLAG, not as a sort key: any finite
+	 * number routes the project into the "Recently used" bucket and its absence routes it into
+	 * "Other". The magnitude is never compared. Rows WITHIN every bucket are ordered by the
+	 * component's own stable sort — alphabetical by short name, tie-broken by scroll group — so a
+	 * larger `lastUsedAt` does not move a project higher up the list.
+	 *
+	 * If your data source is an ordered recency list rather than per-project timestamps (as
+	 * `platformScripture.recentlyOpenedProjects.RecentProjects` returns), synthesize values via
+	 * {@link recencyMapFromOrderedIds}.
+	 */
+	lastUsedAt?: number;
+};
+/**
+ * Pack a subset of {@link ProjectSelectorCustomDataShape} into a plain record ready to assign to
+ * `ProjectSelectorProject.customData`. Keys with a wrong-typed value (or `undefined`) are omitted
+ * so groupings see them as "missing" rather than as a bogus empty string / NaN.
+ *
+ * Consumers with additional custom groupings can spread the returned record with their own keys:
+ *
+ * ```ts
+ * const customData = {
+ *   ...makeProjectSelectorCustomData({ language, type, typeName, lastUsedAt }),
+ *   versificationId, // consumer-defined key for a custom `versification` grouping
+ * };
+ * ```
+ */
+export declare function makeProjectSelectorCustomData(input: ProjectSelectorCustomDataShape): Readonly<Record<string, unknown>>;
+/**
+ * Convert a recency-ordered list of project ids (most-recent FIRST, as returned by
+ * `platformScripture.recentlyOpenedProjects.RecentProjects`) into a map of projectId → synthetic
+ * `lastUsedAt` value suitable for feeding into `ProjectSelectorProject.customData`.
+ *
+ * The recently-opened-projects service exposes order without timestamps; this helper synthesizes a
+ * monotonic descending value (higher = more recent). Projects NOT in the list get no entry, so they
+ * fall into the grouping's "Other" bucket per the built-in behavior.
+ *
+ * The synthesized ORDER is not consumed by the built-in `lastUsed` grouping, which reads
+ * `lastUsedAt` only as a presence flag and leaves each bucket in the component's stable
+ * alphabetical order. What this helper guarantees the grouping is that every listed id gets a
+ * strictly positive, unambiguously-present number. The descending values are still meaningful to a
+ * consumer-defined grouping that chooses to compare them.
+ *
+ * The synthesized values are DETERMINISTIC (do not call `Date.now()`), so calling this at render
+ * time is safe — the returned map has stable content and consumers can memoize on the input list
+ * identity.
+ *
+ * DUPLICATE IDS: the FIRST occurrence wins. The input is most-recent-first, so the earliest
+ * position is the most recent use and is the score the id keeps; later occurrences are ignored.
+ * Duplicates are reachable in practice because callers normalize ids on the way in (e.g.
+ * `orderedProjectIds.map(normalizeProjectId)`), which can collapse two differently-cased raw ids
+ * into one.
+ */
+export declare function recencyMapFromOrderedIds(orderedProjectIds: readonly string[]): ReadonlyMap<string, number>;
+export type ResourceType = "ScriptureResource" | "CommentaryResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;
 	displayName: string;
@@ -4104,6 +5227,33 @@ export type DblResourceData = {
 	updateAvailable: boolean;
 	projectId: string;
 };
+/**
+ * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or,
+ * failing that, by the `startsWith(dblEntryUid)` convention.
+ *
+ * The prefix branch is a best-effort fallback, not an invariant. A resource project's id is
+ * unrelated to the DBL entry it was installed from: ParatextData records the entry uid in the
+ * project's settings and matches on that, so the prefix holds for many installed resources and not
+ * for others. The `projectId` the backend reports is authoritative, so the exact match is tried
+ * first — but the prefix test is a fallthrough, not an `else`, so a row naming project A can still
+ * claim a prefix-sharing project B. `buildLocalNonDblResources` depends on that today, which is
+ * what makes tightening it a behaviour change rather than a cleanup. See
+ * `adr-dbl-install-status-from-backend`.
+ *
+ * Both branches require the row to have been reconciled against disk at least once (`installed`, or
+ * a non-empty `projectId`). A never-synced row carries `installed: false, projectId: ''`, and
+ * `''.startsWith('')` is true for every string, so trusting such a row would let a stale entry for
+ * a DBL-reassigned UID hide a local project whose real UID still matches.
+ *
+ * Producers on both sides of the picker consult this — the one that decides which local projects
+ * are NOT already in the catalog, and the one that decides which catalog row describes a downloaded
+ * project. They must agree, or a project is claimed by one and disowned by the other.
+ *
+ * @param row The DBL catalog row to test
+ * @param localProjectId The id of the local project to test it against
+ * @returns `true` when `row` already accounts for `localProjectId`
+ */
+export declare function doesCatalogRowCoverProject(row: DblResourceData, localProjectId: string): boolean;
 /** The data an extension provides to inform Platform.Bible of the settings it provides */
 export type SettingsContribution = SettingsGroup | SettingsGroup[];
 /** A description of an extension's setting entry */
@@ -4977,6 +6127,12 @@ export interface ThemeCssVariables {
 	destructive?: string;
 	/** Text and content color rendered on destructive surfaces. */
 	"destructive-foreground"?: string;
+	/** Color to emphasize the success of some action */
+	"success-foreground"?: string;
+	/** Color representing warning states such as caution, advisories, and non-critical issues. */
+	warning?: string;
+	/** Text and content color rendered on warning surfaces. */
+	"warning-foreground"?: string;
 	/** Default border and separator color. Applied to cards, menus, tables, and layout dividers. */
 	border?: string;
 	/** Border and surface treatment color for form controls such as inputs, text areas, and selects. */
@@ -5026,6 +6182,11 @@ export interface ThemeCssVariables {
 	 * tokens.
 	 */
 	radius?: string;
+	/**
+	 * Base spacing unit. Controls the size of all Tailwind spacing utilities (padding, margin, gap,
+	 * etc.).
+	 */
+	spacing?: string;
 }
 /** JSON schema object for ThemeContribution */
 export declare const themeDocumentSchema: {
@@ -5104,6 +6265,18 @@ export declare const themeDocumentSchema: {
 					description: string;
 					type: string;
 				};
+				"success-foreground": {
+					description: string;
+					type: string;
+				};
+				warning: {
+					description: string;
+					type: string;
+				};
+				"warning-foreground": {
+					description: string;
+					type: string;
+				};
 				border: {
 					description: string;
 					type: string;
@@ -5169,6 +6342,10 @@ export declare const themeDocumentSchema: {
 					type: string;
 				};
 				radius: {
+					description: string;
+					type: string;
+				};
+				spacing: {
 					description: string;
 					type: string;
 				};
@@ -5365,9 +6542,44 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private fragmentsByJsonPathInternal;
 	private indicesInUsfmByVerseRefInternal;
 	private usfmInternal;
+	/**
+	 * Messages already reported by {@link reportProblemOnce}, so each distinct problem is reported
+	 * once per instance rather than once per occurrence. A commentary or UBS Handbook repeats markers
+	 * this class's markers map does not carry tens of thousands of times per book, and a web view's
+	 * console calls cross IPC to the main process's log file, so reporting per occurrence costs work
+	 * proportional to the document.
+	 *
+	 * Keyed by full message text, so a report collapses only as far as its text repeats: the marker
+	 * reports name only the marker, while the chapter and verse reports also name a position. The set
+	 * lives as long as the instance, so a caller that builds a new instance per action reports each
+	 * problem again per action. Deliberately not reset by {@link usjChanged}: these describe the
+	 * marker, not where it appeared.
+	 */
+	private readonly reportedProblems;
 	constructor(usj: Usj, options?: UsjReaderWriterOptions);
 	usjChanged(): void;
 	private static areUsjVersionsCompatible;
+	/**
+	 * The book this document is for, for naming it in a log message.
+	 *
+	 * Reads the book marker straight off the top level of the content already in memory and stops at
+	 * the first one, so it costs nothing beyond that scan and does not walk into nested content. Only
+	 * call it on a path that is about to log — there is no reason to look for the book otherwise.
+	 *
+	 * @returns The book code, or {@link NO_BOOK_ID} if the document does not carry one
+	 */
+	private getBookIdForLogging;
+	/**
+	 * Reports `message`, unless an identical message has already been reported by this instance. See
+	 * {@link reportedProblems} for why repeats are dropped.
+	 *
+	 * Defaults to `warn` because these describe a document that is malformed or that this class had
+	 * to reinterpret. Pass `debug` for problems that are normal in a well-formed document.
+	 *
+	 * @param message Message to report
+	 * @param level Console level to report at. Defaults to `warn`
+	 */
+	private reportProblemOnce;
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	findParent<T>(jsonPathQuery: string): T | undefined;
 	/**
@@ -5761,7 +6973,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   potential adjustments to handle verse ranges differently when we know better what we ought to
 	 *   do.
 	 */
-	private static transferFragmentsInfoArrayToMaps;
+	private transferFragmentsInfoArrayToMaps;
 	/**
 	 * Generates USFM representation of the USJ document passed in and returns it along with
 	 * information about how various locations in USFM and USJ map to each other
@@ -5788,20 +7000,59 @@ export type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
  */
 export type CommentType = "Normal" | "Conflict";
 /**
+ * The resolution actions the current user may take on a `verseText` conflict thread, as reported by
+ * the legacy comment data provider's `getConflictResolutionOptions`. Defined here so the comment
+ * data provider's type declaration and the conflict-note-card UI share a single source of truth.
+ *
+ * - `'none'`: no actions available - the thread is already resolved, is not a `verseText` conflict,
+ *   or the user lacks permission. UIs should hide the accept/reject controls entirely.
+ * - `'accept'`: the verse was edited after the merge (stale), so only "accept" (keep the current
+ *   text) is available; reject/merge are disabled.
+ * - `'acceptOrReject'`: accept and reject are available, but the two sides overlap and cannot be
+ *   auto-merged, so merge is not offered.
+ * - `'acceptRejectOrMerge'`: accept, reject, and merge are all available.
+ */
+export type ConflictResolutionOptions = "none" | "accept" | "acceptOrReject" | "acceptRejectOrMerge";
+/**
  * Represents a single comment/note in a scripture text
  *
  * This is the C# Comment type from Paratext.Data.ProjectComments
  */
 export type LegacyComment = {
+	/**
+	 * Only present on the ROOT comment of a `verseText` conflict thread: HTML diff of the accepted
+	 * (winning) side (same `<u>`/`<s>` markup as {@link rejectedText}). Also absent for `verseText`
+	 * conflicts that have no common ancestor (two translators independently drafted the same
+	 * previously-absent verse, so no accepted-side diff exists), and when the accepted-side diff has
+	 * no visible content. Never present on replies. Consumers must treat this field as optional even
+	 * on `verseText` conflict notes.
+	 */
+	acceptedText?: string;
 	/** Present in a note when it has been assigned to a particular user */
 	assignedUser?: string;
 	/** Present when there is a Biblical Term Id associated with the note */
 	biblicalTermId?: string;
 	/**
 	 * Type of conflict. Only applicable for conflict notes and it used to give a more specific
-	 * message when displaying the note.
+	 * message when displaying the note. Only meaningful on a thread's ROOT comment (not necessarily
+	 * `comments[0]` — see {@link LegacyCommentThread.comments}); never present on replies.
 	 */
 	conflictType?: string;
+	/**
+	 * The conflict-resolution action recorded on a conflict thread's resolution comment, present only
+	 * when text was written into the verse:
+	 *
+	 * - `'replaced'` — the conflict was rejected, so the previously-rejected side was written into the
+	 *   text (replacing what Paratext had accepted).
+	 * - `'merged'` - the conflict was resolved via PT10's merge action, which writes PT9's auto-merged
+	 *   (both-sides) text into the verse; data synced from a PT9 three-way merge may also carry it.
+	 *
+	 * Absent means the conflict was accepted (no text write) or this is not a resolution comment.
+	 * Unlike the four `verseText` decode fields, this is NOT gated on `conflictType`: the resolution
+	 * comment has type `Conflict` but no `conflictType`, so it must be read directly from this
+	 * field.
+	 */
+	conflictResolutionAction?: "replaced" | "merged";
 	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
 	contents: string;
 	/**
@@ -5828,8 +7079,41 @@ export type LegacyComment = {
 	isRead: boolean;
 	/** Language of note */
 	language: string;
+	/**
+	 * The PT9 "merge all changes" diff preview (same markup as {@link acceptedText}/
+	 * {@link rejectedText}); present only when the two changes are independent.
+	 */
+	mergedText?: string;
+	/**
+	 * Only present on the ROOT comment of a `verseText` conflict thread (never on replies): the
+	 * resulting verse USFM (plain, no diff markup) if the change is REJECTED — i.e. the losing side.
+	 * Pairs with {@link resultText} (the accepted outcome) to drive a dynamic result preview. Absent
+	 * when the reject outcome decodes to an empty verse (e.g. the losing side deleted the verse) or
+	 * the note carries no decodable diff. May be absent even when {@link rejectedText} is present —
+	 * the two are independently optional.
+	 */
+	rejectedResultText?: string;
+	/**
+	 * Only present on the ROOT comment of a `verseText` conflict thread, and only when the rejected
+	 * (losing) side's rendered diff has visible content: HTML diff of the rejected side, using
+	 * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. This is full HTML,
+	 * `<blockquote>`-wrapped like {@link contents}. Coloring is applied by the UI, not carried in the
+	 * markup. Absent for normal notes, non-`verseText` conflicts, replies, and conflicts whose
+	 * rejected-side diff body is empty.
+	 */
+	rejectedText?: string;
 	/** Present in a note when it has been assigned to reply-to a particular user */
 	replyToUser?: string;
+	/**
+	 * Only present on the ROOT comment of a `verseText` conflict thread when the merged result verse
+	 * USFM is non-empty: the resulting verse USFM (plain, no diff markup) already written into the
+	 * text at merge time. Equals the accepted side in v1. Absent otherwise. On a `verseText` conflict
+	 * ROOT this value equals the serialized {@link verse} field, but the two are deliberately
+	 * distinct: `verse` is ungated per-comment verse-history data whose meaning varies by position
+	 * (on a reply it is the verse text captured at reply time, possibly stale), while `resultText` is
+	 * root-only conflict metadata. Conflict-card consumers must read `resultText`, never `verse`.
+	 */
+	resultText?: string;
 	/** Text which was selected in comment, or "" for none */
 	selectedText?: string;
 	/** Present in a note when it has been marked to be shared in teh Global Consultant Notes */
@@ -5851,7 +7135,12 @@ export type LegacyComment = {
 	type?: string;
 	/** Name of the user who created this comment */
 	user: string;
-	/** Original USFM content of verse */
+	/**
+	 * The verse USFM captured on this comment. Per-comment history data, present on replies too:
+	 * Paratext 9 stores the current verse text on any comment written after the verse changed. Only
+	 * on a conflict thread's ROOT comment does it hold the merged result — conflict-card consumers
+	 * should read {@link resultText} instead of this field.
+	 */
 	verse?: string;
 	/** Verse reference in which comment appears */
 	verseRef: string;
@@ -5864,7 +7153,16 @@ export type LegacyComment = {
 export type LegacyCommentThread = {
 	/** Thread identifier (from first comment) */
 	id: string;
-	/** All comments in this thread */
+	/**
+	 * All comments in this thread.
+	 *
+	 * The conflict-only fields ({@link LegacyComment.conflictType}, {@link LegacyComment.rejectedText},
+	 * {@link LegacyComment.acceptedText}, {@link LegacyComment.resultText}, and
+	 * {@link LegacyComment.rejectedResultText}) live on this thread's ROOT comment — the
+	 * earliest-`date` comment — which after thread-fragment deduplication is NOT necessarily
+	 * `comments[0]`. Locate the root by earliest `date` (or simply read whichever comment carries the
+	 * fields); never assume a fixed array position.
+	 */
 	comments: LegacyComment[];
 	/** Thread status (aggregated from most recent non-Unspecified comment) */
 	status: CommentStatus;
@@ -5901,6 +7199,7 @@ export {
 	MarkerCategoryType as CategoryType,
 	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
 	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
+	Usj,
 };
 
 export {};

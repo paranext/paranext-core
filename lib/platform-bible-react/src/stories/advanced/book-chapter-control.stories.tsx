@@ -1,18 +1,41 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { defaultScrRef, LanguageStrings } from 'platform-bible-utils';
 import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import { BookChapterControlHandle } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
 import { useRecentSearches } from '@/components/advanced/recent-searches.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 type BookChapterControlWrapperProps = {
   scrRef: SerializedVerseRef;
   handleSubmit: (scrRef: SerializedVerseRef) => void;
   className?: string;
   getActiveBookIds?: () => string[];
+  getAdditionalBookIds?: () => string[];
+  getEndVerse?: (bookId: string, chapterNum: number) => number;
+  onOpenChange?: (open: boolean) => void;
+  disabled?: boolean;
 };
+
+/**
+ * Sample verse-count table for stories. Real consumers will typically derive this from a
+ * versification service. This is just enough data to demonstrate verse selection.
+ */
+const SAMPLE_VERSE_COUNTS: Record<string, Record<number, number>> = {
+  GEN: { 1: 31, 2: 25, 3: 24 },
+  PSA: { 23: 6, 117: 2, 119: 176, 135: 21 },
+  MAT: { 1: 25, 5: 48, 15: 39 },
+  JHN: { 3: 36 },
+  ROM: { 8: 39, 12: 21 },
+  '1CO': { 13: 13 },
+  REV: { 22: 21 },
+  OBA: { 1: 21 },
+};
+
+function sampleGetEndVerse(bookId: string, chapterNum: number): number {
+  return SAMPLE_VERSE_COUNTS[bookId]?.[chapterNum] ?? 30;
+}
 
 // Wrapper component to handle state
 function BookChapterControlWrapper({
@@ -31,14 +54,12 @@ function BookChapterControlWrapper({
   );
 
   return (
-    <ThemeProvider>
-      <div className="tw:p-4">
-        <BookChapterControl {...rest} scrRef={scrRef} handleSubmit={handleSubmitWrapper} />
-        <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
-          Current Reference: {JSON.stringify(scrRef, undefined, 2)}
-        </div>
+    <div className="tw:p-4">
+      <BookChapterControl {...rest} scrRef={scrRef} handleSubmit={handleSubmitWrapper} />
+      <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
+        Current Reference: {JSON.stringify(scrRef, undefined, 2)}
       </div>
-    </ThemeProvider>
+    </div>
   );
 }
 
@@ -77,6 +98,10 @@ const meta: Meta<typeof BookChapterControl> = {
   args: {
     scrRef: defaultScrRef,
     handleSubmit: fn((scrRef) => console.log('Scripture reference changed:', scrRef)),
+    // Explicit spy so Storybook doesn't synthesize an implicit action arg for this `on*`
+    // handler. The component invokes `onOpenChange` from an effect on open/close, which would
+    // otherwise trip SB_PREVIEW_API_0002 (ImplicitActionsDuringRendering).
+    onOpenChange: fn(),
   },
   render: (args) => <BookChapterControlWrapper {...args} />,
 } satisfies Meta<typeof BookChapterControl>;
@@ -85,6 +110,43 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
+  args: {
+    scrRef: defaultScrRef,
+  },
+};
+
+export const Disabled: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    disabled: true,
+  },
+};
+
+/** Demonstrates opening the control (with the search input focused) via its imperative handle */
+export const ImperativeOpen: Story = {
+  render: (args) => {
+    const controlRef = useRef<BookChapterControlHandle | undefined>(undefined);
+    const [scrRef, setScrRef] = useState<SerializedVerseRef>(args.scrRef);
+    return (
+      <div className="tw:flex tw:items-center tw:gap-2 tw:p-4">
+        <BookChapterControl
+          {...args}
+          ref={(handle) => {
+            controlRef.current = handle ?? undefined;
+          }}
+          scrRef={scrRef}
+          handleSubmit={setScrRef}
+        />
+        <button
+          type="button"
+          className="tw:rounded tw:border tw:px-2 tw:py-1"
+          onClick={() => controlRef.current?.open()}
+        >
+          Open via handle
+        </button>
+      </div>
+    );
+  },
   args: {
     scrRef: defaultScrRef,
   },
@@ -111,6 +173,56 @@ export const WithLimitedBooks: Story = {
         story: 'Shows the component with a limited set of available books.',
       },
     },
+  },
+};
+
+export const WithBooksFromOpenResources: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    getActiveBookIds: () => ['GEN', 'EXO', 'MAT', 'JHN'],
+    // Books the active project lacks but an open resource has. They stay hidden until the user asks
+    // for them, then render greyed and selectable rather than disabled.
+    getAdditionalBookIds: () => ['PSA', 'ROM', 'REV', 'TOB'],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The active project has four books; four more are reachable through open resources. ' +
+          'The list shows only the project\'s books until "Show more books" is pressed, after ' +
+          'which the reachable books appear greyed — still selectable, with a tooltip and an ' +
+          'accessible name explaining why they are greyed.',
+      },
+    },
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the control', async () => {
+      await userEvent.click(canvas.getByRole(TRIGGER_ROLE));
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step("Only the project's books are listed", async () => {
+      const dropdown = within(getDropdown());
+      await expect(dropdown.queryByRole('option', { name: /Romans/ })).not.toBeInTheDocument();
+    });
+
+    await step('Reveal the books from open resources', async () => {
+      const dropdown = within(getDropdown());
+      await userEvent.click(dropdown.getByRole('button', { name: 'Show more books' }));
+
+      const romans = await dropdown.findByRole('option', { name: /Romans/ });
+      await expect(romans).toHaveAccessibleName(/not in this project/);
+      // Greyed, but never marked unavailable — the user can still navigate there
+      await expect(romans).not.toHaveAttribute('aria-disabled', 'true');
+    });
+
+    await step("Return to the project's own books", async () => {
+      const dropdown = within(getDropdown());
+      await userEvent.click(dropdown.getByRole('button', { name: 'Show project books only' }));
+      await waitFor(() =>
+        expect(dropdown.queryByRole('option', { name: /Romans/ })).not.toBeInTheDocument(),
+      );
+    });
   },
 };
 
@@ -246,7 +358,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, 'John 3:16');
 
       // Look for the top match suggestion in the dropdown
-      const topMatch = await within(dropdownContent).findByText('JHN 3:16');
+      const topMatch = await within(dropdownContent).findByText('John 3:16');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -271,7 +383,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, 'Roma 8');
 
       // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('ROM 8:1');
+      const topMatch = await within(dropdownContent).findByText('Romans 8:1');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -296,7 +408,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, '1 co 13:4');
 
       // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('1CO 13:4');
+      const topMatch = await within(dropdownContent).findByText('1 Corinthians 13:4');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -318,11 +430,11 @@ export const SmartParsingDemo: Story = {
 
 This test verifies:
 1. Opens the component and activates the search input
-2. Tests complete reference parsing by typing "John 3:16" and verifying "JHN 3:16" appears as top match
+2. Tests complete reference parsing by typing "John 3:16" and verifying "John 3:16" appears as top match
 3. Confirms selection submits correct reference (JHN 3:16)
-4. Tests partial book name parsing by typing "Roma 8" and verifying "ROM 8:1" appears as top match
+4. Tests partial book name parsing by typing "Roma 8" and verifying "Romans 8:1" appears as top match
 5. Confirms selection submits correct reference (ROM 8:1)
-6. Tests book ID parsing by typing "1 co 13:4" and verifying "1CO 13:4" appears as top match
+6. Tests book ID parsing by typing "1 co 13:4" and verifying "1 Corinthians 13:4" appears as top match
 7. Confirms selection submits correct reference (1CO 13:4)
 8. Validates that all selections properly call handleSubmit with the expected SerializedVerseRef objects
         `,
@@ -484,13 +596,13 @@ export const SingleChapterBookDemo: Story = {
 
     await step('Verify Odes smart parsing result appears', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = await within(dropdownContent).findByText('ODA 1:1');
+      const odesItem = await within(dropdownContent).findByText('Odes 1:1');
       await expect(odesItem).toBeInTheDocument();
     });
 
     await step('Click Odes result to submit', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = within(dropdownContent).getByText('ODA 1:1');
+      const odesItem = within(dropdownContent).getByText('Odes 1:1');
       await userEvent.click(odesItem);
     });
 
@@ -533,7 +645,7 @@ export const KeyboardNavigation: Story = {
       verseNum: 1,
     },
   },
-  play: async ({ canvas, userEvent, step }) => {
+  play: async ({ canvas, userEvent, step, args }) => {
     await step('Open component with Matthew reference', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
@@ -552,40 +664,49 @@ export const KeyboardNavigation: Story = {
       await userEvent.click(matthewItem);
     });
 
-    await step('Verify chapter 15 button exists in chapter grid', async () => {
-      const dropdownContent = getDropdown();
-      const chapter15 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
-        name: '15',
+    // Assert on the `data-selected` highlight itself. Checking only that the popover is still
+    // visible after a keypress would pass even if the arrow keys moved nothing at all, which is
+    // exactly the behaviour these steps exist to demonstrate.
+    const expectChapterHighlighted = async (chapter: string) => {
+      await waitFor(async () => {
+        await expect(
+          within(getDropdown()).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter }),
+        ).toHaveAttribute('data-selected', 'true');
       });
-      await expect(chapter15).toBeInTheDocument();
+    };
+
+    await step('Verify the grid opens with the current chapter highlighted', async () => {
+      await expectChapterHighlighted('15');
     });
 
-    await step('Test right arrow key navigation', async () => {
+    // Matthew has 28 chapters in a 6-column grid, so from 15: right 16, down 22, left 21, up 15.
+    await step('Right arrow moves the highlight to the next chapter', async () => {
       await userEvent.keyboard('{ArrowRight}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('16');
     });
 
-    await step('Test down arrow key navigation', async () => {
+    await step('Down arrow moves the highlight one full row', async () => {
       await userEvent.keyboard('{ArrowDown}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('22');
     });
 
-    await step('Test left arrow key navigation', async () => {
+    await step('Left arrow moves the highlight to the previous chapter', async () => {
       await userEvent.keyboard('{ArrowLeft}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('21');
     });
 
-    await step('Test up arrow key navigation', async () => {
+    await step('Up arrow moves the highlight back one full row', async () => {
       await userEvent.keyboard('{ArrowUp}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('15');
     });
 
-    await step('Test Enter key to select focused chapter', async () => {
+    await step('Enter submits the highlighted chapter', async () => {
       await userEvent.keyboard('{Enter}');
+      await expect(args.handleSubmit).toHaveBeenCalledWith({
+        book: 'MAT',
+        chapterNum: 15,
+        verseNum: 1,
+      });
     });
 
     await step('Verify component closes after Enter key selection', async () => {
@@ -604,13 +725,16 @@ This interactive test demonstrates:
 1. Opening the component with a multi-chapter book (Matthew)
 2. Verifying the book appears in the dropdown
 3. Clicking the book to enter chapter view
-4. Confirming the current chapter button exists in the grid
-5. Testing right arrow key navigation
-6. Testing down arrow key navigation
-7. Testing left arrow key navigation
-8. Testing up arrow key navigation
-9. Using Enter key to select the focused chapter
+4. Confirming the grid opens with the current chapter (15) already highlighted
+5. Right arrow moving the highlight to chapter 16
+6. Down arrow moving the highlight one full row, to chapter 22
+7. Left arrow moving the highlight back to chapter 21
+8. Up arrow moving the highlight one full row back, to chapter 15
+9. Enter submitting the highlighted chapter
 10. Verifying the component closes after keyboard selection
+
+Each arrow step asserts which cell carries the \`data-selected\` highlight, so the grid arithmetic
+is actually exercised rather than only checking that the popover stayed open.
         `,
       },
     },
@@ -684,7 +808,7 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Click Obadiah smart parsing result', async () => {
       const dropdownContent = getDropdown();
-      const obadiahItem = await within(dropdownContent).findByText('OBA 1:1');
+      const obadiahItem = await within(dropdownContent).findByText('Obadiah 1:1');
       await userEvent.click(obadiahItem);
     });
 
@@ -712,7 +836,7 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Click Revelation smart parsing result', async () => {
       const dropdownContent = getDropdown();
-      const revMatch = await within(dropdownContent).findByText('REV 22:21');
+      const revMatch = await within(dropdownContent).findByText('Revelation 22:21');
       await userEvent.click(revMatch);
     });
 
@@ -966,26 +1090,176 @@ function BookChapterControlWithRecentSearches({
   );
 
   return (
-    <ThemeProvider>
-      <div className="tw:p-4">
-        <BookChapterControl
-          {...rest}
-          scrRef={scrRef}
-          handleSubmit={handleScrRef}
-          recentSearches={recentSearches}
-          onAddRecentSearch={handleAddRecentSearch}
-        />
-        <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
-          Current Reference: {JSON.stringify(scrRef, undefined, 2)}
-        </div>
-        <div className="tw:mt-2 tw:text-sm tw:text-gray-500">
-          Recent Searches:{' '}
-          {recentSearches.map((ref) => `${ref.book} ${ref.chapterNum}:${ref.verseNum}`).join(', ')}
-        </div>
+    <div className="tw:p-4">
+      <BookChapterControl
+        {...rest}
+        scrRef={scrRef}
+        handleSubmit={handleScrRef}
+        recentSearches={recentSearches}
+        onAddRecentSearch={handleAddRecentSearch}
+      />
+      <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
+        Current Reference: {JSON.stringify(scrRef, undefined, 2)}
       </div>
-    </ThemeProvider>
+      <div className="tw:mt-2 tw:text-sm tw:text-gray-500">
+        Recent Searches:{' '}
+        {recentSearches.map((ref) => `${ref.book} ${ref.chapterNum}:${ref.verseNum}`).join(', ')}
+      </div>
+    </div>
   );
 }
+
+export const WithDisabledReferences: Story = {
+  args: {
+    scrRef: {
+      book: 'REV',
+      chapterNum: 22,
+      verseNum: 21,
+    },
+    getEndVerse: sampleGetEndVerse,
+    disableReferencesUpTo: {
+      book: 'MAT',
+      chapterNum: 5,
+      verseNum: 10,
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Disabled References** - When \`disableReferencesUpTo\` is provided, any reference that comes
+strictly before the given one is shown as disabled: books before MAT, chapters before MAT 5,
+and verses before MAT 5:10. Useful for range pickers where the "end" selector should not allow
+picking a reference before the "start".
+        `,
+      },
+    },
+  },
+};
+
+export const WithVerseSelection: Story = {
+  args: {
+    scrRef: {
+      book: 'JHN',
+      chapterNum: 3,
+      verseNum: 16,
+    },
+    getEndVerse: sampleGetEndVerse,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Verse Selection** - When the \`getEndVerse\` prop is provided, the control enables verse
+selection. After clicking a chapter in the chapter grid, the control transitions to a verse
+selection sub-screen instead of submitting immediately. Additionally, typing a reference with a
+chapter-verse separator (e.g. "John 3:" or "John 3:16") shows a verse grid below the top match.
+        `,
+      },
+    },
+  },
+};
+
+export const VerseSelectionByTyping: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    getEndVerse: sampleGetEndVerse,
+  },
+  play: async ({ canvas, userEvent, step, args }) => {
+    await step('Open control and type reference with colon', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.type(searchInput, 'John 3:');
+    });
+
+    await step('Click verse 16 from the verse grid', async () => {
+      const dropdownContent = getDropdown();
+      const verse16 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
+        name: '16',
+      });
+      await userEvent.click(verse16);
+    });
+
+    await step('Verify submission with selected verse', async () => {
+      await expect(args.handleSubmit).toHaveBeenCalledWith({
+        book: 'JHN',
+        chapterNum: 3,
+        verseNum: 16,
+      });
+      await expectPopoverToBeClosed();
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Typing a reference with the chapter-verse separator present (e.g. "John 3:") shows the verse grid so the user can pick a verse.',
+      },
+    },
+  },
+};
+
+export const VerseSelectionFromChapterGrid: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    getEndVerse: sampleGetEndVerse,
+  },
+  play: async ({ canvas, userEvent, step, args }) => {
+    await step('Open control and click Matthew', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+
+      const dropdownContent = getDropdown();
+      const matthewItem = within(dropdownContent).getByText('Matthew');
+      await userEvent.click(matthewItem);
+    });
+
+    await step('Click chapter 5 from chapter grid', async () => {
+      const dropdownContent = getDropdown();
+      const chapter5 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
+        name: '5',
+      });
+      await userEvent.click(chapter5);
+    });
+
+    await step('Verify verse grid appears (did not submit yet)', async () => {
+      await expect(args.handleSubmit).not.toHaveBeenCalled();
+      const dropdownContent = getDropdown();
+      const verse3 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
+        name: '3',
+      });
+      await expect(verse3).toBeInTheDocument();
+    });
+
+    await step('Click verse 3 to submit', async () => {
+      const dropdownContent = getDropdown();
+      const verse3 = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: '3' });
+      await userEvent.click(verse3);
+    });
+
+    await step('Verify submission', async () => {
+      await expect(args.handleSubmit).toHaveBeenCalledWith({
+        book: 'MAT',
+        chapterNum: 5,
+        verseNum: 3,
+      });
+      await expectPopoverToBeClosed();
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'After selecting a chapter from the chapter grid, the control shows a verse grid instead of submitting immediately. The user then picks the verse to finalize the reference.',
+      },
+    },
+  },
+};
 
 export const WithRecentSearches: Story = {
   args: {

@@ -142,10 +142,10 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           onChange(option);
           setOpen(false);
         }}
-        className="tw:flex tw:items-center"
+        className="tw:gap-1.5!"
       >
         <Check
-          className={cn('tw:me-2 tw:h-4 tw:w-4 tw:shrink-0', {
+          className={cn('tw:h-4 tw:w-4 tw:shrink-0', {
             'tw:opacity-0': !value || getOptionLabel(value) !== optionLabel,
           })}
         />
@@ -192,16 +192,24 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
         style={popoverContentStyle}
       >
         <Command>
-          <CommandInput placeholder={textPlaceholder} className="tw:text-inherit" />
+          <CommandInput
+            placeholder={textPlaceholder}
+            className="tw:text-inherit"
+            // Picker semantics: the option list is the whole point of this control and a leading
+            // space in the search box is meaningless, so Space picks the highlighted option.
+            spaceSelectsHighlightedItem
+          />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
           <CommandList>
-            {isGroupedOptions(options)
-              ? options.map((group) => (
-                  <CommandGroup key={group.groupHeading} heading={group.groupHeading}>
-                    {group.options.map((option) => renderCommandItem(option, group.groupHeading))}
-                  </CommandGroup>
-                ))
-              : options.map((option) => renderCommandItem(option))}
+            {isGroupedOptions(options) ? (
+              options.map((group) => (
+                <CommandGroup key={group.groupHeading} heading={group.groupHeading}>
+                  {group.options.map((option) => renderCommandItem(option, group.groupHeading))}
+                </CommandGroup>
+              ))
+            ) : (
+              <CommandGroup>{options.map((option) => renderCommandItem(option))}</CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

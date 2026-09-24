@@ -1,0 +1,13 @@
+[
+  {
+    "label": "%settings_platformEnhancedResources_group_label%",
+    "description": "%settings_platformEnhancedResources_group_description%",
+    "properties": {
+      "platformEnhancedResources.showMarbleGuide": {
+        "label": "%settings_platformEnhancedResources_showMarbleGuide_label%",
+        "description": "%settings_platformEnhancedResources_showMarbleGuide_description%",
+        "default": true
+      }
+    }
+  }
+]

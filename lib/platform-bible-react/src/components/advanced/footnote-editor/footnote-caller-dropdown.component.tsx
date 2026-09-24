@@ -16,20 +16,26 @@ import { Button } from '@/components/shadcn-ui/button';
 import { GENERATOR_NOTE_CALLER, HIDDEN_NOTE_CALLER } from '@eten-tech-foundation/platform-editor';
 import { Input } from '@/components/shadcn-ui/input';
 import { KeyboardEvent, useEffect, useRef, useState } from 'react';
-import { Z_INDEX_FOOTNOTE_EDITOR } from '@/components/z-index';
+import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteCallerDropdownProps {
   /** The caller type value to pass to the dropdown */
   callerType: FootnoteCallerType;
-  /** Function to update the caller type */
-  updateCallerType: (newCallerType: FootnoteCallerType) => void;
   /** The custom caller to pass to the custom caller input field */
   customCaller: string;
-  /** FUnction to update the custom caller */
-  updateCustomCaller: (newCustomCaller: string) => void;
+  /**
+   * Applies the caller the user settled on. Both halves travel together because they are ONE
+   * choice, and the applied caller is a function of both: a type of `custom` means nothing without
+   * its character. Split into a call per half, each would have to read the other from state its
+   * sibling had not updated yet, and a visit that changes both — choosing Custom and typing its
+   * character — would write neither.
+   */
+  updateCaller: (newCallerType: FootnoteCallerType, newCustomCaller: string) => void;
   /** Localized strings from the parent component */
   localizedStrings: FootnoteEditorLocalizedStrings;
+  /** Returns the caret and keyboard focus to the note being edited. See `onCloseAutoFocus` below. */
+  focusNoteText: () => void;
 }
 
 const renderCallerButtonContent = (
@@ -62,11 +68,15 @@ const renderCallerButtonContent = (
 
 export function FootnoteCallerDropdown({
   callerType,
-  updateCallerType,
   customCaller,
-  updateCustomCaller,
+  updateCaller,
   localizedStrings,
+  focusNoteText,
 }: FootnoteCallerDropdownProps) {
+  // Whether this visit actually committed a caller, read on close to decide who gets focus. Set
+  // where `updateCaller` is called below, so it tracks a real change rather than merely opening the
+  // menu or moving the highlight around inside it.
+  const committedCaller = useRef(false);
   // The ref must start with being null to be passed as an element ref
   // eslint-disable-next-line no-null/no-null
   const customCallerInputRef = useRef<HTMLInputElement>(null);
@@ -79,6 +89,19 @@ export function FootnoteCallerDropdown({
   const [selectedCallerType, setSelectedCallerType] = useState<FootnoteCallerType>(callerType);
   const [newCustomCaller, setNewCustomCaller] = useState<string>(customCaller);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  // Whether the Custom row was already checked when the pointer went down on it — see its
+  // `onPointerDown` for why the click itself can no longer tell.
+  const wasCustomBeforePressRef = useRef(false);
+
+  // The selection is COMMITTED when the menu closes (below), and choosing an item closes the menu
+  // — so both happen in one React batch and the close handler's closure still holds the
+  // pre-selection values. Reading the pending choice through refs is what makes the commit see
+  // what the user just picked instead of what was selected when the menu opened; without them
+  // every selection committed the value it was replacing.
+  const selectedCallerTypeRef = useRef(selectedCallerType);
+  selectedCallerTypeRef.current = selectedCallerType;
+  const newCustomCallerRef = useRef(newCustomCaller);
+  newCustomCallerRef.current = newCustomCaller;
 
   // If the caller type changes, the selected caller type needs to change also
   useEffect(() => {
@@ -99,11 +122,17 @@ export function FootnoteCallerDropdown({
     isCustomCallerInputFocused.current = false;
     setIsDropdownOpen(open);
     if (!open) {
+      const pendingCallerType = selectedCallerTypeRef.current;
+      const pendingCustomCaller = newCustomCallerRef.current;
       // This makes it so that if the custom caller is invalid, then reverts back to the previous
       // selected caller
-      if (selectedCallerType !== 'custom' || newCustomCaller) {
-        updateCallerType(selectedCallerType);
-        updateCustomCaller(newCustomCaller);
+      if (pendingCallerType !== 'custom' || pendingCustomCaller) {
+        // One call for one choice: this is a save, and the note is replaced in the popover's
+        // editor on the way through, so a close must never produce two of them.
+        if (pendingCallerType !== callerType || pendingCustomCaller !== customCaller) {
+          committedCaller.current = true;
+          updateCaller(pendingCallerType, pendingCustomCaller);
+        }
       } else {
         setSelectedCallerType(callerType);
         setNewCustomCaller(customCaller);
@@ -160,7 +189,27 @@ export function FootnoteCallerDropdown({
         </Tooltip>
       </TooltipProvider>
       <DropdownMenuContent
-        style={{ zIndex: Z_INDEX_FOOTNOTE_EDITOR }}
+        style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
+        // Escape is a cancel, never a commit: a caller chosen or typed in this visit is discarded.
+        // Radix runs this and then closes the menu within the same event, before React re-renders,
+        // so the refs the close handler reads are reset directly — resetting only the state would
+        // still leave the close handler committing the abandoned choice.
+        onEscapeKeyDown={() => {
+          selectedCallerTypeRef.current = callerType;
+          newCustomCallerRef.current = customCaller;
+          setSelectedCallerType(callerType);
+          setNewCustomCaller(customCaller);
+        }}
+        // Mirrors the note-type dropdown: after a committed caller, claim Radix's restore and send
+        // focus to the note text, since the caller is applied by replacing the note and the user is
+        // mid-edit. After Escape, or any close that changed nothing, Radix's own restore to this
+        // trigger is both what the user expects and what WCAG 2.4.3 asks for.
+        onCloseAutoFocus={(event) => {
+          if (!committedCaller.current) return;
+          committedCaller.current = false;
+          event.preventDefault();
+          focusNoteText();
+        }}
         onClick={() => {
           if (isCustomCallerInputFocused.current) isCustomCallerInputFocused.current = false;
         }}
@@ -195,8 +244,28 @@ export function FootnoteCallerDropdown({
           ref={customCallerSelectRef}
           checked={selectedCallerType === 'custom'}
           onCheckedChange={() => setSelectedCallerType('custom')}
+          // Radix selects a menu item on POINTER-UP, so by the time the click arrives this row is
+          // already checked and the click handler can no longer tell an arming click from a
+          // confirming one. The answer is only available before the press is resolved, so it is
+          // taken here.
+          onPointerDown={() => {
+            wasCustomBeforePressRef.current = selectedCallerType === 'custom';
+          }}
           onClick={(event) => {
             event.stopPropagation();
+            // Choosing Custom deliberately keeps the menu OPEN (see `onSelect` below) so a caller
+            // can be typed, which leaves this row's own check as the pointer gesture that confirms
+            // one — the same commit Enter performs, through the same close handler. The check's
+            // indicator is `pointer-events-none`, so a click on it arrives here, on the row.
+            //
+            // Only a row that was ALREADY checked commits: the first click is what selects Custom
+            // and focuses the field, and committing there would apply whatever the field held
+            // before the user typed. A click that landed in the FIELD is the user reaching for the
+            // text, never a confirmation — closing on that would make a caller impossible to type.
+            if (wasCustomBeforePressRef.current && event.target !== customCallerInputRef.current) {
+              handleDropdownOpenChange(false);
+              return;
+            }
             isCustomCallerInputFocused.current = true;
             customCallerInputRef.current?.focus();
           }}

@@ -4,6 +4,24 @@ import { Dispose } from '../lifetime-management/disposal.model';
 import { PlatformEvent, PlatformEventHandler } from './platform-event';
 
 /**
+ * Determine at runtime whether a value is a promise whose rejection we can subscribe to.
+ * Deliberately duck-typed: this runs on values whose static type claims to be `void`, so there is
+ * nothing for the type system to narrow. Both `then` and `catch` are checked because `catch` is the
+ * capability the caller uses, and an `async` function - the case this exists for - returns a native
+ * promise that has both.
+ */
+function isPromise(value: unknown): value is Promise<unknown> {
+  return (
+    typeof value === 'object' &&
+    !!value &&
+    'then' in value &&
+    typeof value.then === 'function' &&
+    'catch' in value &&
+    typeof value.catch === 'function'
+  );
+}
+
+/**
  * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
  * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
  * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
@@ -80,16 +98,76 @@ export class PlatformEventEmitter<T> implements Dispose {
   };
 
   /**
+   * Runs the subscriptions for the event, keeping each subscriber's failure to itself: a subscriber
+   * that throws hands its error to `handleSubscriberError` and the remaining subscribers still
+   * run.
+   *
+   * Use this where the emit is the only time subscribers are told about something that has already
+   * happened and will not be reported again — one broken subscriber must not cost the rest the
+   * news. Prefer {@link emit} everywhere else: a caller that can still act on a throw should see
+   * it.
+   *
+   * This does not await `async` subscribers. It routes their rejections — a subscriber whose
+   * promise rejects reaches `handleSubscriberError` the same way a synchronous throw does — but it
+   * does not sequence them: this returns as soon as every subscriber has been _started_, with any
+   * async subscriber still suspended at its first `await`. An emitter that tears something down
+   * right after emitting therefore tears it down out from under those subscribers.
+   *
+   * @param event Event data to provide to subscribed callbacks
+   * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+   *   position in the subscription order. Must not throw; a throw from it stops the remaining
+   *   subscribers, which is the very thing this is here to prevent.
+   * @experimental
+   */
+  emitIsolated = (
+    event: T,
+    handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+  ) => {
+    // Do not do anything other than emitIsolatedFn here. This is just binding `this` to it
+    this.emitIsolatedFn(event, handleSubscriberError);
+  };
+
+  /**
    * Function that runs the subscriptions for the event. Added here so children can override emit
    * and still call the base functionality. See NetworkEventEmitter.emit for example
    */
   protected emitFn(event: T) {
     this.assertNotDisposed();
 
-    // Clone the subscriptions array before iterating over the callbacks so the callback index
-    // doesn't get messed up if someone subscribes or unsubscribes inside one of the callbacks
-    const emitCallbacks = [...(this.subscriptions ?? [])];
-    emitCallbacks.forEach((callback) => callback(event));
+    this.forEachSubscription((callback) => callback(event));
+  }
+
+  /**
+   * Function that runs the subscriptions for the event in isolation from each other. Added here so
+   * children can override {@link emitIsolated} and still call the base functionality.
+   *
+   * @experimental
+   */
+  protected emitIsolatedFn(
+    event: T,
+    handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+  ) {
+    this.assertNotDisposed();
+
+    this.forEachSubscription((callback, subscriberIndex) => {
+      try {
+        // `PlatformEventHandler` returns `void`, but an `async` function is assignable to a
+        // void-returning type, so a subscriber can hand back a promise even though the type says
+        // nothing came back. Were we to ignore it, that promise's rejection would escape as an
+        // unhandled rejection naming no emitter, event, or subscriber - the opposite of the
+        // isolation this method promises - so look at what actually came back and route a
+        // rejection the same way a synchronous throw goes. Inspecting the returned value rather
+        // than wrapping every call in `Promise.resolve(...)` keeps the common all-synchronous
+        // emit allocation-free; these are hot paths.
+        const returnedValue: unknown = callback(event);
+        if (isPromise(returnedValue))
+          returnedValue.catch((error: unknown) => {
+            handleSubscriberError(error, subscriberIndex);
+          });
+      } catch (error) {
+        handleSubscriberError(error, subscriberIndex);
+      }
+    });
   }
 
   /** Check to make sure this emitter is not disposed. Throw if it is */
@@ -108,6 +186,17 @@ export class PlatformEventEmitter<T> implements Dispose {
     this.subscriptions = undefined;
     this.lazyEvent = undefined;
     return Promise.resolve(true);
+  }
+
+  /**
+   * Run something for each current subscription. Clones the subscriptions array before iterating
+   * over the callbacks so the callback index doesn't get messed up if someone subscribes or
+   * unsubscribes inside one of the callbacks
+   */
+  private forEachSubscription(
+    runForSubscription: (callback: PlatformEventHandler<T>, subscriberIndex: number) => void,
+  ) {
+    [...(this.subscriptions ?? [])].forEach(runForSubscription);
   }
 }
 

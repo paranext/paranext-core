@@ -1,3 +1,5 @@
+using Paranext.DataProvider.NetworkObjects.Documentation;
+
 namespace Paranext.DataProvider.NetworkObjects;
 
 internal abstract class DataProvider : NetworkObject
@@ -38,10 +40,20 @@ internal abstract class DataProvider : NetworkObject
         await RegisterNetworkObjectAsync(
             DataProviderName,
             GetFunctions(),
-            GetDataProviderCreatedDetails()
+            GetDataProviderCreatedDetails(),
+            GetNetworkObjectDocumentation()
         );
         await StartDataProviderAsync();
     }
+
+    /// <summary>
+    /// Optional documentation for this data provider, threaded into registration. Override to mark
+    /// the whole provider experimental (set <see cref="NetworkObjectDocumentation.Experimental"/>) or
+    /// to document/mark only specific functions via <see cref="NetworkObjectDocumentation.Methods"/> —
+    /// e.g. one experimental projectInterface on a PDP that also exposes stable ones. Defaults to
+    /// <c>null</c> (no documentation).
+    /// </summary>
+    protected virtual NetworkObjectDocumentation? GetNetworkObjectDocumentation() => null;
 
     /// <summary>
     /// Create an event that tells the network details about the data provider that is being created

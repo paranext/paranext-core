@@ -5,19 +5,56 @@ import {
   menuDataServiceProviderName,
 } from '@shared/services/menu-data.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import { settingsService } from '@shared/services/settings.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
   createSyncProxyForAsyncObject,
+  isPlatformError,
   PlatformMenus,
   MultiColumnMenu,
+  InterfaceMode,
   ReferencedItem,
+  SingleColumnMenu,
   WebViewMenu,
   Localized,
   Unsubscriber,
+  UnsubscriberAsync,
 } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
+import { getShortcutHintForCommand } from '@shared/utils/keyboard-shortcut-hint.util';
 import { menuDocumentCombiner, onDidResyncContributions } from './contribution.service';
+
+/**
+ * Removes items whose `hiddenInterfaceModes` includes `currentMode` from a menu item list.
+ *
+ * Constrained to just the one field this needs, not the full `MenuItemBase` — `Localized<T>` widens
+ * `MenuItemBase`'s branded `ReferencedItem`/`LocalizeKey` string fields (e.g. `group`) to plain
+ * `string`, so a localized menu item no longer satisfies `MenuItemBase` itself, which would
+ * otherwise make `TItem` fail to infer as the caller's actual (localized or unlocalized) item
+ * type.
+ */
+function filterItemsForInterfaceMode<TItem extends { hiddenInterfaceModes?: InterfaceMode[] }>(
+  items: TItem[],
+  currentMode: InterfaceMode,
+): TItem[] {
+  return items.filter((item) => !item.hiddenInterfaceModes?.includes(currentMode));
+}
+
+/**
+ * Adds the catalogued keyboard shortcut to each item that runs a command which has one, written for
+ * `platform`. Items without a catalogued shortcut are returned untouched.
+ */
+function addShortcutHints<TItem extends object>(
+  items: TItem[],
+  platform: typeof process.platform,
+): TItem[] {
+  return items.map((item) => {
+    if (!('command' in item) || typeof item.command !== 'string') return item;
+    const shortcut = getShortcutHintForCommand(item.command, platform);
+    return shortcut ? { ...item, shortcut } : item;
+  });
+}
 
 class MenuDataDataProviderEngine
   extends DataProviderEngine<MenuDataDataTypes>
@@ -26,12 +63,26 @@ class MenuDataDataProviderEngine
   private mainMenu: Localized<MultiColumnMenu> = { groups: {}, items: [], columns: {} };
   private unlocalizedMainMenu: MultiColumnMenu = { groups: {}, items: [], columns: {} };
   private webViewMenusMap = new Map<ReferencedItem, Localized<WebViewMenu>>();
+  /**
+   * Kept on its own because tabs hosting no web view — dialogs, error tabs — have no name to look a
+   * menu up by, and the items in a tab menu act on the tab rather than on its contents
+   */
+  private defaultTabMenu: Localized<SingleColumnMenu> = { groups: {}, items: [] };
   private unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
+  private unsubscribeFromInterfaceMode: UnsubscriberAsync | undefined;
+  private currentMode: InterfaceMode = 'power';
+  private isDisposed = false;
+  private readonly platform: typeof process.platform;
 
-  constructor(unlocalizedMenuData: PlatformMenus) {
+  constructor(
+    unlocalizedMenuData: PlatformMenus,
+    platform: typeof process.platform = process.platform,
+  ) {
     super();
+    this.platform = platform;
     this.#loadAllMenuData(unlocalizedMenuData, unlocalizedMenuData);
     this.unsubscribeOnDidResyncContributions = onDidResyncContributions(() => this.rebuildMenus());
+    this.#subscribeToInterfaceMode();
   }
 
   async rebuildMenus(): Promise<void> {
@@ -49,7 +100,8 @@ class MenuDataDataProviderEngine
 
   async getMainMenu(): Promise<Localized<MultiColumnMenu>> {
     if (!this.mainMenu) throw new Error('Missing/invalid main menu data');
-    return this.mainMenu;
+    const items = this.#buildServedItems(this.mainMenu.items);
+    return { ...this.mainMenu, items };
   }
 
   // setMainMenu doesn't use instance state but cannot be static because it implements the
@@ -61,7 +113,13 @@ class MenuDataDataProviderEngine
 
   async getUnlocalizedMainMenu(): Promise<MultiColumnMenu> {
     if (!this.unlocalizedMainMenu) throw new Error('Missing/invalid unlocalized main menu data');
-    return this.unlocalizedMainMenu;
+    // subscribeCurrentMacosMenubar (platform-macos-menubar.util.ts) builds the native macOS
+    // application menu from this data, registered unconditionally on darwin — it must apply the
+    // same interface-mode filter as getMainMenu, or a hidden item would still appear there.
+    // No shortcut hints: the native macOS menu would show a shortcut only as an Electron accelerator,
+    // and `platform-macos-menubar.util.ts` sets none.
+    const items = filterItemsForInterfaceMode(this.unlocalizedMainMenu.items, this.currentMode);
+    return { ...this.unlocalizedMainMenu, items };
   }
 
   // setUnlocalizedMainMenu doesn't use instance state but cannot be static because it implements
@@ -75,9 +133,26 @@ class MenuDataDataProviderEngine
     const webViewMenu = this.webViewMenusMap.get(webViewName);
     if (!webViewMenu) {
       logger.debug(`Missing/invalid web view menu data for web view ${webViewName}`);
-      return { contextMenu: undefined, includeDefaults: false, topMenu: undefined };
+      // A tab hosting no web view still has a tab menu, and the platform items in it apply to every
+      // tab, so an unrecognized name is answered with those rather than with nothing
+      return {
+        contextMenu: undefined,
+        includeDefaults: false,
+        topMenu: undefined,
+        tabMenu: this.#buildServedTabMenu(this.defaultTabMenu),
+      };
     }
-    return webViewMenu;
+    const topMenu = webViewMenu.topMenu
+      ? { ...webViewMenu.topMenu, items: this.#buildServedItems(webViewMenu.topMenu.items) }
+      : undefined;
+    const contextMenu = webViewMenu.contextMenu
+      ? { ...webViewMenu.contextMenu, items: this.#buildServedItems(webViewMenu.contextMenu.items) }
+      : undefined;
+    // Unlike the top and context menus, the tab menu is not opt-in: its items act on the tab frame
+    // rather than on the web view's contents, so every tab gets them whether or not the web view
+    // asked for platform defaults. A web view that contributes none of its own gets exactly these
+    const tabMenu = this.#buildServedTabMenu(webViewMenu.tabMenu ?? this.defaultTabMenu);
+    return { ...webViewMenu, topMenu, contextMenu, tabMenu };
   }
 
   // setWebViewMenu doesn't use instance state but cannot be static because it implements the
@@ -88,6 +163,11 @@ class MenuDataDataProviderEngine
   }
 
   async dispose(): Promise<boolean> {
+    this.isDisposed = true;
+    if (this.unsubscribeFromInterfaceMode) {
+      await this.unsubscribeFromInterfaceMode();
+      this.unsubscribeFromInterfaceMode = undefined;
+    }
     if (this.unsubscribeOnDidResyncContributions) {
       const success = this.unsubscribeOnDidResyncContributions();
       this.unsubscribeOnDidResyncContributions = undefined;
@@ -96,14 +176,74 @@ class MenuDataDataProviderEngine
     return true;
   }
 
+  /** Builds the tab menu to serve by building its items */
+  #buildServedTabMenu(tabMenu: Localized<SingleColumnMenu>): Localized<SingleColumnMenu> {
+    return { ...tabMenu, items: this.#buildServedItems(tabMenu.items) };
+  }
+
+  /**
+   * Builds the items to serve: removes the items hidden in the current interface mode, then adds
+   * each remaining item's shortcut hint
+   */
+  #buildServedItems<TItem extends { hiddenInterfaceModes?: InterfaceMode[] }>(
+    items: TItem[],
+  ): TItem[] {
+    return addShortcutHints(filterItemsForInterfaceMode(items, this.currentMode), this.platform);
+  }
+
+  /**
+   * Reads the initial `platform.interfaceMode` and subscribes to further changes so menu data stays
+   * live if the user switches modes without restarting. Fire-and-forget (the constructor can't be
+   * async): failures are logged, not thrown, and `isDisposed` guards against setting state or
+   * leaking a subscription if this engine is disposed before the async work resolves — mirrors the
+   * `subscribeToInterfaceMode` pattern in `web-view.service-shard.ts`'s `registerDockLayout`.
+   */
+  #subscribeToInterfaceMode(): void {
+    const subscribe = async () => {
+      try {
+        const initialMode = await settingsService.get('platform.interfaceMode');
+        if (this.isDisposed) return;
+        this.currentMode = initialMode;
+        this.notifyUpdate('*');
+
+        const unsub = await settingsService.subscribe(
+          'platform.interfaceMode',
+          (newMode) => {
+            if (isPlatformError(newMode)) {
+              logger.warn(
+                `Menu data service failed to read updated platform.interfaceMode setting: ${newMode}`,
+              );
+              return;
+            }
+            if (newMode === this.currentMode) return;
+            this.currentMode = newMode;
+            this.notifyUpdate('*');
+          },
+          { retrieveDataImmediately: false },
+        );
+
+        if (this.isDisposed) {
+          await unsub();
+        } else {
+          this.unsubscribeFromInterfaceMode = unsub;
+        }
+      } catch (error) {
+        logger.warn(`Menu data service failed to subscribe to platform.interfaceMode: ${error}`);
+      }
+    };
+    subscribe();
+  }
+
   #loadAllMenuData(unlocalizedMainMenu: PlatformMenus, menuData: Localized<PlatformMenus>): void {
     this.mainMenu = { groups: {}, items: [], columns: {} };
     this.unlocalizedMainMenu = { groups: {}, items: [], columns: {} };
+    this.defaultTabMenu = { groups: {}, items: [] };
     this.webViewMenusMap.clear();
 
     try {
       this.mainMenu = menuData.mainMenu;
       this.unlocalizedMainMenu = unlocalizedMainMenu.mainMenu;
+      this.defaultTabMenu = menuData.defaultWebViewTabMenu ?? { groups: {}, items: [] };
       const { webViewMenus } = menuData;
 
       Object.entries(webViewMenus).forEach(([webViewType, value]) => {
@@ -146,8 +286,11 @@ export async function initialize(): Promise<void> {
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingMenuDataService = {
-  implementMenuDataDataProviderEngine: (dataObj: PlatformMenus) => {
-    return new MenuDataDataProviderEngine(dataObj);
+  implementMenuDataDataProviderEngine: (
+    dataObj: PlatformMenus,
+    platform?: typeof process.platform,
+  ) => {
+    return new MenuDataDataProviderEngine(dataObj, platform);
   },
 };
 

@@ -1,4 +1,4 @@
-import { LocalizationData } from '@papi/core';
+import type { LocalizationData } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   cn,

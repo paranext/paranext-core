@@ -100,12 +100,34 @@ export function rewriteCssVarReferences(content: string, protectedVars: Set<stri
   });
 }
 
+/**
+ * Ensures a `React` default import is in scope for content that references the `React` namespace.
+ *
+ * Upstream shadcn does not always emit a React import: some generated components reference
+ * `React.ComponentProps` as a type only, which TypeScript resolves through the global namespace but
+ * ESLint's `no-undef` rule does not. The namespace-import transform is replace-only, so it leaves
+ * those files without React in scope. The import is inserted ahead of the first existing import
+ * statement, or at the top of the content when there are none.
+ */
+export function ensureReactImport(content: string): string {
+  if (!/\bReact\./.test(content)) return content;
+  if (/^import\s+(?:\*\s+as\s+)?React\b[^;]*from\s+['"]react['"]/m.test(content)) return content;
+  const importStatement = "import React from 'react';\n";
+  const firstImportIndex = content.search(/^import\s/m);
+  if (firstImportIndex === -1) return importStatement + content;
+  return content.slice(0, firstImportIndex) + importStatement + content.slice(firstImportIndex);
+}
+
 function buildFileTransformations(rootVars: Set<string>): FileTransformation[] {
   return [
     {
       description: 'React namespace import → default import',
       apply: (content) =>
         content.replace(/^import \* as React from ['"]react['"]/gm, "import React from 'react'"),
+    },
+    {
+      description: 'insert missing React default import',
+      apply: ensureReactImport,
     },
     {
       description: 'rtl:tw: → tw:rtl:',
@@ -122,11 +144,12 @@ function buildFileTransformations(rootVars: Set<string>): FileTransformation[] {
 }
 
 /**
- * Applies the three standard shadcn file transformations to each given absolute file path:
+ * Applies the four standard shadcn file transformations to each given absolute file path:
  *
  * 1. `import * as React from 'react'` → `import React from 'react'`
- * 2. `rtl:tw:` → `tw:rtl:`
- * 3. `var(--xxx)` → `var(--tw-xxx)` for Tailwind theme variables (skips vars in `rootVars` and vars
+ * 2. `import React from 'react'` inserted when the file references `React.` and has no React import
+ * 3. `rtl:tw:` → `tw:rtl:`
+ * 4. `var(--xxx)` → `var(--tw-xxx)` for Tailwind theme variables (skips vars in `rootVars` and vars
  *    declared inline in the component itself)
  *
  * Files are modified in place. Per-file errors are collected and returned rather than thrown, so

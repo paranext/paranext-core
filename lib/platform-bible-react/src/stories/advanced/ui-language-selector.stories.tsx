@@ -4,7 +4,6 @@ import {
   UiLanguageSelector,
   LanguageInfo,
 } from '@/components/advanced/ui-language-selector.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const mockKnownLanguages: Record<string, LanguageInfo> = {
   en: {
@@ -104,11 +103,9 @@ const meta: Meta<typeof UiLanguageSelector> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:max-w-md tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:max-w-md tw:p-4">
+        <Story />
+      </div>
     ),
   ],
 };

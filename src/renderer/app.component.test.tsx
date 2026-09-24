@@ -1,52 +1,98 @@
-import { App } from '@renderer/app.component';
-import { ProcessType } from '@shared/global-this.model';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import '@testing-library/jest-dom';
-import { render } from '@testing-library/react';
-import { vi } from 'vitest';
+import * as firstRunStore from '@renderer/services/first-run-store';
 
-// #region globalThis setup
-
-globalThis.processType = ProcessType.Renderer;
-globalThis.isPackaged = false;
-globalThis.resourcesPath = 'resources://';
-
-// #endregion
-
-// vi.mock factories are hoisted above imports by vitest, so top-level imports aren't available
-// inside them. Use dynamic import() within the factory to access PlatformEventEmitter.
-vi.mock('@shared/services/network.service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/services/network.service')>();
-  const { PlatformEventEmitter } = await import('platform-bible-utils');
-  return {
-    ...actual,
-    createRequestFunction:
-      (requestType: string) =>
-      async (...args: unknown[]) =>
-        `Mocked ${requestType} request with args ${args.join(', ')}`,
-    createNetworkEventEmitter: () => {
-      return new PlatformEventEmitter();
-    },
-    papiNetworkService: {
-      createNetworkEventEmitter: () => {
-        return new PlatformEventEmitter();
-      },
-      onDidClientConnect: new PlatformEventEmitter().event,
-    },
-  };
+// Safety net alongside app.component.tsx's own effect cleanup: RTL's auto-cleanup unmounts each
+// rendered tree (which now runs that effect cleanup too), but assert this directly so a future
+// regression of either one is still caught here, not just wherever the leak happens to surface.
+afterEach(() => {
+  document.body.removeAttribute('data-interface-mode');
 });
-vi.mock('@renderer/components/docking/platform-dock-layout.component', () => ({
-  __esModule: true,
-  default: /** PlatformDockLayout Mock */ () => undefined,
-  PlatformDockLayout: /** PlatformDockLayout Named Export Mock */ () => <div />,
+
+vi.mock('@renderer/services/first-run-store', async (importActual) => {
+  const actual = await importActual<typeof firstRunStore>();
+  return { ...actual, resolveFirstRunState: vi.fn().mockResolvedValue(undefined) };
+});
+// Stub heavy children so the test isolates the first-run wiring.
+// OnboardingTour is stubbed because it transitively imports papi-hooks → papi-frontend.service.ts
+// which calls window.matchMedia at module init time (not supported by jsdom without a stub).
+vi.mock('./components/onboarding-tour/onboarding-tour.component', () => ({
+  OnboardingTour: () => <div data-testid="onboarding-tour" />,
 }));
-vi.mock('@renderer/components/platform-bible-toolbar', () => ({
-  __esModule: true,
-  default: /** PlatformBibleToolbar Mock */ () => <div />,
-  PlatformBibleToolbar: /** PlatformBibleToolbar Named Export Mock */ () => <div />,
+vi.mock('@renderer/components/docking/platform-dock-layout.component', () => ({
+  PlatformDockLayout: () => undefined,
+}));
+vi.mock('./components/platform-bible-toolbar', () => ({ PlatformBibleToolbar: () => undefined }));
+vi.mock('./components/notification-display', () => ({ NotificationDisplay: () => undefined }));
+vi.mock('./components/overlay-host.component', () => ({ OverlayHost: () => undefined }));
+vi.mock('./components/overlays/overlay-workspace-updating.component', () => ({
+  WorkspaceUpdatingOverlay: () => undefined,
+}));
+vi.mock('./components/overlays/overlay-connection-lost.component', () => ({
+  ConnectionLostOverlay: () => <div data-testid="connection-lost-overlay" />,
+}));
+vi.mock('./components/first-run/first-run-overlay.component', () => ({
+  FirstRunOverlay: () => <div data-testid="first-run-overlay" />,
+}));
+vi.mock('./services/workspace-updating-service', () => ({
+  initWorkspaceUpdatingService: () => () => {},
+}));
+vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
+  useIsPowerMode: vi.fn(() => false),
 }));
 
-describe('App', () => {
-  it('should render', async () => {
-    expect(render(<App />)).toBeTruthy();
+// Import App after mocks are set up so vi.mock hoisting works correctly
+// eslint-disable-next-line import/first
+import { App } from './app.component';
+
+describe('App first-run wiring', () => {
+  it('kicks off first-run resolution on mount', () => {
+    render(<App />);
+    expect(firstRunStore.resolveFirstRunState).toHaveBeenCalled();
+  });
+
+  it('renders the first-run overlay so fresh users are gated', () => {
+    // Guards the actual wiring: resolveFirstRunState runs in its own effect, so asserting it was
+    // called does not prove <FirstRunOverlay /> is in Main's JSX. Removing the overlay must fail.
+    render(<App />);
+    expect(screen.getByTestId('first-run-overlay')).toBeInTheDocument();
+  });
+
+  it('mounts the connection-lost overlay so it is listening from startup', () => {
+    // Guards the actual wiring, the same way the first-run overlay assertion above does: the
+    // component decides for itself whether to render anything, so nothing else in this suite would
+    // notice if <ConnectionLostOverlay /> were removed from Main's JSX. Removing the mount must fail.
+    render(<App />);
+    expect(screen.getByTestId('connection-lost-overlay')).toBeInTheDocument();
+  });
+
+  it('mounts the onboarding tour so it can stand itself down when the connection drops', () => {
+    // Guards the actual wiring, as the two assertions above do. The tour decides for itself whether
+    // to render, and one of those decisions is to render nothing while the connection-lost state is
+    // up — so a tour dropped from Main's JSX looks identical to a tour that stood down correctly
+    // from inside the tour's own suite. Removing the mount must fail here.
+    render(<App />);
+    expect(screen.getByTestId('onboarding-tour')).toBeInTheDocument();
+  });
+
+  it('sets data-interface-mode="simple" on document.body when not in power mode', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    render(<App />);
+    expect(document.body.getAttribute('data-interface-mode')).toBe('simple');
+  });
+
+  it('sets data-interface-mode="power" on document.body when in power mode', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    render(<App />);
+    expect(document.body.getAttribute('data-interface-mode')).toBe('power');
+  });
+
+  it('removes data-interface-mode from document.body when App unmounts', () => {
+    const { unmount } = render(<App />);
+    expect(document.body.getAttribute('data-interface-mode')).not.toBeNull();
+    unmount();
+    expect(document.body.getAttribute('data-interface-mode')).toBeNull();
   });
 });

@@ -1,6 +1,4 @@
-import { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectData } from '@papi/frontend/react';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ColumnDef,
   getInventoryHeader,
@@ -12,15 +10,14 @@ import {
   InventoryTableData,
   Scope,
 } from 'platform-bible-react';
-import {
-  getErrorMessage,
-  isPlatformError,
-  LanguageStrings,
-  LocalizeKey,
-} from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useMemo } from 'react';
 
-const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
+/**
+ * Localization keys this inventory needs for its table headers. Resolve these via the Platform's
+ * localization hook and pass the result into the `markerInventoryStrings` prop.
+ */
+export const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_marker%',
   '%webView_inventory_table_header_preceding_marker%',
   '%webView_inventory_table_header_style_name%',
@@ -29,8 +26,6 @@ const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_show_preceding_marker%',
   '%webView_inventory_unknown_marker%',
 ];
-
-const MARKER_NAMES_DEFAULT: string[] = [];
 
 function getDescription(markerDescriptions: string[], marker: string): string | undefined {
   // Search for whole marker surrounded by whitespace or periods or at string boundaries (^ and $)
@@ -87,49 +82,44 @@ const createColumns = (
 
 type MarkerInventoryProps = {
   inventoryItems: InventorySummaryItem[] | undefined;
-  verseRef: SerializedVerseRef;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
+  /**
+   * Localized strings for this inventory's table headers; resolve via
+   * {@link MARKER_INVENTORY_STRING_KEYS}.
+   */
+  markerInventoryStrings: LanguageStrings;
+  /**
+   * Full marker descriptions (as defined in the project's USFM stylesheet) for the current book,
+   * used to resolve each marker's style-name column. Loaded by the container (webview/story)
+   * because reading them depends on the project and book reference.
+   */
+  markerNames: string[];
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
-  projectId?: string;
   areInventoryItemsLoading: boolean;
   onItemSelected?: (itemKey: string) => void;
 };
 
 export function MarkerInventory({
   inventoryItems,
-  verseRef,
   setVerseRef,
   localizedStrings,
+  markerInventoryStrings,
+  markerNames,
   approvedItems,
   onApprovedItemsChange,
   unapprovedItems,
   onUnapprovedItemsChange,
   scope,
   onScopeChange,
-  projectId,
   areInventoryItemsLoading,
   onItemSelected,
 }: MarkerInventoryProps) {
-  const [markerNamesPossiblyError] = useProjectData(
-    'platformScripture.MarkerNames',
-    projectId ?? undefined,
-  ).MarkerNames(Canon.bookIdToNumber(verseRef.book), []);
-
-  const markerNames = useMemo(() => {
-    if (isPlatformError(markerNamesPossiblyError)) {
-      logger.warn(`Error getting marker names: ${getErrorMessage(markerNamesPossiblyError)}`);
-      return MARKER_NAMES_DEFAULT;
-    }
-    return markerNamesPossiblyError;
-  }, [markerNamesPossiblyError]);
-
-  const [markerInventoryStrings] = useLocalizedStrings(MARKER_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
     () => markerInventoryStrings['%webView_inventory_table_header_marker%'],
     [markerInventoryStrings],

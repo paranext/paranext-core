@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.Services;
 using StreamJsonRpc;
 
@@ -264,11 +265,15 @@ internal class PapiClient : IDisposable
     /// <param name="requestHandler">Method that is called when a request of the specified type is received from the server</param>
     /// <param name="requestTimeout">Custom timeout for this specific request when it's called. If provided, this will be added
     /// to the shared store for use by GetRequestTimeoutMs.</param>
+    /// <param name="documentation">Optional OpenRPC documentation for this method. When provided, it
+    /// is sent to the main process and surfaces in the live OpenRPC document (e.g. carrying
+    /// <c>x-experimental: true</c>). Mirrors the TypeScript <c>registerCommand</c> docs parameter.</param>
     /// <returns><see cref="Task"/> that will resolve to true if registration was successful, false otherwise</returns>
     public virtual async Task<bool> RegisterRequestHandlerAsync(
         string requestType,
         Delegate requestHandler,
-        TimeSpan? requestTimeout = null
+        TimeSpan? requestTimeout = null,
+        OpenRpcSingleMethodDocumentation? documentation = null
     )
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
@@ -280,9 +285,15 @@ internal class PapiClient : IDisposable
         }
         _jsonRpc.AddLocalRpcMethod(requestType, requestHandler);
 
+        // The main process's registerMethod handler accepts an optional second argument carrying
+        // method documentation. Only send it when present so undocumented registrations keep their
+        // existing single-argument wire shape.
+        object?[] registerArgs = documentation is null
+            ? [requestType]
+            : [requestType, documentation];
         var registerTask = _jsonRpc.InvokeWithCancellationAsync<bool>(
             "network:registerMethod",
-            [requestType],
+            registerArgs,
             _cancellationToken
         );
 

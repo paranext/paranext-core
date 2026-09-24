@@ -1,4 +1,3 @@
-import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ColumnDef,
@@ -13,7 +12,11 @@ import {
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useMemo } from 'react';
 
-const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
+/**
+ * Localization keys this inventory needs for its table headers. Resolve these via the Platform's
+ * localization hook and pass the result into the `repeatedWordsInventoryStrings` prop.
+ */
+export const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_repeated_words%',
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
@@ -55,6 +58,11 @@ interface RepeatedWordsInventoryProps {
   inventoryItems: InventorySummaryItem[] | undefined;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
+  /**
+   * Localized strings for this inventory's table headers; resolve via
+   * {@link REPEATED_WORDS_INVENTORY_STRING_KEYS}.
+   */
+  repeatedWordsInventoryStrings: LanguageStrings;
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
@@ -69,6 +77,7 @@ export function RepeatedWordsInventory({
   inventoryItems,
   setVerseRef,
   localizedStrings,
+  repeatedWordsInventoryStrings,
   approvedItems,
   onApprovedItemsChange,
   unapprovedItems,
@@ -78,7 +87,6 @@ export function RepeatedWordsInventory({
   areInventoryItemsLoading,
   onItemSelected,
 }: RepeatedWordsInventoryProps) {
-  const [repeatedWordsInventoryStrings] = useLocalizedStrings(REPEATED_WORDS_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
     () => repeatedWordsInventoryStrings['%webView_inventory_table_header_repeated_words%'],
     [repeatedWordsInventoryStrings],

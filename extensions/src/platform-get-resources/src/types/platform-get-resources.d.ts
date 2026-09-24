@@ -8,7 +8,67 @@ declare module 'platform-get-resources' {
     DblResources: DataProviderDataType<undefined, DblResourceData[], never>;
   };
 
+  /**
+   * Whether a newer version of each resource is available from the DBL, keyed by DBL Entry UID.
+   *
+   * Only the backend can determine this — it compares the revision of the locally installed
+   * resource against the revision in the DBL catalog — so a resource missing from the map means
+   * "unknown", and callers should keep whatever value they already have rather than guessing.
+   */
+  export type DblResourceUpdateStatus = { [dblEntryUid: string]: boolean | undefined };
+
+  /**
+   * The local project id each catalogued DBL resource is installed as, keyed by DBL Entry UID. An
+   * empty string means the resource is not installed; a resource absent from the map is one the
+   * backend did not report on, and keeps whatever the caller already has.
+   *
+   * Only the backend can produce this: a resource project's id is unrelated to the DBL entry it was
+   * installed from — the entry uid is recorded in the project's settings, which is what
+   * ParatextData matches on — so nothing in the local project list identifies the catalog row it
+   * belongs to.
+   */
+  export type DblResourceInstallStatus = { [dblEntryUid: string]: string | undefined };
+
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
+    /**
+     * Recomputes whether a newer version of each known resource is available from the DBL,
+     * comparing the locally installed revision against the revision in the DBL catalog already in
+     * memory.
+     *
+     * Never contacts the DBL, and gives up rather than blocking when the provider is busy, so it is
+     * cheap enough to call on a UI refresh. In exchange it answers for only what it already knows:
+     * the result is empty if the catalog has not been fetched yet this session, or if another DBL
+     * operation (a fetch, install, or uninstall) currently holds the provider. Treat a resource
+     * missing from the result as "unknown" and keep whatever value you have.
+     *
+     * Comparing revisions across the whole catalog is not free. Prefer a background refresh; the
+     * one path that waits on it is the refresh a caller runs straight after installing, updating or
+     * removing a resource, where the user is already waiting on their own action.
+     *
+     * @returns Whether an update is available, keyed by DBL Entry UID.
+     * @experimental
+     */
+    recomputeDblResourcesUpdateStatus: () => Promise<DblResourceUpdateStatus>;
+    /**
+     * Recomputes which of the resources in the DBL catalog are installed locally, and under which
+     * project id.
+     *
+     * Callers cannot work this out for themselves: a resource project's id is unrelated to the DBL
+     * entry it was installed from, so matching a catalog row to a local project by id — exactly or
+     * by prefix — is guesswork that fails for any resource whose ids diverge.
+     *
+     * Never contacts the DBL, and gives up rather than blocking when the provider is busy. Unlike
+     * {@link recomputeDblResourcesUpdateStatus} it still answers before the catalog has been fetched
+     * — install status is a property of the machine, not of the catalog — but names only the
+     * resources that are installed until the catalog arrives, and cannot report a removal in that
+     * state. Read an empty map as "no answer" and keep the values you have; reading it as "nothing
+     * is installed" would clear every installed flag.
+     *
+     * @returns The local project id of each catalogued resource, keyed by DBL Entry UID; an empty
+     *   string for one that is not installed.
+     * @experimental
+     */
+    recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
     /**
      * Installs or updates a DBL resource to the local filesystem
      *
@@ -29,10 +89,34 @@ declare module 'platform-get-resources' {
      */
     isGetDblResourcesAvailable: () => Promise<boolean>;
   };
+
+  /**
+   * Why the DBL resource catalog cannot be shown, when it cannot.
+   *
+   * - `notConfigured` — this build has no DBL credentials, so there is no catalog to fetch and no
+   *   amount of retrying will produce one. Nothing is wrong; offering a retry here would be an
+   *   inert control attached to a false failure.
+   * - `notReady` — the resources data provider has not registered yet. Transient, so a later call can
+   *   succeed.
+   */
+  export type DblResourceCatalogUnavailableReason = 'notConfigured' | 'notReady';
+
+  /**
+   * The DBL resource catalog, or the reason there is none to show.
+   *
+   * A genuine fetch failure REJECTS rather than resolving to `unavailable`. That split is the whole
+   * point of this type: a caller can tell "this build cannot download DBL resources" (show nothing,
+   * offer no retry) from "the fetch broke" (say so, offer a retry) without having to guess at an
+   * ambiguous absent value.
+   */
+  export type DblResourceCatalog =
+    | { status: 'available'; resources: DblResourceData[] }
+    | { status: 'unavailable'; reason: DblResourceCatalogUnavailableReason };
 }
 
 declare module 'papi-shared-types' {
-  import type { IDblResourcesProvider } from 'platform-get-resources';
+  import type { DblResourceCatalog, IDblResourcesProvider } from 'platform-get-resources';
+  import type { DblResourceData } from 'platform-bible-utils';
 
   export interface DataProviders {
     'platformGetResources.dblResourcesProvider': IDblResourcesProvider;
@@ -49,9 +133,15 @@ declare module 'papi-shared-types' {
     /**
      * Opens a new Home web view and returns the WebView id
      *
+     * @param shouldShowProjectsOnly Open Home scoped to editable projects, leaving out the
+     *   published resources that otherwise share its list. Set by entry points that are asking "get
+     *   me to one of my projects"; Home's own entry points omit it and list both. Applies to the
+     *   open it is passed on only — it does not stick to the tab.
      * @returns WebView id for new Home WebView or `undefined` if not created
      */
-    'platformGetResources.openHome': () => Promise<string | undefined>;
+    'platformGetResources.openHome': (
+      shouldShowProjectsOnly?: boolean,
+    ) => Promise<string | undefined>;
 
     /**
      * Opens a "New Tab" web view and returns the WebView id
@@ -61,62 +151,64 @@ declare module 'papi-shared-types' {
      */
     'platformGetResources.openNewTab': (tabGroupId?: string) => Promise<string | undefined>;
 
-    /** @returns True if Send/Receive is available to the user, false if not */
+    /**
+     * Whether the Send/Receive extension is part of this build.
+     *
+     * @returns `true` if Send/Receive is available to the user, `false` if it is not, or
+     *   `undefined` if availability could not be determined. Treat `undefined` as unknown — never
+     *   as unavailable — since it means this extension had no way to check, not that Send/Receive
+     *   is missing.
+     */
     'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
 
     /**
-     * Commits changes in the specified project to the version history. Unless `forceCommit` is
-     * `true`, will only commit if there are changes/revisions detected.
+     * Returns DBL resources from memory cache.
      *
-     * @param projectId Id of the project
-     * @param comment Specified comment describing the change/revisions
-     * @param forceCommit Whether to force a commit even if there are no changes
-     * @returns Whether or not changes were committed
+     * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
+     * existing cached data.
+     *
+     * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
+     * @throws When the fetch itself fails. Callers that render an error state with a retry should
+     *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
+     *   change the answer.
      */
-    'paratextBibleSendReceive.commitChanges': (
-      projectId: string,
-      comment: string,
-      forceCommit?: boolean,
-    ) => Promise<boolean>;
+    'platformGetResources.getCachedResources': () => Promise<DblResourceCatalog>;
 
     /**
-     * Commits changes only if it's been a day since the last commit.
+     * Brings the catalog's derived flags (`installed`, `projectId`, `updateAvailable`) up to date
+     * and resolves once they are.
      *
-     * @param projectId Id of the project
+     * `getCachedResources` does not wait for that sync, so it is always one refresh behind: it
+     * answers from the array it already has. Call this after changing local state — installing,
+     * updating or removing a resource — and then re-read the catalog, or the read will return the
+     * flags from before the change. Without it an updated resource keeps its "update available"
+     * flag until the catalog is read a second time, because nothing else about the row changes.
+     *
+     * @experimental
      */
-    'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
+    'platformGetResources.refreshResourceFlags': () => Promise<void>;
 
     /**
-     * Syncs projects: sends/receives each project, then reads each project's connected resources
-     * and projects (one level deep — connections of connections are not included) and
-     * sends/receives connected translation projects or DBL-updates connected resources as needed.
-     * Unknown project IDs are skipped. Deduplication is handled internally.
+     * Returns locally-installed, read-only resources that are NOT in the DBL catalog (e.g. VULGP83,
+     * TNN, TND, HBK) as synthetic `DblResourceData` entries.
      *
-     * @param projectIds IDs of the projects to sync. If omitted, all shared projects that are
-     *   already present locally (i.e., not new) are synced. If provided, only projects already
-     *   present locally are synced; new projects (not yet received) and unknown IDs are skipped.
-     * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
+     * Convention: each returned entry has `dblEntryUid === projectId`, marking it as non-DBL.
+     * Callers (e.g. `selectTextConnection`) detect this and create a `ProjectReference` instead of
+     * a `DblResourceReference` so the resource is loadable without a catalog entry.
+     *
+     * @returns Synthetic resource entries for locally-installed non-DBL resources. Also returns
+     *   `[]` when the C# data provider has not registered its projects yet or the lookup threw —
+     *   callers cannot distinguish those from a genuine "no local non-DBL resources" result, so a
+     *   caller that needs a retry or loading affordance must get that signal from elsewhere.
      */
-    'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
+    'platformGetResources.getLocalNonDblResources': () => Promise<DblResourceData[]>;
 
-    /**
-     * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
-     * them.
-     *
-     * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
-     */
-    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
-
-    /**
-     * Cancels an in-progress sync operation if one is running. The process will finish dealing with
-     * the current project/resource and then it will abort. It will not undo what has been done.
-     *
-     * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
-     */
-    'paratextBibleSendReceive.cancelSync': () => Promise<void>;
+    // `paratextBibleSendReceive.*` commands are deliberately NOT declared here. This file is
+    // auto-included (via `typeRoots`) into the TypeScript programs of extension repos developed
+    // against core — including the closed-source Send/Receive extension itself, where duplicate or
+    // drifted declarations collide with the authoritative ones. Core's copy of the Send/Receive
+    // seam lives in `src/@types/paratext-bible-send-receive/`, which external extension programs
+    // do not include.
   }
 
   export interface SettingTypes {

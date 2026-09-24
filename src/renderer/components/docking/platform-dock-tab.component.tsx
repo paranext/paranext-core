@@ -1,19 +1,34 @@
-import { TabInfo } from '@shared/models/docking-framework.model';
+import { TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 
-import { TAB_GROUP } from './platform-dock-layout-positioning.util';
+import { getTabGroup } from './platform-dock-layout-positioning.util';
 import { PlatformPanel } from './platform-panel.component';
 import { PlatformTabTitle } from './platform-tab-title.component';
 import { RCDockTabInfo } from './docking-framework-internal.model';
 
 /**
+ * Options for {@link createRCDockTabFromTabInfo}.
+ *
+ * Using an options object instead of positional parameters so future tab-construction options can
+ * be added without re-arranging callers.
+ */
+export type CreateRCDockTabOptions = {
+  /** If true, the returned tab will start flashing when next rendered. Defaults to `false`. */
+  shouldFlash?: boolean;
+};
+
+/**
  * Creates a tab ready to go into rc-dock from platform tab info
  *
  * @param tabInfo Data used to create the rc-dock tab
- * @param shouldFlash If true, the tab info will be adjusted to start flashing when next rendered.
- *   Defaults to `false`
+ * @param options Construction options (see {@link CreateRCDockTabOptions}).
  * @returns Rc-dock tab created from `tabInfo`
  */
-export function createRCDockTabFromTabInfo(tabInfo: TabInfo, shouldFlash = false): RCDockTabInfo {
+export function createRCDockTabFromTabInfo(
+  tabInfo: TabInfo,
+  options: CreateRCDockTabOptions = {},
+): RCDockTabInfo {
+  const { shouldFlash = false } = options;
   // Update the flash trigger time if we are supposed to bring the tab to the front
   const flashTriggerTime = shouldFlash ? Date.now() : tabInfo.flashTriggerTime;
 
@@ -28,11 +43,26 @@ export function createRCDockTabFromTabInfo(tabInfo: TabInfo, shouldFlash = false
         tooltip={tabInfo.tabTooltip}
         flashTriggerTime={flashTriggerTime}
         id={tabInfo.id}
+        // For WebView tabs, the tab id IS the web view id
+        webViewId={tabInfo.tabType === TAB_TYPE_WEBVIEW ? tabInfo.id : undefined}
+        // Names the contributed menu to show on this tab. A tab hosting no WebView has no such
+        // name, and the menu data service answers that with the platform's own tab items
+        webViewType={
+          tabInfo.tabType === TAB_TYPE_WEBVIEW
+            ? // The tab's data is the web view's saved definition for WebView tabs
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              (tabInfo.data as SavedWebViewDefinition | undefined)?.webViewType
+            : undefined
+        }
       />
     ),
     content: <PlatformPanel id={tabInfo.id}>{tabInfo.content}</PlatformPanel>,
-    group: TAB_GROUP,
-    closable: true,
+    group: getTabGroup(tabInfo),
+    // Tabs are closable by default; a WebView can opt out by setting `isClosable: false` (e.g. the
+    // fixed 3-column simple-mode layout's own webviews, which force this per interface mode so
+    // floating dialogs like About/Settings stay closable in simple mode while the fixed columns
+    // don't — see each webview provider's own `isClosable` computation).
+    closable: tabInfo.isClosable ?? true,
   };
 }
 

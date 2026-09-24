@@ -1,7 +1,7 @@
 import { protocol } from 'electron';
 import { StatusCodes } from 'http-status-codes';
 import { extensionAssetService } from '@shared/services/extension-asset.service';
-import { getErrorMessage, lastIndexOf, substring } from 'platform-bible-utils';
+import { getErrorMessage } from 'platform-bible-utils';
 import { getAssetPathInfoFromExtensionUri } from '@shared/utils/extension-asset.utils';
 import { logger } from '@shared/services/logger.service';
 
@@ -28,13 +28,16 @@ const knownMimeTypes = {
   '.svg': 'image/svg+xml',
   '.txt': 'text/plain',
   '.wav': 'audio/wav',
+  '.webp': 'image/webp',
 };
 
 /** Lookup the MIME type to pass back to the renderer */
 function getMimeTypeForFileName(fileName: string): string {
-  const dotIndex = lastIndexOf(fileName, '.');
+  const dotIndex = fileName.lastIndexOf('.');
   if (dotIndex > 0) {
-    const fileType: string = substring(fileName, dotIndex);
+    // Lowercased because the table's keys are: a file named `logo.PNG` is still a PNG, and this
+    // must agree with `getMimeTypeForImageId`, which serves the same kinds of file over `papi-er:`
+    const fileType: string = fileName.substring(dotIndex).toLowerCase();
     // Assert key type confirmed in check.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     if (fileType in knownMimeTypes) return knownMimeTypes[fileType as keyof typeof knownMimeTypes];

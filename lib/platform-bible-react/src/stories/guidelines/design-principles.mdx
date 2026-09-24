@@ -1,7 +1,5 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 import { Button } from '@/components/shadcn-ui/button';
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/shadcn-ui/tooltip';
-import { Save } from 'lucide-react';
 import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
 
 <Meta title="Guidelines/Design Principles" />
@@ -73,27 +71,7 @@ In dialogs and popovers, the discard button should use `variant="secondary"` or 
 
 ### Button labels
 
-Labels should communicate what will happen — even if the user skips the surrounding text. Use a specific action verb. Avoid **OK**: users learn to dismiss it without reading, which turns dialogs into interruptions rather than decisions.
-
-**Cancel** is sometimes appropriate, but a more descriptive alternative is usually clearer. Both buttons should be self-explanatory taken together.
-
-**Example scenario:** A user writes a comment, then tries to navigate away. The app needs to know: submit the comment or discard it? Draft-saving is not an option.
-
-|            | Dismiss | Confirm |
-| ---------- | ------- | ------- |
-| Avoid      | Cancel  | OK      |
-| Acceptable | Cancel  | Comment |
-| Preferred  | Discard | Comment |
-
-<ExampleBlockGroup>
-  <ExampleBlock variant="dont" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Cancel</Button><Button>OK</Button></div>}>
-    Neither label explains what will happen — users dismiss without reading.
-  </ExampleBlock>
-
-  <ExampleBlock variant="do" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Discard</Button><Button>Comment</Button></div>}>
-    Both actions are self-evident — the choice is clear without reading surrounding text.
-  </ExampleBlock>
-</ExampleBlockGroup>
+Button *labels* — the words, and which apply model they express — are covered in [Applying Changes](?path=/docs/guidelines-applying-changes--docs#microcopy). In short: avoid **OK** (users dismiss it without reading), and use a specific action verb so the label says what will happen. This page owns how dialog buttons **look and arrange** (order, variant, icon, above); Applying Changes owns what they **say**.
 
 ### ButtonGroup
 
@@ -107,109 +85,12 @@ Every icon-only button must have an `aria-label`. Screen readers cannot infer me
 
 ## Tooltips
 
-Tooltips are required for every icon button and any control without a visible label — including toolbar items. At the same time, tooltips are supplementary. If the tooltip would only repeat the visible label, omit it.
+Tooltips are required for every icon button and any control without a visible label — including
+toolbar items. Tooltips are supplementary: if the tooltip would only repeat the visible label,
+omit it. Keep tooltip text short enough to scan at a glance.
 
-<ExampleBlockGroup>
-  <ExampleBlock
-    variant="dont"
-    previewClassName="tw:pb-8"
-    preview={
-  <Button variant="outline" size="icon" aria-label="Save">
-    <Save />
-  </Button>
-}
-  >
-    This icon button lacks a tooltip, so users can't learn what it means.
-  </ExampleBlock>
-
-  <ExampleBlock
-    title="Avoid redundant tooltips"
-    variant="dont"
-    previewClassName="tw:pb-8"
-    preview={
-  <TooltipProvider>
-    <Tooltip open>
-      <TooltipTrigger asChild>
-        <Button>Save</Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">Save</TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-}
-  >
-    The tooltip only repeats the visible label — omit it.
-  </ExampleBlock>
-</ExampleBlockGroup>
-
-Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an explanation.
-
-<ExampleBlockGroup>
-  <ExampleBlock
-    variant="dont"
-    previewClassName="tw:pb-16"
-    preview={
-  <TooltipProvider>
-    <Tooltip open>
-      <TooltipTrigger asChild>
-        <Button variant="outline" size="icon" aria-label="Save">
-          <Save />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" className="tw:max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-}
-  >
-    Too long to scan — a tooltip is a hint, not a sentence.
-  </ExampleBlock>
-
-  <ExampleBlock
-    variant="do"
-    previewClassName="tw:pb-16"
-    preview={
-  <TooltipProvider>
-    <Tooltip open>
-      <TooltipTrigger asChild>
-        <Button variant="outline" size="icon" aria-label="Save">
-          <Save />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">Save changes</TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-}
-  >
-    The tooltip adds meaning an icon alone cannot convey, and it's short enough to read at a glance.
-  </ExampleBlock>
-</ExampleBlockGroup>
-
-### Keyboard shortcuts in tooltips
-
-Render keyboard shortcut hints using the HTML `<kbd>` element, not plain text in parentheses. The `<kbd>` styling provides sufficient visual distinction on its own — no parentheses needed.
-
-<ExampleBlockGroup>
-  <ExampleBlock
-    variant="do"
-    preview={<span>Undo <kbd className="tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:text-xs tw:font-mono">
-⌘Z
-</kbd></span>}
-    code="Undo <kbd>⌘</kbd><kbd>Z</kbd>"
-  >
-    The <code>kbd</code> element provides visual distinction without extra punctuation.
-  </ExampleBlock>
-
-  <ExampleBlock variant="dont" preview={<span>Undo (⌘Z)</span>} code="Undo (⌘Z)">
-    Parentheses blend into prose and don't signal "keyboard shortcut" to the reader.
-  </ExampleBlock>
-</ExampleBlockGroup>
-
-Use the shared `Kbd` component from `platform-bible-react` instead of styling `<kbd>` inline:
-
-```tsx
-import { Kbd } from 'platform-bible-react';
-
-<Kbd>⌘Z</Kbd>
-```
+For full tooltip guidance — when to use a tooltip vs. a popover, keyboard-shortcut formatting,
+and patterns under consideration — see [Tooltips](./tooltips.mdx).
 
 ---
 
@@ -217,6 +98,14 @@ import { Kbd } from 'platform-bible-react';
 
 All interactive UI must be keyboard navigable. Focus should be indicated by a focus ring by default, unless UX specifies otherwise for a specific component.
 
+One such exception: when a menu closes after pointer use, focus returns to its trigger without the ring. See "Restore focus on close" in [Dismissal Patterns](?path=/docs/guidelines-dismissal-patterns--docs#accessibility).
+
 Be aware that the focus ring sometimes goes on a **container** rather than the interactive element itself. For example, when a text input field contains buttons, the focus ring wraps the entire container — not each individual button.
+
+### Keyboard shortcut catalog
+
+Every keyboard shortcut in the entire application — main process, bundled extensions, and this component library — is documented in one curated catalog, so there is a single place to see what shortcuts exist, what they do, and where they are handled in code. It lives in the main Platform.Bible Storybook under **Reference → Keyboard shortcuts**.
+
+**Definition of Done:** when you add, change, or remove any keyboard shortcut — a `keydown`/`keyup` handler, an Electron accelerator or `before-input-event` branch, or a `useHotkeys` binding — you must add, update, or remove its entry in the single catalog data file `src/shared/data/keyboard-shortcuts.data.ts` as part of the same change. A shortcut change that leaves the catalog stale is not done.
 
 See also: [Responsiveness](./responsiveness.mdx) for minimum width requirements and container query guidance.

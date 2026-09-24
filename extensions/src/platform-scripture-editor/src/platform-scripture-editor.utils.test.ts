@@ -1,8 +1,55 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
-import { UsjTextContentLocation } from 'platform-bible-utils';
-import { convertScriptureRangeToEditorRange } from './platform-scripture-editor.utils';
+import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
+import type { SavedWebViewDefinition } from '@papi/core';
+import { MutableRefObject } from 'react';
+import type { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
+import {
+  convertScriptureRangeToEditorRange,
+  decideNoteCallerClickAction,
+  finalizeProjectSwitch,
+  formatEditorTitle,
+  getTabTitleProjectName,
+  generateParagraphMenuListItems,
+  getNextViewTypeInCycle,
+  openDefaultActiveProjectIfApplicable,
+  resolveOpenEditorDispatch,
+  resolveViewTypeForInterfaceMode,
+  syncOnProjectSwitch,
+  openOrUpdateRelatedPanels,
+  buildScriptureTextGridWebView,
+  resolveGridProviderProjectId,
+  updateRelatedTextCollectionPanel,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+  type OpenEditorDispatch,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  selectProjectIdsForOpenMode,
+  startDefaultProjectPicker,
+  toScriptureEditorInfos,
+  isBlankChapterOnScreen,
+  isChapterBlank,
+  buildChapterScaffoldOps,
+  canAddChapterNumber,
+  resolveAddChapterNumberClick,
+  isMissingBookError,
+  isMissingBookOnScreen,
+  parseMissingBookError,
+  resolveResourceContentState,
+} from './platform-scripture-editor.utils';
+
+/** Build a mock editor ref exposing spies for the methods the generators call. */
+function makeMockEditorRef() {
+  const formatPara = vi.fn();
+  const insertMarker = vi.fn();
+  // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const ref = {
+    current: { formatPara, insertMarker },
+  } as unknown as MutableRefObject<EditorRef | null>;
+  return { ref, formatPara, insertMarker };
+}
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
 const SAMPLE_USJ_CHAPTER = Object.freeze({
@@ -396,3 +443,3262 @@ describe('convertScriptureRangeToEditorRange', () => {
     });
   });
 });
+
+// #region openDefaultActiveProjectIfApplicable
+
+interface PickerMocks {
+  papi: typeof PapiBackend;
+  mockGetSetting: ReturnType<typeof vi.fn>;
+  mockGetAllOpenWebViewDefinitions: ReturnType<typeof vi.fn>;
+  mockSendCommand: ReturnType<typeof vi.fn>;
+  mockWarn: ReturnType<typeof vi.fn>;
+  mockInfo: ReturnType<typeof vi.fn>;
+  mockDebug: ReturnType<typeof vi.fn>;
+  mockProjectDataProvidersGet: ReturnType<typeof vi.fn>;
+  mockDataProvidersGet: ReturnType<typeof vi.fn>;
+  mockRecordProjectOpened: ReturnType<typeof vi.fn>;
+  mockRecentProjectsGet: ReturnType<typeof vi.fn>;
+  /**
+   * Sets the `canUserEditScripture` mock return value for a specific project id. Values default to
+   * `true` for any project id not configured. Call before triggering the picker.
+   */
+  setCanUserEditScripture: (projectId: string, canEdit: boolean) => void;
+  /** Sets the list of recently opened project IDs. */
+  setRecentProjects: (ids: string[]) => void;
+  /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
+  fireWebViewOpen: () => void;
+  /**
+   * Synthesize a `webViews.onDidUpdateWebView` event from within a test. The driver filters to
+   * Scripture Editor updates, so the default `webViewType` is `SCRIPTURE_EDITOR_WEBVIEW_TYPE`; pass
+   * another value to simulate an unrelated webview update.
+   */
+  fireWebViewUpdate: (webViewType?: string) => void;
+  /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
+  fireSync: (event: { isSyncing: boolean }) => void;
+  /** `true` once the driver has unsubscribed from `onDidOpenWebView`. */
+  isWebViewOpenUnsubscribed: () => boolean;
+  /** `true` once the driver has unsubscribed from `onDidUpdateWebView`. */
+  isWebViewUpdateUnsubscribed: () => boolean;
+  /** `true` once the driver has unsubscribed from `onSyncStateChanged`. */
+  isSyncUnsubscribed: () => boolean;
+}
+
+function createPickerMocks(): PickerMocks {
+  const mockGetSetting = vi.fn();
+  const mockGetAllOpenWebViewDefinitions = vi.fn();
+  const mockSendCommand = vi.fn();
+  const mockWarn = vi.fn();
+  const mockInfo = vi.fn();
+  const mockDebug = vi.fn();
+
+  // The driver subscribes to these events; we capture each listener so tests can drive events.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let webViewOpenListener: ((evt: any) => void) | undefined;
+  let webViewOpenUnsubscribed = false;
+  const mockOnDidOpenWebView = vi.fn((listener) => {
+    webViewOpenListener = listener;
+    return () => {
+      webViewOpenUnsubscribed = true;
+      webViewOpenListener = undefined;
+    };
+  });
+
+  // Mirrors the open-event capture above — the driver subscribes to `onDidUpdateWebView` too, and
+  // we capture the listener so tests can drive update events.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let webViewUpdateListener: ((evt: any) => void) | undefined;
+  let webViewUpdateUnsubscribed = false;
+  const mockOnDidUpdateWebView = vi.fn((listener) => {
+    webViewUpdateListener = listener;
+    return () => {
+      webViewUpdateUnsubscribed = true;
+      webViewUpdateListener = undefined;
+    };
+  });
+
+  let syncListener: ((evt: { isSyncing: boolean }) => void) | undefined;
+  let syncUnsubscribed = false;
+  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: typeof syncListener) => {
+    if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
+      syncListener = listener;
+    }
+    return () => {
+      if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
+        syncUnsubscribed = true;
+        syncListener = undefined;
+      }
+    };
+  });
+
+  // Per-project Observer/editor role. Defaults to `true` (editable) so existing tests written
+  // before role partitioning continue to pass. The picker queries the narrow
+  // `platformScripture.scriptureEditPermissions` projectInterface; tests configure that PDP's
+  // `canUserEditScripture` method via `setCanUserEditScripture`.
+  const canUserEditScriptureByProjectId = new Map<string, boolean>();
+  const setCanUserEditScripture = (projectId: string, canEdit: boolean) => {
+    canUserEditScriptureByProjectId.set(projectId, canEdit);
+  };
+  const mockProjectDataProvidersGet = vi.fn(async (_interface: string, projectId: string) => ({
+    canUserEditScripture: async () => canUserEditScriptureByProjectId.get(projectId) ?? true,
+  }));
+
+  const mockRecentProjects: string[] = [];
+  const mockRecentProjectsGet = vi.fn().mockImplementation(async () => [...mockRecentProjects]);
+  const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
+  const mockDataProvidersGet = vi.fn().mockImplementation(async (name: string) => {
+    if (name === 'platformScripture.recentlyOpenedProjects') {
+      return {
+        getRecentProjects: mockRecentProjectsGet,
+        recordProjectOpened: mockRecordProjectOpened,
+      };
+    }
+    return undefined;
+  });
+
+  // Mocking just the parts of PAPI the picker and its driver touch at runtime.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    settings: { get: mockGetSetting },
+    webViews: {
+      getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
+      onDidOpenWebView: mockOnDidOpenWebView,
+      onDidUpdateWebView: mockOnDidUpdateWebView,
+    },
+    commands: { sendCommand: mockSendCommand },
+    network: { getNetworkEvent: mockGetNetworkEvent },
+    projectDataProviders: { get: mockProjectDataProvidersGet },
+    dataProviders: { get: mockDataProvidersGet },
+    logger: { warn: mockWarn, info: mockInfo, debug: mockDebug },
+  } as unknown as typeof PapiBackend;
+
+  return {
+    papi,
+    mockGetSetting,
+    mockGetAllOpenWebViewDefinitions,
+    mockSendCommand,
+    mockWarn,
+    mockInfo,
+    mockDebug,
+    mockProjectDataProvidersGet,
+    mockDataProvidersGet,
+    mockRecordProjectOpened,
+    mockRecentProjectsGet,
+    setCanUserEditScripture,
+    setRecentProjects: (ids: string[]) => {
+      mockRecentProjects.length = 0;
+      mockRecentProjects.push(...ids);
+    },
+    fireWebViewOpen: () => {
+      if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
+      webViewOpenListener({});
+    },
+    fireWebViewUpdate: (webViewType: string = SCRIPTURE_EDITOR_WEBVIEW_TYPE) => {
+      if (!webViewUpdateListener) throw new Error('fireWebViewUpdate: no listener captured');
+      webViewUpdateListener({ webView: { webViewType } });
+    },
+    fireSync: (event) => {
+      if (!syncListener) throw new Error('fireSync: no listener captured');
+      syncListener(event);
+    },
+    isWebViewOpenUnsubscribed: () => webViewOpenUnsubscribed,
+    isWebViewUpdateUnsubscribed: () => webViewUpdateUnsubscribed,
+    isSyncUnsubscribed: () => syncUnsubscribed,
+  };
+}
+
+// Helper: getAllOpenWebViewDefinitions returns WebViewDefinition[], but test fixtures here are
+// plain objects that satisfy only a subset of that interface. Casting through never avoids
+// constructing full WebViewDefinition objects in tests.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const asWebViews = (arr: object[]) => arr as never;
+
+describe('openDefaultActiveProjectIfApplicable', () => {
+  it("returns 'wrong-mode' when interfaceMode is not 'simple'", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('power');
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('wrong-mode');
+    expect(mockGetAllOpenWebViewDefinitions).not.toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it("returns 'wrong-mode' and warns when settings.get returns a PlatformError", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand, mockWarn } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue({
+      platformErrorVersion: 1,
+      message: 'simulated platform error',
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('wrong-mode');
+    expect(mockGetAllOpenWebViewDefinitions).not.toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it("returns 'no-empty' when no Scripture Editor with undefined projectId is open", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([
+        { webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: 'project1' },
+        { webViewType: 'someOtherType', projectId: undefined },
+      ]),
+    );
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-empty');
+    expect(mockGetAllOpenWebViewDefinitions).toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it("returns 'no-send-receive' when getSharedProjects rejects (S/R not registered yet)", async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockWarn,
+      mockDebug,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        throw new Error("Command 'paratextBibleSendReceive.getSharedProjects' is not registered");
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-send-receive');
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
+    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
+      'platformScriptureEditor.openScriptureEditor',
+    );
+    // Expected steady state on Platform.Bible — logged at debug, not warn.
+    expect(mockDebug).toHaveBeenCalled();
+    expect(mockWarn).not.toHaveBeenCalled();
+  });
+
+  it("returns 'no-candidate' when all entries have editedStatus 'new'", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'new',
+            lastSendReceiveDate: '2024-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-candidate');
+  });
+
+  it('picks the project with the highest lastSendReceiveDate and calls openScriptureEditor', async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          older: {
+            id: 'older',
+            name: 'Older',
+            fullName: 'Older',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2024-01-01T00:00:00Z',
+          },
+          newer: {
+            id: 'newer',
+            name: 'Newer',
+            fullName: 'Newer',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+          stillOlder: {
+            id: 'stillOlder',
+            name: 'StillOlder',
+            fullName: 'StillOlder',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2023-01-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        return 'opened-webview-id';
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'newer',
+    );
+  });
+
+  it("skips entries with editedStatus 'new' or 'unregistered' and picks the newest of the rest", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          notDownloaded: {
+            id: 'notDownloaded',
+            name: 'ND',
+            fullName: 'ND',
+            language: 'en',
+            editedStatus: 'new',
+            lastSendReceiveDate: '2025-12-01T00:00:00Z',
+          },
+          limitedLicense: {
+            id: 'limitedLicense',
+            name: 'LL',
+            fullName: 'LL',
+            language: 'en',
+            editedStatus: 'unregistered',
+            lastSendReceiveDate: '2025-11-01T00:00:00Z',
+          },
+          downloaded: {
+            id: 'downloaded',
+            name: 'D',
+            fullName: 'D',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'downloaded',
+    );
+  });
+
+  it("returns 'no-candidate' when all entries have editedStatus 'unregistered'", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'unregistered',
+            lastSendReceiveDate: '2024-01-01T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-candidate');
+  });
+
+  it("returns 'failed' when the openScriptureEditor command rejects", async () => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand, mockWarn } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'P1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        throw new Error('open failed');
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('failed');
+    expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it('records the opened project as recently-opened on the filled path', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecordProjectOpened,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        return 'opened-webview-id';
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj1');
+    expect(mockRecordProjectOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it('still reports filled even if recordProjectOpened throws', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecordProjectOpened,
+      mockWarn,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        return 'opened-webview-id';
+      }
+      return undefined;
+    });
+    mockRecordProjectOpened.mockRejectedValueOnce(new Error('storage write blew up'));
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it('does not record when openScriptureEditor fails', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecordProjectOpened,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        throw new Error('open failed');
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('failed');
+    expect(mockRecordProjectOpened).not.toHaveBeenCalled();
+  });
+
+  it('still reports filled when dataProviders.get returns undefined', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockDataProvidersGet,
+      mockRecordProjectOpened,
+      mockWarn,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        return 'opened-webview-id';
+      }
+      return undefined;
+    });
+    // Override the default mock so dataProviders.get returns undefined for the recents service.
+    mockDataProvidersGet.mockResolvedValue(undefined);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockRecordProjectOpened).not.toHaveBeenCalled();
+    expect(mockWarn).not.toHaveBeenCalled();
+  });
+
+  it('picks the editable project even when an Observer-only project has a newer lastSendReceiveDate', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          editableProject: {
+            id: 'editableProject',
+            name: 'Editable',
+            fullName: 'Editable Project',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-19T00:00:00Z',
+          },
+          observerProject: {
+            id: 'observerProject',
+            name: 'Observer',
+            fullName: 'Observer Project',
+            language: 'en',
+            editedStatus: 'edited',
+            // Observer is *more recently* S/R'd than the editable one.
+            lastSendReceiveDate: '2026-05-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('editableProject', true);
+    setCanUserEditScripture('observerProject', false);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'editableProject',
+    );
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'observerProject',
+    );
+  });
+
+  // #region Single-project scenarios
+
+  it('opens the only project when it is editable', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          only: {
+            id: 'only',
+            name: 'Only',
+            fullName: 'Only Project',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-19T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('only', true);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'only',
+    );
+  });
+
+  it("opens the only project when it has never been S/R'd", async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          neverSynced: {
+            id: 'neverSynced',
+            name: 'Never',
+            fullName: 'Never Synced',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('neverSynced', true);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'neverSynced',
+    );
+  });
+
+  it('opens the only project when it is Observer-only (lone-Observer fallback policy)', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          onlyObserver: {
+            id: 'onlyObserver',
+            name: 'OnlyObs',
+            fullName: 'Only Observer Project',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-19T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('onlyObserver', false);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'onlyObserver',
+    );
+  });
+
+  it.each([
+    {
+      label: "editedStatus 'new' (not yet downloaded)",
+      info: {
+        id: 'newProject',
+        name: 'New',
+        fullName: 'New Project',
+        language: 'en',
+        editedStatus: 'new',
+        lastSendReceiveDate: '2026-05-19T00:00:00Z',
+      },
+    },
+    {
+      label: "editedStatus 'unregistered'",
+      info: {
+        id: 'unregProject',
+        name: 'Unreg',
+        fullName: 'Unregistered Project',
+        language: 'en',
+        editedStatus: 'unregistered',
+        lastSendReceiveDate: '2026-05-19T00:00:00Z',
+      },
+    },
+  ])("returns 'no-candidate' when the only project is filtered out by $label", async ({ info }) => {
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return { [info.id]: info };
+      }
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-candidate');
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      info.id,
+    );
+  });
+
+  // #endregion Single-project scenarios
+
+  // #region Multi-project scenarios
+
+  it('picks the newer-S/R editable project when both candidates are editable', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          older: {
+            id: 'older',
+            name: 'Older',
+            fullName: 'Older Editable',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-18T00:00:00Z',
+          },
+          newer: {
+            id: 'newer',
+            name: 'Newer',
+            fullName: 'Newer Editable',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('older', true);
+    setCanUserEditScripture('newer', true);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'newer',
+    );
+  });
+
+  it("picks the S/R'd editable project over a never-synced editable project", async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          neverSynced: {
+            id: 'neverSynced',
+            name: 'Never',
+            fullName: 'Never Synced',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '',
+          },
+          synced: {
+            id: 'synced',
+            name: 'Synced',
+            fullName: 'Synced Editable',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-18T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('neverSynced', true);
+    setCanUserEditScripture('synced', true);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'synced',
+    );
+  });
+
+  it('picks the older editable project when newer projects are all Observer-only', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          olderEditable: {
+            id: 'olderEditable',
+            name: 'OldEd',
+            fullName: 'Older Editable',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-15T00:00:00Z',
+          },
+          newerObserverA: {
+            id: 'newerObserverA',
+            name: 'NewObsA',
+            fullName: 'Newer Observer A',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-19T00:00:00Z',
+          },
+          newerObserverB: {
+            id: 'newerObserverB',
+            name: 'NewObsB',
+            fullName: 'Newer Observer B',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('olderEditable', true);
+    setCanUserEditScripture('newerObserverA', false);
+    setCanUserEditScripture('newerObserverB', false);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'olderEditable',
+    );
+  });
+
+  it('falls back to the newest Observer-only project when all candidates are Observer-only', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          olderObserver: {
+            id: 'olderObserver',
+            name: 'Older',
+            fullName: 'Older Observer',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-15T00:00:00Z',
+          },
+          newerObserver: {
+            id: 'newerObserver',
+            name: 'Newer',
+            fullName: 'Newer Observer',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('olderObserver', false);
+    setCanUserEditScripture('newerObserver', false);
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'newerObserver',
+    );
+  });
+
+  it('filters editedStatus before role, then sorts editable by recency', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          notDownloaded: {
+            id: 'notDownloaded',
+            name: 'NotDl',
+            fullName: 'Not Downloaded',
+            language: 'en',
+            editedStatus: 'new',
+            lastSendReceiveDate: '2026-05-21T00:00:00Z',
+          },
+          unregistered: {
+            id: 'unregistered',
+            name: 'Unreg',
+            fullName: 'Unregistered',
+            language: 'en',
+            editedStatus: 'unregistered',
+            lastSendReceiveDate: '2026-05-21T00:00:00Z',
+          },
+          editableNewer: {
+            id: 'editableNewer',
+            name: 'EdNew',
+            fullName: 'Editable Newer',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-20T00:00:00Z',
+          },
+          observerNewest: {
+            id: 'observerNewest',
+            name: 'ObsNew',
+            fullName: 'Observer Newest',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-21T00:00:00Z',
+          },
+          editableOlder: {
+            id: 'editableOlder',
+            name: 'EdOld',
+            fullName: 'Editable Older',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-15T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('editableNewer', true);
+    setCanUserEditScripture('editableOlder', true);
+    setCanUserEditScripture('observerNewest', false);
+    // 'notDownloaded' and 'unregistered' should be filtered before role lookup; their role
+    // mocks don't need to be set.
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'editableNewer',
+    );
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'observerNewest',
+    );
+  });
+
+  // #endregion Multi-project scenarios
+
+  // #region Error and edge cases
+
+  it('treats a project whose canUserEditScripture rejects as Observer-only', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+      setCanUserEditScripture,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          editable: {
+            id: 'editable',
+            name: 'Ed',
+            fullName: 'Editable',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-19T00:00:00Z',
+          },
+          throws: {
+            id: 'throws',
+            name: 'Throws',
+            fullName: 'Throws Project',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    setCanUserEditScripture('editable', true);
+    // Override the default `projectDataProviders.get` for the 'throws' id to return a PDP whose
+    // canUserEditScripture rejects.
+    mockProjectDataProvidersGet.mockImplementation(
+      async (_interface: string, projectId: string) => {
+        if (projectId === 'throws') {
+          return {
+            canUserEditScripture: async () => {
+              throw new Error('simulated role-lookup failure');
+            },
+          };
+        }
+        return {
+          canUserEditScripture: async () => projectId === 'editable',
+        };
+      },
+    );
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'editable',
+    );
+  });
+
+  it('treats a project whose projectDataProviders.get rejects as Observer-only', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          editable: {
+            id: 'editable',
+            name: 'Ed',
+            fullName: 'Editable',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-19T00:00:00Z',
+          },
+          unreachable: {
+            id: 'unreachable',
+            name: 'Unr',
+            fullName: 'Unreachable Project',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    mockProjectDataProvidersGet.mockImplementation(
+      async (_interface: string, projectId: string) => {
+        if (projectId === 'unreachable') {
+          throw new Error('simulated PDP-get failure');
+        }
+        return {
+          canUserEditScripture: async () => projectId === 'editable',
+        };
+      },
+    );
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'editable',
+    );
+  });
+
+  it('treats a project whose PDP does not advertise scriptureEditPermissions as Observer-only', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockProjectDataProvidersGet,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          editable: {
+            id: 'editable',
+            name: 'Ed',
+            fullName: 'Editable',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-19T00:00:00Z',
+          },
+          undefinedPdp: {
+            id: 'undefinedPdp',
+            name: 'NoIface',
+            fullName: 'Project Without scriptureEditPermissions',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-05-20T00:00:00Z',
+          },
+        };
+      }
+      return undefined;
+    });
+    // Simulate a PDP that doesn't advertise `platformScripture.scriptureEditPermissions` by
+    // returning `undefined` from `projectDataProviders.get` for that id. The picker must treat
+    // this case as Observer-equivalent rather than crashing.
+    mockProjectDataProvidersGet.mockImplementation(
+      async (_interface: string, projectId: string) => {
+        if (projectId === 'undefinedPdp') return undefined;
+        return {
+          canUserEditScripture: async () => projectId === 'editable',
+        };
+      },
+    );
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'editable',
+    );
+  });
+
+  // #endregion Error and edge cases
+
+  // #region Recents-first behavior (Tasks 2-4)
+
+  it("returns 'filled' from recents and does not call S/R when a recent project opens", async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecordProjectOpened,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['proj-recent']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'proj-recent',
+    );
+    expect(mockSendCommand).not.toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-recent');
+  });
+
+  it('tries each recent project in order and opens the first one that succeeds', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecordProjectOpened,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['proj-gone', 'proj-alive']);
+    mockSendCommand.mockImplementation(async (commandName: string, projectId?: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') {
+        if (projectId === 'proj-gone') throw new Error('Project not found');
+        return undefined;
+      }
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledTimes(2);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'proj-gone',
+    );
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.openScriptureEditor',
+      'proj-alive',
+    );
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-alive');
+    expect(mockSendCommand).not.toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
+  });
+
+  it('falls through to S/R when all recent projects fail to open', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['proj-gone']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor')
+        throw new Error('Project not found');
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects')
+        throw new Error('S/R not registered');
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-send-receive');
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
+  });
+
+  it('falls through to S/R when recentlyOpenedProjects service is unavailable', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockDataProvidersGet,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockDataProvidersGet.mockResolvedValue(undefined);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects')
+        throw new Error('S/R not registered');
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-send-receive');
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
+  });
+
+  it('falls through to S/R when getRecentProjects throws after service is obtained', async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecentProjectsGet,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockRecentProjectsGet.mockRejectedValueOnce(new Error('Storage read failed'));
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects')
+        throw new Error('S/R not registered');
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('no-send-receive');
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
+  });
+
+  it("returns 'filled' even when recordProjectOpened throws in the recents path", async () => {
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      mockRecordProjectOpened,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['proj-recent']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+    mockRecordProjectOpened.mockRejectedValue(new Error('Storage write failed'));
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+  });
+
+  // #endregion Recents-first behavior (Tasks 2-4)
+});
+
+// #endregion openDefaultActiveProjectIfApplicable
+
+// #region resolveOpenEditorDispatch
+
+// Helper: build a minimal "Scripture editor" web view definition record for the dispatch helper.
+// `resolveOpenEditorDispatch` only reads `id`, `projectId`, and `isReadOnly`, so a partial object
+// is sufficient.
+type ScriptureEditorDef = { id: string; projectId?: string; isReadOnly?: boolean };
+
+describe('resolveOpenEditorDispatch', () => {
+  it('simple mode + caller override + different project: caller override is ignored, replaces first editor', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-other', projectId: 'PROJ_X', isReadOnly: false },
+    ];
+    const result: OpenEditorDispatch = resolveOpenEditorDispatch(
+      editors,
+      'WEB',
+      false,
+      'simple',
+      'caller-supplied-tab-id',
+    );
+    // Simple-mode invariant: every open routes to the editor column. The caller's tab is not the
+    // editor, so we ignore it and replace the existing editor instead.
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'editor-other' });
+  });
+
+  it('simple mode + caller override + same project open: focuses the existing tab (caller override is ignored)', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(
+      editors,
+      'WEB',
+      false,
+      'simple',
+      'caller-supplied-tab-id',
+    );
+    // Simple-mode invariant: caller override is ignored. We always route to the editor column,
+    // and since the requested project is already in the editor column we focus that tab.
+    expect(result).toEqual({ kind: 'focus-existing', existingId: 'editor-web' });
+  });
+
+  it('power mode + caller override + same project open: caller override still wins (no focus rule)', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(
+      editors,
+      'WEB',
+      false,
+      'power',
+      'caller-supplied-tab-id',
+    );
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'caller-supplied-tab-id' });
+  });
+
+  it('power mode + caller override + no editors: replace-tab on the caller-supplied target', () => {
+    const editors: ScriptureEditorDef[] = [];
+    const result = resolveOpenEditorDispatch(
+      editors,
+      'WEB',
+      false,
+      'power',
+      'caller-supplied-tab-id',
+    );
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'caller-supplied-tab-id' });
+  });
+
+  it('simple mode: returns focus-existing when an editor for the same project (both editable) is already open', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'simple', undefined);
+    expect(result).toEqual({ kind: 'focus-existing', existingId: 'editor-web' });
+  });
+
+  it('simple mode: returns focus-existing when a read-only viewer for the same project is already open and a read-only viewer is requested', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'viewer-web', projectId: 'WEB', isReadOnly: true },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', true, 'simple', undefined);
+    expect(result).toEqual({ kind: 'focus-existing', existingId: 'viewer-web' });
+  });
+
+  it('simple mode: replaces an editable editor when a read-only viewer is requested for the same project', () => {
+    // Read-only Resource Viewers and editable Scripture Editors share the same webViewType but
+    // are different views. The single editor slot can only host one at a time, so requesting
+    // the opposite mode should replace the existing tab, not focus it.
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', true, 'simple', undefined);
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'editor-web' });
+  });
+
+  it('simple mode: replaces a read-only viewer when an editable editor is requested for the same project', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'viewer-web', projectId: 'WEB', isReadOnly: true },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'simple', undefined);
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'viewer-web' });
+  });
+
+  it('simple mode: returns replace-tab on the first existing editor when the requested project differs', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-a', projectId: 'PROJ_A', isReadOnly: false },
+      { id: 'editor-b', projectId: 'PROJ_B', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'PROJ_C', false, 'simple', undefined);
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'editor-a' });
+  });
+
+  it('simple mode: returns replace-tab on the empty placeholder editor when no project editors exist', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'empty-editor', projectId: undefined, isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'simple', undefined);
+    // Same-(project, readonly) lookup misses (no projectId on the empty one). Simple-mode then
+    // replaces the first existing editor — which happens to be the empty placeholder.
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'empty-editor' });
+  });
+
+  it('simple mode: returns open-new when no Scripture Editors are open at all', () => {
+    const editors: ScriptureEditorDef[] = [];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'simple', undefined);
+    expect(result).toEqual({ kind: 'open-new' });
+  });
+
+  it('power mode: only the empty-editor probe applies — same project clicked twice does not focus', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'power', undefined);
+    // No empty editor and no caller override → fall through to open-new (P9-style two tabs).
+    expect(result).toEqual({ kind: 'open-new' });
+  });
+
+  it('power mode: falls back to empty-editor probe when one exists', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'empty-editor', projectId: undefined, isReadOnly: false },
+    ];
+    const result = resolveOpenEditorDispatch(editors, 'WEB', false, 'power', undefined);
+    expect(result).toEqual({ kind: 'replace-tab', targetTabId: 'empty-editor' });
+  });
+
+  it('power mode: isReadOnly is ignored — same project, opposite readonly does not focus', () => {
+    const editors: ScriptureEditorDef[] = [
+      { id: 'editor-web', projectId: 'WEB', isReadOnly: false },
+    ];
+    // Power mode never focuses, regardless of (project, readonly) alignment.
+    const result = resolveOpenEditorDispatch(editors, 'WEB', true, 'power', undefined);
+    expect(result).toEqual({ kind: 'open-new' });
+  });
+});
+
+// #endregion resolveOpenEditorDispatch
+
+// #region toScriptureEditorInfos
+
+describe('toScriptureEditorInfos', () => {
+  it('filters out web views that are not Scripture Editors', () => {
+    const defs: SavedWebViewDefinition[] = [
+      { id: 'editor-1', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: 'PROJ_A' },
+      { id: 'model-text', webViewType: 'platformScriptureEditor.modelText', projectId: 'PROJ_A' },
+      { id: 'comments', webViewType: 'legacyCommentManager.commentListPanel' },
+    ];
+    expect(toScriptureEditorInfos(defs)).toEqual([
+      { id: 'editor-1', projectId: 'PROJ_A', isReadOnly: false },
+    ]);
+  });
+
+  it('maps id and projectId through, including an undefined projectId (empty editor slot)', () => {
+    const defs: SavedWebViewDefinition[] = [
+      { id: 'editor-empty', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE },
+    ];
+    expect(toScriptureEditorInfos(defs)).toEqual([
+      { id: 'editor-empty', projectId: undefined, isReadOnly: false },
+    ]);
+  });
+
+  it('reads isReadOnly from state, defaulting to false when state or the flag is missing', () => {
+    const defs: SavedWebViewDefinition[] = [
+      {
+        id: 'viewer',
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'PROJ_A',
+        state: { isReadOnly: true },
+      },
+      {
+        id: 'editor',
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'PROJ_B',
+        state: { isReadOnly: false },
+      },
+      { id: 'no-state', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: 'PROJ_C' },
+      { id: 'no-flag', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: 'PROJ_D', state: {} },
+    ];
+    expect(toScriptureEditorInfos(defs).map((e) => e.isReadOnly)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  it('returns an empty array for empty input', () => {
+    expect(toScriptureEditorInfos([])).toEqual([]);
+  });
+});
+
+// #endregion toScriptureEditorInfos
+
+// #region selectProjectIdsForOpenMode
+
+describe('selectProjectIdsForOpenMode', () => {
+  it("returns only published project IDs when opening the Resource Viewer (mode='resourceViewer')", () => {
+    const result = selectProjectIdsForOpenMode(
+      [
+        { projectId: 'ProjA', isPublished: true },
+        { projectId: 'ProjB', isPublished: false },
+        { projectId: 'ProjC', isPublished: true },
+      ],
+      'resourceViewer',
+    );
+    expect(result).toEqual(['ProjA', 'ProjC']);
+  });
+
+  it("returns only non-published project IDs when opening the Scripture Editor (mode='scriptureEditor')", () => {
+    const result = selectProjectIdsForOpenMode(
+      [
+        { projectId: 'ProjA', isPublished: true },
+        { projectId: 'ProjB', isPublished: false },
+        { projectId: 'ProjC', isPublished: true },
+        { projectId: 'ProjD', isPublished: false },
+      ],
+      'scriptureEditor',
+    );
+    expect(result).toEqual(['ProjB', 'ProjD']);
+  });
+
+  it('preserves the input order of matching projects', () => {
+    const result = selectProjectIdsForOpenMode(
+      [
+        { projectId: 'ProjZ', isPublished: true },
+        { projectId: 'ProjA', isPublished: true },
+        { projectId: 'ProjM', isPublished: true },
+      ],
+      'resourceViewer',
+    );
+    expect(result).toEqual(['ProjZ', 'ProjA', 'ProjM']);
+  });
+
+  it('returns an empty array when no projects match the requested mode', () => {
+    const allPublished = [
+      { projectId: 'ProjA', isPublished: true },
+      { projectId: 'ProjB', isPublished: true },
+    ];
+    expect(selectProjectIdsForOpenMode(allPublished, 'scriptureEditor')).toEqual([]);
+
+    const allUnpublished = [
+      { projectId: 'ProjA', isPublished: false },
+      { projectId: 'ProjB', isPublished: false },
+    ];
+    expect(selectProjectIdsForOpenMode(allUnpublished, 'resourceViewer')).toEqual([]);
+  });
+
+  it('returns an empty array when given no projects', () => {
+    expect(selectProjectIdsForOpenMode([], 'resourceViewer')).toEqual([]);
+    expect(selectProjectIdsForOpenMode([], 'scriptureEditor')).toEqual([]);
+  });
+});
+
+// #endregion selectProjectIdsForOpenMode
+
+// #region startDefaultProjectPicker
+
+describe('startDefaultProjectPicker', () => {
+  /**
+   * Configure the mocks so `openDefaultActiveProjectIfApplicable` exits at its cheapest path
+   * (interfaceMode !== 'simple' returns 'wrong-mode'). We use `mockGetSetting` as the call counter
+   * because it's the first PAPI call inside the picker, so its call count equals the run count.
+   */
+  function setUpFastNoOp(mocks: PickerMocks) {
+    mocks.mockGetSetting.mockResolvedValue('power');
+  }
+
+  it('runs the picker immediately on subscribe', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('re-runs the picker when a web view opens', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireWebViewOpen();
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('re-runs the picker when a web view updates (soft-close-reopen layout restore)', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireWebViewUpdate();
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('does NOT re-run the picker when an unrelated web view updates', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireWebViewUpdate('someOtherExtension.someWebViewType');
+
+    // Give the microtask queue a chance to flush in case a stray retry was queued.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-runs the picker when a sync completes (isSyncing becomes false)', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireSync({ isSyncing: false });
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('does NOT re-run the picker when a sync starts (isSyncing true)', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireSync({ isSyncing: true });
+
+    // Give the microtask queue a chance to flush in case a stray retry was queued.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
+  });
+
+  it('coalesces multiple triggers during an in-flight run into a single follow-up', async () => {
+    const mocks = createPickerMocks();
+    // Block the initial picker call on a controllable promise so we can fire triggers while it's
+    // in flight. Subsequent calls resolve immediately to 'power' for a fast no-op.
+    let unblock: () => void = () => {};
+    const initialPromise = new Promise<'power'>((resolve) => {
+      unblock = () => resolve('power');
+    });
+    mocks.mockGetSetting.mockReturnValueOnce(initialPromise).mockResolvedValue('power');
+
+    startDefaultProjectPicker(mocks.papi);
+    // Initial run is now in flight, blocked on `initialPromise`.
+    mocks.fireWebViewOpen();
+    mocks.fireSync({ isSyncing: false });
+    // Two triggers while in flight should coalesce to a single follow-up run.
+
+    unblock();
+
+    await vi.waitFor(() => {
+      // 1 initial + 1 coalesced follow-up = 2 total calls.
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+
+    // Give any stray retry a chance to fire; assert we're still at 2.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+  });
+
+  it('returned unsubscriber removes all subscriptions', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    const unsub = startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    unsub();
+
+    expect(mocks.isWebViewOpenUnsubscribed()).toBe(true);
+    expect(mocks.isWebViewUpdateUnsubscribed()).toBe(true);
+    expect(mocks.isSyncUnsubscribed()).toBe(true);
+  });
+
+  it('warns and keeps running when openDefaultActiveProjectIfApplicable throws unexpectedly', async () => {
+    const mocks = createPickerMocks();
+    // Force the inner picker to reject by making its first PAPI call throw. This bypasses the
+    // inner function's own try/catch (which only wraps the getSharedProjects call) and exercises
+    // the tryPicker catch block — the "PAPI plumbing bug" path.
+    mocks.mockGetSetting.mockRejectedValueOnce(new Error('simulated PAPI plumbing bug'));
+    // Subsequent runs (re-triggered by the next event) take the fast no-op path so the driver
+    // continues to work after the unexpected throw.
+    mocks.mockGetSetting.mockResolvedValue('power');
+
+    startDefaultProjectPicker(mocks.papi);
+
+    await vi.waitFor(() => {
+      expect(mocks.mockWarn).toHaveBeenCalled();
+    });
+    expect(mocks.mockWarn.mock.calls[0]?.[0]).toMatch(/tryPicker threw unexpectedly/);
+
+    // Driver still works after the throw — a follow-up trigger should re-run the picker.
+    mocks.fireWebViewOpen();
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
+// #endregion startDefaultProjectPicker
+
+// #region syncOnProjectSwitch
+
+function createSyncMockPapi() {
+  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
+  const mockWarn = vi.fn();
+  // Must cast since the mock only includes the papi properties used by syncOnProjectSwitch.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    commands: { sendCommand: mockSendCommand },
+    logger: { warn: mockWarn },
+  } as unknown as typeof PapiBackend;
+  return { papi, mockSendCommand, mockWarn };
+}
+
+describe('syncOnProjectSwitch', () => {
+  it('calls syncProjects with the incoming project ID', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-incoming',
+    ]);
+  });
+
+  it('calls sendReceiveProjects with the outgoing project ID when provided', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-outgoing',
+    ]);
+  });
+
+  it('calls syncProjects before sendReceiveProjects', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+    const callOrder: string[] = [];
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      callOrder.push(commandName);
+    });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(callOrder).toEqual([
+      'paratextBibleSendReceive.syncProjects',
+      'paratextBibleSendReceive.sendReceiveProjects',
+    ]);
+  });
+
+  it('does not call sendReceiveProjects when outgoingProjectId is undefined', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+
+    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
+      'paratextBibleSendReceive.sendReceiveProjects',
+    );
+  });
+
+  it('still calls sendReceiveProjects when syncProjects throws', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
+    });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-outgoing',
+    ]);
+  });
+
+  it('resolves without throwing when both syncs fail', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+    mockSendCommand.mockRejectedValue(new Error('network error'));
+
+    await expect(
+      syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('logs a warning when the incoming sync fails', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
+    });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
+  });
+
+  it('logs a warning when the outgoing sync fails', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi();
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.sendReceiveProjects')
+        throw new Error('S/R failed');
+    });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
+  });
+});
+
+// #endregion syncOnProjectSwitch
+
+// #region finalizeProjectSwitch
+
+const GRID_WEBVIEW_ID = 'text-collection-1';
+
+function createFinalizeMockPapi() {
+  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
+  const mockWarn = vi.fn();
+  const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
+  const mockDataProvidersGet = vi.fn().mockImplementation(async (name: string) => {
+    if (name === 'platformScripture.recentlyOpenedProjects') {
+      return { recordProjectOpened: mockRecordProjectOpened };
+    }
+    return undefined;
+  });
+  // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
+  // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
+  const mockSettingsGet = vi.fn().mockResolvedValue('simple');
+  // The Text Collection re-point runs from here, so the mock needs a webViews surface; without one
+  // it would take the swallowed-failure path and the assertions below would pass vacuously.
+  const mockGetAllOpenWebViewDefinitions = vi
+    .fn()
+    .mockResolvedValue([
+      { id: GRID_WEBVIEW_ID, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, projectId: undefined },
+    ]);
+  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which is
+  // reported as an error.
+  const mockReloadWebView = vi.fn().mockResolvedValue(GRID_WEBVIEW_ID);
+  const mockError = vi.fn();
+  // Must cast since the mock only includes the papi properties finalizeProjectSwitch uses.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    commands: { sendCommand: mockSendCommand },
+    dataProviders: { get: mockDataProvidersGet },
+    settings: { get: mockSettingsGet },
+    webViews: {
+      getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
+      reloadWebView: mockReloadWebView,
+    },
+    logger: { warn: mockWarn, error: mockError },
+  } as unknown as typeof PapiBackend;
+  return {
+    papi,
+    mockSendCommand,
+    mockWarn,
+    mockError,
+    mockRecordProjectOpened,
+    mockDataProvidersGet,
+    mockSettingsGet,
+    mockGetAllOpenWebViewDefinitions,
+    mockReloadWebView,
+  };
+}
+
+describe('finalizeProjectSwitch', () => {
+  it('syncs the incoming project only via syncProjects (finalizeProjectSwitch has no outgoing project by design)', async () => {
+    const { papi, mockSendCommand } = createFinalizeMockPapi();
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
+    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
+      'paratextBibleSendReceive.sendReceiveProjects',
+    );
+  });
+
+  it('does not await the sync before returning - a hung sync must not block applyForProject or recordProjectOpened', async () => {
+    const { papi, mockSendCommand, mockRecordProjectOpened } = createFinalizeMockPapi();
+    // Never resolves - simulates a slow/hung Send/Receive.
+    mockSendCommand.mockImplementation(() => new Promise(() => {}));
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(applyForProject).toHaveBeenCalledWith('proj-1');
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('re-points the Text Collection, which the rebuilt Simple layout leaves unbound', async () => {
+    // On the mode-switch path buildSimpleLayoutForProject stamps projectId onto the static
+    // layout's tabs, but the Text Collection is merged in afterwards from the supplement with none.
+    const { papi, mockReloadWebView } = createFinalizeMockPapi();
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      { projectId: 'proj-1', bringToFront: false },
+    );
+  });
+
+  it('re-points the Text Collection before the shared layout picks the front tab', async () => {
+    const { papi, mockReloadWebView } = createFinalizeMockPapi();
+    const order: string[] = [];
+    mockReloadWebView.mockImplementation(async () => {
+      order.push('reload');
+    });
+    const applyForProject = vi.fn().mockImplementation(async () => {
+      order.push('applyForProject');
+    });
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(order).toEqual(['reload', 'applyForProject']);
+  });
+
+  it('does not re-point the Text Collection once the user is back in Power mode', async () => {
+    const { papi, mockReloadWebView, mockSettingsGet } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('calls applyForProject when still in Simple mode', async () => {
+    const { papi } = createFinalizeMockPapi();
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(applyForProject).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('does not call applyForProject when the user has since switched back to Power mode', async () => {
+    const { papi, mockSettingsGet } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(applyForProject).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when applyForProject is undefined', async () => {
+    const { papi } = createFinalizeMockPapi();
+
+    await expect(finalizeProjectSwitch(papi, 'proj-1', undefined)).resolves.toBeUndefined();
+  });
+
+  it('records the project as recently opened', async () => {
+    const { papi, mockRecordProjectOpened } = createFinalizeMockPapi();
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('records the project as recently opened even when no longer in Simple mode', async () => {
+    const { papi, mockSettingsGet, mockRecordProjectOpened } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('logs a warning and does not throw when recordProjectOpened rejects', async () => {
+    const { papi, mockWarn, mockRecordProjectOpened } = createFinalizeMockPapi();
+    mockRecordProjectOpened.mockRejectedValue(new Error('storage write failed'));
+
+    await expect(finalizeProjectSwitch(papi, 'proj-1', undefined)).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
+  });
+});
+
+// #endregion finalizeProjectSwitch
+
+// isBlockMarker moved to platform-bible-utils (src/markers/usfm-markers.ts); its tests live in
+// lib/platform-bible-utils/src/markers/usfm-markers.test.ts.
+
+describe('generateParagraphMenuListItems', () => {
+  it('when protected: action notifies and does not call formatPara', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const notify = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, true, notify);
+
+    expect(items.length).toBeGreaterThan(0);
+    items[0].action?.();
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(formatPara).not.toHaveBeenCalled();
+  });
+
+  it('when not protected: action calls formatPara and does not notify', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const notify = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, false, notify);
+
+    const item = items[0];
+    item.action?.();
+
+    expect(formatPara).toHaveBeenCalledTimes(1);
+    expect(formatPara).toHaveBeenCalledWith(item.marker);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('fills the detail column from the marker description, so the paragraph menu is not the one menu with an empty second column', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(
+      ref,
+      {
+        '%paragraphMenu_p_markerDescription%': 'Paragraph',
+        '%markerMenu_marker_p_description%': 'Normal paragraph',
+      },
+      false,
+      vi.fn(),
+    );
+
+    const paragraphItem = items.find((item) => item.marker === 'p');
+
+    expect(paragraphItem?.title).toBe('Paragraph');
+    expect(paragraphItem?.subtitle).toBe('Normal paragraph');
+  });
+
+  it('leaves the detail column empty while the description strings are still loading, rather than showing a raw localize key', () => {
+    // The web view loads every marker description asynchronously, so this is the real state for the
+    // first frames after mount — not a hypothetical.
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+
+    expect(items.length).toBeGreaterThan(0);
+    items.forEach((item) => {
+      expect(item.subtitle).toBeUndefined();
+    });
+  });
+
+  it('restores the caret before formatting, so a pick made after the menu took focus still lands', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), restoreSelection);
+
+    const item = items[0];
+    item.action?.();
+
+    expect(restoreSelection).toHaveBeenCalledTimes(1);
+    expect(formatPara).toHaveBeenCalledWith(item.marker);
+    // Order is the whole point: opening the menu can leave the editor with no selection, and
+    // `formatPara` has nothing to retag then — restoring after the apply would be too late.
+    expect(restoreSelection.mock.invocationCallOrder[0]).toBeLessThan(
+      formatPara.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('when protected: does not restore the caret either (nothing is applied)', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, true, vi.fn(), restoreSelection);
+
+    items[0].action?.();
+
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(formatPara).not.toHaveBeenCalled();
+  });
+});
+
+describe('isChapterBlank', () => {
+  const emptyUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
+
+  it('returns true when the chapter has no content at all', () => {
+    expect(isChapterBlank(emptyUsj)).toBe(true);
+  });
+
+  it('returns false when the chapter has a chapter marker but no verses (avoids a duplicate \\c on click)', () => {
+    const usj: Usj = {
+      ...emptyUsj,
+      content: [{ type: 'chapter', marker: 'c', number: '1' }],
+    };
+    expect(isChapterBlank(usj)).toBe(false);
+  });
+
+  it('returns false when a verse node exists at the top level', () => {
+    const usj: Usj = {
+      ...emptyUsj,
+      content: [{ type: 'verse', marker: 'v', number: '1' }],
+    };
+    expect(isChapterBlank(usj)).toBe(false);
+  });
+
+  it('returns false when a verse node is nested inside a paragraph', () => {
+    const usj: Usj = {
+      ...emptyUsj,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '1' }, 'Some text'],
+        },
+      ],
+    };
+    expect(isChapterBlank(usj)).toBe(false);
+  });
+});
+
+describe('isBlankChapterOnScreen', () => {
+  const emptyUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
+
+  it('reports a real chapter with no content as blank', () => {
+    expect(isBlankChapterOnScreen(emptyUsj, 1)).toBe(true);
+  });
+
+  it("never calls a book's front matter a blank chapter", () => {
+    // Chapter 0 addresses the material before `\c 1` — `\id`, `\h`, `\toc`, `\mt`, `\ip` — which
+    // carries neither a chapter nor a verse node, so `isChapterBlank` alone reports it blank and the
+    // panel would replace real content the reader can see with "this chapter is empty".
+    const frontMatter: Usj = {
+      ...emptyUsj,
+      content: [
+        { type: 'book', marker: 'id', code: 'GEN' },
+        { type: 'para', marker: 'h', content: ['Genesis'] },
+        { type: 'para', marker: 'mt', content: ['The First Book of Moses'] },
+        { type: 'para', marker: 'ip', content: ['Genesis tells of beginnings.'] },
+      ],
+    };
+    expect(isChapterBlank(frontMatter)).toBe(true);
+    expect(isBlankChapterOnScreen(frontMatter, 0)).toBe(false);
+  });
+
+  it('leaves a Psalm superscription alone, which `isChapterBlank` already answers', () => {
+    // A chapter carrying a `\d` still carries its `\c`, so this is false before the chapter-number
+    // gate is consulted. Pinned so narrowing the gate later cannot quietly take this with it.
+    const superscription: Usj = {
+      ...emptyUsj,
+      content: [
+        { type: 'chapter', marker: 'c', number: '3' },
+        { type: 'para', marker: 'd', content: ['A Psalm of David.'] },
+      ],
+    };
+    expect(isBlankChapterOnScreen(superscription, 3)).toBe(false);
+  });
+
+  it('makes no claim when no USJ has arrived for this reference', () => {
+    expect(isBlankChapterOnScreen(undefined, 1)).toBe(false);
+  });
+});
+
+describe('buildChapterScaffoldOps', () => {
+  it('builds one chapter-embed op followed by one verse-embed op per verse, 1-indexed', () => {
+    const ops = buildChapterScaffoldOps(3, 4);
+    expect(ops).toEqual([
+      { insert: { chapter: { number: '3', style: 'c' } } },
+      { insert: { verse: { number: '1', style: 'v' } } },
+      { insert: { verse: { number: '2', style: 'v' } } },
+      { insert: { verse: { number: '3', style: 'v' } } },
+      { insert: { verse: { number: '4', style: 'v' } } },
+    ]);
+  });
+
+  it('builds one chapter-embed op and one verse-embed op when the chapter has exactly one verse', () => {
+    const ops = buildChapterScaffoldOps(1, 1);
+    expect(ops).toEqual([
+      { insert: { chapter: { number: '1', style: 'c' } } },
+      { insert: { verse: { number: '1', style: 'v' } } },
+    ]);
+  });
+});
+
+describe('canAddChapterNumber', () => {
+  it('returns false when there is no versification entry for the chapter (lastVerse 0)', () => {
+    expect(canAddChapterNumber(0)).toBe(false);
+  });
+
+  it('returns false for a negative lastVerse', () => {
+    expect(canAddChapterNumber(-1)).toBe(false);
+  });
+
+  it('returns true when the chapter has at least one verse', () => {
+    expect(canAddChapterNumber(1)).toBe(true);
+  });
+});
+
+describe('resolveAddChapterNumberClick', () => {
+  it('returns "already-in-flight" when a previous insert has not yet completed, regardless of lastVerse', () => {
+    expect(resolveAddChapterNumberClick(true, 5)).toBe('already-in-flight');
+    expect(resolveAddChapterNumberClick(true, 0)).toBe('already-in-flight');
+  });
+
+  it('returns "no-versification" when not in flight but lastVerse is 0', () => {
+    expect(resolveAddChapterNumberClick(false, 0)).toBe('no-versification');
+  });
+
+  it('returns "insert" when not in flight and lastVerse is positive', () => {
+    expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
+  });
+});
+
+describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
+  const base = {
+    isCollapsed: true,
+    editingNoteKey: undefined,
+    popoverShown: false,
+    paneVisible: false,
+    paneRendered: false,
+    isAutoShowEnabled: false,
+  };
+
+  it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
+    expect(decideNoteCallerClickAction(base)).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('ignores clicks on expanded notes', () => {
+    expect(decideNoteCallerClickAction({ ...base, isCollapsed: false })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'ignore-expanded',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('ignores clicks while a popover session is really shown (one at a time)', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: true }),
+    ).toEqual({
+      clearStaleEditingSession: false,
+      action: 'ignore-popover-open',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
+    // Pre-fix, a leftover editingNoteKey silently swallowed every future caller click.
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: false }),
+    ).toEqual({
+      clearStaleEditingSession: true,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('still opens the popover when the pane is rendered — the pane highlight rides alongside', () => {
+    // The popover is the only surface that can EDIT a note today, so a routed click always opens
+    // it; the rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
+    expect(decideNoteCallerClickAction({ ...base, paneVisible: true, paneRendered: true })).toEqual(
+      {
+        clearStaleEditingSession: false,
+        action: 'open-popover',
+        sendPaneFocusRequest: true,
+        showPane: false,
+      },
+    );
+  });
+
+  it('shows a closed pane when auto-show is on, and highlights the note once it mounts', () => {
+    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: true })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: true,
+      showPane: true,
+    });
+  });
+
+  it('leaves a closed pane closed when auto-show is off', () => {
+    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: false })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('does not re-show a pane that is already toggled visible but still mounting its data', () => {
+    // paneVisible without paneRendered: the toggle is on but the data has not loaded — nothing to
+    // show and nothing to highlight yet.
+    expect(
+      decideNoteCallerClickAction({ ...base, paneVisible: true, isAutoShowEnabled: true }),
+    ).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('clears a stale session while still doing the pane work', () => {
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        editingNoteKey: 'note-1',
+        paneVisible: true,
+        paneRendered: true,
+      }),
+    ).toEqual({
+      clearStaleEditingSession: true,
+      action: 'open-popover',
+      sendPaneFocusRequest: true,
+      showPane: false,
+    });
+  });
+});
+
+describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', () => {
+  it('coerces standard to formatted in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
+  });
+
+  it('keeps standard in power mode', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
+  });
+
+  it('leaves formatted unchanged in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
+  });
+
+  it('leaves markers unchanged in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('markers');
+  });
+
+  it('leaves formatted and markers unchanged in power mode', () => {
+    expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
+    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('markers');
+  });
+});
+
+describe('getNextViewTypeInCycle', () => {
+  it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
+    expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
+    expect(getNextViewTypeInCycle('standard', true)).toBe('markers');
+    expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
+  });
+
+  it('skips standard in simple mode: formatted -> markers -> formatted', () => {
+    expect(getNextViewTypeInCycle('formatted', false)).toBe('markers');
+    expect(getNextViewTypeInCycle('markers', false)).toBe('formatted');
+  });
+
+  it('moves a lingering standard view forward to markers in simple mode', () => {
+    // A persisted 'standard' can still be the current state for a moment before the web view's
+    // coercion effect runs; cycling from it must behave as if it were already coerced.
+    expect(getNextViewTypeInCycle('standard', false)).toBe('markers');
+  });
+
+  it('never yields standard in simple mode for any current view type', () => {
+    const allViewTypes = ['formatted', 'markers', 'standard'] as const;
+    allViewTypes.forEach((current) => {
+      expect(getNextViewTypeInCycle(current, false)).not.toBe('standard');
+    });
+  });
+});
+
+describe('isMissingBookError', () => {
+  it('returns true for the message C# MissingBookException actually produces', () => {
+    expect(isMissingBookError(new Error('Book number 1 not found in project abc123.'))).toBe(true);
+  });
+
+  it('returns true when the PDP has wrapped the message in its own prefix', () => {
+    expect(
+      isMissingBookError(
+        new Error('Error in getChapterUSJ: Book number 40 not found in project abc123.'),
+      ),
+    ).toBe(true);
+  });
+
+  it('returns true for a plain string message rather than an Error', () => {
+    expect(isMissingBookError('Book number 66 not found in project abc123.')).toBe(true);
+  });
+
+  it('returns false for an unrelated failure', () => {
+    expect(isMissingBookError(new Error('Project abc123 is not available'))).toBe(false);
+  });
+
+  it('returns false when the book number is absent, so a partial match cannot pass', () => {
+    expect(isMissingBookError(new Error('Book number not found in project abc123.'))).toBe(false);
+  });
+
+  it('returns false for undefined, so a missing error is never read as a missing book', () => {
+    expect(isMissingBookError(undefined)).toBe(false);
+  });
+
+  it('detects the failure even when the project id is not followed by a period', () => {
+    // Detection must not depend on the identity suffix. The main editor turns a non-detection into
+    // `bookExists === true`, which reaches `usjFromPdp === defaultUsj` and spins forever instead of
+    // showing the book-not-available view, so a stricter predicate here costs a hang.
+    expect(isMissingBookError(new Error('Book number 1 not found in project abc123'))).toBe(true);
+  });
+
+  it('never reads a message off a value that is not an error', () => {
+    // `getErrorMessage` falls back to `JSON.stringify` for an object with no string `message`, so an
+    // unguarded call serializes the whole chapter on every render and then matches the regex against
+    // the scripture text. The guard belongs here rather than in each caller.
+    expect(
+      isMissingBookError({
+        type: 'USJ',
+        version: '3.1',
+        content: ['Book number 1 not found in project abc123.'],
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('parseMissingBookError', () => {
+  it('reports which book and which project the failure names', () => {
+    expect(parseMissingBookError(new Error('Book number 40 not found in project abc123.'))).toEqual(
+      {
+        bookNum: 40,
+        projectId: 'abc123',
+      },
+    );
+  });
+
+  it('reads through the prefix the PDP wraps the message in', () => {
+    expect(
+      parseMissingBookError(
+        new Error('Error in getChapterUSJ: Book number 1 not found in project abc123.'),
+      ),
+    ).toEqual({ bookNum: 1, projectId: 'abc123' });
+  });
+
+  it('returns undefined for an unrelated failure, so callers cannot read identities off one', () => {
+    expect(parseMissingBookError(new Error('Project abc123 is not available'))).toBeUndefined();
+  });
+
+  it('keeps a project id that contains periods intact', () => {
+    // The C# message always ends in a period, so the id runs to the LAST one. Stopping at the first
+    // would hand back a truncated id, which compares unequal and silently restores the blank editor.
+    expect(
+      parseMissingBookError(new Error('Book number 40 not found in project abc.123.def.')),
+    ).toEqual({ bookNum: 40, projectId: 'abc.123.def' });
+  });
+
+  it('returns undefined for a value that is not an error', () => {
+    expect(
+      parseMissingBookError({
+        type: 'USJ',
+        version: '3.1',
+        content: ['Book number 1 not found in project abc123.'],
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe('isMissingBookOnScreen', () => {
+  const PROJECT_ID = 'abc123';
+  const GENESIS = 1;
+  const MATTHEW = 40;
+  const missingBook = (bookNum: number, projectId = PROJECT_ID) =>
+    newPlatformError(new Error(`Book number ${bookNum} not found in project ${projectId}.`));
+
+  it('is true when the failure names the book and project on screen', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(GENESIS),
+        currentBookNum: GENESIS,
+        projectId: PROJECT_ID,
+      }),
+    ).toBe(true);
+  });
+
+  it('is false for a failure about the book the view has already left', () => {
+    // This is what makes the answer frame-accurate. A caller that instead latched a boolean when the
+    // failure arrived would still be asserting it on the first render after navigation, because the
+    // effect that clears such a flag runs after that render has already been committed.
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(MATTHEW),
+        currentBookNum: GENESIS,
+        projectId: PROJECT_ID,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false for a failure about a project the view has already switched away from', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(GENESIS, 'someOtherProject'),
+        currentBookNum: GENESIS,
+        projectId: PROJECT_ID,
+      }),
+    ).toBe(false);
+  });
+
+  it('compares project ids case-insensitively', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(GENESIS, 'ABC123'),
+        currentBookNum: GENESIS,
+        projectId: 'abc123',
+      }),
+    ).toBe(true);
+  });
+
+  it('is false when there is no project to compare against', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(GENESIS),
+        currentBookNum: GENESIS,
+        projectId: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false when the current book number is not a real book', () => {
+    expect(
+      isMissingBookOnScreen({ error: missingBook(0), currentBookNum: 0, projectId: PROJECT_ID }),
+    ).toBe(false);
+  });
+
+  it('is false for an unrelated failure and for no failure at all', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: newPlatformError(new Error('Project abc123 is not available')),
+        currentBookNum: GENESIS,
+        projectId: PROJECT_ID,
+      }),
+    ).toBe(false);
+    expect(
+      isMissingBookOnScreen({ error: undefined, currentBookNum: GENESIS, projectId: PROJECT_ID }),
+    ).toBe(false);
+  });
+});
+
+describe('resolveResourceContentState', () => {
+  const PROJECT_ID = 'abc123';
+  // Genesis. `Canon.bookIdToNumber('GEN')` is 1, which is what the panel passes.
+  const GENESIS = 1;
+  const MATTHEW = 40;
+  const missingBook = (bookNum: number, projectId = PROJECT_ID) =>
+    newPlatformError(new Error(`Book number ${bookNum} not found in project ${projectId}.`));
+
+  it('returns "loading" before a resource project has resolved', () => {
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: undefined,
+        usjPossiblyError: undefined,
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('loading');
+  });
+
+  it('returns "loading" for a caller whose hook is not seeded with a default', () => {
+    // The Bible texts panel passes `EMPTY_USJ` as its hook's default, so its value is an object from
+    // the first render and this pair does not occur there. Kept because the state is part of this
+    // function's contract for any caller reading a hook without a seeded default, and because the
+    // alternative — falling to `'ready'` — would mount an editor with nothing to put in it.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: undefined,
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('loading');
+  });
+
+  it('returns "ready" once chapter data has arrived', () => {
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('ready');
+  });
+
+  it('returns "bookNotAvailable" when the failure names the book and project on screen', () => {
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: missingBook(GENESIS),
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('bookNotAvailable');
+  });
+
+  it('reads a failure about a different book as still loading, in either direction of navigation', () => {
+    // `useProjectData` keeps serving the PREVIOUS selector's result until the new subscription's
+    // first update lands, so the error in hand may describe the book the user just left. Attributing
+    // it to the current book would flash "not in this text" on the way INTO a book the text has —
+    // and, because the hook raises `isLoading` from an effect that runs after the commit, on the way
+    // OUT of one it does not.
+    //
+    // `'loading'` rather than `'failed'`: the answer for this reference is still in flight, so the
+    // honest state is a spinner. This is the same ordering `deriveCellState` uses, so the panel and
+    // the Scripture Text Grid cannot give opposite answers about one error.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: missingBook(MATTHEW),
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('loading');
+  });
+
+  it('reads a failure about a different project as still loading, so switching resources cannot misreport', () => {
+    // Same stale window, reached by picking a different text from the panel's selector rather than
+    // by navigating. The book number alone would still match, so the project has to be checked too.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: missingBook(GENESIS, 'someOtherProject'),
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('loading');
+  });
+
+  it('never reads a message off a success value', () => {
+    // Two failures at once if the success path reached the message check: `getErrorMessage` falls
+    // back to `JSON.stringify` for an object with no string `message`, so this would serialize the
+    // whole chapter on every render — and then match the regex against the scripture text, which
+    // here says exactly what the C# exception says.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: {
+          type: 'USJ',
+          version: '3.1',
+          content: [`Book number ${GENESIS} not found in project ${PROJECT_ID}.`],
+        },
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('ready');
+  });
+
+  it('matches project ids case-insensitively', () => {
+    // C# stores and reports ids uppercased (`ProjectMetadata` calls `ToUpperInvariant`), while the
+    // panel's own id arrives verbatim from a resource reference. The PDP lookup folds case, so a
+    // mismatch is invisible on the data path and would surface only here — as a blank editor with
+    // no message and no log, the exact failure this state exists to remove.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: 'abc123',
+        usjPossiblyError: missingBook(GENESIS, 'ABC123'),
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('bookNotAvailable');
+  });
+
+  it('withholds the message when the current book number is not a real book', () => {
+    // `Canon.bookIdToNumber` answers 0 for an unrecognized id, and 0 === 0 would match a failure
+    // that also carried book 0 — asserting a specific claim about a book the panel cannot name. The
+    // failure is still a missing-book one, so it reads as in-flight rather than as a fault.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: missingBook(0),
+        currentBookNum: 0,
+      }),
+    ).toBe('loading');
+  });
+
+  it('returns "failed" for an unrelated failure rather than a spinner that never resolves', () => {
+    // Only a missing book earns the dedicated missing-book message. Widening that to every error
+    // would relabel genuine failures as "this book is not here", which is a different and misleading
+    // claim — but they still have to be named. There is no USJ to render and nothing re-emits until
+    // the data provider does, so both of the alternatives lie: a spinner claims progress that never
+    // arrives, and an editor with nothing set invites the reader to type into a text they cannot
+    // edit.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('failed');
+  });
+});
+
+describe('formatEditorTitle', () => {
+  const TITLE_FORMAT_KEY = '%webView_platformScriptureEditor_title_format%';
+  const mockGetProjectName = vi.fn().mockResolvedValue('My Project');
+  const mockGetLocalizedStrings = vi.fn().mockResolvedValue({
+    '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+    '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+    [TITLE_FORMAT_KEY]: '{projectId} {editable}',
+  });
+
+  it('renders the editable indicator when isReadOnly is false', async () => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      false,
+      mockGetProjectName,
+      mockGetLocalizedStrings,
+    );
+    expect(title).toBe('My Project (Editable)');
+  });
+
+  it('renders the read-only indicator when isReadOnly is true', async () => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      true,
+      mockGetProjectName,
+      mockGetLocalizedStrings,
+    );
+    expect(title).toBe('My Project (Read-only)');
+  });
+});
+
+// #region updateRelatedTextCollectionPanel
+
+/**
+ * Mock papi exposing the webViews reads/writes the Column 3 re-point helpers use, plus a
+ * `sendCommand` spy for the four command-driven panels.
+ *
+ * @param openDefs Definitions `getAllOpenWebViewDefinitions` should report as open.
+ */
+function createRelatedPanelsMockPapi(openDefs: Array<Partial<SavedWebViewDefinition>> = []) {
+  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
+  const mockGetAllOpenWebViewDefinitions = vi.fn().mockResolvedValue(openDefs);
+  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which is
+  // reported as an error.
+  const mockReloadWebView = vi.fn().mockResolvedValue(GRID_WEBVIEW_ID);
+  const mockOpenWebView = vi.fn().mockResolvedValue(undefined);
+  const mockWarn = vi.fn();
+  const mockError = vi.fn();
+  // Must cast since the mock only includes the papi properties these helpers use.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    commands: { sendCommand: mockSendCommand },
+    webViews: {
+      getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
+      reloadWebView: mockReloadWebView,
+      openWebView: mockOpenWebView,
+    },
+    logger: { warn: mockWarn, error: mockError },
+  } as unknown as typeof PapiBackend;
+  return {
+    papi,
+    mockSendCommand,
+    mockGetAllOpenWebViewDefinitions,
+    mockReloadWebView,
+    mockOpenWebView,
+    mockWarn,
+    mockError,
+  };
+}
+
+/** An open Text Collection panel currently pointed at `projectId`. */
+function gridDef(projectId: string | undefined): Partial<SavedWebViewDefinition> {
+  return { id: GRID_WEBVIEW_ID, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, projectId };
+}
+
+describe('updateRelatedTextCollectionPanel', () => {
+  it('reloads the open panel with the incoming project', async () => {
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      expect.objectContaining({ projectId: 'proj-b' }),
+    );
+  });
+
+  it('re-points a panel that has no project yet', async () => {
+    // The shipped Simple layout opens the grid with no projectId, so the first switch of a session
+    // is this case rather than a project-to-project change.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef(undefined)]);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      expect.objectContaining({ projectId: 'proj-b' }),
+    );
+  });
+
+  it('never brings the panel to front', async () => {
+    // Re-pointing Column 3 must not yank the user off whichever tab they were on.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      expect.objectContaining({ bringToFront: false }),
+    );
+  });
+
+  it('skips the reload when the panel already shows the project', async () => {
+    // Reloading rebuilds the iframe and drops transient grid state, so an unchanged project must
+    // not trigger one.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-a');
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('does not open a panel when none is open', async () => {
+    // "Not open" means the tab was closed in Power mode or the feature setting is off — neither is
+    // a state a project switch should reverse.
+    const { papi, mockReloadWebView, mockOpenWebView } = createRelatedPanelsMockPapi([
+      { id: 'other-1', webViewType: 'platformScriptureEditor.bibleTexts', projectId: 'proj-a' },
+    ]);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(mockOpenWebView).not.toHaveBeenCalled();
+  });
+
+  it('skips the reload when the open panel already shows the project in different casing', async () => {
+    // Ids reach here verbatim from a resource reference while the .NET side canonicalizes to
+    // uppercase, so a raw === would reload needlessly and discard the panel's in-memory state.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('PROJ-A')]);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-a');
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('resolves without throwing and reports an error when the reload rejects', async () => {
+    const { papi, mockReloadWebView, mockError } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+    mockReloadWebView.mockRejectedValue(new Error('reload failed'));
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('reload failed'));
+    // Names the project left on screen, so the log says what the user is actually looking at.
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('proj-a'));
+  });
+
+  it('reports an error when the reload resolves no id, which it does instead of throwing', async () => {
+    // `reloadWebView` resolves undefined when the definition has gone or the provider declines.
+    // The re-point is the panel's only project signal, so a silent no-op here is not acceptable.
+    const { papi, mockReloadWebView, mockError } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+    mockReloadWebView.mockResolvedValue(undefined);
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('did not take'));
+  });
+
+  it('resolves without throwing and reports an error when the open-web-view probe fails', async () => {
+    const { papi, mockGetAllOpenWebViewDefinitions, mockError } = createRelatedPanelsMockPapi();
+    mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('probe failed'));
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('probe failed'));
+    // Distinct from "no panel is open": the router rejects when a window is unreachable, so what is
+    // open is unknown rather than empty.
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('could not establish'));
+  });
+});
+
+// #endregion updateRelatedTextCollectionPanel
+
+// #region openOrUpdateRelatedPanels
+
+describe('openOrUpdateRelatedPanels', () => {
+  it('re-points the Text Collection panel at the incoming project', async () => {
+    // Every Column 3 panel must be re-pointed on a project switch. The Text Collection is the one
+    // re-pointed by reload rather than by command, so it is easy to leave out of this batch.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+
+    await openOrUpdateRelatedPanels(papi, 'proj-b', true);
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      expect.objectContaining({ projectId: 'proj-b' }),
+    );
+  });
+
+  it('still re-points the Text Collection when an earlier panel fails', async () => {
+    const { papi, mockSendCommand, mockReloadWebView } = createRelatedPanelsMockPapi([
+      gridDef('proj-a'),
+    ]);
+    mockSendCommand.mockRejectedValue(new Error('panel failed'));
+
+    await openOrUpdateRelatedPanels(papi, 'proj-b', true);
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      expect.objectContaining({ projectId: 'proj-b' }),
+    );
+  });
+
+  it('leaves the Text Collection alone for a read-only resource', async () => {
+    // The grid is built from an editable project's settings, so a read-only resource opened in the
+    // editor column must not re-point it. The other Column 3 panels follow the editor either way.
+    const { papi, mockReloadWebView, mockSendCommand } = createRelatedPanelsMockPapi([
+      gridDef('proj-a'),
+    ]);
+
+    await openOrUpdateRelatedPanels(papi, 'resource-1', false);
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(mockSendCommand.mock.calls.map(([command]) => command)).toEqual([
+      'platformScriptureEditor.openModelText',
+      'platformScriptureEditor.openResourceText',
+      'platformScriptureEditor.openResourceText',
+      'legacyCommentManager.openCommentListPanel',
+    ]);
+  });
+
+  it('resolves without throwing when every panel command fails', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+    mockSendCommand.mockRejectedValue(new Error('everything is down'));
+
+    await expect(openOrUpdateRelatedPanels(papi, 'proj-b', true)).resolves.toBeUndefined();
+  });
+
+  it('still opens the four command-driven panels', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+
+    await openOrUpdateRelatedPanels(papi, 'proj-b', true);
+
+    // Full arguments, not just command names: the names alone pass even if the resource types are
+    // swapped or every panel is handed the outgoing projectId, which is the routing this covers.
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['platformScriptureEditor.openModelText', 'proj-b'],
+      ['platformScriptureEditor.openResourceText', 'CommentaryResource', 'proj-b'],
+      ['platformScriptureEditor.openResourceText', 'ScriptureResource', 'proj-b'],
+      ['legacyCommentManager.openCommentListPanel', 'proj-b'],
+    ]);
+  });
+});
+
+// #endregion openOrUpdateRelatedPanels
+
+describe('getTabTitleProjectName', () => {
+  /** A PAPI whose `platform.base` PDP returns the settings this test hands it. */
+  function papiWithSettings(settings: Record<string, unknown>) {
+    const mockGetSetting = vi.fn(async (key: string) => settings[key]);
+    const mockGet = vi.fn().mockResolvedValue({ getSetting: mockGetSetting });
+    // Mocking just the part of the PAPI that we need for these tests
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const papi = {
+      projectDataProviders: { get: mockGet },
+    } as unknown as typeof PapiBackend;
+    return { papi, mockGet, mockGetSetting };
+  }
+
+  it('shows the short name, not the full name', async () => {
+    const { papi } = papiWithSettings({
+      'platform.name': 'WEB',
+      'platform.fullName': 'World English Bible',
+    });
+
+    // Both settings are populated, so a tab title reading the wrong one — or joining the two the
+    // way every other surface now does — is distinguishable from the correct answer here.
+    expect(await getTabTitleProjectName(papi, 'project-1')).toBe('WEB');
+  });
+
+  it('falls back to the project id when the project has no short name', async () => {
+    const { papi } = papiWithSettings({});
+
+    expect(await getTabTitleProjectName(papi, 'project-1')).toBe('project-1');
+  });
+});
+
+// #region resolveGridProviderProjectId
+
+describe('resolveGridProviderProjectId', () => {
+  it('prefers the project a switch supplied over the one the tab already had', () => {
+    // Inverting this strands the panel: the re-point passes the incoming project in options, and falling
+    // back to the saved id leaves the panel on the outgoing project.
+    expect(resolveGridProviderProjectId({ projectId: 'incoming' }, { projectId: 'outgoing' })).toBe(
+      'incoming',
+    );
+  });
+
+  it('keeps the saved project when the caller supplied none', () => {
+    // A restored tab, or one re-provided for a reason unrelated to a project switch.
+    expect(resolveGridProviderProjectId({}, { projectId: 'saved' })).toBe('saved');
+  });
+
+  it('binds no project when neither half names one', () => {
+    // The shipped default-layout open: the grid starts unbound and follows the scroll group.
+    expect(resolveGridProviderProjectId({}, {})).toBeUndefined();
+  });
+});
+
+// #endregion
+
+// #region buildScriptureTextGridWebView
+
+/** Papi mock exposing only what the grid's web view provider reads. */
+function createGridProviderMockPapi(interfaceMode: string) {
+  // Must cast since the mock only includes the papi properties the provider uses.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return {
+    settings: { get: vi.fn().mockResolvedValue(interfaceMode) },
+    localization: {
+      getLocalizedStrings: vi
+        .fn()
+        .mockResolvedValue({ '%webView_scriptureTextGrid_title_multiple%': 'Text Collection' }),
+    },
+  } as unknown as typeof PapiBackend;
+}
+
+const GRID_ASSETS = { content: '<html></html>', styles: '.a{}' };
+
+/**
+ * A saved Text Collection definition carrying only the fields the provider reads. `webViewType` is
+ * a parameter so the wrong-type case needs no mutation.
+ */
+function savedGrid(
+  projectId: string | undefined,
+  webViewType: string = SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+): SavedWebViewDefinition {
+  const definition = { id: 'grid-1', webViewType, projectId };
+  // A full SavedWebViewDefinition carries fields this function never touches; constructing them
+  // would obscure which ones the assertions below actually depend on.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return definition as unknown as SavedWebViewDefinition;
+}
+
+describe('buildScriptureTextGridWebView', () => {
+  it('binds the project a switch supplied rather than the one the tab already had', async () => {
+    // The provider half of the re-point. Inverting this precedence leaves the panel on the
+    // outgoing project, which is the bug this whole mechanism exists to prevent — and it is only
+    // caught here, since the provider itself is unreachable from a test.
+    const papi = createGridProviderMockPapi('simple');
+
+    const definition = await buildScriptureTextGridWebView(
+      papi,
+      savedGrid('outgoing'),
+      { projectId: 'incoming' },
+      GRID_ASSETS,
+    );
+
+    expect(definition.projectId).toBe('incoming');
+  });
+
+  it('keeps the saved project when the caller supplied none', async () => {
+    const papi = createGridProviderMockPapi('simple');
+
+    const definition = await buildScriptureTextGridWebView(
+      papi,
+      savedGrid('saved'),
+      {},
+      GRID_ASSETS,
+    );
+
+    expect(definition.projectId).toBe('saved');
+  });
+
+  it('pins the panel to scroll group 0 and makes it unclosable in Simple mode', async () => {
+    const papi = createGridProviderMockPapi('simple');
+
+    const definition = await buildScriptureTextGridWebView(papi, savedGrid('p1'), {}, GRID_ASSETS);
+
+    expect(definition.isClosable).toBe(false);
+    expect(definition.scrollGroupScrRef).toBe(0);
+  });
+
+  it('leaves the panel closable and its scroll group alone in Power mode', async () => {
+    const papi = createGridProviderMockPapi('power');
+
+    const definition = await buildScriptureTextGridWebView(papi, savedGrid('p1'), {}, GRID_ASSETS);
+
+    expect(definition.isClosable).toBe(true);
+  });
+
+  it('refuses to provide a web view of another type', async () => {
+    const papi = createGridProviderMockPapi('simple');
+    const wrongType = savedGrid('p1', 'someOther.webView');
+
+    await expect(buildScriptureTextGridWebView(papi, wrongType, {}, GRID_ASSETS)).rejects.toThrow(
+      'someOther.webView',
+    );
+  });
+});
+
+// #endregion

@@ -20,6 +20,10 @@
     "moduleResolution": "Node",
     "resolveJsonModule": true,
     "noEmit": true,
+    // Redirect 'vite' imports to a stub shim — @types/jest chains through @vitest to vite, and
+    // vite's types reference 'rollup/parseAst' via package exports which moduleResolution:Node
+    // cannot resolve. The shim avoids the error without needing to change moduleResolution.
+    "paths": { "vite": ["../../../src/@types/shims-vite.d.ts"] },
     "jsx": "react-jsx",
     "typeRoots": [
       // Include default type declarations

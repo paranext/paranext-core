@@ -1,6 +1,8 @@
-import { Canon } from '@sillsdev/scripture';
-import { getChaptersForBook } from 'platform-bible-utils';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { getChaptersForBook, Section } from 'platform-bible-utils';
 import { ALL_ENGLISH_BOOK_NAMES, doesBookMatchQuery } from '@/components/shared/book.utils';
+import { ArrowKey } from '@/utils/keyboard.util';
+import { Direction } from '@/utils/dir-helper.util';
 import { BookWithOptionalChapterAndVerse } from './book-chapter-control.types';
 
 // Smart parsing regex patterns
@@ -19,10 +21,50 @@ export const SEARCH_QUERY_FORMATS = [
   SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE,
 ];
 
-export function getKeyCharacterType(key: string) {
-  const isLetter = /^[a-zA-Z]$/.test(key);
-  const isDigit = /^[0-9]$/.test(key);
-  return { isLetter, isDigit };
+/**
+ * Returns true if the query contains a chapter-verse separator (`:`) following a chapter number.
+ * Used to decide whether to switch to verse selection when the user is typing.
+ */
+export function hasChapterVerseSeparator(query: string): boolean {
+  return SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE.test(query.trim());
+}
+
+/** Returns true if `bookId` appears strictly before `lowerBound.book` in canon order. */
+export function isBookBefore(bookId: string, lowerBound: SerializedVerseRef): boolean {
+  return Canon.bookIdToNumber(bookId) < Canon.bookIdToNumber(lowerBound.book);
+}
+
+/**
+ * Returns true if the chapter in `bookId` is strictly before `lowerBound`. Chapters in books
+ * earlier than `lowerBound.book` are treated as before. Chapters in later books are never before.
+ */
+export function isChapterBefore(
+  bookId: string,
+  chapterNum: number,
+  lowerBound: SerializedVerseRef,
+): boolean {
+  const bookCmp = Canon.bookIdToNumber(bookId) - Canon.bookIdToNumber(lowerBound.book);
+  if (bookCmp < 0) return true;
+  if (bookCmp > 0) return false;
+  return chapterNum < lowerBound.chapterNum;
+}
+
+/**
+ * Returns true if the verse in `bookId` / `chapterNum` is strictly before `lowerBound`. Verses in
+ * earlier books or earlier chapters of the same book are treated as before.
+ */
+export function isVerseBefore(
+  bookId: string,
+  chapterNum: number,
+  verseNum: number,
+  lowerBound: SerializedVerseRef,
+): boolean {
+  const bookCmp = Canon.bookIdToNumber(bookId) - Canon.bookIdToNumber(lowerBound.book);
+  if (bookCmp < 0) return true;
+  if (bookCmp > 0) return false;
+  if (chapterNum < lowerBound.chapterNum) return true;
+  if (chapterNum > lowerBound.chapterNum) return false;
+  return verseNum < lowerBound.verseNum;
 }
 
 export function fetchEndChapter(bookId: string) {
@@ -137,4 +179,165 @@ export function calculateTopMatch(
   if (topMatch) return topMatch;
 
   return undefined;
+}
+
+/** Grouped and flattened book lists a `BookChapterControl` renders. */
+export type BookChapterControlBookLists = {
+  /** The active project's books, grouped by section — what the control browses by default. */
+  projectBooksBySection: Record<Section, string[]>;
+  /** Every reachable book, grouped by section — what searching spans. */
+  reachableBooksBySection: Record<Section, string[]>;
+  /**
+   * `reachableBooksBySection` flattened — the candidate list for searching, top-match parsing, and
+   * quick navigation. Searching spans this list whether or not the widened list is on screen, so a
+   * book in an open resource is findable by name without expanding first; every match it surfaces
+   * is still rendered greyed and labelled, so search never presents one as a project book.
+   * Deliberately the flattened GROUPED list rather than the raw reachable ids: section grouping
+   * drops the peripheral ids no section claims (FRT, BAK, OTH, INT, CNC, GLO, TDX, NDX) and orders
+   * DC/Extra differently from raw canon order, so the raw list would offer callers books they have
+   * never been offered.
+   */
+  reachableBooks: string[];
+  /**
+   * `projectBooksBySection` flattened — the navigation universe while the list is collapsed. Only
+   * the project's books, so quick navigation stays inside the books the user has opted into.
+   */
+  projectBooks: string[];
+  /** Reachable books the project does not have. These render greyed but stay selectable. */
+  booksOutsideProject: ReadonlySet<string>;
+};
+
+/**
+ * Groups book ids into the sections the control renders. Ids no section claims — the peripheral
+ * ones (FRT, BAK, OTH, INT, CNC, GLO, TDX, NDX) — are dropped, which is what keeps the control from
+ * offering a book it cannot browse to.
+ *
+ * Deliberately NOT built on `getSectionForBook`, despite answering a similar question: that
+ * function classifies a book already known to belong to a section and throws otherwise, and it
+ * tests Extra with `Canon.isExtraMaterial`, which claims all eight peripheral ids. Routing this
+ * through it would turn front and back matter into browsable Extra books and throw on anything else
+ * — the opposite of the filtering this exists to do. `Canon.extraBooks()` is the narrow membership
+ * test that keeps peripheral ids out.
+ *
+ * @param bookIds Book ids to group, in the order they should appear within their section
+ */
+export function groupBooksBySection(bookIds: readonly string[]): Record<Section, string[]> {
+  return {
+    [Section.OT]: bookIds.filter((bookId) => Canon.isBookOT(bookId)),
+    [Section.NT]: bookIds.filter((bookId) => Canon.isBookNT(bookId)),
+    [Section.DC]: bookIds.filter((bookId) => Canon.isBookDC(bookId)),
+    [Section.Extra]: bookIds.filter((bookId) => Canon.extraBooks().includes(bookId)),
+  };
+}
+
+/**
+ * Derives every book list the control renders from the two inputs that determine them.
+ *
+ * Purely a function of its inputs: a book is reachable only if the caller passes it. A caller that
+ * wants the book of the current reference reachable while the project lacks it must include that
+ * book in `additionalBookIds`.
+ *
+ * @param projectBookIds Books the active project has
+ * @param additionalBookIds Books reachable elsewhere, e.g. present in an open resource. Ids the
+ *   project already has are ignored — this arrives from a public callback that may include them.
+ */
+export function deriveBookChapterControlBookLists(
+  projectBookIds: readonly string[],
+  additionalBookIds: readonly string[],
+): BookChapterControlBookLists {
+  const projectBookIdSet = new Set(projectBookIds);
+  const extraBookIds = additionalBookIds.filter((bookId) => !projectBookIdSet.has(bookId));
+  const extraBookIdSet = new Set(extraBookIds);
+
+  // Canon-ordered so an extra book lands among its neighbours instead of after the project's books.
+  // Ordered from `Canon.allBookIds` rather than `ALL_BOOK_IDS` so the widened list is always a
+  // superset of the project's books: `ALL_BOOK_IDS` drops the ids the Canon library marks obsolete
+  // (JSA, JDB, TBS, SST, DNT, BLT, 3ES), which a project's `booksPresent` can still claim and which
+  // the collapsed list therefore offers. An obsolete book reachable through an open resource is
+  // offered for the same reason - a book present in an open scripture stays browsable.
+  // The fast path preserves the caller's array when nothing widens the list.
+  const reachableBookIds =
+    extraBookIdSet.size === 0
+      ? projectBookIds
+      : Canon.allBookIds.filter(
+          (bookId) => projectBookIdSet.has(bookId) || extraBookIdSet.has(bookId),
+        );
+
+  const reachableBooksBySection = groupBooksBySection(reachableBookIds);
+  const reachableBooks = Object.values(reachableBooksBySection).flat();
+
+  const projectBooksBySection = groupBooksBySection(projectBookIds);
+
+  return {
+    projectBooksBySection,
+    reachableBooksBySection,
+    reachableBooks,
+    // Grouped and flattened like `reachableBooks`, so it inherits the same peripheral-id exclusion.
+    projectBooks: Object.values(projectBooksBySection).flat(),
+    // Derived from the grouped-and-flattened list, so a peripheral id that grouping dropped can
+    // never be marked dimmed for a list it is not part of.
+    booksOutsideProject: new Set(reachableBooks.filter((bookId) => !projectBookIdSet.has(bookId))),
+  };
+}
+
+/**
+ * Number of columns in the chapter and verse grids. Drives both the arrow-key arithmetic in
+ * {@link computeTargetGridItem} and the grids' rendered `gridTemplateColumns`, so the two cannot
+ * drift out of sync and leave arrow navigation landing on the wrong cell.
+ */
+export const GRID_COLUMNS = 6;
+
+/** In a right-to-left grid the horizontal arrows point at the opposite neighbour. */
+function mirrorHorizontalKey(key: ArrowKey): ArrowKey {
+  if (key === 'ArrowLeft') return 'ArrowRight';
+  if (key === 'ArrowRight') return 'ArrowLeft';
+  return key;
+}
+
+/**
+ * Computes where the highlight moves when an arrow key is pressed in a numbered grid — the chapter
+ * grid and the verse grid share this arithmetic.
+ *
+ * Horizontal movement wraps around the whole grid; vertical movement clamps at the first and last
+ * item, so a partial last row can be reached from any column above it.
+ *
+ * @param current The currently highlighted item, 1-based. Callers seed a valid highlight when a
+ *   grid becomes visible, so an out-of-range value here means the seed did not happen; the helper
+ *   lands on the first item rather than moving from an unknown position.
+ * @param key The arrow key that was pressed.
+ * @param max The number of items in the grid. Values of 0 or less mean the count is unknown (the
+ *   Scripture data returns -1 for books it has no chapter count for), and the highlight is left
+ *   alone.
+ * @param direction Layout direction. In `'rtl'` the horizontal arrows are mirrored so they follow
+ *   what the user sees; the vertical arrows are unaffected.
+ * @returns The item the highlight should move to, 1-based.
+ */
+export function computeTargetGridItem({
+  current,
+  key,
+  max,
+  direction = 'ltr',
+}: {
+  current: number;
+  key: ArrowKey;
+  max: number;
+  direction?: Direction;
+}): number {
+  if (max <= 0) return current;
+  if (current < 1 || current > max) return 1;
+
+  const effectiveKey = direction === 'rtl' ? mirrorHorizontalKey(key) : key;
+
+  switch (effectiveKey) {
+    case 'ArrowLeft':
+      return current > 1 ? current - 1 : max;
+    case 'ArrowRight':
+      return current < max ? current + 1 : 1;
+    case 'ArrowUp':
+      return Math.max(1, current - GRID_COLUMNS);
+    case 'ArrowDown':
+      return Math.min(max, current + GRID_COLUMNS);
+    default:
+      return current;
+  }
 }

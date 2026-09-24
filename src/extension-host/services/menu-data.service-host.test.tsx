@@ -1,5 +1,14 @@
+import { menuDocumentCombiner } from '@extension-host/services/contribution.service';
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
 import { PlatformMenus, ReferencedItem, WebViewMenus } from 'platform-bible-utils';
+import { vi } from 'vitest';
+
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: {
+    get: vi.fn(async () => 'power'),
+    subscribe: vi.fn(async () => async () => true),
+  },
+}));
 
 const EXTENSION_NAME: ReferencedItem = 'videoExtension.playEditWebView';
 const MOCK_MENU_DATA: PlatformMenus = {
@@ -145,6 +154,26 @@ const MOCK_MENU_DATA: PlatformMenus = {
       },
     ],
   },
+  defaultWebViewTabMenu: {
+    groups: { 'platform.tabWindow': { order: 1, isExtensible: true } },
+    items: [
+      {
+        label: '%tab_contextMenu_floatPanel%',
+        localizeNotes: 'Tab context menu > Float tab',
+        group: 'platform.tabWindow',
+        order: 1,
+        command: 'platform.floatTab',
+      },
+      {
+        label: '%tab_contextMenu_moveTabToNewWindow%',
+        localizeNotes: 'Tab context menu > Move tab to new window',
+        group: 'platform.tabWindow',
+        order: 2,
+        command: 'platform.moveWebViewToNewWindow',
+        hiddenInterfaceModes: ['simple'],
+      },
+    ],
+  },
   webViewMenus: {
     'videoExtension.playEditWebView': {
       includeDefaults: false,
@@ -197,7 +226,12 @@ test('Get web view menu data for videoExtension', async () => {
   // If I do not specify the type for this object it will not let me index with EXTENSION_NAME
   // eslint-disable-next-line prefer-destructuring
   const webViewMenus: WebViewMenus = MOCK_MENU_DATA.webViewMenus;
-  expect(result).toEqual(webViewMenus[EXTENSION_NAME]);
+  // The tab menu is added on the way out for every web view, since its items act on the tab frame
+  // rather than on the web view's contents
+  expect(result).toEqual({
+    ...webViewMenus[EXTENSION_NAME],
+    tabMenu: MOCK_MENU_DATA.defaultWebViewTabMenu,
+  });
 });
 
 test('Setting web view menu data throws', async () => {
@@ -214,4 +248,575 @@ test('Setting unlocalized main menu data throws', async () => {
   await expect(menuDataProviderEngine.setUnlocalizedMainMenu()).rejects.toThrow(
     'setUnlocalizedMainMenu disabled',
   );
+});
+
+describe('Simple-mode menu item filtering', () => {
+  const MOCK_MENU_DATA_WITH_HIDDEN_ITEM: PlatformMenus = {
+    ...MOCK_MENU_DATA,
+    mainMenu: {
+      ...MOCK_MENU_DATA.mainMenu,
+      items: [
+        ...MOCK_MENU_DATA.mainMenu.items,
+        {
+          label: '%test_hiddenMainMenuItem%',
+          localizeNotes: 'Test item hidden in simple mode',
+          group: 'paratext.sendReceive',
+          order: 99,
+          command: 'test.hiddenMainMenuCommand',
+          hiddenInterfaceModes: ['simple'],
+        },
+      ],
+    },
+    webViewMenus: (() => {
+      // Indexing MOCK_MENU_DATA.webViewMenus directly with EXTENSION_NAME doesn't type-check
+      // (same TS quirk noted in the file's existing 'Get web view menu data' test above) — go
+      // through a WebViewMenus-typed local first.
+      // eslint-disable-next-line prefer-destructuring
+      const webViewMenus: WebViewMenus = MOCK_MENU_DATA.webViewMenus;
+      return {
+        [EXTENSION_NAME]: {
+          ...webViewMenus[EXTENSION_NAME],
+          topMenu: {
+            // Spreading webViewMenus[EXTENSION_NAME].topMenu directly would make columns/groups
+            // optional in the result (it's typed MultiColumnMenu | undefined even though
+            // MOCK_MENU_DATA above always defines it), so reconstruct the required fields
+            // explicitly instead.
+            columns: webViewMenus[EXTENSION_NAME].topMenu?.columns ?? {},
+            groups: webViewMenus[EXTENSION_NAME].topMenu?.groups ?? {},
+            items: [
+              ...(webViewMenus[EXTENSION_NAME].topMenu?.items ?? []),
+              {
+                label: '%test_hiddenWebViewMenuItem%',
+                localizeNotes: 'Test item hidden in simple mode',
+                group: 'videoExtension.videoTop',
+                order: 99,
+                command: 'test.hiddenWebViewMenuCommand',
+                hiddenInterfaceModes: ['simple'],
+              },
+            ],
+          },
+          contextMenu: {
+            groups: webViewMenus[EXTENSION_NAME].contextMenu?.groups ?? {},
+            items: [
+              ...(webViewMenus[EXTENSION_NAME].contextMenu?.items ?? []),
+              {
+                label: '%test_hiddenWebViewContextMenuItem%',
+                localizeNotes: 'Test item hidden in simple mode',
+                group: 'platform.insert',
+                order: 99,
+                command: 'test.hiddenWebViewContextMenuCommand',
+                hiddenInterfaceModes: ['simple'],
+              },
+            ],
+          },
+        },
+      };
+    })(),
+  };
+
+  test('getMainMenu excludes hiddenInterfaceModes items when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(false);
+    // Unflagged items are unaffected
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'paratext.sendReceiveProjects',
+      ),
+    ).toBe(true);
+  });
+
+  test('getMainMenu includes hiddenInterfaceModes items when platform.interfaceMode is power', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(true);
+  });
+
+  test('getUnlocalizedMainMenu excludes hiddenInterfaceModes items when platform.interfaceMode is simple, matching getMainMenu (macOS menubar consistency)', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getUnlocalizedMainMenu();
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(false);
+  });
+
+  test('getWebViewMenu excludes hiddenInterfaceModes items from topMenu when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(
+      result.topMenu?.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenWebViewMenuCommand',
+      ),
+    ).toBe(false);
+    expect(
+      result.topMenu?.items.some(
+        (item) => 'command' in item && item.command === 'videoExtension.playVideo',
+      ),
+    ).toBe(true);
+  });
+
+  test('getWebViewMenu excludes hiddenInterfaceModes items from contextMenu when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(
+      result.contextMenu?.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenWebViewContextMenuCommand',
+      ),
+    ).toBe(false);
+  });
+
+  test('getWebViewMenu includes hiddenInterfaceModes contextMenu items when platform.interfaceMode is power', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(
+      result.contextMenu?.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenWebViewContextMenuCommand',
+      ),
+    ).toBe(true);
+  });
+
+  test('menu data updates live when platform.interfaceMode changes after subscribe resolves', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    let subscribedCallback: ((newMode: string) => void) | undefined;
+    vi.mocked(settingsService.subscribe).mockImplementation(async (_key, callback) => {
+      // subscribe's generic callback type is inferred as SettingTypes[SettingName] | PlatformError;
+      // narrow it to the concrete signature this test invokes it with below.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      subscribedCallback = callback as (newMode: string) => void;
+      return async () => true;
+    });
+
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const beforeChange = await engine.getMainMenu();
+    expect(
+      beforeChange.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(true);
+
+    expect(subscribedCallback).toBeDefined();
+    if (!subscribedCallback) throw new Error('subscribedCallback was not set by mock');
+    subscribedCallback('simple');
+
+    const afterChange = await engine.getMainMenu();
+    expect(
+      afterChange.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('Platform menu document interface-mode gating', () => {
+  /**
+   * The real platform menu document (`menu.data.json`), exactly as the combiner hands it to the
+   * engine at startup — so these tests pin the shipped document's mode gating, not a mock's.
+   */
+  function getRealPlatformMenus(): PlatformMenus {
+    const realMenus = menuDocumentCombiner.rawOutput;
+    if (!realMenus) throw new Error('Platform menu document failed to combine');
+    return realMenus;
+  }
+
+  /**
+   * Builds the engine from the shipped menu document with `platform.interfaceMode` set to `mode`,
+   * then reports whether the resulting main menu still offers `command`.
+   */
+  async function isCommandInMainMenu(mode: 'simple' | 'power', command: string): Promise<boolean> {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue(mode);
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const { items } = await engine.getMainMenu();
+    return items.some((item) => 'command' in item && item.command === command);
+  }
+
+  /**
+   * Core menu items the shipped document gates to Power mode. Each is asserted in both directions:
+   * absent in Simple proves the gate takes effect, and present in Power proves the item was gated
+   * rather than deleted — which is what catches a flag broad enough to hide it in every mode.
+   */
+  const POWER_ONLY_COMMANDS = [
+    'platform.createWindow',
+    'platform.visitGettingStartedPage',
+    'platform.visitFeatureRoadmapPage',
+    'platform.openDeveloperDocumentationUrl',
+  ];
+
+  test.each(POWER_ONLY_COMMANDS)(
+    'getMainMenu hides %s when platform.interfaceMode is simple',
+    async (command) => {
+      expect(await isCommandInMainMenu('simple', command)).toBe(false);
+    },
+  );
+
+  test.each(POWER_ONLY_COMMANDS)(
+    'getMainMenu shows %s when platform.interfaceMode is power',
+    async (command) => {
+      expect(await isCommandInMainMenu('power', command)).toBe(true);
+    },
+  );
+});
+
+describe('Tab menu', () => {
+  /** The shipped platform menu document, as the combiner hands it to the engine at startup */
+  function getRealPlatformMenus(): PlatformMenus {
+    const realMenus = menuDocumentCombiner.rawOutput;
+    if (!realMenus) throw new Error('Platform menu document failed to combine');
+    return realMenus;
+  }
+
+  const commandsIn = (menu: { items: unknown[] } | undefined) =>
+    (menu?.items ?? []).map((item) => {
+      // Items are either a command item or a submenu host; both are identified for these assertions
+      if (typeof item !== 'object' || !item) return undefined;
+      if ('command' in item && typeof item.command === 'string') return item.command;
+      if ('id' in item && typeof item.id === 'string') return item.id;
+      return undefined;
+    });
+
+  test('the shipped document offers both move actions and the float item', async () => {
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // A tab hosting no web view is the case that must still get the platform items
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(commandsIn(result.tabMenu)).toEqual([
+      'platform.webViewContentZoomIn',
+      'platform.webViewContentZoomOut',
+      'platform.webViewContentZoomReset',
+      'platform.floatTab',
+      'platform.moveWebViewToNewWindow',
+      'platform.moveTabToWindow',
+    ]);
+  });
+
+  test('a recognized web view that never asked for defaults still gets the platform items', async () => {
+    // What this pins is the engine's own fallback, not the production shape: MOCK_MENU_DATA is an
+    // unfolded fixture, so this entry reaches the engine with no `tabMenu` and the `??` supplies
+    // the platform's. In production the combiner has already folded the tab menu into every entry
+    // before the engine sees it — it does that above the `includeDefaults` gate, because these
+    // items act on the tab frame rather than on the web view — so the fallback is not reached
+    // there. The fold itself is covered in menu-document-combiner.test.ts
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+
+    expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
+  });
+
+  test('a web view carries through whatever tab menu the combiner handed it', async () => {
+    // The engine's fallback fills a gap; it does not overwrite. Folding the platform items into a
+    // web view's own tab menu is the combiner's job, pinned in menu-document-combiner.test.ts
+    const ownTabMenu = {
+      groups: { 'videoExtension.tabGroup': { order: 1 } },
+      items: [
+        {
+          label: '%rewind%',
+          localizeNotes: '',
+          group: 'videoExtension.tabGroup',
+          order: 1,
+          command: 'videoExtension.rewind',
+        },
+      ],
+    };
+    const menus = {
+      ...MOCK_MENU_DATA,
+      webViewMenus: {
+        ...MOCK_MENU_DATA.webViewMenus,
+        [EXTENSION_NAME]: { ...MOCK_MENU_DATA.webViewMenus[EXTENSION_NAME], tabMenu: ownTabMenu },
+      },
+    };
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(menus);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+
+    expect(commandsIn(result.tabMenu)).toEqual(['videoExtension.rewind']);
+  });
+
+  test('a tab hosting no web view is answered with the platform items, not with nothing', async () => {
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(result.tabMenu).toBeDefined();
+    expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
+  });
+
+  test('hides a tab item marked hidden in simple mode', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(commandsIn(result.tabMenu)).not.toContain('platform.moveWebViewToNewWindow');
+    // Positive control: the filter removed one item rather than the menu arriving empty
+    expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
+  });
+
+  test('shows that same item in power mode', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(commandsIn(result.tabMenu)).toContain('platform.moveWebViewToNewWindow');
+  });
+});
+
+describe('Platform tab menu order reservation', () => {
+  /**
+   * Orders an extension is most likely to reach for first. The platform has to stay clear of these,
+   * not merely differ from them.
+   */
+  const ORDERS_AN_EXTENSION_WOULD_PICK_FIRST = 10;
+
+  test('an extension picking the first order for its tab group keeps its menus', async () => {
+    // The guarantee the reservation exists for, exercised rather than inferred: fold the shipped
+    // platform document together with an extension that takes `order: 1` — the obvious first
+    // choice — and the extension's menus have to survive it.
+    const { MenuDocumentCombiner } = await import('@shared/utils/menu-document-combiner');
+    const { default: shippedMenus } = await import('@extension-host/data/menu.data.json');
+    const combiner = new MenuDocumentCombiner(shippedMenus);
+
+    expect(() =>
+      combiner.addOrUpdateContribution('firstOrder', {
+        webViewMenus: {
+          'firstOrder.webView': {
+            includeDefaults: false,
+            tabMenu: {
+              groups: { 'firstOrder.tabGroup': { order: 1 } },
+              items: [
+                {
+                  label: '%rewind%',
+                  group: 'firstOrder.tabGroup',
+                  order: 1,
+                  command: 'firstOrder.rewind',
+                },
+              ],
+            },
+          },
+        },
+      }),
+    ).not.toThrow();
+
+    // The positive control: the contribution really is in the output, so this is a fold that
+    // happened rather than one that was dropped without throwing
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const output = combiner.rawOutput as unknown as {
+      webViewMenus: Record<string, { tabMenu?: { items: { command?: string }[] } }>;
+    };
+    expect(
+      output.webViewMenus['firstOrder.webView'].tabMenu?.items.map((item) => item.command),
+    ).toEqual(expect.arrayContaining(['firstOrder.rewind', 'platform.floatTab']));
+  });
+
+  test('the shipped tab menu leaves the low orders free for extensions', async () => {
+    // The tab menu folds into every web view's menu whether or not the web view asked for defaults,
+    // so an extension cannot opt out of sharing this order space. A collision makes
+    // `checkMenuGroupsForDuplicateOrdering` throw, the combiner drop the whole contribution, and
+    // `contribution.service` swallow it with a warn — so an extension that picks `order: 1` for its
+    // own tab group loses its entire menus.json, main menu and context menus included, with nothing
+    // on screen to explain it. Reserving high orders here is what keeps that from happening.
+    const { default: shippedMenus } = await import('@extension-host/data/menu.data.json');
+    const tabMenu = shippedMenus.defaultWebViewTabMenu;
+
+    const groupOrders = Object.values(tabMenu.groups).map((group) => group.order);
+    const itemOrders = tabMenu.items.map((item) => item.order);
+
+    expect(groupOrders.length).toBeGreaterThan(0);
+    expect(itemOrders.length).toBeGreaterThan(0);
+    expect(Math.min(...groupOrders, ...itemOrders)).toBeGreaterThan(
+      ORDERS_AN_EXTENSION_WOULD_PICK_FIRST,
+    );
+  });
+});
+
+describe('shortcut hints', () => {
+  const findItem = {
+    label: '%find%',
+    localizeNotes: 'test',
+    group: 'test.group',
+    order: 1,
+    command: 'platformScripture.openFind',
+  } as const;
+  const unjoinedItem = {
+    ...findItem,
+    label: '%other%',
+    order: 2,
+    command: 'test.noShortcut',
+  } as const;
+
+  const HINT_MENU_DATA: PlatformMenus = {
+    mainMenu: {
+      columns: { 'test.column': { label: '%test_column%', order: 1 } },
+      groups: { 'test.group': { column: 'test.column', order: 1 } },
+      items: [findItem],
+    },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    defaultWebViewTabMenu: { groups: { 'test.group': { order: 1 } }, items: [findItem] },
+    webViewMenus: {
+      [EXTENSION_NAME]: {
+        includeDefaults: false,
+        topMenu: {
+          columns: { 'test.column': { label: '%test_column%', order: 1 } },
+          groups: { 'test.group': { column: 'test.column', order: 1 } },
+          items: [findItem, unjoinedItem],
+        },
+        contextMenu: { groups: { 'test.group': { order: 1 } }, items: [findItem] },
+        tabMenu: undefined,
+      },
+    },
+  };
+
+  const findCommandItem = (items: object[] | undefined, command: string): object | undefined =>
+    items?.find((item) => 'command' in item && item.command === command);
+
+  async function createEngine(platform: typeof process.platform) {
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      HINT_MENU_DATA,
+      platform,
+    );
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+    return engine;
+  }
+
+  test.each([
+    ['darwin', '⌃F'],
+    ['win32', 'Ctrl+F'],
+  ] as const)(
+    "on %s, a top-menu item shows its command's shortcut as %s",
+    async (platform, expected) => {
+      const { topMenu } = await (await createEngine(platform)).getWebViewMenu(EXTENSION_NAME);
+      expect(findCommandItem(topMenu?.items, 'platformScripture.openFind')).toHaveProperty(
+        'shortcut',
+        expected,
+      );
+    },
+  );
+
+  test('an item whose command has no catalogued shortcut has no hint', async () => {
+    const { topMenu } = await (await createEngine('win32')).getWebViewMenu(EXTENSION_NAME);
+    expect(findCommandItem(topMenu?.items, 'test.noShortcut')).toBeDefined();
+    expect(findCommandItem(topMenu?.items, 'test.noShortcut')).not.toHaveProperty('shortcut');
+  });
+
+  test('context menu and main menu items get hints', async () => {
+    const engine = await createEngine('win32');
+    const { contextMenu } = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(findCommandItem(contextMenu?.items, 'platformScripture.openFind')).toHaveProperty(
+      'shortcut',
+      'Ctrl+F',
+    );
+    const mainMenu = await engine.getMainMenu();
+    expect(findCommandItem(mainMenu.items, 'platformScripture.openFind')).toHaveProperty(
+      'shortcut',
+      'Ctrl+F',
+    );
+  });
+
+  test('the unlocalized main menu has no hints', async () => {
+    const engine = await createEngine('darwin');
+    const unlocalized = await engine.getUnlocalizedMainMenu();
+    expect(findCommandItem(unlocalized.items, 'platformScripture.openFind')).toBeDefined();
+    expect(findCommandItem(unlocalized.items, 'platformScripture.openFind')).not.toHaveProperty(
+      'shortcut',
+    );
+  });
+
+  test('tab menu items get hints for recognized and unrecognized web views', async () => {
+    const engine = await createEngine('win32');
+    const { tabMenu: unrecognizedTabMenu } = await engine.getWebViewMenu('nothing.recognized');
+    expect(
+      findCommandItem(unrecognizedTabMenu?.items, 'platformScripture.openFind'),
+    ).toHaveProperty('shortcut', 'Ctrl+F');
+    const { tabMenu: recognizedTabMenu } = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(findCommandItem(recognizedTabMenu?.items, 'platformScripture.openFind')).toHaveProperty(
+      'shortcut',
+      'Ctrl+F',
+    );
+  });
 });

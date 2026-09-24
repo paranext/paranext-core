@@ -38,6 +38,9 @@ export function MarkdownRenderer({
         a: {
           props: {
             target: anchorTarget,
+            // Harden links opened in a new tab against reverse-tabnabbing (the opened page can
+            // otherwise reach back through window.opener).
+            rel: anchorTarget === '_blank' ? 'noopener noreferrer' : undefined,
           },
         },
       },

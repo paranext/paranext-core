@@ -64,6 +64,16 @@ vi.mock('@shared/services/window.service', () => ({
   },
 }));
 
+// Mock localizationService so the fire-and-forget aria-live announcement in showContextMenu
+// (announceLocalizedToScreenReader) resolves immediately instead of reaching the real
+// data-provider/network stack, which is unavailable in this test environment and was an
+// intermittent source of unhandled rejections surfacing after a test had already completed.
+vi.mock('@shared/services/localization.service', () => ({
+  localizationService: {
+    getLocalizedStrings: vi.fn(() => Promise.resolve({})),
+  },
+}));
+
 const mockGetWebViewMenu = vi.mocked(menuDataService.getWebViewMenu);
 
 describe('showContextMenu contribution integration', () => {

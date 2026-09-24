@@ -25,9 +25,22 @@
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "experimental": ["./dist/experimental.d.ts"]
+    }
+  },
   "exports": {
-    "import": "./dist/index.js",
-    "require": "./dist/index.cjs"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./experimental": {
+      "types": "./dist/experimental.d.ts",
+      "import": "./dist/experimental.js",
+      "require": "./dist/experimental.cjs"
+    }
   },
   "files": ["dist"],
   "scripts": {
@@ -46,11 +59,11 @@
     "typecheck": "tsc -p ./tsconfig.json"
   },
   "dependencies": {
-    "@eten-tech-foundation/scripture-utilities": "~0.1.6",
+    "@eten-tech-foundation/scripture-utilities": "file:../../dev-packages/staging/scripture-utilities",
     "async-mutex": "^0.5.0",
     "dompurify": "^3.4.0",
     "jsonpath-plus": "^10.3.0",
-    "stringz": "^2.1.0"
+    "unicode-segmenter": "^0.17.3"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -66,7 +79,7 @@
     "typedoc": "^0.28.3",
     "typescript": "^5.8.3",
     "vite": "^6.4.2",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.7"
   },
   "volta": {
     "extends": "../../package.json"

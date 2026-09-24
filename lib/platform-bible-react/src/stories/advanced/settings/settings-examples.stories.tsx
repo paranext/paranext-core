@@ -19,8 +19,6 @@ import {
   CardTitle,
 } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
-
 // Create a dummy component for the meta
 function SettingsExamples() {
   return <div>Settings Examples</div>;
@@ -30,13 +28,6 @@ const meta: Meta<typeof SettingsExamples> = {
   title: 'Advanced/Settings/SettingsExamples',
   component: SettingsExamples,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
   parameters: {
     docs: {
       description: {

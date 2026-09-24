@@ -121,10 +121,7 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName)!;
 
         string jsonBody = new ResourceReferenceList().SerializeToJson();
-        SetRawSetting(
-            ptSettingName,
-            $"{ResourceReferenceList.CurrentFormatVersion} {jsonBody}"
-        );
+        SetRawSetting(ptSettingName, $"{ResourceReferenceList.CurrentFormatVersion} {jsonBody}");
 
         var result = _provider.GetProjectSetting(pbSettingName);
 
@@ -152,10 +149,7 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
             ],
         };
         string jsonBody = originalList.SerializeToJson();
-        SetRawSetting(
-            ptSettingName,
-            $"{ResourceReferenceList.CurrentFormatVersion} {jsonBody}"
-        );
+        SetRawSetting(ptSettingName, $"{ResourceReferenceList.CurrentFormatVersion} {jsonBody}");
 
         var result = _provider.GetProjectSetting(pbSettingName);
 
@@ -272,10 +266,7 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
         var roundTripped = jsonBody.DeserializeFromJson<ResourceReferenceList>();
         Assert.That(roundTripped, Is.Not.Null);
         Assert.That(roundTripped!.Items, Is.Empty);
-        Assert.That(
-            roundTripped.DataVersion,
-            Is.EqualTo(ResourceReferenceList.CurrentDataVersion)
-        );
+        Assert.That(roundTripped.DataVersion, Is.EqualTo(ResourceReferenceList.CurrentDataVersion));
     }
 
     [TestCase(ProjectSettingsNames.PB_MODEL_TEXTS)]
@@ -340,6 +331,72 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
         Assert.That(list.Items[1], Is.InstanceOf<DblResourceReference>());
         Assert.That(((DblResourceReference)list.Items[1]).Id, Is.EqualTo("bbb222"));
         Assert.That(list.Items[2], Is.InstanceOf<EnhancedResourceReference>());
+    }
+
+    #endregion
+
+    #region Migration — old version reads, new version written back (PT-4050)
+
+    [TestCase(ProjectSettingsNames.PB_MODEL_TEXTS)]
+    [TestCase(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES)]
+    public void GetProjectSetting_OldVersionFileWithoutFlags_ReadsWithNullFlags(
+        string pbSettingName
+    )
+    {
+        string ptSettingName =
+            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName)!;
+        // A 1.0.0 file with no flag keys — as written by an old build.
+        SetRawSetting(
+            ptSettingName,
+            """1.0.0 {"dataVersion":"1.0.0","items":[{"type":"project","name":"P","id":"aabbcc"}]}"""
+        );
+
+        var list = (ResourceReferenceList)_provider.GetProjectSetting(pbSettingName)!;
+        var item = (ProjectReference)list.Items[0];
+
+        Assert.That(item.IsInTextCollection, Is.Null);
+        Assert.That(item.IsInTextCollectionForUser, Is.Null);
+    }
+
+    [TestCase(ProjectSettingsNames.PB_MODEL_TEXTS)]
+    [TestCase(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES)]
+    public void SetProjectSetting_WritesBackCurrentFormatVersion(string pbSettingName)
+    {
+        string ptSettingName =
+            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName)!;
+        SetRawSetting(
+            ptSettingName,
+            """1.0.0 {"dataVersion":"1.0.0","items":[{"type":"project","name":"P","id":"aabbcc"}]}"""
+        );
+
+        // Read the old file, then write it back unchanged.
+        var list = (ResourceReferenceList)_provider.GetProjectSetting(pbSettingName)!;
+        _provider.SetProjectSetting(pbSettingName, list.SerializeToJson());
+
+        string stored = _scrText.Settings.ParametersDictionary[ptSettingName];
+        Assert.That(stored, Does.StartWith("1.1.0 "));
+    }
+
+    [TestCase(ProjectSettingsNames.PB_MODEL_TEXTS)]
+    [TestCase(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES)]
+    public void SetThenGet_IsIdempotent_AcrossMigration(string pbSettingName)
+    {
+        string ptSettingName =
+            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName)!;
+        SetRawSetting(
+            ptSettingName,
+            """1.0.0 {"dataVersion":"1.0.0","items":[{"type":"project","name":"P","id":"aabbcc"}]}"""
+        );
+
+        var first = (ResourceReferenceList)_provider.GetProjectSetting(pbSettingName)!;
+        _provider.SetProjectSetting(pbSettingName, first.SerializeToJson());
+        var second = (ResourceReferenceList)_provider.GetProjectSetting(pbSettingName)!;
+        _provider.SetProjectSetting(pbSettingName, second.SerializeToJson());
+        var third = (ResourceReferenceList)_provider.GetProjectSetting(pbSettingName)!;
+
+        Assert.That(third.Items, Has.Count.EqualTo(1));
+        Assert.That(((ProjectReference)third.Items[0]).Id, Is.EqualTo("aabbcc"));
+        Assert.That(((ProjectReference)third.Items[0]).IsInTextCollection, Is.Null);
     }
 
     #endregion

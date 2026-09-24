@@ -1,4 +1,5 @@
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { isMacOs } from '@/utils/platform.util';
 import { MutableRefObject, PropsWithChildren, useEffect, useRef } from 'react';
 
 /** Properties for the `KeyboardShortcutsPlugin` component */
@@ -27,7 +28,7 @@ export function EditorKeyboardShortcuts({
 
   // Listen for the standard undo/redo shortcuts for the current OS.
   useEffect(() => {
-    const isMac = /Macintosh/i.test(navigator.userAgent);
+    const isMac = isMacOs();
     const editorInput = divRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
 
     const handleKeyDown = (event: KeyboardEvent) => {

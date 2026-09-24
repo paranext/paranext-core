@@ -3,8 +3,21 @@
 // this is required for many overwrites
 /* stylelint-disable selector-class-pattern */
 
+@use './simple-mode';
+
+// Semi-transparent amber for the Find current-result highlight, shared by the base rule and the
+// ::selection re-apply below. Deliberately a fixed amber rather than a theme token: it must read on
+// top of the ::selection primary/secondary colors and stay distinct from them in both light and
+// dark mode (see the find-result-highlight rules).
+$find-current-result-highlight-bg: rgb(255 213 0 / 40%);
+
 // Platform.Bible modifications
 
+// NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the
+// web view's sized flex column and this element (EditorKeyboardShortcuts, the paragraph-marker
+// tooltip overlay) leave it auto-height, so it grows to its content and the web view's outer
+// `tw:overflow-auto` wrapper is what actually scrolls. Scroll code must not assume this element
+// scrolls — editor-dom.util.ts discovers the scroll container dynamically (findScrollContainer).
 .editor-container {
   height: 100%;
   max-width: none;
@@ -33,6 +46,26 @@
 ::selection {
   color: var(--secondary-foreground);
   background-color: var(--secondary);
+}
+
+// Find/Replace current-result highlight.
+// Applied to the matched text via setAnnotation(range, 'find-result-highlight',
+// 'find-current-result') from the Find web view (platform-scripture/src/find.web-view.tsx), which
+// wraps the match in a TypedMarkNode carrying this class. Semi-transparent amber so it reads on top
+// of the ::selection color above (selectRange selects the same match) and stays distinct from the
+// primary/secondary selection in both light and dark mode.
+.editor-typed-mark-external-find-result-highlight {
+  background-color: $find-current-result-highlight-bg;
+  border-radius: 2px;
+}
+
+// The Find web view also calls selectRange on the current match, so the native ::selection color
+// (--primary when focused, --secondary when not) paints on top of the semi-transparent amber above
+// and hides it — the inactive --secondary reads as grayish-blue. Re-apply the amber to the selected
+// glyphs inside the find-result mark so the current result stays amber regardless of pane focus.
+.editor-typed-mark-external-find-result-highlight::selection,
+.editor-typed-mark-external-find-result-highlight ::selection {
+  background-color: $find-current-result-highlight-bg;
 }
 
 // focus ring
@@ -264,216 +297,51 @@ button {
   }
 }
 
-i.add-comment {
-  // could be replaced with lucid icon message-square-text
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chat-left-text.svg');
-  background-image: none;
+// Translator Comment annotations: editor-typed-mark-external-translator-comment comes
+// from ANNOTATION_TYPE_TRANSLATOR_COMMENT in platform-scripture-editor.web-view.tsx.
+// _editor.scss (upstream mirror) has no rule for it, so inserted comments rendered with
+// no visible marking. Styled as a dashed underline (matching Paratext 9) rather than a
+// persistent background highlight, so it stays visually distinct from whatever other
+// highlight (selection, verse markers, etc.) might be applied at the same time. On hover, a
+// background tint and solid underline give a clearer, transient affordance that it's clickable.
+.editor-typed-mark-external-translator-comment {
+  border-bottom: 1px dashed var(--muted-foreground);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+    border-bottom: 2px solid var(--foreground);
+  }
 }
 
-i.comments {
-  // could be replaced with lucid icon messages-square
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/comments.svg');
-  background-image: none;
+// Verse-arrival highlight: a brief pulse on the verse a navigation landed on. Applied by adding
+// `.highlighted` to the verse element returned by `scrollToVerse`, and removed on cleanup.
+//
+// Lives here rather than in the Scripture editor's own stylesheet because the read-only reference
+// panels need it too: Find's "go to result" scrolls those panels to the matched verse, and without
+// the pulse the user lands on a verse with nothing indicating which one matched.
+//
+// Highlight keyframes thanks to chazsolo at https://stackoverflow.com/a/55835473
+@keyframes highlight {
+  from {
+    background-color: yellow;
+  }
 }
 
-i.send {
-  // could be replaced with lucid icon send
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/send.svg');
-  background-image: none;
+.editor-container .highlighted {
+  position: relative;
 }
 
-.CommentPlugin_CommentsPanel_List_DeleteButton i.delete {
-  // could be replaced with lucid icon trash-2
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/trash3.svg');
-  background-image: none;
-  // linting does not like a duplicate rule, therefore putting it in here.
-  // overwriting requires this exact selector (or a more specific one)
-  left: 8px;
-  top: 8px;
-}
-
-// _editor.scss
-
-.link-editor div.link-edit {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/pencil-fill.svg');
-  background-image: none;
-}
-
-i.undo {
-  // could be replaced with lucid icon rotate-ccw
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/arrow-counterclockwise.svg');
-  background-image: none;
-}
-
-i.redo {
-  // could be replaced with lucid icon rotate-cw
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/arrow-clockwise.svg');
-  background-image: none;
-}
-
-.icon.m,
-.icon.nb,
-.icon.p,
-.icon.pi,
-.icon.paragraph {
-  // could be replaced with lucid icon text
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-paragraph.svg');
-  background-image: none;
-}
-
-.icon.ms,
-.icon.ms1,
-.icon.r,
-.icon.s,
-.icon.large-heading,
-.icon.h1 {
-  // could be replaced with lucid icon heading-1
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h1.svg');
-  background-image: none;
-}
-
-.icon.ms2,
-.icon.small-heading,
-.icon.h2 {
-  // could be replaced with lucid icon heading-2
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h2.svg');
-  background-image: none;
-}
-
-.icon.ms3,
-.icon.h3 {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h3.svg');
-  background-image: none;
-}
-
-.icon.mt,
-.icon.mt1,
-.icon.square-1 {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/1-square.svg');
-  background-image: none;
-}
-
-.icon.mt2,
-.icon.square-2 {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/2-square.svg');
-  background-image: none;
-}
-
-.icon.mt3,
-.icon.square-3 {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/3-square.svg');
-  background-image: none;
-}
-
-.icon.mt4,
-.icon.square-4 {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/4-square.svg');
-  background-image: none;
-}
-
-.icon.cl,
-.icon.bookmark {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/bookmark.svg');
-  background-image: none;
-}
-
-.icon.ide,
-.icon.h,
-.icon.h1,
-.icon.h2,
-.icon.h3,
-.icon.toc1,
-.icon.toc2,
-.icon.toc3,
-.icon.file-earmark {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/file-earmark.svg');
-  background-image: none;
-}
-
-.icon.bullet-list,
-.icon.ul {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/list-ul.svg');
-  background-image: none;
-}
-
-.icon.numbered-list,
-.icon.ol {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/list-ol.svg');
-  background-image: none;
-}
-
-.icon.b,
-.icon.q1,
-.icon.q2,
-.icon.quote {
-  // could be replaced with lucid icon message-square-quote
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chat-square-quote.svg');
-  background-image: none;
-}
-
-.icon.ban {
-  // could be replaced with lucid icon lucide-ban
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/ban.svg');
-  background-image: none;
-}
-
-.icon.code {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/code.svg');
-  background-image: none;
-}
-
-i.bold {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-bold.svg');
-  background-image: none;
-}
-
-i.italic {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-italic.svg');
-  background-image: none;
-}
-
-i.underline {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-underline.svg');
-  background-image: none;
-}
-
-i.strikethrough {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-strikethrough.svg');
-  background-image: none;
-}
-
-i.code {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/code.svg');
-  background-image: none;
-}
-
-i.link {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/link.svg');
-  background-image: none;
-}
-
-i.left-align {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-left.svg');
-  background-image: none;
-}
-
-i.center-align {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-center.svg');
-  background-image: none;
-}
-
-i.right-align {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-right.svg');
-  background-image: none;
-}
-
-i.justify-align {
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/justify.svg');
-  background-image: none;
-}
-
-i.chevron-down {
-  // could be replaced with lucid icon chevron-down
-  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chevron-down.svg');
-  background-image: none;
+.editor-container .highlighted::before {
+  content: '';
+  position: absolute;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.8;
+  animation: highlight 2s;
 }

@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Kbd } from '@/components/shadcn-ui/kbd';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Kbd> = {
   title: 'Shadcn/Kbd',
@@ -8,11 +7,9 @@ const meta: Meta<typeof Kbd> = {
   tags: ['autodocs', 'test'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:p-4">
+        <Story />
+      </div>
     ),
   ],
 };

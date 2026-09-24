@@ -1,0 +1,1050 @@
+import { WebViewProps } from '@papi/core';
+import papi, { logger, network } from '@papi/frontend';
+import { useData, useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
+import {
+  useEvent,
+  ScopeSelector,
+  SCOPE_SELECTOR_STRING_KEYS,
+  usePromise,
+} from 'platform-bible-react';
+import {
+  ProjectSelector,
+  PROJECT_SELECTOR_STRING_KEYS,
+  buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
+  buildSelectionGroupingStrings,
+  makeBuiltInGroupings,
+  makeSelectionGrouping,
+  resolveLocalizedString,
+  type ProjectSelectorGrouping,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProject,
+  type ProjectSelectorProjectPair,
+  type ScopeWithRange,
+} from 'platform-bible-react/experimental';
+import {
+  defaultScrRef,
+  formatReplacementString,
+  formatScrRef,
+  getErrorMessage,
+  isPlatformError,
+  makeProjectSelectorCustomData,
+  normalizeProjectId,
+} from 'platform-bible-utils';
+import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
+import type {
+  ChecklistComparativeTextRef,
+  ChecklistRequest,
+  ChecklistResultResponse,
+  ScriptureRange,
+} from 'platform-scripture';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { projectNamesFromMetadata } from './project-names.util';
+import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
+import type {
+  ChecklistCell,
+  ChecklistData,
+  ChecklistEmptyResultMessage,
+  ChecklistRow,
+} from './components/checklist.component';
+import {
+  MarkerSettingsDialog,
+  MARKER_SETTINGS_STRING_KEYS,
+} from './components/marker-settings-dialog.component';
+import { useChecklistService } from './hooks/use-checklist';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
+import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
+import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
+
+// ─── Constants ─────────────────────────────────────────────────────────────
+
+/**
+ * Fallback menu used while the menu-data subscription is pending or errored. Matches the pattern
+ * used by `platform-scripture-editor.web-view.tsx:141-145`. When the real menu arrives, the
+ * memoized `webViewMenu` below narrows to the concrete value.
+ */
+const DEFAULT_WEBVIEW_MENU = {
+  topMenu: undefined,
+  includeDefaults: true,
+  contextMenu: undefined,
+};
+
+const MARKERS_CHECKLIST_WEB_VIEW_TYPE = 'platformScripture.markersChecklist';
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * Narrow the discriminated-union `ChecklistResultResponse` success body to the `ChecklistData`
+ * shape the presentational component consumes. The wire format uses `unknown[]` + `unknown` for the
+ * rows + empty-result message (see `platform-scripture.d.ts` §Markers Checklist Types); both are
+ * validated upstream by the backend, so we cast through `unknown` to the stricter component types
+ * here. If the response shape ever drifts, TypeScript will flag the direct access sites below
+ * (row/cell/emptyResultMessage destructuring) before this hidden cast blows up.
+ */
+function toChecklistData(body: Extract<ChecklistResultResponse, { success: true }>): ChecklistData {
+  return {
+    // The backend already emits the structural shape the component expects; we trust the contract
+    // and narrow via `unknown` so we don't have to re-validate every field at runtime. Any future
+    // drift will surface at the row/cell destructuring sites below.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    rows: body.rows as unknown as ChecklistRow[],
+    columnHeaders: body.columnHeaders,
+    columnProjectIds: body.columnProjectIds,
+    excludedCount: body.excludedCount,
+    truncated: body.truncated,
+    // Same rationale as the rows cast — trust the data-contract.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    emptyResultMessage: body.emptyResultMessage as ChecklistEmptyResultMessage | undefined,
+  };
+}
+
+/**
+ * Build a tab-separated, human-readable snapshot of the currently visible checklist rows for the
+ * clipboard (BHV-313). We favour a simple `\t` + `\n` format so that pasting into a spreadsheet
+ * produces a grid; pasting into a text editor stays legible. `includedRows` is the post-filter row
+ * list (after `hideMatches` has been applied by the caller) so the clipboard matches what the user
+ * sees.
+ */
+function buildClipboardText(columnHeaders: string[], includedRows: ChecklistRow[]): string {
+  const headerLine = ['', ...columnHeaders].join('\t');
+  const bodyLines = includedRows.map((row) => {
+    const cellStrings = row.cells.map((cell) => cellToText(cell));
+    return [row.firstRef ? formatScrRef(row.firstRef.start) : '', ...cellStrings].join('\t');
+  });
+  return [headerLine, ...bodyLines].join('\n');
+}
+
+/** Flatten a cell's paragraph/item structure to a single clipboard-friendly string. */
+function cellToText(cell: ChecklistCell): string {
+  if (cell.error) return cell.error;
+  if (cell.paragraphs.length === 0) return '';
+  return cell.paragraphs
+    .map((paragraph) => {
+      const markerToken = `\\${paragraph.marker}`;
+      const itemTokens = paragraph.items
+        .map((item) => {
+          if (item.type === 'text') return item.text;
+          if (item.type === 'verse') return item.verseNumber;
+          if (item.type === 'link') return item.displayText;
+          if (item.type === 'error') return item.message;
+          if (item.type === 'message') return item.message;
+          // editLink — no textual representation
+          return '';
+        })
+        .filter((token) => token.length > 0);
+      return [markerToken, ...itemTokens].join(' ');
+    })
+    .join(' | ');
+}
+
+/**
+ * The built-in grouping ids both checklist project pickers offer, in `makeBuiltInGroupings` order.
+ * The comparative-texts picker appends `makeSelectionGrouping` on top of these — `'selection'` is
+ * not a built-in, so it is not a member of this list.
+ *
+ * `type` is left out because the checklist has no project-type source: the project fetch reads the
+ * name, full name and language off project metadata, which carries no type, so the grouping would
+ * put every row under a single "Unknown type" bucket.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in these pickers. That is deliberate: a new grouping reaches users only
+ * once someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toChecklistSelectorRows} actually packs, so adding an id here without adding
+ * its data is a build failure rather than a dead menu item.
+ */
+export const CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = [
+  'openTabs',
+  'lastUsed',
+  'language',
+];
+
+/**
+ * A checklist project as fetched, before its grouping inputs are packed. `rawLanguage` is held
+ * beside the row rather than inside `customData` so recency (which arrives from a separate
+ * subscription) can be merged in one pass.
+ */
+export type ChecklistRawProject = ProjectSelectorProject & { rawLanguage: string | undefined };
+
+/**
+ * Maps fetched checklist projects onto ProjectSelector rows, packing the grouping inputs the
+ * picker's built-in groupings read into `customData`. Exported for coverage tests.
+ *
+ * `recencyMap` must already be keyed by {@link normalizeProjectId}-normalized ids — the recents
+ * service stores whatever id its caller handed it, while these are canonical project ids, so
+ * normalizing only one side can miss on casing alone and route every project into the grouping's
+ * "Other" bucket.
+ */
+export function toChecklistSelectorRows(
+  projects: readonly ChecklistRawProject[],
+  recencyMap: ReadonlyMap<string, number>,
+): ProjectSelectorProject[] {
+  return projects.map(({ rawLanguage, ...rest }) => ({
+    ...rest,
+    customData: makeProjectSelectorCustomData({
+      language: rawLanguage,
+      lastUsedAt: recencyMap.get(normalizeProjectId(rest.id)),
+    }),
+  }));
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────
+
+/**
+ * Fully-wired Markers Checklist web view (UI-PKG-002 + UI-PKG-003 + UI-PKG-004).
+ *
+ * - **UI-PKG-002** — wires the `ChecklistTool` presentational component to the
+ *   `platformScripture.checklistService` NetworkObject (via `useChecklistService`), the tab-menu
+ *   data provider, the platform base PDP (for column full-name tooltips), and the browser
+ *   clipboard. A `try/catch` around `buildChecklistData` feeds the ChecklistTool's destructive
+ *   Alert + Retry affordance (T-R-2 contract).
+ * - **UI-PKG-003** — composes `MarkerSettingsDialog` adjacent to `ChecklistTool` and opens it in
+ *   response to the `CHECKLIST_OPEN_SETTINGS_EVENT` network event emitted by the tab-menu
+ *   `Settings…` command handler in `main.ts`. Submitted values are normalized inside the dialog
+ *   (see `marker-settings-dialog.component.tsx`) before being written back to the parent state.
+ * - **UI-PKG-004** — six adjacent `useWebViewState<T>(key, default)` slots declared at the top of the
+ *   component, backing per-web-view persistence for the checklist settings.
+ */
+global.webViewComponent = function ChecklistWebView({
+  projectId,
+  useWebViewState,
+  useWebViewScrollGroupScrRef,
+  updateWebViewDefinition,
+}: WebViewProps) {
+  // ─── UI-PKG-004: persisted state slots ────────────────────────────────────
+
+  // ─── Scroll group binding (drives currentScrRef + goto setter) ────────
+  // The fourth tuple slot (`setScrollGroupId`) is reserved for a future scroll-group picker UI
+  // (parity with checks-side-panel Tasks 13/14); omitted here until that UI is wired.
+  const [liveScrRef, setLiveScrRef, scrollGroupId] = useWebViewScrollGroupScrRef();
+
+  const [equivalentMarkers, setEquivalentMarkers] = useWebViewState<string>(
+    'checklistEquivalentMarkers',
+    '',
+  );
+  const [markerFilter, setMarkerFilter] = useWebViewState<string>('checklistMarkerFilter', '');
+  const [hideMatches, setHideMatches] = useWebViewState<boolean>('checklistHideMatches', false);
+  const [showVerseText, setShowVerseText] = useWebViewState<boolean>(
+    'checklistShowVerseText',
+    false,
+  );
+  // Comparative-texts selection is driven by the real `ProjectSelector` (`mode: 'project-multi'`,
+  // vendored from draft PR #2223).
+  const [comparativeTexts, setComparativeTexts] = useWebViewState<ChecklistComparativeTextRef[]>(
+    'checklistComparativeTexts',
+    [],
+  );
+  // R1 — mode-aware snapshot persistence (matches PT9's frozen-range model).
+  // - `scope` drives the ScopeSelector display label; `verseRange` auto-follows `liveScrRef`
+  //   via the effect below.
+  // - `verseRange` is the *frozen* request payload sent to the backend (PT9-equivalent;
+  //   `undefined` = "All Books", matching PT9 memento with empty FirstVerseRef/LastVerseRef).
+  // - `rangeStart` / `rangeEnd` back the BCV pickers shown in `range` mode.
+  // - `selectedBookIds` is wired to ScopeSelector but inert (its mode is not in availableScopes).
+  const [scope, setScope] = useWebViewState<ScopeWithRange>('checklistScope', 'chapter');
+  const [rangeStart, setRangeStart] = useWebViewState<SerializedVerseRef>(
+    'checklistRangeStart',
+    defaultScrRef,
+  );
+  const [rangeEnd, setRangeEnd] = useWebViewState<SerializedVerseRef>(
+    'checklistRangeEnd',
+    defaultScrRef,
+  );
+  const [verseRange, setVerseRange] = useWebViewState<ScriptureRange | undefined>(
+    'checklistVerseRange',
+    undefined,
+  );
+  const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
+    'checklistSelectedBookIds',
+    [],
+  );
+
+  // Note: `scope`, `setScope`, `rangeStart`, `setRangeStart`, `rangeEnd`,
+  // `setRangeEnd`, `selectedBookIds`, and `setSelectedBookIds` are all consumed below by the
+  // ScopeSelector wiring (Task 8). `setLiveScrRef` and `scrollGroupId` are consumed by the
+  // goto handler (Task 9). `setScrollGroupId` stays `void`-suppressed until a scroll-group
+  // picker is wired (parity with checks-side-panel Tasks 13/14).
+
+  // ─── Localization ─────────────────────────────────────────────────────────
+
+  const checklistStringKeys = useMemo(() => Array.from(CHECKLIST_STRING_KEYS), []);
+  const localizedStringsWithLoadingState = useLocalizedStrings(checklistStringKeys);
+  const [localizedStrings] = localizedStringsWithLoadingState;
+
+  const markerSettingsStringKeys = useMemo(() => Array.from(MARKER_SETTINGS_STRING_KEYS), []);
+  const markerSettingsLocalizedStrings = useLocalizedStrings(markerSettingsStringKeys);
+
+  const scopeSelectorStringKeys = useMemo(() => Array.from(SCOPE_SELECTOR_STRING_KEYS), []);
+  const [scopeSelectorLocalizedStrings] = useLocalizedStrings(scopeSelectorStringKeys);
+
+  const projectSelectorStringKeys = useMemo(() => Array.from(PROJECT_SELECTOR_STRING_KEYS), []);
+  const [projectSelectorResolvedStrings] = useLocalizedStrings(projectSelectorStringKeys);
+
+  // ─── Service + editability ────────────────────────────────────────────────
+
+  const { service } = useChecklistService(projectId);
+
+  // ─── Local UI state (ephemeral) ──────────────────────────────────────────
+
+  const [data, setData] = useState<ChecklistData | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [columnProjectFullNames, setColumnProjectFullNames] = useState<Record<string, string>>({});
+  const [columnDirections, setColumnDirections] = useState<
+    Record<string, 'ltr' | 'rtl' | undefined>
+  >({});
+
+  // ─── Books-present for ScopeSelector ──────────────────────────────────────
+  const [booksPresent, setBooksPresent] = useState<string>(
+    '0'.repeat(124), // 124 books per BookSet — empty default until project setting resolves
+  );
+  useEffect(() => {
+    if (!projectId) return () => {};
+    let cancelled = false;
+    (async () => {
+      try {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+        const next = await pdp.getSetting('platformScripture.booksPresent');
+        if (cancelled) return;
+        if (typeof next === 'string') setBooksPresent(next);
+      } catch (err) {
+        logger.debug(`ChecklistWebView: booksPresent fetch failed: ${getErrorMessage(err)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  // ─── Fetch checklist data when any request-shaping input changes ──────────
+
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // A monotonically-increasing counter used to force a refetch on Retry without re-shaping the
+  // request. Incrementing it triggers the effect below to re-run even though no other input
+  // changed.
+  const [refreshCounter, setRefreshCounter] = useState<number>(0);
+
+  useEffect(() => {
+    if (!service || !projectId) {
+      setData(undefined);
+      setIsLoading(false);
+      return () => {};
+    }
+
+    const request: ChecklistRequest = {
+      projectId,
+      comparativeTextIds: comparativeTexts.map((ref) => ref.id),
+      markerSettings: { equivalentMarkers, markerFilter },
+      verseRange,
+      // hideMatches/showVerseText are post-fetch filters; we pass them to the backend anyway so
+      // the `excludedCount` reflects what would be hidden if the filter were applied server-side,
+      // but we also filter client-side below for the visible-rows path.
+      hideMatches,
+      showVerseText,
+    };
+
+    setIsLoading(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await service.buildChecklistData(request);
+        if (cancelled || !isMountedRef.current) return;
+        // `ChecklistResultResponse` is a TS-only discriminated union; the C# side never sends
+        // a `success` field — narrowing is on the presence of `rows` (success shape) vs `code`
+        // (ChecklistResultError shape). See data-contracts.md §3.1.
+        if ('rows' in response) {
+          // The `'rows' in response` narrowing already proves response is the success variant,
+          // so we can pass it through without further casting.
+          setData(toChecklistData(response));
+          setError(undefined);
+        } else {
+          setData(undefined);
+          setError(response.message);
+        }
+      } catch (err) {
+        if (cancelled || !isMountedRef.current) return;
+        logger.warn(`ChecklistWebView: buildChecklistData failed: ${getErrorMessage(err)}`);
+        setData(undefined);
+        setError(getErrorMessage(err));
+      } finally {
+        if (!cancelled && isMountedRef.current) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    service,
+    projectId,
+    comparativeTexts,
+    equivalentMarkers,
+    markerFilter,
+    verseRange,
+    hideMatches,
+    showVerseText,
+    refreshCounter,
+  ]);
+
+  // ─── Resolve column full names for tooltip ────────────────────────────────
+
+  useEffect(() => {
+    const ids = data?.columnProjectIds ?? [];
+    if (ids.length === 0) {
+      setColumnProjectFullNames({});
+      return () => {};
+    }
+    let cancelled = false;
+    (async () => {
+      // Metadata rather than `pdp.getSetting('platform.fullName')` — see
+      // `projectNamesFromMetadata` for why that setting cannot answer "has no full name".
+      const entries = await Promise.all(
+        ids.map(async (id): Promise<[string, string | undefined]> => {
+          try {
+            const metadata = await papi.projectLookup.getMetadataForProject(id);
+            return [id, projectNamesFromMetadata(metadata).fullName];
+          } catch (err) {
+            logger.warn(
+              `ChecklistWebView: failed to resolve full name for ${id}: ${getErrorMessage(err)}`,
+            );
+            return [id, undefined];
+          }
+        }),
+      );
+      if (cancelled) return;
+      // A column with no distinct full name is simply absent from the map; the header falls back to
+      // its short name on its own.
+      setColumnProjectFullNames(
+        Object.fromEntries(entries.filter((entry): entry is [string, string] => !!entry[1])),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.columnProjectIds]);
+
+  // ─── Resolve per-column text direction (RTL/LTR) ──────────────────────────
+  //
+  // Per Localization-Guide.md → Text Direction (RTL/LTR), per-content text direction comes from
+  // the `platform.textDirection` project setting (admins can override; the platform derives it
+  // from the project's language definition by default). We resolve it once per column projectId
+  // so RTL projects (Hebrew, Arabic, Persian, Urdu, etc.) render right-to-left.
+
+  useEffect(() => {
+    const ids = data?.columnProjectIds ?? [];
+    if (ids.length === 0) {
+      setColumnDirections({});
+      return () => {};
+    }
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        ids.map(async (id): Promise<[string, 'ltr' | 'rtl' | undefined]> => {
+          try {
+            const pdp = await papi.projectDataProviders.get('platform.base', id);
+            const direction = await pdp.getSetting('platform.textDirection');
+            // Setting type is `'ltr' | 'rtl' | '' | undefined`; map empty/undefined to undefined
+            // so the component falls back to document direction.
+            if (direction === 'rtl') return [id, 'rtl'];
+            if (direction === 'ltr') return [id, 'ltr'];
+            return [id, undefined];
+          } catch (err) {
+            logger.warn(
+              `ChecklistWebView: failed to resolve textDirection for ${id}: ${getErrorMessage(err)}`,
+            );
+            return [id, undefined];
+          }
+        }),
+      );
+      if (cancelled) return;
+      setColumnDirections(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.columnProjectIds]);
+
+  // ─── Versification lookups (Theme 6) ──────────────────────────────────────
+  //
+  // Mirrors the versification-PDP block in platform-scripture-editor.web-view.tsx. Uses the
+  // per-project Versification PDP for current-book verse counts; other books would need their own
+  // fetch/cache (matches the scripture-editor's existing limitation).
+
+  const currentBookNum = useMemo(() => Canon.bookIdToNumber(liveScrRef.book), [liveScrRef.book]);
+
+  const versificationPdp = useProjectDataProvider('platformScripture.Versification', projectId);
+
+  const fetchLastVersesInCurrentBook = useCallback(async (): Promise<number[] | undefined> => {
+    if (!versificationPdp || currentBookNum <= 0) return undefined;
+    try {
+      return await versificationPdp.getFinalVerseNumbersInBook(currentBookNum);
+    } catch (err) {
+      logger.debug(`ChecklistWebView: Versification PDP unavailable: ${getErrorMessage(err)}`);
+      return undefined;
+    }
+  }, [versificationPdp, currentBookNum]);
+  const [lastVersesInCurrentBook] = usePromise(fetchLastVersesInCurrentBook, undefined);
+
+  const getEndVerse = useCallback(
+    (bookId: string, chapterNum: number): number => {
+      if (Canon.bookIdToNumber(bookId) !== currentBookNum) return 0;
+      return lastVersesInCurrentBook?.[chapterNum] ?? 0;
+    },
+    [currentBookNum, lastVersesInCurrentBook],
+  );
+
+  // Last-chapter lookup derived from the same per-book array as getEndVerse.
+  // The verses array is 1-indexed (matches the `[chapterNum]` access in getEndVerse above), so
+  // length - 1 yields the highest chapter number. Returns 0 for non-current books —
+  // computeRangeFromScope tolerates 0 by falling back to the documented 999 sentinel
+  // (FALLBACK_END_CHAPTER).
+  const getLastChapter = useCallback(
+    (bookId: string): number => {
+      if (Canon.bookIdToNumber(bookId) !== currentBookNum) return 0;
+      if (!lastVersesInCurrentBook || lastVersesInCurrentBook.length === 0) return 0;
+      return lastVersesInCurrentBook.length - 1;
+    },
+    [currentBookNum, lastVersesInCurrentBook],
+  );
+
+  // ─── Client-side filtering for hideMatches ────────────────────────────────
+
+  const visibleData = useMemo<ChecklistData | undefined>(() => {
+    if (!data) return undefined;
+    if (!hideMatches) return data;
+    return {
+      ...data,
+      rows: data.rows.filter((row) => !row.isMatch),
+    };
+  }, [data, hideMatches]);
+
+  // ─── Match count label (BHV-303) ──────────────────────────────────────────
+
+  const matchCountLabel = useMemo<string | undefined>(() => {
+    if (!hideMatches) return undefined;
+    const excluded = data?.excludedCount ?? 0;
+    if (excluded <= 0) return undefined;
+    const template =
+      localizedStrings['%markersChecklist_matches_omitted%'] ?? '{count} Matches Omitted';
+    return formatReplacementString(template, { count: String(excluded) });
+  }, [hideMatches, data?.excludedCount, localizedStrings]);
+
+  // ─── Tab menu data via menuData provider ──────────────────────────────────
+
+  const [webViewMenuPossiblyError] = useData(papi.menuData.dataProviderName).WebViewMenu(
+    MARKERS_CHECKLIST_WEB_VIEW_TYPE,
+    DEFAULT_WEBVIEW_MENU,
+  );
+
+  const webViewMenu = useMemo(() => {
+    if (isPlatformError(webViewMenuPossiblyError)) {
+      logger.warn(
+        `ChecklistWebView: failed to load web view menu for ${MARKERS_CHECKLIST_WEB_VIEW_TYPE}`,
+        webViewMenuPossiblyError,
+      );
+      return DEFAULT_WEBVIEW_MENU;
+    }
+    return webViewMenuPossiblyError;
+  }, [webViewMenuPossiblyError]);
+
+  // ─── Subscribe to the "open settings" network event (UI-PKG-003) ─────────
+
+  const handleOpenSettingsEvent = useCallback(() => {
+    setIsSettingsOpen(true);
+  }, []);
+  useEvent(network.getNetworkEvent(CHECKLIST_OPEN_SETTINGS_EVENT), handleOpenSettingsEvent);
+
+  // ─── Project-menu item selection handler ──────────────────────────────────
+  //
+  // Items defined in `extensions/src/platform-scripture/contributions/menus.json` for
+  // `platformScripture.markersChecklist`'s top menu fire here. Most items dispatch via
+  // `papi.commands.sendCommand` (so future contributions from other extensions wire
+  // automatically), but we intercept `platformScripture.copyMarkersChecklist` locally because
+  // the copy action operates on the live web-view's visible data — there's no point in routing
+  // it through PAPI just to send the result back.
+
+  const handleSelectProjectMenuItem = useCallback(
+    (selectedMenuItem: { [key: string]: unknown; command: string }) => {
+      const { command } = selectedMenuItem;
+      if (!command) return;
+      // Local intercept: copy operates on the live web-view's visible rows; routing through PAPI
+      // would just round-trip and come back. Build the clipboard text inline here using the
+      // current `visibleData` snapshot.
+      if (command === 'platformScripture.copyMarkersChecklist') {
+        if (!visibleData) return;
+        const clipboardText = buildClipboardText(visibleData.columnHeaders, visibleData.rows);
+        navigator.clipboard.writeText(clipboardText).catch((err) => {
+          logger.warn(`ChecklistWebView: clipboard write failed: ${getErrorMessage(err)}`);
+        });
+        return;
+      }
+      // Other commands (e.g. `platformScripture.openMarkersChecklistSettings`) route via PAPI.
+      // The registered handler in main.ts emits CHECKLIST_OPEN_SETTINGS_EVENT, which this web
+      // view picks up via `useEvent` above to open the dialog.
+      papi.commands
+        // The PAPI sendCommand type requires a registered command-name literal union. Menu items
+        // contain arbitrary registered command names at runtime, so we intentionally widen via a
+        // cast to `Parameters<...>[0]` mirroring the editor's pattern. A runtime-validated dispatch
+        // wrapper would be overkill here.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        .sendCommand(command as Parameters<typeof papi.commands.sendCommand>[0])
+        .catch((err) =>
+          logger.warn(
+            `ChecklistWebView: project-menu command "${command}" failed: ${getErrorMessage(err)}`,
+          ),
+        );
+    },
+    [visibleData],
+  );
+
+  // ─── Comparative-texts picker via real ProjectSelector (draft PR #2223) ────
+  //
+  // Fetch all scripture projects on mount; filter the primary out (no self-comparison); track open
+  // tabs for the "Open tabs" section in the popover. On selection change, map the returned
+  // `ProjectSelectorProjectPair[]` back to our `ChecklistComparativeTextRef[]` persistence shape.
+
+  const [allProjectsRaw] = usePromise(
+    useCallback(async () => {
+      const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        // Scripture + Paratext project interfaces — mirrors checks-side-panel's filter so we pick
+        // up the same project set that the scripture editor shows.
+        includeProjectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.USFM_Book'],
+      });
+      // Names and language come off the metadata above rather than a `pdp.getSetting` fan-out —
+      // see `projectNamesFromMetadata` for why. `language` lets the built-in `language` grouping
+      // partition rows into real per-language buckets rather than everything under "Unknown
+      // language".
+      return allMetadata.map((metadata): ChecklistRawProject => {
+        const { language, ...names } = projectNamesFromMetadata(metadata);
+        return { id: metadata.id, ...names, rawLanguage: language };
+      });
+    }, []),
+    useMemo<ChecklistRawProject[]>(() => [], []),
+  );
+
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('ChecklistWebView');
+
+  const allProjects = useMemo<ProjectSelectorProject[]>(
+    () => toChecklistSelectorRows(allProjectsRaw, recencyMap),
+    [allProjectsRaw, recencyMap],
+  );
+
+  const comparativeProjects = useMemo<ProjectSelectorProject[]>(
+    () => allProjects.filter((p) => p.id !== projectId),
+    [allProjects, projectId],
+  );
+
+  // Comparative-texts ProjectSelector tracks ALL project-bound tabs (no webViewType filter).
+  // The shared `useOpenProjectTabs` hook (introduced for goto-focus tracking) returns a richer
+  // shape with webViewId + webViewType; map back to the lighter ProjectSelectorOpenTab shape that
+  // ProjectSelector's `openTabs` prop expects.
+  const allOpenProjectTabs = useOpenProjectTabs();
+  const comparativeOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
+    () =>
+      allOpenProjectTabs.map((t) => ({ projectId: t.projectId, scrollGroupId: t.scrollGroupId })),
+    [allOpenProjectTabs],
+  );
+
+  // ─── Editor-tab tracking (for goto focus, Q4-C) ───────────────────────────
+  const editorTabsFilter = useCallback(
+    (wv: { webViewType: string }) => wv.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+    [],
+  );
+  const editorTabs = useOpenProjectTabs(editorTabsFilter);
+  const editorTabsByProject = useMemo(
+    () => new Map(editorTabs.map((t) => [t.projectId, t])),
+    [editorTabs],
+  );
+
+  // `project-multi` renders one row per (project, scroll group) open tab, but a comparative-text
+  // ref names a project and carries no scroll group. Feed the picker one open tab per project —
+  // the lowest scroll group it is open in — so a project open in several groups is a single
+  // selectable row whose identity matches what gets stored. That keeps the "Open tabs" grouping
+  // usable without ever offering two rows that would store the same project twice.
+  const comparativeOpenTabByProject = useMemo(() => {
+    const lowestTabByProject = new Map<string, ProjectSelectorOpenTab>();
+    comparativeOpenTabs.forEach((tab) => {
+      const key = normalizeProjectId(tab.projectId);
+      const existing = lowestTabByProject.get(key);
+      if (!existing || tab.scrollGroupId < existing.scrollGroupId) lowestTabByProject.set(key, tab);
+    });
+    return lowestTabByProject;
+  }, [comparativeOpenTabs]);
+
+  const collapsedComparativeOpenTabs = useMemo(
+    () => [...comparativeOpenTabByProject.values()],
+    [comparativeOpenTabByProject],
+  );
+
+  // A row for an open project is keyed by (projectId, scrollGroupId), so pair each stored ref with
+  // the scroll group of the row it belongs to. Without it the stored selection would never light
+  // up its row, and clicking that row would add a second copy instead of toggling the ref off.
+  const comparativeSelection = useMemo(
+    () => ({
+      pairs: comparativeTexts.map((ref) => ({
+        projectId: ref.id,
+        scrollGroupId: comparativeOpenTabByProject.get(normalizeProjectId(ref.id))?.scrollGroupId,
+      })),
+    }),
+    [comparativeTexts, comparativeOpenTabByProject],
+  );
+
+  const handleComparativeTextsChange = useCallback(
+    (selection: { pairs: ProjectSelectorProjectPair[] }) => {
+      const projectIdToName = new Map(allProjects.map((p) => [p.id, p.shortName]));
+      // Comparative texts are stored per project, so collapse the incoming pairs to one ref per
+      // project id: whatever rows a project is reachable through, it is stored exactly once.
+      const seenProjectIds = new Set<string>();
+      const nextRefs: ChecklistComparativeTextRef[] = [];
+      selection.pairs.forEach((pair) => {
+        const key = normalizeProjectId(pair.projectId);
+        if (seenProjectIds.has(key)) return;
+        seenProjectIds.add(key);
+        nextRefs.push({
+          id: pair.projectId,
+          name: projectIdToName.get(pair.projectId) ?? pair.projectId,
+        });
+      });
+      setComparativeTexts(nextRefs);
+    },
+    [allProjects, setComparativeTexts],
+  );
+
+  const projectSelectorLocalizedStrings = useMemo(
+    () => buildProjectSelectorLocalizedStrings(projectSelectorResolvedStrings),
+    [projectSelectorResolvedStrings],
+  );
+
+  // Built-in groupings for the primary-project picker, narrowed to the ids the checklist offers.
+  // See CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
+  const primaryProjectGroupings = useMemo(
+    () =>
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorResolvedStrings)).filter(
+        (grouping) => CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [projectSelectorResolvedStrings],
+  );
+
+  // Comparative-texts picker: the same built-in options as the primary picker PLUS the multi-select
+  // Selection grouping (Selected / Unselected bucketing), which partitions off row selection state
+  // rather than `customData` and so is appended after the narrowing rather than named in it.
+  // Explicit array — when a consumer passes `availableGroupings`, the component uses it verbatim
+  // with no auto-additions.
+  const comparativeTextsGroupings = useMemo<ProjectSelectorGrouping[]>(
+    () => [
+      ...primaryProjectGroupings,
+      makeSelectionGrouping(buildSelectionGroupingStrings(projectSelectorResolvedStrings)),
+    ],
+    [primaryProjectGroupings, projectSelectorResolvedStrings],
+  );
+
+  // One label per picker, used as both the trigger's visible placeholder and its accessible name so
+  // the two can never disagree on the unresolved path. The last candidate is a literal this file
+  // owns, because the picker's own English default ("Select a project") is too generic to identify
+  // which of the two toolbar pickers a screen reader has landed on. Mirrors
+  // `%markersChecklist_toolbar_*%` in contributions/localizedStrings.json.
+  const comparativeProjectsLabel = resolveLocalizedString(
+    localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
+    'Select comparative projects',
+  );
+  const primaryProjectPickerLabel = resolveLocalizedString(
+    localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+    'Select primary Scripture text',
+  );
+
+  const comparativeTextsSelectorNode = useMemo(
+    () => (
+      <div data-testid="checklist-comparative-texts-trigger" className="tw:min-w-32">
+        <ProjectSelector
+          mode="project-multi"
+          projects={comparativeProjects}
+          openTabs={collapsedComparativeOpenTabs}
+          selection={comparativeSelection}
+          onChangeSelection={handleComparativeTextsChange}
+          localizedStrings={{
+            ...projectSelectorLocalizedStrings,
+            buttonPlaceholder: comparativeProjectsLabel,
+            ariaLabel: comparativeProjectsLabel,
+          }}
+          availableGroupings={comparativeTextsGroupings}
+        />
+      </div>
+    ),
+    [
+      collapsedComparativeOpenTabs,
+      comparativeProjects,
+      comparativeSelection,
+      handleComparativeTextsChange,
+      projectSelectorLocalizedStrings,
+      comparativeTextsGroupings,
+      comparativeProjectsLabel,
+    ],
+  );
+
+  // ─── ScopeSelector handlers (R1: snapshot at click-time) ─────────────────
+
+  const handleScopeChange = useCallback(
+    (newScope: ScopeWithRange) => {
+      // Auto-follow: verseRange is derived via the effect below from {scope, liveScrRef,
+      // rangeStart, rangeEnd}. handleScopeChange just commits the new mode.
+      setScope(newScope);
+    },
+    [setScope],
+  );
+
+  const handleRangeStartChange = useCallback(
+    (next: SerializedVerseRef) => {
+      setRangeStart(next);
+      if (scope === 'range') setVerseRange({ start: next, end: rangeEnd });
+    },
+    [scope, rangeEnd, setRangeStart, setVerseRange],
+  );
+
+  const handleRangeEndChange = useCallback(
+    (next: SerializedVerseRef) => {
+      setRangeEnd(next);
+      if (scope === 'range') setVerseRange({ start: rangeStart, end: next });
+    },
+    [scope, rangeStart, setRangeEnd, setVerseRange],
+  );
+
+  // ─── Retry handler ────────────────────────────────────────────────────────
+
+  const handleRetry = useCallback(() => {
+    setRefreshCounter((n) => n + 1);
+  }, []);
+
+  // ─── View-toggle change handlers (write through to persisted slots) ─────
+
+  const handleHideMatchesChange = useCallback(
+    (next: boolean) => {
+      setHideMatches(next);
+    },
+    [setHideMatches],
+  );
+
+  const handleShowVerseTextChange = useCallback(
+    (next: boolean) => {
+      setShowVerseText(next);
+    },
+    [setShowVerseText],
+  );
+
+  // ─── Dialog submit/cancel ────────────────────────────────────────────────
+
+  const handleSettingsSubmit = useCallback(
+    ({
+      equivalentMarkers: nextEquivalent,
+      markerFilter: nextFilter,
+    }: {
+      equivalentMarkers: string;
+      markerFilter: string;
+    }) => {
+      // Collapse internal whitespace runs in the equivalent-markers string before persisting (the
+      // dialog just trims now per Sebastian PR #2219 #3138226285 — validation/normalization
+      // concerns moved out of the presentational component). The backend stores the value
+      // verbatim; we keep the canonical wire format here so it matches what the backend's
+      // validateMarkerSettings parsing expects.
+      setEquivalentMarkers(nextEquivalent.replace(/\s+/g, ' '));
+      setMarkerFilter(nextFilter);
+      setIsSettingsOpen(false);
+    },
+    [setEquivalentMarkers, setMarkerFilter],
+  );
+
+  // Backend validation callback for the MarkerSettingsDialog. Calls the backend's
+  // `validateMarkerSettings` PAPI command via the network-object proxy. The dialog calls this
+  // (debounced) on every input change so the inline validation feedback reflects backend truth.
+  // If the service proxy isn't available yet (e.g. during initial mount), return a permissive
+  // valid result — the dialog will retry on the next input change once the proxy resolves.
+  const handleSettingsValidate = useCallback(
+    async (input: string) => {
+      if (!service) {
+        return { valid: true, parsedPairs: undefined, errorMessage: undefined };
+      }
+      return service.validateMarkerSettings(input);
+    },
+    [service],
+  );
+
+  const handleSettingsCancel = useCallback(() => {
+    setIsSettingsOpen(false);
+  }, []);
+
+  // ─── Primary-project picker via real ProjectSelector (Theme 5 #2) ─────────
+  //
+  // Single-select picker. On change, retargets the checklist to a new project via
+  // `updateWebViewDefinition`. Reuses `allProjects` and `comparativeOpenTabs` from the
+  // comparative-texts wiring. PT9 confirmed interactive (`ChecklistsTool.cs:179`).
+
+  const primaryProjectSelectorNode = useMemo(
+    () => (
+      <div data-testid="checklist-primary-project-trigger" className="tw:min-w-32">
+        <ProjectSelector
+          mode="project"
+          projects={allProjects}
+          openTabs={comparativeOpenTabs}
+          selection={{ projectId }}
+          onChangeSelection={(next: { projectId: string }) =>
+            updateWebViewDefinition({ projectId: next.projectId })
+          }
+          availableGroupings={primaryProjectGroupings}
+          localizedStrings={{
+            ...projectSelectorLocalizedStrings,
+            buttonPlaceholder: primaryProjectPickerLabel,
+            ariaLabel: primaryProjectPickerLabel,
+          }}
+        />
+      </div>
+    ),
+    [
+      allProjects,
+      comparativeOpenTabs,
+      projectId,
+      updateWebViewDefinition,
+      primaryProjectPickerLabel,
+      projectSelectorLocalizedStrings,
+      primaryProjectGroupings,
+    ],
+  );
+
+  // ─── Auto-follow effect: recompute verseRange when scope or liveScrRef changes ────
+  //
+  // Debounced 250ms (matches checks-side-panel.web-view.tsx:496) so rapid editor
+  // navigation doesn't fire a backend refetch on every cursor blink. The fetch effect
+  // (which depends on verseRange) only fires when the computed range actually changes
+  // shape — within a chapter, scope='chapter' produces an identical range so the
+  // referential change still bumps verseRange but the request payload is the same;
+  // backend can dedupe.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const computed = computeRangeFromScope({
+        scope,
+        ref: liveScrRef,
+        rangeStart,
+        rangeEnd,
+        getEndVerse,
+        getLastChapter,
+      });
+      if (computed) setVerseRange(computed);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [scope, liveScrRef, rangeStart, rangeEnd, getEndVerse, getLastChapter, setVerseRange]);
+
+  // ─── Verse-range picker via real ScopeSelector (Themes 5 #3 + 6) ─────────
+  //
+  // Auto-follow semantics: the displayed scripture reference tracks `liveScrRef` directly;
+  // verseRange is derived from {scope, liveScrRef, rangeStart, rangeEnd} via the effect above.
+  // `availableScopes` excludes `selectedBooks` and `selectedText` because the backend's
+  // `ScriptureRange` contract only models contiguous start/end ranges.
+  // `getEndVerse` enables verse-grid selection in the BCV pickers used by `range` mode (Theme 6).
+
+  const verseRangeSelectorNode = useMemo(
+    () => (
+      <div data-testid="checklist-verse-range-trigger">
+        <ScopeSelector
+          variant="dropdown"
+          scope={scope}
+          availableScopes={['verse', 'chapter', 'book', 'range']}
+          onScopeChange={handleScopeChange}
+          availableBookInfo={booksPresent}
+          selectedBookIds={selectedBookIds}
+          onSelectedBookIdsChange={setSelectedBookIds}
+          localizedStrings={scopeSelectorLocalizedStrings}
+          currentScrRef={liveScrRef}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          onRangeStartChange={handleRangeStartChange}
+          onRangeEndChange={handleRangeEndChange}
+          getEndVerse={getEndVerse}
+          hideLabel
+          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
+        />
+      </div>
+    ),
+    [
+      scope,
+      handleScopeChange,
+      booksPresent,
+      selectedBookIds,
+      setSelectedBookIds,
+      scopeSelectorLocalizedStrings,
+      liveScrRef,
+      rangeStart,
+      rangeEnd,
+      handleRangeStartChange,
+      handleRangeEndChange,
+      getEndVerse,
+    ],
+  );
+
+  // ─── Goto-link click handler (Q4: A scroll-group broadcast + C editor focus) ──
+
+  const handleGotoLinkClick = useCallback(
+    (_row: ChecklistRow, verseRef: SerializedVerseRef) => {
+      setLiveScrRef(verseRef); // A: scroll-group broadcast
+      // C: if an editor tab is open in the same project + same scroll group, raise it.
+      // `projectId` is `string | undefined` from WebViewProps; without one we can't pick an
+      // editor tab, but the broadcast above still serves any other bound web-view.
+      if (!projectId) return;
+      const editorTab = editorTabsByProject.get(projectId);
+      if (editorTab && editorTab.scrollGroupId === scrollGroupId) {
+        papi.window
+          .setFocus({ focusType: 'webView', id: editorTab.webViewId })
+          .catch((err: unknown) =>
+            logger.debug(`ChecklistWebView: setFocus failed: ${getErrorMessage(err)}`),
+          );
+      }
+    },
+    [setLiveScrRef, editorTabsByProject, projectId, scrollGroupId],
+  );
+
+  return (
+    <>
+      <ChecklistTool
+        localizedStringsWithLoadingState={localizedStringsWithLoadingState}
+        data={visibleData}
+        columnProjectFullNames={columnProjectFullNames}
+        columnDirections={columnDirections}
+        isLoading={isLoading}
+        error={error}
+        helpText={undefined}
+        primaryProjectSelector={primaryProjectSelectorNode}
+        comparativeTextsSelector={comparativeTextsSelectorNode}
+        verseRangeSelector={verseRangeSelectorNode}
+        hideMatches={hideMatches}
+        onHideMatchesChange={handleHideMatchesChange}
+        showVerseText={showVerseText}
+        onShowVerseTextChange={handleShowVerseTextChange}
+        matchCountLabel={matchCountLabel}
+        onRetry={handleRetry}
+        projectMenuData={webViewMenu.topMenu}
+        onSelectProjectMenuItem={handleSelectProjectMenuItem}
+        onGotoLinkClick={handleGotoLinkClick}
+        // onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003).
+        // Per the no-stubs rule, omitting the prop hides the affordance entirely until the
+        // integration lands.
+      />
+      <MarkerSettingsDialog
+        open={isSettingsOpen}
+        initialEquivalentMarkers={equivalentMarkers}
+        initialMarkerFilter={markerFilter}
+        validate={handleSettingsValidate}
+        onSubmit={handleSettingsSubmit}
+        onCancel={handleSettingsCancel}
+        localizedStringsWithLoadingState={markerSettingsLocalizedStrings}
+      />
+    </>
+  );
+};

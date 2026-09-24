@@ -1,0 +1,922 @@
+/**
+ * Window service shard — the window service implementation for THIS window. Registered as a data
+ * provider under a window-scoped name (e.g.
+ * "platform.windowServiceDataProvider-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so several windows can
+ * coexist; the main process's `window.service-router.ts` publishes the generic name and relays
+ * reads and updates from whichever window is the current routing target.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
+ */
+
+import {
+  WindowDataTypes,
+  IWindowService,
+  windowServiceObjectToProxy,
+  windowServiceProviderName,
+  FocusSubject,
+  FocusSubjectOther,
+  SetFocusSpecifier,
+  FocusSubjectWebView,
+  FocusSubjectTab,
+  getWebViewIdFromFocusSubject,
+  EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID,
+} from '@shared/services/window.service-model';
+import { dataProviderService } from '@shared/services/data-provider.service';
+import { sendCommand } from '@shared/services/command.service';
+import { getNetworkEvent } from '@shared/services/network.service';
+import { NavigationContext } from '@shared/models/window.service-shard.model';
+import { readDirection } from 'platform-bible-react/experimental';
+import {
+  getServiceShardAttributes,
+  WINDOW_SERVICE_SHARD_OBJECT_TYPE,
+} from '@shared/models/service-shard.model';
+import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
+import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
+import {
+  createSyncProxyForAsyncObject,
+  Unsubscriber,
+  deepEqual,
+  getErrorMessage,
+  debounce,
+  isPlatformError,
+  PlatformEventEmitter,
+} from 'platform-bible-utils';
+import {
+  getDockLayout,
+  getDockLayoutSync,
+  getSavedWebViewDefinitionSync,
+  onDidCloseWebView,
+  onDidOpenWebView,
+  onDidUpdateWebView,
+} from '@renderer/services/web-view.service-shard';
+import {
+  isScriptureNavigableWebViewDefinition,
+  ResolvedWebView,
+  resolveTargetWebView,
+} from '@renderer/services/navigation-target.util';
+import { isDirectionFromTab } from '@shared/models/docking-framework.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-view.model';
+import { logger } from '@shared/services/logger.service';
+import {
+  CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS,
+  isWindowAwaitingFirstActivation,
+  noteWindowActivated,
+  resetActivationLatchForTesting,
+  takeTabAwaitingDocumentFocus,
+  takeTabAwaitingDocumentFocusIfFresh,
+} from '@renderer/services/window-activation.util';
+import { settingsService } from '@shared/services/settings.service';
+
+const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
+  focusType: 'other',
+});
+
+/**
+ * Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.).
+ *
+ * This contains the exact element that is being focused. It is a helper internally for this file
+ * only. It helps with determining when "other" focus subject changes
+ */
+type FocusSubjectElement = {
+  focusType: 'element';
+  element: Element;
+};
+
+/**
+ * The scripture-navigable web view the user most recently focused (selected). This is the RAW
+ * tracker: it follows focus to any navigable web view (see {@link isScriptureNavigableWebView}) and
+ * has NO fallback. Focusing a web view that is not scripture-navigable retains the previous value,
+ * as does focus moving to something that is not a web view (the toolbar, a dialog, nothing).
+ * Cleared to `undefined` when that web view closes.
+ *
+ * This is NOT directly what BCV navigation drives — that is {@link navigationTargetWebView}, which
+ * RESOLVES this raw value through the main-editor fallback (and Simple-mode pinning). Use this raw
+ * tracker only where "the tab the user was last in" is what matters: the last-selected tab tint,
+ * and routing `platform.openBookChapterControl` to that tab's own control. Prefer the navigation
+ * target for anything that reads or sets the current reference.
+ *
+ * Note: this tracker (and {@link lastFocusedTabId} below) is deliberately renderer-internal module
+ * state rather than window service PAPI data (e.g. a `WindowDataTypes` data type) — we are not yet
+ * confident this API shape is what we want to expose to extensions, so it stays off the PAPI until
+ * we are. If extensions need it later (PT9's "active window" is a platform-level concept), migrate
+ * it into the window data provider engine as a subscribable data type.
+ */
+let lastSelectedScriptureNavigableWebViewId: WebViewId | undefined;
+
+const onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter = new PlatformEventEmitter<
+  WebViewId | undefined
+>();
+
+/**
+ * Event that fires with the new id when the last selected (most recently focused)
+ * scripture-navigable web view changes — including to `undefined` when that web view closes. See
+ * {@link getLastSelectedScriptureNavigableWebViewId} for how this raw tracker differs from the
+ * navigation target ({@link onDidChangeNavigationTargetWebView}).
+ */
+export const onDidChangeLastSelectedScriptureNavigableWebViewId =
+  onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter.event;
+
+/**
+ * Gets the id of the scripture-navigable web view the user most recently focused (selected), if one
+ * has been selected and is still open; `undefined` otherwise.
+ *
+ * This is the RAW last-focused tab, with no fallback. Use it only when you specifically need "the
+ * navigable tab the user was last in" — e.g. tinting that tab, or routing an action to its own
+ * control. For anything that DRIVES or READS the current BCV reference (navigating, or showing the
+ * current book/chapter/verse), use {@link getNavigationTargetWebView} instead: it resolves this
+ * value through the main-editor fallback (and Simple-mode pinning) into a target that is always
+ * safe to drive, and it is the single value the top toolbar and the navigation commands share.
+ */
+export function getLastSelectedScriptureNavigableWebViewId(): WebViewId | undefined {
+  return lastSelectedScriptureNavigableWebViewId;
+}
+
+function setLastSelectedScriptureNavigableWebViewId(newWebViewId: WebViewId | undefined): void {
+  if (newWebViewId === lastSelectedScriptureNavigableWebViewId) return;
+  lastSelectedScriptureNavigableWebViewId = newWebViewId;
+  onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter.emit(newWebViewId);
+  scheduleRecomputeNavigationTargetWebView();
+}
+
+/**
+ * The tab or web view that most recently had focus, regardless of whether it is
+ * scripture-navigable. Unlike {@link lastSelectedScriptureNavigableWebViewId}, this follows the
+ * user's focus to every tab. Retained when focus moves outside all tabs so the last-selected tab
+ * tint can tell whether the tracked web view was also the tab the user was most recently in — if
+ * the user visited some other tab in between, the tracked web view keeps driving navigation but
+ * should not be tinted. (A web view's tab id is the same as its web view id, so the two trackers
+ * are comparable.)
+ */
+let lastFocusedTabId: string | undefined;
+
+const onDidChangeLastFocusedTabIdEmitter = new PlatformEventEmitter<string | undefined>();
+
+/** Event that fires with the new id when the last focused tab changes */
+export const onDidChangeLastFocusedTabId = onDidChangeLastFocusedTabIdEmitter.event;
+
+/** Gets the id of the tab or web view that most recently had focus, if any ever has */
+export function getLastFocusedTabId(): string | undefined {
+  return lastFocusedTabId;
+}
+
+function setLastFocusedTabId(newTabId: string | undefined): void {
+  if (newTabId === lastFocusedTabId) return;
+  lastFocusedTabId = newTabId;
+  onDidChangeLastFocusedTabIdEmitter.emit(newTabId);
+}
+
+/**
+ * Whether the main process currently considers this window the one holding OS focus. Tracked from
+ * {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID}, seeded from `platform.getFocusedWindowId` (see
+ * the subscription below).
+ *
+ * Distinct from DOM focus, which `WindowDataProviderEngine`'s `focusin`/`focusout` listeners track
+ * per window regardless of which window holds OS focus — several windows can each report a tab
+ * focused in their own dock at the same time, so gating an active-tab focus ring on DOM focus alone
+ * shows the ring in every window at once. This is what lets a single window's UI (e.g.
+ * `platform-tab-title.component.tsx`'s focus ring) key off "am I the one window the user is in" —
+ * see {@link getIsThisWindowFocused}.
+ *
+ * Deliberately survives the whole application losing OS focus, matching
+ * {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID}'s survive-blur semantic: alt-tabbing away from
+ * the app must not clear every window's ring, only OS focus actually moving to a different window
+ * of this app does.
+ */
+let isThisWindowFocused = false;
+
+const onDidChangeIsThisWindowFocusedEmitter = new PlatformEventEmitter<boolean>();
+
+/** Event that fires with the new value when {@link getIsThisWindowFocused} changes */
+export const onDidChangeIsThisWindowFocused = onDidChangeIsThisWindowFocusedEmitter.event;
+
+/** Whether the main process currently considers this window the one holding OS focus */
+export function getIsThisWindowFocused(): boolean {
+  return isThisWindowFocused;
+}
+
+/**
+ * Class toggled on `document.documentElement` while this window is NOT the one the main process
+ * considers focused. Power mode's stylesheet uses it to suppress the web view's own `:focus`
+ * outline there, the same way Simple mode already suppresses it unconditionally — see
+ * `dock-layout-wrapper.component.scss`.
+ */
+export const CSS_CLASS_WINDOW_NOT_FOCUSED = 'platform-window-not-focused';
+
+// Applied synchronously here, at module load, to match `isThisWindowFocused`'s own `false` default
+// above — `setIsThisWindowFocused` only toggles the class on a value CHANGE, so if this window's
+// seed also resolves to "not focused" (`false`, same as the default), that call is a no-op and would
+// otherwise leave the ring showing in a window the seed has already confirmed is not the focused
+// one, for as long as it takes some other window to take focus and hand this one a real transition.
+document.documentElement.classList.add(CSS_CLASS_WINDOW_NOT_FOCUSED);
+
+function setIsThisWindowFocused(newValue: boolean): void {
+  if (newValue === isThisWindowFocused) return;
+  isThisWindowFocused = newValue;
+  // Hidden case for the ring: a class toggle on the root element and an emitted value, neither of
+  // which reads layout or geometry, so both keep working identically whether this window's tab (in
+  // a multi-window setup each window is its own OS window, not a docked tab) is the visible one or
+  // not. The catch-up below is a different matter — see `runFocusCatchUpForRaisedWindow`.
+  document.documentElement.classList.toggle(CSS_CLASS_WINDOW_NOT_FOCUSED, !newValue);
+  onDidChangeIsThisWindowFocusedEmitter.emit(newValue);
+  if (newValue) {
+    // Main names this window as the focused one only for a genuine activation: a withheld window's
+    // own first-paint self-focus is handed back before it is ever recorded (`shouldBounceFocusBack`
+    // in `src/main/window-activation.util.ts` decides that, and the handler returns without
+    // recording), so arriving here means the user really is in this window. Ending the withholding
+    // on that is what a declaration looks like from the renderer's side — and it is what lets the
+    // catch-up below run, since a window still marked as awaiting its first activation has no
+    // business taking document focus.
+    //
+    // Read before clearing the latch: this transition is the arrival a withheld window's note was
+    // left for exactly when the latch still says "awaiting" here, and `noteWindowActivated` below
+    // would otherwise already say "activated" for that very arrival, indistinguishable from any
+    // later, unrelated one.
+    const wasAwaitingFirstActivation = isWindowAwaitingFirstActivation();
+    noteWindowActivated();
+    runFocusCatchUpForRaisedWindow(wasAwaitingFirstActivation);
+  }
+}
+
+// Seed this window's "am I the focused one" state from the current focused window id, then track
+// live changes. Race-safe the same way `initAutoSyncBlockingService` is: a live event that arrives
+// while the seed request is in flight is more current than the snapshot and must win, so the seed
+// only applies if nothing live has spoken yet.
+(() => {
+  let hasReceivedFocusedWindowIdEvent = false;
+  getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID)((event) => {
+    hasReceivedFocusedWindowIdEvent = true;
+    setIsThisWindowFocused(String(event.focusedWindowId) === globalThis.windowId);
+  });
+  (async () => {
+    try {
+      const focusedWindowId = (await sendCommand('platform.getFocusedWindowId')) ?? undefined;
+      if (!hasReceivedFocusedWindowIdEvent)
+        setIsThisWindowFocused(String(focusedWindowId) === globalThis.windowId);
+    } catch (e) {
+      logger.warn(
+        `window.service-shard failed to seed this window's focused state: ${getErrorMessage(e)}`,
+      );
+    }
+  })();
+})();
+
+/**
+ * Whether a web view is a candidate for BCV navigation (see
+ * {@link isScriptureNavigableWebViewDefinition}). Web views that are not must not become the tracked
+ * web view, since navigation commands and the top toolbar would otherwise target a tab with nothing
+ * to navigate.
+ *
+ * Returns `false` (do not track) if the web view's saved definition cannot be read.
+ */
+function isScriptureNavigableWebView(webViewId: WebViewId): boolean {
+  try {
+    const definition = getSavedWebViewDefinitionSync(webViewId);
+    return !!definition && isScriptureNavigableWebViewDefinition(definition);
+  } catch (e) {
+    logger.warn(
+      `window.service-shard could not get web view definition for ${webViewId} to check navigability: ${getErrorMessage(e)}`,
+    );
+    return false;
+  }
+}
+
+/**
+ * The web view BCV navigation currently DRIVES — what the top toolbar's book/chapter/verse controls
+ * and the `platform.goTo*` commands read and write. RESOLVED via {@link resolveTargetWebView} from
+ * the raw {@link lastSelectedScriptureNavigableWebViewId}: the tracked last-selected web view's
+ * saved definition or, failing that (or always in Simple interface mode — see
+ * {@link currentInterfaceMode}), the first open Scripture editor with a project. Kept current by the
+ * web view lifecycle and interface-mode subscriptions below so consumers read ONE resolved value
+ * instead of each re-deriving the chain — deriving it in multiple places is how the toolbar and the
+ * commands previously fell out of sync. Deliberately renderer-internal, like the trackers above.
+ */
+let navigationTargetWebView: ResolvedWebView | undefined;
+
+const onDidChangeNavigationTargetWebViewEmitter = new PlatformEventEmitter<
+  ResolvedWebView | undefined
+>();
+
+/**
+ * Event that fires with the new resolved target when the web view BCV navigation drives changes
+ * (see {@link getNavigationTargetWebView}). Fires on raw-tracker changes, web view lifecycle
+ * changes, and interface-mode changes.
+ */
+export const onDidChangeNavigationTargetWebView = onDidChangeNavigationTargetWebViewEmitter.event;
+
+/**
+ * Gets the web view BCV navigation currently DRIVES — the resolved target (with its current saved
+ * definition) that the top toolbar's book/chapter/verse controls and the `platform.goTo*` commands
+ * read and write, or `undefined` when there is nothing to navigate.
+ *
+ * This is the value nearly all navigation code wants. It is
+ * {@link getLastSelectedScriptureNavigableWebViewId} RESOLVED through the main-editor fallback and
+ * Simple-mode pinning (see {@link resolveTargetWebView}). Reach for the raw last-selected tracker
+ * only when you specifically need the tab the user last focused, not what navigation drives.
+ */
+export function getNavigationTargetWebView(): ResolvedWebView | undefined {
+  return navigationTargetWebView;
+}
+
+/**
+ * Cached `platform.interfaceMode`, kept current by the subscription below.
+ * {@link recomputeNavigationTargetWebView} reads it to decide whether to pin the target to the main
+ * editor (Simple mode). `undefined` only before the subscription's first (immediate) delivery at
+ * startup — treated as "not Simple" so power-mode users are never briefly mis-pinned; the seed's
+ * own recompute switches Simple mode on a tick later.
+ */
+let currentInterfaceMode: 'simple' | 'power' | undefined;
+
+/**
+ * Recomputes the resolved navigation target and notifies subscribers when it actually changed.
+ * Cheap (synchronous renderer-local reads); the deepEqual gate keeps no-op events from rippling
+ * downstream. In Simple interface mode the target is pinned to the main project editor (see
+ * {@link currentInterfaceMode} and {@link resolveTargetWebView}).
+ *
+ * Always reached through {@link scheduleRecomputeNavigationTargetWebView}, never called directly —
+ * it reads this window's dock layout, and every trigger below can arrive before the dock has
+ * adopted the layout it is reporting.
+ */
+function recomputeNavigationTargetWebView(): void {
+  const newTarget = resolveTargetWebView(
+    lastSelectedScriptureNavigableWebViewId,
+    currentInterfaceMode === 'simple',
+  );
+  if (deepEqual(newTarget, navigationTargetWebView)) return;
+  navigationTargetWebView = newTarget;
+  onDidChangeNavigationTargetWebViewEmitter.emit(navigationTargetWebView);
+}
+
+let isRecomputePending = false;
+
+/**
+ * Requests a navigation-target recompute on a later microtask, coalescing a burst into one.
+ *
+ * The deferral is required, not an optimization. `onDidCloseWebView` is emitted from inside
+ * rc-dock's `onLayoutChange` (`web-view.service-shard.ts`'s `onLayoutChange`, before any await),
+ * and a network event's local subscribers run synchronously — so a recompute taken inside the
+ * handler resolves the target against the layout the dock is changing FROM, and finds the very tab
+ * that is closing. A microtask is enough, and is the same deferral
+ * `platform-dock-layout.component.tsx` uses for its own post-`onLayoutChange` read: `setLayout`
+ * assigns `tempLayout` synchronously, and `getLayout()` returns it, so the new layout is readable
+ * as soon as the synchronous stack unwinds.
+ *
+ * Coalescing costs nothing here because the recompute is idempotent and deepEqual-gated: N triggers
+ * in one tick describe one layout and resolve one target.
+ */
+function scheduleRecomputeNavigationTargetWebView(): void {
+  if (isRecomputePending) return;
+  isRecomputePending = true;
+  queueMicrotask(() => {
+    isRecomputePending = false;
+    recomputeNavigationTargetWebView();
+  });
+}
+
+// A web view OPENING can change the resolved target: a new Scripture editor may become the fallback
+onDidOpenWebView(() => scheduleRecomputeNavigationTargetWebView());
+// Updates fire far more often (every definition change — detached-ref writes, tabs loading, etc.).
+// An update changes the resolved target only when it touches the tracked web view (its own
+// definition drives the tracked resolution, e.g. its scroll group ref) or a Scripture editor (the
+// editor fallback filters by the editor webViewType, which is immutable — so a non-editor,
+// non-tracked update can never change the target). Gating on that spares the frequent update stream
+// from re-enumerating every open web view for nothing.
+onDidUpdateWebView(({ webView }) => {
+  if (
+    webView.id === lastSelectedScriptureNavigableWebViewId ||
+    webView.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE
+  )
+    scheduleRecomputeNavigationTargetWebView();
+});
+
+// A closing web view can change the resolved navigation target, so BOTH branches recompute:
+// - If the CLOSED web view is the tracked last-selected one, clear the tracker; its setter
+//   (setLastSelectedScriptureNavigableWebViewId) then requests the recompute — which now falls back
+//   to the main editor. The id guard also prevents a stale close event for a previously-selected
+//   web view from clearing a newer selection.
+// - Otherwise the closed web view was not the tracked one, but it could still have been the
+//   main-editor fallback (or otherwise part of resolution), so request the recompute here. This is
+//   why the non-tracked branch recomputes rather than doing nothing: a non-tracked close can still
+//   move the target.
+onDidCloseWebView(({ webView }) => {
+  if (webView.id === lastSelectedScriptureNavigableWebViewId)
+    setLastSelectedScriptureNavigableWebViewId(undefined);
+  else scheduleRecomputeNavigationTargetWebView();
+});
+
+// Keep `currentInterfaceMode` current and recompute the target when the mode flips: Simple pins the
+// target to the main project editor, Power uses tracked-first resolution (see
+// `recomputeNavigationTargetWebView`). `retrieveDataImmediately: true` seeds the mode right after
+// startup (recomputing once for it). All settings share one data provider data type, so this callback
+// also fires on unrelated settings writes — the `=== currentInterfaceMode` guard makes those no-ops.
+// Module-lived like the lifecycle subscriptions above, so its unsubscriber is intentionally discarded.
+(async () => {
+  try {
+    await settingsService.subscribe(
+      'platform.interfaceMode',
+      (newMode) => {
+        if (isPlatformError(newMode)) {
+          logger.warn(
+            `window.service-shard failed to read platform.interfaceMode: ${getErrorMessage(newMode)}`,
+          );
+          return;
+        }
+        if (newMode === currentInterfaceMode) return;
+        currentInterfaceMode = newMode;
+        scheduleRecomputeNavigationTargetWebView();
+      },
+      { retrieveDataImmediately: true },
+    );
+  } catch (e) {
+    logger.warn(
+      `window.service-shard failed to subscribe to platform.interfaceMode: ${getErrorMessage(e)}`,
+    );
+  }
+})();
+
+// A gesture, not this window's own `focus` event: a window held back from the foreground takes
+// focus by itself when its page first paints, so treating that self-focus as activation would end
+// the withholding before the user had done anything. Pointer and key are the first things a person
+// actually does in a window. Main naming this window focused is different: that IS activation, and
+// is handled in `setIsThisWindowFocused` below.
+window.addEventListener('pointerdown', () => {
+  endWithholdingAndCatchUp();
+});
+window.addEventListener('keydown', () => {
+  endWithholdingAndCatchUp();
+});
+
+/**
+ * End the withholding on the user's first gesture, and give the waiting tab its focus.
+ *
+ * Runs on every gesture rather than only the window's first, because the latch can already have
+ * been cleared by an OS focus transition (see {@link setIsThisWindowFocused}) while a note is still
+ * waiting — a raise the OS has not honoured yet leaves one — and the user's own gesture is then the
+ * only thing left that can hand that tab its caret.
+ *
+ * Which read is right depends on which of those two it is, so {@link noteWindowActivated}'s answer
+ * is kept rather than discarded. On the window's FIRST activation the gesture IS the arrival the
+ * note was left for, however long ago it was written, and waiting indefinitely for someone to come
+ * to a background window is the whole point of it — so the unbounded read is correct. After that, a
+ * note can only have been left by a cross-window raise, and the same staleness argument applies
+ * here as on the focus-driven path: a gesture minutes later is not the arrival that raise was
+ * completing, and consuming the note then would take the caret into a tab the user never asked to
+ * see, in the middle of whatever they were typing. So it honours the same bound that path does.
+ */
+function endWithholdingAndCatchUp(): void {
+  const isFirstActivation = noteWindowActivated();
+  const tabId = isFirstActivation
+    ? takeTabAwaitingDocumentFocus()
+    : takeTabAwaitingDocumentFocusIfFresh(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS);
+  if (tabId === undefined) return;
+  // Reached synchronously, within the triggering gesture's own event handling, rather than through
+  // the async `getDockLayout()`: a keystroke's own default action is dispatched as part of that same
+  // gesture, so a focus move that waits for a microtask can land after it, with nothing left to
+  // redirect it to. Failure here costs the caret, not the content, so it is logged rather than
+  // thrown: the user can still click into the view.
+  try {
+    getDockLayoutSync().focusTab(tabId);
+  } catch (e) {
+    logger.warn(`Could not focus tab ${tabId} after this window was activated: ${e}`);
+  }
+}
+
+/**
+ * Give the tab a cross-window raise left waiting for document focus its focus, now that this window
+ * has actually become the one the main process considers focused. Called from
+ * {@link setIsThisWindowFocused} on every transition into "focused".
+ *
+ * Distinct from {@link endWithholdingAndCatchUp} above in what triggers them, not — for a given
+ * window state — in what they read: on a window's first activation, whichever trigger reaches it
+ * first (a gesture inside the window, or main naming it focused) reads the unbounded
+ * `takeTabAwaitingDocumentFocus`, since that arrival is exactly what an indefinitely-waiting note
+ * is for, however the user happened to make it. Every later transition of either kind falls back to
+ * the bounded `takeTabAwaitingDocumentFocusIfFresh`: main naming this window focused can arrive
+ * long after the raise it was meant to complete (an unrelated later alt-tab back into this window,
+ * once the window has moved on to something else entirely), and a stale note is left alone rather
+ * than stealing focus into a tab the user never asked to see.
+ *
+ * Hidden case: intentionally not handled. `focusTab` makes the tab active and focuses its iframe in
+ * one synchronous stack, so a tab that is not already its panel's active tab is still in a
+ * `display: none` pane when the focus lands and it goes to the document body instead. No door
+ * reaches that today — every path that changes a withheld window's active tab goes through
+ * `revealTabGroupAndSetDocumentFocusToTab`, which records whichever tab it just activated, and only
+ * the latest record is kept, so the record tracks the active tab rather than drifting from it. A
+ * new door that activates a tab without passing through there is what would break this assumption.
+ *
+ * @param isArrivalInWithheldWindow Whether this transition is the FIRST arrival in a window that
+ *   was still awaiting its first activation (see {@link isWindowAwaitingFirstActivation}) — the
+ *   caller reads that before clearing the latch, since by the time this function runs the latch
+ *   already says "activated" either way.
+ */
+function runFocusCatchUpForRaisedWindow(isArrivalInWithheldWindow: boolean): void {
+  const tabId = isArrivalInWithheldWindow
+    ? takeTabAwaitingDocumentFocus()
+    : takeTabAwaitingDocumentFocusIfFresh(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS);
+  if (tabId === undefined) return;
+  try {
+    getDockLayoutSync().focusTab(tabId);
+  } catch (e) {
+    logger.warn(`Could not focus tab ${tabId} after this window was raised across windows: ${e}`);
+  }
+}
+
+/**
+ * What navigation should act on in this window — the resolved target (if any) and this window's
+ * layout direction, in one round trip for the main process's navigation commands.
+ *
+ * Reads module state only, so it is a free function the engine exposes rather than a method: the
+ * data provider machinery reads a `get___` method on an engine as the getter for a
+ * `NavigationContext` data type and fails registration for want of a `setNavigationContext`, which
+ * is why the engine's copy carries the `ignore` decorator.
+ */
+export async function getNavigationContext(): Promise<NavigationContext> {
+  const target = getNavigationTargetWebView();
+  return {
+    readDirection: readDirection(),
+    target: target
+      ? {
+          webViewId: target.id,
+          scrollGroupScrRef: target.definition.scrollGroupScrRef ?? 0,
+          projectId: target.definition.projectId,
+        }
+      : undefined,
+  };
+}
+
+class WindowDataProviderEngine
+  extends DataProviderEngine<WindowDataTypes>
+  implements IDataProviderEngine<WindowDataTypes>
+{
+  /** The currently focused subject. Do NOT expose `FocusSubjectElement` outside this class */
+  #focusSubject: FocusSubject | FocusSubjectElement | undefined;
+  /**
+   * Getting the focusSubject is async. We are firing off a promise to get it in the constructor,
+   * and this tracks that promise. If `undefined`, the work is finished, and #focusSubject can be
+   * used freely
+   */
+  #focusSubjectInitialPromise: Promise<boolean> | undefined;
+  #unsubscribeOnDidFocus: Unsubscriber | undefined;
+  /**
+   * Last project id this engine notified subscribers about, so a webViewId-only change (same
+   * project, different tab) does not trigger a redundant `ActiveEditorProjectId` notify.
+   */
+  #lastActiveEditorProjectId: string | undefined;
+  #unsubscribeFromNavigationTargetChange: Unsubscriber | undefined;
+
+  /**
+   * Debounced version of {@link #setDetectFocusInternal}. Debounced because because it takes a sec
+   * for the focus to change in the DOM
+   */
+  #setDetectFocusInternalDebounced = debounce(this.#setDetectFocusInternal.bind(this), 250);
+
+  constructor() {
+    super();
+
+    this.#focusSubjectInitialPromise = this.#setDetectFocusInternal();
+
+    // Listen for window-wide focus/blur changes
+    const handleChangeFocus = async () => {
+      // Run debounce, then make sure we haven't been disposed before sending update
+      if ((await this.#setDetectFocusInternalDebounced()) && this.#unsubscribeOnDidFocus)
+        this.notifyUpdate('Focus');
+    };
+    window.addEventListener('focusin', handleChangeFocus);
+    window.addEventListener('focusout', handleChangeFocus);
+    this.#unsubscribeOnDidFocus = () => {
+      window.removeEventListener('focusin', handleChangeFocus);
+      window.removeEventListener('focusout', handleChangeFocus);
+      return true;
+    };
+
+    this.#lastActiveEditorProjectId = getNavigationTargetWebView()?.definition.projectId;
+    this.#unsubscribeFromNavigationTargetChange = onDidChangeNavigationTargetWebView((target) => {
+      const newProjectId = target?.definition.projectId;
+      if (newProjectId === this.#lastActiveEditorProjectId) return;
+      this.#lastActiveEditorProjectId = newProjectId;
+      this.notifyUpdate('ActiveEditorProjectId');
+    });
+  }
+
+  /**
+   * What navigation should act on in this window. Delegates to the module-level
+   * {@link getNavigationContext}; this is only how the main process reaches it.
+   *
+   * Ignored by the data provider machinery on purpose: a `get___` method on an engine is otherwise
+   * read as the getter for a `NavigationContext` data type, and registration fails the get/set
+   * matching check for want of a `setNavigationContext`. This is a plain method on the shard, not a
+   * subscribable data type.
+   */
+  @dataProviderService.decorators.ignore
+  // The answer is module state shared with the rest of this file's resolution chain, not per-engine
+  // state, so there is no instance to consult — but it has to be reachable as a member for the
+  // network object to expose it.
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async getNavigationContext(): Promise<NavigationContext> {
+    return getNavigationContext();
+  }
+
+  async getFocus(): Promise<FocusSubject | undefined> {
+    // Wait for first retrieval of #focusSubject
+    if (this.#focusSubjectInitialPromise) await this.#focusSubjectInitialPromise;
+
+    if (!this.#focusSubject) return undefined;
+
+    // Hide element focus type and just return other
+    if (this.#focusSubject?.focusType === 'element') return FOCUS_SUBJECT_OTHER;
+
+    return this.#focusSubject;
+  }
+
+  // Can be called with or without a selector
+  async setFocus(
+    newSetFocusSpecifierPossiblyUndefinedSelector: SetFocusSpecifier | undefined,
+    newSetFocusSpecifierPossiblyNotProvided?: SetFocusSpecifier,
+    activateWithoutDocumentFocus?: boolean,
+  ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
+    // The trailing `?? undefined` collapses a `null` arriving in the specifier position. The types
+    // say that cannot happen, but arguments cross the process boundary as JSON, where an `undefined`
+    // becomes `null` — and "deselect" is recognized further down by being strictly `undefined`, so a
+    // `null` reaching there is taken for a subject to focus and has an id read off it.
+    const newSetFocusSpecifier: SetFocusSpecifier | FocusSubjectElement | undefined =
+      newSetFocusSpecifierPossiblyUndefinedSelector ??
+      newSetFocusSpecifierPossiblyNotProvided ??
+      undefined;
+
+    // Update the tracked focus in this service based on what is actually focused
+    if (newSetFocusSpecifier === 'detect') {
+      // Need to debounce because it takes a sec for the focus to change in the DOM. The debounced
+      // function resolves `undefined` when a leading-edge call is superseded (coalesced) before it
+      // runs; coalesce that to `false` so this method always returns a boolean per its contract.
+      return (await this.#setDetectFocusInternalDebounced()) ?? false;
+    }
+
+    // Figure out what we should be focusing
+    let newFocusSubject: FocusSubjectWebView | FocusSubjectTab | undefined;
+
+    // If we should move focus relative to the currently selected tab, do so
+    if (isDirectionFromTab(newSetFocusSpecifier)) {
+      // If we don't have a tab selected, can't move relative to it. Return false
+      if (
+        !this.#focusSubject ||
+        (this.#focusSubject.focusType !== 'webView' && this.#focusSubject.focusType !== 'tab')
+      )
+        return false;
+
+      try {
+        const tabInfo = (await getDockLayout()).getTabInfoByDirectionFromTab(
+          this.#focusSubject.id,
+          newSetFocusSpecifier,
+        );
+
+        if (!tabInfo)
+          // We didn't find the tab they're looking for, so forget it
+          return false;
+
+        newFocusSubject = {
+          focusType: 'tab',
+          id: tabInfo.id,
+          tabType: tabInfo.tabType,
+        };
+      } catch (e) {
+        throw new Error(
+          `window.service-shard.setFocus threw while getting tab info by direction from tab ${this.#focusSubject.id} in direction ${newSetFocusSpecifier}: ${getErrorMessage(e)}`,
+        );
+      }
+
+      // If we didn't find the tab to focus next, don't change focus
+      if (!newFocusSubject) return false;
+    }
+    // If we should select a specific tab, fill out the partial tab focus subject
+    else if (newSetFocusSpecifier?.focusType === 'tab') {
+      try {
+        const tabInfo = (await getDockLayout()).getTabInfoById(newSetFocusSpecifier.id);
+
+        if (!tabInfo)
+          // We didn't find the tab they're looking for, so forget it
+          return false;
+
+        newFocusSubject = { ...newSetFocusSpecifier, tabType: tabInfo.tabType };
+      } catch (e) {
+        throw new Error(
+          `window.service-shard.setFocus threw while getting tab info for id ${newSetFocusSpecifier.id}: ${getErrorMessage(e)}`,
+        );
+      }
+    }
+    // If we should select a specific WebView or should deselect (undefined), go with that
+    else newFocusSubject = newSetFocusSpecifier;
+
+    const didChangeFocus = this.#setFocusInternal(newFocusSubject);
+
+    // Update the window even if didn't change focus as far as the window service knows because
+    // there are probably situations where something in the window needs to be re-focused even if
+    // the service still has the right focus subject
+    // deselect if undefined
+    if (newFocusSubject === undefined) {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    }
+    // Set the focus in the docking layout to the appropriate tab or WebView
+    // The main process answers for content it routes here, and its answer WINS: it watches this
+    // window's focus events, while the latch `focusTab` falls back on when this parameter is left
+    // unspecified only sees gestures in the shell document — a pointer or key event inside a docked
+    // web view's iframe never reaches it, so it can stay set long after the user has been working
+    // here. That latch answers only for the focus requests this window's own panels and web views
+    // make as they mount, which never leave the renderer.
+    else {
+      // Deferred, not dropped: the dock records whatever tab it leaves unfocused, and the
+      // catch-up gives that tab its focus when the user actually arrives.
+      (await getDockLayout()).focusTab(newFocusSubject.id, activateWithoutDocumentFocus);
+    }
+
+    return didChangeFocus;
+  }
+
+  /**
+   * See {@link getNavigationTargetWebView}. Reads module state directly, like {@link getFocus} reads
+   * `#focusSubject` — the answer is the same for every engine instance in this window, so there is
+   * no per-instance state to consult.
+   */
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async getActiveEditorProjectId(): Promise<string | undefined> {
+    return getNavigationTargetWebView()?.definition.projectId;
+  }
+
+  // setActiveEditorProjectId doesn't use instance state but cannot be static because it implements
+  // the IDataProviderEngine<WindowDataTypes> interface
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
+    throw new Error(
+      'Cannot set the active editor project id. It follows the web view BCV navigation drives',
+    );
+  }
+
+  async dispose(): Promise<boolean> {
+    this.#unsubscribeFromNavigationTargetChange?.();
+    this.#unsubscribeFromNavigationTargetChange = undefined;
+    if (this.#unsubscribeOnDidFocus) {
+      const success = this.#unsubscribeOnDidFocus();
+      this.#unsubscribeOnDidFocus = undefined;
+      return success;
+    }
+    return true;
+  }
+
+  /**
+   * Set the tracked focus in this window service.
+   *
+   * Note; this _only_ changes tracked focus in the window service. If you want to change the focus
+   * in the window to match it, you must do so elsewhere
+   *
+   * @param newFocusSubject Focus subject to be considered the new focus of this window service
+   * @returns `true` if the service's tracked focus actually changed; `false` otherwise
+   */
+  #setFocusInternal(newFocusSubject: FocusSubject | FocusSubjectElement | undefined) {
+    if (deepEqual(this.#focusSubject, newFocusSubject)) return false;
+
+    this.#focusSubject = newFocusSubject;
+
+    if (newFocusSubject) {
+      // Follow focus to every tab and web view with no eligibility gate (see `lastFocusedTabId`)
+      if (newFocusSubject.focusType === 'webView' || newFocusSubject.focusType === 'tab') {
+        setLastFocusedTabId(newFocusSubject.id);
+
+        // Only track web views that are actually scripture-navigable (see
+        // `isScriptureNavigableWebView`). An ineligible web view retains whatever was tracked
+        // before, same as focus moving to something that is not a web view at all.
+        // A web view's TAB counts as its web view (see `getWebViewIdFromFocusSubject`): a tab
+        // click resolves and stamps `tabType` onto the subject synchronously (see `setFocus`
+        // above) and reaches here directly, bypassing the 250ms trailing-edge debounce that
+        // `detectFocus()` sits behind. Without this, clicking a web view's tab left the tracker
+        // (and thus the top toolbar's BCV) stale until the debounced detect path caught up.
+        const focusedWebViewId = getWebViewIdFromFocusSubject(newFocusSubject);
+        if (focusedWebViewId && isScriptureNavigableWebView(focusedWebViewId))
+          setLastSelectedScriptureNavigableWebViewId(focusedWebViewId);
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Update the service's tracked focus subject to whatever is currently the actual window's focus
+   *
+   * @returns `true` if the service's tracked focus actually changed; `false` otherwise
+   */
+  async #setDetectFocusInternal() {
+    return this.#setFocusInternal(await detectFocus());
+  }
+}
+
+/**
+ * Detect the current focus of the window. Uses `document.activeElement` and checks with the dock
+ * layout
+ */
+async function detectFocus(): Promise<FocusSubject | FocusSubjectElement | undefined> {
+  const { activeElement } = document;
+
+  // No focus
+  if (!activeElement) return undefined;
+
+  // Check to see if focus is on a WebView iframe
+  if (
+    activeElement.tagName === 'IFRAME' &&
+    activeElement instanceof HTMLElement &&
+    activeElement.dataset.webViewId
+  )
+    return { focusType: 'webView', id: activeElement.dataset.webViewId };
+
+  try {
+    const tabInfo = (await getDockLayout()).getTabInfoByElement(activeElement);
+
+    if (tabInfo)
+      return {
+        focusType: 'tab',
+        id: tabInfo.id,
+        tabType: tabInfo.tabType,
+      };
+  } catch (e) {
+    throw new Error(
+      `Could not find tabInfo for existing tab while detecting focus on active element ${activeElement.tagName}: ${getErrorMessage(e)}`,
+    );
+  }
+
+  return { focusType: 'element', element: activeElement };
+}
+
+let initializationPromise: Promise<void>;
+/** Need to run initialize before using this */
+let dataProvider: IWindowService;
+export async function initialize(): Promise<void> {
+  if (!initializationPromise) {
+    initializationPromise = new Promise<void>((resolve, reject) => {
+      const executor = async () => {
+        try {
+          const { windowId } = globalThis;
+          if (windowId === undefined)
+            throw new Error('Cannot start the window service: windowId is not set');
+          // What a usable window id is gets decided in exactly one place. Building the scoped name
+          // below from an id the router would then reject as an attribute would register a shard
+          // under a name nothing looks for, so the check that decides that runs first.
+          const shardAttributes = getServiceShardAttributes(windowId);
+
+          // Register this window's shard under a window-scoped name (e.g.
+          // "platform.windowServiceDataProvider-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so multiple
+          // renderers can coexist. The main process's window service router registers the generic
+          // name and relays from whichever window is the current routing target.
+          //
+          // The object type and window id are how the router finds this shard, so the
+          // window-scoped name stays an internal detail of the registration.
+          dataProvider = await dataProviderService.registerEngine(
+            // Only the name needs asserting — it is built at runtime, but registerEngine expects
+            // the literal provider name and infers the right provider type from it, the same way
+            // window.service.ts resolves it on the consuming side
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            `${windowServiceProviderName}-${windowId}` as typeof windowServiceProviderName,
+            new WindowDataProviderEngine(),
+            WINDOW_SERVICE_SHARD_OBJECT_TYPE,
+            shardAttributes,
+            // Experimental at the object level, which fans out over the provider's methods and its
+            // update notification: this is a window-scoped name only the main process's router is
+            // meant to resolve.
+            { 'x-experimental': true },
+          );
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      };
+      executor();
+    });
+  }
+  return initializationPromise;
+}
+
+/** This is an internal-only export for testing purposes and should not be used in development */
+export const testingWindowService = {
+  implementWindowDataProviderEngine: () => {
+    return new WindowDataProviderEngine();
+  },
+  /**
+   * Put the activation latch back to "not activated yet".
+   *
+   * The latch is module state that only ever goes one way in a real window, so without this a test
+   * that activates the window decides the answer for every test after it.
+   */
+  resetActivationLatchForTesting,
+  /**
+   * Set {@link getIsThisWindowFocused} directly, bypassing the command-seed/network-event plumbing a
+   * test does not have running. Goes through the same {@link setIsThisWindowFocused} a live
+   * broadcast would, so it also drives the CSS class toggle, the emitted event, and the
+   * focus-driven catch-up exactly as the real path does.
+   */
+  setIsThisWindowFocusedForTesting: setIsThisWindowFocused,
+};
+
+// This will be needed later for disposing of the data provider, choosing to ignore instead of
+// remove code that will be used later
+// @ts-ignore 6133
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const windowService = createSyncProxyForAsyncObject<IWindowService>(async () => {
+  await initialize();
+  return dataProvider;
+}, windowServiceObjectToProxy);

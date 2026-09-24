@@ -10,25 +10,65 @@ import {
   JSONRPCServer,
 } from 'json-rpc-2.0';
 import { logger } from '@shared/services/logger.service';
-import { IRpcHandler, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
 import {
+  IRpcEventRegistry,
+  IRpcHandler,
+  RegisteredRpcMethodDetails,
+} from '@shared/models/rpc.interface';
+import {
+  ANNOUNCE_PEER,
   ConnectionStatus,
   createErrorResponse,
   createRequest,
   createSuccessResponse,
   deserializeMessage,
+  describeWebSocketCloseEvent,
+  describeWebSocketErrorEvent,
+  INTENTIONAL_CLOSE_CODE,
   InternalRequestHandler,
+  isCleanCloseEvent,
+  REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
   requestWithRetry,
   sendPayloadToWebSocket,
+  UNREGISTER_EVENT,
   UNREGISTER_METHOD,
 } from '@shared/data/rpc.model';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
-import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import {
+  SingleMethodDocumentation,
+  SingleNotificationDocumentation,
+} from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
 
+/**
+ * Whether the app is on its way down, as {@link RpcServer.onWebSocketClose} needs to know to
+ * classify a handshake-less close. Defaults to "not shutting down", so a process that never
+ * supplies it reports every socket death as a fault.
+ *
+ * Injected rather than imported from the main-process shutdown latch that answers it, because every
+ * module this one imports lands in the generated `papi.d.ts`: importing the latch published it and
+ * the window-state service it depends on — `resetForTesting()` included — as extension-facing API.
+ */
+let isAppShuttingDown: () => boolean = () => false;
+
+/**
+ * Tell socket-close severity how to ask whether the app is shutting down.
+ *
+ * Called once by the process that owns the answer, before the network starts. See
+ * {@link isAppShuttingDown} for why this is wired in rather than imported.
+ *
+ * @param signal Returns whether the app is currently coming down
+ */
+export function setAppShutdownSignal(signal: () => boolean): void {
+  isAppShuttingDown = signal;
+}
+
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
+
+/** Called by an RpcServer with the method names its client's departure removed from the registry */
+type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
 
 /**
  * Manages the JSON-RPC protocol on the server end of a websocket owned by main. This class is not
@@ -39,28 +79,51 @@ type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) 
  */
 export class RpcServer implements IRpcHandler {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
+  /**
+   * Whether {@link onWebSocketClose} has already run for the current socket.
+   *
+   * A closed socket's listener is already removed, but a caller holding a stale reference to the
+   * bound handler could still invoke it directly; this makes a second call a no-op rather than
+   * double-logging and re-running teardown. Deliberately its own field rather than a read of
+   * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+   * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+   * permanently leak everything the socket had registered.
+   */
+  private hasCompletedTeardown = false;
   private ws: WebSocket | undefined;
   private requestId: number = 1;
   /** Only used for logging to differentiate from other RpcServer objects */
   private readonly name: string;
+  /**
+   * How the peer on the other end of this socket labels itself in its own logs, once it has said so
+   * (see {@link ANNOUNCE_PEER}). Undefined until then, and for a peer that never announces — the
+   * .NET data provider does not.
+   */
+  private peerName: string | undefined;
   /** Refers to the main process */
   private readonly jsonRpcServer: JSONRPCServer;
   /** Refers to any process that connected to main over the websocket */
   private readonly jsonRpcClient: JSONRPCClient;
   private readonly rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>;
+  private readonly rpcEventDetailsByEventName: IRpcEventRegistry;
   /** Called by an RpcServer when all other RpcServers should emit an event over the network */
   private readonly propagateEventMethod: PropagateEventMethod;
+  /** Called by an RpcServer once its client's methods have been removed from the registry */
+  private readonly announceClientDisconnectMethod: AnnounceClientDisconnectMethod;
 
   constructor(
     name: string,
     webSocket: WebSocket,
     propagateEventMethod: PropagateEventMethod,
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
+    rpcEventDetailsByEventName: IRpcEventRegistry,
+    announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
   ) {
     bindClassMethods.call(this);
     this.name = name;
     this.ws = webSocket;
     this.propagateEventMethod = propagateEventMethod;
+    this.announceClientDisconnectMethod = announceClientDisconnectMethod;
 
     // Uncomment the following to log every message sent
     /*
@@ -77,25 +140,39 @@ export class RpcServer implements IRpcHandler {
       this.createNextRequestId,
     );
     this.rpcMethodDetailsByMethodName = rpcMethodDetailsByMethodName;
+    this.rpcEventDetailsByEventName = rpcEventDetailsByEventName;
 
     this.addMethodToRpcServer(REGISTER_METHOD, this.registerRemoteMethod);
     this.addMethodToRpcServer(UNREGISTER_METHOD, this.unregisterRemoteMethod);
+    this.addMethodToRpcServer(REGISTER_EVENT, this.registerRemoteEvent);
+    this.addMethodToRpcServer(UNREGISTER_EVENT, this.unregisterRemoteEvent);
+    this.addMethodToRpcServer(ANNOUNCE_PEER, this.setPeerName);
   }
 
   async connect(): Promise<boolean> {
+    // TODO(PT-4495): `false` here means "already connected", while `RpcClient` returns `true` for
+    // the same condition. The `true` below carries no readiness meaning either — this connect binds
+    // nothing, it attaches listeners to a socket the listener already accepted.
     if (this.connectionStatus === ConnectionStatus.Connected) return false;
+    this.hasCompletedTeardown = false;
     this.addEventListenersToWebSocket();
     this.connectionStatus = ConnectionStatus.Connected;
     return true;
   }
 
+  // TODO(PT-4435): Nothing calls this. `RpcWebSocketListener.disconnect()` closes the WebSocket
+  // server without iterating its `RpcServer`s, so live client sockets are never closed and
+  // `IRpcHandler.disconnect`'s documented "on servers: disconnects from all clients" is unmet —
+  // which is also why `INTENTIONAL_CLOSE_CODE` never leaves main. Fixing it means changing what
+  // shutdown does to live sockets, so it belongs with the reconnect/teardown work rather than in a
+  // diagnosis-only change.
   async disconnect(): Promise<void> {
     if (this.connectionStatus === ConnectionStatus.Disconnected) return;
     if (!this.ws) {
       logger.warn(`Server connected but websocket is not set`);
       return;
     }
-    this.ws.close();
+    this.ws.close(INTENTIONAL_CLOSE_CODE, 'server shutdown');
   }
 
   async request(
@@ -135,7 +212,16 @@ export class RpcServer implements IRpcHandler {
 
   // Outgoing event from this server to the client it is connected to
   emitEventOnNetwork<T>(eventType: string, event: T): void {
-    this.jsonRpcClient.notify(eventType, [event]);
+    // Wrap notify so any synchronous throw inside the JSON-RPC client / underlying
+    // WebSocket cannot bubble up as an uncaught exception when the peer socket is
+    // half-closed. See D-010.
+    try {
+      this.jsonRpcClient.notify(eventType, [event]);
+    } catch (error) {
+      logger.warn(
+        `RpcServer ${this.name}: notify('${eventType}') threw; dropping. ${getErrorMessage(error)}`,
+      );
+    }
   }
 
   registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean {
@@ -152,6 +238,38 @@ export class RpcServer implements IRpcHandler {
     return handlersMatch;
   }
 
+  registerRemoteEvent(eventName: string, documentation?: SingleNotificationDocumentation): boolean {
+    return this.rpcEventDetailsByEventName.tryRegister(this, eventName, documentation);
+  }
+
+  unregisterRemoteEvent(eventName: string): boolean {
+    return this.rpcEventDetailsByEventName.tryUnregister(this, eventName);
+  }
+
+  /**
+   * Record how the peer on the other end labels itself, so this socket's log lines can be joined to
+   * that process's own. Called remotely by a connecting client; see {@link ANNOUNCE_PEER}.
+   *
+   * A socket gets to say this once. Accepting later announcements would let a peer relabel itself
+   * mid-session — so log lines already attributed to one name could be continued under another —
+   * and would let it re-log this line as often as it liked.
+   *
+   * @param peerName The peer's label for itself
+   * @returns Whether a usable label was recorded
+   */
+  setPeerName(peerName: string): boolean {
+    if (this.peerName) return false;
+    if (typeof peerName !== 'string') return false;
+    // Peer-supplied text going straight into log lines, so allowlist rather than sanitize: the
+    // label a client generates is `<processType>#<discriminator>`, and nothing outside that shape
+    // belongs in a log line at all.
+    const safePeerName = peerName.replace(/[^\w#.:-]/g, '').slice(0, 60);
+    if (!safePeerName) return false;
+    this.peerName = safePeerName;
+    logger.info(`Websocket ${this.name} is ${safePeerName}`);
+    return true;
+  }
+
   private createNextRequestId(): number {
     const retVal = this.requestId;
     this.requestId += 1;
@@ -164,8 +282,18 @@ export class RpcServer implements IRpcHandler {
 
   private handleError(message: string, data: unknown): void {
     logger.error(
-      `Websocket ${this.name} ${message}: ${typeof data === 'string' ? data : JSON.stringify(data)}`,
+      `Websocket ${this.describePeer()} ${message}: ${typeof data === 'string' ? data : JSON.stringify(data)}`,
     );
+  }
+
+  /**
+   * How to name this socket in a log line: main's own incrementing id, plus the peer's self-applied
+   * label once it has announced one. Both halves are needed — the id is what main's other lines
+   * use, and the label is the only thing that ties a line here to the same disconnect as reported
+   * by the process that owns the other end.
+   */
+  private describePeer(): string {
+    return this.peerName ? `${this.name} (${this.peerName})` : this.name;
   }
 
   private addEventListenersToWebSocket() {
@@ -185,23 +313,62 @@ export class RpcServer implements IRpcHandler {
     }
   }
 
-  private onWebSocketClose(): void {
+  private onWebSocketClose(ev: CloseEvent): void {
+    if (this.hasCompletedTeardown) return;
+    this.hasCompletedTeardown = true;
+
     this.jsonRpcClient.rejectAllPendingRequests(`Web socket ${this.name} has closed`);
+    const detail = describeWebSocketCloseEvent(ev);
+    const isClean = isCleanCloseEvent(ev);
+    // A close with no completed handshake is the fingerprint this ticket exists to make greppable —
+    // but on the way down it is also the ordinary case, not a fault. Main's server is still
+    // listening while the extension host calls `process.exit()` and each renderer process is torn
+    // down, so every peer's socket dies with 1006 on a normal quit. Reporting those at `warn` would
+    // fire on every shutdown and bury the signal under the routine.
+    const diedDuringShutdown = !isClean && isAppShuttingDown();
+    const shutdownNote = diedDuringShutdown ? ', expected during app shutdown' : '';
+    // No method count here on purpose: the number that belongs on a close line is what this socket
+    // actually took with it, and that is only known once the removal loop below has run — which
+    // logs it.
+    const summary = `Websocket ${this.describePeer()} closed (${detail}${shutdownNote})`;
+    if (isClean || diedDuringShutdown) logger.info(summary);
+    else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
-    logger.info(
-      `Websocket ${this.name} closed. Removing ${this.rpcMethodDetailsByMethodName.size} methods`,
-    );
+    const removedMethodNames: string[] = [];
     this.rpcMethodDetailsByMethodName.forEach(({ handler }, methodName) => {
       if (handler !== this) return;
 
       logger.debug(`Method '${methodName}' removed since websocket ${this.name} closed`);
       this.rpcMethodDetailsByMethodName.delete(methodName);
+      removedMethodNames.push(methodName);
     });
+    // The registry is shared by every connected process, so count what this socket actually took
+    // with it rather than what is in the registry
+    logger.info(
+      `Websocket ${this.describePeer()} closed. Removed ${removedMethodNames.length} methods`,
+    );
+    this.rpcEventDetailsByEventName.unregisterAll(this);
+    // Announced only after the registry no longer holds any of this client's methods, so a
+    // subscriber acting on the news can never be told about a death that has not happened yet. That
+    // ordering is why the announcement exists here at all: it is derived from the teardown rather
+    // than from a message the departing process sent before it, which can outrun its own socket.
+    //
+    // A second ordering makes the announcement safe to act on blindly, and it is load-bearing: the
+    // disposal names an object by id, and whoever receives it drops whatever it holds under that id
+    // without checking whether that is still the registration the announcement was about. What rules
+    // out dropping a NEWER registration is that this announcement's `ws.send` reaches every surviving
+    // socket before any registration request that arrives after this teardown can be answered on the
+    // same socket — the announcement path from here to the send awaits nothing real (an
+    // already-resolved initialize at most), and a process only records a local registration once its
+    // register request has been answered. Introduce a genuine `await` anywhere between here and the
+    // send and a re-registration can slip in front of the disposal, which will then revoke it.
+    this.announceClientDisconnectMethod(removedMethodNames);
   }
 
   private onWebSocketError(ev: Event): void {
-    this.handleError('Server websocket error event occurred', ev);
+    const detail = describeWebSocketErrorEvent(ev);
+    this.handleError('Server websocket error event occurred', detail);
   }
 
   private async onMessageReceivedByWebSocket(ev: MessageEvent) {

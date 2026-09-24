@@ -8,10 +8,62 @@ export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
 const CATEGORY_SCROLL_GROUP = 'scrollGroup';
 
 /** Name to use when creating a network event that is fired when webViews are updated */
+// serializeRequestType returns SerializedRequestType (an opaque branded string), but we know the
+// actual value matches this NetworkEvents key. Cast to the literal so consumers can use this
+// constant directly without re-casting at every usage site.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const EVENT_NAME_ON_DID_UPDATE_SCR_REF = serializeRequestType(
   CATEGORY_SCROLL_GROUP,
   'onDidUpdateScrRef',
-);
+) as 'scrollGroup:onDidUpdateScrRef';
+
+/**
+ * Name to use when creating a network event that is fired when a tracked project's versification
+ * changes. Host↔hook INTERNAL: intentionally NOT declared in the public `NetworkEvents` map (not
+ * part of the `@papi/*` surface).
+ */
+// serializeRequestType returns SerializedRequestType (an opaque branded string). Cast to the
+// literal so consumers can use this constant directly without re-casting at every usage site.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+export const EVENT_NAME_ON_DID_CHANGE_VERSIFICATION = serializeRequestType(
+  CATEGORY_SCROLL_GROUP,
+  'onDidChangeVersification',
+) as 'scrollGroup:onDidChangeVersification';
+
+/**
+ * Name to use when creating a network event that is fired when a scroll group's reference history
+ * changes
+ */
+// serializeRequestType returns SerializedRequestType (an opaque branded string), but we know the
+// actual value matches this NetworkEvents key. Cast to the literal so consumers can use this
+// constant directly without re-casting at every usage site.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+export const EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY = serializeRequestType(
+  CATEGORY_SCROLL_GROUP,
+  'onDidChangeReferenceHistory',
+) as 'scrollGroup:onDidChangeReferenceHistory';
+
+/**
+ * `localStorage` key the scroll group state is persisted under: every group's Scripture reference.
+ *
+ * Named here rather than in the host because two processes spell it: main's host, which owns the
+ * store, and the renderer, whose one-time handover reads the copy left in its own `localStorage`
+ * from when a renderer held this state. Those are two different stores under one key name, and the
+ * handover only finds anything if the name stays identical in both.
+ *
+ * @experimental
+ */
+export const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
+
+/**
+ * `localStorage` key the scroll group state is persisted under: the project whose versification
+ * each group's reference is expressed in. Spelled in two processes for the same reason as
+ * {@link SCR_REFS_STORAGE_KEY}.
+ *
+ * @experimental
+ */
+export const SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY =
+  'scroll-group.service-host.scrRefSourceProjectIds';
 
 /**
  * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
@@ -24,19 +76,108 @@ export type ScrollGroupScrRef = ScrollGroupId | SerializedVerseRef;
 /**
  * Information about an update to a scroll group. Informs about the new SerializedVerseRef at a
  * {@link ScrollGroupId}
+ *
+ * @param scrRef The new Scripture reference for the scroll group
+ * @param scrollGroupId The scroll group that was updated
+ * @param sourceProjectId Project whose versification the `scrRef` is expressed in. `undefined` =
+ *   unknown
  */
 export type ScrollGroupUpdateInfo = {
   scrRef: SerializedVerseRef;
   scrollGroupId: ScrollGroupId;
+  sourceProjectId?: string;
+};
+
+/**
+ * One visited location in a scroll group's reference history
+ *
+ * @experimental
+ */
+export type ReferenceHistoryEntry = {
+  /** The visited Scripture reference */
+  scrRef: SerializedVerseRef;
+  /**
+   * Project whose versification `scrRef` is expressed in. `undefined` = unknown. Preserved so
+   * navigating back restores the reference in its original versification context
+   */
+  sourceProjectId?: string;
+};
+
+/**
+ * Back/forward reference history for one scroll group. Session-only (in-memory; resets on app
+ * restart)
+ *
+ * @experimental
+ */
+export type ReferenceHistory = {
+  /** The current location, or `undefined` when nothing has been recorded yet */
+  current: ReferenceHistoryEntry | undefined;
+  /** Entries strictly behind the current location, nearest first (offsets -1, -2, ...) */
+  back: ReferenceHistoryEntry[];
+  /** Entries strictly ahead of the current location, nearest first (offsets +1, +2, ...) */
+  forward: ReferenceHistoryEntry[];
+};
+
+/**
+ * Information about a change to a scroll group's reference history
+ *
+ * @experimental
+ */
+export type ReferenceHistoryUpdateInfo = {
+  /** The scroll group whose history changed */
+  scrollGroupId: ScrollGroupId;
+  /** The new history state (a copy, safe to keep) */
+  history: ReferenceHistory;
+};
+
+/**
+ * Per-scroll-group values keyed by {@link ScrollGroupId}. Serialized as a plain object, so a group
+ * that has never been touched is simply absent rather than present-and-`undefined`.
+ *
+ * @experimental
+ */
+export type ScrollGroupMap<T> = { [scrollGroupId: ScrollGroupId]: T | undefined };
+
+/**
+ * The scroll group state that survives an app restart: each group's Scripture reference and the
+ * project whose versification that reference is expressed in. Reference history is deliberately NOT
+ * here — it is session-only (see {@link ReferenceHistory}).
+ *
+ * @experimental
+ */
+export type PersistedScrollGroupState = {
+  scrRefs: ScrollGroupMap<SerializedVerseRef>;
+  scrRefSourceProjectIds: ScrollGroupMap<string>;
+};
+
+/**
+ * The whole scroll group state at one instant, for a consumer that keeps a local cache of it and
+ * needs to (re)seed that cache in one round trip rather than asking per group.
+ *
+ * @experimental
+ */
+export type ScrollGroupSnapshot = PersistedScrollGroupState & {
+  referenceHistories: ScrollGroupMap<ReferenceHistory>;
 };
 
 /** Parts of the Scroll Group Service that are exposed through the network object */
 export interface IScrollGroupRemoteService {
   /**
-   * Get the SerializedVerseRef associated with the provided scroll group
+   * Get the SerializedVerseRef associated with the provided scroll group, in the versification of
+   * whichever project last set it (see {@link ScrollGroupUpdateInfo.sourceProjectId}).
+   *
+   * NOTE: this returns the raw stored reference without versification conversion. If your consumer
+   * displays or navigates in a specific project's versification, use {@link getScrRefForProject}
+   * instead so mixed-versification projects land on the right verse.
+   *
+   * NOTE: a window's own synchronous writers move that window's UI before the host has answered, so
+   * a caller in another process can read a reference the window it is looking at has already left.
+   * The host's `onDidUpdateScrRef` is what everything converges on; subscribe to it rather than
+   * polling if you need to follow a group.
    *
    * @param scrollGroupId Scroll group whose Scripture reference to get. Defaults to 0
-   * @returns Scripture reference associated with the provided scroll group
+   * @returns Scripture reference associated with the provided scroll group, in its source project's
+   *   versification
    */
   getScrRef(scrollGroupId?: ScrollGroupId): Promise<SerializedVerseRef>;
   /**
@@ -45,14 +186,114 @@ export interface IScrollGroupRemoteService {
    * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
    *   0
    * @param scrRef Scripture reference to which to set the scroll group
-   * @returns `true` if the Scripture reference changed. `false` otherwise
+   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
+   *   unknown
+   * @returns `true` if the scroll group's reference or its versification source changed. `false`
+   *   otherwise
    */
-  setScrRef(scrollGroupId: ScrollGroupId | undefined, scrRef: SerializedVerseRef): Promise<boolean>;
+  setScrRef(
+    scrollGroupId: ScrollGroupId | undefined,
+    scrRef: SerializedVerseRef,
+    sourceProjectId?: string,
+  ): Promise<boolean>;
+  /**
+   * Get the SerializedVerseRef associated with the provided scroll group, converted into the
+   * versification of `projectId`. The scroll group stores its reference in the versification of
+   * whichever project last set it; this converts it into `projectId`'s versification so any
+   * consumer gets a reference it can use directly. Returns the raw reference when no conversion is
+   * needed.
+   *
+   * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
+   *   0
+   * @param projectId Project into whose versification to convert the reference
+   * @returns Scripture reference in `projectId`'s versification
+   */
+  getScrRefForProject(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): Promise<SerializedVerseRef>;
+  /**
+   * Get a copy of the reference history for the provided scroll group
+   *
+   * @param scrollGroupId Scroll group whose history to get
+   * @returns Copy of the scroll group's reference history
+   * @experimental
+   */
+  getReferenceHistory(scrollGroupId: ScrollGroupId): Promise<ReferenceHistory>;
+  /**
+   * Navigate within the reference history of the provided scroll group, browser-`history.go` style:
+   * negative offset = back that many steps, positive = forward that many steps.
+   *
+   * @param scrollGroupId Scroll group whose history to navigate
+   * @param offset Signed number of steps. -1 = back one, +1 = forward one
+   * @returns `true` if navigation happened; `false` if the offset was 0 or out of range
+   * @experimental
+   */
+  navigateReferenceHistory(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>;
 }
+
+/**
+ * Scroll group operations that exist for the platform's own cache-keeping rather than for
+ * consumers. They are deliberately kept off {@link IScrollGroupService}, so `papi.scrollGroups` does
+ * not offer them.
+ *
+ * That is the whole guarantee, and it is a discoverability one rather than a privacy one: these
+ * ride on the same network object as {@link IScrollGroupRemoteService} under the same name, so any
+ * process that resolves the object itself can call them. That reachability is why they are
+ * `@experimental` on both surfaces (TSDoc here, `x-experimental` in the registration's OpenRPC
+ * document) rather than pretending to be private.
+ *
+ * @experimental
+ */
+export interface IScrollGroupInternalService {
+  /**
+   * Get every scroll group's current reference, source project, and reference history at once, so a
+   * process keeping a local cache can (re)seed it in one round trip rather than one per group.
+   *
+   * @returns Copy of the whole scroll group state, safe to keep
+   * @experimental
+   */
+  getScrollGroupSnapshot(): Promise<ScrollGroupSnapshot>;
+  /**
+   * Hand over scroll group state persisted somewhere the host cannot read, so the host can adopt it
+   * into its own store. Idempotent: the first offer to be adopted wins and every later one is
+   * refused, so several callers offering their own copies cannot interleave into a mixture of
+   * them.
+   *
+   * Resolving is terminal for the caller either way: `true` means the state now lives in the host's
+   * store, `false` means the host already has state that beats the offer. In both cases the
+   * caller's copy is dead and should be discarded. A rejection means neither — the offer can be
+   * made again.
+   *
+   * @param state Previously persisted scroll group state
+   * @returns `true` if the offer was adopted, `false` if it was refused
+   * @experimental
+   */
+  migrateStoredScrollGroupState(state: PersistedScrollGroupState): Promise<boolean>;
+}
+
+/**
+ * Everything the scroll group service host registers on its network object: what consumers call
+ * plus the platform's own cache-keeping operations.
+ *
+ * @experimental
+ */
+export type IScrollGroupHostService = IScrollGroupRemoteService & IScrollGroupInternalService;
 
 // Parts of the Scroll Group Service that are added in the service client on top of what is provided by the network object
 /** JSDOC DESTINATION scrollGroupService */
 export interface IScrollGroupService extends IScrollGroupRemoteService {
-  /** Event that emits with information about a changed Scripture Reference for a scroll group */
+  /**
+   * Event that emits with information about a changed Scripture Reference for a scroll group. The
+   * emitted `scrRef` is in the source project's versification (see
+   * {@link ScrollGroupUpdateInfo.sourceProjectId}); a consumer that needs it in a specific project's
+   * versification should call {@link getScrRefForProject} for that project.
+   */
   onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+  /**
+   * Event that emits when a scroll group's reference history changes
+   *
+   * @experimental
+   */
+  onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
 }

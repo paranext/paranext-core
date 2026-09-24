@@ -1,0 +1,826 @@
+// Test fixtures use `as ScrollGroupId` to construct branded-number values from literals, and `!`
+// non-null assertions immediately after `expect(x).toBeDefined()` calls to read fields off the
+// just-asserted value. Both are idiomatic for test code; the lint rule's strict prohibition fits
+// production code better than test fixtures.
+/* eslint-disable no-type-assertion/no-type-assertion */
+import { describe, it, expect } from 'vitest';
+import type { ScrollGroupId } from 'platform-bible-utils';
+import {
+  computeRows,
+  partitionByGrouping,
+  partitionByOpenTabs,
+  partitionFlat,
+  type ProjectSelectorGrouping,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProject,
+} from './project-selector.rows';
+
+const A: ScrollGroupId = 0 as ScrollGroupId;
+const B: ScrollGroupId = 1 as ScrollGroupId;
+const C: ScrollGroupId = 2 as ScrollGroupId;
+
+const projects: ProjectSelectorProject[] = [
+  { id: 'a', shortName: 'A', fullName: 'Project A' },
+  { id: 'b', shortName: 'B', fullName: 'Project B' },
+  { id: 'c', shortName: 'C', fullName: 'Project C' },
+];
+
+const openTabs: ProjectSelectorOpenTab[] = [
+  { projectId: 'a', scrollGroupId: A },
+  { projectId: 'a', scrollGroupId: B },
+  { projectId: 'b', scrollGroupId: A },
+];
+
+describe('computeRows — case-insensitive open-tab join', () => {
+  // Real-world casing mismatch: canonical project ids are UPPERCASE (C# ProjectSummary →
+  // Guid.ToUpperInvariant), but the open-tabs hook lowercases projectId. The join must still match
+  // so the "Open Tabs" section renders. All-lowercase fixtures above never exercise this path.
+  const upperProjects: ProjectSelectorProject[] = [
+    { id: 'ABC123', shortName: 'A', fullName: 'Project A' },
+    { id: 'DEF456', shortName: 'B', fullName: 'Project B' },
+  ];
+  const lowerTabs: ProjectSelectorOpenTab[] = [
+    { projectId: 'abc123', scrollGroupId: A },
+    { projectId: 'abc123', scrollGroupId: B },
+  ];
+
+  it('matches open tabs to projects regardless of id casing (project mode)', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { projectId: undefined },
+    });
+    const rowA = rows.find((r) => r.projectId === 'ABC123');
+    expect(rowA).toBeDefined();
+    expect(rowA!.openGroups).toEqual([A, B]);
+    expect(rowA!.isMuted).toBe(false);
+  });
+
+  it('matches open tabs to projects regardless of id casing (project-multi mode)', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { pairs: [] },
+    });
+    // With a working join, ABC123 has two open groups → two per-pair rows (not one muted row).
+    const abcRows = rows.filter((r) => r.projectId === 'ABC123');
+    expect(abcRows).toHaveLength(2);
+    expect(abcRows.every((r) => r.isMuted === false)).toBe(true);
+  });
+
+  // Selection folds in the pair modes too, not just in `project` mode. The trigger label folds
+  // unconditionally, so a raw comparison here splits the component against itself: the trigger
+  // names the project while no row shows a check, `selectedRowRef` never attaches, and the
+  // open-popover scroll-into-view has nothing to scroll to.
+  it('marks the selected row regardless of id casing (project mode)', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects: upperProjects,
+      openTabs: [],
+      selection: { projectId: 'abc123' },
+    });
+    const rowA = rows.find((r) => r.projectId === 'ABC123');
+    expect(rowA).toBeDefined();
+    expect(rowA!.isSelected).toBe(true);
+    expect(rows.find((r) => r.projectId === 'DEF456')!.isSelected).toBe(false);
+    expect(rows.filter((r) => r.isSelected)).toHaveLength(1);
+  });
+
+  it('marks no row selected when nothing is selected (project mode)', () => {
+    // Guards the normalization against turning "nothing selected" into "everything matches".
+    const rows = computeRows({
+      mode: 'project',
+      projects: upperProjects,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    expect(rows.every((r) => !r.isSelected)).toBe(true);
+  });
+
+  it('marks the selected pair regardless of id casing (project-multi mode)', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { pairs: [{ projectId: 'abc123', scrollGroupId: A }] },
+    });
+    const selected = rows.filter((r) => r.isSelected);
+    expect(selected.map((r) => [r.projectId, r.scrollGroupId])).toEqual([['ABC123', A]]);
+  });
+
+  it('marks the selected pair regardless of id casing (projectScrollGroup mode)', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { projectId: 'abc123', scrollGroupId: A },
+    });
+    const selected = rows.filter((r) => r.isSelected);
+    expect(selected).toHaveLength(1);
+    expect(selected[0].projectId).toBe('ABC123');
+  });
+
+  it('does not duplicate a bound-but-closed row for a differently-cased pair', () => {
+    // The synthetic-row dedupe compares the pair against the rows already built. Comparing raw
+    // would miss the match and append a second row for a project that is already listed.
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { pairs: [{ projectId: 'abc123', scrollGroupId: A }] },
+    });
+    expect(rows.filter((r) => r.projectId === 'ABC123' && r.scrollGroupId === A)).toHaveLength(1);
+    expect(rows.some((r) => r.isBoundButClosed)).toBe(false);
+  });
+
+  it('builds a bound-but-closed row for a differently-cased pair in a closed group', () => {
+    // The pair's project must still be found in `projects` when only the casing differs, or the
+    // selected-but-closed row is silently dropped.
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { pairs: [{ projectId: 'abc123', scrollGroupId: C }] },
+    });
+    const closed = rows.find((r) => r.isBoundButClosed);
+    expect(closed).toBeDefined();
+    expect(closed!.projectId).toBe('ABC123');
+    expect(closed!.scrollGroupId).toBe(C);
+    expect(closed!.isSelected).toBe(true);
+  });
+
+  // The same synthetic row in the single-pair mode, which the `project-multi` cases above do not
+  // reach: a raw comparison drops the row entirely under mixed casing, losing its Open affordance
+  // rather than merely leaving it unchecked.
+  it('builds the bound-but-closed row for a selected pair whose casing differs', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects: upperProjects,
+      openTabs: [{ projectId: 'abc123', scrollGroupId: A }],
+      selection: { projectId: 'abc123', scrollGroupId: B },
+    });
+    const boundButClosed = rows.filter((r) => r.isBoundButClosed);
+    expect(boundButClosed).toHaveLength(1);
+    expect(boundButClosed[0].projectId).toBe('ABC123');
+    expect(boundButClosed[0].scrollGroupId).toBe(B);
+  });
+});
+
+describe('computeRows — project mode', () => {
+  it('emits one row per project with openGroups reflecting open tabs', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs,
+      selection: { projectId: undefined },
+    });
+    expect(rows).toHaveLength(3);
+    const [rowA, rowB, rowC] = rows;
+    expect(rowA.projectId).toBe('a');
+    expect(rowA.openGroups).toEqual([A, B]);
+    expect(rowA.isMuted).toBe(false);
+    expect(rowB.openGroups).toEqual([A]);
+    expect(rowC.openGroups).toEqual([]);
+    expect(rowC.isMuted).toBe(true);
+  });
+
+  it('marks the selected project', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs,
+      selection: { projectId: 'b' },
+    });
+    expect(rows.find((r) => r.projectId === 'b')?.isSelected).toBe(true);
+    expect(rows.filter((r) => r.isSelected)).toHaveLength(1);
+  });
+
+  it('never emits synthetic or in-group rows', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs,
+      selection: { projectId: 'a' },
+    });
+    expect(rows.every((r) => r.scrollGroupId === undefined)).toBe(true);
+    expect(rows.every((r) => !r.isBoundButClosed)).toBe(true);
+  });
+
+  it('passes through scrollGroupScrRefLabel — not used in project mode', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs: [{ projectId: 'a', scrollGroupId: A, scrollGroupScrRefLabel: 'MAT 3:16' }],
+      selection: { projectId: undefined },
+    });
+    // Project mode rows don't carry a scrollGroupScrRefLabel (aggregate chips)
+    expect(rows.find((r) => r.projectId === 'a')?.scrollGroupScrRefLabel).toBeUndefined();
+  });
+});
+
+describe('computeRows — project-multi mode (per-pair selection)', () => {
+  it('emits one row per (project, open group) pair plus one row per not-open project', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects,
+      openTabs,
+      selection: { pairs: [] },
+    });
+    // a in A, a in B, b in A, c not open
+    expect(rows).toHaveLength(4);
+    expect(rows.find((r) => r.projectId === 'c')?.isMuted).toBe(true);
+  });
+
+  it('marks ONLY the exact (projectId, scrollGroupId) pairs in the selection', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects,
+      openTabs,
+      selection: {
+        pairs: [
+          { projectId: 'a', scrollGroupId: A },
+          { projectId: 'b', scrollGroupId: A },
+        ],
+      },
+    });
+    expect(
+      rows
+        .filter((r) => r.isSelected)
+        .map((r) => `${r.projectId}:${r.scrollGroupId}`)
+        .sort(),
+    ).toEqual(['a:0', 'b:0']);
+  });
+
+  it('selecting the same project in one scroll group does NOT select it in another', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects,
+      openTabs,
+      selection: { pairs: [{ projectId: 'a', scrollGroupId: A }] },
+    });
+    const aInB = rows.find((r) => r.projectId === 'a' && r.scrollGroupId === B);
+    expect(aInB?.isSelected).toBe(false);
+  });
+
+  it('emits a synthetic bound-but-closed row for a selected pair whose tab is not open', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects,
+      openTabs,
+      selection: {
+        pairs: [
+          { projectId: 'a', scrollGroupId: B },
+          { projectId: 'a', scrollGroupId: C },
+        ],
+      },
+    });
+    const synthetic = rows.filter((r) => r.isBoundButClosed);
+    expect(synthetic).toHaveLength(1);
+    expect(synthetic[0].projectId).toBe('a');
+    expect(synthetic[0].scrollGroupId).toBe(C);
+    expect(synthetic[0].isSelected).toBe(true);
+  });
+
+  it('a not-open project can be selected via a pair with undefined scrollGroupId', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects,
+      openTabs,
+      selection: { pairs: [{ projectId: 'c' }] },
+    });
+    const cRow = rows.find((r) => r.projectId === 'c');
+    expect(cRow?.isSelected).toBe(true);
+    expect(cRow?.scrollGroupId).toBeUndefined();
+    expect(rows.some((r) => r.isBoundButClosed)).toBe(false);
+  });
+
+  it('carries scrollGroupScrRefLabel through to matching tab rows', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects,
+      openTabs: [{ projectId: 'a', scrollGroupId: A, scrollGroupScrRefLabel: 'MAT 3:16' }],
+      selection: { pairs: [] },
+    });
+    expect(
+      rows.find((r) => r.projectId === 'a' && r.scrollGroupId === A)?.scrollGroupScrRefLabel,
+    ).toBe('MAT 3:16');
+  });
+});
+
+describe('computeRows — projectScrollGroup mode', () => {
+  it('emits one row per (project, open group) pair and a row for projects not open anywhere', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects,
+      openTabs,
+      selection: { projectId: undefined, scrollGroupId: undefined },
+    });
+    expect(rows).toHaveLength(4);
+    expect(rows.find((r) => r.projectId === 'a' && r.scrollGroupId === A)?.isMuted).toBe(false);
+    expect(rows.find((r) => r.projectId === 'c')?.isMuted).toBe(true);
+    expect(rows.find((r) => r.projectId === 'c')?.scrollGroupId).toBeUndefined();
+  });
+
+  it('marks the exact (projectId, scrollGroupId) pair as selected', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects,
+      openTabs,
+      selection: { projectId: 'a', scrollGroupId: B },
+    });
+    const selected = rows.filter((r) => r.isSelected);
+    expect(selected).toHaveLength(1);
+    expect(selected[0].projectId).toBe('a');
+    expect(selected[0].scrollGroupId).toBe(B);
+  });
+
+  it('does NOT mark other open rows of the same project as selected', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects,
+      openTabs,
+      selection: { projectId: 'a', scrollGroupId: A },
+    });
+    const aInB = rows.find((r) => r.projectId === 'a' && r.scrollGroupId === B);
+    expect(aInB?.isSelected).toBe(false);
+  });
+
+  it('adds a synthetic bound-but-closed row when the selected pair is not open', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects,
+      openTabs,
+      selection: { projectId: 'a', scrollGroupId: C },
+    });
+    const synthetic = rows.find((r) => r.isBoundButClosed);
+    expect(synthetic).toBeDefined();
+    expect(synthetic?.projectId).toBe('a');
+    expect(synthetic?.scrollGroupId).toBe(C);
+    expect(synthetic?.isSelected).toBe(true);
+    expect(rows.filter((r) => r.projectId === 'a' && !r.isBoundButClosed)).toHaveLength(2);
+  });
+
+  it('does NOT add synthetic row when the selected pair is already open', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects,
+      openTabs,
+      selection: { projectId: 'a', scrollGroupId: A },
+    });
+    expect(rows.some((r) => r.isBoundButClosed)).toBe(false);
+  });
+
+  it('does NOT add synthetic row when selection projectId is absent from projects', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects,
+      openTabs,
+      selection: { projectId: 'missing', scrollGroupId: A },
+    });
+    expect(rows.some((r) => r.isBoundButClosed)).toBe(false);
+  });
+
+  it('does NOT add synthetic row when scrollGroupId is undefined', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects,
+      openTabs,
+      selection: { projectId: 'a', scrollGroupId: undefined },
+    });
+    expect(rows.some((r) => r.isBoundButClosed)).toBe(false);
+  });
+});
+
+describe('partitionFlat / partitionByOpenTabs', () => {
+  it('partitionFlat returns a single section with no section kind header', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs,
+      selection: { projectId: 'b' },
+    });
+    const sections = partitionFlat(rows);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
+  });
+
+  it('partitionByOpenTabs splits into Open tabs / Other projects for project mode', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs,
+      selection: { projectId: undefined },
+    });
+    const sections = partitionByOpenTabs(rows);
+    expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
+    expect(sections[0].rows.map((r) => r.projectId).sort()).toEqual(['a', 'b']);
+    expect(sections[1].rows.map((r) => r.projectId)).toEqual(['c']);
+  });
+
+  it('bound-but-closed rows land in the Other projects section', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects,
+      openTabs,
+      selection: { projectId: 'a', scrollGroupId: C },
+    });
+    const sections = partitionByOpenTabs(rows);
+    const other = sections.find((s) => s.kind === 'other');
+    expect(other).toBeDefined();
+    expect(other!.rows.some((r) => r.isBoundButClosed && r.projectId === 'a')).toBe(true);
+  });
+
+  it('selected rows stay in alphabetical position (no float-to-top)', () => {
+    // Selected rows do NOT float to the top — the component scrolls the
+    // selected row into view on open, but the ordering itself is the
+    // canonical alphabetical sort.
+    const many: ProjectSelectorProject[] = [
+      { id: 'z', shortName: 'Z', fullName: 'Z' },
+      { id: 'a', shortName: 'A', fullName: 'A' },
+      { id: 'm', shortName: 'M', fullName: 'M' },
+    ];
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: many,
+      openTabs: [{ projectId: 'z', scrollGroupId: A }],
+      selection: { pairs: [{ projectId: 'm' }] },
+    });
+    const sections = partitionByOpenTabs(rows);
+    const other = sections.find((s) => s.kind === 'other');
+    expect(other!.rows.map((r) => r.projectId)).toEqual(['a', 'm']);
+  });
+
+  it('selection state is preserved across flat / openTabs flips', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects,
+      openTabs,
+      selection: { projectId: 'a', scrollGroupId: B },
+    });
+    const flat = partitionFlat(rows);
+    const grouped = partitionByOpenTabs(rows);
+    const flatSelected = flat.flatMap((s) => s.rows).filter((r) => r.isSelected);
+    const groupedSelected = grouped.flatMap((s) => s.rows).filter((r) => r.isSelected);
+    expect(flatSelected.map((r) => `${r.projectId}:${r.scrollGroupId}`)).toEqual(
+      groupedSelected.map((r) => `${r.projectId}:${r.scrollGroupId}`),
+    );
+  });
+
+  it('row set is identical between grouped and flat (grouping only affects headers)', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs,
+      selection: { projectId: 'a' },
+    });
+    const flatKeys = partitionFlat(rows)
+      .flatMap((s) => s.rows)
+      .map((r) => r.rowKey)
+      .sort();
+    const groupedKeys = partitionByOpenTabs(rows)
+      .flatMap((s) => s.rows)
+      .map((r) => r.rowKey)
+      .sort();
+    expect(flatKeys).toEqual(groupedKeys);
+  });
+
+  it('within a section, ties on selection are broken alphabetically, then by scroll group', () => {
+    const many: ProjectSelectorProject[] = [
+      { id: 'p', shortName: 'P', fullName: 'P' },
+      { id: 'q', shortName: 'Q', fullName: 'Q' },
+    ];
+    const tabs: ProjectSelectorOpenTab[] = [
+      { projectId: 'p', scrollGroupId: B },
+      { projectId: 'p', scrollGroupId: A },
+      { projectId: 'q', scrollGroupId: A },
+    ];
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects: many,
+      openTabs: tabs,
+      selection: { projectId: undefined, scrollGroupId: undefined },
+    });
+    const sections = partitionByOpenTabs(rows);
+    const open = sections.find((s) => s.kind === 'openTabs');
+    expect(open!.rows.map((r) => `${r.projectId}:${r.scrollGroupId}`)).toEqual([
+      'p:0',
+      'p:1',
+      'q:0',
+    ]);
+  });
+});
+
+describe('computeRows — isDisabled / disabledReason flow-through', () => {
+  it('project mode propagates isDisabled and disabledReason from project to row', () => {
+    const disabledProjects: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'A' },
+      {
+        id: 'b',
+        shortName: 'B',
+        fullName: 'B',
+        isDisabled: true,
+        disabledReason: 'Read-only target',
+      },
+    ];
+    const rows = computeRows({
+      mode: 'project',
+      projects: disabledProjects,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    const rowA = rows.find((r) => r.projectId === 'a');
+    const rowB = rows.find((r) => r.projectId === 'b');
+    expect(rowA?.isDisabled).toBe(false);
+    expect(rowA?.disabledReason).toBeUndefined();
+    expect(rowB?.isDisabled).toBe(true);
+    expect(rowB?.disabledReason).toBe('Read-only target');
+  });
+
+  it('project-multi mode propagates isDisabled to per-tab rows of a disabled project', () => {
+    const disabledProjects: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'A' },
+      { id: 'b', shortName: 'B', fullName: 'B', isDisabled: true, disabledReason: 'Locked' },
+    ];
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: disabledProjects,
+      openTabs: [
+        { projectId: 'a', scrollGroupId: A },
+        { projectId: 'b', scrollGroupId: A },
+        { projectId: 'b', scrollGroupId: B },
+      ],
+      selection: { pairs: [] },
+    });
+    const bRows = rows.filter((r) => r.projectId === 'b');
+    expect(bRows).toHaveLength(2);
+    expect(bRows.every((r) => r.isDisabled)).toBe(true);
+    expect(bRows.every((r) => r.disabledReason === 'Locked')).toBe(true);
+  });
+
+  it('synthetic bound-but-closed rows inherit isDisabled from the source project', () => {
+    const disabledProjects: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'A', isDisabled: true, disabledReason: 'Archived' },
+    ];
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects: disabledProjects,
+      openTabs: [],
+      selection: { projectId: 'a', scrollGroupId: A },
+    });
+    const closed = rows.find((r) => r.isBoundButClosed);
+    expect(closed?.isDisabled).toBe(true);
+    expect(closed?.disabledReason).toBe('Archived');
+  });
+
+  it('rows for projects without isDisabled report isDisabled=false (boolean, not undefined)', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects: [{ id: 'a', shortName: 'A', fullName: 'A' }],
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    expect(rows[0].isDisabled).toBe(false);
+  });
+});
+
+describe('partitionByOpenTabs — flat fallback when no Open Tabs section', () => {
+  it('returns a single flat section (no headings) when no rows belong to Open Tabs', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    const sections = partitionByOpenTabs(rows);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
+    expect(sections[0].rows).toHaveLength(projects.length);
+  });
+
+  it('still emits both Open Tabs + Other Projects sections when at least one tab is open', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs: [{ projectId: 'a', scrollGroupId: A }],
+      selection: { projectId: undefined },
+    });
+    const sections = partitionByOpenTabs(rows);
+    expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
+  });
+
+  it('falls back to flat in project-multi mode when no projects are open', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects,
+      openTabs: [],
+      selection: { pairs: [] },
+    });
+    const sections = partitionByOpenTabs(rows);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
+  });
+});
+
+describe('partitionByGrouping — dispatch', () => {
+  const p: ProjectSelectorProject[] = [
+    { id: 'en1', shortName: 'EN1', fullName: 'English 1', customData: { language: 'English' } },
+    { id: 'en2', shortName: 'EN2', fullName: 'English 2', customData: { language: 'English' } },
+    { id: 'de1', shortName: 'DE1', fullName: 'German 1', customData: { language: 'German' } },
+    { id: 'legacy', shortName: 'LEG', fullName: 'Legacy' },
+  ];
+  const rows = computeRows({
+    mode: 'project',
+    projects: p,
+    openTabs: [],
+    selection: { projectId: undefined },
+  });
+
+  it("delegates the reserved 'openTabs' id to partitionByOpenTabs", () => {
+    const rowsWithTabs = computeRows({
+      mode: 'project',
+      projects: p,
+      openTabs: [{ projectId: 'en1', scrollGroupId: A }],
+      selection: { projectId: undefined },
+    });
+    const openTabsGrouping: ProjectSelectorGrouping = { id: 'openTabs', label: 'Open tabs' };
+    const sections = partitionByGrouping(rowsWithTabs, openTabsGrouping);
+    expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
+  });
+
+  it('buckets rows by getGroupKey, emitting one grouping section per key', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      unknownSectionHeading: 'Unknown',
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    const labels = sections.map((s) => s.label);
+    // Alphabetical by heading (English before German), unknown bucket last.
+    expect(labels).toEqual(['English', 'German', 'Unknown']);
+    expect(sections[0].rows.map((r) => r.projectId).sort()).toEqual(['en1', 'en2']);
+    expect(sections[2].rows.map((r) => r.projectId)).toEqual(['legacy']);
+  });
+
+  it('drops the unknown bucket when unknownSectionHeading is absent', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections.map((s) => s.label)).toEqual(['English', 'German']);
+    // 'legacy' is elided since it has no language and no unknown heading was provided.
+    expect(sections.flatMap((s) => s.rows).find((r) => r.projectId === 'legacy')).toBeUndefined();
+  });
+
+  it('honors priorityKey by pinning that bucket first', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      priorityKey: 'German',
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections.map((s) => s.label)).toEqual(['German', 'English']);
+    expect(sections[0].isPriority).toBe(true);
+    expect(sections[1].isPriority).toBe(false);
+  });
+
+  it('honors compareSections for non-priority ordering', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      // Reverse alphabetic.
+      compareSections: (a, b) => b.heading.localeCompare(a.heading),
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections.map((s) => s.label)).toEqual(['German', 'English']);
+  });
+
+  it('getSectionHeading receives all projects in the bucket so it can lift a friendlier heading', () => {
+    const typed: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'A', customData: { type: 'std' } },
+      {
+        id: 'b',
+        shortName: 'B',
+        fullName: 'B',
+        customData: { type: 'std', typeName: 'Standard translation' },
+      },
+    ];
+    const rowsTyped = computeRows({
+      mode: 'project',
+      projects: typed,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    const grouping: ProjectSelectorGrouping = {
+      id: 'type',
+      label: 'Type',
+      getGroupKey: (project) =>
+        typeof project.customData?.type === 'string' ? project.customData.type : undefined,
+      getSectionHeading: (key, bucketProjects) => {
+        const first = bucketProjects.find(
+          (project) => typeof project.customData?.typeName === 'string',
+        );
+        const heading = first?.customData?.typeName;
+        return typeof heading === 'string' ? heading : key;
+      },
+    };
+    const sections = partitionByGrouping(rowsTyped, grouping);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].label).toBe('Standard translation');
+  });
+
+  it('falls back to a flat section when the grouping has no getGroupKey and is not `openTabs`', () => {
+    const grouping: ProjectSelectorGrouping = { id: 'no-op', label: 'No-op' };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
+  });
+});
+
+describe('partitionByGrouping — compareProjects', () => {
+  const recencyOf = (project: ProjectSelectorProject): number =>
+    typeof project.customData?.lastUsedAt === 'number' ? project.customData.lastUsedAt : 0;
+  /** Newest first — deliberately the REVERSE of the canonical alphabetical order. */
+  const byRecency = (a: ProjectSelectorProject, b: ProjectSelectorProject) =>
+    recencyOf(b) - recencyOf(a);
+
+  // Three orders that are pairwise different, so each assertion below can only hold for one of
+  // them: input order (BBB, CCC, AAA), canonical order (AAA, BBB, CCC) and recency order
+  // (CCC, BBB, AAA). A fixture already in alphabetical order would let a stable sort satisfy the
+  // canonical expectations without sorting at all.
+  const recencyProjects: ProjectSelectorProject[] = [
+    { id: 'bbb', shortName: 'BBB', fullName: 'Middle', customData: { bucket: 'x', lastUsedAt: 2 } },
+    { id: 'ccc', shortName: 'CCC', fullName: 'Newest', customData: { bucket: 'x', lastUsedAt: 3 } },
+    { id: 'aaa', shortName: 'AAA', fullName: 'Oldest', customData: { bucket: 'x', lastUsedAt: 1 } },
+    // Unbucketed, and listed newest-first so the canonical order is the reverse of the recency one.
+    { id: 'zzz', shortName: 'ZZZ', fullName: 'No bucket, newer', customData: { lastUsedAt: 9 } },
+    { id: 'yyy', shortName: 'YYY', fullName: 'No bucket, older', customData: { lastUsedAt: 1 } },
+  ];
+  const rows = computeRows({
+    mode: 'project',
+    projects: recencyProjects,
+    openTabs: [],
+    selection: { projectId: undefined },
+  });
+  const bucketed: ProjectSelectorGrouping = {
+    id: 'recent',
+    label: 'Recent',
+    getGroupKey: (project) =>
+      typeof project.customData?.bucket === 'string' ? project.customData.bucket : undefined,
+    unknownSectionHeading: 'Other',
+  };
+
+  it('orders rows within a bucket by the supplied comparator', () => {
+    const sections = partitionByGrouping(rows, { ...bucketed, compareProjects: byRecency });
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['ccc', 'bbb', 'aaa']);
+  });
+
+  it('falls back to canonical order when the comparator reports a tie', () => {
+    const sections = partitionByGrouping(rows, { ...bucketed, compareProjects: () => 0 });
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['aaa', 'bbb', 'ccc']);
+  });
+
+  it('uses canonical order within a bucket when no comparator is supplied', () => {
+    const sections = partitionByGrouping(rows, bucketed);
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['aaa', 'bbb', 'ccc']);
+  });
+
+  it('leaves the unknown bucket canonically ordered, not comparator-ordered', () => {
+    const sections = partitionByGrouping(rows, { ...bucketed, compareProjects: byRecency });
+    const unknown = sections.find((s) => s.label === 'Other');
+    // Recency order here would be ZZZ, YYY.
+    expect(unknown?.rows.map((r) => r.projectId)).toEqual(['yyy', 'zzz']);
+  });
+
+  it('keeps one project fanned across scroll groups in scroll-group order', () => {
+    // The comparator only sees ProjectSelectorProject, so it cannot tell these two rows apart and
+    // reports a tie for them. The canonical tie-break is what keeps A above B.
+    const multiRows = computeRows({
+      mode: 'project-multi',
+      projects: recencyProjects,
+      openTabs: [
+        { projectId: 'ccc', scrollGroupId: 1 },
+        { projectId: 'ccc', scrollGroupId: 0 },
+        { projectId: 'aaa', scrollGroupId: 0 },
+      ],
+      selection: { pairs: [] },
+    });
+    const sections = partitionByGrouping(multiRows, { ...bucketed, compareProjects: byRecency });
+    expect(sections[0].rows.map((r) => [r.projectId, r.scrollGroupId])).toEqual([
+      ['ccc', 0],
+      ['ccc', 1],
+      ['bbb', undefined],
+      ['aaa', 0],
+    ]);
+  });
+});

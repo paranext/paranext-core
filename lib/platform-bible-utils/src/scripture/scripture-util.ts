@@ -6,7 +6,8 @@ import {
   USJ_TYPE,
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
-import { at, isWhiteSpace, slice, split, startsWith } from '../string-util';
+import { isWhiteSpace } from '../string-util';
+import { GraphemeString } from '../grapheme-string';
 import { LocalizeKey } from '../extension-contributions/menus.model';
 import { isString } from '../util';
 
@@ -21,6 +22,7 @@ import { isString } from '../util';
 const BLOCK_MARKER_TYPES = ['chapter', 'book', 'para', 'row', 'sidebar', USJ_TYPE];
 
 const ZWSP = '\u200B';
+const NBSP = '\u00A0';
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
@@ -184,6 +186,50 @@ export const getChaptersForBook = (bookNum: number): number => {
 };
 
 /**
+ * Default `platformScripture.booksPresent` project setting value to use while loading or on error:
+ * no books present
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export const BOOKS_PRESENT_DEFAULT = '';
+
+/**
+ * Book ids for all books that are not considered obsolete in the SIL Canon library, in canonical
+ * order.
+ *
+ * The list to fall back on when a project cannot say which books it has (see
+ * {@link getBookIdsFromBooksPresent}). It lives here rather than beside the book-picking UI because
+ * the navigation commands that share it run in the main process, which cannot import a React
+ * library.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export const ALL_BOOK_IDS: readonly string[] = Canon.allBookIds.filter(
+  (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+);
+
+/**
+ * Converts a `platformScripture.booksPresent` flag string ('1' per present book, indexed by
+ * canonical book number) into the list of present book ids
+ *
+ * @param booksPresent The `platformScripture.booksPresent` project setting value
+ * @returns The three-letter ids of the books flagged as present, in canonical order
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export function getBookIdsFromBooksPresent(booksPresent: string): string[] {
+  const ids: string[] = [];
+  // Bound to the canon length. A '1' past the last canonical book would make Canon.bookNumberToId
+  // return the '***' placeholder id, which downstream Canon.isObsolete/bookIdToNumber calls choke on
+  // (a TypeError that crashes the book-list build). The provider always emits exactly
+  // Canon.allBookIds.length flags, so any extra characters are never meaningful — ignore them.
+  const bookCount = Math.min(booksPresent.length, Canon.allBookIds.length);
+  for (let index = 0; index < bookCount; index += 1) {
+    if (booksPresent[index] === '1') ids.push(Canon.bookNumberToId(index + 1));
+  }
+  return ids;
+}
+
+/**
  * Adjusts the book of a Scripture reference by a specified offset.
  *
  * @param scrRef The Scripture reference whose book is to be adjusted.
@@ -191,7 +237,9 @@ export const getChaptersForBook = (bookNum: number): number => {
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted book. The chapter and verse numbers are
  *   reset to 1. If the resulting book number exceeds the bounds of available books, it is clamped
- *   to the nearest valid book.
+ *   to the nearest valid book. For books-present-aware stepping that rolls across chapter/book
+ *   boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export const offsetBook = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   book: Canon.bookNumberToId(
@@ -211,7 +259,9 @@ export const offsetBook = (scrRef: SerializedVerseRef, offset: number): Serializ
  * @param offset The number of chapters to offset the current chapter by. Positive values move
  *   forward, negative values move backward.
  * @returns A new Scripture reference with the adjusted chapter. The verse number is reset to 1. The
- *   chapter number is clamped to stay within valid bounds for the book.
+ *   chapter number is clamped to stay within valid bounds for the book. For books-present-aware
+ *   stepping that rolls across chapter/book boundaries (Paratext 9 style), see the `get*Ref`
+ *   navigation functions in `platform-bible-react/experimental`.
  */
 export const offsetChapter = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   ...scrRef,
@@ -229,7 +279,9 @@ export const offsetChapter = (scrRef: SerializedVerseRef, offset: number): Seria
  * @param offset The number of verses to offset the current verse by. Positive values move forward,
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted verse. The verse number is clamped to stay
- *   within valid bounds for the chapter.
+ *   within valid bounds for the chapter. For books-present-aware stepping that rolls across
+ *   chapter/book boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export const offsetVerse = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   ...scrRef,
@@ -260,7 +312,7 @@ export async function getLocalizedIdFromBookNumber(
 ) {
   const id = Canon.bookNumberToId(bookNumber);
 
-  if (!startsWith(Intl.getCanonicalLocales(localizationLanguage)[0], 'zh'))
+  if (!Intl.getCanonicalLocales(localizationLanguage)[0].startsWith('zh'))
     return getLocalizedString({
       localizeKey: `LocalizedId.${id}`,
       languagesToSearch: [localizationLanguage],
@@ -271,11 +323,20 @@ export async function getLocalizedIdFromBookNumber(
     localizeKey: `Book.${id}`,
     languagesToSearch: [localizationLanguage],
   });
-  const parts = split(bookName, '-');
-  // some entries had a second name inside ideographic parenthesis
-  const parts2 = split(parts[0], '\xff08');
-  const retVal = parts2[0].trim();
-  return retVal;
+  // Grapheme-aware splitting, deliberately, even though both separators are single characters.
+  // These are localized book names, so a separator can carry a combining mark — and a decorated
+  // separator is part of a larger cluster, which means it is not a separator. Native splits there
+  // anyway and orphans the mark onto the front of the next piece. Keep this off native.
+  //
+  // Split the instance rather than calling the free function twice: the pieces carry the parent's
+  // segmentation, so the second split reuses it. The free function takes a bare string and would
+  // segment again — the same text again, whenever the name has no hyphen.
+  const graphemeName = new GraphemeString(bookName);
+  // Some entries carry a second name inside ideographic parentheses. That is the fullwidth left
+  // parenthesis U+FF08, which needs the four-digit `\u` escape: `\xff08` takes only the first two
+  // hex digits and yields the three characters `ÿ08`, which no book name contains.
+  const beforeParenthesis = graphemeName.split('-')[0].split('\uff08')[0];
+  return beforeParenthesis.toString().trim();
 }
 
 /**
@@ -323,6 +384,42 @@ export function getLocalizeKeyForScrollGroupId(
 ): LocalizeKey {
   return `%scrollGroup_${scrollGroupId}%`;
 }
+
+/**
+ * Default English localizations for scroll group ids: `'Ø'` for `undefined` and `'A'`–`'Z'` for ids
+ * 0–25. Keyed by {@link getLocalizeKeyForScrollGroupId}. Used as the fallback map for
+ * scroll-group-aware UI (selectors, badges, chips) before user-supplied localized strings load and
+ * as a stable lookup table for code that only needs the letter representation.
+ */
+export const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {
+  [getLocalizeKeyForScrollGroupId('undefined')]: 'Ø',
+  [getLocalizeKeyForScrollGroupId(0)]: 'A',
+  [getLocalizeKeyForScrollGroupId(1)]: 'B',
+  [getLocalizeKeyForScrollGroupId(2)]: 'C',
+  [getLocalizeKeyForScrollGroupId(3)]: 'D',
+  [getLocalizeKeyForScrollGroupId(4)]: 'E',
+  [getLocalizeKeyForScrollGroupId(5)]: 'F',
+  [getLocalizeKeyForScrollGroupId(6)]: 'G',
+  [getLocalizeKeyForScrollGroupId(7)]: 'H',
+  [getLocalizeKeyForScrollGroupId(8)]: 'I',
+  [getLocalizeKeyForScrollGroupId(9)]: 'J',
+  [getLocalizeKeyForScrollGroupId(10)]: 'K',
+  [getLocalizeKeyForScrollGroupId(11)]: 'L',
+  [getLocalizeKeyForScrollGroupId(12)]: 'M',
+  [getLocalizeKeyForScrollGroupId(13)]: 'N',
+  [getLocalizeKeyForScrollGroupId(14)]: 'O',
+  [getLocalizeKeyForScrollGroupId(15)]: 'P',
+  [getLocalizeKeyForScrollGroupId(16)]: 'Q',
+  [getLocalizeKeyForScrollGroupId(17)]: 'R',
+  [getLocalizeKeyForScrollGroupId(18)]: 'S',
+  [getLocalizeKeyForScrollGroupId(19)]: 'T',
+  [getLocalizeKeyForScrollGroupId(20)]: 'U',
+  [getLocalizeKeyForScrollGroupId(21)]: 'V',
+  [getLocalizeKeyForScrollGroupId(22)]: 'W',
+  [getLocalizeKeyForScrollGroupId(23)]: 'X',
+  [getLocalizeKeyForScrollGroupId(24)]: 'Y',
+  [getLocalizeKeyForScrollGroupId(25)]: 'Z',
+};
 
 /**
  * Gets a list of localized string keys for provided scroll group Ids. Uses
@@ -697,6 +794,27 @@ function isUsjContentEmpty(content: MarkerContent[] | undefined) {
 }
 
 /**
+ * The text of `graphemeString` with trailing whitespace graphemes removed. Scans the existing
+ * segmentation for the cut point and then slices once, so it costs a single pass over the text.
+ *
+ * Not a `/\s+$/` replace, which would be faster: `isWhiteSpace` is not JavaScript's `\s`. It
+ * includes NEXT LINE (U+0085), which `\s` does not, and excludes ZWNBSP (U+FEFF), which `\s`
+ * matches — so a regex would trim a byte-order mark and leave a NEL. Working in clusters is
+ * incidental rather than load-bearing: no cluster can end in a whitespace character without being
+ * entirely whitespace, since whitespace is never an Extend, so this agrees with a character-wise
+ * scan using the same predicate on every input.
+ */
+function trimEndOfGraphemes(graphemeString: GraphemeString): string {
+  const { length } = graphemeString;
+  let end = length;
+  while (end > 0 && isWhiteSpace(graphemeString.charAt(end - 1))) end -= 1;
+  // Slicing would copy the grapheme array to reach the same text. Roughly half the calls here trim
+  // nothing, so answer those without the copy.
+  if (end === length) return graphemeString.toString();
+  return graphemeString.slice(0, end).toString();
+}
+
+/**
  * Determines if the content object is the final child of a parent that is a block-level marker.
  *
  * We do not need to walk up the ancestors to the _closest_ block marker because spaces are
@@ -728,6 +846,25 @@ function isAtEndOfBlockMarker(
 }
 
 /**
+ * {@link normalizeScriptureSpaces}, except a non-breaking space counts as content rather than as
+ * spacing.
+ *
+ * Paratext regularizes spaces while TOKENIZING USFM, where a non-breaking space is still the escape
+ * `~` — an ordinary, non-whitespace byte — so a `~` beside a space always survives into the tokens.
+ * By the time the text is USJ that escape has already become U+00A0, so running the tokenizer's
+ * rule a second time would fold it into the neighbouring space. Comparing USJ that way reports "no
+ * difference" for an edit that added a `~`, which is why this variant exists: normalize each
+ * NBSP-delimited segment on its own and put the NBSPs back, which is exactly what Paratext's own
+ * pass does when it walks over a `~`.
+ *
+ * @param str String to normalize
+ * @returns The normalized string
+ */
+function normalizeScriptureSpacesTreatingNbspAsContent(str: string): string {
+  return str.split(NBSP).map(normalizeScriptureSpaces).join(NBSP);
+}
+
+/**
  * Determines if the USJ documents or markers (and all contents) are equivalent after regularizing
  * spaces according to the way `ParatextData.dll` does.
  *
@@ -752,27 +889,34 @@ function areUsjContentsEqualExceptWhitespaceInternal(
   const aIsString = isString(a);
   const bIsString = isString(b);
   if (aIsString && bIsString) {
-    const aNormalized = normalizeScriptureSpaces(a);
-    const bNormalized = normalizeScriptureSpaces(b);
+    const aNormalized = normalizeScriptureSpacesTreatingNbspAsContent(a);
+    const bNormalized = normalizeScriptureSpacesTreatingNbspAsContent(b);
     // Check to see if their regularized forms are equal. If so, they're equal. If not, they may still
     // be equal if they are at the end of a block-level marker and the only difference is space at the end.
     // If at the end of a block-level marker with space at the end, take off the final space and compare again
     if (aNormalized !== bNormalized) {
+      // Segment `a` once: both the whitespace check and the trim below reuse that work instead of
+      // re-segmenting.
+      const aGraphemes = new GraphemeString(aNormalized);
+      // PERF: `b` is segmented only if something actually reads it. The check below short-circuits
+      // whenever `a` ends in whitespace, and either block-marker guard can return first.
+      let bGraphemesCache: GraphemeString | undefined;
+      const bGraphemes = () => {
+        bGraphemesCache ??= new GraphemeString(bNormalized);
+        return bGraphemesCache;
+      };
+
       // If neither ends in whitespace, they are not equal
-      if (!isWhiteSpace(at(aNormalized, -1) ?? '') && !isWhiteSpace(at(bNormalized, -1) ?? ''))
+      if (!isWhiteSpace(aGraphemes.at(-1) ?? '') && !isWhiteSpace(bGraphemes().at(-1) ?? ''))
         return false;
 
       // If either is not at the end of a block-level marker, they are not equal
       if (!isAtEndOfBlockMarker(a, aParent)) return false;
       if (!isAtEndOfBlockMarker(b, bParent)) return false;
 
-      // Trim the end of each string
-      let aTrimmed = aNormalized;
-      while (isWhiteSpace(at(aTrimmed, -1) ?? '')) aTrimmed = slice(aTrimmed, 0, -1);
-      let bTrimmed = bNormalized;
-      while (isWhiteSpace(at(bTrimmed, -1) ?? '')) bTrimmed = slice(bTrimmed, 0, -1);
-      // If they are not equal after trimming, they are not equal
-      if (aTrimmed !== bTrimmed) return false;
+      // If they are not equal after trimming, they are not equal. Compare the text: `===` on two
+      // instances asks whether they are the same object, which is not the question here.
+      if (trimEndOfGraphemes(aGraphemes) !== trimEndOfGraphemes(bGraphemes())) return false;
     }
   } else if (!aIsString && !bIsString) {
     // We have determined they are not strings, so they must be objects with various simple properties and possibly a `content` array
@@ -840,3 +984,55 @@ export function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj |
 }
 
 // #endregion
+
+/**
+ * Collects the distinct markers actually present in a USJ document.
+ *
+ * The scripture editor warns "Unexpected <kind> marker" for any marker in the USJ it doesn't
+ * recognize as a built-in USFM marker. Handbook/commentary resources use extra markers (e.g. `pn`,
+ * `jmp`, `xtSee`) that aren't built-ins, so a consumer can pass this document-derived set to the
+ * editor as `options.nodes.extraValidMarkers` to suppress those warnings — scoped to the resource
+ * actually being displayed, never a global list.
+ *
+ * The editor's `isValidMarker` is additive (a marker is valid if it is built-in OR listed in
+ * `extraValidMarkers`), so returning markers that are already built-in valid is a harmless no-op;
+ * callers therefore don't need the editor's internal built-in list (which it doesn't export) to
+ * compute a "delta". `z`-prefixed markers are omitted because the editor already treats every
+ * `z...` custom marker as unconditionally valid.
+ *
+ * Because this returns every marker the document uses, the editor will not warn about any marker in
+ * these panels — including genuine typos or bad data in the resource. That is an accepted
+ * trade-off: the warning is a `logger.warn` diagnostic (warn-and-continue; rendering is identical
+ * whether or not it fires), and these consumers are read-only resource viewers (`isReadonly:
+ * true`), not the editable authoring editor — so typo-catching still works where authors actually
+ * edit. Do not narrow this to an "extra-only" delta: that would require the editor's internal
+ * built-in marker lists, which it deliberately doesn't export, forcing either a re-coupling to the
+ * editor package or a duplicated list that drifts. Passing everything the document uses is the
+ * correct consequence of core not owning the editor's marker definitions.
+ *
+ * @param usj The USJ document being displayed (e.g. the chapter USJ handed to the editor).
+ * @returns The distinct non-`z` markers found anywhere in the document, in first-seen order. Empty
+ *   when `usj` is undefined or contains no markers, so callers can omit the option (opt-in, no
+ *   behavior change) for content that needs nothing extra.
+ */
+export function collectUsjMarkers(usj: Usj | undefined): string[] {
+  const markers: string[] = [];
+  const seen = new Set<string>();
+
+  const visit = (content: MarkerContent[] | undefined): void => {
+    if (!content) return;
+    content.forEach((node) => {
+      // String nodes are text runs, not markers.
+      if (isString(node)) return;
+      const { marker } = node;
+      if (marker && !marker.startsWith('z') && !seen.has(marker)) {
+        seen.add(marker);
+        markers.push(marker);
+      }
+      visit(node.content);
+    });
+  };
+
+  visit(usj?.content);
+  return markers;
+}

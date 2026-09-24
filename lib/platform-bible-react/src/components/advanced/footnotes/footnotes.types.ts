@@ -59,6 +59,14 @@ export interface FootnoteListProps {
   listId: string | number;
   /** The currently selected footnote (or undefined if none) */
   selectedFootnote?: MarkerObject;
+  /**
+   * Identity token for the CURRENT selection request. The reveal-on-select scroll keys on this
+   * token's identity in addition to the derived selected index, so a REPEAT selection of the same
+   * footnote — same object, same index — brings its row back into view again. Pass a value whose
+   * identity changes on every selection application (e.g. the host's per-selection state object);
+   * when omitted, re-reveal happens only when the selected index changes.
+   */
+  selectionRequest?: unknown;
   /** Flag indicating whether to display USFM-style markers */
   showMarkers?: boolean;
   /**

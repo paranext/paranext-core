@@ -13,20 +13,28 @@ import {
   isWebViewNonceCorrect,
   reloadWebView,
   updateTabPartialSync,
-} from '@renderer/services/web-view.service-host';
+  getSavedWebViewDefinitionSync,
+} from '@renderer/services/web-view.service-shard';
+import {
+  applyContentZoomForWebView,
+  forgetContentZoom,
+} from '@renderer/services/web-view-content-zoom.service';
 import { logger } from '@shared/services/logger.service';
 import {
   PromiseChainingMap,
   UnsubscriberAsync,
   formatReplacementString,
   isLocalizeKey,
+  type LocalizeKey,
   serialize,
   getLocalizeKeysForScrollGroupIds,
   isPlatformError,
   getErrorMessage,
 } from 'platform-bible-utils';
 import {
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
+  BookChapterControlHandle,
   SelectMenuItemHandler,
   ScrollGroupSelector,
   TabToolbar,
@@ -40,20 +48,23 @@ import {
   useScrollGroupScrRef,
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
+import { registerBookChapterControlHandle } from '@renderer/services/book-chapter-control.registry';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import {
   getWebViewMessageRequestType,
   WebViewMessageRequestHandler,
 } from '@shared/services/web-view.service-model';
-import { Canon } from '@sillsdev/scripture';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
+import { WindowClosingError } from '@renderer/services/window-closing-error.model';
+import {
+  BOOKS_PRESENT_DEFAULT,
+  getBookIdsFromBooksPresent,
+} from 'platform-bible-utils/experimental';
 
-export const TAB_TYPE_WEBVIEW = 'webView';
-
-const BOOKS_PRESENT_DEFAULT = '';
 const WEB_VIEW_MENU_DEFAULT = {
   topMenu: undefined,
   includeDefaults: true,
@@ -61,6 +72,8 @@ const WEB_VIEW_MENU_DEFAULT = {
 };
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const registrationPromises = new PromiseChainingMap<string>(logger);
 
@@ -78,10 +91,24 @@ async function retrieveWebViewContent(webViewType: string, id: string): Promise<
     bringToFront: false,
   });
 
-  if (!loadedId)
+  if (!loadedId) {
+    // Two very different answers arrive as the same `undefined`, and the dock tells them apart. A
+    // web view that is no longer in it left while the reload was in flight — a layout load took the
+    // dock wholesale, which is what an interface mode switch does to a tab still fetching its
+    // content, or the tab was dragged into another window. Whatever took it disposed what backed
+    // it, so there is nothing here to report. A web view still in the dock is one whose provider
+    // declined to supply content, leaving that tab waiting on content that is never coming, which
+    // nothing else will mention.
+    if (!getSavedWebViewDefinitionSync(id)) {
+      logger.debug(
+        `WebView with type ${webViewType} and id ${id} is no longer in this window's dock; nothing to reload`,
+      );
+      return;
+    }
     throw new Error(
       `WebView with type ${webViewType} and id ${id} returned undefined when reloading!`,
     );
+  }
 
   if (loadedId !== id)
     logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
@@ -290,7 +317,11 @@ export function WebView({
     iframeHasLoadedRef.current = true;
     // Increment the tracker for the number of times the iframe has loaded
     setIframeHasLoadedTimes((prev) => prev + 1);
-  }, []);
+    // Pushes the pane's current zoom. The whole-view fallback applies immediately to URL web views;
+    // for any other view it applies only after the grace period during which the bootstrap may
+    // report its zoom areas.
+    applyContentZoomForWebView(id);
+  }, [id]);
 
   // Keep track of focus in the iframe
   useEffect(() => {
@@ -401,6 +432,8 @@ export function WebView({
     const currentIframe = iframeRef.current;
 
     return () => {
+      forgetContentZoom(id);
+
       if (!currentIframe) {
         logger.warn(`WebView ${id} iframe reference was not available during cleanup`);
         return;
@@ -441,9 +474,30 @@ export function WebView({
         updateWebViewDefinitionSync(id, { scrollGroupScrRef: newScrollGroupScrRef }),
       [id],
     ),
+    projectId,
+  );
+
+  const isPowerMode = useIsPowerMode();
+
+  // Register this tab's BookChapterControl (power mode only — that is when it renders) so
+  // platform.openBookChapterControl can open it when this web view is active. React 19 cleanup
+  // callback ref so registration tracks the control's mount/unmount exactly
+  const registerBookChapterControl = useCallback(
+    (handle: BookChapterControlHandle | null) => {
+      if (!handle) return undefined;
+      const unsubscribe = registerBookChapterControlHandle(id, handle);
+      return () => {
+        unsubscribe();
+      };
+    },
+    [id],
   );
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
+
+  const [bookChapterControlLocalizedStrings] = useLocalizedStrings(
+    bookChapterControlLocalizedStringKeys,
+  );
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
@@ -461,15 +515,14 @@ export function WebView({
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
 
-  const fetchActiveBooks = () => {
-    return Array.from(booksPresent).reduce((ids: string[], char, index) => {
-      if (char === '1') {
-        ids.push(Canon.bookNumberToId(index + 1));
-      }
-
-      return ids;
-    }, []);
-  };
+  // Stable identity per booksPresent value. BookChapterControl memoizes its book list (and the
+  // filtering/matching derived from it) on this function's identity, so a fresh closure every render
+  // would recompute all of that on every WebView render while a control is mounted (power mode).
+  // Mirrors the top toolbar's fetchActiveBookIds in platform-bible-toolbar.tsx.
+  const fetchActiveBooks = useCallback(
+    () => getBookIdsFromBooksPresent(booksPresent),
+    [booksPresent],
+  );
 
   const projectMenuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
@@ -511,22 +564,33 @@ export function WebView({
           onSelectViewInfoMenuItem={viewInfoMenuCommandHandler}
           projectMenuData={webViewMenu.topMenu}
           className="web-view-tab-nav"
+          // In simple mode, hide the per-tab BCV control and scroll group selector for ALL webview
+          // types served by this generic tab toolbar (commentary, notes, etc.) — not just scripture
+          // editors. Simple mode assumes the top-toolbar BCV is the single navigation point, so
+          // per-tab BCVs would break that assumption. Revisit this if a future webview type needs
+          // its own per-tab navigation in simple mode.
           startAreaChildren={
-            <BookChapterControl
-              scrRef={scrRef}
-              handleSubmit={setScrRef}
-              getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
-              recentSearches={recentScriptureRefs}
-              onAddRecentSearch={addRecentScriptureRef}
-            />
+            isPowerMode ? (
+              <BookChapterControl
+                ref={registerBookChapterControl}
+                scrRef={scrRef}
+                handleSubmit={setScrRef}
+                getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+                recentSearches={recentScriptureRefs}
+                onAddRecentSearch={addRecentScriptureRef}
+                localizedStrings={bookChapterControlLocalizedStrings}
+              />
+            ) : undefined
           }
           endAreaChildren={
-            <ScrollGroupSelector
-              availableScrollGroupIds={availableScrollGroupIds}
-              scrollGroupId={scrollGroupId}
-              onChangeScrollGroupId={setScrollGroupId}
-              localizedStrings={scrollGroupLocalizedStrings}
-            />
+            isPowerMode ? (
+              <ScrollGroupSelector
+                availableScrollGroupIds={availableScrollGroupIds}
+                scrollGroupId={scrollGroupId}
+                onChangeScrollGroupId={setScrollGroupId}
+                localizedStrings={scrollGroupLocalizedStrings}
+              />
+            ) : undefined
           }
         />
       )}
@@ -571,6 +635,7 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
     tabIconUrl: data.iconUrl,
     tabTitle: data.title ?? '%tab_title_unknown%',
     tabTooltip: data.tooltip ?? '',
+    isClosable: data.isClosable,
     content: <WebView {...data} />,
   };
 }
@@ -594,6 +659,16 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
         try {
           await retrieveWebViewContent(data.webViewType, data.id);
         } catch (e) {
+          // A window that has been told it is closing refuses in-flight reloads; that refusal is
+          // an ordinary part of closing, not a failure worth surfacing at error level.
+          if (e instanceof WindowClosingError) {
+            logger.debug(
+              `web-view.component did not retrieve web view content for ${serialize(
+                savedTabInfo,
+              )}: ${getErrorMessage(e)}`,
+            );
+            return;
+          }
           logger.error(
             `web-view.component failed to retrieve web view content for ${serialize(
               savedTabInfo,

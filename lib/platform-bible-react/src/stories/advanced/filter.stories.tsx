@@ -3,7 +3,6 @@ import { Filter } from '@/components/advanced/filter.component';
 import { MultiSelectComboBoxEntry } from '@/components/advanced/multi-select-combo-box.component';
 import { Blocks } from 'lucide-react';
 import { useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const resources = [
   {
@@ -111,11 +110,9 @@ const meta: Meta<typeof Filter> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw:p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw:p-4">
+        <Story />
+      </div>
     ),
   ],
 };
@@ -149,6 +146,7 @@ export const Default: Story = {
             selected={selectedTypes}
             onChange={setSelectedTypes}
             placeholder="Filter by type"
+            searchPlaceholder="Search types…"
             customSelectedText={getCustomSelectedText()}
             icon={<Blocks />}
             badgesPlaceholder="No types selected"
@@ -200,6 +198,7 @@ export const MultipleBadges: Story = {
           selected={selectedTypes}
           onChange={setSelectedTypes}
           placeholder="Select types"
+          searchPlaceholder="Search types…"
           icon={<Blocks />}
           badgesPlaceholder="No filters applied"
         />
@@ -227,6 +226,7 @@ export const EmptyState: Story = {
           selected={selectedTypes}
           onChange={setSelectedTypes}
           placeholder="Filter by type"
+          searchPlaceholder="Search types…"
           icon={<Blocks />}
           badgesPlaceholder="No filters applied"
         />

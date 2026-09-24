@@ -1,11 +1,185 @@
 import { FloatPosition } from 'rc-dock';
 import { vi } from 'vitest';
-import { FloatLayout } from '@shared/models/docking-framework.model';
-import { getFloatPosition } from './platform-dock-layout-positioning.util';
+import { render } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { FloatLayout, TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
+import {
+  getFloatPosition,
+  getGroups,
+  getTabGroup,
+  getDockLayoutOuterInset,
+  HEADLESS_GROUP,
+  TAB_GROUP,
+  TAB_GROUP_RESOURCES,
+} from './platform-dock-layout-positioning.util';
+import { createDockContext, createPanel } from './__tests__/rc-dock.test-utils';
+
+/** Minimal WebView {@link TabInfo} fixture for `getTabGroup` tests. */
+function makeWebViewTabInfo(webViewType: string, isClosable?: boolean): TabInfo {
+  const data: Partial<WebViewDefinition> = { id: 'test-id', webViewType };
+  return {
+    id: 'test-id',
+    tabType: TAB_TYPE_WEBVIEW,
+    tabTitle: 'Test',
+    content: undefined,
+    isClosable,
+    data,
+  };
+}
 
 vi.mock('../../../shared/services/logger.service');
+vi.mock('@renderer/services/theme.service', () => ({
+  __esModule: true,
+  localThemeService: {},
+}));
 
 describe('Dock Layout Component', () => {
+  describe('getGroups()', () => {
+    // `floatable`/`tabLocked`/`disableDock` below pin what this app's groups actually set; see
+    // `resolveTabBarDropZoneSource`'s TSDoc (tab-bar-drop-zone.util.ts) for why its own gates don't
+    // replicate rc-dock's `disableDock` branch — no group registered here ever sets it.
+    it('power mode: returns TAB_GROUP with panelExtra and without tabLocked', () => {
+      const groups = getGroups(true);
+      expect(typeof groups[TAB_GROUP].panelExtra).toBe('function');
+      expect(groups[TAB_GROUP].tabLocked).toBeUndefined();
+      expect(groups[TAB_GROUP].maximizable).toBe(false);
+      expect(groups[TAB_GROUP].floatable).toBe(false);
+      expect(groups[TAB_GROUP].animated).toBe(false);
+      expect(groups[TAB_GROUP].disableDock).toBeUndefined();
+    });
+
+    it('simple mode: returns TAB_GROUP with tabLocked and without panelExtra', () => {
+      const groups = getGroups(false);
+      expect(groups[TAB_GROUP].tabLocked).toBe(true);
+      expect(groups[TAB_GROUP].panelExtra).toBeUndefined();
+      expect(groups[TAB_GROUP].maximizable).toBe(false);
+      expect(groups[TAB_GROUP].floatable).toBe(false);
+      expect(groups[TAB_GROUP].animated).toBe(false);
+      expect(groups[TAB_GROUP].disableDock).toBeUndefined();
+    });
+
+    it('simple mode: registers HEADLESS_GROUP and TAB_GROUP_RESOURCES with locked config', () => {
+      const groups = getGroups(false);
+      [HEADLESS_GROUP, TAB_GROUP_RESOURCES].forEach((groupKey) => {
+        expect(groups[groupKey].tabLocked).toBe(true);
+        expect(groups[groupKey].panelExtra).toBeUndefined();
+        expect(groups[groupKey].maximizable).toBe(false);
+        expect(groups[groupKey].floatable).toBe(false);
+        expect(groups[groupKey].disableDock).toBeUndefined();
+      });
+    });
+
+    it('power mode: panelExtra renders both the new-tab button and the tab-bar drop zone, in that order', () => {
+      const { panelExtra } = getGroups(true)[TAB_GROUP];
+      if (!panelExtra) throw new Error('Expected power mode TAB_GROUP to define panelExtra');
+
+      const { container } = render(panelExtra(createPanel(), createDockContext()));
+      const newTabButton = container.querySelector('.new-tab-button');
+      const dropZone = container.querySelector('.platform-tab-bar-drop-zone');
+      if (!newTabButton || !dropZone)
+        throw new Error('Expected both the "+" button and the drop zone to render');
+
+      // Outside a drag both keep their default flex order, so this DOM order is what actually
+      // positions "+" before the drop zone at rest (only the drag-time CSS rule in
+      // dock-layout-wrapper.component.scss moves "+" to the bar's end).
+      const position = newTabButton.compareDocumentPosition(dropZone);
+      // Node.compareDocumentPosition's contract is a bitmask.
+      // eslint-disable-next-line no-bitwise
+      expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
+
+  describe('getTabGroup()', () => {
+    it('gives the fixed Column 3 resources webviews TAB_GROUP_RESOURCES when pinned (isClosable: false)', () => {
+      [
+        'platformScriptureEditor.bibleTexts',
+        'platformScriptureEditor.commentaries',
+        'legacyCommentManager.commentListPanel',
+        'platformScriptureEditor.scriptureTextGrid',
+        'platformScripture.find',
+      ].forEach((webViewType) => {
+        expect(getTabGroup(makeWebViewTabInfo(webViewType, false))).toBe(TAB_GROUP_RESOURCES);
+      });
+    });
+
+    it('gives the fixed Column 1/2 headless webviews HEADLESS_GROUP when pinned (isClosable: false)', () => {
+      ['platformScriptureEditor.modelText', SCRIPTURE_EDITOR_WEBVIEW_TYPE].forEach(
+        (webViewType) => {
+          expect(getTabGroup(makeWebViewTabInfo(webViewType, false))).toBe(HEADLESS_GROUP);
+        },
+      );
+    });
+
+    it('falls back to TAB_GROUP for a fixed-column webViewType when isClosable is not false (e.g. Power mode)', () => {
+      expect(getTabGroup(makeWebViewTabInfo('platformScriptureEditor.bibleTexts', true))).toBe(
+        TAB_GROUP,
+      );
+      expect(getTabGroup(makeWebViewTabInfo('platformScriptureEditor.bibleTexts', undefined))).toBe(
+        TAB_GROUP,
+      );
+    });
+
+    it('falls back to TAB_GROUP for a floating/unrelated webViewType even when isClosable is false', () => {
+      expect(getTabGroup(makeWebViewTabInfo('someExtension.someFloatingDialog', false))).toBe(
+        TAB_GROUP,
+      );
+    });
+
+    it('falls back to TAB_GROUP for non-webview tabs regardless of isClosable', () => {
+      const tabInfo: TabInfo = {
+        id: 'test-id',
+        tabType: 'settingsTab',
+        tabTitle: 'Test',
+        content: undefined,
+        isClosable: false,
+      };
+      expect(getTabGroup(tabInfo)).toBe(TAB_GROUP);
+    });
+
+    it('falls back to TAB_GROUP (does not throw) for a webview tab with isClosable: false but no data', () => {
+      const tabInfo: TabInfo = {
+        id: 'test-id',
+        tabType: TAB_TYPE_WEBVIEW,
+        tabTitle: 'Test',
+        content: undefined,
+        isClosable: false,
+      };
+      expect(() => getTabGroup(tabInfo)).not.toThrow();
+      expect(getTabGroup(tabInfo)).toBe(TAB_GROUP);
+    });
+  });
+
+  describe('getDockLayoutOuterInset()', () => {
+    it('power mode: keeps the original 8px inset on every side (except top)', () => {
+      expect(getDockLayoutOuterInset(true)).toEqual({
+        position: 'absolute',
+        top: 48,
+        bottom: 8,
+        left: 8,
+        right: 8,
+      });
+    });
+
+    it('simple mode: removes the inset except for the top toolbar clearance', () => {
+      expect(getDockLayoutOuterInset(false)).toEqual({
+        position: 'absolute',
+        top: 56,
+        bottom: 0,
+        left: 0,
+        right: 0,
+      });
+    });
+
+    it('returns a 56px top inset in simple mode (matches the taller tw:h-14 toolbar)', () => {
+      expect(getDockLayoutOuterInset(false).top).toBe(56);
+    });
+
+    it('keeps a 48px top inset in power mode (matches tw:h-12)', () => {
+      expect(getDockLayoutOuterInset(true).top).toBe(48);
+    });
+  });
+
   describe('getFloatPosition()', () => {
     it('should cascade from top-left of layout', () => {
       const layout: FloatLayout = { type: 'float', floatSize: { width: 20, height: 10 } };
@@ -56,6 +230,44 @@ describe('Dock Layout Component', () => {
         width: 20,
         height: 10,
       });
+    });
+
+    it('should clamp an oversized float to a fraction of the layout size', () => {
+      // Requested 1100x720 in an 800x600 layout -> clamp to 80% width / 85% height
+      const layout: FloatLayout = { type: 'float', floatSize: { width: 1100, height: 720 } };
+      const floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
+
+      const next = getFloatPosition(layout, floatPosition, { width: 800, height: 600 });
+
+      expect(next.width).toBe(640); // 800 * 0.8
+      expect(next.height).toBe(510); // 600 * 0.85
+    });
+
+    it('should center a clamped float using the clamped size', () => {
+      const layout: FloatLayout = {
+        type: 'float',
+        position: 'center',
+        floatSize: { width: 1100, height: 720 },
+      };
+      const floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
+
+      const next = getFloatPosition(layout, floatPosition, { width: 800, height: 600 });
+
+      // Centered on the clamped 640x510 box, not the requested 1100x720
+      expect(next).toEqual({ left: 80, top: 45, width: 640, height: 510 });
+    });
+
+    it('should not alter floats that already fit within the clamp fraction', () => {
+      const layout: FloatLayout = {
+        type: 'float',
+        position: 'center',
+        floatSize: { width: 400, height: 300 },
+      };
+      const floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
+
+      const next = getFloatPosition(layout, floatPosition, { width: 800, height: 600 });
+
+      expect(next).toEqual({ left: 200, top: 150, width: 400, height: 300 });
     });
   });
 });
