@@ -29,10 +29,15 @@ import {
   localizedStringsDocumentCombiner,
   waitForResyncContributions,
 } from '@extension-host/services/contribution.service';
-import { LanguageInfo } from 'platform-bible-react';
 import { Canon } from '@sillsdev/scripture';
 import { languageDetails } from '@extension-host/data/language-details.data';
 import { computeSetupDialogLanguages } from '@extension-host/services/setup-dialog-languages.util';
+import {
+  filterToOffered,
+  loadedLocales,
+  markLoadedLocalesFailed,
+  markLoadedLocalesReady,
+} from '@extension-host/services/interface-languages';
 
 /**
  * The base language to get localized strings for if they are not present in other languages
@@ -44,8 +49,6 @@ const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localizati
 // BCP 47 validation regex from https://stackoverflow.com/questions/7035825/regular-expression-for-a-language-tag-as-defined-by-bcp47
 const LANGUAGE_CODE_REGEX =
   /^(?<grandfathered>(?:en-GB-oed|i-(?:ami|bnn|default|enochian|hak|klingon|lux|mingo|navajo|pwn|t(?:a[oy]|su))|sgn-(?:BE-(?:FR|NL)|CH-DE))|(?:art-lojban|cel-gaulish|no-(?:bok|nyn)|zh-(?:guoyu|hakka|min(?:-nan)?|xiang)))|(?:(?<language>(?:[A-Za-z]{2,3}(?:-(?<extlang>[A-Za-z]{3}(?:-[A-Za-z]{3}){0,2}))?)|[A-Za-z]{4}|[A-Za-z]{5,8})(?:-(?<script>[A-Za-z]{4}))?(?:-(?<region>[A-Za-z]{2}|[0-9]{3}))?(?:-(?<variant>[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*(?:-(?<extension>[0-9A-WY-Za-wy-z](?:-[A-Za-z0-9]{2,8})+))*)(?:-(?<privateUse>x(?:-[A-Za-z0-9]{1,8})+))?$/;
-
-const loadedLocales: Record<string, LanguageInfo> = {};
 
 function getFileNameFromUri(uriToMatch: string): string {
   const file = path.parse(uriToMatch);
@@ -391,7 +394,7 @@ class LocalizationDataProviderEngine
   // implements the IDataProviderEngine<LocalizationDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getAvailableInterfaceLanguages() {
-    return loadedLocales;
+    return filterToOffered(loadedLocales);
   }
 
   // retrieveCurrentLocalizedStringData doesn't use instance state but cannot be static because it
@@ -433,7 +436,7 @@ class LocalizationDataProviderEngine
     return computeSetupDialogLanguages(
       englishData,
       (tag) => localizedStringsDocumentCombiner.getLocalizedStringData(tag),
-      loadedLocales,
+      filterToOffered(loadedLocales),
     );
   }
 
@@ -456,6 +459,7 @@ export async function initialize(): Promise<void> {
       const executor = async () => {
         try {
           await loadAllLocalizationData();
+          markLoadedLocalesReady();
           const engine = new LocalizationDataProviderEngine();
           dataProvider = await dataProviderService.registerEngine(
             localizationServiceProviderName,
@@ -465,6 +469,7 @@ export async function initialize(): Promise<void> {
           engine.subscribeToInterfaceLanguageChanges();
           resolve();
         } catch (error) {
+          markLoadedLocalesFailed(getErrorMessage(error));
           reject(error);
         }
       };
@@ -478,6 +483,7 @@ export async function initialize(): Promise<void> {
 export const testingLocalizationService = {
   implementLocalizationDataProviderEngine: async () => {
     await loadAllLocalizationData();
+    markLoadedLocalesReady();
     const engine = new LocalizationDataProviderEngine();
     engine.subscribeToInterfaceLanguageChanges();
     return engine;
