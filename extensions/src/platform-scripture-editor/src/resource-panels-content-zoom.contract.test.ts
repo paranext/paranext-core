@@ -128,12 +128,12 @@ describe('content zoom markers (Bible Texts / Commentaries panel)', () => {
     expect(panel).toMatch(/resourceType === 'ScriptureResource' \? 'bible-texts' : 'commentaries'/);
   });
 
-  it('marks the editor inside its scroll box, keeping the selector and the messages unmarked', () => {
+  it('marks the editor inside its scroll box, keeping the selector, the copyright notice and the messages unmarked', () => {
     expect(panel).toMatch(
       /data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID} ?> <ContentZoomRoot area={contentZoomArea}> <Editorial/,
     );
     expect(panel).toMatch(
-      /<ResourceSelectorDropdown[\s\S]*?\/> <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent\(\)}<\/div>/,
+      /<ResourceSelectorDropdown[\s\S]*?\/> {copyrightNotice} <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent\(\)}<\/div>/,
     );
   });
 
