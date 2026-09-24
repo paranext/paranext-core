@@ -22,7 +22,6 @@
   "%commentEditor_unassigned%": "Unassigned",
   "%data_loading_error_internetAccess_disabled%": "Internet access is disabled in “Internet Settings”. Please enable it and try again.",
   "%data_loading_error_internetAccess_disabled_2%": "Internet access is disabled in “Internet & connectivity”. Please enable it and try again.",
-  "%data_loading_error_internetAccess_sensitiveLocation%": "Paratext blocked internet access because this location is flagged as sensitive, or could not be confirmed. Connect through a VPN, or change the setting in “Internet & connectivity”.",
   "%data_loading_error_paratextData_auth_failure%": "Paratext Registration is not valid. Please update your registration information and try again.",
   "%data_loading_error_paratextData_internet_disabled%": "Internet access is disabled in “Paratext Registration Information”. Please enable it and try again.",
   "%downloadUpdateProjectTab_aria_downloadable%": "downloadable projects",

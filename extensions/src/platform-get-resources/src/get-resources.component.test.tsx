@@ -20,8 +20,6 @@ import {
 
 const STRINGS = {
   '%data_loading_error_internetAccess_disabled_2%': 'Internet access is disabled, translated',
-  '%data_loading_error_internetAccess_sensitiveLocation%':
-    'Location could not be confirmed, translated',
   '%resources_noResults%': 'No resources found',
   '%resources_noResultsError%': 'Unable to search for resources',
   '%resources_retry%': 'Try again',
@@ -230,25 +228,23 @@ describe('GetResources', () => {
     expect(await screen.findByText('This resource is no longer available')).toBeInTheDocument();
   });
 
-  // ParatextData's own texts for its internet blocks describe ParatextData, not the setting the user
-  // can change — and the sensitive-locations one is just .NET's default for an exception with no
-  // message. Installing a resource is the Get Resources action that runs into them.
+  // Blocked installs show the message that points at the setting, not the raw text: ParatextData's
+  // describes ParatextData, and the gate's carries a sentinel. Installing a resource is the Get
+  // Resources action that runs into them.
   it.each([
     {
-      block: 'all internet access is disabled',
+      block: 'ParatextData blocks it',
       rawMessage:
         'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.',
-      expectedText: 'Internet access is disabled, translated',
     },
     {
-      block: 'the sensitive-locations setting cannot confirm the location',
+      block: 'the internet setting gate blocks it',
       rawMessage:
-        "JSON-RPC Request error (-32000): Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown.",
-      expectedText: 'Location could not be confirmed, translated',
+        'JSON-RPC Request error (-32000): Internet access is off. (INTERNET_SERVICES_BLOCKED)',
     },
   ])(
-    'explains a blocked install when $block instead of showing the raw ParatextData message',
-    async ({ rawMessage, expectedText }) => {
+    'explains a blocked install when $block instead of showing the raw message',
+    async ({ rawMessage }) => {
       const resource = {
         dblEntryUid: 'uid-1',
         displayName: 'NIV',
@@ -273,16 +269,18 @@ describe('GetResources', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Get' }));
 
-      expect(await screen.findByText(expectedText)).toBeInTheDocument();
-      // The raw markers, not the word "Paratext" — the shipped replacement text starts with it.
       expect(
-        screen.queryByText(/VpnDisconnectedException|Bug in Paratext/),
+        await screen.findByText('Internet access is disabled, translated'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/INTERNET_SERVICES_BLOCKED|Bug in Paratext/),
       ).not.toBeInTheDocument();
     },
   );
 
-  // Localized strings arrive asynchronously. Before this fallback the alert rendered the raw
-  // `%data_loading_error_...%` key whenever a block landed first.
+  // Localized strings arrive asynchronously, and `useLocalizedStrings` fills each key with the key
+  // itself until then — so a block that lands first must show the failure's own message, not the
+  // `%data_loading_error_...%` key.
   it('shows the failure message rather than a localize key when strings have not loaded', async () => {
     const resource = {
       dblEntryUid: 'uid-1',
@@ -298,7 +296,14 @@ describe('GetResources', () => {
 
     render(
       <GetResources
-        localizedStringsWithLoadingState={[{}, true]}
+        localizedStringsWithLoadingState={[
+          {
+            '%data_loading_error_internetAccess_disabled_2%':
+              '%data_loading_error_internetAccess_disabled_2%',
+            '%resources_get%': '%resources_get%',
+          },
+          true,
+        ]}
         resources={[resource]}
         selectedTypes={['ScriptureResource']}
         selectedLanguages={['English']}

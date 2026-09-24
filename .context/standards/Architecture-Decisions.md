@@ -1530,54 +1530,46 @@ step, no automation. Just a record.
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
 
-## adr-internet-access-enforcement-delegated: ParatextData alone enforces the internet-access setting; the UI states its geo-conditional behavior
+## adr-internet-services-gate: Platform.Bible gates Registry, Send/Receive, and DBL access on the saved internet setting
 
-- **Date:** 2026-09-11
+- **Date:** 2026-09-24
 - **Status:** Accepted
-- **Context:** A user who picked the strongest internet option the settings offered could still
-  download DBL resources. The setting is ParatextData's `InternetUse`, saved to the machine-wide
-  `InternetSettings.xml` that a co-installed Paratext 9 also reads. ParatextData enforces it in
-  `RESTClient.VerifyUri` → `InternetAccess.VerifySafety`, which blocks only when the effective
-  `InternetAccess.Status` is `Disabled`. `Status` resolves `VpnRequired` by geolocating the machine's
-  public IP against `CountryStatuses.xml`: `Disabled` where the country is marked `blocked`, **and
-  also wherever the country cannot be determined** (no network, every IP-lookup service failing, a
-  missing file), `Enabled` everywhere else. The options list offered `VpnRequired` under copy that
-  promised an unconditional block, rendered a UI-only "Block internet when in sensitive locations"
-  row that described `VpnRequired` exactly but saved nothing, and greyed out `Disabled` as "Coming
-  soon". `VerifySafety` also throws two different exceptions: an `InvalidOperationException` with a
-  fixed message when the saved value is `Disabled`, and a `VpnDisconnectedException` — which declares
-  no message — when a `VpnRequired` block fires.
-- **Decision:** Keep enforcement wholly in ParatextData; Platform.Bible adds no gate of its own. Make
-  `Disabled` selectable, relabel `VpnRequired` to say it blocks only where the location is flagged as
-  sensitive or cannot be confirmed (Paratext 9's own meaning for it, whose translations the new label
-  takes as its fallback), and delete the duplicate placeholder row. Recognize both exceptions in
-  TypeScript — `isErrorMessageAboutParatextBlockingInternetAccess` by ParatextData's fixed message,
-  `isErrorMessageAboutParatextSensitiveLocationBlock` by the type name in .NET's default message —
-  and give each its own user-facing string. Write the chosen value to `InternetAccess.RawStatus`
-  explicitly (`InternetSettingsLogic.ReassertedRawStatus`) rather than leaning on `SetProxy` forcing
-  `Disabled` as a side effect: enforcement is delegated, but persisting the user's choice is ours.
-- **Alternatives:** **Make `VpnRequired` block unconditionally, as the old copy promised** — rejected:
-  it needs a Platform.Bible-side gate, and a co-installed Paratext 9 reading the same saved value
-  would go on behaving geo-conditionally, so the two apps would disagree about one setting. **Add a
-  Platform.Bible gate in front of DBL calls** — rejected: ParatextData's chain already fires once
-  `Status` is `Disabled`, and a second gate is a second copy of the rules to drift. **Keep the
-  placeholder row and point it at `VpnRequired`** — rejected: two rows saving one value. **Show the
-  existing "internet access is disabled" message for both exceptions** — rejected: the user did not
-  disable internet, and the block also fires where the location lookup merely failed, so its message
-  says the location could not be confirmed rather than that it is flagged.
-- **Consequences:** The sensitive-location detector depends on `VpnDisconnectedException` keeping
-  .NET's default message; `InternetSettingsLogicTests` fails if a ParatextData update changes that.
-  Classification lives in three places that cannot import one another — the detectors in
-  `platform-bible-utils`, `constructErrorNotification` for data-provider subscriptions, and
-  `internet-block-notification.utils.ts` for the Get Resources extension — so a third kind of block
-  means editing all three. "Disable all internet access" gates ParatextData's REST layer only —
-  Platform.Bible's own network use (extension installs, for one) is not covered. Get Resources
-  persists its catalog, so after internet is disabled it still lists resources; installs and fresh
-  fetches are what fail.
-- **Source:** PT-4590 implementation. ParatextData's internals above (`RESTClient.VerifyUri`,
-  `InternetAccess.VerifySafety`, the `CountryStatuses.xml` lookup, and the two exception types) were
-  read from decompiled ParatextData 9.5.0.24, which this repo consumes as a binary package — only
-  the exception's message is pinned by a test.
+- **Context:** The Internet & connectivity settings offer "Disable access to some Bible translation
+  services", which saves ParatextData's `InternetUse.VpnRequired` to the machine-wide
+  `InternetSettings.xml` and says it disables the Registry, Send/Receive, and the Digital Bible
+  Library. ParatextData does not do that: `RESTClient.VerifyUri` → `InternetAccess.VerifySafety`
+  blocks only when the effective `InternetAccess.Status` is `Disabled`, and `Status` resolves
+  `VpnRequired` by geolocating the machine's public IP against `CountryStatuses.xml` — `Disabled`
+  where the country is marked `blocked` or cannot be determined, `Enabled` everywhere else. So from
+  most locations the setting blocked nothing, and DBL resources still downloaded. Product direction
+  (PT-4590, 2026-09-18) is to keep the options PT10 offers today and make this one do what it says;
+  "sensitive locations" and "Disable all internet access" stay unavailable.
+- **Decision:** Add a Platform.Bible-side gate, `InternetServicesGate` (`c-sharp/Users/`), that reads
+  the saved value (`InternetAccess.RawStatus`) and refuses when it is `VpnRequired` or `Disabled`.
+  Every C# entry point that reaches one of the three services calls `ThrowIfBlocked` first: the DBL
+  catalog fetch and install in `DblResourcesDataProvider`, and the `syncProjects` and `breakSyncLock`
+  registrations in `ParatextProjectSendReceiveService` — at registration rather than in the method
+  bodies, because the Paratext 10 Studio patch replaces those bodies. The rejection is a localized
+  message ending in the `(INTERNET_SERVICES_BLOCKED)` sentinel (the `(SR_EDIT_BLOCKED)` pattern), and
+  `isErrorMessageAboutParatextBlockingInternetAccess` matches it alongside ParatextData's own message,
+  so the existing "internet access is disabled" message and its link to the setting cover both.
+- **Alternatives:** **Relabel `VpnRequired` to say it only blocks in sensitive locations, and leave
+  enforcement to ParatextData** — rejected by product: it keeps a setting whose purpose most users
+  cannot use, and turns the fix into documenting the gap. **Save `Disabled` when the user picks this
+  option** — rejected: a co-installed Paratext 9 reads the same file and would switch to "Disable
+  ALL Internet use", and the option would then block ParatextData's other internet uses too, not
+  just these three services. **Gate inside the S/R method bodies** — rejected: the Studio patch
+  replaces them, silently dropping the check.
+- **Consequences:** PT10 and a co-installed Paratext 9 now treat `VpnRequired` differently: PT10
+  blocks the three services everywhere, while PT9 keeps its location-dependent behavior.
+  Send/Receive entry points that exist only in the Studio extension/patch (`sendReceiveProjects`, `getSharedProjects`, scheduled session sync)
+  are not covered by the core registrations and must call `InternetServicesGate.ThrowIfBlocked`
+  there. Core has no Registry network entry point of its own; registry traffic happens inside the
+  S/R and DBL paths. The setting governs ParatextData-backed services only — network use by the Node
+  and Chromium processes (extension host, renderers) is not covered. Automatic syncs that hit the
+  gate fail the way other automatic-sync failures do: logged, with no user-facing error.
+- **Source:** PT-4590. ParatextData's internals above were read from decompiled ParatextData
+  9.5.0.24, which this repo consumes as a binary package.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 

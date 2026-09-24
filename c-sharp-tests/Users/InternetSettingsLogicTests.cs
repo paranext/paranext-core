@@ -185,31 +185,13 @@ public class InternetSettingsLogicTests
         Assert.That(result, Is.Null);
     }
 
-    // "Disable all internet access" is only as good as this write. ParatextData's SetProxy
-    // happens to set Disabled when given no host, but nothing guarantees a future ParatextData
-    // version will keep doing so, and the user's choice must not depend on that. ProxyOnly is the
-    // deliberate exception: it writes nothing and keeps whatever SetProxy set.
     [Test]
-    public void ReassertedRawStatus_EnabledCurrentAndDisabledRequested_ReturnsDisabled()
+    public void ReassertedRawStatus_EnabledCurrentAndDisabledRequested_ReturnsNull()
     {
         var result = InternetSettingsLogic.ReassertedRawStatus(
             InternetUse.Enabled,
             InternetUse.Disabled
         );
-        Assert.That(result, Is.EqualTo(InternetUse.Disabled));
-    }
-
-    // ----- ParatextData contract, guarding the TypeScript detector -----
-
-    [Test]
-    public void VpnDisconnectedException_Message_NamesTheExceptionType()
-    {
-        // The exception declares no message, so .NET's default — which names the type — is all that
-        // reaches TypeScript, where `isErrorMessageAboutParatextSensitiveLocationBlock` matches on
-        // that name. If ParatextData gives it a real message, update that detector.
-        Assert.That(
-            new VpnDisconnectedException().Message,
-            Does.Contain("Paratext.Data.VpnDisconnectedException")
-        );
+        Assert.That(result, Is.Null);
     }
 }

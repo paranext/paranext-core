@@ -985,8 +985,8 @@ export type InternetAccessOptionListProps = {
 	/**
 	 * Whether to show the "disabled options are planned for future updates" note below the rows.
 	 * Defaults to true. Set false where vertical space is tight (the first-run wizard step, whose
-	 * heading and Next button compete for the same fold) — a "Coming soon" badge still marks any
-	 * option that is not yet available.
+	 * heading and Next button compete for the same fold) — the per-row "Coming soon" badges still
+	 * convey that those options are not yet available.
 	 */
 	showFooter?: boolean;
 };

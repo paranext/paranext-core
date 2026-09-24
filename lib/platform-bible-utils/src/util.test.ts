@@ -2,7 +2,7 @@ import { afterEach, vi } from 'vitest';
 import {
   debounce,
   DEBOUNCE_CANCELED_ERROR_MESSAGE,
-  isErrorMessageAboutParatextSensitiveLocationBlock,
+  isErrorMessageAboutParatextBlockingInternetAccess,
   retryUntil,
 } from './util';
 
@@ -333,28 +333,30 @@ describe('retryUntil', () => {
   });
 });
 
-describe('isErrorMessageAboutParatextSensitiveLocationBlock', () => {
-  // .NET's default message for ParatextData's message-less `VpnDisconnectedException`
-  const sensitiveLocationMessage =
-    "Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown.";
-
-  it('recognizes the exception by the type name in its default message', () => {
-    expect(isErrorMessageAboutParatextSensitiveLocationBlock(sensitiveLocationMessage)).toBe(true);
-  });
-
-  it('recognizes it inside an Error that crossed a process boundary', () => {
+describe('isErrorMessageAboutParatextBlockingInternetAccess', () => {
+  it("recognizes ParatextData's own block", () => {
     expect(
-      isErrorMessageAboutParatextSensitiveLocationBlock(
-        new Error(`JSON-RPC Request error (-32000): ${sensitiveLocationMessage}`),
+      isErrorMessageAboutParatextBlockingInternetAccess(
+        'Bug in Paratext caused attempted access to Internet. Request has been blocked.',
       ),
     ).toBe(true);
   });
 
-  // "Disable all internet access" has its own detector and its own user-facing message.
-  it('does not claim the "Disable all internet access" block', () => {
+  // The gate's message is localized, so only its sentinel can be matched
+  it("recognizes the data provider's gate by its sentinel, in any language", () => {
     expect(
-      isErrorMessageAboutParatextSensitiveLocationBlock(
-        'Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+      isErrorMessageAboutParatextBlockingInternetAccess(
+        new Error(
+          'JSON-RPC Request error (-32000): El acceso a Internet está deshabilitado. (INTERNET_SERVICES_BLOCKED)',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores other failures', () => {
+    expect(
+      isErrorMessageAboutParatextBlockingInternetAccess(
+        new Error('JSON-RPC Request error (-32000): This resource is no longer available'),
       ),
     ).toBe(false);
   });

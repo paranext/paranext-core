@@ -143,7 +143,6 @@
   "%commentEditor_team%": "Equipo",
   "%commentEditor_unassigned%": "Sin asignar",
   "%data_loading_error_internetAccess_disabled_2%": "El acceso a Internet está deshabilitado en “Internet y conectividad”. Por favor, actívelo e intente nuevamente.",
-  "%data_loading_error_internetAccess_sensitiveLocation%": "Paratext bloqueó el acceso a Internet porque esta ubicación está marcada como sensible, o no se pudo confirmar. Conéctese mediante una VPN o cambie la configuración en “Internet y conectividad”.",
   "%data_loading_error_paratextData_auth_failure%": "La registración de Paratext no es válida. Actualice su información de registración y vuelva a intentarlo.",
   "%data_loading_error_paratextData_internet_disabled%": "El acceso a Internet está deshabilitado en “Información de Registro de Paratext”. Por favor, actívelo e intente nuevamente.",
   "%downloadUpdateProjectTab_aria_downloadable%": "proyectos descargables",

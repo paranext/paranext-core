@@ -41,11 +41,12 @@ vi.mock('@papi/frontend/react', () => ({
 // eslint-disable-next-line import/first
 import './get-resources.web-view';
 
-// ParatextData's own texts, as they arrive across the process boundary.
+// The two blocks' texts, as they arrive across the process boundary: ParatextData's own, and the
+// data provider's gate on the "Disable access to some Bible translation services" setting.
 const ALL_ACCESS_DISABLED_ERROR =
   'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.';
-const SENSITIVE_LOCATION_ERROR =
-  "JSON-RPC Request error (-32000): Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown.";
+const SERVICES_BLOCKED_ERROR =
+  'JSON-RPC Request error (-32000): Internet access is disabled in “Internet & connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)';
 
 const RESOURCE = {
   dblEntryUid: 'uid-1',
@@ -92,14 +93,14 @@ function renderWebView() {
 
 describe('Get Resources web view', () => {
   it('reports a blocked catalog fetch with the notification that opens the setting', async () => {
-    mockSendCommand.mockRejectedValue(new Error(SENSITIVE_LOCATION_ERROR));
+    mockSendCommand.mockRejectedValue(new Error(SERVICES_BLOCKED_ERROR));
 
     renderWebView();
 
     await waitFor(() =>
       expect(mockSendNotification).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%data_loading_error_internetAccess_sensitiveLocation%',
+          message: '%data_loading_error_internetAccess_disabled_2%',
           clickCommand: 'paratextRegistration.showInternetSettings',
           notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,
         }),
@@ -130,7 +131,7 @@ describe('Get Resources web view', () => {
   // list that loaded fine — and does not raise a second one.
   it('does not report the block again once a retry succeeds', async () => {
     mockSendCommand
-      .mockRejectedValueOnce(new Error(SENSITIVE_LOCATION_ERROR))
+      .mockRejectedValueOnce(new Error(SERVICES_BLOCKED_ERROR))
       .mockResolvedValue({ status: 'available', resources: [RESOURCE] });
 
     renderWebView();

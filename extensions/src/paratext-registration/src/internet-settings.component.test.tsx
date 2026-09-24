@@ -43,15 +43,17 @@ const mockLocalizedStrings: LanguageStrings = {
   // Minimum required for sub-components to render
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
   '%paratextRegistration_description_internetUse_option_Enabled_details%': '',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_3%':
-    'Sensitive locations sentinel',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%': '',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'VPN sentinel',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_details%': '',
   '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Blocked sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled_details%': '',
-  '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Proxy sentinel',
+  '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
+    'Sensitive sentinel',
+  '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%': '',
+  '%paratextRegistration_description_internetUse_option_ProxyOnly%': 'Proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': '',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_footer_2%': 'Footer sentinel',
+  '%paratextRegistration_internetUse_footer%': 'Footer sentinel',
   '%paratextRegistration_developer_section_label%': 'Developer only',
   '%paratextRegistration_label_serverType_option_Production%': 'Production',
   '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance',

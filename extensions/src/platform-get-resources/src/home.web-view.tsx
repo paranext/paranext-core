@@ -221,8 +221,8 @@ globalThis.webViewComponent = function HomeWebView() {
         }
       } catch (e) {
         const errorMessage = getErrorMessage(e);
-        // An internet block does not retry: ParatextData caches the location lookup that produced
-        // it, so the answer cannot change within this ladder's few seconds.
+        // An internet block does not retry: it comes from the user's internet setting, so retrying
+        // cannot succeed until they change it.
         const internetBlockedNotification = getInternetBlockedNotification(errorMessage);
         if (internetBlockedNotification) {
           papi.notifications.send(internetBlockedNotification);

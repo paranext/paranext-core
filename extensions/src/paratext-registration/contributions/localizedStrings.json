@@ -17,47 +17,11 @@
         "date": "2026-07-26"
       }
     },
-    "%paratextRegistration_description_internetUse_option_Disabled_2%": {
-      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%"
-    },
     "%paratextRegistration_description_internetUse_option_VpnRequired%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%",
       "deprecationInfo": {
         "message": "Changed label to \"Disable access to some Bible translation services\". The new key is %paratextRegistration_description_internetUse_option_VpnRequired_2%.",
         "date": "2026-07-26"
-      }
-    },
-    "%paratextRegistration_description_internetUse_option_VpnRequired_2%": {
-      "deprecationInfo": {
-        "message": "Changed label to \"Block internet when in sensitive locations\", because this option only blocks where the location is flagged as sensitive or cannot be confirmed. The new key is %paratextRegistration_description_internetUse_option_VpnRequired_3%.",
-        "date": "2026-09-11"
-      }
-    },
-    "%paratextRegistration_description_internetUse_option_VpnRequired_3%": {
-      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%"
-    },
-    "%paratextRegistration_description_internetUse_option_VpnRequired_details%": {
-      "deprecationInfo": {
-        "message": "Rewrote the description to say the block applies only where the location is flagged as sensitive or cannot be confirmed. The new key is %paratextRegistration_description_internetUse_option_VpnRequired_details_2%.",
-        "date": "2026-09-11"
-      }
-    },
-    "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": {
-      "deprecationInfo": {
-        "message": "Removed the separate sensitive-locations row, which duplicated the VpnRequired option. Its label is now %paratextRegistration_description_internetUse_option_VpnRequired_3%.",
-        "date": "2026-09-11"
-      }
-    },
-    "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": {
-      "deprecationInfo": {
-        "message": "Removed the separate sensitive-locations row, which duplicated the VpnRequired option. Its description is now %paratextRegistration_description_internetUse_option_VpnRequired_details_2%.",
-        "date": "2026-09-11"
-      }
-    },
-    "%paratextRegistration_internetUse_footer%": {
-      "deprecationInfo": {
-        "message": "Reworded for a list with a single unavailable option, and to name the badge rather than say \"disabled options\", which read as the options that disable things. The new key is %paratextRegistration_internetUse_footer_2%.",
-        "date": "2026-09-22"
       }
     },
     "%paratextRegistration_label_proxyHost%": {
@@ -191,7 +155,7 @@
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Block internet when in sensitive locations",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Automatically blocks Paratext internet access in configured sensitive areas.",
       "%paratextRegistration_description_internetUse_option_Disabled%": "Disable all Internet use",
-      "%paratextRegistration_description_internetUse_option_Disabled_2%": "Disable all internet access",
+      "%paratextRegistration_description_internetUse_option_Disabled_2%": "Disable all Internet access",
       "%paratextRegistration_description_internetUse_option_Disabled_details%": "Blocks all internet access within the Paratext app. Other applications on your computer are not affected.",
       "%paratextRegistration_description_internetUse_option_Enabled%": "Allow unrestricted Internet use",
       "%paratextRegistration_description_internetUse_option_Enabled_2%": "Unrestricted",
@@ -201,16 +165,13 @@
       "%paratextRegistration_description_internetUse_option_ProxyOnly_details%": "Routes Paratext internet traffic through a configured proxy server.",
       "%paratextRegistration_description_internetUse_option_VpnRequired%": "Disable Internet use in sensitive locations",
       "%paratextRegistration_description_internetUse_option_VpnRequired_2%": "Disable access to some Bible translation services",
-      "%paratextRegistration_description_internetUse_option_VpnRequired_3%": "Block internet when in sensitive locations",
       "%paratextRegistration_description_internetUse_option_VpnRequired_details%": "Disables access to Registry, Send/Receive, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.",
-      "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": "Paratext checks the location your internet connection appears to come from. Where that location is flagged as sensitive — or cannot be confirmed — access to the Registry, Send/Receive, and the Digital Bible Library is blocked. Elsewhere they work normally.",
       "%paratextRegistration_description_is_registered%": "Your {%product_name%} is registered!",
       "%paratextRegistration_description_shared_with_paratext_9%": "These settings also apply to Paratext 9.",
       "%paratextRegistration_developer_section_label%": "Developer only",
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "You must provide a valid Paratext registration before opening resources from the Digital Bible Library.",
       "%paratextRegistration_internetUse_comingSoon%": "Coming soon",
       "%paratextRegistration_internetUse_footer%": "Disabled options are planned for future updates.",
-      "%paratextRegistration_internetUse_footer_2%": "Options marked “Coming soon” are planned for future updates.",
       "%paratextRegistration_label_emailAddress%": "Email address",
       "%paratextRegistration_label_proxyHost%": "Host",
       "%paratextRegistration_label_proxyMode%": "Mode",
@@ -273,7 +234,7 @@
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Bloquear internet en lugares sensibles",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Bloquea automáticamente el acceso a internet de Paratext en áreas sensibles configuradas.",
       "%paratextRegistration_description_internetUse_option_Disabled%": "Deshabilitar todo uso de Internet",
-      "%paratextRegistration_description_internetUse_option_Disabled_2%": "Deshabilitar todo el acceso a internet",
+      "%paratextRegistration_description_internetUse_option_Disabled_2%": "Deshabilitar todo el acceso a Internet",
       "%paratextRegistration_description_internetUse_option_Disabled_details%": "Bloquea todo el acceso a internet dentro de la aplicación Paratext. Otras aplicaciones en tu computadora no se ven afectadas.",
       "%paratextRegistration_description_internetUse_option_Enabled%": "Permitir uso de Internet sin restricción",
       "%paratextRegistration_description_internetUse_option_Enabled_2%": "Sin restricciones",
@@ -283,15 +244,12 @@
       "%paratextRegistration_description_internetUse_option_ProxyOnly_details%": "Enruta el tráfico de internet de Paratext a través de un servidor proxy configurado.",
       "%paratextRegistration_description_internetUse_option_VpnRequired%": "Deshabilitar Internet en áreas sensibles",
       "%paratextRegistration_description_internetUse_option_VpnRequired_2%": "Deshabilitar acceso a algunos servicios de traducción bíblica",
-      "%paratextRegistration_description_internetUse_option_VpnRequired_3%": "Bloquear internet en lugares sensibles",
       "%paratextRegistration_description_internetUse_option_VpnRequired_details%": "Deshabilita el acceso al Registro, Enviar/Recibir y la Biblioteca Bíblica Digital dentro de la aplicación Paratext. Otras funciones de internet y otras aplicaciones no se ven afectadas.",
-      "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": "Paratext comprueba la ubicación de la que parece provenir su conexión a internet. Donde esa ubicación está marcada como sensible —o no se puede confirmar— se bloquea el acceso al Registro, Enviar/Recibir y la Biblioteca Bíblica Digital. En los demás lugares funcionan con normalidad.",
       "%paratextRegistration_description_shared_with_paratext_9%": "Estas configuraciones se aplican también a Paratext 9.",
       "%paratextRegistration_developer_section_label%": "Solo para desarrolladores",
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "Debe proporcionar credenciales de Registro de Paratext válidas antes de abrir recursos de la Biblioteca Bíblica Digital.",
       "%paratextRegistration_internetUse_comingSoon%": "Próximamente",
       "%paratextRegistration_internetUse_footer%": "Las opciones deshabilitadas están previstas para futuras actualizaciones.",
-      "%paratextRegistration_internetUse_footer_2%": "Las opciones marcadas como “Próximamente” están previstas para futuras actualizaciones.",
       "%paratextRegistration_label_emailAddress%": "Dirección de correo electrónico",
       "%paratextRegistration_label_proxyHost%": "Servidor",
       "%paratextRegistration_label_proxyMode%": "Modo",

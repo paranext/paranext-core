@@ -333,15 +333,15 @@ export const RemoveError: Story = {
 };
 
 /**
- * An install refused by the "Block internet when in sensitive locations" setting. ParatextData's
- * own text is a message-less .NET exception, so the component shows its own wording instead; the
- * web view additionally raises a notification that opens the setting.
+ * An install refused by the "Disable access to some Bible translation services" setting. The
+ * component shows the message that points at the setting instead of the raw error; the web view
+ * additionally raises a notification that opens the setting.
  */
 export const BlockedByInternetSettings: Story = {
   decorators: [
     createDecorator({
       onInstallOrRemoveResource: rejectingMock(
-        "Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown.",
+        'Internet access is disabled in “Internet & connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)',
       ),
     }),
   ],

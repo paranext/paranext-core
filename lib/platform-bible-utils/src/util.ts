@@ -426,8 +426,9 @@ function getErrorText(errorMessage: unknown): string {
 }
 
 /**
- * Indicates if the exception or error message provided appears to be from ParatextData.dll
- * indicating that Paratext is blocking internet access.
+ * Indicates if the exception or error message provided shows that Paratext refused internet access
+ * because of the user's internet setting — either ParatextData.dll's own block, or the .NET data
+ * provider's gate on Registry, Send/Receive, and Digital Bible Library access.
  *
  * @param errorMessage Error message or exception to check
  * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
@@ -436,31 +437,15 @@ export function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: 
   // Copied from ParatextData/InternetAccess.cs, not a localized string
   const paratextExceptionMessage =
     'Bug in Paratext caused attempted access to Internet. Request has been blocked.';
+  // Copied from `InternetServicesGate.BlockedSentinel` in c-sharp/Users/InternetServicesGate.cs.
+  // The message it ends is localized, so match only the sentinel.
+  const internetServicesBlockedSentinel = '(INTERNET_SERVICES_BLOCKED)';
 
-  return getErrorText(errorMessage).includes(paratextExceptionMessage);
-}
-
-/**
- * Indicates if the exception or error message provided appears to be from ParatextData.dll
- * indicating that Paratext blocked internet access under the "Block internet when in sensitive
- * locations" setting. ParatextData raises this both where the current location is flagged as
- * sensitive and where it cannot determine the location at all.
- *
- * Matches the exception's type name within the message, so text that merely quotes that type — a
- * forwarded stack trace, a logged inner exception — matches too.
- *
- * @param errorMessage Error message or exception to check
- * @returns `true` if the message indicates Paratext blocked internet access because it could not
- *   confirm the current location is safe, `false` otherwise
- */
-export function isErrorMessageAboutParatextSensitiveLocationBlock(errorMessage: unknown): boolean {
-  // `VpnDisconnectedException` declares no message, so .NET's default — which names the type — is
-  // all that crosses to TypeScript. `InternetSettingsLogicTests` fails if that stops being true.
-  // Matched with its namespace: the surrounding sentence is a .NET resource string that a localized
-  // runtime may translate, while the type name survives.
-  const paratextExceptionTypeName = 'Paratext.Data.VpnDisconnectedException';
-
-  return getErrorText(errorMessage).includes(paratextExceptionTypeName);
+  const errorText = getErrorText(errorMessage);
+  return (
+    errorText.includes(paratextExceptionMessage) ||
+    errorText.includes(internetServicesBlockedSentinel)
+  );
 }
 
 /**

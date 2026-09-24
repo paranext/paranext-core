@@ -1,4 +1,3 @@
-import { useId } from 'react';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { cn } from '@/utils/shadcn-ui/utils';
@@ -16,7 +15,10 @@ import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 type InternetUse = 'Enabled' | 'VpnRequired' | 'Disabled' | 'ProxyOnly';
 
 type OptionRow = {
-  value: InternetUse;
+  // BlockInSensitiveLocations is included here as a UI-only option that the UX spec requires
+  // showing in this list, but it is not part of the InternetUse type that PAPI persists — the
+  // onChange handler filters it out before calling the caller (see the if-guard below).
+  value: InternetUse | 'BlockInSensitiveLocations';
   labelKey: LocalizeKey;
   descriptionKey: LocalizeKey;
   isEnabled: boolean;
@@ -30,19 +32,23 @@ const OPTION_ROWS: OptionRow[] = [
     isEnabled: true,
   },
   {
-    // ParatextData blocks for this value only where the machine's location is flagged as sensitive
-    // or cannot be determined at all; everywhere else it behaves like `Enabled`. The label and
-    // description must keep saying so.
     value: 'VpnRequired',
-    labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired_3%',
-    descriptionKey: '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%',
+    labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired_2%',
+    descriptionKey: '%paratextRegistration_description_internetUse_option_VpnRequired_details%',
     isEnabled: true,
   },
   {
     value: 'Disabled',
     labelKey: '%paratextRegistration_description_internetUse_option_Disabled_2%',
     descriptionKey: '%paratextRegistration_description_internetUse_option_Disabled_details%',
-    isEnabled: true,
+    isEnabled: false,
+  },
+  {
+    value: 'BlockInSensitiveLocations',
+    labelKey: '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%',
+    descriptionKey:
+      '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%',
+    isEnabled: false,
   },
   {
     value: 'ProxyOnly',
@@ -52,10 +58,10 @@ const OPTION_ROWS: OptionRow[] = [
   },
 ];
 
-// Radix reports the selection as a plain string; narrowing it against the rows keeps `onChange`
-// typed without a type assertion.
 function isInternetUse(value: string): value is InternetUse {
-  return OPTION_ROWS.some((row) => row.value === value);
+  return OPTION_ROWS.some(
+    (row) => row.value !== 'BlockInSensitiveLocations' && row.value === value,
+  );
 }
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -63,7 +69,7 @@ function isInternetUse(value: string): value is InternetUse {
 export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
   ...OPTION_ROWS.flatMap((row) => [row.labelKey, row.descriptionKey]),
   '%paratextRegistration_internetUse_comingSoon%',
-  '%paratextRegistration_internetUse_footer_2%',
+  '%paratextRegistration_internetUse_footer%',
 ];
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -79,8 +85,8 @@ export type InternetAccessOptionListProps = {
   /**
    * Whether to show the "disabled options are planned for future updates" note below the rows.
    * Defaults to true. Set false where vertical space is tight (the first-run wizard step, whose
-   * heading and Next button compete for the same fold) — a "Coming soon" badge still marks any
-   * option that is not yet available.
+   * heading and Next button compete for the same fold) — the per-row "Coming soon" badges still
+   * convey that those options are not yet available.
    */
   showFooter?: boolean;
 };
@@ -93,16 +99,12 @@ export function InternetAccessOptionList({
   disabled,
   showFooter = true,
 }: InternetAccessOptionListProps) {
-  // Scoped per instance: the ids below tie each radio to its own label and description, and two of
-  // these lists rendered in one document would otherwise point every radio at the first match.
-  const listId = useId();
-  const optionId = (optionValue: InternetUse) => `${listId}-${optionValue}`;
-
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
       <RadioGroup
         value={value}
         onValueChange={(v) => {
+          // BlockInSensitiveLocations is UI-only; isInternetUse excludes it.
           if (isInternetUse(v)) onChange(v);
         }}
         disabled={disabled}
@@ -117,17 +119,14 @@ export function InternetAccessOptionList({
           >
             <RadioGroupItem
               value={row.value}
-              id={optionId(row.value)}
-              // Each option's description qualifies what it does — most of all the sensitive-locations
-              // one — so it has to reach assistive tech, which announces the label alone by default.
-              aria-describedby={`${optionId(row.value)}-description`}
+              id={`internet-option-${row.value}`}
               disabled={disabled || !row.isEnabled}
               className="tw:mt-0.5"
             />
             <div className="tw:flex tw:flex-1 tw:flex-col">
               <div className="tw:flex tw:items-center tw:justify-between">
                 <label
-                  htmlFor={optionId(row.value)}
+                  htmlFor={`internet-option-${row.value}`}
                   aria-disabled={!row.isEnabled || undefined}
                   className={cn(
                     'tw:text-sm tw:font-medium',
@@ -144,10 +143,7 @@ export function InternetAccessOptionList({
                   </Badge>
                 )}
               </div>
-              <p
-                id={`${optionId(row.value)}-description`}
-                className="tw:text-xs tw:text-muted-foreground"
-              >
+              <p className="tw:text-xs tw:text-muted-foreground">
                 {localizedStrings[row.descriptionKey]}
               </p>
             </div>
@@ -156,7 +152,7 @@ export function InternetAccessOptionList({
       </RadioGroup>
       {showFooter && (
         <p className="tw:px-2 tw:text-xs tw:text-muted-foreground">
-          {localizedStrings['%paratextRegistration_internetUse_footer_2%']}
+          {localizedStrings['%paratextRegistration_internetUse_footer%']}
         </p>
       )}
     </div>

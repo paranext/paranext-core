@@ -7,8 +7,6 @@ import {
 // ParatextData's own texts, as they arrive after crossing a process boundary.
 const ALL_ACCESS_DISABLED_ERROR =
   'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.';
-const SENSITIVE_LOCATION_ERROR =
-  "JSON-RPC Request error (-32000): Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown.";
 const AUTH_FAILURE_ERROR = 'User registration is not valid. Cannot retrieve resources from DBL.';
 
 describe('constructParatextErrorNotification', () => {
@@ -22,22 +20,11 @@ describe('constructParatextErrorNotification', () => {
     });
   });
 
-  // A sensitive-location block is not the user having switched internet off, so it must not reuse
-  // the "internet access is disabled" wording.
-  it('gives a sensitive-location block its own message', () => {
-    expect(constructParatextErrorNotification(SENSITIVE_LOCATION_ERROR)).toMatchObject({
-      message: '%data_loading_error_internetAccess_sensitiveLocation%',
-      clickCommand: 'paratextRegistration.showInternetSettings',
-      notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,
-    });
-  });
-
-  // Both blocks are one machine-wide condition; a shared id keeps many failing subscriptions from
-  // raising a toast each.
-  it('reports both blocks under the same notification id', () => {
-    expect(constructParatextErrorNotification(ALL_ACCESS_DISABLED_ERROR)?.notificationId).toBe(
-      constructParatextErrorNotification(SENSITIVE_LOCATION_ERROR)?.notificationId,
-    );
+  // Pinned as a literal because the platform-get-resources extension sends the same message under
+  // this same string and cannot import it: changing one without the other splits one block into two
+  // notifications.
+  it('shares its id with the notification the Get Resources extension sends for the same block', () => {
+    expect(INTERNET_BLOCKED_NOTIFICATION_ID).toBe('platform.internetBlocked');
   });
 
   it('sends an invalid registration to the registration screen instead', () => {

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
 using Paratext.Data.Archiving;
 using Paratext.Data.Users;
@@ -166,6 +167,8 @@ internal class DblResourcesDataProvider(
     /// </summary>
     private void FetchResourcesCore()
     {
+        InternetServicesGate.ThrowIfBlocked(PapiClient);
+
         if (!RegistrationInfo.DefaultUser.IsValid)
             throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
@@ -284,6 +287,9 @@ internal class DblResourcesDataProvider(
                     $"Resource is already installed and up to date. Installation skipped."
                 )
             );
+
+        // The catalog may have loaded before the internet setting changed, so check again here
+        InternetServicesGate.ThrowIfBlocked(PapiClient);
 
         // Note that we don't get any info telling if the installation succeeded or failed
         installableResource.Install();

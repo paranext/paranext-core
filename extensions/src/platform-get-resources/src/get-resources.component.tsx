@@ -57,7 +57,6 @@ import { getInternetBlockedMessageKey } from './internet-block-notification.util
  */
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%data_loading_error_internetAccess_disabled_2%',
-  '%data_loading_error_internetAccess_sensitiveLocation%',
   '%general_error_title%',
   '%resources_action%',
   '%resources_any_language%',
@@ -365,17 +364,21 @@ export function GetResources({
   const [actionError, setActionError] = useState<string | undefined>(undefined);
 
   // This component holds the localized strings, so callers signal the not-ready case with a
-  // sentinel rather than text, and ParatextData's internet blocks are swapped for our own wording —
-  // their raw messages describe ParatextData internals. Anything else shows its own message, minus
-  // the cross-process prefix. An unresolved key falls back to the raw message: strings load
-  // asynchronously, and `%data_loading_error_...%` reads worse than the failure itself.
+  // sentinel rather than text, and internet blocks are swapped for the wording that points at the
+  // setting responsible. Anything else shows its own message, minus the cross-process prefix.
+  //
+  // An unresolved key falls back to the raw message: strings load asynchronously, and
+  // `%data_loading_error_...%` reads worse than the failure itself. `useLocalizedStrings` fills each
+  // key with the key itself until its string arrives, so "unresolved" means missing OR equal to the
+  // key.
   const getActionErrorText = (error: unknown): string => {
     if (isResourceActionProviderNotReadyError(error)) return providerNotReadyText;
     const blockedMessageKey = getInternetBlockedMessageKey(error);
     const blockedText = blockedMessageKey
       ? localizedStringsWithLoadingState[0][blockedMessageKey]
       : undefined;
-    return blockedText ?? stripCrossProcessPrefix(getErrorMessage(error));
+    if (blockedText && blockedText !== blockedMessageKey) return blockedText;
+    return stripCrossProcessPrefix(getErrorMessage(error));
   };
 
   const handleInstallOrRemoveResource = async (dblEntryUid: string, action: ResourceAction) => {

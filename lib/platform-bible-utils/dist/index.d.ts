@@ -1574,27 +1574,14 @@ export declare function getAllObjectFunctionNames(obj: {
  */
 export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
 /**
- * Indicates if the exception or error message provided appears to be from ParatextData.dll
- * indicating that Paratext is blocking internet access.
+ * Indicates if the exception or error message provided shows that Paratext refused internet access
+ * because of the user's internet setting — either ParatextData.dll's own block, or the .NET data
+ * provider's gate on Registry, Send/Receive, and Digital Bible Library access.
  *
  * @param errorMessage Error message or exception to check
  * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
  */
 export declare function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: unknown): boolean;
-/**
- * Indicates if the exception or error message provided appears to be from ParatextData.dll
- * indicating that Paratext blocked internet access under the "Block internet when in sensitive
- * locations" setting. ParatextData raises this both where the current location is flagged as
- * sensitive and where it cannot determine the location at all.
- *
- * Matches the exception's type name within the message, so text that merely quotes that type — a
- * forwarded stack trace, a logged inner exception — matches too.
- *
- * @param errorMessage Error message or exception to check
- * @returns `true` if the message indicates Paratext blocked internet access because it could not
- *   confirm the current location is safe, `false` otherwise
- */
-export declare function isErrorMessageAboutParatextSensitiveLocationBlock(errorMessage: unknown): boolean;
 /**
  * Indicates if the exception or error message provided appears to be from ParatextData.dll
  * indicating that an authorization failure occurred regarding registry credentials.
