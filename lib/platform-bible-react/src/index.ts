@@ -166,6 +166,7 @@ export {
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
+export { isGroupUnderColumnOrSubMenu } from './components/advanced/menus/menu.util';
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,

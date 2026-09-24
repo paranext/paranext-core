@@ -25,7 +25,11 @@ export const RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX = 4;
  */
 export const SIMPLE_COLUMN_MIN_WIDTH_PX = 297;
 
-/** Rc-dock panel IDs for the Simple-mode layout. Used by the onboarding tour to locate panels. */
+/**
+ * Rc-dock panel IDs for the Simple-mode layout. Used by the onboarding tour to locate panels.
+ * `SIMPLE_PANEL_ID_RESOURCES` is also mirrored in `platform-scripture`
+ * (`simple-resources-panel-id.const.ts`), which opens its Checks tab into Column 3 by this ID.
+ */
 export const SIMPLE_PANEL_ID_MODEL_TEXT = 'simple-panel-model-text';
 export const SIMPLE_PANEL_ID_PROJECT = 'simple-panel-project';
 export const SIMPLE_PANEL_ID_RESOURCES = 'simple-panel-resources';

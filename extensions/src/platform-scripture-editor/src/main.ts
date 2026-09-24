@@ -41,6 +41,7 @@ import {
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
   openOrUpdateRelatedPanels,
+  updateRelatedChecksSidePanel,
   updateRelatedFindPanel,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -450,13 +451,17 @@ async function open(
       )
       .finally(emitDidFinish);
 
-    // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find waits
-    // until here because it is the one panel that needs the id of the editor this call just created.
-    // Find and the Scripture Text Grid both follow the active translation project, so a read-only
-    // resource opened in the editor column must not drag them along. The other Column 3 panels
-    // follow the editor either way.
-    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
+    // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find and Checks
+    // wait until here because they are the panels that need the id of the editor this call just
+    // created. Find, Checks and the Scripture Text Grid follow the active translation project, so a
+    // read-only resource opened in the editor column must not drag them along. The other Column 3
+    // panels follow the editor either way. Simple mode only: in Power mode each Checks panel is
+    // docked beside the editor it was opened for, so re-pointing "the" open one would retarget
+    // whichever editor's panel the probe happened to find.
+    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable) {
       await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
+      await updateRelatedChecksSidePanel(papi, projectForWebView.projectId, openedWebViewId);
+    }
 
     return openedWebViewId;
   }

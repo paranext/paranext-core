@@ -53,10 +53,12 @@ describe('platform-scripture-editor zoom menu contribution', () => {
    * its items survives mode filtering (`getMenuSectionsWithItems` in
    * `lib/platform-bible-react/src/components/advanced/menus/menu.util.ts`) — so a single ungated
    * zoom item here would put the whole Options column, heading included, into Simple's Project
-   * menu, which the Simple design has no Options column in. Simple still reaches zoom from the tab
-   * menu, which core's `defaultWebViewTabMenu` serves in every mode.
+   * menu, which the Simple design has no Options column in. Simple still zooms the editor with
+   * Ctrl/⌘+wheel and Ctrl/⌘+`+`/`-`/`0`, which work in every mode. The tab menu's zoom items are no
+   * mouse route for the editor in Simple: its tab title is hidden there, so that menu opens only
+   * from the keyboard.
    */
-  it('hides every zoom item in Simple, and marks experimental on the group rather than the items', () => {
+  it('hides every zoom item in Simple and leaves isExperimental off the items', () => {
     const zoomItems = items.filter((item) => item.group === 'platformScriptureEditor.zoom');
     expect(zoomItems).toHaveLength(3);
     zoomItems.forEach((item) => {

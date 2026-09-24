@@ -166,7 +166,7 @@ export type TabDropdownMenuProps = {
  * the next by a line; columns without items are left out. Groups within a column are not
  * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
  * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
- * sets `isHeaderHidden`.
+ * sets `isHeaderHidden`, whose label names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -225,15 +225,18 @@ export default function TabDropdownMenu({
       >
         {sections.map(({ columnKey, label, isHeaderHidden }, index) => {
           const headingId = `${headingIdPrefix}-${columnKey}`;
-          const showHeading = showHeadings && !isHeaderHidden;
           return (
             <Fragment key={columnKey}>
-              <DropdownMenuGroup
-                aria-labelledby={showHeading ? headingId : undefined}
-                // A section shown without its heading is still named for assistive technology
-                aria-label={showHeadings && isHeaderHidden ? label : undefined}
-              >
-                {showHeading && <DropdownMenuLabel id={headingId}>{label}</DropdownMenuLabel>}
+              <DropdownMenuGroup aria-labelledby={showHeadings ? headingId : undefined}>
+                {showHeadings && (
+                  // A section shown without its heading keeps it for assistive technology only
+                  <DropdownMenuLabel
+                    id={headingId}
+                    className={isHeaderHidden ? 'tw:sr-only' : undefined}
+                  >
+                    {label}
+                  </DropdownMenuLabel>
+                )}
                 <TooltipProvider>
                   {getGroupContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
                 </TooltipProvider>

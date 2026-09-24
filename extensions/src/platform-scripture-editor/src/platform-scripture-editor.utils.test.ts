@@ -21,6 +21,7 @@ import {
   openOrUpdateRelatedPanels,
   buildScriptureTextGridWebView,
   resolveGridProviderProjectId,
+  updateRelatedChecksSidePanel,
   updateRelatedTextCollectionPanel,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
   type OpenEditorDispatch,
@@ -3555,6 +3556,26 @@ describe('openOrUpdateRelatedPanels', () => {
 });
 
 // #endregion openOrUpdateRelatedPanels
+
+describe('updateRelatedChecksSidePanel', () => {
+  it('asks platformScripture to re-point the Checks side panel at the project and new editor', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
+
+    await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['platformScripture.updateChecksSidePanelProject', 'proj-b', 'editor-2'],
+    ]);
+  });
+
+  it('logs and swallows a rejection, since the project switch has already succeeded', async () => {
+    const { papi, mockSendCommand, mockWarn } = createRelatedPanelsMockPapi();
+    mockSendCommand.mockRejectedValue(new Error('platformScripture is down'));
+
+    await expect(updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2')).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platformScripture is down'));
+  });
+});
 
 describe('getTabTitleProjectName', () => {
   /** A PAPI whose `platform.base` PDP returns the settings this test hands it. */

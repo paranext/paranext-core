@@ -36,6 +36,10 @@ import {
   ManageBooksWebViewOptions,
   ManageBooksWebViewProvider,
 } from './manage-books.web-view-provider';
+import {
+  openChecksSidePanelWebView,
+  updateChecksSidePanelProject,
+} from './open-checks-side-panel.utils';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import {
   SCRIPTURE_EXTENDER_PDPF_ID,
@@ -181,13 +185,7 @@ async function openChecksSidePanel(
     editorScrollGroupId,
     editorWebViewId,
   };
-  const sidePanelWebViewId = await papi.webViews.openWebView(
-    checksSidePanelWebViewType,
-    { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
-    options,
-  );
-
-  return sidePanelWebViewId;
+  return openChecksSidePanelWebView(options, tabIdFromWebViewId);
 }
 
 async function openMarkersChecklist(webViewId: string | undefined): Promise<string | undefined> {
@@ -853,6 +851,36 @@ export async function activate(context: ExecutionActivationContext) {
       },
     },
   );
+  const updateChecksSidePanelProjectPromise = papi.commands.registerCommand(
+    'platformScripture.updateChecksSidePanelProject',
+    updateChecksSidePanelProject,
+    {
+      method: {
+        summary: 'Re-point an already-open checks side panel at a different project',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The ID of the project the checks side panel should check from now on',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary:
+              'The ID of the editor web view the checks side panel should act on; omit to keep the one it holds',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            'The ID of the checks side panel web view, or undefined if none was open or the re-point did not take',
+          schema: { type: ['string', 'null'] },
+        },
+      },
+    },
+  );
   const showChecksSidePanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     checksSidePanelWebViewType,
     checksSidePanelWebViewProvider,
@@ -1094,6 +1122,7 @@ export async function activate(context: ExecutionActivationContext) {
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
+    await updateChecksSidePanelProjectPromise,
     await showChecksSidePanelWebViewProviderPromise,
     await openMarkersChecklistPromise,
     await openMarkersChecklistSettingsPromise,
