@@ -171,6 +171,7 @@ import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
+import { usePauseEditing } from './use-pause-editing.hook';
 import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
@@ -2603,6 +2604,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
     useMemo(() => ({ whichUpdates: '*' }), []),
   );
+  // From the moment another chapter is selected until its content arrives, the editor still shows
+  // the chapter being left, and nothing typed there can be saved to either one — so edits are held
+  // off for that stretch, with the editor left focused and editable.
+  const getEditorRoot = useCallback(() => editorRef.current?.getElementByKey('root'), []);
+  usePauseEditing(getEditorRoot, isUsjFromPdpLoading);
   // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
   // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
   // re-parsing (and re-logging) it each time is pure waste.
