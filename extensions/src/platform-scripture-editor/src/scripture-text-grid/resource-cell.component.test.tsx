@@ -3,9 +3,11 @@ import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
 import { ResourceCell } from './resource-cell.component';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 
 const {
   mockUseProjectData,
@@ -492,7 +494,7 @@ describe('ResourceCell name display', () => {
 });
 
 describe('ResourceCell right-click menu', () => {
-  it('opens the cell’s own menu with Copy and no zoom items, and gives the text no zoom of its own', () => {
+  it('without a zoom controller, opens the cell’s own menu with Copy alone, and gives the text no zoom of its own', () => {
     setUsjResult(chapter, false);
     render(<ResourceCell {...props} viewMode="chapter" />);
 
@@ -524,6 +526,123 @@ describe('ResourceCell right-click menu', () => {
     expect(capturedEditorOptions).toHaveBeenCalled();
     const [lastOptions] = capturedEditorOptions.mock.lastCall ?? [];
     expect(lastOptions?.contextMenu).toBeUndefined();
+  });
+});
+
+const zoomMenuLabels = {
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
+  reset: 'Reset zoom',
+  options: 'Zoom options for {resourceName}',
+};
+
+/** A controller whose level and own-level state the test sets; the actions are spies. */
+function makeZoom(overrides: Partial<ResourceZoomController> = {}): ResourceZoomController {
+  return {
+    getZoom: () => 1,
+    hasOwnLevel: () => false,
+    adjustZoom: vi.fn(),
+    resetZoom: vi.fn(),
+    ...overrides,
+  };
+}
+
+describe('ResourceCell zoom menu', () => {
+  it('calls the controller with the resource id for each zoom item', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const zoom = makeZoom({ hasOwnLevel: () => true });
+    setUsjResult(chapter, false);
+    render(
+      <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
+    );
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    await user.click(screen.getByRole('menuitem', { name: 'Zoom in' }));
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    await user.click(screen.getByRole('menuitem', { name: 'Zoom out' }));
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    await user.click(screen.getByRole('menuitem', { name: 'Reset zoom' }));
+    expect(zoom.adjustZoom).toHaveBeenNthCalledWith(1, 'r1', 1);
+    expect(zoom.adjustZoom).toHaveBeenNthCalledWith(2, 'r1', -1);
+    expect(zoom.resetZoom).toHaveBeenCalledWith('r1');
+  });
+
+  it('disables Zoom in and Reset zoom for a resource that follows a 300 % default', () => {
+    // No level of its own, and the Tab content default zoom is at the top of the range.
+    const zoom = makeZoom({ getZoom: () => 3, hasOwnLevel: () => false });
+    setUsjResult(chapter, false);
+    render(
+      <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
+    );
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('disables Zoom out at 50 % and enables Reset zoom for a resource with its own level', () => {
+    const zoom = makeZoom({ getZoom: () => 0.5, hasOwnLevel: () => true });
+    setUsjResult(chapter, false);
+    render(
+      <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
+    );
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('shows the "⋮" button in the chapter view and none in the verse view', () => {
+    setUsjResult(chapter, false);
+    const { rerender } = render(
+      <ResourceCell
+        {...props}
+        viewMode="chapter"
+        zoom={makeZoom()}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Zoom options for WEB' })).toBeInTheDocument();
+    rerender(
+      <ResourceCell
+        {...props}
+        viewMode="verse"
+        zoom={makeZoom()}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Zoom options for WEB' })).not.toBeInTheDocument();
+  });
+
+  it('offers no zoom surfaces for a resource that is not installed', () => {
+    setUsjResult(undefined, true);
+    render(
+      <ResourceCell
+        resourceRef={{ resourceId: 'dbl-uid-2', projectId: undefined, label: 'NIV' }}
+        zoomArea="resource-dbl-uid-2"
+        scrRef={scrRef}
+        setScrRef={vi.fn()}
+        viewMode="chapter"
+        zoom={makeZoom()}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    // Positive control: the cell rendered its not-installed placeholder.
+    expect(screen.getByText('Resource not installed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /zoom options/i })).not.toBeInTheDocument();
   });
 });
 

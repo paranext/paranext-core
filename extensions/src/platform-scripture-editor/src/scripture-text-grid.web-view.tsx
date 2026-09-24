@@ -66,6 +66,14 @@ import { toGridResources } from './scripture-text-grid/grid-resources.utils';
 import { getGridBodyState } from './scripture-text-grid/grid-body-state.utils';
 import { isNonDblResource } from './resource-reference.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
+import { useResourceContentZoom } from './scripture-text-grid/use-resource-content-zoom.hook';
+import {
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
+  type ZoomMenuLabels,
+} from './scripture-text-grid/resource-cell-view.component';
 
 // The tab's visible title, hover tooltip, and accessible name. The title/tooltip themselves are
 // resolved and set by scriptureTextGridWebViewProvider in main.ts (not by this web view); this key
@@ -101,6 +109,10 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   CELL_ACCESSIBLE_NAME_KEY,
   ARIA_OPENED_KEY,
   ARIA_CLOSED_KEY,
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
   REORDER_ANNOUNCEMENT_KEY,
   REORDER_HANDLE_KEY,
   REORDER_HINT_KEY,
@@ -140,6 +152,19 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   useWebViewState,
 }: WebViewProps) {
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
+
+  // Each resource is its own content zoom area; the menus read the platform's levels for this tab
+  // and send the platform's zoom commands with this tab's id and the resource's area.
+  const zoom = useResourceContentZoom(webViewId, useWebViewState);
+  const zoomMenuLabels = useMemo<ZoomMenuLabels>(
+    () => ({
+      zoomIn: localizedStrings[ZOOM_IN_KEY],
+      zoomOut: localizedStrings[ZOOM_OUT_KEY],
+      reset: localizedStrings[RESET_ZOOM_KEY],
+      options: localizedStrings[ZOOM_OPTIONS_KEY],
+    }),
+    [localizedStrings],
+  );
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
@@ -581,10 +606,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
           The body itself is not a zoom area: each cell marks only its resource's text, with that
           resource's own area (`resource-<id>`, see `resource-zoom-area.utils.ts`), so the cells'
-          name labels, reorder grips and other controls, the chapter-context chrome and the empty and
-          error states keep interface scale. Naming each resource's area keeps its remembered level
-          apart from the other resources' and from this project's other resource panes, which
-          resolve to the same kind/identity pair. */}
+          name labels, reorder grips and zoom options buttons, the chapter-context chrome and the
+          empty and error states keep interface scale. Naming each resource's area keeps its
+          remembered level apart from the other resources' and from this project's other resource
+          panes, which resolve to the same kind/identity pair. */}
       <div className="tw:flex-1 tw:overflow-hidden">
         {gridBodyState === 'catalogError' && (
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
@@ -616,6 +641,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             scrRef={scrRef}
             setScrRef={setScrRef}
             viewMode={viewMode}
+            zoom={zoom}
+            zoomMenuLabels={zoomMenuLabels}
             chapterContext={chapterContext}
             onChapterContextChange={handleChapterContextChange}
             onChapterContextClose={handleCloseChapterContext}

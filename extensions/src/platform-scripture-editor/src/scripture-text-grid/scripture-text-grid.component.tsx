@@ -5,11 +5,13 @@ import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import { X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ResourceCell, GridResource } from './resource-cell.component';
+import type { ZoomMenuLabels } from './resource-cell-view.component';
 import {
   resourceZoomAreaOf,
   TEXT_COLLECTION_ZOOM_AREA,
   toResourceZoomAreaId,
 } from './resource-zoom-area.utils';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 import { resolveDisplayVerseNum } from './verse-display.utils';
 import { moveId } from '../scripture-text-grid-order.utils';
 
@@ -46,6 +48,10 @@ type ScriptureTextGridProps = {
    * When omitted, the accessible name falls back to the resource label alone.
    */
   cellAccessibleNameTemplate?: string;
+  /** The resource zoom controller; when omitted the cells render without zoom surfaces. */
+  zoom?: ResourceZoomController;
+  /** Localized labels for the zoom menus; passed through to each ResourceCell. */
+  zoomMenuLabels?: ZoomMenuLabels;
   /**
    * Fired after a drag-and-drop or keyboard move with the new visible id sequence; omit to disable
    * reorder. Reorder applies to both views: the chapter view (side-by-side columns) and the verse
@@ -91,6 +97,8 @@ export function ScriptureTextGrid({
   onChapterContextClose,
   closeChapterContextLabel,
   cellAccessibleNameTemplate,
+  zoom,
+  zoomMenuLabels,
   onReorder,
   getReorderHandleLabel,
   reorderHint,
@@ -219,6 +227,8 @@ export function ScriptureTextGrid({
         <ResourceCell
           resourceRef={onlyResource}
           zoomArea={onlyZoomArea}
+          zoom={zoom}
+          zoomMenuLabels={zoomMenuLabels}
           scrRef={scrRef}
           setScrRef={setScrRef}
           viewMode="chapter"
@@ -302,6 +312,8 @@ export function ScriptureTextGrid({
               <ResourceCell
                 resourceRef={resource}
                 zoomArea={zoomArea}
+                zoom={zoom}
+                zoomMenuLabels={zoomMenuLabels}
                 scrRef={scrRef}
                 setScrRef={setScrRef}
                 viewMode="chapter"
@@ -425,6 +437,8 @@ export function ScriptureTextGrid({
             <ResourceCell
               resourceRef={resource}
               zoomArea={zoomArea}
+              zoom={zoom}
+              zoomMenuLabels={zoomMenuLabels}
               scrRef={scrRef}
               setScrRef={setScrRef}
               viewMode={viewMode}
@@ -487,6 +501,8 @@ export function ScriptureTextGrid({
               <ResourceCell
                 resourceRef={chapterContext}
                 zoomArea={resourceZoomAreaOf(chapterContext.resourceId)}
+                zoom={zoom}
+                zoomMenuLabels={zoomMenuLabels}
                 scrRef={scrRef}
                 setScrRef={setScrRef}
                 viewMode="chapter"

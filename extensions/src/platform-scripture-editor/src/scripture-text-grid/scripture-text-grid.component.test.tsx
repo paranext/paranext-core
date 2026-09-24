@@ -23,6 +23,8 @@ const mockResourceCell = vi.fn(
   }: {
     resourceRef: { label: string; projectId: string; resourceId: string };
     zoomArea: string;
+    zoom?: unknown;
+    zoomMenuLabels?: unknown;
     scrRef: { verseNum: number };
     setScrRef: (scrRef: unknown) => void;
     viewMode?: string;
@@ -736,5 +738,63 @@ describe('ScriptureTextGrid — zoom areas', () => {
     expect(scopesOf(screen.getAllByRole('listitem'))).toEqual(['text-collection', 'resource-r-a']);
     expect(mockWarn).toHaveBeenCalledTimes(1);
     expect(String(mockWarn.mock.calls[0][0])).toContain('"日本語"');
+  });
+
+  it('hands every cell the zoom controller and menu labels, in all four layouts', () => {
+    const zoom = {
+      getZoom: () => 1,
+      hasOwnLevel: () => false,
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
+    };
+    const zoomMenuLabels = { zoomIn: 'in', zoomOut: 'out', reset: 'reset', options: 'options' };
+    const everyCellGotThem = () =>
+      mockResourceCell.mock.calls.every(
+        ([cellProps]) => cellProps.zoom === zoom && cellProps.zoomMenuLabels === zoomMenuLabels,
+      );
+
+    const verseView = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[0]}
+        onChapterContextChange={vi.fn()}
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    // Positive control: three verse rows plus the chapter panel rendered.
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(4);
+    expect(everyCellGotThem()).toBe(true);
+    verseView.unmount();
+
+    mockResourceCell.mockClear();
+    const chapterView = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(3);
+    expect(everyCellGotThem()).toBe(true);
+    chapterView.unmount();
+
+    mockResourceCell.mockClear();
+    render(
+      <ScriptureTextGrid
+        resources={[resources[0]]}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(1);
+    expect(everyCellGotThem()).toBe(true);
   });
 });
