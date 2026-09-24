@@ -51,10 +51,10 @@ describe('Help menu links open the destinations their labels promise', () => {
   });
 
   /**
-   * Feature roadmap has no menu item and no case of its own, so a stray item carrying its id must
-   * not reach the unpublished roadmap page.
+   * A command with no Help-link case is dispatched as itself. The Feature roadmap id is the example
+   * because its page is unpublished, so it must never be given a case that opens a web page.
    */
-  test('the retired Feature roadmap command does not open a web page', () => {
+  test('a command with no Help-link case is dispatched unchanged rather than opened as a page', () => {
     handleMenuCommand(menuItem('platform.visitFeatureRoadmapPage'));
 
     expect(commandService.sendCommand).toHaveBeenCalledWith(
