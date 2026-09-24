@@ -1,4 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { DEFAULT_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
 import { localizationService } from '@shared/services/localization.service';
@@ -186,34 +187,35 @@ export function Setting({
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
-  // Although the full set of languages is likely to load more-or-less instantaneously, if there is
-  // a delay, we want to be sure to include at least any language(s) currently selected, so the user
-  // can't get into the weird state of dropping down the list and not seeing the current selection
-  // in the list.
-  const defaultLanguages = useMemo(() => {
-    const languages: Record<string, LanguageInfo> = {
+  // What the language selector offers while the offered languages load. Kept to exactly the offered
+  // languages so nothing else flashes up during loading.
+  const defaultLanguages = useMemo<Record<string, LanguageInfo>>(
+    () => ({
       en: { autonym: 'English', uiNames: { es: 'inglés' } },
-    };
+      ...(settingKey === 'platform.interfaceLanguage'
+        ? { es: { autonym: 'Español', uiNames: { en: 'Spanish' } } }
+        : {}),
+    }),
+    [settingKey],
+  );
 
-    if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
-      // Add hardcoded languages
-      languages.es = { autonym: 'Español', uiNames: { en: 'Spanish', fr: 'espagnol' } };
-      languages.fr = { autonym: 'Français', uiNames: { en: 'French', es: 'francés' } };
+  const [offeredLanguagesPossiblyError] = useData(
+    localizationService.dataProviderName,
+  ).AvailableInterfaceLanguages(undefined, defaultLanguages);
 
-      // Add dynamic languages from setting
-      setting.forEach((lang) => {
-        if (!languages[lang]) {
-          languages[lang] = { autonym: lang }; // Autonym is required, but we don't know it.
-        }
-      });
-    }
-
-    return languages;
-  }, [setting, settingKey]);
-
-  const [languages] = useData(localizationService.dataProviderName).AvailableInterfaceLanguages(
-    undefined,
-    defaultLanguages,
+  // The user's current languages are always listed, even when not offered, so the selector never
+  // shows a blank selection and the user can see what they have and switch away from it.
+  const knownUiLanguages = useMemo(
+    () =>
+      includeCurrentLanguages(
+        isPlatformError(offeredLanguagesPossiblyError)
+          ? defaultLanguages
+          : offeredLanguagesPossiblyError,
+        Array.isArray(setting) && settingKey === 'platform.interfaceLanguage'
+          ? setting.filter((tag): tag is string => typeof tag === 'string')
+          : [],
+      ),
+    [offeredLanguagesPossiblyError, defaultLanguages, setting, settingKey],
   );
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
@@ -370,7 +372,7 @@ export function Setting({
           <UiLanguageSelector
             className="language-selector"
             key={settingKey}
-            knownUiLanguages={isPlatformError(languages) ? defaultLanguages : languages}
+            knownUiLanguages={knownUiLanguages}
             primaryLanguage={setting[0]}
             fallbackLanguages={setting.slice(1)}
             onLanguagesChange={debouncedHandleChange}
@@ -413,8 +415,7 @@ export function Setting({
     debouncedHandleChange,
     debouncedHandleStepperChange,
     errorMessage,
-    languages,
-    defaultLanguages,
+    knownUiLanguages,
     disabled,
     setSetting,
   ]);
