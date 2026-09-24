@@ -1,6 +1,6 @@
+import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages';
 import { localization } from '@extension-host/services/papi-backend.service';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
-import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
 import { formatZoomPercent, isValidZoomFactor } from '@shared/utils/content-zoom.util';
 import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
@@ -88,7 +88,9 @@ export const platformSettings: SettingsContribution = [
 const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'> = async (
   newValue: string[],
 ): Promise<boolean> => {
-  const validLanguages = await localizationService.getAvailableInterfaceLanguages();
+  // Every language with a locale file is valid, offered or not, so tests, tooling and developers
+  // can still select a language that is not offered to users.
+  const validLanguages = await getAllLoadedInterfaceLanguages();
   return (
     typeof newValue === 'object' &&
     Array.isArray(newValue) &&
