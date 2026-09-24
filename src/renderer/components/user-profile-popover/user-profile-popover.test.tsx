@@ -35,7 +35,8 @@ type MockState = {
   setInterfaceMode: ReturnType<typeof vi.fn> | undefined;
   interfaceLanguage: string[];
   setInterfaceLanguage: ReturnType<typeof vi.fn> | undefined;
-  availableLanguages: Record<string, { autonym: string }>;
+  /** Undefined means "still loading": the hook hands back the component's own default list. */
+  availableLanguages: Record<string, { autonym: string }> | undefined;
   themeType: 'light' | 'dark';
   setTheme: ReturnType<typeof vi.fn> | undefined;
   shouldMatchSystem: boolean;
@@ -117,7 +118,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       mockState.setTheme,
     ]),
     ShouldMatchSystem: vi.fn(() => [mockState.shouldMatchSystem, mockState.setShouldMatchSystem]),
-    AvailableInterfaceLanguages: vi.fn(() => [mockState.availableLanguages]),
+    AvailableInterfaceLanguages: vi.fn((_selector: undefined, defaultValue: unknown) => [
+      mockState.availableLanguages ?? defaultValue,
+    ]),
   })),
   useDataProvider: vi.fn(() => undefined),
 }));
@@ -358,6 +361,17 @@ describe('UserProfilePopover language picker', () => {
       'user-profile-language-es',
       'user-profile-language-fr',
     ]);
+  });
+
+  test('offers exactly English and Español while the languages load', async () => {
+    setMockSetting('availableLanguages', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-language-en');
+    const pills = Array.from(
+      document.querySelectorAll('[data-testid^="user-profile-language-"]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    expect(pills).toEqual(['user-profile-language-en', 'user-profile-language-es']);
   });
 
   test('shows a hidden current language as the pressed pill next to the offered ones', async () => {
