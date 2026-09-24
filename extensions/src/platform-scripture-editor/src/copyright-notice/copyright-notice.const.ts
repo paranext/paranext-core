@@ -1,5 +1,8 @@
 import { LocalizeKey } from 'platform-bible-utils';
 
+/** Where Biblica asks people to request permission for uses outside Paratext */
+export const BIBLICA_PERMISSIONS_URL = 'https://www.biblica.com/permissions/';
+
 /**
  * Strings the copyright notice banner, indicator and details dialog use. The notice's own strings
  * live in platform-scripture's localized strings, next to the `platformScripture.copyrightNotice`
