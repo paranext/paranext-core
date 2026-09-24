@@ -1,11 +1,13 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Paranext.DataProvider.Projects.DigitalBibleLibrary;
+using Paratext.Data;
+using Paratext.Data.ProjectSettingsAccess;
 
 namespace TestParanextDataProvider.Projects.DigitalBibleLibrary;
 
 /// <summary>
-/// Checks Biblica licence detection against two fixtures:
+/// Checks Biblica license detection against two fixtures:
 /// <list type="bullet">
 /// <item><c>biblica-restricted-texts.json</c> — Biblica's list of traditionally licensed texts: DBL
 /// entries whose rights holder is Biblica and which are not open access.</item>
@@ -19,6 +21,12 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary;
 [ExcludeFromCodeCoverage]
 internal class BiblicaLicensingTests
 {
+    private const string NivCopyright =
+        "The Holy Bible, New International Version® NIV® Copyright © 1973, 1978, 1984, 2011 by Biblica, Inc.® Used by Permission of Biblica, Inc.® All rights reserved worldwide.";
+
+    // NIV11
+    private const string ListedDblId = "71c6eab17ae5b667";
+
     private sealed record SurveyRow(
         string DblId,
         string ShortName,
@@ -55,13 +63,17 @@ internal class BiblicaLicensingTests
 
     private static IEnumerable<TestCaseData> SurveyCases() =>
         s_surveyRows.Value.Select(row =>
-            new TestCaseData(row).SetName($"{row.ShortName} {row.DblId} ({row.Category})")
+            new TestCaseData(row).SetArgDisplayNames(
+                $"{row.ShortName} {row.DblId} ({row.Category})"
+            )
         );
 
     private static IEnumerable<TestCaseData> RestrictedSurveyCases() =>
         s_surveyRows
             .Value.Where(row => row.ExpectedRestricted)
-            .Select(row => new TestCaseData(row).SetName($"{row.ShortName} {row.DblId}"));
+            .Select(row =>
+                new TestCaseData(row).SetArgDisplayNames($"{row.ShortName} {row.DblId}")
+            );
 
     [Test]
     public void Survey_HasTheExpectedNumberOfRestrictedTexts()
@@ -70,10 +82,10 @@ internal class BiblicaLicensingTests
     }
 
     [Test]
-    public void RestrictedModelTextIds_AreExactlyBiblicasList()
+    public void RestrictedTextIds_AreExactlyBiblicasList()
     {
         Assert.That(
-            BiblicaLicensing.RestrictedModelTextIds,
+            BiblicaLicensing.RestrictedTextIds,
             Is.EquivalentTo(s_restrictedTexts.Value.Select(text => text.DblId.ToLowerInvariant()))
         );
     }
@@ -103,29 +115,26 @@ internal class BiblicaLicensingTests
 
         Assert.That(
             BiblicaLicensing.IsRestrictedLicense(row.Copyright, row.FullName, dblId: null),
-            Is.EqualTo(
-                BiblicaLicensing.IsRestrictedAsModelText(row.DblId) || isOpenTextKnownOnlyById
-            ),
+            Is.EqualTo(BiblicaLicensing.IsOnRestrictedList(row.DblId) || isOpenTextKnownOnlyById),
             row.Copyright
         );
     }
 
     [TestCaseSource(nameof(SurveyCases))]
-    public void IsRestrictedAsModelText_MatchesSurvey(object rowObject)
+    public void IsOnRestrictedList_MatchesSurvey(object rowObject)
     {
         var row = (SurveyRow)rowObject;
 
         Assert.That(
-            BiblicaLicensing.IsRestrictedAsModelText(row.DblId),
+            BiblicaLicensing.IsOnRestrictedList(row.DblId),
             Is.EqualTo(row.ExpectedRestricted)
         );
     }
 
     [Test]
-    public void IsRestrictedAsModelText_IgnoresCase()
+    public void IsOnRestrictedList_IgnoresCase()
     {
-        // NIV11
-        Assert.That(BiblicaLicensing.IsRestrictedAsModelText("71C6EAB17AE5B667"), Is.True);
+        Assert.That(BiblicaLicensing.IsOnRestrictedList(ListedDblId.ToUpperInvariant()), Is.True);
     }
 
     [Test]
@@ -157,6 +166,45 @@ internal class BiblicaLicensingTests
                 "Biblica® Open Example Bible. Copyright © 2020 by Biblica, Inc.",
                 "Example Bible",
                 "0000000000000000"
+            ),
+            Is.False
+        );
+    }
+
+    [TestCase("Biblica Open Example Bible. Copyright © 2020 by Biblica, Inc.", "Example Bible")]
+    [TestCase("Copyright © 2020 by Biblica, Inc.", "Biblica Open Example Bible")]
+    public void IsRestrictedLicense_OpenWordingWithoutRegisteredMark_ReturnsFalse(
+        string copyright,
+        string fullName
+    )
+    {
+        Assert.That(
+            BiblicaLicensing.IsRestrictedLicense(copyright, fullName, dblId: null),
+            Is.False
+        );
+    }
+
+    [TestCase("版權所有Biblica, Inc.", TestName = "{m}(Chinese letter before Biblica)")]
+    [TestCase("حقوق النشرBiblica, Inc.", TestName = "{m}(Arabic letter before Biblica)")]
+    [TestCase("© 2014 Biblica، Inc.", TestName = "{m}(Arabic comma before Inc)")]
+    [TestCase("© 2014 Biblica，Inc.", TestName = "{m}(Full-width comma before Inc)")]
+    [TestCase("© 2014 Biblica , Inc.", TestName = "{m}(Space before the comma)")]
+    public void IsRestrictedLicense_BiblicaIncWithOtherScriptsAroundIt_ReturnsTrue(string copyright)
+    {
+        Assert.That(
+            BiblicaLicensing.IsRestrictedLicense(copyright, "Example Bible", dblId: null),
+            Is.True
+        );
+    }
+
+    [Test]
+    public void IsRestrictedLicense_BiblicaInsideALatinWord_ReturnsFalse()
+    {
+        Assert.That(
+            BiblicaLicensing.IsRestrictedLicense(
+                "© 2014 ExampleBiblica, Inc.",
+                "Example Bible",
+                dblId: null
             ),
             Is.False
         );
@@ -203,5 +251,79 @@ internal class BiblicaLicensingTests
     public void GetCopyrightYears_NoYears_ReturnsEmpty(string? copyright)
     {
         Assert.That(BiblicaLicensing.GetCopyrightYears(copyright), Is.Empty);
+    }
+
+    [Test]
+    public void IsRestricted_ResourceWithBiblicaCopyright_ReturnsTrue()
+    {
+        // No DBLId is set, so the double's typed DBLId accessor falls back to a zip it does not
+        // have; that must read as "no id", not fault
+        using ResourceDummyScrText resource = new();
+        resource.Settings.Copyright = NivCopyright;
+
+        Assert.That(BiblicaLicensing.IsRestricted(resource), Is.True);
+    }
+
+    [Test]
+    public void IsRestricted_ResourceOnBiblicasListWithNoCopyright_ReturnsTrue()
+    {
+        using ResourceDummyScrText resource = new();
+        resource.Settings.DBLId = HexId.FromStr(ListedDblId);
+
+        Assert.That(BiblicaLicensing.IsRestricted(resource), Is.True);
+    }
+
+    [Test]
+    public void IsRestricted_OrdinaryResource_ReturnsFalse()
+    {
+        using ResourceDummyScrText resource = new();
+        resource.Settings.Copyright = "© 2001 Example Bible Society. Used by permission.";
+        resource.Settings.DBLId = HexId.FromStr("97196133a859179b");
+
+        Assert.That(BiblicaLicensing.IsRestricted(resource), Is.False);
+    }
+
+    [Test]
+    public void IsRestricted_EditableProjectWithBiblicaCopyright_ReturnsFalse()
+    {
+        // A Biblica translation team's own project carries Biblica's copyright
+        using DummyScrText project = new();
+        project.Settings.Copyright = NivCopyright;
+
+        Assert.That(BiblicaLicensing.IsRestricted(project), Is.False);
+    }
+
+    [Test]
+    public void IsRestricted_EditableProjectWithListedDblId_ReturnsFalse()
+    {
+        // Biblica's master project has the DBL id of the resource published from it
+        using DummyScrText project = new();
+        project.Settings.DBLId = HexId.FromStr(ListedDblId);
+
+        Assert.That(BiblicaLicensing.IsRestricted(project), Is.False);
+    }
+
+    [TestCase(NivCopyright, true)]
+    [TestCase("© 2001 Example Bible Society.", false)]
+    public void IsRestricted_ResourceWithMalformedDblId_JudgesByCopyright(
+        string copyright,
+        bool expected
+    )
+    {
+        using ResourceDummyScrText resource = new();
+        resource.Settings.Copyright = copyright;
+        resource.Settings.SetSetting(Setting.DBLId, "not a hex id");
+
+        Assert.That(BiblicaLicensing.IsRestricted(resource), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void IsRestricted_ReadsHtmlCopyrightAsDecodedPlainText()
+    {
+        using ResourceDummyScrText resource = new();
+        resource.Settings.Copyright =
+            "<p>Copyright &#169; 2011 by <b>Biblica&#44; Inc.</b></p><p>Used by permission.</p>";
+
+        Assert.That(BiblicaLicensing.IsRestricted(resource), Is.True);
     }
 }
