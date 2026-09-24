@@ -515,7 +515,7 @@
   "%settings_platform_webViewContentZoom_atMinimum%": "Already at the smallest zoom (50 %)",
   "%settings_platform_webViewContentZoom_decrease%": "Decrease default zoom",
   "%settings_platform_webViewContentZoom_description%": "Default zoom for the content of every pane in a tab (such as the Scripture Editor, resources and notes) that has not been zoomed on its own. 100 % is the default; allowed range is 50 % to 300 %. The application's own menus and tab toolbars keep their size, and Interface scaling still scales the whole application on top of this.",
-  "%settings_platform_webViewContentZoom_description_2%": "Default zoom for the project text shown in panes such as the Scripture Editor, resources, notes, Find, inventories and checks, wherever that text has not been zoomed on its own. 100 % is the default; allowed range is 50 % to 300 %. Menus, buttons and pop-ups keep their size, and Interface scaling still scales the whole application on top of this.",
+  "%settings_platform_webViewContentZoom_description_2%": "Default size of project text in panes you haven't zoomed. Interface scaling applies on top.",
   "%settings_platform_webViewContentZoom_increase%": "Increase default zoom",
   "%settings_platform_webViewContentZoom_label%": "Tab content default zoom",
   "%settings_platform_webViewContentZoom_reset%": "Reset default zoom",
