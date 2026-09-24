@@ -42,6 +42,7 @@ import { startBookChapterControlServiceRouter } from '@main/services/book-chapte
 import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
+import { registerDisplayMediaRequestHandler } from '@main/services/display-media-request.util';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
@@ -211,6 +212,7 @@ import {
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
   THEME_STATE_QUERY_PARAMETER,
+  USERSNAP_SPACE_API_KEY,
   WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
   WINDOW_ID,
 } from '@shared/data/platform.data';
@@ -2350,6 +2352,13 @@ async function main() {
           respond({ requestHeaders });
         },
       );
+
+      // Usersnap's native screenshot asks for a display-media stream. When Usersnap is configured,
+      // serve the window's top frame without showing an OS screen picker. Code in the top frame's
+      // origin, including web views created with the default `allowSameOrigin`, shares that grant;
+      // web views with `allowSameOrigin: false` and any other iframe are denied (see
+      // `selectDisplayMediaSource`).
+      registerDisplayMediaRequestHandler(session.defaultSession, USERSNAP_SPACE_API_KEY);
 
       // Install Chromium devtools extensions once (not per-window)
       if (isDebug) {

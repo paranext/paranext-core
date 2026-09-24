@@ -234,6 +234,7 @@
   "%mainMenu_exit%": "Salir",
   "%mainMenu_feedback_emailDevelopers%": "Enviar un correo al equipo",
   "%mainMenu_feedback_failed_to_open%": "No se pudo abrir el formulario de retroalimentación. Inténtalo de nuevo.",
+  "%mainMenu_feedback_notConfigured%": "Los formularios de retroalimentación no están disponibles en esta versión.",
   "%mainMenu_feedback_unavailable%": "Formulario de retroalimentación no disponible. Verifica tu conexión a internet, reinicia la aplicación e inténtalo de nuevo.",
   "%mainMenu_feedbackForm_screenshot%": "Informar un error / Enviar comentarios",
   "%mainMenu_feedbackForm_textArea%": "Enviar una idea",
