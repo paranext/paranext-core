@@ -611,6 +611,14 @@ export declare const NO_GROUPING = "none";
  */
 export declare function ProjectSelector(props: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
+ *
+ * @param value The value read out of a localized-strings map, if any.
+ * @param fallback Text to show when `value` does not carry real localized text.
+ * @returns `value` when {@link isResolvedLocalizedValue} accepts it, `fallback` otherwise.
+ */
+export declare function resolveLocalizedString(value: string | undefined, fallback: string): string;
+/**
  * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
  * the result as the `localizedStrings` prop.
  */

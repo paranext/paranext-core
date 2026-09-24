@@ -178,12 +178,21 @@ The established contract for a localizable library component is four parts:
    };
    ```
 
-3. **An optional `localizedStrings?` prop** typed as that mapped type (or the shared `LanguageStrings` type from `platform-bible-utils`). Inside the component, every read goes through an English-fallback lookup so the component still renders readable text when a key is absent:
+3. **An optional `localizedStrings?` prop** typed as that mapped type (or the shared `LanguageStrings` type from `platform-bible-utils`). Inside the component, every read goes through
+   `resolveLocalizedString` so the component still renders readable text when a key is unresolved:
 
    ```tsx
-   const selectChapter =
-     localizedStrings?.['%webView_bookChapterControl_selectChapter%'] ?? 'Select Chapter';
+   const selectChapter = resolveLocalizedString(
+     localizedStrings?.['%webView_bookChapterControl_selectChapter%'],
+     'Select Chapter',
+   );
    ```
+
+   **Do not use `?? 'Select Chapter'` here.** `useLocalizedStrings` seeds its map with
+   `{ [key]: key }` and keeps that seed until strings load — permanently if the localization
+   provider errors — so an unresolved lookup arrives as the *defined* string
+   `'%webView_bookChapterControl_selectChapter%'`, which `??` returns and the component renders at
+   the user.
 
 4. **A shipped English value for every key in the tuple.** The tuple only *declares* what the
    component asks for; nothing about declaring a key produces a value. The **default** home for a

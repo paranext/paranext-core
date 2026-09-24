@@ -51,6 +51,7 @@ import {
   ProjectSelectorGrouping,
   ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
+  resolveLocalizedString,
 } from 'platform-bible-react/experimental';
 import {
   formatProjectName,
@@ -618,9 +619,12 @@ export function ManageBooksDialog({
   const filterBarRef = useRef<HTMLDivElement | null>(null);
   const filterBarIsNarrow = useIsNarrow(filterBarRef, open);
 
+  // `?? fallback` would never fire here: `useLocalizedStrings` seeds its map with `{ [key]: key }`
+  // and keeps that seed until strings load — permanently if localization errors — so an unresolved
+  // lookup arrives as the defined string `%manageBooks_…%`, not as nullish.
   const t = useCallback(
     (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) =>
-      localizedStrings[key] ?? fallback,
+      resolveLocalizedString(localizedStrings[key], fallback),
     [localizedStrings],
   );
 

@@ -46,6 +46,7 @@ import {
   ScopeWithRange,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
+  resolveLocalizedString,
   makeBuiltInGroupings,
   summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';
@@ -977,9 +978,21 @@ export function Find({
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
       ...buildProjectSelectorLocalizedStrings(localizedStrings),
-      buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
-      commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
-      ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
+      // Each override falls back to Find's own English, not the picker's. The picker's generic
+      // "Select a project" would be actively wrong here: this placeholder reports that there is
+      // nothing to pick, so instructing the user to pick something contradicts it.
+      buttonPlaceholder: resolveLocalizedString(
+        localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
+        'No open projects or resources',
+      ),
+      commandEmptyMessage: resolveLocalizedString(
+        localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
+        'No projects found',
+      ),
+      ariaLabel: resolveLocalizedString(
+        localizedStrings['%webView_find_projectSelector_label%'],
+        'Project',
+      ),
     }),
     [localizedStrings],
   );

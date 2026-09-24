@@ -16,6 +16,10 @@ import {
   type ManageBooksDialogProps,
   type MutationResult,
 } from './manage-books-dialog.component';
+import {
+  MANAGE_BOOKS_DIALOG_STRING_KEYS,
+  type ManageBooksDialogLocalizedStrings,
+} from './manage-books-dialog.types';
 import { installManageBooksJsdomShims, scrolledElements } from './manage-books-dialog.test-utils';
 
 let uninstallShims: () => void;
@@ -310,5 +314,45 @@ describe('ManageBooksDialog header subtitle', () => {
     // Positive control — without it this passes just as happily against a subtitle that never
     // rendered a project label at all.
     expect(text).toMatch(/books in WEB \u22c5/);
+  });
+});
+
+describe('ManageBooksDialog project pickers — dialog strings unresolved', () => {
+  // What `useLocalizedStrings` actually hands a web view before strings load, and permanently if
+  // the localization provider errors: every key seeded as its own value. Those are defined
+  // strings, so the dialog's `t()` helper has to judge them rather than rely on `??`.
+  const UNRESOLVED_STRINGS: ManageBooksDialogLocalizedStrings = Object.fromEntries(
+    MANAGE_BOOKS_DIALOG_STRING_KEYS.map((key) => [key, key]),
+  );
+
+  const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+
+  it("keeps each picker's own English rather than the picker's generic default", async () => {
+    render(dialog({ initialSection: 'copy', localizedStrings: UNRESOLVED_STRINGS }));
+
+    // Distinct names matter as much as correct ones: without the dialog's own fallbacks both
+    // comboboxes resolve to ProjectSelector's identical 'Projects & resources'.
+    const rail = await screen.findByTestId('manage-books-sidebar-project-trigger');
+    await waitFor(() => expect(within(rail).getByRole('combobox')).toBeEnabled());
+    expect(within(rail).getByRole('combobox')).toHaveAccessibleName('Project');
+    // The rail shows its placeholder until the active project lands in the loaded list. That
+    // placeholder is a dialog-owned fallback too, so it must be English rather than a raw key.
+    expect(within(rail).getByRole('combobox')).toHaveTextContent('Select project');
+
+    expect(await screen.findByRole('combobox', { name: 'Select project' })).toBeInTheDocument();
+  });
+
+  it('renders no raw localization key in the copy source picker, trigger or popover', async () => {
+    const user = setupUser();
+    render(dialog({ initialSection: 'copy', localizedStrings: UNRESOLVED_STRINGS }));
+
+    // Any `%…%` key, whatever its prefix — a sweep narrowed to `%manageBooks_` would miss the
+    // shared `%projectSelector_*%` block the popover also renders.
+    const RAW_KEY = /%[^%\s]+%/;
+    await user.click(await screen.findByRole('combobox', { name: 'Select project' }));
+    const popover = await screen.findByRole('dialog');
+
+    expect(within(popover).queryAllByText(RAW_KEY)).toHaveLength(0);
+    expect(within(popover).queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
   });
 });

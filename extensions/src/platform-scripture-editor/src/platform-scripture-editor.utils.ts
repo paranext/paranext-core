@@ -288,8 +288,8 @@ export async function formatEditorTitle(
  *
  * The project-id fallback is defensive rather than reachable in production: the C# data provider
  * special-cases `platform.name` to `scrText.Name`, and the setting carries a contribution default,
- * so a project served by it always answers. It guards a third-party project data provider that
- * does not, and an unavailable provider.
+ * so a project served by it always answers. It guards a third-party project data provider that does
+ * not, and an unavailable provider.
  *
  * @param papi The PAPI backend.
  * @param projectId The project whose name the tab shows.
