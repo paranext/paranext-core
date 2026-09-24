@@ -28,6 +28,12 @@ type ResourceCellProps = {
   setScrRef: (scrRef: SerializedVerseRef) => void;
   viewMode?: 'chapter' | 'verse';
   /**
+   * Content zoom area of this resource's text (`resource-<id>`, or the `text-collection` fallback).
+   * The grid computes it once per resource, so a resource's verse row and chapter view always name
+   * the same area.
+   */
+  zoomArea: string;
+  /**
    * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
    * parent).
    */
@@ -52,6 +58,7 @@ export function ResourceCell({
   scrRef,
   setScrRef,
   viewMode = 'chapter',
+  zoomArea,
   showDragHandle,
   reorderHandleLabel,
   reorderHint,
@@ -199,6 +206,7 @@ export function ResourceCell({
     <ResourceCellView
       state={state}
       label={resourceRef.label}
+      zoomArea={zoomArea}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}

@@ -105,6 +105,7 @@ const chapter = {
 };
 const props = {
   resourceRef: { resourceId: 'r1', projectId: 'p1', label: 'WEB' },
+  zoomArea: 'resource-r1',
   scrRef,
   setScrRef: vi.fn(),
 };
@@ -201,6 +202,7 @@ describe('ResourceCell', () => {
     render(
       <ResourceCell
         resourceRef={{ resourceId: 'dbl-uid-1', projectId: undefined, label: 'NIV' }}
+        zoomArea="resource-dbl-uid-1"
         scrRef={scrRef}
         setScrRef={vi.fn()}
       />,
@@ -499,9 +501,10 @@ describe('ResourceCell right-click menu', () => {
     expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
     expect(screen.getAllByRole('menuitem')).toHaveLength(1);
     // jsdom does not serialize CSS `zoom` into the style attribute, so read the CSSOM property of
-    // every element between the text and the cell's `text-collection` marker.
-    const marker = document.querySelector('[data-platform-content-zoom-root="text-collection"]');
+    // every element between the text and the cell's own marker.
+    const marker = document.querySelector('[data-platform-content-zoom-root="resource-r1"]');
     expect(marker).not.toBeNull();
+    expect(marker?.getAttribute('data-platform-content-zoom-label')).toBe('WEB');
     const zoomed: Element[] = [];
     for (
       let element = screen.getByTestId('editorial').parentElement;
