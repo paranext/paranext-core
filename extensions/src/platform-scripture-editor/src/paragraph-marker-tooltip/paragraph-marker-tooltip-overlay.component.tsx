@@ -10,7 +10,10 @@ import {
 } from 'platform-bible-react';
 import { selectableParagraphMarkers, LocalizeKey } from 'platform-bible-utils';
 import { findScrollContainer, paraAtPoint } from '../editor-dom.util';
-import { getParagraphMarkerTitle } from '../platform-scripture-editor.utils';
+import {
+  getParagraphMarkerTitle,
+  paragraphMarkerNameKey,
+} from '../platform-scripture-editor.utils';
 import { computePosition, extractMarker, TooltipPosition } from './paragraph-marker-tooltip.utils';
 
 type HoveredData = TooltipPosition & { marker: string };
@@ -81,10 +84,7 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   const lastRevealAtRef = useRef<number | undefined>(undefined);
 
   const blockMarkerKeys = useMemo<LocalizeKey[]>(
-    () =>
-      selectableParagraphMarkers.map(
-        (marker): LocalizeKey => `%paragraphMenu_${marker}_markerDescription%`,
-      ),
+    () => selectableParagraphMarkers.map(paragraphMarkerNameKey),
     [],
   );
   const [localizedStrings] = useLocalizedStrings(blockMarkerKeys);

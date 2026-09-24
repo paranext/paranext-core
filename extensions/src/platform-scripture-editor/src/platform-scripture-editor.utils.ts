@@ -504,6 +504,9 @@ export async function convertScriptureRangeToEditorRange(
  */
 export const availableScrollGroupIds = [undefined, ...new Array(5).keys()];
 
+/** {@link selectableParagraphMarkers} as a set, for O(1) membership checks. */
+const selectableParagraphMarkerSet: ReadonlySet<string> = new Set(selectableParagraphMarkers);
+
 /**
  * True when a marker has a real localized title available via {@link getParagraphMarkerTitle} —
  * either because it's offered by the switcher ({@link selectableParagraphMarkers}) or because it's
@@ -512,20 +515,24 @@ export const availableScrollGroupIds = [undefined, ...new Array(5).keys()];
  * misc fallback or a raw marker echo).
  */
 export function isDisplayableParagraphMarkerTitle(marker: string): boolean {
-  return (
-    selectableParagraphMarkers.includes(marker) || PROGRAMMATICALLY_APPLIED_MARKERS.has(marker)
-  );
+  return selectableParagraphMarkerSet.has(marker) || PROGRAMMATICALLY_APPLIED_MARKERS.has(marker);
 }
 
 /**
- * Resolves the localized title for a paragraph marker, for display in the paragraph-style trigger
- * label, the gutter tooltip, or the switcher menu itself. Returns `undefined` both when the marker
- * has no title available at all ({@link isDisplayableParagraphMarkerTitle} is `false` — a marker
- * outside `usfmMarkers` entirely, or one deliberately excluded from both the offered set and the
- * display-only exceptions) and when it does but its localized string hasn't loaded yet —
- * deliberately not collapsed to a raw `%key%` fallback here, so each caller can choose its own
- * loading-state behavior (the trigger label, the gutter tooltip, and the menu items all fall back
- * differently; see their call sites).
+ * Builds the localize key for a paragraph marker's description.
+ *
+ * @param marker Marker code, without its leading backslash (e.g. `p`, not `\p`)
+ */
+export function paragraphMarkerNameKey(marker: string): LocalizeKey {
+  return `%paragraphMenu_${marker}_markerDescription%`;
+}
+
+/**
+ * Resolves the localized title for a paragraph marker. Returns `undefined` when no title is
+ * available at all ({@link isDisplayableParagraphMarkerTitle} is `false`) — that is, when the marker
+ * is outside `usfmMarkers` entirely or is deliberately excluded from both the offered set and the
+ * display-only exceptions. Otherwise, returns whatever `localizedStrings` currently has for the
+ * marker's key (from the `useLocalizedStrings` hook).
  *
  * @param marker Marker code to look up, without its leading backslash (e.g. `p`, not `\p`)
  * @param localizedStrings The localized strings to resolve the title from
@@ -535,8 +542,7 @@ export function getParagraphMarkerTitle(
   localizedStrings: LanguageStrings,
 ): string | undefined {
   if (!isDisplayableParagraphMarkerTitle(marker)) return undefined;
-  const key: LocalizeKey = `%paragraphMenu_${marker}_markerDescription%`;
-  return localizedStrings[key];
+  return localizedStrings[paragraphMarkerNameKey(marker)];
 }
 
 /**
