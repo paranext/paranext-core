@@ -1,7 +1,15 @@
 import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { expect, within } from 'storybook/test';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
-import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
+import {
+  RESET_ZOOM_KEY,
+  RESOURCE_CELL_STRING_KEYS,
+  ResourceCellView,
+  ZOOM_IN_KEY,
+  ZOOM_OPTIONS_KEY,
+  ZOOM_OUT_KEY,
+} from './resource-cell-view.component';
 
 /**
  * One cell of the Scripture Text Grid: a single resource's focused chapter. In the app the
@@ -463,9 +471,189 @@ export const PartialFailureRow: Story = {
   ),
 };
 
+// ---------------------------------------------------------------------------
+// Zoom menus — each story supplies `zoomMenuLabels`, so the right-click menu
+// carries the zoom items and the header shows the "⋮" button (the component
+// renders neither when the labels are absent). The level itself is the
+// platform's content zoom; these stories show the menus' states only.
+// ---------------------------------------------------------------------------
+
+const zoomMenuLabels = {
+  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom in',
+  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom out',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset zoom',
+  options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options for {resourceName}',
+};
+
+/** Zoom menus available: every item enabled, the "⋮" revealed on hover or focus of the header. */
+export const ZoomMenus: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        canZoomIn
+        canZoomOut
+        canReset
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+};
+
 /**
- * A very long resource label in the chapter-context header: shows how the header truncates without
- * overflowing. No interaction needed — a visual smoke check for the layout.
+ * Opens the "⋮" dropdown and asserts its three items. Lets reviewers confirm the affordance appears
+ * on hover and the menu renders with the resource-named button.
+ */
+export const ZoomOptionsOpen: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        canZoomIn
+        canZoomOut
+        canReset
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    // Radix DropdownMenu relies on PointerEvent sequences that a plain click does not synthesize.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await step('Hover the header to reveal the "⋮" button', async () => {
+      await userEvent.hover(canvas.getByText('WEB'));
+    });
+    await step('Open the zoom options menu', async () => {
+      await user.click(canvas.getByRole('button', { name: /zoom options for WEB/i }));
+    });
+    await step('Assert the three zoom items are visible', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: /^zoom in$/i })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^zoom out$/i })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^reset zoom$/i })).toBeVisible();
+    });
+  },
+};
+
+/** At 300 %: Zoom in is disabled, Zoom out and Reset zoom stay enabled. */
+export const AtMaxZoomMenuOpen: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        canZoomIn={false}
+        canZoomOut
+        canReset
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await step('Open the zoom options menu', async () => {
+      await user.click(canvas.getByRole('button', { name: /zoom options for WEB/i }));
+    });
+    await step('Assert Zoom in is disabled and Zoom out is enabled', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: /^zoom in$/i })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await expect(menu.getByRole('menuitem', { name: /^zoom out$/i })).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
+};
+
+/** At 50 %: Zoom out is disabled, Zoom in stays enabled. */
+export const AtMinZoomMenuOpen: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        canZoomIn
+        canZoomOut={false}
+        canReset
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await step('Open the zoom options menu', async () => {
+      await user.click(canvas.getByRole('button', { name: /zoom options for WEB/i }));
+    });
+    await step('Assert Zoom out is disabled', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: /^zoom out$/i })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
+};
+
+/**
+ * A resource with no zoom level of its own follows the Tab content default zoom, so Reset zoom has
+ * nothing to undo and is disabled.
+ */
+export const ResetDisabledWithoutOwnLevel: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        canZoomIn
+        canZoomOut
+        canReset={false}
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await step('Open the zoom options menu', async () => {
+      await user.click(canvas.getByRole('button', { name: /zoom options for WEB/i }));
+    });
+    await step('Assert Reset zoom is disabled', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: /^reset zoom$/i })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
+};
+
+/**
+ * A very long resource label in the chapter-context header: shows how the header truncates and the
+ * "⋮" button coexists without overflowing. No interaction needed — a visual smoke check for the
+ * layout.
  */
 export const LongLabel: Story = {
   render: () => (
@@ -477,6 +665,7 @@ export const LongLabel: Story = {
         textDirection="ltr"
         localizedStrings={localizedStrings}
         editor={<SampleChapter />}
+        zoomMenuLabels={zoomMenuLabels}
       />
     </CellBox>
   ),

@@ -2,6 +2,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Button,
   ContentZoomRoot,
@@ -12,7 +13,8 @@ import {
   TooltipTrigger,
   useTruncationTooltip,
 } from 'platform-bible-react';
-import { GripVertical } from 'lucide-react';
+import { EllipsisVertical, GripVertical } from 'lucide-react';
+import { formatReplacementString } from 'platform-bible-utils';
 import { ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 import {
@@ -35,6 +37,10 @@ export {
   FAILED_KEY,
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
   COPY_KEY,
   RESOURCE_CELL_STRING_KEYS,
   type ResourceCellLocalizedStrings,
@@ -42,6 +48,9 @@ export {
 
 /** How the cell shows its resource name: a hanging inline label, or a header band. */
 export type ResourceNameDisplay = 'inline' | 'header';
+
+/** Localized copy for the zoom actions (the "⋮" dropdown and the right-click context menu). */
+export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; options: string };
 
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
@@ -69,6 +78,21 @@ export type ResourceCellViewProps = {
    * render outside `Editorial` (paranext-core only).
    */
   nameDisplay?: ResourceNameDisplay;
+  /** False when the resource's level is at MAX_ZOOM_FACTOR. */
+  canZoomIn?: boolean;
+  /** False when the resource's level is at MIN_ZOOM_FACTOR. */
+  canZoomOut?: boolean;
+  /**
+   * False while the resource has no zoom level of its own, so Reset would change nothing. Defaults
+   * to true.
+   */
+  canReset?: boolean;
+  /** Zoom action callbacks; invoked by the "⋮" dropdown and the right-click menu. */
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetZoom?: () => void;
+  /** Localized menu copy; when omitted the zoom items and the "⋮" button are not rendered. */
+  zoomMenuLabels?: ZoomMenuLabels;
   /**
    * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
    * parent). The grip is drag-and-drop source presentation AND a keyboard-operable control.
@@ -83,6 +107,38 @@ export type ResourceCellViewProps = {
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
 };
+
+function ZoomItemsShared({
+  labels,
+  canZoomIn,
+  canZoomOut,
+  canReset = true,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+}: {
+  labels: ZoomMenuLabels;
+  canZoomIn: boolean;
+  canZoomOut: boolean;
+  canReset?: boolean;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetZoom?: () => void;
+}) {
+  return (
+    <>
+      <DropdownMenuItem disabled={!canZoomIn} onSelect={onZoomIn}>
+        {labels.zoomIn}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={!canZoomOut} onSelect={onZoomOut}>
+        {labels.zoomOut}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={!canReset} onSelect={onResetZoom}>
+        {labels.reset}
+      </DropdownMenuItem>
+    </>
+  );
+}
 
 /**
  * Compile-time exhaustiveness check for the cell-state chain below: every state that does NOT
@@ -136,10 +192,10 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
  *
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
  * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
- * right-click Copy menu and the drag/keyboard reorder handle grip. The cell text is marked as the
- * resource's own content-zoom area (`zoomArea`), named with the resource label for the zoom
- * indicator; the scroll box around it stays unmarked, so its scrollbar and padding keep interface
- * size.
+ * resource's zoom surfaces (the header's "⋮" dropdown and the right-click Copy and zoom menu) and
+ * the drag/keyboard reorder handle grip. The cell text is marked as the resource's own content-zoom
+ * area (`zoomArea`), named with the resource label for the zoom indicator; the scroll box around it
+ * stays unmarked, so its scrollbar and padding keep interface size.
  */
 export function ResourceCellView({
   state,
@@ -150,6 +206,13 @@ export function ResourceCellView({
   editor,
   isVerseEmpty,
   nameDisplay = 'header',
+  canZoomIn = true,
+  canZoomOut = true,
+  canReset = true,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+  zoomMenuLabels,
   showDragHandle,
   reorderHandleId,
   reorderHandleLabel,
@@ -231,12 +294,18 @@ export function ResourceCellView({
     setRightClickMenuPos({ x: event.clientX, y: event.clientY });
   }, []);
 
+  // Format the "⋮" aria-label with the resource name (the template uses {resourceName}).
+  const zoomOptionsAriaLabel = zoomMenuLabels
+    ? formatReplacementString(zoomMenuLabels.options, { resourceName: label })
+    : undefined;
+
   return (
     <div
       onContextMenuCapture={hasRightClickMenu ? handleCellContextMenu : undefined}
-      // Activation (opening the chapter split) is owned by the parent verse `listitem` in
-      // ScriptureTextGrid — this cell is presentational.
-      className="tw:flex tw:min-w-0 tw:flex-col"
+      // `group` powers the hover/focus-within reveal of the "⋮" button. Activation (opening the
+      // chapter split) is owned by the parent verse `listitem` in ScriptureTextGrid — this cell is
+      // presentational.
+      className="tw:group tw:flex tw:min-w-0 tw:flex-col"
     >
       {nameDisplay === 'inline' ? (
         // Verse-row cell: hang the name at the inline-start beside the verse text. `dir` on the row
@@ -254,9 +323,9 @@ export function ResourceCellView({
         </div>
       ) : (
         // Chapter context: a compact header line (colored name with a bottom border) with the
-        // optional reorder grip at its inline-start, above the content. Long labels
-        // truncate; the tooltip reveals the full name only when actually clipped. Only the content
-        // scales with zoom, not the header.
+        // optional reorder grip at its inline-start and the "⋮" zoom options button at its
+        // inline-end, above the content. Long labels truncate; the tooltip reveals the full name
+        // only when actually clipped. Only the content scales with zoom, not the header.
         <>
           <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5">
             {showDragHandle ? (
@@ -285,6 +354,43 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
             <ResourceNameLabel label={label} className="tw:min-w-0 tw:flex-1 tw:text-xs" />
+            {zoomMenuLabels ? (
+              <TooltipProvider>
+                <DropdownMenu>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={zoomOptionsAriaLabel}
+                          // Keep the click from reaching an enclosing click handler. Radix opens the
+                          // dropdown on pointerdown, so the menu still opens.
+                          onClick={(e) => e.stopPropagation()}
+                          // Hidden until hover/focus for pointer users; always visible on touch
+                          // (`hover: none`) where there is no hover to reveal it.
+                          className="tw:h-6 tw:w-6 tw:shrink-0 tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:focus-visible:opacity-100 tw:[@media(hover:none)]:opacity-100"
+                        >
+                          <EllipsisVertical className="tw:h-4 tw:w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>{zoomOptionsAriaLabel}</TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent>
+                    <ZoomItemsShared
+                      labels={zoomMenuLabels}
+                      canZoomIn={canZoomIn}
+                      canZoomOut={canZoomOut}
+                      canReset={canReset}
+                      onZoomIn={onZoomIn}
+                      onZoomOut={onZoomOut}
+                      onResetZoom={onResetZoom}
+                    />
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TooltipProvider>
+            ) : undefined}
           </div>
           <div className="tw:flex-1 tw:overflow-auto" dir={textDirection}>
             <div className="tw:p-2">
@@ -310,7 +416,18 @@ export function ResourceCellView({
               style={{ left: rightClickMenuPos?.x ?? 0, top: rightClickMenuPos?.y ?? 0 }}
             />
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
+          <DropdownMenuContent
+            // The menu is portaled out of the cell's DOM, but React still bubbles its synthetic
+            // events through the component tree, so a click on an item, or Enter/Space choosing one,
+            // would reach the verse `listitem` around this cell and open that row's chapter panel
+            // (the same reason `book-chapter-control.component.tsx` stops keys on its portaled
+            // popover). Only Enter and Space are stopped, so the zoom chords still reach the pane's
+            // own key handling while the menu is open; Radix handles Escape on the document.
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+            }}
+          >
             <DropdownMenuItem
               disabled={!selectedText}
               onSelect={() => {
@@ -319,6 +436,20 @@ export function ResourceCellView({
             >
               {localizedStrings[COPY_KEY]}
             </DropdownMenuItem>
+            {zoomMenuLabels ? (
+              <>
+                <DropdownMenuSeparator />
+                <ZoomItemsShared
+                  labels={zoomMenuLabels}
+                  canZoomIn={canZoomIn}
+                  canZoomOut={canZoomOut}
+                  canReset={canReset}
+                  onZoomIn={onZoomIn}
+                  onZoomOut={onZoomOut}
+                  onResetZoom={onResetZoom}
+                />
+              </>
+            ) : undefined}
           </DropdownMenuContent>
         </DropdownMenu>
       ) : undefined}

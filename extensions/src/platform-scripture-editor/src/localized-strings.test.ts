@@ -275,28 +275,45 @@ describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) =>
   });
 });
 
-// The Text Collection cell has no zoom menu of its own; content zoom alone sizes the cell text.
-// Shipped keys are immutable, so the four strings such a menu used keep their values and are marked
-// deprecated rather than deleted.
-describe('retired Text Collection per-column zoom strings', () => {
-  const retiredKeys = [
+// The Text Collection cell's zoom items and "⋮" button use these four keys, so they are requested
+// by the cell and must carry no deprecation notice. Shipped keys are immutable, so their values are
+// pinned as shipped.
+describe('Text Collection per-resource zoom strings', () => {
+  const zoomKeys = [
     '%webView_scriptureTextGrid_cell_zoomIn%',
     '%webView_scriptureTextGrid_cell_zoomOut%',
     '%webView_scriptureTextGrid_cell_resetZoom%',
     '%webView_scriptureTextGrid_cell_zoomOptions%',
   ];
 
-  it.each(retiredKeys)('%s keeps its shipped values and is marked deprecated', (key) => {
-    expect(localizedStrings.en[key]).toBeTruthy();
-    expect(localizedStrings.es[key]).toBeTruthy();
-    expect(metadata?.[key]?.deprecationInfo?.date).toBe('2026-09-23');
-    expect(metadata?.[key]?.deprecationInfo?.message).toBeTruthy();
+  it.each(zoomKeys)('%s is requested by the cell and is not marked deprecated', (key) => {
+    expect(RESOURCE_CELL_STRING_KEYS).toContain(key);
+    expect(metadata?.[key]?.deprecationInfo).toBeUndefined();
   });
 
-  it('is no longer requested by the cell', () => {
-    // Positive control: the cell still requests its other strings from this file.
-    expect(RESOURCE_CELL_STRING_KEYS).toContain('%webView_scriptureTextGrid_cell_copy%');
-    expect(RESOURCE_CELL_STRING_KEYS.filter((key) => retiredKeys.includes(key))).toEqual([]);
+  it('reads deprecation notices from this file at all', () => {
+    // Positive control for the absence above: a key that is retired does carry one.
+    expect(
+      metadata?.['%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%']
+        ?.deprecationInfo,
+    ).toBeDefined();
+  });
+
+  it('keeps the shipped English and Spanish values', () => {
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Zoom in');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Zoom out');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_resetZoom%']).toBe('Reset zoom');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
+      'Zoom options for {resourceName}',
+    );
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Acercar');
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Alejar');
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_resetZoom%']).toBe(
+      'Restablecer zoom',
+    );
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
+      'Opciones de zoom para {resourceName}',
+    );
   });
 });
 
