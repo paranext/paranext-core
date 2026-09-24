@@ -4,14 +4,13 @@ import {
   clearOutstandingSaveFailure,
   createSaveFailureMemory,
   planSaveFailureResponse,
-  SaveFailureKind,
   SaveFailureMemory,
   shouldReportSaveFailure,
 } from './save-failure-report.util';
 
-/** A memory already holding `lastReportedKind`, for a case that starts mid-run. */
-function memoryHolding(lastReportedKind: SaveFailureKind | undefined): SaveFailureMemory {
-  return { lastReportedKind };
+/** A memory whose "could not be saved" notice is, or is not, still outstanding. */
+function memoryWith(isUnknownFailureOutstanding: boolean): SaveFailureMemory {
+  return { isUnknownFailureOutstanding };
 }
 
 describe('classifySaveFailure', () => {
@@ -37,23 +36,18 @@ describe('classifySaveFailure', () => {
 });
 
 describe('shouldReportSaveFailure', () => {
-  it('reports the first failure', () => {
-    expect(shouldReportSaveFailure('unknown', undefined)).toBe(true);
+  it('reports the first rejection it cannot name', () => {
+    expect(shouldReportSaveFailure('unknown', false)).toBe(true);
   });
 
-  it('does not re-report the same failure while it keeps happening', () => {
-    expect(shouldReportSaveFailure('unknown', 'unknown')).toBe(false);
+  it('does not re-report a rejection it cannot name while its notice is still up', () => {
+    expect(shouldReportSaveFailure('unknown', true)).toBe(false);
   });
 
-  it('reports again when the failure changes kind', () => {
-    expect(shouldReportSaveFailure('permissions', 'unknown')).toBe(true);
-  });
-
-  // A run of identical rejections reports once, but a success in between clears the memory, so the
-  // SAME kind striking again afterwards is news rather than a repeat.
-  it('reports the same kind again once a success has cleared the memory', () => {
-    expect(shouldReportSaveFailure('unknown', 'unknown')).toBe(false);
-    expect(shouldReportSaveFailure('unknown', undefined)).toBe(true);
+  // Each of these is its own transient notice, raised on every occurrence.
+  it.each(['syncEditBlocked', 'permissions'] as const)('always reports %s', (kind) => {
+    expect(shouldReportSaveFailure(kind, false)).toBe(true);
+    expect(shouldReportSaveFailure(kind, true)).toBe(true);
   });
 });
 
@@ -74,42 +68,24 @@ describe('planSaveFailureResponse', () => {
     expect(planSaveFailureResponse(createSaveFailureMemory(), CHAPTERIZATION).shouldRevert).toBe(
       false,
     );
-    expect(planSaveFailureResponse(memoryHolding('unknown'), CHAPTERIZATION).shouldRevert).toBe(
-      false,
+    expect(planSaveFailureResponse(memoryWith(true), CHAPTERIZATION).shouldRevert).toBe(false);
+  });
+
+  it('reports and reverts a recoverable rejection on every occurrence', () => {
+    const memory = createSaveFailureMemory();
+    const plans = [SYNC_BLOCKED, SYNC_BLOCKED, PERMISSIONS, PERMISSIONS].map((message) =>
+      planSaveFailureResponse(memory, message),
     );
+    expect(plans).toEqual([
+      { kind: 'syncEditBlocked', shouldReport: true, shouldRevert: true },
+      { kind: 'syncEditBlocked', shouldReport: true, shouldRevert: true },
+      { kind: 'permissions', shouldReport: true, shouldRevert: true },
+      { kind: 'permissions', shouldReport: true, shouldRevert: true },
+    ]);
   });
 
-  it('reverts a recoverable rejection on EVERY occurrence, reported or not', () => {
-    const firstBlock = planSaveFailureResponse(createSaveFailureMemory(), SYNC_BLOCKED);
-    expect(firstBlock).toEqual({ kind: 'syncEditBlocked', shouldReport: true, shouldRevert: true });
-
-    // The same rejection again: the toast is deduplicated, but the editor must still be restored.
-    const repeatBlock = planSaveFailureResponse(memoryHolding('syncEditBlocked'), SYNC_BLOCKED);
-    expect(repeatBlock).toEqual({
-      kind: 'syncEditBlocked',
-      shouldReport: false,
-      shouldRevert: true,
-    });
-
-    const repeatPermissions = planSaveFailureResponse(memoryHolding('permissions'), PERMISSIONS);
-    expect(repeatPermissions).toEqual({
-      kind: 'permissions',
-      shouldReport: false,
-      shouldRevert: true,
-    });
-  });
-
-  it('reports again when the failure changes kind', () => {
-    expect(planSaveFailureResponse(memoryHolding('unknown'), PERMISSIONS)).toEqual({
-      kind: 'permissions',
-      shouldReport: true,
-      shouldRevert: true,
-    });
-    expect(planSaveFailureResponse(memoryHolding('permissions'), CHAPTERIZATION)).toEqual({
-      kind: 'unknown',
-      shouldReport: true,
-      shouldRevert: false,
-    });
+  it('still reports a recoverable rejection while a "could not be saved" notice is up', () => {
+    expect(planSaveFailureResponse(memoryWith(true), PERMISSIONS).shouldReport).toBe(true);
   });
 });
 
@@ -123,10 +99,10 @@ describe('the save-failure memory across a run of saves', () => {
   const CHAPTERIZATION = 'Text: MyProject Book: GEN\nMultiple chapter markers present.';
 
   it('starts with nothing outstanding', () => {
-    expect(createSaveFailureMemory().lastReportedKind).toBeUndefined();
+    expect(createSaveFailureMemory().isUnknownFailureOutstanding).toBe(false);
   });
 
-  it('reports a run of identical rejections exactly once', () => {
+  it('reports a run of rejections it cannot name exactly once', () => {
     const memory = createSaveFailureMemory();
     const reports = [CHAPTERIZATION, CHAPTERIZATION, CHAPTERIZATION].map(
       (message) => planSaveFailureResponse(memory, message).shouldReport,
@@ -134,48 +110,41 @@ describe('the save-failure memory across a run of saves', () => {
     expect(reports).toEqual([true, false, false]);
   });
 
-  it('records the kind it said to report, and only that kind', () => {
+  it('remembers only a rejection it cannot name', () => {
     const memory = createSaveFailureMemory();
+    planSaveFailureResponse(memory, SYNC_BLOCKED);
     planSaveFailureResponse(memory, PERMISSIONS);
-    expect(memory.lastReportedKind).toBe('permissions');
-    // Suppressed, so there is nothing new to remember.
-    planSaveFailureResponse(memory, PERMISSIONS);
-    expect(memory.lastReportedKind).toBe('permissions');
+    expect(memory.isUnknownFailureOutstanding).toBe(false);
     planSaveFailureResponse(memory, CHAPTERIZATION);
-    expect(memory.lastReportedKind).toBe('unknown');
+    expect(memory.isUnknownFailureOutstanding).toBe(true);
   });
 
-  // The failure mode this guards: the notice is raised once per run and stays up under a stable id,
-  // so a write that completes without clearing the memory would leave a stale "could not be saved"
-  // toast on screen AND leave the next rejection of the same kind unreported.
+  // The notice is raised once per run and stays up under a stable id, so a write that completes
+  // without clearing the memory would leave a stale "could not be saved" toast on screen AND leave
+  // the next such rejection unreported.
   it('takes the notice down and re-arms reporting once a write completes', () => {
     const memory = createSaveFailureMemory();
     expect(planSaveFailureResponse(memory, CHAPTERIZATION).shouldReport).toBe(true);
     expect(planSaveFailureResponse(memory, CHAPTERIZATION).shouldReport).toBe(false);
 
     expect(clearOutstandingSaveFailure(memory)).toBe(true);
-    expect(memory.lastReportedKind).toBeUndefined();
+    expect(memory.isUnknownFailureOutstanding).toBe(false);
 
     expect(planSaveFailureResponse(memory, CHAPTERIZATION).shouldReport).toBe(true);
   });
 
   it('does not ask the caller to dismiss a notice it never raised', () => {
     const memory = createSaveFailureMemory();
-    // Nothing has failed yet.
     expect(clearOutstandingSaveFailure(memory)).toBe(false);
 
+    // Their notices are transient, so there is nothing to take down.
     planSaveFailureResponse(memory, SYNC_BLOCKED);
+    planSaveFailureResponse(memory, PERMISSIONS);
+    expect(clearOutstandingSaveFailure(memory)).toBe(false);
+
+    planSaveFailureResponse(memory, CHAPTERIZATION);
     expect(clearOutstandingSaveFailure(memory)).toBe(true);
     // Already cleared by the write before this one.
     expect(clearOutstandingSaveFailure(memory)).toBe(false);
-  });
-
-  it('keeps reverting a recoverable rejection while its report stays suppressed', () => {
-    const memory = createSaveFailureMemory();
-    const plans = [SYNC_BLOCKED, SYNC_BLOCKED, SYNC_BLOCKED].map((message) =>
-      planSaveFailureResponse(memory, message),
-    );
-    expect(plans.map((plan) => plan.shouldReport)).toEqual([true, false, false]);
-    expect(plans.map((plan) => plan.shouldRevert)).toEqual([true, true, true]);
   });
 });

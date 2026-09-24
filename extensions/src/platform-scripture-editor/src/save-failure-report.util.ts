@@ -4,7 +4,9 @@
  * The editor saves the open chapter every time the user stops typing, so a chapter the backend
  * keeps refusing is refused over and over. Two things follow, and this module owns both: the
  * rejection has to be classified (only some kinds let the editor recover by restoring what the PDP
- * holds), and a run of identical rejections has to report ONCE rather than toasting on every save.
+ * holds), and a run of rejections the editor cannot name has to report ONCE rather than toasting on
+ * every save. The two it can name — a Send/Receive edit block and a permissions failure — are told
+ * on every occurrence, each with its own transient notice.
  */
 
 /** Connected directly to the exception message within PermissionsException.cs */
@@ -40,21 +42,21 @@ export function classifySaveFailure(errorMessage: string): SaveFailureKind {
 /**
  * Whether a rejection of this kind should be shown to the user now.
  *
- * A chapter the backend refuses is refused on every save for as long as the user keeps typing, so
- * an ungated report would raise a notification every time the save debounce fires. Reporting only
- * on a CHANGE of kind says it once per run of identical rejections — and still speaks up when the
- * failure turns into a different one, or when a save has succeeded in between and cleared the
- * memory.
+ * A Send/Receive edit block and a permissions failure are reported every time they happen, each as
+ * a transient notice. A rejection the editor cannot name is different: the backend refuses such a
+ * chapter on every save for as long as the user keeps typing, and its notice stays on screen until
+ * a save gets through, so it is reported once per run — again only after a save has succeeded and
+ * cleared the memory.
  *
  * @param kind The kind of the rejection just received.
- * @param lastReportedKind The kind last reported to the user, or `undefined` when nothing is
- *   outstanding (nothing has failed yet, or a save has succeeded since).
+ * @param isUnknownFailureOutstanding Whether a rejection the editor cannot name has been reported
+ *   and no save has got through since.
  */
 export function shouldReportSaveFailure(
   kind: SaveFailureKind,
-  lastReportedKind: SaveFailureKind | undefined,
+  isUnknownFailureOutstanding: boolean,
 ): boolean {
-  return kind !== lastReportedKind;
+  return kind !== 'unknown' || !isUnknownFailureOutstanding;
 }
 
 /** What the editor should do about one rejected save. */
@@ -66,15 +68,14 @@ export interface SaveFailureResponse {
   /**
    * Whether the caller may put back what the PDP holds in place of the rejected document.
    *
-   * Independent of {@link shouldReport}: the report gate deduplicates the TOAST across a run of
-   * identical rejections, and must never suppress the revert, which has to happen on every
-   * occurrence.
+   * Independent of {@link shouldReport}: the report gate deduplicates the "could not be saved"
+   * notice, and must never suppress a revert, which has to happen on every occurrence.
    */
   shouldRevert: boolean;
 }
 
 /**
- * The running record of which save rejection the user is currently looking at.
+ * The running record of whether the user is looking at a "could not be saved" notice.
  *
  * Deliberately a value this module owns both transitions of, rather than a field the caller
  * maintains itself. The two halves have to agree: whatever suppresses a repeat report is also the
@@ -84,16 +85,13 @@ export interface SaveFailureResponse {
  * failing to save with nothing on screen saying so.
  */
 export interface SaveFailureMemory {
-  /**
-   * The kind last reported to the user, or `undefined` when nothing is outstanding (nothing has
-   * failed yet, or a save has got through since).
-   */
-  lastReportedKind: SaveFailureKind | undefined;
+  /** Whether a rejection the editor cannot name has been reported and no save has got through since. */
+  isUnknownFailureOutstanding: boolean;
 }
 
 /** A memory with no rejection outstanding. */
 export function createSaveFailureMemory(): SaveFailureMemory {
-  return { lastReportedKind: undefined };
+  return { isUnknownFailureOutstanding: false };
 }
 
 /**
@@ -107,11 +105,11 @@ export function createSaveFailureMemory(): SaveFailureMemory {
  * document with an older snapshot and record the older one as last-sent, leaving the editor and the
  * PDP out of step until the next delivery arrives.
  *
- * A rejection this says to report is recorded as reported HERE, before the caller has sent
- * anything, so that a caller which reverts between deciding and telling cannot report the same
- * rejection twice. A send that then fails is deliberately not un-recorded: a notification the
- * platform refused is a broken notification path, and retrying it on every keystroke of a failing
- * chapter would be worse than staying quiet until the kind changes.
+ * A rejection the editor cannot name is recorded as reported HERE, before the caller has sent
+ * anything, so that a caller which reverts between deciding and telling cannot report it twice. A
+ * send that then fails is deliberately not un-recorded: a notification the platform refused is a
+ * broken notification path, and retrying it on every keystroke of a failing chapter would be worse
+ * than staying quiet until a save gets through.
  *
  * @param memory The record of what the user has already been told. Updated in place.
  * @param errorMessage The message the backend rejected the write with.
@@ -121,8 +119,8 @@ export function planSaveFailureResponse(
   errorMessage: string,
 ): SaveFailureResponse {
   const kind = classifySaveFailure(errorMessage);
-  const shouldReport = shouldReportSaveFailure(kind, memory.lastReportedKind);
-  if (shouldReport) memory.lastReportedKind = kind;
+  const shouldReport = shouldReportSaveFailure(kind, memory.isUnknownFailureOutstanding);
+  if (kind === 'unknown') memory.isUnknownFailureOutstanding = true;
   return {
     kind,
     shouldReport,
@@ -134,16 +132,16 @@ export function planSaveFailureResponse(
 }
 
 /**
- * Records that a write ran to completion with no rejection to classify, so whatever the user was
- * told is no longer outstanding: the next rejection is worth reporting again even if it is the same
- * kind.
+ * Records that a write ran to completion with no rejection to classify, so the "could not be saved"
+ * notice is no longer outstanding: the next rejection the editor cannot name is worth reporting
+ * again.
  *
  * @param memory The record of what the user has already been told. Updated in place.
  * @returns Whether a notice raised for an earlier rejection is now stale and has to be taken down.
  *   `false` when nothing was outstanding, so a caller never dismisses an id it never sent.
  */
 export function clearOutstandingSaveFailure(memory: SaveFailureMemory): boolean {
-  if (memory.lastReportedKind === undefined) return false;
-  memory.lastReportedKind = undefined;
+  if (!memory.isUnknownFailureOutstanding) return false;
+  memory.isUnknownFailureOutstanding = false;
   return true;
 }

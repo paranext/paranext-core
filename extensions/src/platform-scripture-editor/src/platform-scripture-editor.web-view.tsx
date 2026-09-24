@@ -3088,36 +3088,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
      * generic message: the backend's own wording is written for a developer, so it stays in the log
      * and never reaches the toast.
      *
-     * Reports only when `shouldReport` says the kind of rejection has CHANGED, so a chapter the
-     * backend keeps refusing is reported once instead of on every save. Touches no editor content,
-     * so both the live rejection path and the zombie path can report through it.
+     * The two rejections the editor can name are reported on every occurrence, each as its own
+     * transient notice. A rejection it cannot name is reported once per run (`shouldReport`),
+     * because the backend refuses such a chapter on every save. Touches no editor content, so both
+     * the live rejection path and the zombie path can report through it.
      */
     async function reportSaveFailure({ kind, shouldReport }: SaveFailureResponse): Promise<void> {
       if (!shouldReport) return;
 
       try {
         if (kind === 'syncEditBlocked') {
-          // The one transient notice of the three: `SyncBlockedBanner` holds this state in view for
-          // as long as it lasts, so the toast does not have to.
           await notifySyncEditBlocked();
+        } else if (kind === 'permissions') {
+          await papi.notifications.send({
+            severity: 'error',
+            message: formatReplacementString(
+              localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
+              { projectName },
+            ),
+          });
         } else {
           await papi.notifications.send({
             notificationId: saveNotificationIds.saveFailed,
             message: formatReplacementString(
-              localizedStrings[
-                kind === 'permissions'
-                  ? '%webView_platformScriptureEditor_error_permissions_format%'
-                  : '%webView_platformScriptureEditor_error_saveFailed_format%'
-              ],
+              localizedStrings['%webView_platformScriptureEditor_error_saveFailed_format%'],
               { projectName },
             ),
             severity: 'error',
             // Stays up until a save gets through and dismisses it. An auto-closing toast would be
-            // the bug this notice exists to prevent: the kind is reported once per run of identical
-            // rejections, so once it closed itself the chapter would go on silently failing to save
-            // with nothing on screen to say so. The two kinds share one id because only one of them
-            // can be outstanding at a time — a rejection that changes kind should reword the notice
-            // already on screen, not open a second one beside it.
+            // the bug this notice exists to prevent: it is raised once per run of rejections, so
+            // once it closed itself the chapter would go on silently failing to save with nothing
+            // on screen to say so.
             duration: 0,
             // This is about this editor's chapter, and routing is also what makes the reused
             // `notificationId` coalesce: an update that lands in a different window has never seen
