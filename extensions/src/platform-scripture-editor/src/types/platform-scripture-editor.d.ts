@@ -868,8 +868,8 @@ declare module 'papi-shared-types' {
      * `editorWebViewId` is optional in the type but required in practice: with no id, or an id that
      * no longer names an open Scripture editor, the command no-ops silently rather than inserting
      * anywhere. A resolved promise means the request was DELIVERED to the web view, not that a note
-     * was inserted — the web view can still refuse the insert (e.g. read-only, no selection), and
-     * does so with only a logged warning, nothing the caller can observe.
+     * was inserted — the web view can still refuse the insert (e.g. read-only, no selection), and a
+     * refusal is not reported to the caller.
      *
      * @param editorWebViewId The ID of the web view to insert the footnote for
      */
@@ -903,7 +903,10 @@ declare module 'papi-shared-types' {
      * Command to insert a project comment at the current verse in a given editor web view. Opens a
      * comment editor popover for drafting the comment content and optionally assigning to a user.
      * See the `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
-     * `editorWebViewId` and resolution caveats, which apply identically here.
+     * `editorWebViewId` caveat, which applies here too — but resolution does NOT behave
+     * identically: this command's controller rethrows when the user lacks permission to create
+     * comments, so the returned promise CAN reject, and a sync-blocked comment shows the user a
+     * notice rather than failing silently.
      *
      * @param editorWebViewId The ID of the web view to insert the comment for
      */
