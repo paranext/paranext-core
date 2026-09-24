@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { cn } from '@/utils/shadcn-ui/utils';
@@ -92,6 +93,11 @@ export function InternetAccessOptionList({
   disabled,
   showFooter = true,
 }: InternetAccessOptionListProps) {
+  // Scoped per instance: the ids below tie each radio to its own label and description, and two of
+  // these lists rendered in one document would otherwise point every radio at the first match.
+  const listId = useId();
+  const optionId = (optionValue: InternetUse) => `${listId}-${optionValue}`;
+
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
       <RadioGroup
@@ -111,17 +117,17 @@ export function InternetAccessOptionList({
           >
             <RadioGroupItem
               value={row.value}
-              id={`internet-option-${row.value}`}
+              id={optionId(row.value)}
               // Each option's description qualifies what it does — most of all the sensitive-locations
               // one — so it has to reach assistive tech, which announces the label alone by default.
-              aria-describedby={`internet-option-${row.value}-description`}
+              aria-describedby={`${optionId(row.value)}-description`}
               disabled={disabled || !row.isEnabled}
               className="tw:mt-0.5"
             />
             <div className="tw:flex tw:flex-1 tw:flex-col">
               <div className="tw:flex tw:items-center tw:justify-between">
                 <label
-                  htmlFor={`internet-option-${row.value}`}
+                  htmlFor={optionId(row.value)}
                   aria-disabled={!row.isEnabled || undefined}
                   className={cn(
                     'tw:text-sm tw:font-medium',
@@ -139,7 +145,7 @@ export function InternetAccessOptionList({
                 )}
               </div>
               <p
-                id={`internet-option-${row.value}-description`}
+                id={`${optionId(row.value)}-description`}
                 className="tw:text-xs tw:text-muted-foreground"
               >
                 {localizedStrings[row.descriptionKey]}

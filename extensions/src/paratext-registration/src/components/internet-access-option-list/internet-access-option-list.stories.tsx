@@ -45,7 +45,7 @@ export const SensitiveLocations: Story = {
   decorators: [createDecorator('VpnRequired')],
 };
 
-/** "Disable all Internet access" selected — the only option that blocks unconditionally. */
+/** "Disable all internet access" selected — the only option that blocks unconditionally. */
 export const AllInternetDisabled: Story = {
   decorators: [createDecorator('Disabled')],
 };

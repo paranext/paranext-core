@@ -47,7 +47,7 @@ import {
   newPlatformError,
 } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
-import { getInternetBlockedMessage } from './internet-block-notification.utils';
+import { getInternetBlockedMessageKey } from './internet-block-notification.utils';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -371,7 +371,7 @@ export function GetResources({
   // asynchronously, and `%data_loading_error_...%` reads worse than the failure itself.
   const getActionErrorText = (error: unknown): string => {
     if (isResourceActionProviderNotReadyError(error)) return providerNotReadyText;
-    const blockedMessageKey = getInternetBlockedMessage(error);
+    const blockedMessageKey = getInternetBlockedMessageKey(error);
     const blockedText = blockedMessageKey
       ? localizedStringsWithLoadingState[0][blockedMessageKey]
       : undefined;

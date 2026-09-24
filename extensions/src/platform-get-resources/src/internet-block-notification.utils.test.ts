@@ -11,7 +11,7 @@ const SENSITIVE_LOCATION_ERROR =
   "JSON-RPC Request error (-32000): Exception of type 'Paratext.Data.VpnDisconnectedException' was thrown.";
 
 describe('getInternetBlockedNotification', () => {
-  it('reports a "Disable all Internet access" block with a link to the internet settings', () => {
+  it('reports a "Disable all internet access" block with a link to the internet settings', () => {
     expect(getInternetBlockedNotification(new Error(ALL_ACCESS_DISABLED_ERROR))).toEqual({
       severity: 'error',
       message: '%data_loading_error_internetAccess_disabled_2%',
@@ -40,6 +40,14 @@ describe('getInternetBlockedNotification', () => {
     expect(getInternetBlockedNotification(ALL_ACCESS_DISABLED_ERROR)?.notificationId).toBe(
       getInternetBlockedNotification(SENSITIVE_LOCATION_ERROR)?.notificationId,
     );
+  });
+
+  // Pinned as a literal because core's `constructErrorNotification`
+  // (src/shared/services/data-provider.service.ts) sends these same messages under the same string
+  // and cannot import it: changing this value without changing that one splits one block into two
+  // notifications.
+  it('shares its id with the notification core sends for the same block', () => {
+    expect(INTERNET_BLOCKED_NOTIFICATION_ID).toBe('platform.internetBlocked');
   });
 
   it('ignores failures that are not internet blocks', () => {

@@ -67,11 +67,12 @@ describe('InternetAccessOptionList', () => {
   // a choice that isn't one, and a count alone cannot tell that apart from a legitimate new option.
   test('offers one radio per internet use value', () => {
     renderList();
-    expect(screen.getAllByRole('radio').map((radio) => radio.id)).toEqual([
-      'internet-option-Enabled',
-      'internet-option-VpnRequired',
-      'internet-option-Disabled',
-      'internet-option-ProxyOnly',
+    // Ids are `<instance id>-<value>`; the value is the half that says what the row saves.
+    expect(screen.getAllByRole('radio').map((radio) => radio.id.split('-').pop())).toEqual([
+      'Enabled',
+      'VpnRequired',
+      'Disabled',
+      'ProxyOnly',
     ]);
   });
 
@@ -114,8 +115,8 @@ describe('InternetAccessOptionList', () => {
     expect(screen.getAllByText('Coming soon')).toHaveLength(1);
   });
 
-  // The relabelled option only blocks where the location cannot be confirmed, so its description is
-  // load-bearing: a screen reader that announces the label alone loses that qualification.
+  // The sensitive-locations option only blocks where the location cannot be confirmed, so its
+  // description is load-bearing: announcing the label alone loses that qualification.
   test('each radio is described by its own description text', () => {
     renderList();
     const sensitiveLocations = screen.getByLabelText('Sensitive sentinel');

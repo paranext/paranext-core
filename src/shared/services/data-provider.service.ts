@@ -22,19 +22,16 @@ import {
   getAllObjectFunctionNames,
   getErrorMessage,
   groupBy,
-  isErrorMessageAboutParatextBlockingInternetAccess,
-  isErrorMessageAboutParatextSensitiveLocationBlock,
-  isErrorMessageAboutRegistryAuthFailure,
   isString,
   newPlatformError,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
+import { constructParatextErrorNotification } from '@shared/utils/paratext-error-notification.util';
 import { LocalObjectToProxyCreator } from '@shared/models/network-object.model';
 import { networkObjectService, overrideDispose } from '@shared/services/network-object.service';
 import { logger } from '@shared/services/logger.service';
 import {
-  CommandHandlers,
   DataProviderNames,
   DataProviderTypes,
   DataProviders,
@@ -43,7 +40,6 @@ import {
 } from 'papi-shared-types';
 import { IDataProvider, IDisposableDataProvider } from '@shared/models/data-provider.interface';
 import { notificationService } from '@shared/services/notification.service';
-import { PlatformNotification } from '@shared/models/notification.service-model';
 import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
@@ -112,44 +108,6 @@ function hasKnown(providerName: string): boolean {
 }
 
 /**
- * One id for both internet-block messages: a single block fails every subscription that reaches
- * ParatextData, and without a shared id each one would raise its own identical notification.
- */
-const INTERNET_BLOCKED_NOTIFICATION_ID = 'platform.internetBlocked';
-
-const SHOW_INTERNET_SETTINGS_COMMAND =
-  // TS doesn't realize this is a valid command handler key since it is defined in an extension
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  'paratextRegistration.showInternetSettings' as keyof CommandHandlers;
-
-function constructErrorNotification(exception: unknown): PlatformNotification | undefined {
-  const retVal: PlatformNotification = {
-    severity: 'error',
-    message: '',
-    clickCommandLabel: '%general_open%',
-    // TS doesn't realize this is a valid command handler key since it is defined in an extension
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    clickCommand: 'paratextRegistration.showParatextRegistration' as keyof CommandHandlers,
-  };
-
-  if (isErrorMessageAboutParatextBlockingInternetAccess(exception)) {
-    retVal.message = '%data_loading_error_internetAccess_disabled_2%';
-    retVal.clickCommand = SHOW_INTERNET_SETTINGS_COMMAND;
-    retVal.notificationId = INTERNET_BLOCKED_NOTIFICATION_ID;
-  } else if (isErrorMessageAboutParatextSensitiveLocationBlock(exception)) {
-    retVal.message = '%data_loading_error_internetAccess_sensitiveLocation%';
-    retVal.clickCommand = SHOW_INTERNET_SETTINGS_COMMAND;
-    retVal.notificationId = INTERNET_BLOCKED_NOTIFICATION_ID;
-  } else if (isErrorMessageAboutRegistryAuthFailure(exception)) {
-    retVal.message = '%data_loading_error_paratextData_auth_failure%';
-  } else {
-    return undefined;
-  }
-
-  return retVal;
-}
-
-/**
  * Handles errors encountered during data provider subscription in createDataProviderSubscriber.
  * Used for both data retrieval failures and callback execution failures.
  *
@@ -191,7 +149,7 @@ function handleDataProviderSubscriptionError(
       `handleDataProviderSubscriptionError: callback threw while reporting error for ${dataType}. ${getErrorMessage(callbackError)}`,
     );
   }
-  const notification = constructErrorNotification(error);
+  const notification = constructParatextErrorNotification(error);
   if (notification) notificationService.send(notification);
 }
 

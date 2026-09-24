@@ -350,8 +350,8 @@ describe('isErrorMessageAboutParatextSensitiveLocationBlock', () => {
     ).toBe(true);
   });
 
-  // "Disable all Internet access" has its own detector and its own user-facing message.
-  it('does not claim the "Disable all Internet access" block', () => {
+  // "Disable all internet access" has its own detector and its own user-facing message.
+  it('does not claim the "Disable all internet access" block', () => {
     expect(
       isErrorMessageAboutParatextSensitiveLocationBlock(
         'Bug in Paratext caused attempted access to Internet. Request has been blocked.',

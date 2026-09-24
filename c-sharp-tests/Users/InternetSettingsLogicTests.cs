@@ -185,9 +185,10 @@ public class InternetSettingsLogicTests
         Assert.That(result, Is.Null);
     }
 
-    // "Disable all Internet access" is only as good as this write. SetProxy happens to force
-    // Disabled today, but nothing in Paratext 10 Studio guarantees it will keep doing so, and the
-    // user's choice must not depend on that.
+    // "Disable all internet access" is only as good as this write. ParatextData's SetProxy
+    // happens to set Disabled when given no host, but nothing guarantees a future ParatextData
+    // version will keep doing so, and the user's choice must not depend on that. ProxyOnly is the
+    // deliberate exception: it writes nothing and keeps whatever SetProxy set.
     [Test]
     public void ReassertedRawStatus_EnabledCurrentAndDisabledRequested_ReturnsDisabled()
     {

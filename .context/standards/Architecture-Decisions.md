@@ -1570,7 +1570,7 @@ step, no automation. Just a record.
   Classification lives in three places that cannot import one another — the detectors in
   `platform-bible-utils`, `constructErrorNotification` for data-provider subscriptions, and
   `internet-block-notification.utils.ts` for the Get Resources extension — so a third kind of block
-  means editing all three. "Disable all Internet access" gates ParatextData's REST layer only —
+  means editing all three. "Disable all internet access" gates ParatextData's REST layer only —
   Platform.Bible's own network use (extension installs, for one) is not covered. Get Resources
   persists its catalog, so after internet is disabled it still lists resources; installs and fresh
   fetches are what fail.

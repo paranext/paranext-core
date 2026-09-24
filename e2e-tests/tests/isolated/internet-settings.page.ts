@@ -82,7 +82,7 @@ export function connectivityOptions(frame: FrameLocator): {
       name: 'Block internet when in sensitive locations',
     }),
     // %paratextRegistration_description_internetUse_option_Disabled_2%
-    allInternetDisabled: frame.getByRole('radio', { name: 'Disable all Internet access' }),
+    allInternetDisabled: frame.getByRole('radio', { name: 'Disable all internet access' }),
     // %paratextRegistration_description_internetUse_option_ProxyOnly_2%
     configureProxy: frame.getByRole('radio', { name: /Configure proxy/ }),
   };
@@ -118,7 +118,7 @@ async function checkedConnectivityOption(frame: FrameLocator): Promise<Locator> 
  * change. Clicking a fixed option would be a no-op wherever that option was already selected.
  *
  * Only toggles between "Unrestricted" and "Block internet when in sensitive locations". Selecting
- * "Disable all Internet access" would be one accidental save away from cutting ParatextData — and a
+ * "Disable all internet access" would be one accidental save away from cutting ParatextData — and a
  * co-installed Paratext 9 — off the internet on the developer's machine. Nothing here is persisted;
  * only "Save and restart" writes.
  *

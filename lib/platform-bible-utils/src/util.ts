@@ -420,6 +420,11 @@ export function createSyncProxyForAsyncObject<T extends object>(
   });
 }
 
+/** The text to match against, whether the caller passed an error or a message already extracted. */
+function getErrorText(errorMessage: unknown): string {
+  return isString(errorMessage) ? errorMessage : getErrorMessage(errorMessage);
+}
+
 /**
  * Indicates if the exception or error message provided appears to be from ParatextData.dll
  * indicating that Paratext is blocking internet access.
@@ -432,8 +437,7 @@ export function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: 
   const paratextExceptionMessage =
     'Bug in Paratext caused attempted access to Internet. Request has been blocked.';
 
-  if (isString(errorMessage)) return errorMessage.includes(paratextExceptionMessage);
-  return getErrorMessage(errorMessage).includes(paratextExceptionMessage);
+  return getErrorText(errorMessage).includes(paratextExceptionMessage);
 }
 
 /**
@@ -456,8 +460,7 @@ export function isErrorMessageAboutParatextSensitiveLocationBlock(errorMessage: 
   // runtime may translate, while the type name survives.
   const paratextExceptionTypeName = 'Paratext.Data.VpnDisconnectedException';
 
-  const errorString = isString(errorMessage) ? errorMessage : getErrorMessage(errorMessage);
-  return errorString.includes(paratextExceptionTypeName);
+  return getErrorText(errorMessage).includes(paratextExceptionTypeName);
 }
 
 /**
@@ -474,10 +477,9 @@ export function isErrorMessageAboutRegistryAuthFailure(errorMessage: unknown): b
   const paratextExceptionMessage2 =
     'User registration is not valid. Cannot retrieve resources from DBL.';
 
-  const errorString = isString(errorMessage) ? errorMessage : getErrorMessage(errorMessage);
+  const errorText = getErrorText(errorMessage);
   return (
-    errorString.includes(paratextExceptionMessage1) ||
-    errorString.includes(paratextExceptionMessage2)
+    errorText.includes(paratextExceptionMessage1) || errorText.includes(paratextExceptionMessage2)
   );
 }
 

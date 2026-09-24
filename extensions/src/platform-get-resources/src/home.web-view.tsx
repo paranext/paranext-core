@@ -133,8 +133,9 @@ globalThis.webViewComponent = function HomeWebView() {
     }, []),
   );
 
-  // Declared before the first use below: the send/receive failure paths all report through the same
-  // notification id so a repeat failure replaces the previous toast instead of stacking.
+  // Declared before the first use below: the send/receive failures that are not internet blocks
+  // report through this id, so a repeat failure replaces the previous toast instead of stacking.
+  // Internet blocks carry their own id, shared with everywhere else that notices the same block.
   const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
 
   const sendReceiveProject = async (projectId: string) => {

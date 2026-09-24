@@ -91,11 +91,15 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
             );
 
             // Unfortunately, `InternetAccess.SetProxy` is the only way to set proxy properties, and
-            // it does some weird stuff. Make sure `ProxyHost` is `null` if not using a proxy. Then
-            // `InternetAccess.SetProxy` will set the proxy properties to `null`. But it will also
-            // set `RawStatus` to `InternetUse.Disabled`, so set that back to whatever the user
-            // selected if they selected something that is not `InternetUse.ProxyOnly`. But we want
-            // to leave it disabled if they selected `InternetUse.ProxyOnly` but provided no host
+            // it also overwrites `RawStatus`: with no host it clears the proxy properties and sets
+            // `InternetUse.Disabled`; with a host it sets `InternetUse.ProxyOnly`. Make sure
+            // `ProxyHost` is `null` if not using a proxy, then write back whatever the user
+            // selected if it is not `InternetUse.ProxyOnly`. ProxyOnly keeps what `SetProxy` set,
+            // so a proxy selected without a host stays disabled.
+            //
+            // Order matters: `ReassertedRawStatus` must read `RawStatus` after `SetProxy` has
+            // overwritten it. Reading it earlier compares against the stale value and can skip the
+            // write, leaving the user's selection saved as Disabled.
             if (
                 InternetSettingsLogic.ShouldClearProxyHost(newInternetSettings.PermittedInternetUse)
             )

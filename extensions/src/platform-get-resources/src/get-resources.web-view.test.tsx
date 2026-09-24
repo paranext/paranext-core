@@ -27,7 +27,10 @@ vi.mock('@papi/frontend', () => ({
 }));
 
 vi.mock('@papi/frontend/react', () => ({
-  useLocalizedStrings: () => [{ '%resources_get%': 'Get' }, false],
+  useLocalizedStrings: () => [
+    { '%resources_get%': 'Get', '%resources_retry%': 'Try again' },
+    false,
+  ],
   useDataProvider: () => ({
     installDblResource: (...args: unknown[]) => mockInstallDblResource(...args),
     uninstallDblResource: vi.fn(),
@@ -120,6 +123,24 @@ describe('Get Resources web view', () => {
         }),
       ),
     );
+  });
+
+  // The notification is raised from an effect keyed on the committed fetch rather than from the
+  // fetch's own catch, so a retry that succeeds does not leave a block notification standing over a
+  // list that loaded fine — and does not raise a second one.
+  it('does not report the block again once a retry succeeds', async () => {
+    mockSendCommand
+      .mockRejectedValueOnce(new Error(SENSITIVE_LOCATION_ERROR))
+      .mockResolvedValue({ status: 'available', resources: [RESOURCE] });
+
+    renderWebView();
+
+    await waitFor(() => expect(mockSendNotification).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByRole('button', { name: 'Get' })).toBeInTheDocument();
+    expect(mockSendNotification).toHaveBeenCalledTimes(1);
   });
 
   it('stays quiet for a failure that is not an internet block', async () => {
