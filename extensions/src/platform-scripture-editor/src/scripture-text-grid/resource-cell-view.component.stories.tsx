@@ -26,6 +26,9 @@ type Story = StoryObj<typeof ResourceCellView>;
 
 const localizedStrings = getLocalizedStrings([...RESOURCE_CELL_STRING_KEYS]);
 
+/** Storybook runs no content zoom; every cell marks its text with this one area id. */
+const STORY_ZOOM_AREA = 'resource-story';
+
 /** Bounds the cell so its `h-full`/`overflow-auto` layout behaves like a real grid column. */
 const CELL_BOX_STYLE: React.CSSProperties = {
   height: '320px',
@@ -97,6 +100,7 @@ export const Downloading: Story = {
     <CellBox>
       <ResourceCellView
         state="downloading"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -115,6 +119,7 @@ export const Failed: Story = {
     <CellBox>
       <ResourceCellView
         state="failed"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -135,6 +140,7 @@ export const BookNotAvailable: Story = {
     <CellBox>
       <ResourceCellView
         state="bookNotAvailable"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -154,6 +160,7 @@ export const NotInstalled: Story = {
     <CellBox>
       <ResourceCellView
         state="unavailable"
+        zoomArea={STORY_ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -169,6 +176,7 @@ export const Ready: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -184,6 +192,7 @@ export const ReadyRightToLeft: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -199,6 +208,7 @@ export const VerseReady: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -215,6 +225,7 @@ export const VerseEmpty: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -232,6 +243,7 @@ export const VerseRightToLeft: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -252,6 +264,7 @@ export const VerseInlineWrapping: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -275,6 +288,7 @@ export const VerseNotInstalled: Story = {
     <CellBox>
       <ResourceCellView
         state="unavailable"
+        zoomArea={STORY_ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -291,6 +305,7 @@ export const VerseDownloading: Story = {
     <CellBox>
       <ResourceCellView
         state="downloading"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -307,6 +322,7 @@ export const VerseFailed: Story = {
     <CellBox>
       <ResourceCellView
         state="failed"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -326,6 +342,7 @@ export const VerseLongName: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="New International Version 2011"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -345,6 +362,7 @@ export const VerseLongNameNarrowPane: Story = {
     <CellBox width="110px">
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="New International Version 2011"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -361,6 +379,7 @@ export const VerseLongNameRightToLeft: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="תרגום השבעים המלא לפי מהדורת רלפס"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -380,6 +399,7 @@ export const VerseLongNameNarrowPaneRightToLeft: Story = {
     <CellBox width="110px">
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="תרגום השבעים המלא לפי מהדורת רלפס"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -402,6 +422,7 @@ export const PartialFailureRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
+          zoomArea={STORY_ZOOM_AREA}
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -411,6 +432,7 @@ export const PartialFailureRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="failed"
+          zoomArea={STORY_ZOOM_AREA}
           label="ASV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -420,6 +442,7 @@ export const PartialFailureRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="unavailable"
+          zoomArea={STORY_ZOOM_AREA}
           label="NIV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -429,6 +452,7 @@ export const PartialFailureRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="downloading"
+          zoomArea={STORY_ZOOM_AREA}
           label="KJV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -448,6 +472,7 @@ export const LongLabel: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="World English Bible Revised 2023 Study Edition"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -467,6 +492,7 @@ export const ReadyWithDragHandle: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -488,6 +514,7 @@ export const ReadyRightToLeftWithDragHandle: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -510,6 +537,7 @@ export const MixedDirectionRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
+          zoomArea={STORY_ZOOM_AREA}
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -519,6 +547,7 @@ export const MixedDirectionRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
+          zoomArea={STORY_ZOOM_AREA}
           label="עברית"
           textDirection="rtl"
           localizedStrings={localizedStrings}
@@ -528,6 +557,7 @@ export const MixedDirectionRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
+          zoomArea={STORY_ZOOM_AREA}
           label="العربية"
           textDirection="rtl"
           localizedStrings={localizedStrings}

@@ -49,6 +49,9 @@ const localizedStrings = {
   [BOOK_NOT_AVAILABLE_KEY]: 'Book not in this text',
 };
 
+/** The zoom area the cells under test mark their text with. */
+const ZOOM_AREA = 'resource-web';
+
 /** Renders cells in a plain div wrapper — ResourceCellView is now presentational, no role needed. */
 function renderCells(cells: React.ReactNode) {
   return render(<div>{cells}</div>);
@@ -60,6 +63,7 @@ describe('ResourceCellView row smoke', () => {
       <>
         <ResourceCellView
           state="ready"
+          zoomArea={ZOOM_AREA}
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -67,6 +71,7 @@ describe('ResourceCellView row smoke', () => {
         />
         <ResourceCellView
           state="failed"
+          zoomArea={ZOOM_AREA}
           label="ASV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -74,6 +79,7 @@ describe('ResourceCellView row smoke', () => {
         />
         <ResourceCellView
           state="downloading"
+          zoomArea={ZOOM_AREA}
           label="KJV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -104,6 +110,7 @@ describe('ResourceCellView row smoke', () => {
     renderCells(
       <ResourceCellView
         state="unavailable"
+        zoomArea={ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -120,6 +127,7 @@ describe('ResourceCellView row smoke', () => {
     renderCells(
       <ResourceCellView
         state="bookNotAvailable"
+        zoomArea={ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -140,6 +148,7 @@ describe('ResourceCellView row smoke', () => {
       <>
         <ResourceCellView
           state="ready"
+          zoomArea={ZOOM_AREA}
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -147,6 +156,7 @@ describe('ResourceCellView row smoke', () => {
         />
         <ResourceCellView
           state="ready"
+          zoomArea={ZOOM_AREA}
           label="עברית"
           textDirection="rtl"
           localizedStrings={localizedStrings}
@@ -154,6 +164,7 @@ describe('ResourceCellView row smoke', () => {
         />
         <ResourceCellView
           state="ready"
+          zoomArea={ZOOM_AREA}
           label="العربية"
           textDirection="rtl"
           localizedStrings={localizedStrings}
@@ -180,6 +191,7 @@ describe('ResourceCellView name display', () => {
     const { container } = renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -197,6 +209,7 @@ describe('ResourceCellView name display', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -215,6 +228,7 @@ describe('ResourceCellView name display', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -234,6 +248,7 @@ describe('ResourceCellView name display', () => {
     renderCells(
       <ResourceCellView
         state="downloading"
+        zoomArea={ZOOM_AREA}
         label="KJV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -249,6 +264,7 @@ describe('ResourceCellView name display', () => {
     renderCells(
       <ResourceCellView
         state="failed"
+        zoomArea={ZOOM_AREA}
         label="ASV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -264,6 +280,7 @@ describe('ResourceCellView name display', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -280,6 +297,7 @@ describe('ResourceCellView name display', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -296,6 +314,7 @@ describe('ResourceCellView name display', () => {
     const { container } = renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -341,6 +360,7 @@ describe('ResourceCellView right-click menu', () => {
       renderCells(
         <ResourceCellView
           state="ready"
+          zoomArea={ZOOM_AREA}
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
@@ -361,6 +381,7 @@ describe('ResourceCellView right-click menu', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
@@ -379,6 +400,7 @@ describe('ResourceCellView right-click menu', () => {
     renderCells(
       <ResourceCellView
         state="unavailable"
+        zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={{ ...menuStrings, [NOT_INSTALLED_KEY]: 'Resource not installed' }}
@@ -403,6 +425,7 @@ describe('ResourceCellView right-click menu', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
@@ -429,6 +452,7 @@ describe('ResourceCellView right-click menu', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
@@ -465,6 +489,7 @@ describe('ResourceCellView right-click menu', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
@@ -488,6 +513,7 @@ describe('ResourceCellView reorder grip', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="Genesis"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -515,6 +541,7 @@ describe('ResourceCellView reorder grip', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="Genesis"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -536,6 +563,7 @@ describe('ResourceCellView reorder grip', () => {
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="Genesis"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -554,6 +582,7 @@ describe('ResourceCellView content zoom marker', () => {
     return renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
@@ -566,13 +595,14 @@ describe('ResourceCellView content zoom marker', () => {
   }
 
   it.each(['inline', 'header'] as const)(
-    '%s layout: marks one wrapper, with the text-collection area, around the cell text, and nothing zooms that text but the marker',
+    '%s layout: marks one element, with the resource’s own area and name, around the cell text, and nothing zooms that text but the marker',
     (nameDisplay) => {
       const { container } = renderMarkedCell(nameDisplay);
       const markers = container.querySelectorAll('[data-platform-content-zoom-root]');
       expect(markers).toHaveLength(1);
       const marker = markers[0];
-      expect(marker.getAttribute('data-platform-content-zoom-root')).toBe('text-collection');
+      expect(marker.getAttribute('data-platform-content-zoom-root')).toBe(ZOOM_AREA);
+      expect(marker.getAttribute('data-platform-content-zoom-label')).toBe('WEB');
 
       const verse = screen.getByText('marked verse');
       const chain = ancestorsUpTo(verse, marker);
@@ -584,6 +614,20 @@ describe('ResourceCellView content zoom marker', () => {
         expect(element.style.zoom).toBeFalsy();
         expect(element.getAttribute('style') ?? '').not.toMatch(/zoom/i);
       });
+    },
+  );
+
+  it.each(['inline', 'header'] as const)(
+    '%s layout: keeps the scroll box and its padding outside the marker',
+    (nameDisplay) => {
+      const { container } = renderMarkedCell(nameDisplay);
+      const marker = container.querySelector('[data-platform-content-zoom-root]');
+      if (!marker) throw new Error('marker missing');
+      // The scrollbar and the padding keep interface size; only the text inside them scales.
+      expect(marker.getAttribute('class') ?? '').not.toMatch(/overflow|tw:p-2/);
+      const scrollBox = marker.parentElement?.closest('[class~="tw:overflow-auto"]');
+      expect(scrollBox).not.toBeNull();
+      expect(scrollBox?.contains(marker)).toBe(true);
     },
   );
 
