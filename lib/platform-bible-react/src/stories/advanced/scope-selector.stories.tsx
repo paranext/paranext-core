@@ -2,7 +2,10 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { defaultScrRef } from 'platform-bible-utils';
-import { ScopeSelector } from '@/components/advanced/scope-selector/scope-selector.component';
+import {
+  ScopeSelector,
+  ScopeSelectorLocalizedStrings,
+} from '@/components/advanced/scope-selector/scope-selector.component';
 import { ScopeWithRange } from '@/components/utils/scripture.util';
 
 // Mock book information - represents which books are available (all books available in this case)
@@ -20,6 +23,47 @@ const mockLocalizedBookNames = new Map([
   ['JHN', { localizedId: 'Jhn', localizedName: 'John' }],
   ['ROM', { localizedId: 'Rom', localizedName: 'Romans' }],
 ]);
+
+// A complete set of localized strings covering every key the ScopeSelector — and the SelectBooks
+// picker it embeds — can render. Typed as `Required<ScopeSelectorLocalizedStrings>` so the compiler
+// flags any key that goes missing: a partial object leaks raw keys (e.g.
+// `%webView_scope_selector_range%`) into the UI as soon as the matching control is shown (switching
+// scope, opening the range/books dialog, etc.). Shared across every story so all of them stay fully
+// localized regardless of which scope or dialog the viewer interacts with.
+const sampleLocalizedStrings: Required<ScopeSelectorLocalizedStrings> = {
+  '%webView_scope_selector_selected_text%': 'Selected text',
+  '%webView_scope_selector_verse%': 'Verse',
+  '%webView_scope_selector_chapter%': 'Chapter',
+  '%webView_scope_selector_book%': 'Book',
+  '%webView_scope_selector_current_verse%': 'Current verse',
+  '%webView_scope_selector_current_chapter%': 'Current chapter',
+  '%webView_scope_selector_current_book%': 'Current book',
+  '%webView_scope_selector_choose_books%': 'Choose specific books',
+  '%webView_scope_selector_scope%': 'Scope',
+  '%webView_scope_selector_select_books%': 'Select books',
+  '%webView_scope_selector_range%': 'Range',
+  '%webView_scope_selector_select_range%': 'Select a range',
+  '%webView_scope_selector_range_start%': 'From',
+  '%webView_scope_selector_range_end%': 'To',
+  '%webView_scope_selector_ok%': 'OK',
+  '%webView_scope_selector_cancel%': 'Cancel',
+  '%webView_scope_selector_navigate%': 'Change current reference',
+  '%webView_book_selector_books_selected%': 'books selected',
+  '%webView_book_selector_select_books%': 'Select books',
+  '%webView_book_selector_search_books%': 'Search books',
+  '%webView_book_selector_select_all%': 'Select all',
+  '%webView_book_selector_clear_all%': 'Clear all',
+  '%webView_book_selector_no_book_found%': 'No book found',
+  '%webView_book_selector_more%': 'more',
+  '%scripture_section_ot_long%': 'Old Testament',
+  '%scripture_section_ot_short%': 'OT',
+  '%scripture_section_nt_long%': 'New Testament',
+  '%scripture_section_nt_short%': 'NT',
+  '%scripture_section_dc_long%': 'Deuterocanonical',
+  '%scripture_section_dc_short%': 'DC',
+  '%scripture_section_extra_long%': 'Extra material',
+  '%scripture_section_extra_short%': 'Extra',
+};
 
 const meta: Meta<typeof ScopeSelector> = {
   title: 'Advanced/Scope Selector',
@@ -63,18 +107,7 @@ export const BookScope: Story = {
           console.log('Selected books:', bookIds);
           setSelectedBookIds(bookIds);
         }}
-        localizedStrings={{
-          '%webView_scope_selector_book%': 'Book',
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_chapter%': 'Chapter',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_verse%': 'Verse',
-          '%webView_scope_selector_current_verse%': 'Current verse',
-          '%webView_scope_selector_scope%': 'Scope',
-          '%webView_scope_selector_choose_books%': 'Choose specific books',
-          '%webView_book_selector_books_selected%': 'books selected',
-          '%webView_book_selector_select_books%': 'Select books',
-        }}
+        localizedStrings={sampleLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
       />
     );
@@ -106,16 +139,7 @@ export const ChapterScope: Story = {
           console.log('Selected books:', bookIds);
           setSelectedBookIds(bookIds);
         }}
-        localizedStrings={{
-          '%webView_scope_selector_book%': 'Book',
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_chapter%': 'Chapter',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_verse%': 'Verse',
-          '%webView_scope_selector_current_verse%': 'Current verse',
-          '%webView_scope_selector_scope%': 'Scope',
-          '%webView_scope_selector_choose_books%': 'Choose specific books',
-        }}
+        localizedStrings={sampleLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
       />
     );
@@ -147,16 +171,7 @@ export const VerseScope: Story = {
           console.log('Selected books:', bookIds);
           setSelectedBookIds(bookIds);
         }}
-        localizedStrings={{
-          '%webView_scope_selector_book%': 'Book',
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_chapter%': 'Chapter',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_verse%': 'Verse',
-          '%webView_scope_selector_current_verse%': 'Current verse',
-          '%webView_scope_selector_scope%': 'Scope',
-          '%webView_scope_selector_choose_books%': 'Choose specific books',
-        }}
+        localizedStrings={sampleLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
       />
     );
@@ -168,31 +183,6 @@ export const VerseScope: Story = {
       },
     },
   },
-};
-
-const rangeLocalizedStrings = {
-  '%webView_scope_selector_book%': 'Book',
-  '%webView_scope_selector_current_book%': 'Current book',
-  '%webView_scope_selector_chapter%': 'Chapter',
-  '%webView_scope_selector_current_chapter%': 'Current chapter',
-  '%webView_scope_selector_verse%': 'Verse',
-  '%webView_scope_selector_current_verse%': 'Current verse',
-  '%webView_scope_selector_selected_text%': 'Selected text',
-  '%webView_scope_selector_scope%': 'Scope',
-  '%webView_scope_selector_choose_books%': 'Choose specific books',
-  '%webView_scope_selector_range%': 'Range',
-  '%webView_scope_selector_select_range%': 'Select a range',
-  '%webView_scope_selector_range_start%': 'From',
-  '%webView_scope_selector_range_end%': 'To',
-  '%webView_scope_selector_ok%': 'OK',
-  '%webView_scope_selector_navigate%': 'Change current reference',
-  '%webView_book_selector_books_selected%': 'books selected',
-  '%webView_book_selector_select_books%': 'Select books',
-  '%webView_book_selector_search_books%': 'Search books',
-  '%webView_book_selector_select_all%': 'Select all',
-  '%webView_book_selector_clear_all%': 'Clear all',
-  '%webView_book_selector_no_book_found%': 'No book found',
-  '%webView_book_selector_more%': 'more',
 };
 
 // A small sample verse-count table so the range BCV pickers can show a verse grid.
@@ -225,7 +215,7 @@ export const DropdownVariant: Story = {
         selectedBookIds={selectedBookIds}
         onScopeChange={(newScope: ScopeWithRange) => setScope(newScope)}
         onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
-        localizedStrings={rangeLocalizedStrings}
+        localizedStrings={sampleLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
         currentScrRef={currentScrRef}
         onCurrentScrRefChange={setCurrentScrRef}
@@ -261,7 +251,7 @@ export const RangeScope: Story = {
         selectedBookIds={selectedBookIds}
         onScopeChange={(newScope: ScopeWithRange) => setScope(newScope)}
         onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
-        localizedStrings={rangeLocalizedStrings}
+        localizedStrings={sampleLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
         rangeStart={rangeStart}
         rangeEnd={rangeEnd}
@@ -301,7 +291,7 @@ export const DropdownVariantWithRange: Story = {
         selectedBookIds={selectedBookIds}
         onScopeChange={(newScope: ScopeWithRange) => setScope(newScope)}
         onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
-        localizedStrings={rangeLocalizedStrings}
+        localizedStrings={sampleLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
         currentScrRef={currentScrRef}
         onCurrentScrRefChange={setCurrentScrRef}
@@ -340,21 +330,7 @@ export const SelectedBooksScope: Story = {
           console.log('Selected books:', bookIds);
           setSelectedBookIds(bookIds);
         }}
-        localizedStrings={{
-          '%webView_scope_selector_book%': 'Book',
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_chapter%': 'Chapter',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_verse%': 'Verse',
-          '%webView_scope_selector_current_verse%': 'Current verse',
-          '%webView_scope_selector_scope%': 'Scope',
-          '%webView_scope_selector_choose_books%': 'Choose specific books',
-          '%webView_book_selector_books_selected%': 'books selected',
-          '%webView_book_selector_select_books%': 'Select books',
-          '%webView_book_selector_search_books%': 'Search books',
-          '%webView_book_selector_select_all%': 'Select all',
-          '%webView_book_selector_clear_all%': 'Clear all',
-        }}
+        localizedStrings={sampleLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
       />
     );
@@ -490,19 +466,7 @@ export const WithLocalizedSpanishBookNames: Story = {
           console.log('Selected books:', bookIds);
           setSelectedBookIds(bookIds);
         }}
-        localizedStrings={{
-          '%webView_scope_selector_book%': 'Book',
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_chapter%': 'Chapter',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_scope%': 'Scope',
-          '%webView_scope_selector_choose_books%': 'Choose specific books',
-          '%webView_book_selector_books_selected%': 'books selected',
-          '%webView_book_selector_select_books%': 'Select books',
-          '%webView_book_selector_search_books%': 'Search books',
-          '%webView_book_selector_select_all%': 'Select all',
-          '%webView_book_selector_clear_all%': 'Clear all',
-        }}
+        localizedStrings={sampleLocalizedStrings}
         localizedBookNames={spanishBookNames}
       />
     );
@@ -551,19 +515,7 @@ export const WithLocalizedGermanBookNames: Story = {
           console.log('Selected books:', bookIds);
           setSelectedBookIds(bookIds);
         }}
-        localizedStrings={{
-          '%webView_scope_selector_book%': 'Book',
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_chapter%': 'Chapter',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_scope%': 'Scope',
-          '%webView_scope_selector_choose_books%': 'Choose specific books',
-          '%webView_book_selector_books_selected%': 'books selected',
-          '%webView_book_selector_select_books%': 'Select books',
-          '%webView_book_selector_search_books%': 'Search books',
-          '%webView_book_selector_select_all%': 'Select all',
-          '%webView_book_selector_clear_all%': 'Clear all',
-        }}
+        localizedStrings={sampleLocalizedStrings}
         localizedBookNames={germanBookNames}
       />
     );
