@@ -31,6 +31,13 @@ describe('getRestrictedModelTextReason', () => {
     );
   });
 
+  // Pickers disable a row only when it has a reason, so a missing string must not re-enable it.
+  it('still gives a reason for a restricted text when its string has not loaded', () => {
+    expect(getRestrictedModelTextReason(row({ isRestrictedAsModelText: true }), {})).toBe(
+      RESTRICTED_MODEL_TEXT_TOOLTIP_KEY,
+    );
+  });
+
   it('gives no reason for a text without the restriction', () => {
     expect(
       getRestrictedModelTextReason(row({ isRestrictedAsModelText: false }), STRINGS),

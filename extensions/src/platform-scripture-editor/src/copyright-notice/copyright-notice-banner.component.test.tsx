@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CopyrightNoticeBanner } from './copyright-notice-banner.component';
 import { BIBLICA_PERMISSIONS_URL } from './copyright-notice-message.utils';
+
+const { sendCommand } = vi.hoisted(() => ({ sendCommand: vi.fn(async () => undefined) }));
+
+vi.mock('@papi/frontend', () => ({
+  default: { commands: { sendCommand } },
+  logger: { warn: vi.fn() },
+}));
 
 const STRINGS = {
   '%platformScripture_copyrightNotice_restrictedLicense_banner%':
@@ -17,12 +24,18 @@ const STRINGS = {
   '%platformScripture_copyrightNotice_moreInfo%': 'More info…',
   '%platformScripture_copyrightNotice_showMore%': 'Show more',
   '%platformScripture_copyrightNotice_showLess%': 'Show less',
-  '%platformScripture_copyrightNotice_dismiss%': 'Dismiss',
+  '%platformScripture_copyrightNotice_dismiss%': 'Dismiss copyright notice',
   '%platformScripture_copyrightNotice_details_title%': 'Copyright for {name}',
   '%platformScripture_copyrightNotice_details_close%': 'Close',
+  '%ariaLabel_opensInBrowser%': 'Opens externally in a browser window',
 };
 
-const RESTRICTED = { kind: 'restrictedLicense', copyrightYears: '1973, 2011' } as const;
+const RESTRICTED = {
+  kind: 'restrictedLicense',
+  name: 'NIV11',
+  fullName: 'New International Version 2011',
+  copyrightYears: '1973, 2011',
+} as const;
 
 /** Stands in for the browser's ResizeObserver so a test can report a size change on demand. */
 class ControllableResizeObserver {
@@ -61,21 +74,22 @@ function setMeasuredHeights(scrollHeight: number, clientHeight: number) {
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(clientHeight);
 }
 
-function renderBanner(overrides: Partial<Parameters<typeof CopyrightNoticeBanner>[0]> = {}) {
+type BannerProps = Parameters<typeof CopyrightNoticeBanner>[0];
+
+function renderBanner(overrides: Partial<BannerProps> = {}) {
   const onDismiss = vi.fn();
-  const onOpenUrl = vi.fn();
-  render(
-    <CopyrightNoticeBanner
-      notice={RESTRICTED}
-      name="NIV11"
-      fullName="New International Version 2011"
-      localizedStrings={STRINGS}
-      onDismiss={onDismiss}
-      onOpenUrl={onOpenUrl}
-      {...overrides}
-    />,
-  );
-  return { onDismiss, onOpenUrl };
+  const props: BannerProps = {
+    notice: RESTRICTED,
+    localizedStrings: STRINGS,
+    onDismiss,
+    ...overrides,
+  };
+  const result = render(<CopyrightNoticeBanner {...props} />);
+  return {
+    onDismiss,
+    rerender: (next: Partial<BannerProps>) =>
+      result.rerender(<CopyrightNoticeBanner {...props} {...next} />),
+  };
 }
 
 function openDetails(name = 'NIV11') {
@@ -94,32 +108,44 @@ afterEach(() => {
 });
 
 describe('CopyrightNoticeBanner', () => {
-  it('shows the licence notice for a restricted text, naming it', () => {
+  it('shows the license notice for a restricted text, naming it', () => {
     renderBanner();
 
-    expect(screen.getByRole('status')).toHaveTextContent('NIV11: The NIV11 is for reference only.');
+    expect(screen.getByRole('note')).toHaveTextContent('NIV11: The NIV11 is for reference only.');
   });
 
-  it('leads the licence notice with the name in bold', () => {
+  it('is not a live region, so expanding it does not announce the whole notice again', () => {
     renderBanner();
 
-    expect(screen.getByRole('status').querySelector('strong')).toHaveTextContent('NIV11');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('note')).not.toHaveAttribute('aria-live');
+  });
+
+  it('leads the license notice with the name in bold', () => {
+    renderBanner();
+
+    expect(screen.getByRole('note').querySelector('strong')).toHaveTextContent('NIV11');
   });
 
   it("shows a notification text's own banner wording after its name", () => {
     renderBanner({
-      notice: { kind: 'notification', bannerText: 'Do not translate the ESV.', details: '' },
-      name: 'ESVUK',
+      notice: {
+        kind: 'notification',
+        name: 'ESVUK',
+        fullName: 'English Standard Version Anglicised',
+        bannerText: 'Do not translate the ESV.',
+        details: '',
+      },
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('ESVUK: Do not translate the ESV.');
+    expect(screen.getByRole('note')).toHaveTextContent('ESVUK: Do not translate the ESV.');
   });
 
   it('isolates the names so right-to-left names cannot reorder the sentence', () => {
-    renderBanner({ name: 'كتاب' });
+    renderBanner({ notice: { ...RESTRICTED, name: 'كتاب' } });
 
     const isolatedNames = Array.from(
-      screen.getByRole('status').querySelectorAll('bdi'),
+      screen.getByRole('note').querySelectorAll('bdi'),
       (element) => element.textContent,
     );
     expect(isolatedNames).toEqual(['كتاب', 'كتاب']);
@@ -133,38 +159,56 @@ describe('CopyrightNoticeBanner', () => {
     );
   });
 
+  it('announces the terms as the description of the details window', () => {
+    renderBanner();
+
+    expect(openDetails()).toHaveAccessibleDescription(/^Do not quote the NIV11 Bible\./);
+  });
+
   it("leaves the years out of Biblica's terms when the copyright names none", () => {
-    renderBanner({ notice: { kind: 'restrictedLicense', copyrightYears: '' } });
+    renderBanner({ notice: { ...RESTRICTED, copyrightYears: '' } });
 
     expect(openDetails()).toHaveTextContent(
       'New International Version 2011™ Bible copyright © Biblica, Inc.',
     );
   });
 
-  it("uses the short name in Biblica's terms when there is no full name", () => {
-    renderBanner({ fullName: '' });
+  it("links to Biblica's permissions page, opening it in the browser", () => {
+    renderBanner();
 
-    expect(openDetails()).toHaveTextContent('NIV11™ Bible copyright © 1973, 2011');
+    const link = within(openDetails()).getByRole('link', { name: BIBLICA_PERMISSIONS_URL });
+
+    expect(link).toHaveAttribute('href', BIBLICA_PERMISSIONS_URL);
+    expect(link).toHaveAccessibleDescription('Opens externally in a browser window');
   });
 
-  it("opens Biblica's permissions page from its link", () => {
-    const { onOpenUrl } = renderBanner();
+  it('asks the platform to open the permissions page, since a web view cannot open windows', () => {
+    renderBanner();
+    const link = within(openDetails()).getByRole('link', { name: BIBLICA_PERMISSIONS_URL });
 
-    fireEvent.click(
-      within(openDetails()).getByRole('button', { name: 'https://www.biblica.com/permissions/' }),
-    );
+    const isNotCancelled = fireEvent.click(link);
 
-    expect(onOpenUrl).toHaveBeenCalledWith(BIBLICA_PERMISSIONS_URL);
+    expect(isNotCancelled).toBe(false);
+    expect(sendCommand).toHaveBeenCalledWith('platform.openWindow', BIBLICA_PERMISSIONS_URL);
+  });
+
+  it('keeps the permissions address left to right in a right-to-left sentence', () => {
+    renderBanner();
+
+    const link = within(openDetails()).getByRole('link', { name: BIBLICA_PERMISSIONS_URL });
+
+    expect(link.querySelector('bdi')).toHaveAttribute('dir', 'ltr');
   });
 
   it("opens a notification text's own copyright, one paragraph per line", () => {
     renderBanner({
       notice: {
         kind: 'notification',
+        name: 'ESVUK',
+        fullName: 'English Standard Version Anglicised',
         bannerText: 'Do not translate the ESV.',
         details: 'Copyright © 2016 Crossway.\nAll rights reserved.',
       },
-      name: 'ESVUK',
     });
 
     const paragraphs = within(openDetails('ESVUK'))
@@ -173,10 +217,29 @@ describe('CopyrightNoticeBanner', () => {
     expect(paragraphs).toEqual(['Copyright © 2016 Crossway.', 'All rights reserved.']);
   });
 
+  it('offers one way to close the details: its own Close button', () => {
+    renderBanner();
+
+    const closeButtons = within(openDetails()).getAllByRole('button', { name: /close/i });
+
+    expect(closeButtons.map((button) => button.textContent)).toEqual(['Close']);
+  });
+
+  it('returns focus to More info when the details close', async () => {
+    renderBanner();
+    const moreInfo = screen.getByRole('button', { name: 'More info…' });
+    moreInfo.focus();
+
+    fireEvent.keyDown(openDetails(), { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(moreInfo).toHaveFocus());
+  });
+
   it('reports a dismissal', () => {
     const { onDismiss } = renderBanner();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss copyright notice' }));
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
@@ -187,7 +250,7 @@ describe('CopyrightNoticeBanner', () => {
 
       renderBanner();
 
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByRole('note')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
     });
 
@@ -217,6 +280,26 @@ describe('CopyrightNoticeBanner', () => {
       act(() => {
         ControllableResizeObserver.instances.forEach((observer) => observer.fire());
       });
+
+      expect(screen.getByRole('button', { name: 'Show more' })).toBeInTheDocument();
+    });
+
+    it('measures again when the wording changes, as when the strings arrive after the notice', () => {
+      // While strings load, each one is its own key, which here fits on the line
+      setMeasuredHeights(40, 40);
+      const { rerender } = renderBanner({
+        localizedStrings: {
+          ...STRINGS,
+          '%platformScripture_copyrightNotice_restrictedLicense_banner%':
+            '%platformScripture_copyrightNotice_restrictedLicense_banner%',
+        },
+      });
+      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+
+      // The real wording arrives and no longer fits; the box keeps its clamped size, so no
+      // resize is reported
+      setMeasuredHeights(120, 40);
+      rerender({ localizedStrings: STRINGS });
 
       expect(screen.getByRole('button', { name: 'Show more' })).toBeInTheDocument();
     });

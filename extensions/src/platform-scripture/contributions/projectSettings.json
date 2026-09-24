@@ -149,17 +149,17 @@
         "isHidden": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
-      "platformScripture.copyrightNotice": {
-        "label": "%project_settings_platformScripture_copyrightNotice_label%",
-        "description": "%project_settings_platformScripture_copyrightNotice_description%",
-        "default": { "kind": "none" },
-        "isHidden": true,
-        "includeProjectInterfaces": ["Paratext", "Scripture"]
-      },
       "platformScripture.crossRefCallers": {
         "label": "%project_settings_platformScripture_crossRefCallers_label%",
         "description": "%project_settings_platformScripture_crossRefCallers_description%",
         "default": "",
+        "isHidden": true,
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.copyrightNotice": {
+        "label": "%project_settings_platformScripture_copyrightNotice_label%",
+        "description": "%project_settings_platformScripture_copyrightNotice_description%",
+        "default": { "kind": "none" },
         "isHidden": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
