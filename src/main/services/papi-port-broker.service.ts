@@ -57,6 +57,9 @@ type WindowPortState = {
 };
 
 const NAVIGATED_AWAY_REASON = 'page navigated away';
+const RENDERER_GONE_REASON = 'renderer process gone';
+const ALREADY_GRANTED_REASON =
+  'This page already has a PAPI port; a page gets exactly one per load';
 
 const windowStates = new Map<string, WindowPortState>();
 
@@ -124,8 +127,12 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
     }
     if (state.hasGrantedPortForCurrentLoad) {
       logger.warn(
-        `Window ${windowId} already has a PAPI port for this page; ignoring a second request`,
+        `Window ${windowId} already has a PAPI port for this page; refusing a second request`,
       );
+      // Answered rather than ignored so a second socket in the page fails at once instead of
+      // waiting out its connect timeout
+      const message: PapiPortError = { reason: ALREADY_GRANTED_REASON };
+      frame.postMessage(PAPI_PORT_ERROR_CHANNEL, message);
       return;
     }
     grantPort(windowId, state, frame);
@@ -139,7 +146,10 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
   });
 
   webContents.on('render-process-gone', () => {
-    // The port closes on its own when the process dies; the reloaded page must be allowed to ask
+    // Closed here rather than left to the port's own close notification, which can arrive after
+    // the reload's navigation has already replaced the socket, so the crash always reads as 1006
+    closePort(state, 1006, RENDERER_GONE_REASON);
+    // The reloaded page must be allowed to ask
     state.hasGrantedPortForCurrentLoad = false;
   });
 
@@ -149,9 +159,8 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
 }
 
 /**
- * Close one window's port on purpose, so the renderer reads it as a clean close. Call from the
- * window's `close` handler at the very end, after main has finished talking to the page, and before
- * the window is destroyed.
+ * Close one window's port on purpose, so the renderer reads it as a clean close. Call before the
+ * window is destroyed.
  *
  * @param windowId The window whose port to close. A window with no open port is ignored.
  * @param code WebSocket close code to report to both ends
