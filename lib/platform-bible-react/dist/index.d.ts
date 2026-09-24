@@ -825,9 +825,9 @@ export declare const CONTENT_ZOOM_ROOT_ATTRIBUTE = "data-platform-content-zoom-r
  * Attribute a web view puts on an element that is not itself scaled — a row, a column, a card — to
  * tie a click, a focus or a Ctrl/⌘+wheel anywhere inside it to one zoom area. Its value is that
  * area's id, spelled as for {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}. A marked element inside it still
- * decides for itself, and the attribute scales nothing, so never put it on a marked element. Mirrors
- * `CONTENT_ZOOM_SCOPE_ATTRIBUTE` in paranext-core's `src/shared/models/web-view.model.ts`; the
- * literal is duplicated here for the same reason as {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, and a
+ * decides for itself, and the attribute scales nothing, so never put it on a marked element.
+ * Mirrors `CONTENT_ZOOM_SCOPE_ATTRIBUTE` in paranext-core's `src/shared/models/web-view.model.ts`;
+ * the literal is duplicated here for the same reason as {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, and a
  * platform test compares the two constants.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
@@ -835,9 +835,9 @@ export declare const CONTENT_ZOOM_ROOT_ATTRIBUTE = "data-platform-content-zoom-r
 export declare const CONTENT_ZOOM_SCOPE_ATTRIBUTE = "data-platform-content-zoom-scope";
 /**
  * Attribute that names a zoom area for the user: put on an element carrying
- * {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, it makes the platform's zoom indicator read
- * `<label> · <level>` (for example `HSV · 120 %`) instead of the level alone. `ContentZoomRoot`
- * writes it from its `label` prop. Mirrors `CONTENT_ZOOM_LABEL_ATTRIBUTE` in paranext-core's
+ * {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, it makes the platform's zoom indicator read `<label> ·
+ * <level>` (for example `HSV · 120 %`) instead of the level alone. `ContentZoomRoot` writes it from
+ * its `label` prop. Mirrors `CONTENT_ZOOM_LABEL_ATTRIBUTE` in paranext-core's
  * `src/shared/models/web-view.model.ts`; a platform test compares the two constants.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
