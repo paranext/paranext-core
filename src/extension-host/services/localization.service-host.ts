@@ -30,7 +30,7 @@ import {
   waitForResyncContributions,
 } from '@extension-host/services/contribution.service';
 import { Canon } from '@sillsdev/scripture';
-import { languageDetails } from '@extension-host/data/language-details.data';
+import { languageDetails } from '@shared/data/language-details.data';
 import { computeSetupDialogLanguages } from '@extension-host/services/setup-dialog-languages.util';
 import {
   filterToOffered,
