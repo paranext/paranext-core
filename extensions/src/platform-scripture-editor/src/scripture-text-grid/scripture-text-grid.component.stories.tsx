@@ -2,6 +2,15 @@ import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
+import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
+import {
+  RESET_ZOOM_KEY,
+  RESOURCE_CELL_STRING_KEYS,
+  ZOOM_IN_KEY,
+  ZOOM_OPTIONS_KEY,
+  ZOOM_OUT_KEY,
+} from './resource-cell-view.component';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 
 /**
  * The Scripture Text Grid row: one cell per shown resource, all synced to the active scrRef, laid
@@ -98,6 +107,51 @@ export const ChapterContextOpen: Story = {
         onChapterContextChange={noop}
         onChapterContextClose={noop}
         closeChapterContextLabel="Close chapter view"
+      />
+    </GridBox>
+  ),
+};
+
+// ---------------------------------------------------------------------------
+// Zoom wiring at the grid level
+// ---------------------------------------------------------------------------
+
+const localizedStrings = getLocalizedStrings([...RESOURCE_CELL_STRING_KEYS]);
+const zoomMenuLabels = {
+  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom in',
+  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom out',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset zoom',
+  options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options for {resourceName}',
+};
+
+/**
+ * A stub `ResourceZoomController`: every resource follows a 100 % default with no level of its own.
+ * Storybook runs no content zoom, so this story documents the menus' presence and the zoom scope on
+ * each column (`data-platform-content-zoom-scope`), not zoomed text.
+ */
+const stubZoomController: ResourceZoomController = {
+  getZoom: () => 1,
+  hasOwnLevel: () => false,
+  adjustZoom: noop,
+  resetZoom: noop,
+};
+
+/**
+ * Chapter view with zoom wiring active: each column's header carries the "⋮" button (revealed on
+ * hover), and each column's right-click menu carries the zoom items. In Storybook the cells remain
+ * in their "Downloading…" state (PAPI stubs).
+ */
+export const RowWithZoomEnabled: Story = {
+  render: () => (
+    <GridBox>
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={noop}
+        ariaLabel="Text Collection"
+        viewMode="chapter"
+        zoom={stubZoomController}
+        zoomMenuLabels={zoomMenuLabels}
       />
     </GridBox>
   ),
