@@ -5907,6 +5907,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     outside the window that opens a pinch. On macOS, where a mouse notch can be as small as a pinch
     frame, the held key still decides. The bootstrap reads the platform once, from
     `navigator.platform`.
+- **Amended 2026-09-24 (`adr-text-collection-resources-are-zoom-areas`):** the Text Collection grid
+  zooms per resource again, as content-zoom areas rather than a zoom of its own: each cell marks its
+  resource's text with that resource's area `resource-<id>` instead of the shared `text-collection`,
+  which stays the grid's declared default area and the fallback for a resource id that yields no
+  area id. The rest of the 2026-09-23 amendment holds: no inline zoom, no grid wheel handling, and
+  `scriptureTextGrid.zoomByResourceId` left unread and not migrated.
 
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
@@ -7167,6 +7173,83 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   this entry closes, in `~/Desktop/PT-4557-followup-close-button-discards-staged-edits.md`.
 - **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25; round 3 A1, A2, A3).
 
+## adr-text-collection-resources-are-zoom-areas: Each Text Collection resource is its own content zoom area; a click scope and an area label let the platform target and name it
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** The Text Collection grid shipped a per-resource zoom of its own (PT-4155): right-click
+  Zoom in / Zoom out / Reset zoom, a "⋮" in the chapter view header and a grid-owned Ctrl/⌘+wheel
+  listener, stored per tab under `scriptureTextGrid.zoomByResourceId`. It multiplied with the pane's
+  content zoom, so it was removed in favour of one pane-wide `text-collection` area (see the
+  2026-09-23 amendment of `adr-resource-panes-name-their-zoom-areas`). Users rely on sizing one text
+  without the others, so the behaviour had to return on the one content-zoom mechanism every other
+  pane uses. Two framework gaps stood in the way: the bootstrap resolved the area of a click, a
+  focus or a wheel only from the nearest marked ancestor, so a click on a resource's name, grip or a
+  gap in its row fell to the area used last; and the zoom indicator showed only the level, which
+  cannot tell one resource's area from another's.
+- **Decision:**
+  - Each resource's text is its own zoom area `resource-<id>`: the resource id lower-cased, every
+    character outside `[a-z0-9-]` replaced by `-` (`toResourceZoomAreaId`,
+    `extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-zoom-area.utils.ts`).
+    An id with no `[a-z0-9]` character left falls back to the pane-wide `text-collection` area, with
+    one warning per id. A resource's verse row and its chapter view (chapter column or chapter panel)
+    carry the same id, so they always show one level. The markers, the scopes and the menus'
+    commands all resolve a resource's area through one function, `resourceZoomAreaOf` in the same
+    file, so they cannot disagree.
+  - The markers wrap each resource's text blocks, never its scroll box or column
+    (`adr-zoom-areas-mark-project-text`).
+  - New experimental attribute `data-platform-content-zoom-scope="<area>"`
+    (`CONTENT_ZOOM_SCOPE_ATTRIBUTE`, `src/shared/models/web-view.model.ts`, mirrored in
+    `platform-bible-react`) on an unscaled container tied to one area. The bootstrap's `areaOf`
+    falls back to the nearest scope only where no marker encloses the target, so a click, a focus, a
+    chord or the wheel anywhere in a resource's row or column means that resource. An invalid scope
+    id resolves to nothing and warns once; a scope naming an unreported area changes nothing. The
+    grid puts it on the single-resource region, each chapter column, each verse row and the chapter
+    panel.
+  - New experimental attribute `data-platform-content-zoom-label="<text>"`
+    (`CONTENT_ZOOM_LABEL_ATTRIBUTE`; `ContentZoomRoot`'s `label` prop) on a marker: the indicator
+    reads `<label> · <level>`, the name in a `<bdi>` capped at 16em with an ellipsis, written as
+    text; the live region hears the full text. Areas without a label are unchanged.
+  - The right-click menu and the "⋮" return unchanged in look, sending
+    `platform.webViewContentZoomIn/Out/Reset` with the tab's web view id and the resource's area
+    (`useResourceContentZoom`), and reading the level from `platform.contentZoomLevels` and the Tab
+    content default zoom. Reset is disabled while the resource has no level of its own.
+- **Alternatives:**
+  - **One pane-wide area** (the state after the 2026-09-23 amendment). Rejected: it takes away sizing
+    one text alone.
+  - **Restoring the grid's own zoom** (inline `zoom`, its wheel listener,
+    `scriptureTextGrid.zoomByResourceId`). Rejected: a second mechanism that multiplies with content
+    zoom, with no badge, no memory per project and no single reset.
+  - **A `scope` prop or wrapper component in `platform-bible-react`.** Rejected: a scope element must
+    not be scaled, so it cannot be a `ContentZoomRoot`, and the grid's scope elements are existing
+    containers with drag and click handlers; a wrapper would add a DOM level for nothing. Views
+    write the attribute.
+  - **Composing the label in the service.** Rejected: the name lives in the view's DOM, which the
+    bootstrap already reads; the service keeps passing the level text alone.
+  - **Writing the scope as an object spread of the exported constant**
+    (`{...{ [CONTENT_ZOOM_SCOPE_ATTRIBUTE]: zoomArea }}`), which the design first proposed. Rejected:
+    the repo's `react/jsx-props-no-spreading` rule (`['error', { custom: 'ignore' }]`) forbids spreads
+    on DOM elements. The grid writes the literal `data-platform-content-zoom-scope={zoomArea}`, as
+    other views write data attributes, and its tests read the attribute through the exported
+    constant, which keeps the literal and the constant equal.
+- **Consequences:**
+  - Levels are remembered per project × resource (`resource:<project id>:resource-<id>` in
+    `platform.webViewContentZoomMemory`), shared by every Text Collection tab of that project; a
+    removed resource's level comes back when it is added again. A Text Collection not yet pointed at
+    a project remembers nothing (known limit, as for the pane before).
+  - The zoom keys and the tab menu act on one resource — the one last clicked or focused, else the
+    first — where the removed per-column zoom's keys zoomed the whole pane.
+  - Sibling resource panes of the same project (Bible Texts, Commentaries, Model Text) are seeded
+    with the grid's `resource-<id>` levels as unused CSS variables. Harmless and bounded.
+  - Levels stored by the removed per-column zoom (`scriptureTextGrid.zoomByResourceId`) are not
+    migrated: they are per tab and the new ones per project, and writing
+    `platform.contentZoomLevels` from the view would race the platform's seeding. Users re-zoom once.
+  - PR #2781 (verse-aligned Grid view; open as of 2026-09-24) can mark each `.verse-block` with its
+    resource's area and leave its subgrid box unmarked; its adaptation stays in that PR.
+  - The two attributes serve any view with several areas the user cannot tell apart, or with
+    unscaled containers that belong to one area; a view that does not write them sees no change.
+- **Source:** PT-4585 (epic PT-4575); decisions with Rolf, 2026-09-24.
+
 ## adr-theme-hosted-in-main: The theme service is hosted in main, and each window caches the current theme
 
 - **Date:** 2026-08-07
@@ -8091,6 +8174,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     the Simple-mode gutter reservation divides by the area's factor, and the baseline probe takes
     the paragraph's `currentCSSZoom`.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
+- **Amended 2026-09-24 (`adr-text-collection-resources-are-zoom-areas`):** the consequence "a click
+  or wheel over an unmarked control or gap targets the area used last" now holds only where no zoom
+  scope (`data-platform-content-zoom-scope`) encloses the target; inside a scope, it targets the
+  scope's area. A marker still wins over an enclosing scope.
 
 ## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas
 
