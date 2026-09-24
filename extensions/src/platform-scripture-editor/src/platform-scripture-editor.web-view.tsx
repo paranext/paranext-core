@@ -181,19 +181,21 @@ import {
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
+  CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   INSERT_CONTEXT_MENU_STRING_KEYS,
+  insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
+  noteKindForCtrlTChord,
   NOTE_INSERT_CONFIG,
   resolvePaletteItemStrings,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
-  shouldSkipNoteInsert,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
@@ -1604,28 +1606,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Ctrl+T/Ctrl+Shift+T keyboard shortcuts, so the read-only guard, the version-history commit, and
    * `insertMarker` behavior stay identical across every entry point for every kind.
    *
-   * Checks read-only BEFORE the version-history snapshot: a read-only top-menu click (which reaches
-   * this with no prior gate — the menu item itself has no enablement) must not write a forced,
-   * empty version-history commit. The refusal is logged, not shown to the user.
+   * The read-only-before-snapshot ordering itself lives in {@link insertNoteAtCurrentSelectionCore},
+   * which this wraps with the live editor ref, `commitVersionHistorySnapshot` bound to the current
+   * project, and `localizedStrings`.
    */
   const insertNoteAtCurrentSelection = useCallback(
     async (kind: EditorMessageInsertTextualNoteAtSelection['method']) => {
-      const { marker, commitMessageKey, editDescription } = NOTE_INSERT_CONFIG[kind];
-      if (shouldSkipNoteInsert(!!editorRef.current, isReadOnlyEffective)) {
-        logger.debug(`Not ${editDescription}: no mounted editor or read-only`);
-        return;
-      }
-
-      // Commits a snapshot of the project to the version history. Best-effort: see
-      // `commitVersionHistorySnapshot`, which owns the ERROR_UNIMPLEMENTED handling shared with
-      // the character-marker-removal path.
-      await commitVersionHistorySnapshot(
-        projectId,
-        localizedStrings[commitMessageKey],
-        editDescription,
+      await insertNoteAtCurrentSelectionCore(
+        kind,
+        !!editorRef.current,
+        isReadOnlyEffective,
+        (marker) => editorRef.current?.insertMarker(marker),
+        // Best-effort: see `commitVersionHistorySnapshot`, which owns the ERROR_UNIMPLEMENTED
+        // handling shared with the character-marker-removal path.
+        (message, editDescription) =>
+          commitVersionHistorySnapshot(projectId, message, editDescription),
+        localizedStrings,
       );
-
-      editorRef.current?.insertMarker(marker);
     },
     [projectId, localizedStrings, isReadOnlyEffective],
   );
@@ -1646,16 +1643,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         localizedStrings,
         {
           insertFootnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection('insertFootnoteAtSelection'),
-            NOTE_INSERT_CONFIG.insertFootnoteAtSelection.editDescription,
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
           ),
           insertCrossReference: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection('insertCrossReferenceAtSelection'),
-            NOTE_INSERT_CONFIG.insertCrossReferenceAtSelection.editDescription,
+            () =>
+              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
+              .editDescription,
           ),
           insertEndnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection('insertEndnoteAtSelection'),
-            NOTE_INSERT_CONFIG.insertEndnoteAtSelection.editDescription,
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
           ),
           insertComment: insertCommentAtCurrentSelection,
         },
@@ -2437,12 +2436,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // Swallowed while the editor's right-click menu is up: the insert opens the footnote editor,
         // which would land over a menu that is still open. See `isEditorContextMenuOpen`.
         if (isEditorContextMenuOpen(editorContainerRef.current)) return;
-        // Both are async and this handler is not, so surface a rejection instead of dropping it as
-        // an unhandled promise: the user pressed a key and must not be left with no marker and no
-        // explanation.
-        const method = event.shiftKey
-          ? 'insertCrossReferenceAtSelection'
-          : 'insertFootnoteAtSelection';
+        // insertNoteAtCurrentSelection is async and this handler is not, so surface a rejection
+        // instead of dropping it as an unhandled promise: the user pressed a key and must not be
+        // left with no marker and no explanation.
+        const method = noteKindForCtrlTChord(event.shiftKey);
         logInsertRejection(
           insertNoteAtCurrentSelection(method),
           `${NOTE_INSERT_CONFIG[method].editDescription} from keyboard shortcut`,
