@@ -1154,10 +1154,11 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
  * holds nothing the user wrote. A translation project with editing switched off still syncs: its
  * Scripture text is locked, but the user can still add comments to it. The window-close and
- * shutdown syncs (`getWritableEditorProjectIds` in `src/main/shutdown-tasks.ts`) draw the same
- * line: they drop editors whose saved `isReadOnly` is set, and that flag marks a Resource Viewer,
- * which Home, New Tab and the open dialog choose by `platform.isPublished` — not by
- * `platform.isEditable`.
+ * shutdown syncs (`getWritableEditorProjectIds` in `src/main/shutdown-tasks.ts`) do not yet draw
+ * the same line: they drop every editor whose saved `isReadOnly` is set, and an editor opened with
+ * a project ID (Home, New Tab, the title-bar picker) takes that flag from `platform.isEditable`, so
+ * an `Editable=F` project is synced here but not when its window closes or the app quits
+ * (PT-4786).
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,

@@ -952,9 +952,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     candidates and `cacheLastOpenedSimpleProject` declines to cache them. The outgoing Send/Receive
     on an editor-column switch follows the same rule: `syncOnProjectSwitch` skips it only for a
     published resource, since an `Editable=F` project can still hold new comments. The window-close
-    and shutdown syncs already draw that line: `getWritableEditorProjectIds` drops editors whose
-    saved `isReadOnly` is set, and that flag marks a Resource Viewer, which Home, New Tab and the open
-    dialog choose by `platform.isPublished`. Following costs a reload the old gate avoided: a round
+    and shutdown syncs do not draw that line yet: `getWritableEditorProjectIds` drops every editor
+    whose saved `isReadOnly` is set, and an editor opened with a project ID (Home, New Tab, the
+    title-bar picker) takes that flag from `platform.isEditable`, so an `Editable=F` project syncs
+    on a switch but not on a window close or a quit. PT-4786 tracks moving those syncs to the
+    published-resource rule. Following costs a reload the old gate avoided: a round
     trip through a resource reloads Find twice, clearing its results, and an `Editable=F` project now
     reloads the grid. How an unbound grid gets its first project, and what following costs
     in Power mode, is recorded in `adr-active-editor-project-is-a-window-data-type`.
