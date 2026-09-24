@@ -340,8 +340,8 @@ describe('ResourceCellView zoom UI', () => {
     options: 'Zoom options',
   };
 
-  it('applies the zoom factor to the content wrapper', () => {
-    renderCells(
+  it('applies the zoom factor to the padding wrapper, never to the scroll port', () => {
+    const { container } = renderCells(
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -352,16 +352,18 @@ describe('ResourceCellView zoom UI', () => {
         zoomMenuLabels={menuLabels}
       />,
     );
-    // jsdom doesn't serialize `zoom` into the style attribute string, so we walk up to the
-    // overflow-auto content wrapper and read its CSSOM style.zoom directly.
-    // Structure: span → div.p-2 (inner padding wrapper) → div.overflow-auto (zoom applied here)
-    const content = screen.getByText('verse').parentElement?.parentElement;
-    expect(content).not.toBeNull();
-    expect(content instanceof HTMLElement && content.style.zoom).toBe('1.4');
+    // jsdom doesn't serialize `zoom` into the style attribute string, so read CSSOM directly.
+    const pad = container.querySelector('[data-cell-pad]');
+    expect(pad instanceof HTMLElement && pad.style.zoom).toBe('1.4');
+    // `[data-cell-content]` is the port a chapter cell scrolls to a verse. `zoom` on it would leave
+    // the target's viewport rect and the port's `scrollTop` in different coordinate spaces, so the
+    // port would overshoot the verse by the zoom factor.
+    const port = container.querySelector('[data-cell-content]');
+    expect(port instanceof HTMLElement && port.style.zoom).toBeFalsy();
   });
 
   it('publishes the factor as a custom property instead when zoomTarget is "blocks"', () => {
-    renderCells(
+    const { container } = renderCells(
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -373,13 +375,14 @@ describe('ResourceCellView zoom UI', () => {
         zoomMenuLabels={menuLabels}
       />,
     );
-    // In the aligned grid this wrapper is a `grid-template-rows: subgrid` box, so `zoom` on it
-    // would scale the shared row tracks it inherits along with the text and let one column measure
-    // its rows differently from its neighbours. The factor rides down to the verse blocks instead.
-    const content = screen.getByText('verse-blocks').parentElement?.parentElement;
-    expect(content).not.toBeNull();
-    expect(content instanceof HTMLElement && content.style.zoom).toBeFalsy();
-    expect(content?.style.getPropertyValue('--aligned-zoom')).toBe('1.4');
+    // In the aligned grid `[data-cell-content]` is a `grid-template-rows: subgrid` box, so `zoom`
+    // anywhere above the blocks would scale the shared row tracks along with the text and let one
+    // column measure its rows differently from its neighbours. The factor rides down to the verse
+    // blocks instead; `[data-cell-pad]` is `display:contents` there, so the property inherits
+    // through it without generating a box.
+    const pad = container.querySelector('[data-cell-pad]');
+    expect(pad instanceof HTMLElement && pad.style.zoom).toBeFalsy();
+    expect(pad?.style.getPropertyValue('--aligned-zoom')).toBe('1.4');
   });
 
   it('has no zoom style on the content wrapper when zoomFactor is 1', () => {
@@ -860,5 +863,17 @@ describe('ResourceCellView content scroll ownership', () => {
     expect(container.querySelector('[data-cell-root]')).toBeInTheDocument();
     expect(container.querySelector('[data-cell-header]')).toBeInTheDocument();
     expect(container.querySelector('[data-cell-pad]')).toBeInTheDocument();
+  });
+
+  it('keeps the header OUTSIDE the content box, which the chapter scroll depends on', () => {
+    // `getFirstVisibleY` measures a sticky header by looking for `[data-cell-header]` INSIDE the
+    // port. In a chapter cell the header is the port's sibling, so that lookup finds nothing and
+    // contributes no offset — which is the only reason the port math needs no per-layout branch.
+    // Making this header sticky inside the scroll box (the natural way to keep a column label
+    // visible while scrolling, and what the aligned grid does with its own row-1 headers) would
+    // silently land every chapter-mode scroll one header-height too low.
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-content] [data-cell-header]')).toBeNull();
   });
 });

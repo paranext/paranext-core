@@ -29,6 +29,9 @@ import {
   resolveDisplayVerseNum,
   sliceUsjToVerse,
 } from './verse-display.utils';
+import { VERSE_NUMBER_SCROLL_OFFSET } from '../editor-dom.util';
+import { findVerseMarkerForVerse, isMarkerFullyInPortView } from './reference-scroll.utils';
+import { useReferenceScroll } from './use-reference-scroll.hook';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
@@ -47,6 +50,12 @@ type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
+  /**
+   * Whether this web view is rendered, from `useViewVisibility` at the web view's root. A prop
+   * rather than a hook call here because a cell is rendered once per resource, and the answer is
+   * the same for all of them — see {@link useReferenceScroll}.
+   */
+  isViewVisible: boolean;
   /**
    * `'chapter'` and `'aligned'` both feed the editor the whole chapter; `'verse'` feeds only the
    * reference's verse. `'aligned'` additionally asks the editor for its block-verse layout, which
@@ -84,6 +93,7 @@ export function ResourceCell({
   resourceRef,
   scrRef,
   setScrRef,
+  isViewVisible,
   viewMode = 'chapter',
   zoom,
   zoomMenuLabels,
@@ -175,6 +185,33 @@ export function ResourceCell({
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+
+  // This cell's own scroll port, when it has one. React's ref API requires `null` here.
+  // eslint-disable-next-line no-null/no-null
+  const contentRef = useRef<HTMLDivElement>(null);
+  // The reference this cell last published, so the scroll group's echo of the reader's own click
+  // can be told from a genuine navigation. Consumed by `useReferenceScroll`.
+  const lastPublishedScrRefRef = useRef<SerializedVerseRef | undefined>(undefined);
+  // Chapter surfaces render a whole chapter in a short port — the chapter-context split, a chapter
+  // column, the single-resource view — so they have to follow the scroll group's verse themselves.
+  // The other two modes deliberately do not:
+  //   - verse mode has nothing to scroll to; `sliceUsjToVerse` has already reduced the cell to the
+  //     reference's verse;
+  //   - aligned mode hands its scrolling to the grid root, which owns the only port in that view
+  //     (`contentOverflow="visible"`), and `AlignedGrid` runs this same hook there.
+  //
+  // Hidden case (`.claude/rules/cross-view-sync-hidden-views.md`): handled inside the hook, which
+  // defers while the dock tab is inactive and consumes one catch-up on activation, instantly —
+  // `scrollPortToBlock` is `scrollTop` arithmetic, so there is nothing to animate from. In Simple
+  // mode that is the common path, not the edge: column 3 shows one tab at a time.
+  useReferenceScroll(contentRef, scrRef, isViewVisible, findVerseMarkerForVerse, {
+    isEnabled: viewMode === 'chapter',
+    isTargetVisible: isMarkerFullyInPortView,
+    publishedScrRefRef: lastPublishedScrRefRef,
+    // The same framing the Scripture editor, the model text panel and the reference panels use, so
+    // a reference lands the same way whichever view the reader is looking at.
+    leadInPx: VERSE_NUMBER_SCROLL_OFFSET,
+  });
   // Give the editor this resource's valid markers so it recognizes them (footnote/apparatus and
   // other resource-specific markers) instead of rendering them inline as raw text. Mirrors the
   // resource-text-panel render path this cell reuses.
@@ -236,6 +273,9 @@ export function ResourceCell({
   const handleScrRefChange = useCallback(
     (nextScrRef: SerializedVerseRef) => {
       if (viewMode === 'verse' && isFallenForward) return;
+      // Arm the echo latch before publishing: this reference is about to come back as a prop, and
+      // scrolling for it would move the text out from under the click that produced it.
+      lastPublishedScrRefRef.current = nextScrRef;
       setScrRef(nextScrRef);
     },
     [viewMode, isFallenForward, setScrRef],
@@ -285,6 +325,7 @@ export function ResourceCell({
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
       // In the aligned grid the single scroll port is the grid root; see `contentOverflow`.
       contentOverflow={viewMode === 'aligned' ? 'visible' : 'auto'}
+      contentRef={contentRef}
       zoomFactor={zoomFactor}
       // The aligned grid's content wrapper is a subgrid box, so scaling it would scale the shared
       // row tracks along with the text; the factor rides down to the verse blocks instead.

@@ -91,10 +91,10 @@ vi.mock('./use-resource-zoom-input.hook', () => ({
   useResourceZoomInput: vi.fn(),
 }));
 
-// Mutable so a test can model an inactive dock tab. `useViewVisibility` itself needs an
-// IntersectionObserver, which jsdom has not got, and would report `false` regardless because jsdom
-// reports zero geometry for everything — so the aligned grid's deferred scroll could never be
-// observed without this.
+// Stands in for the web view root's `useViewVisibility()`, whose answer the grid takes as a prop.
+// Mutable so a test can model an inactive dock tab: the real hook needs an IntersectionObserver,
+// which jsdom has not got, and would report `false` regardless because jsdom reports zero geometry
+// for everything — so the aligned grid's deferred scroll could never be observed without this.
 const mockVisibility = { isVisible: true };
 
 vi.mock('platform-bible-react', async (importOriginal) => {
@@ -128,6 +128,7 @@ type RenderOptions = { zoom?: ResourceZoomController };
 function renderGrid(gridResources: typeof resources, options: RenderOptions = {}) {
   const result = render(
     <ScriptureTextGrid
+      isViewVisible
       resources={gridResources}
       scrRef={scrRef}
       setScrRef={setScrRef}
@@ -139,6 +140,7 @@ function renderGrid(gridResources: typeof resources, options: RenderOptions = {}
     rerender: (nextResources: typeof resources, nextOptions: RenderOptions = {}) =>
       result.rerender(
         <ScriptureTextGrid
+          isViewVisible
           resources={nextResources}
           scrRef={scrRef}
           setScrRef={setScrRef}
@@ -157,6 +159,7 @@ describe('ScriptureTextGrid', () => {
   it('renders one listitem per resource in effective-list order', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -172,6 +175,7 @@ describe('ScriptureTextGrid', () => {
   it('announces verse 1 at a verse-0 reference, matching what the cells render (PT-3133)', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={{ ...scrRef, verseNum: 0 }}
         setScrRef={setScrRef}
@@ -186,13 +190,21 @@ describe('ScriptureTextGrid', () => {
     ]);
   });
   it('feeds the same scrRef to every cell', () => {
-    render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
+    render(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+      />,
+    );
     expect(screen.getByText('WEB@3')).toBeInTheDocument();
     expect(screen.getByText('KJV@3')).toBeInTheDocument();
   });
   it('names the list region with the provided accessible label', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -202,7 +214,14 @@ describe('ScriptureTextGrid', () => {
     expect(screen.getByRole('list', { name: 'Text Collection' })).toBeInTheDocument();
   });
   it('has list and listitem roles, no grid or row', () => {
-    render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
+    render(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+      />,
+    );
     expect(screen.getByRole('list')).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(resources.length);
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
@@ -211,6 +230,7 @@ describe('ScriptureTextGrid', () => {
   it('renders a single resource as a whole-chapter region, not a verse list', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={[{ resourceId: 'r-a', projectId: 'a', label: 'WEB' }]}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -224,13 +244,21 @@ describe('ScriptureTextGrid', () => {
     expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'chapter');
   });
   it('defaults row cells to verse view mode', () => {
-    render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
+    render(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+      />,
+    );
     expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'verse');
     expect(screen.getByTestId('cell-b')).toHaveAttribute('data-view-mode', 'verse');
   });
   it('does not render the chapter-context split when closed', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -244,6 +272,7 @@ describe('ScriptureTextGrid', () => {
     const onChapterContextChange = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -258,6 +287,7 @@ describe('ScriptureTextGrid', () => {
   it('renders the chapter-context region when split is open', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -282,6 +312,7 @@ describe('ScriptureTextGrid', () => {
     const onChapterContextClose = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -297,6 +328,7 @@ describe('ScriptureTextGrid', () => {
   it('restores focus to the opening listitem when the split closes', () => {
     const { rerender } = render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -309,6 +341,7 @@ describe('ScriptureTextGrid', () => {
     // Open, then close the split (the parent controls `chapterContext`).
     rerender(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -318,6 +351,7 @@ describe('ScriptureTextGrid', () => {
     );
     rerender(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -334,6 +368,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('stacks one chapter cell per resource, each in its own region', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -356,6 +391,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('does not open a chapter-context split in chapter mode, even when a handler is provided', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -372,6 +408,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('gives every chapter cell the shared scrRef setter (selection stays in sync)', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -386,6 +423,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('renders a single resource as a whole-chapter region in chapter mode too', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={[{ resourceId: 'r-a', projectId: 'a', label: 'WEB' }]}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -447,6 +485,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('chapter-context region exposes data-resource-id for its resource so Ctrl+wheel zoom works over the split panel', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -466,6 +505,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -482,6 +522,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -497,6 +538,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -511,6 +553,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
   it('highlights the hovered drop-target item and clears the highlight on dragEnd', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -531,6 +574,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
     const onChapterContextChange = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -551,6 +595,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -566,6 +611,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
   it('highlights the hovered drop-target cell and clears the highlight on dragEnd', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -585,6 +631,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
   it('does not highlight the dragged cell itself when hovered', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -601,6 +648,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -619,6 +667,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -634,6 +683,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -648,6 +698,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
   it('keyboard: the live region announces the move after a successful keyboard reorder', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -667,6 +718,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -682,6 +734,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -697,6 +750,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -712,6 +766,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
   it('keyboard: restores focus to the moved cell grip after the row re-renders', () => {
     const { rerender } = render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -725,6 +780,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     // with 'r-a' in its new slot and focus must follow it to the moved grip.
     rerender(
       <ScriptureTextGrid
+        isViewVisible
         resources={[resources[1], resources[0], resources[2]]}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -771,6 +827,7 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
   ) {
     const ui = (currentRef: typeof alignedRef) => (
       <ScriptureTextGrid
+        isViewVisible={mockVisibility.isVisible}
         resources={gridResources}
         scrRef={currentRef}
         setScrRef={setScrRef}

@@ -3889,6 +3889,58 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
 
+## adr-one-reference-scroll-hook-parameterized-by-verse-anchor: The Text Collection has one reference-scroll controller, parameterized by how a verse is found
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** The Text Collection's chapter surfaces — the chapter-context split pane, a chapter
+  column, the single-resource full-width view — rendered a whole chapter and never scrolled to the
+  scroll group's verse (PT-4543, duplicate PT-4170). Verse mode needs no scroll, because
+  `sliceUsjToVerse` has already reduced the cell to the reference's verse. Two candidate
+  implementations already existed: the aligned grid's controller (added by PT-4184/#2781 as
+  `use-aligned-reference-scroll.hook.ts`, renamed here to `use-reference-scroll.hook.ts`) and an older settle loop in `resource-text-panel.component.tsx`. The two
+  layouts expose different verse anchors: the editor's block-verse layout wraps each verse in a
+  placed element carrying `data-verse-start`, and is emitted only under `BLOCK_VERSE_VIEW_MODE`,
+  while the inline layout emits a bare `span[data-marker="v"][data-number]`.
+- **Decision:** One hook serves both layouts, with the two things the layouts disagree on injected:
+  the verse lookup as a `VerseTargetFinder`, and the "can the reader already see it" test as a
+  `TargetVisibilityTest`. The aligned grid takes both defaults — `findVerseBlockForVerse` and
+  `isBlockInPortView`, whose any-part-showing rule is right for a whole verse block. A chapter cell
+  passes `findVerseMarkerForVerse` and `isMarkerFullyInPortView`, because its target is a
+  zero-content `\v` marker span: any-part-showing would count a marker clipped at the bottom edge as
+  visible while the reader sees a verse number and none of its verse, and the
+  leave-a-visible-verse-alone rule would then decline to scroll. An earlier form of this change
+  forked `isBlockInPortView` on target height instead, which silently gave the Grid view containment
+  semantics too — a change to a view this work does not own, and one that contradicted the first
+  rule in `useReferenceScroll`'s own docstring. Injecting keeps each layout's answer at its own call
+  site; `aligned-grid.component.tsx` is unchanged, so the Grid view keeps exactly the behavior
+  PT-4184/#2781 reviewed. Plus an `isEnabled` flag so a view that is scrolled by an ancestor can
+  keep the hook call unconditional while reading no geometry. The port math is shared without a
+  per-layout branch because `getFirstVisibleY` looks the resource-name header up *inside* the port:
+  a chapter cell's header is the port's sibling and so contributes nothing, while the aligned grid's
+  sticky headers are descendants of its port and are counted.
+- **Alternatives:** (a) *A second hand-rolled loop for chapter mode* — rejected: two scroll
+  implementations in one directory, diverging on the rules that took a review round to get right.
+  (b) *Extract the settle loop from `resource-text-panel.component.tsx`* — rejected: it has no
+  reader stand-down, does not re-check as content arrives, cannot tell a browser `scrollTop` clamp
+  on content shrink from the reader, animates its hidden-tab catch-up where the rule requires an
+  instant consume, and records success on `scrollToVerse`'s return value even when
+  `findScrollContainer` found no overflowing container — so a short port silently skips the scroll
+  and never retries. (c) *Scroll via `scrollToVerse`* — only its selector transfers; its
+  `findScrollContainer`/`getTopWithinScrollContainer`/`behavior: 'smooth'` math is superseded by an
+  explicit port and `scrollPortToBlock`.
+- **Consequences:** Adding a third Text Collection layout means writing a finder, not a scroll
+  controller. The header-outside-the-port adjacency is now load-bearing — moving
+  `[data-cell-header]` inside `[data-cell-content]` would offset every chapter-mode scroll by the
+  header's height. Two tests pin it: `reference-scroll.utils.test.ts` covers the port math for a
+  header outside the port, and `resource-cell-view.component.test.tsx` asserts the rendered cell
+  really does keep `[data-cell-header]` out of `[data-cell-content]` — the arithmetic alone would
+  stay green if the markup moved. The reference panel still
+  runs the older settle loop; converging it onto this hook is deliberately deferred rather than
+  widening this change into a file #2781 does not touch. Revisit if a layout ever needs a genuinely
+  different scroll *policy* rather than a different anchor or visibility test.
+- **Source:** PT-4543, stacked on PT-4184/#2781.
+
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
 - **Formerly:** ADR-0017

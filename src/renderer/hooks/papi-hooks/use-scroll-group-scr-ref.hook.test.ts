@@ -467,3 +467,78 @@ describe('useScrollGroupScrRef on a detached (independent-ref) view', () => {
     expect(result.current[0]).toEqual(ownRef);
   });
 });
+
+// A web view whose definition carries NO `scrollGroupScrRef` follows scroll group 0. Several web
+// views depend on that default rather than pinning a group: the Bible texts and Commentaries
+// reference panels deliberately leave the field alone (`createResourceTextPanelProvider` in
+// `platform-scripture-editor`'s `main.ts`), so the default is the only reason they track the
+// editor's reference in Simple mode. Pinned here rather than left to the one-line `?? 0`, because
+// nothing at those call sites states the dependency and a reader there cannot see it.
+describe('useScrollGroupScrRef with no scroll group in the definition', () => {
+  it('reports group 0 rather than reporting no group', async () => {
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(undefined, () => true));
+
+    // Contrast with the detached case above, where an own-ref view reports `undefined` here.
+    expect(result.current[2]).toBe(0);
+    expect(result.current[0]).toEqual(rawRef);
+  });
+
+  it('follows updates published to group 0', async () => {
+    const groupRef = { book: 'MRK', chapterNum: 4, verseNum: 1 };
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(undefined, () => true));
+    act(() =>
+      lastScrRefUpdateHandler?.({
+        scrRef: groupRef,
+        scrollGroupId: 0,
+        sourceProjectId: 'sourceProj',
+      }),
+    );
+
+    expect(result.current[0]).toEqual(groupRef);
+  });
+
+  it('ignores updates published to a different group', async () => {
+    // The falsifiable half: without it, a hook that followed EVERY group would pass the test above.
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(undefined, () => true));
+    act(() =>
+      lastScrRefUpdateHandler?.({
+        scrRef: { book: 'LUK', chapterNum: 2, verseNum: 1 },
+        scrollGroupId: 1,
+        sourceProjectId: 'sourceProj',
+      }),
+    );
+
+    expect(result.current[0]).toEqual(rawRef);
+  });
+
+  it('publishes a new reference to group 0, not to the view definition', async () => {
+    const newRef = { book: 'MRK', chapterNum: 4, verseNum: 2 };
+    setScrRefSync.mockClear();
+    const setScrollGroupScrRef = vi.fn(() => true);
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(undefined, setScrollGroupScrRef));
+    act(() => result.current[1](newRef));
+
+    // The group id is asserted as a literal `0` because it is the HOOK's resolution being pinned
+    // here: `setScrRefSync` defaults an absent group to 0 itself, so the write would reach group 0
+    // either way and a looser assertion would not tell the two apart. The trailing `undefined` is
+    // the optional `sourceProjectId`, absent because this view declares no project.
+    expect(setScrRefSync).toHaveBeenCalledWith(0, newRef, undefined);
+    expect(setScrollGroupScrRef).not.toHaveBeenCalled();
+  });
+});
