@@ -170,6 +170,9 @@ async function withPdp<PDP, T>(
  * editing-paused notice appears, and the filter toolbar it also contains wraps as the viewport
  * narrows — so every caller must invoke this immediately before its own `scrollIntoView`, rather
  * than relying on a padding value set by an earlier scroll.
+ *
+ * Nothing clears the padding on unmount, and nothing needs to: this view is the root of its own
+ * iframe document and unmounts only when that document is discarded with it.
  */
 function applyStickyHeaderScrollPadding(): void {
   const stickyHeader = document.getElementById(COMMENT_LIST_STICKY_HEADER_ELEMENT_ID);

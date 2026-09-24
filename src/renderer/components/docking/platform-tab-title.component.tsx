@@ -529,9 +529,8 @@ export function PlatformTabTitle({
    * event. The zoom items exist only while it is `true`; in Simple mode, whose menu holds nothing
    * else, a tab whose pane is not zoomable therefore has no menu at all.
    *
-   * Hidden case: nothing to catch up. Zoomability comes from the pane's area reports, which the
-   * bootstrap's MutationObserver sends with no layout, and from core's static declaration map, so
-   * the value is already current for an inactive tab when it is shown.
+   * Hidden case: nothing to catch up, for the reason given at `onDidChangeContentZoomable` in the
+   * content-zoom service.
    */
   const liveIsContentZoomable = useIsContentZoomable(webViewId);
 

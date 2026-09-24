@@ -844,7 +844,7 @@ export declare function ContentZoomTextProvider({ area, children }: ContentZoomT
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function useContentZoomTextProps(): {
-	"data-platform-content-zoom-root"?: string;
+	[CONTENT_ZOOM_ROOT_ATTRIBUTE]?: string;
 };
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;

@@ -2,7 +2,7 @@ import { localization } from '@extension-host/services/papi-backend.service';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
-import { isValidZoomFactor } from '@shared/utils/content-zoom.util';
+import { formatZoomPercent, isValidZoomFactor } from '@shared/utils/content-zoom.util';
 import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
@@ -128,9 +128,10 @@ const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
     await localization.getLocalizedString({
       localizeKey: '%settings_platform_zoomFactor_errorMessage%',
     }),
+    // Settings shows every zoom as a percentage, so the range in the message is one too.
     {
-      lowerLimit: MIN_ZOOM_FACTOR,
-      upperLimit: MAX_ZOOM_FACTOR,
+      lowerLimit: formatZoomPercent(MIN_ZOOM_FACTOR),
+      upperLimit: formatZoomPercent(MAX_ZOOM_FACTOR),
     },
   );
 
@@ -151,7 +152,10 @@ const webViewContentZoomValidator: SettingValidator<'platform.webViewContentZoom
         await localization.getLocalizedString({
           localizeKey: '%settings_platform_zoomFactor_errorMessage%',
         }),
-        { lowerLimit: MIN_ZOOM_FACTOR, upperLimit: MAX_ZOOM_FACTOR },
+        {
+          lowerLimit: formatZoomPercent(MIN_ZOOM_FACTOR),
+          upperLimit: formatZoomPercent(MAX_ZOOM_FACTOR),
+        },
       ),
     );
   }

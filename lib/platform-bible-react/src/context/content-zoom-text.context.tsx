@@ -63,7 +63,7 @@ export function ContentZoomTextProvider({ area, children }: ContentZoomTextProvi
  * @returns The marker attribute inside a provider; an empty object outside one
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export function useContentZoomTextProps(): { 'data-platform-content-zoom-root'?: string } {
+export function useContentZoomTextProps(): { [CONTENT_ZOOM_ROOT_ATTRIBUTE]?: string } {
   const area = useContext(ContentZoomTextContext);
   return area === undefined ? {} : { [CONTENT_ZOOM_ROOT_ATTRIBUTE]: area };
 }
