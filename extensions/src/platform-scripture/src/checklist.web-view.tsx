@@ -15,10 +15,11 @@ import {
   buildSelectionGroupingStrings,
   makeBuiltInGroupings,
   makeSelectionGrouping,
+  resolveLocalizedString,
   type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
-  type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
+  type ProjectSelectorProjectPair,
   type ScopeWithRange,
 } from 'platform-bible-react/experimental';
 import {
@@ -38,6 +39,7 @@ import type {
   ScriptureRange,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { projectNamesFromMetadata } from './project-names.util';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
 import type {
   ChecklistCell,
@@ -142,9 +144,9 @@ function cellToText(cell: ChecklistCell): string {
  * The comparative-texts picker appends `makeSelectionGrouping` on top of these — `'selection'` is
  * not a built-in, so it is not a member of this list.
  *
- * `type` is left out because the checklist has no project-type source: the project fetch reads
- * `platform.name`, `platform.fullName`, and `platform.language` only, so the grouping would put
- * every row under a single "Unknown type" bucket.
+ * `type` is left out because the checklist has no project-type source: the project fetch reads the
+ * name, full name and language off project metadata, which carries no type, so the grouping would
+ * put every row under a single "Unknown type" bucket.
  *
  * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
  * here before it appears in these pickers. That is deliberate: a new grouping reaches users only
@@ -296,34 +298,6 @@ global.webViewComponent = function ChecklistWebView({
     Record<string, 'ltr' | 'rtl' | undefined>
   >({});
 
-  // ─── Primary project short name (for the toolbar trigger label) ──────────
-
-  const [primaryProjectName, setPrimaryProjectName] = useState<string>('');
-  useEffect(() => {
-    if (!projectId) {
-      setPrimaryProjectName('');
-      return () => {};
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-        const name = (await pdp.getSetting('platform.name')) ?? projectId;
-        if (!cancelled) setPrimaryProjectName(name);
-      } catch (err) {
-        if (!cancelled) {
-          logger.warn(
-            `ChecklistWebView: failed to read platform.name for ${projectId}: ${getErrorMessage(err)}`,
-          );
-          setPrimaryProjectName(projectId);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-
   // ─── Books-present for ScopeSelector ──────────────────────────────────────
   const [booksPresent, setBooksPresent] = useState<string>(
     '0'.repeat(124), // 124 books per BookSet — empty default until project setting resolves
@@ -432,24 +406,27 @@ global.webViewComponent = function ChecklistWebView({
     }
     let cancelled = false;
     (async () => {
+      // Metadata rather than `pdp.getSetting('platform.fullName')` — see
+      // `projectNamesFromMetadata` for why that setting cannot answer "has no full name".
       const entries = await Promise.all(
-        ids.map(async (id): Promise<[string, string]> => {
+        ids.map(async (id): Promise<[string, string | undefined]> => {
           try {
-            const pdp = await papi.projectDataProviders.get('platform.base', id);
-            const fullName = await pdp.getSetting('platform.fullName');
-            if (typeof fullName === 'string' && fullName.length > 0) return [id, fullName];
-            const name = await pdp.getSetting('platform.name');
-            return [id, typeof name === 'string' && name.length > 0 ? name : id];
+            const metadata = await papi.projectLookup.getMetadataForProject(id);
+            return [id, projectNamesFromMetadata(metadata).fullName];
           } catch (err) {
             logger.warn(
               `ChecklistWebView: failed to resolve full name for ${id}: ${getErrorMessage(err)}`,
             );
-            return [id, id];
+            return [id, undefined];
           }
         }),
       );
       if (cancelled) return;
-      setColumnProjectFullNames(Object.fromEntries(entries));
+      // A column with no distinct full name is simply absent from the map; the header falls back to
+      // its short name on its own.
+      setColumnProjectFullNames(
+        Object.fromEntries(entries.filter((entry): entry is [string, string] => !!entry[1])),
+      );
     })();
     return () => {
       cancelled = true;
@@ -643,38 +620,14 @@ global.webViewComponent = function ChecklistWebView({
         // up the same project set that the scripture editor shows.
         includeProjectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.USFM_Book'],
       });
-      // Load id/name/fullName/language for every project in parallel. `platform.language` is a
-      // core project setting; fetching it here lets the built-in `language` grouping partition
-      // rows into real per-language buckets rather than everything under "Unknown language".
-      const results: ChecklistRawProject[] = [];
-      await Promise.all(
-        allMetadata.map(async (metadata) => {
-          try {
-            const pdp = await papi.projectDataProviders.get('platform.base', metadata.id);
-            const [shortName, fullName, language] = await Promise.all([
-              pdp.getSetting('platform.name'),
-              pdp.getSetting('platform.fullName'),
-              pdp.getSetting('platform.language').catch(() => undefined),
-            ]);
-            // pdp.getSetting can return `null` for missing settings — must compare against null
-            // explicitly here, so we disable the no-null rule for this guard only.
-            // eslint-disable-next-line no-null/no-null
-            if (shortName !== null && shortName !== undefined) {
-              results.push({
-                id: metadata.id,
-                shortName,
-                fullName: fullName ?? shortName,
-                rawLanguage: typeof language === 'string' ? language : undefined,
-              });
-            }
-          } catch (err) {
-            logger.warn(
-              `ChecklistWebView: failed to load project names for ${metadata.id}: ${getErrorMessage(err)}`,
-            );
-          }
-        }),
-      );
-      return results;
+      // Names and language come off the metadata above rather than a `pdp.getSetting` fan-out —
+      // see `projectNamesFromMetadata` for why. `language` lets the built-in `language` grouping
+      // partition rows into real per-language buckets rather than everything under "Unknown
+      // language".
+      return allMetadata.map((metadata): ChecklistRawProject => {
+        const { language, ...names } = projectNamesFromMetadata(metadata);
+        return { id: metadata.id, ...names, rawLanguage: language };
+      });
     }, []),
     useMemo<ChecklistRawProject[]>(() => [], []),
   );
@@ -796,6 +749,20 @@ global.webViewComponent = function ChecklistWebView({
     [primaryProjectGroupings, projectSelectorResolvedStrings],
   );
 
+  // One label per picker, used as both the trigger's visible placeholder and its accessible name so
+  // the two can never disagree on the unresolved path. The last candidate is a literal this file
+  // owns, because the picker's own English default ("Select a project") is too generic to identify
+  // which of the two toolbar pickers a screen reader has landed on. Mirrors
+  // `%markersChecklist_toolbar_*%` in contributions/localizedStrings.json.
+  const comparativeProjectsLabel = resolveLocalizedString(
+    localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
+    'Select comparative projects',
+  );
+  const primaryProjectPickerLabel = resolveLocalizedString(
+    localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+    'Select primary Scripture text',
+  );
+
   const comparativeTextsSelectorNode = useMemo(
     () => (
       <div data-testid="checklist-comparative-texts-trigger" className="tw:min-w-32">
@@ -807,10 +774,8 @@ global.webViewComponent = function ChecklistWebView({
           onChangeSelection={handleComparativeTextsChange}
           localizedStrings={{
             ...projectSelectorLocalizedStrings,
-            buttonPlaceholder:
-              localizedStrings['%markersChecklist_toolbar_comparativeProjects%'] ??
-              'Select comparative projects',
-            ariaLabel: localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
+            buttonPlaceholder: comparativeProjectsLabel,
+            ariaLabel: comparativeProjectsLabel,
           }}
           availableGroupings={comparativeTextsGroupings}
         />
@@ -823,7 +788,7 @@ global.webViewComponent = function ChecklistWebView({
       handleComparativeTextsChange,
       projectSelectorLocalizedStrings,
       comparativeTextsGroupings,
-      localizedStrings,
+      comparativeProjectsLabel,
     ],
   );
 
@@ -917,10 +882,6 @@ global.webViewComponent = function ChecklistWebView({
     setIsSettingsOpen(false);
   }, []);
 
-  // ─── Derived label for the primary-project selector buttonPlaceholder ────
-
-  const primaryProjectLabel = primaryProjectName;
-
   // ─── Primary-project picker via real ProjectSelector (Theme 5 #2) ─────────
   //
   // Single-select picker. On change, retargets the checklist to a new project via
@@ -941,9 +902,8 @@ global.webViewComponent = function ChecklistWebView({
           availableGroupings={primaryProjectGroupings}
           localizedStrings={{
             ...projectSelectorLocalizedStrings,
-            buttonPlaceholder:
-              localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel,
-            ariaLabel: localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+            buttonPlaceholder: primaryProjectPickerLabel,
+            ariaLabel: primaryProjectPickerLabel,
           }}
         />
       </div>
@@ -953,8 +913,7 @@ global.webViewComponent = function ChecklistWebView({
       comparativeOpenTabs,
       projectId,
       updateWebViewDefinition,
-      localizedStrings,
-      primaryProjectLabel,
+      primaryProjectPickerLabel,
       projectSelectorLocalizedStrings,
       primaryProjectGroupings,
     ],

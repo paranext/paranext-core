@@ -49,11 +49,6 @@ beforeAll(() => {
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
   }
-  // Chapters view schedules a `scrollIntoView` on the target chapter cell after opening,
-  // which jsdom also doesn't implement.
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
 });
 
 describe('BookChapterControl imperative handle', () => {

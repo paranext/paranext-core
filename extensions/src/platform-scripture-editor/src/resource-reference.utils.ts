@@ -1,4 +1,5 @@
 import type { DblResourceReference, ProjectReference, ResourceReference } from 'platform-scripture';
+import { formatProjectName } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 
 /**
@@ -49,9 +50,14 @@ export function isProjectReference(item: unknown): item is ProjectReference {
 }
 
 /**
- * Returns the display label for a resource reference in the form `{fullName} ({displayName})` for
- * DBL resources, falling back to `ref.name` if the DblResourceData entry is not yet in the list.
- * Returns `ref.name` for project references.
+ * Returns the display label for a resource reference. A DBL resource is labelled short-name-first
+ * through {@link formatProjectName} — `{displayName} - {fullName}` — falling back to `ref.name` if
+ * the DblResourceData entry is not yet in the list. Returns `ref.name` for project references.
+ *
+ * A resource's `displayName` is its short identifying name, so it takes the `shortName` slot. The
+ * helper's de-dup matters here: a locally-installed non-DBL resource is synthesized with `fullName`
+ * falling back to the same string as `displayName` (see `getLocalNonDblResources`), and without it
+ * such a resource would read `WEB - WEB`.
  *
  * @param ref The resource reference to label
  * @param dblResourcesList The list of known DBL resources to look up `ref` in when it's a
@@ -61,7 +67,8 @@ export function isProjectReference(item: unknown): item is ProjectReference {
 export function getRefLabel(ref: ResourceReference, dblResourcesList: DblResourceData[]): string {
   if (isDblResourceReference(ref)) {
     const dblData = dblResourcesList.find((r) => r.dblEntryUid === ref.id);
-    if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
+    if (dblData)
+      return formatProjectName({ shortName: dblData.displayName, fullName: dblData.fullName });
     return ref.name;
   }
   if (isProjectReference(ref)) {

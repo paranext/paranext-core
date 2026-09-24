@@ -27,6 +27,7 @@ import {
   CheckRunResult,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { projectNamesFromMetadata } from './project-names.util';
 import { CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
@@ -38,27 +39,6 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
-
-/**
- * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
- * `@papi`-free utils) so the utils stay importable by the presentational component and its story.
- */
-async function getProjectNames(projectId: string): Promise<ProjectOption> {
-  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  // Fetched together so adding language costs no extra serial round trip per project.
-  // `platform.language` is optional: a project that does not define it degrades to an unknown
-  // language bucket rather than failing the whole lookup.
-  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
-    pdp.getSetting('platform.name'),
-    pdp.getSetting('platform.fullName'),
-    pdp.getSetting('platform.language').catch(() => undefined),
-  ]);
-  return {
-    shortName: projectShortName,
-    fullName: projectFullName,
-    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
-  };
-}
 
 /**
  * Web-view types that should count as "open" project tabs for the picker's "Open Tabs" grouping.
@@ -134,14 +114,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
         includeProjectInterfaces: ['Scripture', 'Paratext'],
       });
 
-      // Map through all metadata to get ids and names
-      await Promise.all(
-        allMetadata.map(async (metadata) => {
-          const names = await getProjectNames(metadata.id);
-          if (!names) return;
-          projectDict[metadata.id] = names;
-        }),
-      );
+      // Every name this panel shows comes off the metadata already fetched above, so there is no
+      // per-project read left to await.
+      allMetadata.forEach((metadata) => {
+        projectDict[metadata.id] = projectNamesFromMetadata(metadata);
+      });
 
       return projectDict;
     }, []),

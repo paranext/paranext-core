@@ -188,10 +188,9 @@ type Story = StoryObj<typeof EnhancedResourceWebView>;
  * implementation of the spec's downstream state model. Wires every control with real components and
  * sample data:
  *
- * - Hamburger view-menu (`DropdownMenu` from platform-bible-react) with the 13 menu items from
+ * - Hamburger view-menu (`DropdownMenu` from platform-bible-react) with the 11 menu items from
  *   `ui-spec-marble-form.md` lines 66-79: Show footnotes / Show translations / Hebrew script radios
- *   / Greek script radios / Copyright info / Find / Close / Zoom in/out/reset. Each item flips
- *   story state.
+ *   / Greek script radios / Copyright info / Find / Close. Each item flips story state.
  * - Real `ScrollGroupSelector` driving scroll-group state.
  * - Info-icon button toggles the real `MarbleGuide` Dialog open/closed via `useState`.
  * - "All research terms" highlight toggle drives `highlightMode` state (the visual badge tint).
@@ -365,9 +364,6 @@ export const Default: Story = {
                 placeholderAction('Phase-3-ui wires this to FindReplaceForm in ER mode.'),
               onCloseWindow: () =>
                 placeholderAction('Phase-3-ui wires this to webView.close() (Ctrl+F4 in PT9).'),
-              onZoomIn: () => placeholderAction('Zoom in (wired in phase-3-ui).'),
-              onZoomOut: () => placeholderAction('Zoom out (wired in phase-3-ui).'),
-              onZoomReset: () => placeholderAction('Zoom reset (wired in phase-3-ui).'),
             }}
             ribbons={MOCK_RIBBONS_NONE}
             usj={MOCK_USJ}

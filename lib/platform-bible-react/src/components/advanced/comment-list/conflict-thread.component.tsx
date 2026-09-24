@@ -1,4 +1,4 @@
-import { ReactNode, useMemo } from 'react';
+import { memo, ReactNode, useMemo } from 'react';
 import { ConflictThreadProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 import { ConflictNoteCard } from './conflict-note-card.component';
@@ -18,8 +18,12 @@ import { useConflictResolution } from './use-conflict-resolution.hook';
  *   conflict is resolved through a plain status change, not resolveConflict.
  *
  * All conflict state and logic live in {@link useConflictResolution}.
+ *
+ * Wrapped in `memo` for the same reason as {@link CommentThread}: this container builds fresh
+ * `rootContentSlot`/`resolveActionSlot` JSX every render it actually runs, which would otherwise
+ * defeat `CommentThread`'s own memoization on every unrelated re-render of the list above it.
  */
-export function ConflictThread(props: ConflictThreadProps) {
+export const ConflictThread = memo(function ConflictThread(props: ConflictThreadProps) {
   const {
     comments,
     localizedStrings,
@@ -98,6 +102,6 @@ export function ConflictThread(props: ConflictThreadProps) {
       spaceRootContentFromReplies={isVerseText && isSelected}
     />
   );
-}
+});
 
 export default ConflictThread;

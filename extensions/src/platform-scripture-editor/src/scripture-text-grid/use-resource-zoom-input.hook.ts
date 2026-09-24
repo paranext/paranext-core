@@ -1,5 +1,7 @@
 import type React from 'react';
 import { useEffect } from 'react';
+import { createContentZoomWheelReader } from 'platform-bible-utils';
+import { ZOOM_STEP } from './resource-zoom.utils';
 
 export type ResourceZoomInputOptions = {
   /** The grid container the listeners attach to. */
@@ -28,34 +30,50 @@ function hasZoomModifier(event: WheelEvent): boolean {
  * Wires Ctrl/Cmd+wheel zoom onto the grid container. The listener is capture-phase so it runs
  * before any inner handler; `wheel` is non-passive so it can `preventDefault()` the browser's
  * page-zoom gesture. The grid runs inside a WebView iframe, so these events never reach the
- * renderer's tab-zoom listeners (separate window).
+ * renderer's tab-zoom listeners (separate window). A wheel is read as mouse-notch steps or as
+ * trackpad-pinch travel by the shared {@link createContentZoomWheelReader}, so a pinch inside a
+ * resource cell moves that resource through its zoom range at the same rate the pane-level zoom
+ * moves a whole pane.
  *
- * NOTE: Keyboard zoom (Ctrl/Cmd +/-/0) is deferred pending PT-4143. The main-process
- * before-input-event handler in main.ts claims those chords for window zoom before the WebView
- * iframe sees them, so the keyboard path cannot function correctly until PT-4143 makes that handler
- * focus-aware. Zoom ships three working paths: right-click context menu, hover/touch kebab, and
- * Ctrl/Cmd+wheel.
+ * NOTE: Keyboard zoom (Ctrl/Cmd +/-/0) aimed at a single resource is deferred pending PT-4143.
+ * These chords reach the WebView iframe — `main.ts`'s `before-input-event` handlers do not claim
+ * them — where they are claimed by the platform's own pane-level content-zoom handler
+ * (`web-view-content-zoom.bootstrap-script.ts`), which has no notion of a resource cell. So today
+ * they zoom the whole pane rather than the focused resource. Zoom ships three working paths:
+ * right-click context menu, hover/touch kebab, and Ctrl/Cmd+wheel.
  */
 export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomInputOptions): void {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return undefined;
 
+    // Explicit rather than relying on the util's own default: the grid's real step lives in
+    // `resource-zoom.utils.ts`, and the two only agree today because both happen to be 0.1.
+    const reader = createContentZoomWheelReader({ zoomStep: ZOOM_STEP });
+
     const onWheel = (event: WheelEvent) => {
       if (!hasZoomModifier(event)) return;
-      // Prevent the OS/browser page zoom even if no cell resolves, so Ctrl+wheel never desyncs.
+      // Prevent the OS/browser page zoom even if no cell resolves, so Ctrl+wheel never desyncs, and
+      // keep the pane-level handler from also acting on a gesture aimed at one resource.
       event.preventDefault();
       event.stopPropagation();
       const resourceId = resolveResourceIdFromElement(
         event.target instanceof Element ? event.target : undefined,
       );
+      // A gesture that misses every cell — a gap between rows, the chapter-context chrome, list
+      // padding — reaches here with the page zoom already suppressed and propagation already
+      // stopped above, so it zooms neither this resource nor the pane the platform's bootstrap
+      // would otherwise scale. That swallow is what keeps this handler's zoom from double-firing
+      // with the pane-level one when a gesture DOES land on a cell.
       if (!resourceId) return;
-      adjustZoom?.(resourceId, event.deltaY < 0 ? 1 : -1);
+      const steps = reader.read(event, resourceId);
+      if (steps !== 0) adjustZoom?.(resourceId, steps);
     };
 
     container.addEventListener('wheel', onWheel, { capture: true, passive: false });
     return () => {
       container.removeEventListener('wheel', onWheel, true);
+      reader.dispose();
     };
   }, [containerRef, adjustZoom]);
 }

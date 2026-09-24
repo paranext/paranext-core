@@ -1,4 +1,4 @@
-import type { DblResourceData } from 'platform-bible-utils';
+import { hasDistinctFullName, type DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   ProjectReference,
@@ -225,6 +225,11 @@ export function getViewOptionsTexts(
 
   const dblResourcesByUid = indexDblResourcesByUid(options?.dblResources ?? []);
   (options?.downloaded ?? []).forEach((downloadedResource) => {
+    // The long-name slot the row renders after the short name. `hasDistinctFullName` owns the
+    // "is this worth showing as a second field" rule, so a resource whose long name repeats its
+    // short name contributes none.
+    const names = { shortName: downloadedResource.name, fullName: downloadedResource.fullName };
+    const downloadedLongName = hasDistinctFullName(names) ? names.fullName : undefined;
     const alreadyListed = [...top, ...bottom].some((row) =>
       matchesDownloaded(downloadedResource, row.reference, dblResourcesByUid),
     );
@@ -238,9 +243,7 @@ export function getViewOptionsTexts(
       checked: false,
       isAdminLocked: false,
       isUserRemovable: false,
-      ...(downloadedResource.fullName !== downloadedResource.name
-        ? { longName: downloadedResource.fullName }
-        : {}),
+      ...(downloadedLongName ? { longName: downloadedLongName } : {}),
     });
   });
 

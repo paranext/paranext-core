@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'vitest';
+import type { Localized, SingleColumnMenu } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 import {
   buildTabMenuItems,
+  filterTabMenuToGroup,
   getMoveTargetWindowId,
   MOVE_TO_WINDOW_TARGET_ID_PREFIX,
   type TabMenuContext,
@@ -24,12 +26,30 @@ const moveToWindowSubmenu: OverlayContextMenuItem = {
   items: [],
 };
 
+const zoomInItem: OverlayContextMenuItem = {
+  type: 'item',
+  id: 'platform.webViewContentZoomIn',
+  label: 'Zoom in',
+};
+const zoomOutItem: OverlayContextMenuItem = {
+  type: 'item',
+  id: 'platform.webViewContentZoomOut',
+  label: 'Zoom out',
+};
+const resetZoomItem: OverlayContextMenuItem = {
+  type: 'item',
+  id: 'platform.webViewContentZoomReset',
+  label: 'Reset zoom',
+};
+
 const CONTRIBUTED = [floatItem, moveToNewWindowItem, moveToWindowSubmenu];
+const ZOOM_ITEMS = [zoomInItem, zoomOutItem, resetZoomItem];
 
 const context = (overrides: Partial<TabMenuContext> = {}): TabMenuContext => ({
   webViewId: 'tab-1',
   otherWindows: [{ windowId: '2', label: 'Biblical Terms', isMain: false }],
   isOnlyTabInWindowThatWouldClose: false,
+  hasZoomArea: true,
   ...overrides,
 });
 
@@ -139,6 +159,107 @@ describe('buildTabMenuItems', () => {
       '---',
       'platform.moveWebViewToNewWindow',
     ]);
+  });
+
+  test('drops the zoom items from a tab hosting no web view', () => {
+    // A dialog or an error tab has no content the zoom commands can reach
+    const result = buildTabMenuItems(ZOOM_ITEMS, context({ webViewId: undefined }), 'Empty window');
+
+    expect(idsOf(result)).toEqual([]);
+  });
+
+  test('keeps the zoom items on a tab hosting a web view', () => {
+    // The positive control for the case above
+    const result = buildTabMenuItems(ZOOM_ITEMS, context(), 'Empty window');
+
+    expect(idsOf(result)).toEqual([
+      'platform.webViewContentZoomIn',
+      'platform.webViewContentZoomOut',
+      'platform.webViewContentZoomReset',
+    ]);
+  });
+
+  test('prunes a stray separator left once the zoom items are removed', () => {
+    const grouped = [{ type: 'separator' } as const, ...ZOOM_ITEMS, { type: 'separator' } as const];
+
+    const result = buildTabMenuItems(grouped, context({ webViewId: undefined }), 'Empty window');
+
+    expect(idsOf(result)).toEqual([]);
+  });
+
+  test('greys out the zoom items rather than removing them on a tab with no zoom area', () => {
+    // A pane that hosts a web view but has not (yet) reported an area to act on: the items stay in
+    // the menu, just disabled, so they don't jump into or out of it the moment the area arrives
+    const result = buildTabMenuItems(ZOOM_ITEMS, context({ hasZoomArea: false }), 'Empty window');
+
+    expect(idsOf(result)).toEqual([
+      'platform.webViewContentZoomIn',
+      'platform.webViewContentZoomOut',
+      'platform.webViewContentZoomReset',
+    ]);
+    expect(result.every((item) => item.type === 'item' && item.disabled === true)).toBe(true);
+  });
+
+  test('leaves the zoom items enabled on a tab that has a zoom area', () => {
+    // The positive control for the case above
+    const result = buildTabMenuItems(ZOOM_ITEMS, context({ hasZoomArea: true }), 'Empty window');
+
+    expect(result.every((item) => item.type === 'item' && !item.disabled)).toBe(true);
+  });
+});
+
+describe('filterTabMenuToGroup', () => {
+  const zoomGroupDetail = { order: 50, isExtensible: false };
+  const windowGroupDetail = { order: 100, isExtensible: true };
+
+  const menu: Localized<SingleColumnMenu> = {
+    groups: {
+      'platform.tabZoom': zoomGroupDetail,
+      'platform.tabWindow': windowGroupDetail,
+    },
+    items: [
+      {
+        label: 'Zoom in',
+        localizeNotes: 'Tab context menu > Zoom in',
+        group: 'platform.tabZoom',
+        order: 100,
+        command: 'platform.webViewContentZoomIn',
+      },
+      {
+        label: 'Zoom out',
+        localizeNotes: 'Tab context menu > Zoom out',
+        group: 'platform.tabZoom',
+        order: 200,
+        command: 'platform.webViewContentZoomOut',
+      },
+      {
+        label: 'Float tab',
+        localizeNotes: 'Tab context menu > Float tab',
+        group: 'platform.tabWindow',
+        order: 100,
+        command: 'platform.floatTab',
+      },
+    ],
+  };
+
+  test('keeps only the requested group and its items, in contributed order', () => {
+    const result = filterTabMenuToGroup(menu, 'platform.tabZoom');
+
+    expect(result.groups).toEqual({ 'platform.tabZoom': zoomGroupDetail });
+    expect(result.items.map((item) => item.label)).toEqual(['Zoom in', 'Zoom out']);
+  });
+
+  test('returns an empty menu when the requested group is not defined', () => {
+    const result = filterTabMenuToGroup(menu, 'someExtension.notDefined');
+
+    expect(result).toEqual({ groups: {}, items: [] });
+  });
+
+  test('does not mutate the input menu', () => {
+    filterTabMenuToGroup(menu, 'platform.tabZoom');
+
+    expect(Object.keys(menu.groups)).toEqual(['platform.tabZoom', 'platform.tabWindow']);
+    expect(menu.items).toHaveLength(3);
   });
 });
 

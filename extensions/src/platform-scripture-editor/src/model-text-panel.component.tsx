@@ -8,6 +8,7 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
+  ContentZoomRoot,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -396,8 +397,10 @@ export function ModelTextPanel({
       // Opt-in: omit `nodes` entirely when there are no extra markers (no behavior change), matching
       // resource-text-panel.
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
-      // Narrow the resource's (string) text-direction setting to the editor's union without a cast.
-      textDirection: textDirection === 'rtl' || textDirection === 'auto' ? textDirection : 'ltr',
+      // Narrow the resource's (string) text-direction setting to ltr or rtl. A project always
+      // declares one of the two (direction cannot be guessed for a minority language), so the
+      // editor's `auto` is not a mode core passes; anything else falls back to ltr.
+      textDirection: textDirection === 'rtl' ? 'rtl' : 'ltr',
       view: VIEW_OPTIONS,
     }),
     [textDirection, extraValidMarkers],
@@ -717,16 +720,36 @@ export function ModelTextPanel({
                 // `tw:min-w-0` unlocks the shrink that `tw:overflow-hidden` then bounds.
                 className="tw:flex tw:h-[42px] tw:min-w-0 tw:shrink-0 tw:items-center tw:overflow-hidden tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
               >
-                <span ref={modelTextLabelRef} className="tw:min-w-0 tw:truncate">
+                {/* `dir="auto"`: the label is a joined short/full name in one text node, so it
+                    carries its own direction rather than the panel's. */}
+                <span ref={modelTextLabelRef} className="tw:min-w-0 tw:truncate" dir="auto">
                   {modelTextLabel}
                 </span>
               </div>
             </TooltipTrigger>
-            <TooltipContent>{modelTextLabel}</TooltipContent>
+            <TooltipContent dir="auto">{modelTextLabel}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
-      {renderContent()}
+      {/* Named as its own zoom area ("model-text") so its remembered level is kept apart from this
+          project's other resource panes, which resolve to the same kind/identity pair and would
+          otherwise all read one remembered level. The label row above stays outside so its pinned
+          42 px height — aligned with the editor's toolbar and Column 3's tab bar — doesn't scale
+          with the content.
+
+          This element is only reached once the panel has a project, has a configured readiness, has
+          resolved to a displayable resource, has not just failed an install, and is not mid-pick or
+          mid-install. None of the earlier returns for those states (no project; readiness not
+          configured; not found/unresolvable; install failed; selecting/installing) mark a zoom area,
+          so while any of them is on screen this pane reports no area and offers no per-pane zoom
+          control until content arrives; what the platform does with a pane that reports no areas is
+          core's to define and document. Acceptable: each of those states shows only chrome — a
+          prompt, a spinner or an error — with no scripture content to scale. Some of them (an
+          unconfigured readiness, a failed install) can stay on screen indefinitely without that
+          changing. */}
+      <ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+        {renderContent()}
+      </ContentZoomRoot>
     </div>
   );
 }

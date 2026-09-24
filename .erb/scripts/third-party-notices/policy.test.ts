@@ -1397,7 +1397,7 @@ describe('notices-policy.json', () => {
   // legal determinations, so a change in either is worth noticing here and updating deliberately.
   it('generates a case for every election and every exception the shipped policy carries', () => {
     expect(Object.keys(policy.elections)).toHaveLength(3);
-    expect(policy.exceptions).toHaveLength(16);
+    expect(policy.exceptions).toHaveLength(17);
   });
 
   Object.entries(policy.elections).forEach(([key, election]) => {

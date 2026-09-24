@@ -45,6 +45,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/comment.fixture';
 import {
+  DEFAULT_WEBSOCKET_PORT,
   waitForAppReady,
   waitForOpenWebViewIdByType,
   waitForOverlayGone,
@@ -53,12 +54,13 @@ import {
 } from '../../fixtures/helpers';
 import {
   type CommentTestProject,
+  clickCommentsTab,
   createCommentTestProject,
   cleanupCommentTestProject,
   createCommentThreads,
+  openCommentListPanel,
 } from '../../fixtures/comment-test-helpers';
 
-const DEFAULT_WEBSOCKET_PORT = 8876;
 const SETTINGS_TIMEOUT_MS = 60_000;
 /**
  * `openScriptureEditor` triggers `openOrUpdateRelatedPanels`, which sequentially awaits five PAPI
@@ -164,39 +166,6 @@ async function openScriptureEditor(
   }
 }
 
-/**
- * Click the Comments tab in Column 3.
- *
- * If the tab title is scrolled outside the visible portion of the tab bar (clipped by the rc-tabs
- * overflow container), hover the `.dock-nav-more` overflow button to open the dropdown, then click
- * the Comments option via its `data-web-view-id` attribute.
- *
- * `actionTimeoutMs` bounds the click/hover actions — pass a short value when calling inside a retry
- * loop so a blocked click (e.g. the workspace-updating overlay intercepting pointer events) fails
- * fast and the loop can retry, instead of burning the default 30 s action timeout.
- */
-async function clickCommentsTab(
-  mainPage: Page,
-  commentListPanelId: string,
-  actionTimeoutMs = 30_000,
-): Promise<void> {
-  const tabTitle = mainPage.locator(
-    `.platform-tab-title[data-web-view-id="${commentListPanelId}"]`,
-  );
-  if (await tabTitle.isVisible()) {
-    await tabTitle.click({ timeout: actionTimeoutMs });
-    return;
-  }
-  // Tab is outside the visible scroll area — open the overflow dropdown and activate it.
-  const dockBar = mainPage.locator('.dock-bar').filter({ has: tabTitle });
-  await dockBar.locator('.dock-nav-more').hover({ timeout: actionTimeoutMs });
-  // rc-tabs re-renders PlatformTabTitle (including our data-web-view-id) in the overflow popup.
-  await mainPage
-    .locator('[role="listbox"] [role="option"]')
-    .filter({ has: mainPage.locator(`[data-web-view-id="${commentListPanelId}"]`) })
-    .click({ timeout: 5_000 });
-}
-
 // Own this spec's Electron app so it is not inherited from another spec that has already replaced
 // the Column 2 scripture-editor slot waitForSimpleLayout waits for. See comment.fixture.ts.
 test.use({ commentAppOwner: 'comments-tab' });
@@ -245,8 +214,8 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // Assert on rendered panel UI, not just the iframe body: the body is "attached" as soon as
     // the frame element exists, which would pass even for an empty or errored WebView. The panel
     // renders skeleton placeholders while loading (this test opens no project, so it stays in the
-    // loading state) and the filter toolbar dropdowns once loaded — either proves the
-    // CommentListPanel component actually rendered.
+    // loading state) and the preset filter dropdown once loaded (it renders regardless of loading
+    // state) — either proves the CommentListPanel component actually rendered.
     //
     // Click and assert inside ONE retry loop: a workspace rebuild ("Updating project view"
     // overlay) can still fire after waitForSimpleLayout. It recreates the Column 3 tabs and resets
@@ -255,12 +224,13 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // pointer events, so clicking during one always fails), then clicks and asserts with short
     // timeouts so the loop can retry promptly if another rebuild lands mid-attempt.
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
+    const skeletonOrPresetFilter = commentsFrame
+      .locator('[data-slot="skeleton"]')
+      .or(commentsFrame.locator('[data-testid="comment-preset-filter"]'));
     await expect(async () => {
       await waitForOverlayGone(mainPage, 60_000);
       await clickCommentsTab(mainPage, commentListPanelId, 5_000);
-      await expect(
-        commentsFrame.locator('[data-slot="skeleton"], [data-slot="select-trigger"]').first(),
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(skeletonOrPresetFilter.first()).toBeVisible({ timeout: 10_000 });
     }).toPass({ timeout: 180_000 });
   });
 
@@ -278,17 +248,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // that call getWebView for the comment list panel while the sentinel is in flight,
     // occasionally overwriting it with the previously-open developer project. Calling directly
     // here is safe because waitForSimpleLayout already confirmed the dock is stable (overlay gone).
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [project.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(project.projectId);
 
     await clickCommentsTab(mainPage, commentListPanelId);
 
@@ -316,29 +276,19 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
 
     // Point the Column 3 Comments tab at the seeded project (same direct-open path the
     // "has comments" test uses — see that test for why we avoid openScriptureEditor here).
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [projectScroll.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(projectScroll.projectId);
 
     await clickCommentsTab(mainPage, commentListPanelId);
 
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
-    // The filter dropdowns are the toolbar; the first one is the resolved-status filter. Its
-    // visibility is a faithful proxy for "the filtering bar is visible" (PT-4070 DoD).
-    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
+    // The preset filter dropdown is always mounted in the toolbar (never gated behind a popover),
+    // so its visibility is a faithful proxy for "the filtering bar is visible" (PT-4070 DoD).
+    const presetFilter = commentsFrame.locator('[data-testid="comment-preset-filter"]');
     const threads = commentsFrame.locator('#comment-list [role="option"]');
 
     // Wait for the seeded threads to render, then confirm the toolbar starts out visible.
     await expect(threads.first()).toBeVisible({ timeout: 90_000 });
-    await expect(firstFilter).toBeInViewport();
+    await expect(presetFilter).toBeInViewport();
 
     // Scroll the iframe DOCUMENT explicitly, not "whichever container happens to scroll". In the
     // real web view nothing bounds html/body/#root, so the document is the scroll container and
@@ -357,7 +307,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await expect(threads.first()).not.toBeInViewport();
 
     // The point of PT-4070: the sticky filter row must remain on-screen after scrolling to bottom.
-    await expect(firstFilter).toBeInViewport();
+    await expect(presetFilter).toBeInViewport();
   });
 
   // NOTE: The keyboard and scope-filter tests below MUST stay ahead of the PT-4069 test. That test
@@ -380,30 +330,38 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
       ['PT-4070 keyboard a11y 1', 'PT-4070 keyboard a11y 2', 'PT-4070 keyboard a11y 3'],
     );
 
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
+    await openCommentListPanel(projectScroll.projectId);
+
+    await clickCommentsTab(mainPage, commentListPanelId);
+
+    const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
+    const presetFilter = commentsFrame.locator('[data-testid="comment-preset-filter"]');
+
+    // The filter selection persists per project in localStorage (comment-filter-store.ts), so a
+    // prior test in this file — or a prior local run sharing this worker's user-data dir — can
+    // leave a non-default preset saved for projectScroll. Clear it and reopen the panel so the
+    // component remounts against a known default rather than whatever was last saved, then assert
+    // the reset actually landed before relying on "starts on All comments" below.
+    await expect(presetFilter).toBeVisible({ timeout: 90_000 });
+    await commentsFrame.locator(':root').evaluate((root, storageKey) => {
+      root.ownerDocument.defaultView?.localStorage.removeItem(storageKey);
+    }, `legacyCommentManager.filters.${projectScroll.projectId}`);
     await sendPapiRequestOnce(
       'command:legacyCommentManager.openCommentListPanel',
       [projectScroll.projectId],
       DEFAULT_WEBSOCKET_PORT,
       OPEN_EDITOR_TIMEOUT_MS,
     );
+    await expect(presetFilter).toBeVisible({ timeout: 90_000 });
+    await expect(presetFilter).toContainText('All comments');
 
-    await clickCommentsTab(mainPage, commentListPanelId);
-
-    const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
-    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
-
-    // Wait for the loaded toolbar, then drive the first filter entirely by keyboard.
-    await expect(firstFilter).toBeVisible({ timeout: 90_000 });
-    await firstFilter.focus();
-    await expect(firstFilter).toBeFocused();
+    // The preset dropdown sits directly in the toolbar, so reach it by keyboard with no popover
+    // step in between.
+    await presetFilter.focus();
+    await expect(presetFilter).toBeFocused();
 
     // Open with the keyboard.
-    await firstFilter.press('Enter');
+    await presetFilter.press('Enter');
     const dropdown = commentsFrame.locator('[data-slot="select-content"]');
     await expect(dropdown).toBeVisible({ timeout: 10_000 });
 
@@ -412,15 +370,15 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await mainPage.keyboard.press('Enter');
     await expect(dropdown).toBeHidden({ timeout: 10_000 });
 
-    // Assert the OUTCOME, not merely that the popover closed. The first filter is the resolved-status
-    // axis, whose options are All / Unresolved / Resolved; ArrowDown from the selected "All resolved
-    // statuses" lands on "Unresolved", so the trigger must now display it. This fails if Enter closed
-    // the popover without committing a value, or re-selected the same value — cases a bare
-    // toBeHidden() (satisfied even by the toolbar re-rendering) would pass.
-    await expect(firstFilter).toContainText('Unresolved');
+    // Assert the OUTCOME, not merely that the dropdown closed. The preset options list "All
+    // comments" first; ArrowDown from the selected "All comments" lands on "Unresolved comments
+    // assigned to me", so the trigger must now display it. This fails if Enter closed the dropdown
+    // without committing a value, or re-selected the same value — cases a bare toBeHidden()
+    // (satisfied even by the toolbar re-rendering) would pass.
+    await expect(presetFilter).toContainText('Unresolved comments assigned to me');
   });
 
-  test('Comments tab scope filter offers "Current chapter" in Simple mode (PT-4070)', async ({
+  test('Comments tab scope filter offers all four scopes in Simple mode (PT-4070)', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
@@ -428,49 +386,37 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
 
     await createCommentThreads(projectScroll, ['GEN 3:1'], ['PT-4070 scope-option test']);
 
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [projectScroll.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(projectScroll.projectId);
 
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
     // Find the scope dropdown by its stable data-testid rather than by trigger index — the index
     // holds only while the scope trigger stays the 5th of exactly five and no comment card renders a
-    // Select, which is a coincidence rather than a contract. Click the tab inside a retry loop: a
-    // "workspace updating" overlay can intercept pointer events during dock rebuilds, so wait it out
-    // and retry (same pattern as the panel-display test).
+    // Select, which is a coincidence rather than a contract.
     const scopeTrigger = commentsFrame.locator('[data-testid="comment-scope-filter"]');
+    // Retry the tab click: a "workspace updating" overlay can intercept pointer events during dock
+    // rebuilds, so wait it out and retry (same pattern as the panel-display test).
     await expect(async () => {
       await waitForOverlayGone(mainPage, 60_000);
       await clickCommentsTab(mainPage, commentListPanelId, 5_000);
       await expect(scopeTrigger).toBeVisible({ timeout: 15_000 });
     }).toPass({ timeout: 180_000 });
 
-    // With the overlay cleared, open the scope dropdown and confirm the Column 3 panel actually
-    // offers the "Current chapter" option — the exact capability this fix adds. Before the fix the
-    // option was gated on a wired editor (which the panel lacks even though it follows the active
-    // project's scroll group), so only "All books" appeared. Assert on the localized labels rather
-    // than the option count, so a future change that swapped in a different second scope value while
-    // dropping current-chapter could not keep this test green.
-    //
     // This overlay wait is NOT redundant with the one inside the retry loop above: the loop only
     // guarantees the overlay is gone at the moment the trigger becomes visible, but a fresh dock
     // rebuild can raise it again before the click below — which is a new pointer action. Keep it.
     await waitForOverlayGone(mainPage, 30_000);
     await scopeTrigger.click();
+
+    // Confirm the Column 3 panel offers all four scopes. Assert on the localized labels rather than
+    // just the option count, so a future change that swapped one scope value for another while
+    // keeping the count at four could not keep this test green.
     const scopeOptions = commentsFrame.locator(
       '[data-slot="select-content"] [data-slot="select-item"]',
     );
-    await expect(scopeOptions.filter({ hasText: 'Current chapter' })).toHaveCount(1, {
-      timeout: 10_000,
-    });
+    await expect(scopeOptions).toHaveCount(4, { timeout: 10_000 });
+    await expect(scopeOptions.filter({ hasText: 'Current book' })).toHaveCount(1);
+    await expect(scopeOptions.filter({ hasText: 'Current chapter' })).toHaveCount(1);
+    await expect(scopeOptions.filter({ hasText: 'Current verse' })).toHaveCount(1);
     await expect(scopeOptions.filter({ hasText: 'All books' })).toHaveCount(1);
   });
 

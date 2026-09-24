@@ -76,16 +76,16 @@ export const SecondaryDropped: Story = {
 
 export const SecondaryFirst: Story = {
   args: {
-    primary: '(TP1)',
-    secondary: 'Translation Project 1',
+    primary: 'pt',
+    secondary: '12',
     secondaryFirst: true,
-    fullText: 'Translation Project 1 (TP1)',
+    fullText: '12 pt',
   },
   parameters: {
     docs: {
       description: {
         story:
-          'A project selector reads full-name-then-short-name, but the short name is the identifying half and has to survive. `secondaryFirst` keeps the reading order while leaving the shrink order alone.',
+          'A measurement reads number-then-unit, but the unit is the field that must survive. `secondaryFirst` keeps the reading order while leaving the shrink order alone.',
       },
     },
   },

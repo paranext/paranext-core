@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
 import userEvent from '@testing-library/user-event';
 import { projectLookupService } from '@shared/services/project-lookup.service';
+import { projectDataProviders } from '@renderer/services/papi-frontend.service';
 import type { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { SettingsTab } from './settings-tab.component';
 import {
@@ -100,7 +101,8 @@ vi.mock('@shared/services/project-lookup.service', () => ({
   },
 }));
 
-// Only `getSetting('platform.name')` is reached, and only once a project is in the metadata list.
+// Mocked so a test can assert the sidebar never reaches for one: project names come off metadata,
+// which is the only source that distinguishes "no full name" from "never set one".
 vi.mock('@renderer/services/papi-frontend.service', () => ({
   projectDataProviders: {
     get: vi.fn(
@@ -198,5 +200,41 @@ describe('SettingsTab project picker localization', () => {
 
     await user.type(search, 'zzzz');
     expect(await screen.findByText(PICKER_NO_RESULTS)).toBeInTheDocument();
+  });
+});
+
+describe('SettingsTab project names', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
+  });
+
+  it('names projects from metadata rather than opening a data provider per project', async () => {
+    // `pdp.getSetting('platform.fullName')` falls through to the setting's contribution default, a
+    // localized `*Name Missing*` placeholder, so a project that never set a full name reads back as
+    // one and the sidebar renders "WEB - *Name Missing*". Metadata omits the field instead, which
+    // is the only source that can tell the two states apart.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'projA', name: 'WEB', projectInterfaces: [], pdpFactoryInfo: {} },
+      {
+        id: 'projB',
+        name: 'ESV',
+        fullName: 'English Standard Version',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+      },
+    ]);
+    render(<SettingsTab />);
+
+    const trigger = await screen.findByRole('combobox', { name: PROJECTS_GROUP_LABEL });
+    await user.click(trigger);
+
+    // The project with a full name shows both; the one without shows its short name and no
+    // placeholder standing in for the name it does not have.
+    expect(await screen.findByText('English Standard Version')).toBeInTheDocument();
+    expect(await screen.findByText('WEB')).toBeInTheDocument();
+    expect(screen.queryByText(/Name Missing/)).not.toBeInTheDocument();
+    expect(projectDataProviders.get).not.toHaveBeenCalled();
   });
 });

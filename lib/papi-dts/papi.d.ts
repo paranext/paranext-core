@@ -662,6 +662,13 @@ declare module 'shared/models/web-view.model' {
    * id to factor. An area with no entry follows the default from Settings. Written only by the
    * platform; web views may read it.
    *
+   * A web view whose `getWebViewDefinition` rebuilds its own definition on re-point (a
+   * `reloadWebView` pointed at another project through the same web view id) must carry its saved
+   * `state` through wholesale, by spreading it rather than copying only the keys the view itself
+   * uses: the platform stores a companion identity stamp next to this key, and a view that drops the
+   * stamp while keeping the levels has the platform silently re-attribute the previous project's
+   * level to the new one, rather than losing it.
+   *
    * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
    * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
    * equal to this constant.
@@ -688,6 +695,21 @@ declare module 'shared/models/web-view.model' {
    * @experimental This constant is unstable and may change or disappear without notice
    */
   export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
+  /**
+   * Attribute that marks an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} as pop-up content
+   * opened from that zoom area (a popover, menu or tooltip portaled out of the area element) rather
+   * than a pane. The platform scales such an element with its area but never reports it as an area of
+   * its own and never places the zoom indicator on it. `platform-bible-react`'s `PopoverContent`,
+   * `DropdownMenuContent` and `TooltipContent` set it automatically; `SelectContent`,
+   * `ContextMenuContent`, `MenubarContent` and `DropdownMenuSubContent` do not yet.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that marks its own pop-up content writes the literal `'data-platform-content-zoom-popup'` itself
+   * and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_POPUP_ATTRIBUTE = 'data-platform-content-zoom-popup';
   /**
    * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
    * zoom area, with that area's effective factor (own level, else the Settings default):
@@ -1345,6 +1367,14 @@ declare module 'shared/data/rpc.model' {
   /** Port to use for the WebSocket */
   export const WEBSOCKET_PORT = 8876;
   /**
+   * Largest message the WebSocket transport carries. A message over this is not a failed request: the
+   * receiver closes the connection with 1009, taking down every request in flight on it and, for the
+   * C# data provider, the process itself. Declared here rather than left to the `ws` default so a
+   * producer sizing a response against it - see `Pt9InterlinearReader.MaxPt9InterlinearDataBytes` -
+   * is measuring against a number this repository states.
+   */
+  export const MAX_WEBSOCKET_PAYLOAD_BYTES: number;
+  /**
    * How many times to try sending a request before giving up if the request is not yet registered.
    * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
    * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of
@@ -1619,10 +1649,12 @@ declare module 'shared/data/rpc.model' {
    *
    * The code has to be read back out of the message because `doRequest` flattens every RPC-level
    * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
-   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker (the richer
-   * `platformErrorCode` field is populated only for C# `PlatformErrorCodes.WithCode` throws, which a
-   * "no handler yet" response never carries — it has no `error.data` at all). Deriving the format
-   * from {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
+   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker: a "no
+   * handler yet" response has no `error.data` at all, and the `platformErrorCode` field is no help
+   * either, because it is never populated from C#. `JsonRpc.ExceptionStrategy` is left at its
+   * `CommonErrorData` default, which serializes no `Exception.Data`, so `error.data.data` is always
+   * absent whatever `PlatformErrorCodes.WithCode` set. Deriving the format from
+   * {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
    * with, keeps this matcher in lockstep with any reformat there.
    *
    * @param error Error thrown by a `networkService` request
@@ -5012,7 +5044,8 @@ declare module 'shared/models/network-object-status.service-model' {
      *   indefinitely
      * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
      *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-     *   reached before the network object is registered
+     *   reached before the network object is registered, or if the current set of network objects
+     *   could not be read. Rejections carry a reason string, not an `Error`
      */
     waitForNetworkObject: (
       objectDetailsToMatch: Partial<NetworkObjectDetails>,
@@ -5660,15 +5693,15 @@ declare module 'papi-shared-types' {
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
     /**
-     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
-     * and Linux, Ctrl+`=` / Ctrl+`+` invoke this until PT-4577 hands those chords to per-pane
-     * content zoom (`platform.webViewContentZoomIn`).
+     * Increase the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomIn`.
      */
     'platform.zoomIn': () => Promise<void>;
     /**
-     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
-     * and Linux, Ctrl+`-` invokes this until PT-4577 hands that chord to per-pane content zoom
-     * (`platform.webViewContentZoomOut`).
+     * Decrease the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomOut`.
      */
     'platform.zoomOut': () => Promise<void>;
     /**
@@ -5995,10 +6028,31 @@ declare module 'papi-shared-types' {
       [key: string]: number;
     };
     /**
+     * Which web view types mark at least one content-zoom area, keyed by web view type. An absent
+     * key means the platform has no evidence yet that the type marks any area. Written by the
+     * platform the first time a pane of a type reports an area (the record only ever gains `true`
+     * entries; a type recorded `true` is never downgraded); read when a pane opens, before its
+     * content loads, so the platform knows whether to scale the whole view at the Settings default
+     * or to wait for the areas the view is about to mark. Without it every newly opened pane would
+     * show at the wrong scale for a moment. Local to this machine, and self-correcting in the
+     * `false`→`true` direction: a type that starts marking an area is re-recorded on its next
+     * open.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.webViewContentZoomMemory`. Deliberately separate from that key, which holds the
+     * user's remembered levels: this one is a capability cache, and clearing the user's levels must
+     * not clear it.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomTypesWithAreas': {
+      [webViewType: string]: boolean;
+    };
+    /**
      * The zoom factor that applies to the entire application, including menus and toolbars (shown
      * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
-     * from Settings, by the `platform.zoomIn` / `platform.zoomOut` commands, and by the
-     * application's own zoom keyboard shortcuts; per-pane content zoom is
+     * from Settings and by the `platform.zoomIn` and `platform.zoomOut` commands; no keyboard
+     * shortcut changes it — the zoom chords drive per-pane content zoom, which is
      * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
@@ -8613,6 +8667,34 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
      */
     dialogRole?: 'dialog' | 'alertdialog';
     /**
+     * Whether this dialog's own `Component` renders a `DialogTitle`.
+     *
+     * When it does, the modal shell must not also render its fallback title: Radix derives the id
+     * from the `Dialog.Root` context, so a second title reuses the same id. The duplicate id is a
+     * `duplicate-id-aria` accessibility violation, and `aria-labelledby` resolves to whichever
+     * element comes first in document order — the shell's generic text, not the component's specific,
+     * localized text.
+     *
+     * Independent of {@link providesOwnDescription} on purpose: a dialog that renders a title but no
+     * description (or the reverse) still needs the shell's fallback for the half it omits, and a
+     * single combined flag would make it choose between a duplicate id and no accessible description
+     * at all.
+     *
+     * Defaults to `false`, which keeps the fallback title for dialogs that render none.
+     */
+    providesOwnTitle?: boolean;
+    /**
+     * Whether this dialog's own `Component` renders a `DialogDescription`.
+     *
+     * The description half of {@link providesOwnTitle}, with the same duplicate-id consequence. Set it
+     * only when the component renders a description for EVERY state it can be opened in — a
+     * description that renders conditionally (from an optional `prompt`, say) leaves the dialog with
+     * no description at all whenever the value is absent, because the shell's fallback is gone.
+     *
+     * Defaults to `false`, which keeps the fallback description for dialogs that render none.
+     */
+    providesOwnDescription?: boolean;
+    /**
      * The function used to load the dialog into the dock layout. Default uses the `Component` field
      * and passes in the `DialogProps`
      */
@@ -8711,7 +8793,13 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
-  /** The tabType for the share layout dialog in `share-layout.dialog.tsx` */
+  /**
+   * The tabType for the Team layout dialog in `team-layout.dialog.tsx`.
+   *
+   * The `shareLayout` spelling here, in `SHARE_LAYOUT_DIALOG_TYPE` and in the `%shareLayoutDialog_*%`
+   * localization keys is deliberately frozen: these are published contracts, and renaming them would
+   * break saved layouts and translator catalogs for a cosmetic gain.
+   */
   export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
@@ -8770,7 +8858,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export type ProjectPickerOptions = DialogOptions;
-  /** Options to provide when showing the Share Layout dialog */
+  /** Options to provide when showing the Team layout dialog */
   export type ShareLayoutDialogOptions = DialogOptions & {
     /** The project whose layout is being shared */
     projectId: string;
@@ -9986,6 +10074,35 @@ declare module 'shared/data/platform.data' {
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */
   export const DEFAULT_THEME_TYPE = 'light';
+  /**
+   * Usersnap client key of the space that holds the in-app feedback forms (Usersnap projects). Like
+   * the project keys below, it is write-only: it can only SUBMIT reports to a Usersnap project, not
+   * RETRIEVE any information from it.
+   *
+   * The Usersnap keys are intentionally empty in Platform.Bible. A product built on top of core
+   * (Paratext 10 Studio) sets them at build time through its repository patch, together with the Help
+   * menu items that open the forms. While this key is empty, Usersnap is never initialized and makes
+   * no network request.
+   *
+   * Typed as `string` rather than the literal `''` so a build that sets it still type-checks.
+   *
+   * @experimental
+   */
+  export const USERSNAP_SPACE_API_KEY: string;
+  /**
+   * Usersnap client key of the "report a bug / send feedback" form. Write-only, and empty in
+   * Platform.Bible; see {@link USERSNAP_SPACE_API_KEY}.
+   *
+   * @experimental
+   */
+  export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string;
+  /**
+   * Usersnap client key of the "submit an idea" form. Write-only, and empty in Platform.Bible; see
+   * {@link USERSNAP_SPACE_API_KEY}.
+   *
+   * @experimental
+   */
+  export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string;
   /** Constants related to zoom factor of entire application */
   export const DEFAULT_ZOOM_FACTOR = 1;
   export const MIN_ZOOM_FACTOR = 0.5;
@@ -11074,6 +11191,13 @@ declare module 'renderer/services/overlays/overlay-store' {
   /** Get a specific overlay by id, or undefined if not found */
   export function getOverlayById(id: string): OverlayEntry | undefined;
   /**
+   * Determine whether at least one active overlay has the given type
+   *
+   * @param type The overlay type to check for (e.g. 'modalDialog')
+   * @returns True if an overlay of that type is currently active; false otherwise
+   */
+  export function hasOverlayOfType(type: OverlayEntry['type']): boolean;
+  /**
    * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
    * accepts, since a newer overlay always renders over an older one.
    *
@@ -11122,6 +11246,30 @@ declare module 'renderer/services/overlays/overlay-store' {
       itemCount: number;
     },
   ): boolean;
+}
+declare module 'renderer/components/overlays/overlay-content-zoom.util' {
+  import { CSSProperties } from 'react';
+  /** The Radix primitives whose content the platform draws for a web view. */
+  type ZoomablePrimitive = 'popover' | 'dropdown-menu';
+  /**
+   * The style that draws a platform overlay at the scale of the pane that asked for it.
+   *
+   * `zoom` goes inside the popper wrapper Radix positions — on the Radix `Content` element, or on an
+   * inner wrapper when an arrow must stay unzoomed — never on the wrapper itself: the wrapper stays
+   * in unzoomed viewport pixels, so Radix keeps measuring the drawn size and placing it correctly.
+   * The available-space variables Radix publishes are in those same unzoomed pixels, so dividing them
+   * by the scale is what keeps a zoomed pop-up inside the window rather than letting it grow past the
+   * edge.
+   *
+   * A scale of 1 - or anything that is not a usable positive number - contributes nothing at all, so
+   * an overlay from an unzoomed pane is drawn at interface scale.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function contentZoomOverlayStyle(
+    scale: number,
+    primitive: ZoomablePrimitive,
+  ): CSSProperties;
 }
 declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
   import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
@@ -11206,6 +11354,13 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
       x: number;
       y: number;
     };
+    /**
+     * The scale the requesting pane draws its content at. The menu is drawn at the same scale, so it
+     * matches the text it belongs to. 1 leaves the rendered output exactly as it is.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    contentScale?: number;
     /** Called when the user selects a menu item */
     onSelect: (result: OverlayContextMenuResult) => void;
     /** Called when the menu is dismissed without a selection */
@@ -11222,6 +11377,7 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
   export function OverlayContextMenuPresentational({
     items,
     position,
+    contentScale,
     onSelect,
     onDismiss,
   }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
@@ -11232,6 +11388,14 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
         type: 'contextMenu';
       }
     >;
+    /**
+     * The requesting pane's content scale, read and supplied by `OverlayHost` — see
+     * {@link OverlayContextMenuPresentationalProps.contentScale}. Undefined draws at interface scale,
+     * matching the presentational component's own default.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    contentScale?: number;
   };
   /**
    * Production context menu component. Resolves LocalizeKey values in menu items via
@@ -11244,6 +11408,7 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
    */
   export function OverlayContextMenu({
     overlay,
+    contentScale,
   }: OverlayContextMenuProps): import('react/jsx-runtime').JSX.Element;
 }
 declare module 'renderer/services/overlays/overlay.service-model' {
@@ -11491,6 +11656,10 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * menu data, renders the menu, and auto-executes the selected command. Returns the command string
      * that was executed, or undefined if dismissed.
      *
+     * The menu is drawn at the content zoom of the requesting WebView's pane — of its active area,
+     * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
+     * in and nothing to compensate for.
+     *
      * @param webViewType The webViewType to look up in the menu data service
      * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
      *   from within a WebView iframe.
@@ -11514,6 +11683,10 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * return immediately with an overlay ID rather than waiting for dismissal. Use
      * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
      * {@link dismissPopover} to close it programmatically.
+     *
+     * The popover is drawn at the content zoom of the requesting WebView's pane — of its active area,
+     * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
+     * in and nothing to compensate for.
      *
      * @param request The popover anchor, content, and behavioral options
      * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
@@ -11560,6 +11733,11 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
      * the palette is shown, so all filtering — the palette's own search box and text forwarded via
      * {@link updateCommandPalette} — matches against the text the user actually sees.
+     *
+     * A palette shown at an anchor is drawn at the content zoom of the requesting WebView's pane — of
+     * its active area, for a pane with several zoom areas; there is nothing to opt in and nothing to
+     * compensate for. A palette shown without an anchor is centred in the window, belongs to no
+     * pane's content, and stays at interface scale.
      *
      * @param request The items, optional anchor position, and display options
      * @param webViewId The ID of the WebView requesting the command palette
@@ -13951,6 +14129,37 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    * @returns The iframe element, or null if not found
    */
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
+  /**
+   * Parses the CSS `zoom` inline on an iframe element. Anything that is not a positive finite number
+   * — including the empty string written to clear the zoom, or no iframe at all — means unscaled.
+   *
+   * Exported so {@link getWebViewIframeZoom} and the content zoom service's own iframe-zoom fallback
+   * (which reads its iframe through its own test-only seam, not {@link getWebViewIframe}) share one
+   * parse instead of drifting apart.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): number;
+  /**
+   * Reads the CSS `zoom` the content zoom service has set on a WebView's host `<iframe>` element.
+   *
+   * A zoomed iframe's own `getBoundingClientRect()` is unchanged — only its inner viewport shrinks or
+   * grows — and the inner document measures itself in unscaled inner pixels, so an inner point at `x`
+   * renders `zoom * x` from the iframe's left edge.
+   *
+   * The platform is the only writer of this property, so the inline value is authoritative (and,
+   * unlike computed style, is defined for this non-standard property in every environment the
+   * renderer runs in).
+   *
+   * This does not cover per-area zoom — a pane that marks zoom areas carries no whole-iframe `zoom`
+   * and this always answers `1` for it. For the scale a pane's content is actually drawn at, use
+   * `getContentZoomScaleForWebView` in `web-view-content-zoom.service` instead.
+   *
+   * @param webViewId The webViewId of the iframe
+   * @returns The scale factor the iframe's contents are rendered at
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function getWebViewIframeZoom(webViewId: string): number;
   /**
    * Translates iframe-relative coordinates to document-relative coordinates using
    * getBoundingClientRect of the WebView iframe and the CSS `zoom` applied to it.

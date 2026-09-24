@@ -50,13 +50,17 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
+  ContentZoomAreaProvider,
+  ContentZoomRoot,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   type FootnoteEditorMarkerPalette,
+  leftEdgeRect,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
+  measureRange,
   Popover,
   PopoverAnchor,
   PopoverContent,
@@ -67,6 +71,7 @@ import {
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   isMacOs,
+  useLivePopoverAnchor,
   usePromise,
   useViewVisibility,
 } from 'platform-bible-react';
@@ -125,16 +130,16 @@ import {
   type ManageBooksDisabledReason,
 } from './book-not-available-view.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
-import {
-  ShareLayoutButton,
-  SHARE_LAYOUT_BUTTON_STRING_KEYS,
-} from './share-layout-button.component';
+import { TeamLayoutButton, TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
   removeDecorations,
 } from './decorations.util';
 import {
+  createNoteAnchorSource,
+  createPendingCommentAnchorSource,
+  createPendingCommentCenterAnchorSource,
   getVerseElement,
   runOnFirstLoad,
   scrollToAnnotation,
@@ -237,7 +242,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
   ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
-  ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
+  ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
@@ -284,6 +289,18 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 
 /** Annotation ID used for a pending comment that hasn't been saved yet */
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
+
+/**
+ * The footnote editor popover's minimum width: 500 px, yielding to the zoomed width cap (the pane's
+ * available width divided by the zoom factor) so a zoomed popover still fits a narrow pane. Until
+ * Radix has published the available width, the viewport width stands in for it: the footnote editor
+ * locks its own width on its first layout, which happens before that.
+ *
+ * Set inline rather than as a Tailwind arbitrary class: the web view's SCSS + PostCSS pipeline
+ * drops a rule whose value is this `min()` expression, so the minimum is an inline style.
+ */
+const FOOTNOTE_POPOVER_MIN_WIDTH =
+  'min(500px, calc(var(--radix-popover-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
@@ -402,11 +419,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
-  // These control the placement of the footnote editor popover by setting the location of the anchor
+  // The footnote editor popover and the live anchor it is placed against
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>(false);
-  const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
-  const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
-  const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
+  const notePopoverAnchor = useLivePopoverAnchor();
 
   /**
    * Mirror of {@link showFootnoteEditor} readable from the stable `noteCallerOnClick` closure: an
@@ -434,19 +449,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const editingNoteSessionRefreshedAt = useRef<number | undefined>(undefined);
 
-  // These control the placement of the comment editor popover by setting the location of the anchor
+  // The comment editor popover and the live anchor it is placed against
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
   /** Remembers the last assignee chosen so the next new comment pre-selects the same user */
   const [lastAssignedUser, setLastAssignedUser] = useState<string | undefined>();
-  const [commentPopoverAnchorX, setCommentPopoverAnchorX] = useState<number>();
-  const [commentPopoverAnchorY, setCommentPopoverAnchorY] = useState<number>();
-  const [commentPopoverAnchorHeight, setCommentPopoverAnchorHeight] = useState<number>();
+  const commentPopoverAnchor = useLivePopoverAnchor();
 
-  // These control the placement of the inline markers menu by setting the location of the anchor
+  // The inline markers menu and the live anchor it is placed against
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
-  const [markersMenuAnchorX, setMarkersMenuAnchorX] = useState<number>();
-  const [markersMenuAnchorY, setMarkersMenuAnchorY] = useState<number>();
-  const [markersMenuAnchorHeight, setMarkersMenuAnchorHeight] = useState<number>();
+  const markersMenuAnchor = useLivePopoverAnchor();
 
   // The refs needs to start out with null for it to work as a element ref
   // eslint-disable-next-line no-null/no-null
@@ -1052,6 +1063,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     ],
   );
 
+  /**
+   * Places the footnote editor popover against a note's caller (or the note itself). The caller
+   * element is measured live; if the editor re-renders it away, the note is looked up again by key.
+   * The anchor spans the element's height with no width, so the popover shows below the caller's
+   * line.
+   */
+  const setNoteAnchorSource = useCallback(
+    (element: Element, noteKey: string) => {
+      notePopoverAnchor.setSource(
+        createNoteAnchorSource(element, noteKey, (key) => editorRef.current?.getElementByKey(key)),
+      );
+    },
+    [notePopoverAnchor],
+  );
+
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
       chapterVerseSeparator,
@@ -1127,10 +1153,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               return;
             }
 
-            const targetRect = event.currentTarget.getBoundingClientRect();
-            setNotePopoverAnchorX(targetRect.left);
-            setNotePopoverAnchorY(targetRect.top);
-            setNotePopoverAnchorHeight(targetRect.height);
+            setNoteAnchorSource(event.currentTarget, noteNodeKey);
             editingNoteKey.current = noteNodeKey;
             editingNoteOps.current = [noteOp];
             editingNoteSessionRefreshedAt.current = Date.now();
@@ -1148,6 +1171,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       footnoteCallers,
       crossRefCallers,
       setFootnotesPaneVisible,
+      setNoteAnchorSource,
     ],
   );
 
@@ -1500,6 +1524,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
     }
 
+    // Try to find the selected text element to anchor the popover to. No rendered editor content
+    // means there is nothing to anchor to — bail out before recording the pending range or setting
+    // the highlight annotation below, not just before opening the popover: either one left behind
+    // with no popover open to clear it would strand a highlight in the text with no way to remove
+    // it, and would misdirect the next comment actually saved to this stale range.
+    const editorContainer = document.querySelector<HTMLElement>('.usfm');
+    if (!editorContainer) return;
+
     pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
 
     // Create a temporary annotation to highlight the selected text
@@ -1509,29 +1541,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       PENDING_COMMENT_ANNOTATION_ID,
     );
 
-    // Position the popover near the annotation
-    // Try to find the selected text element for positioning
-    const editorContainer = document.querySelector<HTMLElement>('.usfm');
-    if (editorContainer) {
-      // Use the browser's selection to get the bounding rect of the selected text
-      const domSelection = window.getSelection();
-      if (domSelection && domSelection.rangeCount > 0) {
-        const range = domSelection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        setCommentPopoverAnchorX(rect.left);
-        setCommentPopoverAnchorY(rect.bottom);
-        setCommentPopoverAnchorHeight(0);
-      } else {
-        // Fallback to center of editor viewport
-        const rect = editorContainer.getBoundingClientRect();
-        setCommentPopoverAnchorX(rect.left + rect.width / 2);
-        setCommentPopoverAnchorY(rect.top + rect.height / 2);
-        setCommentPopoverAnchorHeight(0);
-      }
+    // Position the popover near the annotation. Use the browser's selection to get the bounding
+    // rect of the selected text
+    const domSelection = window.getSelection();
+    if (domSelection && domSelection.rangeCount > 0) {
+      const range = domSelection.getRangeAt(0).cloneRange();
+      commentPopoverAnchor.setSource(
+        createPendingCommentAnchorSource(range, PENDING_COMMENT_ANNOTATION_ID, editorContainer),
+      );
+    } else {
+      // Fallback to center of editor viewport
+      commentPopoverAnchor.setSource(createPendingCommentCenterAnchorSource(editorContainer));
     }
 
     setShowCommentEditor(true);
-  }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked]);
+  }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked, commentPopoverAnchor]);
 
   /**
    * Inserts a footnote at the current selection. Shared by the "Insert footnote" context-menu item,
@@ -1904,13 +1928,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
     if (inlineMarkerMenuItems.length && currentSelection && currentSelection.rangeCount > 0) {
-      const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
-      setMarkersMenuAnchorX(selectionRect.left);
-      setMarkersMenuAnchorY(selectionRect.top);
-      setMarkersMenuAnchorHeight(selectionRect.height);
+      const range = currentSelection.getRangeAt(0).cloneRange();
+      const rangeElement =
+        range.startContainer instanceof Element
+          ? range.startContainer
+          : range.startContainer.parentElement;
+      const contextElement = rangeElement?.closest('.editor-input') ?? rangeElement;
+      // A selection outside any element has nothing to anchor to; opening anyway would place the
+      // menu against a previous selection.
+      if (!contextElement) return;
+      markersMenuAnchor.setSource({
+        measure: () => {
+          const rect = measureRange(range);
+          return rect && leftEdgeRect(rect);
+        },
+        contextElement,
+      });
       setShowMarkersMenu(true);
     }
-  }, [inlineMarkerMenuItems]);
+  }, [inlineMarkerMenuItems, markersMenuAnchor]);
 
   // Need to add a window listener for click events that will close the markers menu when you click
   // outside. There is another `onClick` listener for the marker menu that prevents click events
@@ -2920,30 +2956,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editingNoteSessionRefreshedAt.current = Date.now();
   }, []);
 
-  const openFootnoteEditorOnNewNote = useCallback((ops?: DeltaOp[], insertedNodeKey?: string) => {
-    if (insertedNodeKey && ops) {
-      // If we are already editing a note, then returns
-      if (editingNoteKey.current) return;
+  const openFootnoteEditorOnNewNote = useCallback(
+    (ops?: DeltaOp[], insertedNodeKey?: string) => {
+      if (insertedNodeKey && ops) {
+        // If we are already editing a note, then returns
+        if (editingNoteKey.current) return;
 
-      // Makes sure the node is a note
-      const noteOp = ops[1];
-      if (!isInsertEmbedOpOfType('note', noteOp)) return;
+        // Makes sure the node is a note
+        const noteOp = ops[1];
+        if (!isInsertEmbedOpOfType('note', noteOp)) return;
 
-      const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
-      // Note element must be defined
-      if (!noteElement) return;
+        const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
+        // Note element must be defined
+        if (!noteElement) return;
 
-      const targetRect = noteElement.getBoundingClientRect();
-      setNotePopoverAnchorX(targetRect.left);
-      setNotePopoverAnchorY(targetRect.top);
-      setNotePopoverAnchorHeight(targetRect.height);
-      editingNoteKey.current = insertedNodeKey;
-      editingNoteOps.current = [noteOp];
-      editingNoteSessionRefreshedAt.current = Date.now();
-      editingNoteIsNew.current = true;
-      setShowFootnoteEditor(true);
-    }
-  }, []);
+        setNoteAnchorSource(noteElement, insertedNodeKey);
+        editingNoteKey.current = insertedNodeKey;
+        editingNoteOps.current = [noteOp];
+        editingNoteSessionRefreshedAt.current = Date.now();
+        editingNoteIsNew.current = true;
+        setShowFootnoteEditor(true);
+      }
+    },
+    [setNoteAnchorSource],
+  );
 
   // #region Debounced Save Scheduling
 
@@ -3839,15 +3875,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         endAreaChildren={
           <>
             {/* This container is flex-row-reverse, so StructureProtectionButton must come first
-            in JSX order to render visually after (to the right of) ShareLayoutButton. */}
+            in JSX order to render visually after (to the right of) TeamLayoutButton. */}
             <StructureProtectionButton
               projectId={projectId}
               localizedStrings={localizedStrings}
               className="tw:h-8"
             />
-            {/* Share Layout is only available in 10 Simple right now. Later it will be made available in 10 Power too. */}
+            {/* Team layout is only available in 10 Simple right now. Later it will be made available in
+                10 Power too — note the team USFM structure lock it edits is itself unenforced in Power
+                mode (`useStructureProtectionState`), so opening it there needs a decision about what
+                that lock means. */}
             {!isPowerMode && (
-              <ShareLayoutButton
+              <TeamLayoutButton
                 projectId={projectId}
                 localizedStrings={localizedStrings}
                 className="tw:h-8"
@@ -3860,9 +3899,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
-      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
+      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
+          The Scripture text zoom area: the toolbar and the footnotes-pane divider live outside it,
+          in the surrounding layout; the editor and everything it renders inline (including the
+          Simple-mode character-marker bar) scale with the text. Content that portals out of it
+          (menus, pop-ups) is not inside the area: the library's popovers, dropdown menus and
+          tooltips opened from inside follow it through the area `ContentZoomRoot` provides, while
+          the editor's own right-click menu stays at interface scale. */}
       <InPortal node={editorPortalNode}>
-        <PortalContents>{renderEditor()}</PortalContents>
+        <PortalContents>
+          <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+            {renderEditor()}
+          </ContentZoomRoot>
+        </PortalContents>
       </InPortal>
       <div
         ref={editorContainerRef}
@@ -3940,84 +3989,67 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           </div>,
         )}
       </div>
-      {/** Inline markers menu components */}
-      <Popover open={showMarkersMenu}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: markersMenuAnchorY,
-            left: markersMenuAnchorX,
-            height: markersMenuAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
-        <PopoverContent
-          className="tw:w-[500px] tw:p-0"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
-          <MarkerMenu
-            markerMenuItems={inlineMarkerMenuItems}
-            localizedStrings={localizedStrings}
-            searchRef={markerMenuSearchRef}
-            searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
-          />
-        </PopoverContent>
-      </Popover>
-      {/** Footnote editor components */}
-      <Popover open={showFootnoteEditor}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: notePopoverAnchorY,
-            left: notePopoverAnchorX,
-            // This height makes it so that visually the popover displays below the current line where the footnote is
-            height: notePopoverAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
-        <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
-          <FootnoteEditor
-            classNameForEditor="scripture-font"
-            noteOps={editingNoteOps.current}
-            noteKey={editingNoteKey.current}
-            onClose={onFootnoteEditorClose}
-            onNoteEdit={onFootnoteEditorNoteEdit}
-            scrRef={scrRef}
-            editorOptions={options}
-            defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
-            localizedStrings={localizedStrings}
-            parentEditorRef={editorRef}
-            markerPalette={footnoteMarkerPalette}
-          />
-        </PopoverContent>
-      </Popover>
-      {/** Comment editor for creating new comment threads */}
-      <Popover open={showCommentEditor}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: commentPopoverAnchorY,
-            left: commentPopoverAnchorX,
-            height: commentPopoverAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
-        <PopoverContent className="tw:w-[400px] tw:p-[10px]">
-          <CommentEditor
-            assignableUsers={commentEditorAssignableUsers}
-            onSave={onCommentEditorSave}
-            onClose={onCommentEditorCancel}
-            localizedStrings={localizedStrings}
-            initialAssignedUser={lastAssignedUser}
-          />
-        </PopoverContent>
-      </Popover>
+      {/* The popovers below are rendered beside the editor and anchored to live positions in its
+          text (see useLivePopoverAnchor), so they belong to the text's zoom area, scale with it,
+          and follow the text when it scrolls or reflows. */}
+      <ContentZoomAreaProvider>
+        {/** Inline markers menu components */}
+        <Popover open={showMarkersMenu}>
+          <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
+          <PopoverContent
+            className="tw:w-[500px] tw:p-0"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <MarkerMenu
+              markerMenuItems={inlineMarkerMenuItems}
+              localizedStrings={localizedStrings}
+              searchRef={markerMenuSearchRef}
+              searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
+            />
+          </PopoverContent>
+        </Popover>
+        {/** Footnote editor components */}
+        <Popover open={showFootnoteEditor}>
+          <PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />
+          <PopoverContent
+            className="tw:w-max tw:p-[10px]"
+            style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}
+          >
+            <FootnoteEditor
+              classNameForEditor="scripture-font"
+              noteOps={editingNoteOps.current}
+              noteKey={editingNoteKey.current}
+              onClose={onFootnoteEditorClose}
+              onNoteEdit={onFootnoteEditorNoteEdit}
+              scrRef={scrRef}
+              editorOptions={options}
+              defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+              localizedStrings={localizedStrings}
+              parentEditorRef={editorRef}
+              markerPalette={footnoteMarkerPalette}
+            />
+          </PopoverContent>
+        </Popover>
+        {/** Comment editor for creating new comment threads */}
+        <Popover open={showCommentEditor}>
+          <PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />
+          {/* `always`: re-measured every frame while open. Marking the selection as the pending
+              comment re-renders the text under the anchor without any scroll, resize or layout
+              shift that would otherwise trigger a re-measure. */}
+          <PopoverContent className="tw:w-[400px] tw:p-[10px]" updatePositionStrategy="always">
+            <CommentEditor
+              assignableUsers={commentEditorAssignableUsers}
+              onSave={onCommentEditorSave}
+              onClose={onCommentEditorCancel}
+              localizedStrings={localizedStrings}
+              initialAssignedUser={lastAssignedUser}
+            />
+          </PopoverContent>
+        </Popover>
+      </ContentZoomAreaProvider>
     </div>
   );
 };

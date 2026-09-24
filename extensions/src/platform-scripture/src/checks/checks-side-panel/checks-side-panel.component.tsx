@@ -18,6 +18,7 @@ import {
   ProjectSelectorLocalizedStrings,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
+  resolveLocalizedString,
   makeBuiltInGroupings,
 } from 'platform-bible-react/experimental';
 import {
@@ -79,24 +80,25 @@ export const CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] 
 ];
 
 /**
- * Maps caller-supplied checks-side-panel projects onto ProjectSelector rows, sorted by full name
- * and carrying the grouping inputs (language, recency) in the picker's `customData` envelope.
- * Exported for coverage tests.
+ * Maps caller-supplied checks-side-panel projects onto ProjectSelector rows, carrying the grouping
+ * inputs (language, recency) in the picker's `customData` envelope. Exported for coverage tests.
+ *
+ * Deliberately unsorted. `ProjectSelector` sorts every section it renders itself — every partition
+ * path in `project-selector.rows.ts` runs `compareRows`, which leads with `compareProjectsByName` —
+ * so a sort here would order rows nothing ever reads in that order.
  */
 export function toChecksSelectorRows(
   projects: readonly ChecksSidePanelProject[],
 ): ProjectSelectorProject[] {
-  return [...projects]
-    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-    .map((project) => ({
-      id: project.id,
-      shortName: project.shortName,
-      fullName: project.fullName,
-      customData: makeProjectSelectorCustomData({
-        language: project.language,
-        lastUsedAt: project.lastUsedAt,
-      }),
-    }));
+  return projects.map((project) => ({
+    id: project.id,
+    shortName: project.shortName,
+    fullName: project.fullName,
+    customData: makeProjectSelectorCustomData({
+      language: project.language,
+      lastUsedAt: project.lastUsedAt,
+    }),
+  }));
 }
 
 /** Props for the {@link ChecksSidePanel} presentational component. */
@@ -223,11 +225,20 @@ export function ChecksSidePanel({
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
       ...buildProjectSelectorLocalizedStrings(localizedStrings),
-      buttonPlaceholder:
+      // Each override falls back to this panel's own English, not the picker's. "No project"
+      // reports a state; the picker's generic "Select a project" would read as an instruction.
+      buttonPlaceholder: resolveLocalizedString(
         localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%'],
-      commandEmptyMessage:
+        'No project',
+      ),
+      commandEmptyMessage: resolveLocalizedString(
         localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%'],
-      ariaLabel: localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
+        'No projects found',
+      ),
+      ariaLabel: resolveLocalizedString(
+        localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
+        'Your projects & resources',
+      ),
     }),
     [localizedStrings],
   );
