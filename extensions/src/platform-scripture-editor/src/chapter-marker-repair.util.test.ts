@@ -341,133 +341,89 @@ describe('applyChapterSavePreparation', () => {
   const REPAIRED = usjOf(chapter('3'), para('p', 'body'));
   const TO_SAVE = usjOf(chapter('3'), para('p', 'body edited'));
 
-  /** Stands in for the editor side of the call site, recording the document it is handed. */
-  function editorStandIn() {
-    const state: { editorUsj?: Usj } = {};
-    const applyRepairToEditor = vi.fn((usj: Usj) => {
-      state.editorUsj = usj;
+  /** Runs one save's application, recording what reached the editor and the user. */
+  function apply(
+    overrides: Partial<{
+      usjToSave: Usj | undefined;
+      repairedUsj: Usj | undefined;
+      currentChapterKey: string;
+      isUserEditing: boolean;
+    }>,
+  ) {
+    const { usjToSave, repairedUsj, currentChapterKey, isUserEditing } = {
+      usjToSave: TO_SAVE,
+      repairedUsj: REPAIRED,
+      currentChapterKey: 'GEN 3',
+      isUserEditing: false,
+      ...overrides,
+    };
+    const applyRepairToEditor = vi.fn();
+    const notifyRepair = vi.fn();
+    const result = applyChapterSavePreparation({
+      preparation: { repairedUsj, usjToSave, caretTarget: undefined },
+      savedChapterKey: 'GEN 3',
+      currentChapterKey,
+      isUserEditing,
+      applyRepairToEditor,
+      notifyRepair,
     });
-    return { state, applyRepairToEditor };
+    return { result, applyRepairToEditor, notifyRepair };
   }
 
   it('pushes the repaired document back when the save targets the chapter on screen', () => {
-    const { state, applyRepairToEditor } = editorStandIn();
-    const notifyRepair = vi.fn();
-
-    const usjToSave = applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
-      savedChapterKey: 'GEN 3',
-      currentChapterKey: 'GEN 3',
-      isUserEditing: false,
-      applyRepairToEditor,
-      notifyRepair,
-    });
-
+    const { result, applyRepairToEditor } = apply({});
     expect(applyRepairToEditor).toHaveBeenCalledTimes(1);
     expect(applyRepairToEditor).toHaveBeenCalledWith(REPAIRED, undefined);
-    expect(state.editorUsj).toBe(REPAIRED);
-    expect(usjToSave).toBe(TO_SAVE);
+    expect(result.usjToSave).toBe(TO_SAVE);
   });
 
   it('leaves the editor alone when the save targets a chapter the user has left', () => {
-    const { state, applyRepairToEditor } = editorStandIn();
-    const notifyRepair = vi.fn();
-
-    const usjToSave = applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
-      savedChapterKey: 'GEN 3',
-      currentChapterKey: 'GEN 4',
-      isUserEditing: false,
-      applyRepairToEditor,
-      notifyRepair,
-    });
-
+    const { result, applyRepairToEditor } = apply({ currentChapterKey: 'GEN 4' });
     expect(applyRepairToEditor).not.toHaveBeenCalled();
-    expect(state.editorUsj).toBeUndefined();
-    expect(usjToSave).toBe(TO_SAVE);
+    expect(result.usjToSave).toBe(TO_SAVE);
   });
 
   // A save can run mid-typing, and replacing the document then drops the caret so the next keys
-  // land at the end of the chapter. The repair is still written and reported; the save after the
-  // pause puts it on screen.
+  // land at the end of the chapter. The repair is still written; the save after the pause puts it
+  // on screen.
   it('does not correct the editor under a user who is still typing', () => {
-    const { state, applyRepairToEditor } = editorStandIn();
-    const notifyRepair = vi.fn();
-
-    const usjToSave = applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
-      savedChapterKey: 'GEN 3',
-      currentChapterKey: 'GEN 3',
-      isUserEditing: true,
-      applyRepairToEditor,
-      notifyRepair,
-    });
-
+    const { result, applyRepairToEditor } = apply({ isUserEditing: true });
     expect(applyRepairToEditor).not.toHaveBeenCalled();
-    expect(state.editorUsj).toBeUndefined();
-    expect(notifyRepair).toHaveBeenCalledTimes(1);
-    expect(usjToSave).toBe(TO_SAVE);
+    expect(result.usjToSave).toBe(TO_SAVE);
   });
 
-  it('tells the user about the repair whether or not the editor was corrected', () => {
-    const sameChapterNotify = vi.fn();
-    applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
-      savedChapterKey: 'GEN 3',
-      currentChapterKey: 'GEN 3',
-      isUserEditing: false,
-      applyRepairToEditor: vi.fn(),
-      notifyRepair: sameChapterNotify,
-    });
-    expect(sameChapterNotify).toHaveBeenCalledTimes(1);
-
-    const crossChapterNotify = vi.fn();
-    applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
-      savedChapterKey: 'GEN 3',
-      currentChapterKey: 'GEN 4',
-      isUserEditing: false,
-      applyRepairToEditor: vi.fn(),
-      notifyRepair: crossChapterNotify,
-    });
-    expect(crossChapterNotify).toHaveBeenCalledTimes(1);
+  // A write can still be refused after this runs — its chapter may no longer be the one selected —
+  // so the notice waits for the write, on screen or not.
+  it.each([
+    ['on screen', {}],
+    ['for a chapter the user has left', { currentChapterKey: 'GEN 4' }],
+    ['under a user still typing', { isUserEditing: true }],
+  ])('announces a repair with something to write only once it is written (%s)', (_label, args) => {
+    const { result, notifyRepair } = apply(args);
+    expect(notifyRepair).not.toHaveBeenCalled();
+    expect(result.shouldAnnounceRepairOnWrite).toBe(true);
   });
 
-  it('still corrects the editor and reports when the repair left nothing to save', () => {
-    const { state, applyRepairToEditor } = editorStandIn();
-    const notifyRepair = vi.fn();
-
-    const usjToSave = applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: undefined, caretTarget: undefined },
-      savedChapterKey: 'GEN 3',
-      currentChapterKey: 'GEN 3',
-      isUserEditing: false,
-      applyRepairToEditor,
-      notifyRepair,
-    });
-
-    expect(state.editorUsj).toBe(REPAIRED);
+  // The repair put the chapter back to what the PDP already holds, so the change on screen is the
+  // only one there is, and it is the user's to be told about.
+  it('announces straight away a repair that only corrected the screen', () => {
+    const { result, applyRepairToEditor, notifyRepair } = apply({ usjToSave: undefined });
+    expect(applyRepairToEditor).toHaveBeenCalledTimes(1);
     expect(notifyRepair).toHaveBeenCalledTimes(1);
-    expect(usjToSave).toBeUndefined();
+    expect(result).toEqual({ usjToSave: undefined, shouldAnnounceRepairOnWrite: false });
+  });
+
+  it('announces nothing for a repair that was neither written nor shown', () => {
+    const { result, notifyRepair } = apply({ usjToSave: undefined, isUserEditing: true });
+    expect(notifyRepair).not.toHaveBeenCalled();
+    expect(result.shouldAnnounceRepairOnWrite).toBe(false);
   });
 
   it('touches nothing and saves normally when no repair was needed', () => {
-    const { state, applyRepairToEditor } = editorStandIn();
-    const notifyRepair = vi.fn();
-
-    const usjToSave = applyChapterSavePreparation({
-      preparation: { repairedUsj: undefined, usjToSave: TO_SAVE, caretTarget: undefined },
-      savedChapterKey: 'GEN 3',
-      currentChapterKey: 'GEN 3',
-      isUserEditing: false,
-      applyRepairToEditor,
-      notifyRepair,
-    });
-
+    const { result, applyRepairToEditor, notifyRepair } = apply({ repairedUsj: undefined });
     expect(applyRepairToEditor).not.toHaveBeenCalled();
     expect(notifyRepair).not.toHaveBeenCalled();
-    expect(state.editorUsj).toBeUndefined();
-    expect(usjToSave).toBe(TO_SAVE);
+    expect(result).toEqual({ usjToSave: TO_SAVE, shouldAnnounceRepairOnWrite: false });
   });
 });
 

@@ -429,14 +429,24 @@ export function prepareUsjForChapterSave(
   };
 }
 
+/** What a chapter save goes on to do once {@link applyChapterSavePreparation} has run. */
+export interface ChapterSaveApplication {
+  /** The document to write to the PDP, or `undefined` when there is nothing to write. */
+  usjToSave: Usj | undefined;
+  /**
+   * Whether the user is to be told about the repair once {@link usjToSave} has been written. Told
+   * only then, because a write can still be refused — the chapter it belongs to may no longer be
+   * the one selected — and a notice that a correction was made would then describe nothing.
+   */
+  shouldAnnounceRepairOnWrite: boolean;
+}
+
 /**
  * Carries out what {@link prepareUsjForChapterSave} decided: corrects the editor's own document when
- * the save still targets the chapter on screen, tells the user either way, and hands back the
- * document to write.
+ * the save still targets the chapter on screen, and hands back the document to write.
  *
  * The push-back into the editor is not bookkeeping — without it the bad marker stays on screen, so
- * every later save repairs it again and reports it again, forever. It is skipped in three cases,
- * and the user is told either way, because the correction was still made to what gets written:
+ * every later save repairs it again and reports it again, forever. It is skipped in three cases:
  *
  * - The chapter being saved is no longer the chapter being shown. A save can fire after the user has
  *   navigated away (a trailing save, a chapter-switch flush) through the closure captured for the
@@ -452,6 +462,11 @@ export function prepareUsjForChapterSave(
  *   that may no longer mean the same place, and a note editor's own save no longer finds its note.
  *   The next save after the session closes makes the same repair and pushes it back then.
  *
+ * The user is told about a repair when it has actually taken effect: once its document is written
+ * (see {@link ChapterSaveApplication.shouldAnnounceRepairOnWrite}), or straight away when there is
+ * nothing to write but the editor was corrected — the repair put the chapter back to what the PDP
+ * already holds, so the only change is the one on screen.
+ *
  * `applyRepairToEditor` is responsible for its own failures: the PDP write has to run even when the
  * editor refuses the repaired document, because it is that write which un-poisons the chapter.
  *
@@ -463,7 +478,6 @@ export function prepareUsjForChapterSave(
  * @param applyRepairToEditor Puts the repaired document back into the editor and the caret back
  *   where the correction was made. Must not throw.
  * @param notifyRepair Tells the user the chapter marker was corrected.
- * @returns The document to write to the PDP, or `undefined` when there is nothing to write.
  */
 export function applyChapterSavePreparation({
   preparation,
@@ -479,12 +493,12 @@ export function applyChapterSavePreparation({
   isUserEditing: boolean;
   applyRepairToEditor: (usj: Usj, caretTarget: ChapterMarkerCaretTarget | undefined) => void;
   notifyRepair: () => void;
-}): Usj | undefined {
+}): ChapterSaveApplication {
   const { repairedUsj, usjToSave, caretTarget } = preparation;
-  if (repairedUsj) {
-    if (savedChapterKey === currentChapterKey && !isUserEditing)
-      applyRepairToEditor(repairedUsj, caretTarget);
-    notifyRepair();
-  }
-  return usjToSave;
+  if (!repairedUsj) return { usjToSave, shouldAnnounceRepairOnWrite: false };
+
+  const shouldPushBack = savedChapterKey === currentChapterKey && !isUserEditing;
+  if (shouldPushBack) applyRepairToEditor(repairedUsj, caretTarget);
+  if (!usjToSave && shouldPushBack) notifyRepair();
+  return { usjToSave, shouldAnnounceRepairOnWrite: !!usjToSave };
 }

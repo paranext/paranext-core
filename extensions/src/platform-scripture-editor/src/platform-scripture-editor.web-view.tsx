@@ -2945,7 +2945,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // An open command surface's in-progress input is excluded by the editor itself
       // (`setTransientInput`), so what arrives here is already the document we mean to save.
-      const usjToSave = applyChapterSavePreparation({
+      const { usjToSave, shouldAnnounceRepairOnWrite } = applyChapterSavePreparation({
         preparation: prepareUsjForChapterSave(
           correctEditorUsjVersion(usjFromEditor),
           usjFromPdp,
@@ -2983,7 +2983,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum),
       });
 
-      if (usjToSave) return saveUsjToPdpInternal(usjToSave);
+      if (usjToSave)
+        return saveUsjToPdpInternal(
+          usjToSave,
+          shouldAnnounceRepairOnWrite
+            ? () => notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum)
+            : undefined,
+        );
       return Promise.resolve(false);
     }
 
@@ -3133,7 +3139,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
     }
 
-    async function saveUsjToPdpInternal(newUsj: Usj): Promise<boolean> {
+    /**
+     * Writes `newUsj` to the PDP through the save bound to this chapter.
+     *
+     * @param onWritten Called once the write has completed without being rejected — not when the
+     *   save is dropped or refused, or the backend rejects it.
+     */
+    async function saveUsjToPdpInternal(newUsj: Usj, onWritten?: () => void): Promise<boolean> {
       const { save: rawSave, chapterKey: rawSaveChapterKey } = saveUsjToPdpRawStableRef.current;
       if (!rawSave) return false;
       if (rawSaveChapterKey !== savedChapterKey) {
@@ -3186,6 +3198,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           return false;
         }
         const { result: saveResult } = outcome;
+        onWritten?.();
 
         // This write came back with no rejection to classify — whether or not the PDP then
         // declined the set — so the failure the user was told about is no longer outstanding.
