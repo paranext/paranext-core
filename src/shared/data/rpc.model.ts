@@ -1,5 +1,6 @@
 import { logger } from '@shared/services/logger.service';
 import { SerializedRequestType } from '@shared/utils/util';
+import type { ServerSocketLike } from '@shared/models/rpc.interface';
 import {
   JSONRPC,
   JSONRPCErrorCode,
@@ -333,7 +334,7 @@ export function describeWebSocketErrorEvent(ev: unknown): string {
 }
 
 /** Serialize a payload, if needed, and send it over the provided WebSocket */
-export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void {
+export function sendPayloadToWebSocket(ws: ServerSocketLike | undefined, payload: unknown): void {
   if (!ws) throw new Error(`Tried to send payload while not connected`);
 
   // Skip if the socket is already closing/closed. This avoids `ws.send` throwing
