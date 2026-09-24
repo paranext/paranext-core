@@ -4,9 +4,11 @@ import {
   CONTENT_ZOOM_CHORDS,
   CONTENT_ZOOM_COMMANDS,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
   CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   CONTENT_ZOOM_UNNESTED_CLAUSE,
   DEFAULT_ZOOM_FACTOR,
@@ -141,6 +143,8 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     // renders no marker (before a search, while loading), so a declared view stays zoomable.
     const DECLARED_AREA = ${declared};
     const ATTR = '${attr}';
+    const SCOPE_ATTR = '${CONTENT_ZOOM_SCOPE_ATTRIBUTE}';
+    const LABEL_ATTR = '${CONTENT_ZOOM_LABEL_ATTRIBUTE}';
     const MAIN = '${MAIN_CONTENT_ZOOM_AREA}';
     const AREA_ID = new RegExp(${JSON.stringify(CONTENT_ZOOM_AREA_ID_PATTERN.source)});
     const RESERVED_ID = ${JSON.stringify(RESERVED_CONTENT_ZOOM_AREA_ID)};
@@ -177,15 +181,24 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     // that way rather than with an empty value; the same list builds the main area's CSS rule, so
     // the report and the stylesheet always agree. An area genuinely called "true" is not available.
     const MAIN_AREA_VALUES = ${JSON.stringify(CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES)};
-    const idOf = (element) => {
-      const value = element.getAttribute(ATTR);
-      return value === null || MAIN_AREA_VALUES.indexOf(value) !== -1 ? MAIN : value;
-    };
-    // The area an element belongs to: its closest marked ancestor (itself included).
+    const spelledAreaId = (value) =>
+      value === null || MAIN_AREA_VALUES.indexOf(value) !== -1 ? MAIN : value;
+    const idOf = (element) => spelledAreaId(element.getAttribute(ATTR));
+    // The area an element belongs to: its closest marked ancestor (itself included). Where no marker
+    // encloses it, the closest zoom scope decides instead - an unscaled row, column or card a view
+    // ties to one area, so a click, a focus, a chord or the wheel anywhere in it means that area. A
+    // scope is spelled like a marker, and one whose value is not a well-formed id resolves to
+    // nothing. A marker always wins, so a scope inside a marker never counts.
     const areaOf = (node) => {
       const element = node && node.nodeType === 1 ? node : node && node.parentElement;
-      const marked = element && element.closest ? element.closest('[' + ATTR + ']') : undefined;
-      return marked ? idOf(marked) : undefined;
+      if (!element || !element.closest) return undefined;
+      const marked = element.closest('[' + ATTR + ']');
+      if (marked) return idOf(marked);
+      const scope = element.closest('[' + SCOPE_ATTR + ']');
+      if (!scope) return undefined;
+      const areaId = spelledAreaId(scope.getAttribute(SCOPE_ATTR));
+      if (!isAreaId(areaId)) { warnOnce('ignoring zoom scope with invalid id "' + areaId + '"'); return undefined; }
+      return areaId;
     };
 
     let areas = [];
@@ -868,12 +881,44 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       if (placementFrame !== undefined) return;
       placementFrame = window.requestAnimationFrame(placeBadge);
     };
+    // A view names an area for the user by putting a label on one of its markers; the first
+    // non-empty label among the area's marked elements, in document order, is the name. This scans
+    // the marker set on every call - up to 50-120 times a second during a fast wheel gesture - which
+    // is accepted deliberately: the scan reads no style and forces no layout, while a label cached
+    // per area would go stale the moment a resource is renamed or reordered.
+    const labelOf = (areaId) => {
+      const markers = document.querySelectorAll('[' + ATTR + ']');
+      for (let i = 0; i < markers.length; i += 1) {
+        if (idOf(markers[i]) === areaId) {
+          const label = markers[i].getAttribute(LABEL_ATTR);
+          if (label) return label;
+        }
+      }
+      return undefined;
+    };
+    const LABEL_SEPARATOR = ' · ';
+    // The name's own box: a <bdi>, so a right-to-left name cannot reorder the level beside it, and
+    // capped, so a long name is cut with an ellipsis while the level text after it is never cut.
+    const LABEL_STYLE = 'unicode-bidi:isolate;display:inline-block;max-width:16em;overflow:hidden;' +
+      'text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom';
     const showIndicator = (areaId, text) => {
       ensureIndicatorElements();
       if (!badge) return;
       requestPlacement(areaId);
       badge.dataset.area = areaId;
-      badge.textContent = text;
+      const label = labelOf(areaId);
+      // The label is written as text, never as markup, and the live region hears it uncut.
+      const spoken = label ? label + LABEL_SEPARATOR + text : text;
+      if (label) {
+        const name = document.createElement('bdi');
+        name.style.cssText = LABEL_STYLE;
+        name.textContent = label;
+        badge.textContent = '';
+        badge.appendChild(name);
+        badge.appendChild(document.createTextNode(LABEL_SEPARATOR + text));
+      } else {
+        badge.textContent = text;
+      }
       // Reduced motion still hides the badge on schedule, as a hard cut instead of a fade (an
       // opacity-0 pointer-events:none box left in place would otherwise sit at the corner forever).
       // Computed fresh on every call so a badge element reused across shows picks up a live
@@ -886,7 +931,7 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       if (announceTimer) clearTimeout(announceTimer);
       announceTimer = setTimeout(() => {
         announceTimer = undefined;
-        if (liveRegion) liveRegion.textContent = text;
+        if (liveRegion) liveRegion.textContent = spoken;
       }, ${INDICATOR_ANNOUNCE_QUIET_MS});
       if (hideTimer) clearTimeout(hideTimer);
       hideTimer = setTimeout(() => {

@@ -18,6 +18,26 @@ const TWO_AREAS =
   '<div data-platform-content-zoom-root id="main"><p id="verse" tabindex="0">text</p></div>' +
   '<div data-platform-content-zoom-root="footnotes" id="foot"><p id="note" tabindex="0">note</p></div>';
 
+/**
+ * Two resources the way the Text Collection renders them: each row carries a zoom scope with its
+ * resource's area, and inside it an unscaled name and grip plus the marked text.
+ */
+const SCOPED_ROWS =
+  '<div id="outside" tabindex="0">outside</div>' +
+  '<div data-platform-content-zoom-scope="resource-a" id="row-a">' +
+  '<span id="name-a" tabindex="0">A</span>' +
+  '<div data-platform-content-zoom-root="resource-a" id="text-a"><p id="verse-a" tabindex="0">a</p></div>' +
+  '</div>' +
+  '<div data-platform-content-zoom-scope="resource-b" id="row-b">' +
+  '<span id="name-b" tabindex="0">B</span>' +
+  '<div data-platform-content-zoom-root="resource-b" id="text-b"><p id="verse-b" tabindex="0">b</p></div>' +
+  '</div>';
+
+/** One labelled area beside an unlabelled one. */
+const LABELLED_AREAS =
+  '<div data-platform-content-zoom-root="resource-a" data-platform-content-zoom-label="HSV" id="text-a"><p>a</p></div>' +
+  '<div data-platform-content-zoom-root="footnotes" id="foot"><p>note</p></div>';
+
 function key(init: KeyboardEventInit, target: EventTarget = window): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
   target.dispatchEvent(event);
@@ -2162,5 +2182,200 @@ describe('content-zoom bootstrap script', () => {
     expect(selectors.some((selector) => byId('malformed').matches(selector))).toBe(false);
     expect(selectors.some((selector) => byId('nestedFootnotes').matches(selector))).toBe(false);
     expect(selectors.some((selector) => byId('nestedMain').matches(selector))).toBe(false);
+  });
+
+  describe('zoom scope', () => {
+    it('makes the scope’s area active on a pointerdown on an unmarked element inside it, any button', () => {
+      const { bound } = install('wv-scope-click', SCOPED_ROWS);
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-a');
+      // jsdom in this environment has no PointerEvent constructor; the listener only reads
+      // `event.target` and `event.button`, so a MouseEvent of the same type exercises it.
+      byId('name-b').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 2 }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-b');
+      expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+        'wv-scope-click',
+        'resource-b',
+      );
+      byId('row-a').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-a');
+    });
+
+    it('makes the scope’s area active on a focus change into an unmarked element inside it', () => {
+      install('wv-scope-focus', SCOPED_ROWS);
+      byId('name-b').dispatchEvent(new Event('focusin', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-b');
+    });
+
+    it('acts on the scope’s area for a chord with focus on an unmarked element inside it', () => {
+      const { bound } = install('wv-scope-chord', SCOPED_ROWS);
+      byId('name-b').focus();
+      expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith(
+        'wv-scope-chord',
+        1,
+        'resource-b',
+      );
+    });
+
+    it('acts on the scope’s area for Ctrl+wheel over an unmarked element inside it', async () => {
+      const { bound } = install('wv-scope-wheel', SCOPED_ROWS);
+      expect(wheel({ deltaY: -100, ctrlKey: true }, byId('name-b')).defaultPrevented).toBe(true);
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-scope-wheel', 1, 'resource-b']]);
+    });
+
+    it('lets a marker inside a scope of another id decide, and ignores a scope inside a marker', () => {
+      const html =
+        '<div data-platform-content-zoom-root="resource-a" id="text-a">' +
+        '<span data-platform-content-zoom-scope="resource-b" id="scope-in-marker">s</span>' +
+        '</div>' +
+        '<div data-platform-content-zoom-scope="resource-a" id="row-a">' +
+        '<div data-platform-content-zoom-root="resource-b" id="text-b"><p id="inner-b">b</p></div>' +
+        '</div>';
+      install('wv-scope-marker-wins', html);
+      byId('inner-b').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-b');
+      byId('scope-in-marker').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-a');
+    });
+
+    it('reads a scope spelled with the empty value as the main area, the way a marker is read', () => {
+      const html = `${TWO_AREAS}<div data-platform-content-zoom-scope="" id="main-row"><span id="main-name">x</span></div>`;
+      install('wv-scope-main', html);
+      byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+      byId('main-name').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('main');
+    });
+
+    it('resolves a scope with an invalid id to nothing, warning once', () => {
+      const html = `${TWO_AREAS}<div data-platform-content-zoom-scope="Bad Scope!" id="bad-row"><span id="bad-name">x</span></div>`;
+      const { papi } = install('wv-scope-invalid', html);
+      byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      byId('bad-name').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      byId('bad-name').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+      const scopeWarnings = papi.logger.warn.mock.calls
+        .map(([message]) => String(message))
+        .filter((message) => message.includes('zoom scope'));
+      expect(scopeWarnings).toEqual([
+        'Content zoom: ignoring zoom scope with invalid id "Bad Scope!"',
+      ]);
+    });
+
+    it('changes nothing for a scope naming an area the pane has not reported', async () => {
+      const html = `${TWO_AREAS}<div data-platform-content-zoom-scope="ghost" id="ghost-row"><span id="ghost-name">x</span></div>`;
+      const { bound } = install('wv-scope-unreported', html);
+      byId('ghost-name').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('main');
+      expect(bound.reportContentZoomActiveAreaById).not.toHaveBeenCalledWith(
+        'wv-scope-unreported',
+        'ghost',
+      );
+      expect(wheel({ deltaY: -100, ctrlKey: true }, byId('ghost-name')).defaultPrevented).toBe(
+        true,
+      );
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-scope-unreported', 1, 'main']]);
+    });
+  });
+
+  describe('area label', () => {
+    function showIndicator(areaId: string, text: string): void {
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      const api = window.__platformContentZoom;
+      if (!api) throw new Error('indicator api missing');
+      api.showIndicator(areaId, text);
+    }
+
+    it('shows a labelled area as "<label> · <level>", in the badge and, once settled, the live region', () => {
+      install('wv-label', LABELLED_AREAS);
+      stubMatchMedia(false);
+      vi.useFakeTimers();
+      try {
+        showIndicator('resource-a', '120 %');
+        const badge = byId('platform-content-zoom-indicator');
+        expect(badge.textContent).toBe('HSV · 120 %');
+        expect(badge.dataset.area).toBe('resource-a');
+        vi.advanceTimersByTime(520);
+        expect(byId('platform-content-zoom-indicator-status').textContent).toBe('HSV · 120 %');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('shows an unlabelled area as the level alone, leaving no label behind from an earlier show', () => {
+      install('wv-label-none', LABELLED_AREAS);
+      showIndicator('resource-a', 'Default · 100 %');
+      const badge = byId('platform-content-zoom-indicator');
+      // Positive control: the labelled show did put a label element in the badge.
+      expect(badge.querySelector('bdi')).not.toBeNull();
+      showIndicator('footnotes', '120 %');
+      expect(badge.textContent).toBe('120 %');
+      expect(badge.querySelector('bdi')).toBeNull();
+    });
+
+    it('takes the first non-empty label among several markers of one area', () => {
+      const html =
+        '<div data-platform-content-zoom-root="resource-a" data-platform-content-zoom-label="" id="row"><p>a</p></div>' +
+        '<div data-platform-content-zoom-root="resource-a" data-platform-content-zoom-label="HSV" id="panel"><p>a</p></div>' +
+        '<div data-platform-content-zoom-root="resource-a" data-platform-content-zoom-label="Other" id="late"><p>a</p></div>';
+      install('wv-label-first', html);
+      showIndicator('resource-a', '130 %');
+      expect(byId('platform-content-zoom-indicator').textContent).toBe('HSV · 130 %');
+    });
+
+    it('isolates the label for bidi text, caps its width, and writes it as text', () => {
+      const html =
+        '<div data-platform-content-zoom-root="resource-he" data-platform-content-zoom-label="עברית" id="he"><p>א</p></div>' +
+        '<div data-platform-content-zoom-root="resource-x" data-platform-content-zoom-label="&lt;b&gt;x&lt;/b&gt;" id="x"><p>x</p></div>';
+      install('wv-label-bidi', html);
+      showIndicator('resource-he', '120 %');
+      const badge = byId('platform-content-zoom-indicator');
+      const name = badge.querySelector('bdi');
+      if (!name) throw new Error('label element missing');
+      expect(name.textContent).toBe('עברית');
+      // The level sits outside the isolated, capped name, so it is never reordered or cut.
+      expect(badge.textContent).toBe('עברית · 120 %');
+      expect(name.nextSibling?.textContent).toBe(' · 120 %');
+      expect(name.style.maxWidth).toBe('16em');
+      expect(name.style.overflow).toBe('hidden');
+      expect(name.style.whiteSpace).toBe('nowrap');
+      showIndicator('resource-x', '90 %');
+      expect(badge.textContent).toBe('<b>x</b> · 90 %');
+      expect(badge.querySelector('b')).toBeNull();
+    });
   });
 });
