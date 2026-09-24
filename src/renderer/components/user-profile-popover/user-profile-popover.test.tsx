@@ -359,6 +359,33 @@ describe('UserProfilePopover language picker', () => {
       'user-profile-language-fr',
     ]);
   });
+
+  test('shows a hidden current language as the pressed pill next to the offered ones', async () => {
+    setMockSetting('availableLanguages', {
+      en: { autonym: 'English' },
+      es: { autonym: 'Español' },
+    });
+    setMockSetting('interfaceLanguage', ['fr']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const frenchPill = await screen.findByTestId('user-profile-language-fr');
+    expect(frenchPill).toHaveAttribute('data-state', 'on');
+    expect(frenchPill).toHaveAttribute('aria-label', 'Français');
+    expect(screen.getByTestId('user-profile-language-en')).toHaveAttribute('data-state', 'off');
+    expect(screen.getByTestId('user-profile-language-es')).toHaveAttribute('data-state', 'off');
+  });
+
+  test('switching away from a hidden language puts the offered one first and keeps the rest', async () => {
+    setMockSetting('availableLanguages', {
+      en: { autonym: 'English' },
+      es: { autonym: 'Español' },
+    });
+    setMockSetting('interfaceLanguage', ['fr', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['es', 'fr']);
+  });
 });
 
 describe('UserProfilePopover appearance', () => {

@@ -27,6 +27,7 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useRegistrationValidity } from '@renderer/hooks/use-registration-validity.hook';
+import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -201,7 +202,11 @@ export function UserProfilePopover() {
   )
     ? DEFAULT_AVAILABLE_LANGUAGES
     : availableLanguagesPossiblyError;
-  const sortedLanguageEntries = sortLanguageEntries(Object.entries(availableLanguages));
+  // The current primary language is always shown, even when it is not offered, so it appears
+  // pressed and the user can see what they have before switching away.
+  const sortedLanguageEntries = sortLanguageEntries(
+    Object.entries(includeCurrentLanguages(availableLanguages, [primaryLanguage])),
+  );
 
   const handleLanguageChange = (value: string) => {
     if (value === '') return;
