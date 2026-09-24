@@ -462,6 +462,14 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     });
 
     await test.step('clicking "Insert endnote" in the right-click menu with the mouse inserts an endnote', async () => {
+      // The top-menu insert above opened the footnote editor popover, which only a chapter change
+      // closes (see constraint 2 in the header); left open, it covers the paragraph to right-click.
+      await navigateToolbarBcv(mainPage, 'Jonah 2:1');
+      await expect(mainEditor).toContainText('prayed to Yahweh, his God', { timeout: 60_000 });
+      await navigateToolbarBcv(mainPage, 'Jonah 1:2');
+      await expect(mainEditor).toContainText('word came to Jonah', { timeout: 60_000 });
+      await expect(editorInput).toHaveCount(1);
+
       const versePara = nextClearVersePara();
       await expect(versePara).toBeVisible({ timeout: 30_000 });
 
