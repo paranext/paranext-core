@@ -625,7 +625,7 @@
   "%settings_platform_webViewContentZoom_atMinimum%": "Ya está en el zoom mínimo (50 %)",
   "%settings_platform_webViewContentZoom_decrease%": "Reducir el zoom predeterminado",
   "%settings_platform_webViewContentZoom_description%": "Zoom predeterminado para el contenido de cada panel de una pestaña (como el Editor de Escrituras, los recursos y las notas) que no se haya ampliado por su cuenta. El valor predeterminado es 100 %; el rango permitido es de 50 % a 300 %. Los menús de la aplicación y las barras de herramientas de las pestañas mantienen su tamaño, y Escalado de la interfaz sigue escalando toda la aplicación además de esto.",
-  "%settings_platform_webViewContentZoom_description_2%": "Zoom predeterminado para el texto del proyecto que se muestra en paneles como el Editor de Escrituras, los recursos, las notas, Buscar, los inventarios y las verificaciones, siempre que ese texto no se haya ampliado por su cuenta. El valor predeterminado es 100 %; el rango permitido es de 50 % a 300 %. Los menús, los botones y las ventanas emergentes mantienen su tamaño, y Escalado de la interfaz sigue escalando toda la aplicación además de esto.",
+  "%settings_platform_webViewContentZoom_description_2%": "Tamaño predeterminado del texto del proyecto en paneles que no haya ampliado. Escalado de la interfaz se aplica además.",
   "%settings_platform_webViewContentZoom_increase%": "Aumentar el zoom predeterminado",
   "%settings_platform_webViewContentZoom_label%": "Zoom predeterminado del contenido de la pestaña",
   "%settings_platform_webViewContentZoom_reset%": "Restablecer el zoom predeterminado",
