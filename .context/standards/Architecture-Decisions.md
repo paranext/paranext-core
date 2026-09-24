@@ -7056,7 +7056,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     migrated: they are per tab and the new ones per project, and writing
     `platform.contentZoomLevels` from the view would race the platform's seeding. Users re-zoom once.
   - PR #2781 (verse-aligned Grid view; open as of 2026-09-24) can mark each `.verse-block` with its
-    resource's area and leave its subgrid box unmarked; its adaptation stays in that PR.
+    resource's area and leave its subgrid box unmarked, but only if the cell does not also mark its
+    text: `ResourceCellView` wraps the whole editor in one `ContentZoomRoot`, a marker nested inside
+    another marker is ignored (with a warning) and gets no zoom, and the wrapper's own `div` is one
+    more level in the aligned view's subgrid/`display:contents` chain. So the aligned view must
+    either skip the cell's own text marker, or keep it and read the resource's level from
+    `var(--platform-content-zoom-resource-<id>, …)` with the wrapper's zoom neutralised. Its
+    adaptation stays in that PR.
   - The two attributes serve any view with several areas the user cannot tell apart, or with
     unscaled containers that belong to one area; a view that does not write them sees no change.
 - **Source:** PT-4585 (epic PT-4575); decisions with Rolf, 2026-09-24.
