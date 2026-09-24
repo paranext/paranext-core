@@ -1,1 +1,0 @@
-import{r as t}from"./iframe-CD5VsEmC.js";const n="--platform-content-zoom-",r="--platform-content-zoom-default",c="main",a="--platform-content-zoom-popup-factor",d=t.createContext(void 0);function s(){return t.useContext(d)}function m(e){const o=e||c;return{[a]:`var(${n}${o}, var(${r}, 1))`}}export{m as g,s as u};
