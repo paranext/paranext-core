@@ -560,6 +560,23 @@ describe('ResourcePickerDialog', () => {
     ).toBeInTheDocument();
   });
 
+  it("runs the notice's action from a button beside the notice", () => {
+    const onNoticeAction = vi.fn();
+    renderDialog({
+      notice: 'Only freely available texts are shown.',
+      noticeAction: { label: 'Register', onSelect: onNoticeAction },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+
+    expect(onNoticeAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no notice action without a notice to act on', () => {
+    renderDialog({ noticeAction: { label: 'Register', onSelect: vi.fn() } });
+    expect(screen.queryByRole('button', { name: 'Register' })).toBeNull();
+  });
+
   // Assistive tech announces mutations to a live region already in the accessibility tree, so the
   // region has to outlive the notice it carries rather than appear along with it.
   it('keeps the notice live region mounted and empty when there is no notice', () => {
