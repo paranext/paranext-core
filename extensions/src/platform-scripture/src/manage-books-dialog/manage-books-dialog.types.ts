@@ -72,9 +72,12 @@ export type ManageBooksDialogProject = {
    */
   name: string;
   /**
-   * Long human-readable name (typically the project's `platform.fullName` setting), e.g. "English
-   * Standard Version 2016". Falls back to `shortName` when no fullName is configured. Used as the
-   * secondary label in the `<ProjectSelector>` dialog pickers (Copy "From", Create "Based on").
+   * Long human-readable name, e.g. "English Standard Version 2016". Used as the secondary label in
+   * the `<ProjectSelector>` dialog pickers (Copy "From", Create "Based on").
+   *
+   * Optional, and absent when the project has no distinct full name — deliberately NOT mirrored
+   * from the short name, which would claim a full name the project does not have and leave every
+   * consumer downstream to un-claim it.
    */
   fullName?: string;
   /**
@@ -103,6 +106,17 @@ export type ManageBooksDialogProject = {
    * surfaced as the section header in versification-grouping mode.
    */
   versificationName?: string;
+  /**
+   * Locale-stable project-type key (the PT9 `ProjectType` enum value, e.g. "Standard"). Forwarded
+   * to the Copy "From" `<ProjectSelector>` so it can group projects by type. Arrives on the same
+   * project-list round-trip as the rest of this shape, so it costs no extra fetch.
+   */
+  type?: string;
+  /**
+   * Friendlier display name for {@link type}, used as the section heading. Falls back to the raw
+   * `type` key when absent.
+   */
+  typeName?: string;
 };
 
 /**
@@ -234,20 +248,20 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_filter_placeholder%',
   '%manageBooks_filter_books%',
   '%manageBooks_genericError%',
-  '%manageBooks_projectSelector_boundButClosedTooltip%',
-  '%manageBooks_projectSelector_clearAll%',
-  '%manageBooks_projectSelector_filterAriaLabel%',
-  '%manageBooks_projectSelector_filterGroupByOpenTabs%',
-  '%manageBooks_projectSelector_filterSectionLabel%',
-  '%manageBooks_projectSelector_filterShowSelectedOnly%',
-  '%manageBooks_projectSelector_groupSectionLabel%',
-  '%manageBooks_projectSelector_openButtonLabel%',
-  '%manageBooks_projectSelector_openTabsSectionHeading%',
-  '%manageBooks_projectSelector_otherProjectsSectionHeading%',
-  '%manageBooks_projectSelector_searchPlaceholder%',
   '%manageBooks_projectSelector_versificationSectionHeading%',
   '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
-  '%manageBooks_projectSelector_selectAll%',
+  // Section headings for the built-in `type` grouping in the manage-books project pickers. The
+  // wire carries the raw PT9 `ProjectType` enum value with no display name, so the web view maps
+  // each value onto one of these keys consumer-side.
+  '%manageBooks_projectType_Auxiliary%',
+  '%manageBooks_projectType_BackTranslation%',
+  '%manageBooks_projectType_ConsultantNotes%',
+  '%manageBooks_projectType_Daughter%',
+  '%manageBooks_projectType_Standard%',
+  '%manageBooks_projectType_StudyBible%',
+  '%manageBooks_projectType_StudyBibleAdditions%',
+  '%manageBooks_projectType_TransliterationManual%',
+  '%manageBooks_projectType_TransliterationWithEncoder%',
   '%manageBooks_filter_count%',
   '%manageBooks_filter_zero%',
   '%manageBooks_filter_state_all%',

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
@@ -119,6 +120,7 @@ internal class DblResourcesDataProvider(
         return
         [
             ("getDblResources", GetDblResources),
+            ("recomputeDblResourcesInstallStatus", RecomputeDblResourcesInstallStatus),
             ("recomputeDblResourcesUpdateStatus", RecomputeDblResourcesUpdateStatus),
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
@@ -130,6 +132,33 @@ internal class DblResourcesDataProvider(
     {
         return Task.CompletedTask;
     }
+
+    // Only these two recompute functions are marked: their contract is untested beyond the one
+    // caller that awaits them (see refreshResourceFlags's own experimental marker in
+    // platform-get-resources). GetDblResources, InstallDblResource, UninstallDblResource and
+    // IsGetDblResourcesAvailable are unaffected and stay undocumented, so `Experimental` is left
+    // unset rather than fanning out to the whole object.
+    protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
+        new()
+        {
+            Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
+            {
+                ["recomputeDblResourcesUpdateStatus"] = ExperimentalMethodDocumentation.Create(
+                    "Recompute, for each resource in the already-loaded catalog, whether the DBL has a newer version than the copy installed locally.",
+                    result: ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "Whether an update is available, keyed by DBL entry uid."
+                    )
+                ),
+                ["recomputeDblResourcesInstallStatus"] = ExperimentalMethodDocumentation.Create(
+                    "Recompute which resources in the already-loaded catalog are installed locally, and under which project id.",
+                    result: ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "The local project id of each catalogued resource, keyed by DBL entry uid; empty string for one that is not installed."
+                    )
+                ),
+            },
+        };
 
     #endregion
 
@@ -232,20 +261,45 @@ internal class DblResourcesDataProvider(
             lock (_providerGate)
             {
                 FetchResourcesCore();
+                var installedProjectIds = InstalledProjectIdsByDblId();
                 return _resources
-                    .Select(resource => new DblResourceData(
-                        resource.DBLEntryUid.Id,
-                        resource.DisplayName,
-                        resource.FullName,
-                        resource.BestLanguageName,
-                        resource.Type,
-                        resource.Size,
-                        resource.Installed,
-                        resource.IsNewerThanCurrentlyInstalled(),
-                        resource.ExistingScrText?.Guid.ToString().ToUpperInvariant()
-                            ?? resource.ExistingDictionary?.Guid.ToString().ToUpperInvariant()
-                            ?? ""
-                    ))
+                    .Select(resource =>
+                    {
+                        // `installed` and `projectId` come from one lookup, the same one
+                        // RecomputeDblResourcesInstallStatus uses, because the front end reads the
+                        // flag as "there is a project id I can open".
+                        var projectId = installedProjectIds.ProjectIdsByDblId.GetValueOrDefault(
+                            resource.DBLEntryUid.Id,
+                            ""
+                        );
+                        // A row has no way to say "unknown" — `installed` is a bool — so an
+                        // incomplete scan cannot be answered by staying silent the way
+                        // ProjectInstallStatus does. Ask ParatextData directly instead:
+                        // ExistingScrText resolves the project itself rather than through the
+                        // scan, so a project the scan could not read is still found.
+                        //
+                        // This is the per-row lookup the scan exists to avoid, and when it fires
+                        // it fires for every uid the scan did not name — every uninstalled
+                        // resource included. That is affordable only here: this path runs inside
+                        // FetchResourcesCore, behind an unbounded catalog download, and only when
+                        // a project's settings failed to load. The recompute, which runs on every
+                        // list refresh, must not pay it, which is why ProjectInstallStatus omits
+                        // rather than falling back.
+                        if (projectId == "" && !installedProjectIds.IsComplete)
+                            projectId =
+                                resource.ExistingScrText?.Guid.ToString().ToUpperInvariant() ?? "";
+                        return new DblResourceData(
+                            resource.DBLEntryUid.Id,
+                            resource.DisplayName,
+                            resource.FullName,
+                            resource.BestLanguageName,
+                            resource.Type,
+                            resource.Size,
+                            projectId != "",
+                            resource.IsNewerThanCurrentlyInstalled(),
+                            projectId
+                        );
+                    })
                     .ToList();
             }
         });
@@ -292,7 +346,10 @@ internal class DblResourcesDataProvider(
                 if (!gateTaken || !_hasFetchedResources)
                     return [];
 
-                return ProjectUpdateStatus(_resources, InstalledDblIds());
+                return ProjectUpdateStatus(
+                    _resources,
+                    InstalledProjectIdsByDblId().ProjectIdsByDblId
+                );
             }
             finally
             {
@@ -303,8 +360,135 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
-    /// The DBL entry uids of every resource currently installed locally, gathered in a single pass
-    /// over the project collection.
+    /// Recompute which resources in the already-loaded catalog are installed locally, and under
+    /// which project id.
+    /// </summary>
+    /// <remarks>
+    /// Callers cannot work this out for themselves: a resource project's id is unrelated to the DBL
+    /// entry it was installed from — ParatextData records the entry uid in the project's settings
+    /// and matches on that — so nothing in the local project list identifies the catalog row it
+    /// belongs to. Never loads the catalog, for the same reason as
+    /// <see cref="RecomputeDblResourcesUpdateStatus"/>.
+    /// </remarks>
+    /// <returns>
+    /// The local project id of each catalogued resource, keyed by DBL entry uid, empty for one that
+    /// is not installed. Before the catalog has loaded the result names only the resources that are
+    /// installed, which is the same contract seen from the other side: a uid absent from the map is
+    /// one the backend did not report on, and the caller keeps what it has. The dictionary itself
+    /// is empty when another DBL operation holds the gate, or when nothing is installed and the
+    /// catalog has not loaded; callers must read that as "no answer", never as "nothing is
+    /// installed".
+    /// </returns>
+    [NetworkTimeout(UPDATE_STATUS_NETWORK_TIMEOUT)]
+    internal Task<Dictionary<string, string>> RecomputeDblResourcesInstallStatus()
+    {
+        // Answer from disk alone when the catalog has never loaded — the whole of startup, and
+        // every session of a user who is offline, since _hasFetchedResources is set only by a
+        // successful DBL fetch. Unlike the update recheck, this question does not need the catalog:
+        // install status is a property of what is on the machine. The local scan names only
+        // installed resources, which is a complete answer for each uid it contains, because the
+        // front end leaves a row absent from the map exactly as it is. What it cannot report while
+        // offline is a removal, since a removed resource is simply absent.
+        if (!_hasFetchedResources)
+            return Task.Run(() =>
+            {
+                bool gateTaken = false;
+                try
+                {
+                    // Non-waiting, as in the branch below. The scan reads ScrTextCollection, which
+                    // install and uninstall mutate through RefreshScrTexts and DeleteProject, so it
+                    // is shared state this gate exists to guard. A contended gate costs this
+                    // refresh its answer, not its responsiveness: the empty map means "no answer"
+                    // and the front end keeps the flags it has.
+                    //
+                    // `_hasFetchedResources` is deliberately not re-checked under the lock. Unlike
+                    // the catalog branch this reads no `_resources`, so a catalog that arrived
+                    // while we waited makes the scan a narrower answer, not a wrong one.
+                    Monitor.TryEnter(_providerGate, ref gateTaken);
+                    if (!gateTaken)
+                        return [];
+
+                    return InstalledProjectIdsByDblId().ProjectIdsByDblId;
+                }
+                finally
+                {
+                    if (gateTaken)
+                        Monitor.Exit(_providerGate);
+                }
+            });
+
+        return Task.Run(() =>
+        {
+            bool gateTaken = false;
+            try
+            {
+                Monitor.TryEnter(_providerGate, ref gateTaken);
+                if (!gateTaken || !_hasFetchedResources)
+                    return [];
+
+                return ProjectInstallStatus(_resources, InstalledProjectIdsByDblId());
+            }
+            finally
+            {
+                if (gateTaken)
+                    Monitor.Exit(_providerGate);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Projects a catalog into "which local project is this installed as", keyed by DBL entry uid.
+    /// </summary>
+    /// <param name="resources">The catalog entries to report on.</param>
+    /// <param name="installed">
+    /// The pass over the project collection, from <see cref="InstalledProjectIdsByDblId"/>. An
+    /// absent uid is reported as not installed only when that pass saw every project; otherwise it
+    /// is omitted, which the caller reads as "no answer for this row".
+    /// </param>
+    internal static Dictionary<string, string> ProjectInstallStatus(
+        IEnumerable<InstallableResource> resources,
+        InstalledResourceProjects installed
+    )
+    {
+        Dictionary<string, string> installStatus = [];
+        foreach (var resource in resources)
+        {
+            var dblEntryUid = resource.DBLEntryUid?.Id;
+            if (dblEntryUid == null)
+                continue;
+            var projectId = installed.ProjectIdsByDblId.GetValueOrDefault(dblEntryUid, "");
+            // "The scan skipped a project it could not read" and "this resource is not installed"
+            // are indistinguishable from here, and the caller persists what it is told. Saying
+            // nothing leaves the cached row as it is; a wrong empty string demotes an installed
+            // resource and writes that to user storage.
+            if (projectId == "" && !installed.IsComplete)
+                continue;
+            // TryAdd, not the indexer, for the same reason as ProjectUpdateStatus: a duplicate uid
+            // resolves to the entry FindResource's FirstOrDefault picks.
+            installStatus.TryAdd(dblEntryUid, projectId);
+        }
+        return installStatus;
+    }
+
+    /// <summary>
+    /// The result of one pass over the project collection: what was found, and whether the pass
+    /// saw everything.
+    /// </summary>
+    /// <param name="ProjectIdsByDblId">Local project id per DBL entry uid, for what was found.</param>
+    /// <param name="IsComplete">
+    /// False when a project could not be read at all. The scan cannot name which one — reading the
+    /// project is what failed — so a caller that would otherwise report "not installed" for an
+    /// absent uid has to fall back to saying nothing about it, rather than asserting an answer the
+    /// pass was not in a position to give.
+    /// </param>
+    internal readonly record struct InstalledResourceProjects(
+        Dictionary<string, string> ProjectIdsByDblId,
+        bool IsComplete
+    );
+
+    /// <summary>
+    /// The local project id of every DBL resource installed locally, keyed by DBL entry uid and
+    /// gathered in a single pass over the project collection.
     /// </summary>
     /// <remarks>
     /// This exists to keep <see cref="ProjectUpdateStatus"/> off
@@ -322,48 +506,65 @@ internal class DblResourcesDataProvider(
     /// reaching here without a uid would be reported as not installed, which is what
     /// ParatextData already returns for anything uninstalled.
     /// </remarks>
-    internal static HashSet<string> InstalledDblIds()
+    internal static InstalledResourceProjects InstalledProjectIdsByDblId()
     {
-        HashSet<string> installedDblIds = [];
-        foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
+        Dictionary<string, string> installedProjectIds = [];
+        var isComplete = true;
+        try
         {
-            try
+            foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
             {
-                if (!scrText.IsResourceProject)
-                    continue;
-                var dblId = scrText.Settings.DBLId;
-                if (dblId != null)
-                    installedDblIds.Add(dblId.Id);
-            }
-            catch (Exception e)
-            {
-                // Both reads above touch project settings, which fault on a corrupt Settings.xml.
-                // Skipping the project costs at most one row an accurate flag; letting the
-                // exception escape would fault the whole recheck and leave every row stale for the
-                // session — the outcome the per-entry guard in ProjectUpdateStatus also prevents.
-                // The project is deliberately not named here: reading anything off it is what
-                // just failed, so doing it again in the handler could throw out of the catch.
-                Console.WriteLine(
-                    $"Could not read a project's DBL id while rechecking updates: {e}"
-                );
+                try
+                {
+                    if (!scrText.IsResourceProject)
+                        continue;
+                    var dblId = scrText.Settings.DBLId;
+                    if (dblId != null)
+                        installedProjectIds.TryAdd(
+                            dblId.Id,
+                            scrText.Guid.ToString().ToUpperInvariant()
+                        );
+                }
+                catch (Exception e)
+                {
+                    isComplete = false;
+                    // Both reads above touch project settings, which fault on a corrupt
+                    // Settings.xml. Skipping the project costs at most one row an accurate flag;
+                    // letting the exception escape would leave every row stale for the session.
+                    // The project is deliberately not named here: reading anything off it is what
+                    // just failed, so doing it again in the handler could throw out of the catch.
+                    Console.WriteLine(
+                        $"Could not read a project's DBL id while rechecking updates: {e}"
+                    );
+                }
             }
         }
-        return installedDblIds;
+        catch (Exception e)
+        {
+            isComplete = false;
+            // The inner guard covers a project that has already been yielded; advancing the
+            // enumerator happens between iterations, outside it. A collection mutated mid-scan
+            // therefore faults here, and without this would fault the whole recompute. Reporting
+            // what was gathered and flagging the pass incomplete degrades it the same way a single
+            // unreadable project does — callers omit rather than assert for the uids not named.
+            Console.WriteLine($"Could not finish scanning projects for DBL ids: {e}");
+        }
+        return new InstalledResourceProjects(installedProjectIds, isComplete);
     }
 
     /// <summary>
     /// Projects a catalog into "is a newer version available", keyed by DBL entry uid.
     /// </summary>
     /// <param name="resources">The catalog entries to report on.</param>
-    /// <param name="installedDblIds">
-    /// Uids of the resources installed locally, from <see cref="InstalledDblIds"/>. An entry
-    /// outside this set is reported as having an update available without consulting
+    /// <param name="installedProjectIds">
+    /// Local project id per installed uid, from <see cref="InstalledProjectIdsByDblId"/>. An entry
+    /// outside this map is reported as having an update available without consulting
     /// ParatextData — the same answer <c>IsNewerThanCurrentlyInstalled</c> gives for anything
     /// uninstalled, since it opens with <c>if (!Installed) return true;</c>.
     /// </param>
     internal static Dictionary<string, bool> ProjectUpdateStatus(
         IEnumerable<InstallableResource> resources,
-        ISet<string> installedDblIds
+        IReadOnlyDictionary<string, string> installedProjectIds
     )
     {
         Dictionary<string, bool> updateStatus = [];
@@ -379,7 +580,7 @@ internal class DblResourcesDataProvider(
                 // then describes the resource the install/uninstall buttons act on.
                 updateStatus.TryAdd(
                     dblEntryUid,
-                    !installedDblIds.Contains(dblEntryUid)
+                    !installedProjectIds.ContainsKey(dblEntryUid)
                         || resource.IsNewerThanCurrentlyInstalled()
                 );
             }
@@ -442,12 +643,24 @@ internal class DblResourcesDataProvider(
                 )
             );
 
-        // Note that we don't get any info telling if the installation succeeded or failed
-        installableResource.Install();
+        // Install()'s bool is not a verdict on the install. Its only `true` assignment is inside
+        // InternalInstall's loop over the bundle's `*.font` entries, so a bundle carrying no font
+        // installs perfectly and returns false. It is still worth reading: that loop runs after
+        // the resource has been validated and migrated, so `true` IS definitive success and lets
+        // the disk check below be skipped.
+        var didExtractFont = installableResource.Install();
 
+        // Unconditional, and before the verdict: InternalInstall deletes the previous project
+        // before validating the replacement, so a failed install leaves the collection needing
+        // reconciliation just as much as a successful one does.
         ScrTextCollection.RefreshScrTexts();
 
-        if (!ScrTextCollection.IsPresent(installableResource.InstalledScrText))
+        // For the ambiguous `false`, ask disk. ExistingScrText resolves through the DBL id recorded
+        // in the installed project's settings — the same link InstalledProjectIdsByDblId uses — so
+        // a resource that is genuinely present passes here whatever its project id turned out to
+        // be. Deliberately not IsPresent(InstalledScrText): RefreshScrTexts can replace the
+        // collection's entries, leaving the captured instance absent after a good install.
+        if (!didExtractFont && installableResource.ExistingScrText == null)
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,

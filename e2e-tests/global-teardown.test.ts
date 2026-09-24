@@ -1,14 +1,17 @@
 /**
  * Unit tests for the renderer dev server's platform-addressed kill.
  *
- * `global-setup.ts` spawns it with `shell: true` and `detached: true`. On POSIX that puts it in its
- * own process group, addressable with a negative PID. On Windows neither half of that holds:
- * `detached` does not create a process group `-pid` could reach, and `shell: true` means the PID
- * names cmd.exe rather than the npm/webpack tree underneath it — so a Windows kill has to walk that
- * tree by a different mechanism (`taskkill /t`) instead of signalling a PID directly.
+ * `killDevServerProcess` is a one-line delegate to {@link killProcessTree}. The cross-platform kill
+ * mechanics themselves — taskkill vs. process-group signalling, the ESRCH/EPERM liveness reads —
+ * are pinned directly against `killProcessTree` in `fixtures/helpers.test.ts`. What stays here is
+ * specific to this call site: that `killDevServerProcess` forwards its pid, SIGTERM, and platform
+ * through unchanged, plus one integration case (EPERM-means-alive) that is not exercised anywhere
+ * else, since `helpers.test.ts`'s own `killProcessTree` tests inject `isPidAlive` directly rather
+ * than going through its real EPERM interpretation.
  */
 import { execFileSync } from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { killProcessTree } from './fixtures/helpers';
 import { killDevServerProcess } from './global-teardown';
 
 // vi.mock calls are hoisted to the top of the file by Vitest, so this runs before the imports
@@ -28,6 +31,14 @@ vi.mock('node:child_process', () => {
   };
 });
 
+// Wraps the real killProcessTree rather than replacing it, so every test below still exercises the
+// actual kill logic (through the node:child_process mock above and each test's own process.kill
+// spy) while still giving `killDevServerProcess`'s forwarded arguments something to assert against.
+vi.mock('./fixtures/helpers', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./fixtures/helpers')>();
+  return { ...actual, killProcessTree: vi.fn(actual.killProcessTree) };
+});
+
 afterEach(() => {
   // restoreAllMocks (not clearAllMocks) also puts back the real implementation behind any
   // vi.spyOn in this file — a safety net for a test that forgets its own .mockRestore(), so a
@@ -36,36 +47,22 @@ afterEach(() => {
 });
 
 describe('stopping the renderer dev server on the platform that spawned it', () => {
-  it('kills the whole tree via taskkill on Windows, not process.kill, bounded by a timeout', () => {
-    // The liveness check reuses process.kill (signal 0), so this also stands in for "the pid is
-    // alive" — the taskkill-not-called assertion below is what proves it is a genuinely separate
-    // call, not process.kill being used to do the killing.
+  it('delegates to killProcessTree with SIGTERM and the pid/platform it was given', () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
     killDevServerProcess(4242, 'win32');
 
-    expect(execFileSync).toHaveBeenCalledExactlyOnceWith('taskkill', ['/pid', '4242', '/t', '/f'], {
-      stdio: 'pipe',
-      timeout: 10_000,
-    });
-    expect(killSpy).toHaveBeenCalledExactlyOnceWith(4242, 0);
+    expect(killProcessTree).toHaveBeenCalledExactlyOnceWith(4242, 'SIGTERM', 'win32');
 
     killSpy.mockRestore();
   });
 
-  it('does not call taskkill at all when the pid is not alive', () => {
-    // A dead pid is one whose probe reports ESRCH — the pid number itself is arbitrary and must
-    // never be relied on to be unused on the test runner; pids recycle, so a real process can hold
-    // this exact number.
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-      const error: NodeJS.ErrnoException = new Error('no such process');
-      error.code = 'ESRCH';
-      throw error;
-    });
+  it('forwards whatever platform it is given, not just win32', () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
-    killDevServerProcess(4242, 'win32');
+    killDevServerProcess(4242, 'linux');
 
-    expect(execFileSync).not.toHaveBeenCalled();
+    expect(killProcessTree).toHaveBeenCalledExactlyOnceWith(4242, 'SIGTERM', 'linux');
 
     killSpy.mockRestore();
   });
@@ -74,7 +71,9 @@ describe('stopping the renderer dev server on the platform that spawned it', () 
     // A refused signal (Windows, or a pid owned by another user) proves the process EXISTS — the
     // same EPERM-is-alive reading `isPidAlive` in fixtures/helpers.ts makes for the backup-ownership
     // checks. Reading it as dead here would skip taskkill for a dev server that is actually still
-    // running under a different permission context, leaving it holding the port.
+    // running under a different permission context, leaving it holding the port. This is the one
+    // case not already covered by killProcessTree's own tests in helpers.test.ts, which inject
+    // isPidAlive directly rather than exercising its real EPERM interpretation.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       const error: NodeJS.ErrnoException = new Error('operation not permitted');
       error.code = 'EPERM';
@@ -87,57 +86,6 @@ describe('stopping the renderer dev server on the platform that spawned it', () 
       stdio: 'pipe',
       timeout: 10_000,
     });
-
-    killSpy.mockRestore();
-  });
-
-  it('does not throw when taskkill itself fails on Windows (already stopped), and logs it', () => {
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    vi.mocked(execFileSync).mockImplementationOnce(() => {
-      throw new Error('no such process');
-    });
-
-    expect(() => killDevServerProcess(4242, 'win32')).not.toThrow();
-    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('no such process'));
-
-    killSpy.mockRestore();
-    warnSpy.mockRestore();
-  });
-
-  it('signals the process group on POSIX, not taskkill', () => {
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
-
-    killDevServerProcess(4242, 'linux');
-
-    expect(killSpy).toHaveBeenCalledExactlyOnceWith(-4242, 'SIGTERM');
-    expect(execFileSync).not.toHaveBeenCalled();
-
-    killSpy.mockRestore();
-  });
-
-  it('falls back to the bare PID on POSIX when the group signal fails', () => {
-    const killSpy = vi
-      .spyOn(process, 'kill')
-      .mockImplementationOnce(() => {
-        throw new Error('ESRCH');
-      })
-      .mockImplementationOnce(() => true);
-
-    killDevServerProcess(4242, 'darwin');
-
-    expect(killSpy).toHaveBeenNthCalledWith(1, -4242, 'SIGTERM');
-    expect(killSpy).toHaveBeenNthCalledWith(2, 4242, 'SIGTERM');
-
-    killSpy.mockRestore();
-  });
-
-  it('does not throw when both POSIX signals fail (already stopped)', () => {
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw new Error('ESRCH');
-    });
-
-    expect(() => killDevServerProcess(4242, 'linux')).not.toThrow();
 
     killSpy.mockRestore();
   });

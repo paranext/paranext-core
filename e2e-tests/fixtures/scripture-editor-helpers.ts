@@ -1,6 +1,7 @@
 import { type Frame, type Page } from '@playwright/test';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
+  requireIsolatedProjectRoot,
   SAMPLE_WEB_PROJECT_ID,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
@@ -24,6 +25,93 @@ export interface OpenScriptureEditorOptions {
 }
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
+
+/**
+ * Names of the three content-zoom commands (registered in
+ * `src/main/services/web-view.service-router.ts`). Restated here rather than imported from
+ * `@shared/models/content-zoom.model`'s `CONTENT_ZOOM_COMMANDS`: `e2e-tests/tsconfig.json` carries
+ * no path aliases, so e2e specs cannot reach core source and this is the one place the literal is
+ * kept.
+ */
+export const CONTENT_ZOOM_COMMANDS = {
+  in: 'platform.webViewContentZoomIn',
+  out: 'platform.webViewContentZoomOut',
+  reset: 'platform.webViewContentZoomReset',
+} as const;
+
+/**
+ * The `<iframe data-web-view-id>` element's content frame — a real `Frame`, not a `FrameLocator`,
+ * so `evaluate` can read the CSS custom properties the platform writes onto the pane's own
+ * `documentElement`.
+ */
+export async function getEditorFrame(page: Page, webViewId: string): Promise<Frame> {
+  const handle = await page.locator(`iframe[data-web-view-id="${webViewId}"]`).elementHandle();
+  const frame = await handle?.contentFrame();
+  if (!frame) throw new Error(`Editor iframe ${webViewId} has no content frame`);
+  return frame;
+}
+
+/**
+ * Reads one zoom area's effective factor straight off the CSS custom property the platform writes
+ * as an inline style on the pane's `documentElement` (`pushContentZoom`'s
+ * `root.style.setProperty`), so it is readable from inside the frame without going through any DOM
+ * measurement. `areaId` is `''` for the `main` area.
+ */
+export async function readFactor(frame: Frame, areaId: string): Promise<number> {
+  const value = await frame.evaluate(
+    (variableName) =>
+      getComputedStyle(document.documentElement).getPropertyValue(variableName).trim(),
+    `--platform-content-zoom-${areaId || 'main'}`,
+  );
+  return Number(value);
+}
+
+/**
+ * Sends a PAPI command from the renderer, exactly as a menu entry would (`window.papi` is exposed
+ * on `globalThis` but not typed there). Used both for the three content-zoom commands (with an area
+ * id) and for `platformScriptureEditor.toggleFootnotes` (without one).
+ */
+export async function sendCommandWithId(
+  page: Page,
+  commandName: string,
+  webViewId: string,
+  areaId?: string,
+): Promise<void> {
+  await page.evaluate(
+    ([cmd, id, area]) => {
+      // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as
+      // scripture-text-grid-zoom.spec.ts's afterEach cleanup).
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: { commands: { sendCommand: (c: string, ...a: unknown[]) => Promise<unknown> } };
+      };
+      return area === undefined
+        ? win.papi.commands.sendCommand(cmd, id)
+        : win.papi.commands.sendCommand(cmd, id, area);
+    },
+    [commandName, webViewId, areaId] as const,
+  );
+}
+
+/**
+ * Shows the footnotes pane, tolerating that it may already be visible: Power mode's footnotes
+ * auto-show/hide (`resolveFootnotesPaneAutoVisibility`) shows the pane by itself for any chapter
+ * that has notes — so sending `toggleFootnotes` unconditionally would just as often HIDE an
+ * already-auto-shown pane.
+ */
+export async function ensureFootnotesVisible(
+  page: Page,
+  frame: Frame,
+  webViewId: string,
+): Promise<void> {
+  const footnotesRoot = frame.locator(
+    '[data-platform-content-zoom-root="footnotes"]:not([data-platform-content-zoom-popup])',
+  );
+  if ((await footnotesRoot.count()) === 0) {
+    await sendCommandWithId(page, 'platformScriptureEditor.toggleFootnotes', webViewId);
+  }
+  await footnotesRoot.waitFor({ state: 'attached', timeout: 20_000 });
+}
 /**
  * Poll until the ProjectLookupService advertises the bundled sample WEB project. The generic
  * `waitForAtLeastOneProjectMetadata` is NOT sufficient here: other PDP factories (e.g. the lexical
@@ -83,26 +171,77 @@ export async function sendPapiCommandWhenRegistered(
  * click, so caret-driven behavior cannot be exercised without this. Flipping the setting through
  * the PDP (same write path as the Project Settings UI) keeps the change inside the isolated temp
  * project root.
+ *
+ * Writes project data, so it refuses to run unless the app was launched with `isolatedProjectRoot:
+ * true`: there is no restore, and the sample project's id is the one the backend installs into a
+ * developer's real project root too.
  */
 export async function makeSampleProjectEditable(): Promise<void> {
-  // Wait until the Paratext factory has registered AND the sample project is installed and
-  // advertised — see waitForSampleProjectMetadata for why a generic any-project wait is racy, and
-  // LAUNCH_PHASE_TIMEOUT_MS for why this factory in particular needs the cold-boot budget.
+  requireIsolatedProjectRoot();
+  const pdpId = await getSampleProjectDataProviderId();
+  await sendPapiRequestOnce<boolean>(
+    `object:${pdpId}.setSetting`,
+    ['platform.isEditable', true],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+}
+
+/**
+ * Resolves the sample WEB project's data provider id once the Paratext factory has registered AND
+ * the sample project is installed and advertised — see waitForSampleProjectMetadata for why a
+ * generic any-project wait is racy, and LAUNCH_PHASE_TIMEOUT_MS for why this factory in particular
+ * needs the cold-boot budget.
+ */
+async function getSampleProjectDataProviderId(): Promise<string> {
   await waitForPapiMethodRegistered(
     'object:platform.Paratext-pdpf.getProjectDataProviderId',
     WEBSOCKET_PORT,
     LAUNCH_PHASE_TIMEOUT_MS,
   );
   await waitForSampleProjectMetadata();
-  const pdpId = await sendPapiRequestOnce<string>(
+  return sendPapiRequestOnce<string>(
     'object:platform.Paratext-pdpf.getProjectDataProviderId',
     [SAMPLE_WEB_PROJECT_ID],
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
-  await sendPapiRequestOnce<boolean>(
-    `object:${pdpId}.setSetting`,
-    ['platform.isEditable', true],
+}
+
+/** The book/chapter selector the chapter USFM data type takes; `verseNum` is ignored for chapters. */
+export interface SampleChapterRef {
+  book: string;
+  chapterNum: number;
+  verseNum: number;
+}
+
+/**
+ * Rewrites one chapter of the sample WEB project through its data provider — read the chapter's
+ * USFM, pass it through `transform`, write the result back — so a spec can put markers the sample
+ * text does not contain in front of real verses. Writes project data, so it refuses to run unless
+ * the app was launched with `isolatedProjectRoot: true`: without that option it would rewrite the
+ * developer's own copy of the sample project, with no restore.
+ *
+ * Going through PAPI rather than editing the SFM file on disk means the write lands the same way an
+ * editor save does: the provider re-parses it and every open editor for the chapter is notified.
+ */
+export async function rewriteSampleProjectChapterUsfm(
+  chapter: SampleChapterRef,
+  transform: (usfm: string) => string,
+): Promise<void> {
+  requireIsolatedProjectRoot();
+  const pdpId = await getSampleProjectDataProviderId();
+  const usfm = await sendPapiRequestOnce<string | undefined>(
+    `object:${pdpId}.getChapterUSFM`,
+    [chapter],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+  if (!usfm)
+    throw new Error(`Sample project has no USFM for ${chapter.book} ${chapter.chapterNum}`);
+  await sendPapiRequestOnce(
+    `object:${pdpId}.setChapterUSFM`,
+    [chapter, transform(usfm)],
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
@@ -242,6 +381,53 @@ export async function navigateToolbarBcv(mainPage: Page, reference: string): Pro
   await input.press('Enter');
   // The popover closing confirms the commit was accepted before callers assert on the outcome.
   await input.waitFor({ state: 'hidden', timeout: 10_000 });
+}
+
+/**
+ * `SIMPLE_COLUMN_MIN_WIDTH_PX` from `simple-layout.data.ts`, plus room for the rounding the dock's
+ * flex weights introduce. Assert it as an upper bound on the editor column's width after a drag to
+ * the floor, so a spec states that the drag really reached the floor rather than stopping somewhere
+ * comfortable.
+ */
+export const COLUMN_FLOOR_CEILING_PX = 310;
+
+/** Width of the Simple-mode editor column (the middle dock panel), rounded to whole pixels. */
+export async function getEditorColumnWidth(mainPage: Page): Promise<number> {
+  return mainPage
+    .locator('.dock-panel')
+    .nth(1)
+    .evaluate((el) => Math.round(el.getBoundingClientRect().width));
+}
+
+/**
+ * Drags the divider between the editor column and the resources column to the left by `distancePx`,
+ * in steps rc-dock will track. Pass `Number.POSITIVE_INFINITY` to drag as far as the window allows:
+ * the dock clamps the column at its floor, which is the state the column-floor specs are about.
+ */
+export async function dragEditorColumnDividerLeft(
+  mainPage: Page,
+  distancePx: number,
+): Promise<void> {
+  // The second divider is the one between the editor column and the resources column.
+  const divider = mainPage.locator('.dock-divider').nth(1);
+  const dividerBox = await divider.boundingBox();
+  if (!dividerBox) throw new Error('The editor/resources divider has no bounding box');
+  const startX = dividerBox.x + dividerBox.width / 2;
+  const y = dividerBox.y + dividerBox.height / 2;
+  const targetX = Math.max(1, startX - distancePx);
+  await mainPage.mouse.move(startX, y);
+  await mainPage.mouse.down();
+  // Stepped, and with a small first nudge: rc-dock's drag manager starts tracking on the first
+  // move that differs from where the press landed, so a single jump to the target does nothing.
+  const dragPath = [startX - 5];
+  for (let x = startX - 5; x > targetX; x -= 40) dragPath.push(Math.max(x - 40, targetX));
+  // Sequenced through a promise chain rather than an await-in-loop: the moves have to arrive in
+  // order.
+  await dragPath.reduce(
+    (previous, x) => previous.then(() => mainPage.mouse.move(x, y)),
+    Promise.resolve(),
+  );
+  await mainPage.mouse.up();
 }
 
 /**

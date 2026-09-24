@@ -8,6 +8,10 @@ import {
   reportConnectionLost,
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
+import {
+  isWindowBlockedByOverlay,
+  resetWindowBlockingOverlays,
+} from '@renderer/services/window-blocking-overlay-store';
 import { FirstRunOverlay } from './first-run-overlay.component';
 
 vi.mock('@renderer/services/first-run-store', async (importActual) => {
@@ -135,9 +139,9 @@ vi.mock('platform-bible-react', () => {
 });
 const mockGetStatus = vi.mocked(store.getFirstRunStatus);
 
-// jsdom doesn't ship ResizeObserver or scrollIntoView; cmdk (used inside LanguageStep's
-// InterfaceLanguagePicker) instantiates a ResizeObserver on mount. No-op stubs are sufficient
-// since these tests don't assert layout or scroll behavior.
+// jsdom doesn't ship ResizeObserver; cmdk (used inside LanguageStep's InterfaceLanguagePicker)
+// instantiates one on mount. A no-op stub is sufficient since these tests don't assert layout
+// behavior. scrollIntoView is shimmed repo-wide in vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   // `targets` gives the no-op methods a `this` use (satisfies class-methods-use-this); unused by tests.
   private readonly targets = new Set<Element>();
@@ -159,9 +163,6 @@ beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
   }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
 });
 
 // beforeEach (not afterEach) so mocks are clean even when a prior test throws mid-run.
@@ -174,6 +175,9 @@ afterEach(() => {
   // The connection-lost store is a module-level singleton and never clears itself, so a test that
   // latches it would leave every later test permanently stood down.
   resetConnectionLost();
+  // Same for the window-blocking store: a registration left behind would block the window for every
+  // later test in this process.
+  resetWindowBlockingOverlays();
 });
 
 describe('FirstRunOverlay', () => {
@@ -304,6 +308,42 @@ describe('FirstRunOverlay', () => {
       captured?.();
     });
     expect(screen.getByText(/choose your language/i)).toBeInTheDocument();
+  });
+
+  it('marks the window blocked while the first-run gate is up', () => {
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    const { unmount } = render(<FirstRunOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(true);
+    unmount();
+    expect(isWindowBlockedByOverlay()).toBe(false);
+  });
+
+  // The production release path: this gate is mounted for the life of the window (it returns
+  // nothing once setup is done rather than unmounting), so the block is never lifted by an unmount.
+  // A registration that only ever released on unmount would leave the window blocked for the rest
+  // of the session, and every content-zoom chord in it dead, with nothing said.
+  it('releases the block when setup finishes, without unmounting', () => {
+    let captured: (() => void) | undefined;
+    vi.spyOn(store, 'subscribeToFirstRun').mockImplementation((listener) => {
+      captured = listener;
+      return () => {};
+    });
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    render(<FirstRunOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(true);
+
+    mockGetStatus.mockReturnValue({ kind: 'app' });
+    act(() => {
+      captured?.();
+    });
+    expect(isWindowBlockedByOverlay()).toBe(false);
+  });
+
+  it('does not mark the window blocked once the connection is lost', () => {
+    reportConnectionLost();
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    render(<FirstRunOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(false);
   });
 
   // Both orderings, because the gate can be raised at any time: a background registration re-check

@@ -133,14 +133,28 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl/intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
-export { normalizeProjectId } from './project-util';
+export {
+  normalizeProjectId,
+  hasDistinctFullName,
+  normalizeFullName,
+  formatProjectName,
+  PROJECT_NAME_SEPARATOR,
+  compareProjectsByName,
+  compareProjectShortNames,
+  type ProjectNames,
+} from './project-util';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
 export { computeEffectiveStructureProtection } from './structure-protection.util';
+export { createContentZoomWheelReader } from './content-zoom-wheel.util';
 
 // Types
 export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
 export type { NameablePhysicalKey } from './keyboard-util';
+export type {
+  ContentZoomWheelReader,
+  ContentZoomWheelReaderOptions,
+} from './content-zoom-wheel.util';
 export type {
   DebouncedFunction,
   DeepPartial,
@@ -205,6 +219,12 @@ export type {
 } from './extension-contributions/menus.model';
 export { menuDocumentSchema } from './extension-contributions/menus.model';
 export type { PaletteItem } from './palette.types';
+export {
+  PROJECT_SELECTOR_CUSTOM_DATA_KEYS,
+  makeProjectSelectorCustomData,
+  recencyMapFromOrderedIds,
+} from './project-selector-custom-data';
+export type { ProjectSelectorCustomDataShape } from './project-selector-custom-data';
 export type { DblResourceData, ResourceType } from './resources.model';
 export { doesCatalogRowCoverProject } from './resources.model';
 export type {

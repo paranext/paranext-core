@@ -7,9 +7,7 @@ import type { FindWebViewOptions } from '../find.web-view-provider';
  * unit-testable without importing the WebView's `?inline` content.
  *
  * Simple mode forces group 0, matching the Scripture editor, model text panel, Text Collection, and
- * comment list panel — Find follows the single reference the top-toolbar BCV drives. The web view
- * also reads that group's source project to resolve a project when its own tab carries none, which
- * is what makes the seeded Column 3 Find tab usable before the first Ctrl+F.
+ * comment list panel — Find follows the single reference the top-toolbar BCV drives.
  *
  * Power mode takes the caller's group, falling back to the saved one so a trigger with no group of
  * its own (a read-only reference panel, or a content reload/restore, which passes no options at

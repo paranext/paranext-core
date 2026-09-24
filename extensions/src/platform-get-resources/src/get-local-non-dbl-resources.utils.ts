@@ -1,5 +1,5 @@
 import type { DblResourceData } from 'platform-bible-utils';
-import { doesCatalogRowCoverProject } from 'platform-bible-utils';
+import { doesCatalogRowCoverProject, normalizeFullName } from 'platform-bible-utils';
 
 /** Subset of ProjectMetadata fields consumed by {@link buildLocalNonDblResources}. */
 type ProjectInfo = {
@@ -65,8 +65,15 @@ export function buildLocalNonDblResources(
       // DblResourceReference so the resource is resolvable without a catalog entry.
       dblEntryUid: m.id,
       displayName: m.name ?? m.id,
-      fullName: m.fullName ?? m.name ?? m.id,
+      // A synthetic entry for a local project carries no DBL catalog full name. Left empty rather
+      // than mirrored from the short name: the table renders Full Name in its own column beside
+      // Name, so a mirror would print the same text twice. `DblResourceData.fullName` is a
+      // required wire field, so empty is the absent form here.
+      fullName: normalizeFullName(m.fullName) ?? '',
       bestLanguageName: m.language ?? '',
+      // Best-effort: a project id need not start with the DBL entry uid it was installed from
+      // (see `adr-dbl-install-status-from-backend`), so a commentary whose ids diverge is
+      // classified as a plain ScriptureResource.
       type: [...LOCAL_COMMENTARY_UIDS].some((uid) => m.id.toLowerCase().startsWith(uid))
         ? 'CommentaryResource'
         : 'ScriptureResource',

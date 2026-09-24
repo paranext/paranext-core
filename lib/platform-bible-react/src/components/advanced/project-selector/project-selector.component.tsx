@@ -15,15 +15,18 @@ import {
   type MouseEvent,
   type RefObject,
 } from 'react';
-import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter, Loader2 } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Group, Loader2 } from 'lucide-react';
 import {
+  formatProjectName,
   getLocalizeKeyForScrollGroupId,
+  hasDistinctFullName,
   normalizeProjectId,
   type ScrollGroupId,
 } from 'platform-bible-utils';
 import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
+import { resolveLocalizedString } from '@/utils/localization.util';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -38,9 +41,10 @@ import {
 } from '@/components/shadcn-ui/command';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
@@ -53,10 +57,13 @@ import {
 import { useTruncationTooltip } from '@/hooks/use-truncation-tooltip.hook';
 import {
   computeRows,
-  partitionAndSort,
-  partitionByVersification,
+  DEFAULT_SELECTED_SECTION_HEADING,
+  DEFAULT_UNSELECTED_SECTION_HEADING,
+  partitionByGrouping,
+  partitionFlat,
   type ProjectSelectorOpenTab,
   type ProjectMultiSelection,
+  type ProjectSelectorGrouping,
   type ProjectSelectorProjectPair,
   type ProjectRow,
   type ProjectScrollGroupSelection,
@@ -66,9 +73,57 @@ import {
   type RowSection,
 } from './project-selector.rows';
 
+import {
+  makeOpenTabsGrouping,
+  makeSelectionGrouping,
+  readProjectSelectorString,
+  type ProjectSelectorStringLookup,
+} from './project-selector.groupings';
+
+/**
+ * An action row pinned below the project list — "More projects…", "Browse the server…". Expressed
+ * as data rather than a render prop on purpose: the selector owns the markup so the row stays
+ * keyboard-reachable, which a caller-rendered `<button>` would not be.
+ */
+/**
+ * What {@link ProjectSelectorProps.renderProjectIndicator} returns for a row: the glyph, and
+ * optionally what it means.
+ *
+ * One value rather than a glyph prop and a label prop, so the two cannot drift: a label with no
+ * glyph would describe an icon that is not on screen, and there is nothing in a two-prop shape to
+ * stop that. Returning `undefined` for a row means no indicator, and the column stays reserved for
+ * it either way.
+ */
+export type ProjectSelectorIndicator = {
+  /** The glyph to render in the row's indicator slot. */
+  node: ReactNode;
+  /**
+   * The glyph's meaning as text, surfaced in the row tooltip. Supply it whenever the glyph carries
+   * meaning a sighted user cannot otherwise get from the row.
+   *
+   * The rows are already tooltip triggers, so a caller cannot give the glyph its own hover label
+   * without opening a second tooltip over the row's — this is the way in.
+   *
+   * **Only supply this when {@link node} already names itself** — with `role="img"` and an
+   * `aria-label`, or equivalent. The tooltip line is the sighted-user half and is rendered
+   * `aria-hidden`, because Radix wires an open tooltip as the row's `aria-describedby` and a glyph
+   * that names itself would otherwise be announced twice per row. A `node` that is itself
+   * `aria-hidden` paired with a `label` leaves the indicator silent at both ends.
+   */
+  label?: string;
+};
+
+export type ProjectSelectorFooterAction = {
+  /** Localized row label. */
+  label: string;
+  /** Run when the row is activated. The popover closes afterwards. */
+  onSelect: () => void;
+};
+
 export type {
   ProjectSelectorOpenTab,
   ProjectMultiSelection,
+  ProjectSelectorGrouping,
   ProjectSelectorProjectPair,
   ProjectRow,
   ProjectScrollGroupSelection,
@@ -77,64 +132,250 @@ export type {
   ProjectSelectorProject,
 } from './project-selector.rows';
 
+export {
+  defaultGroupings,
+  makeBuiltInGroupings,
+  makeSelectionGrouping,
+  buildBuiltInGroupingStrings,
+  buildSelectionGroupingStrings,
+  PROJECT_SELECTOR_STRING_KEYS,
+  type BuiltInGroupingStrings,
+  type SelectionGroupingStrings,
+  type ProjectSelectorLocalizedStringKey,
+  type ProjectSelectorStringLookup,
+} from './project-selector.groupings';
+
+// Below this trigger width the chevron + its 8px margin + the button's own padding leave no room
+// for a legible label — auto-hide the chevron so at least a few characters of the shortName
+// remain. Tuned to the manage-books icon-rail sidebar (~56px), which needs to drop the chevron
+// while a normally-sized picker (~180px+) keeps it.
+const NARROW_TRIGGER_THRESHOLD_PX = 100;
+
 // #region Localized strings
 
+/**
+ * Every user-facing string the selector can render. All keys are optional; unset values fall back
+ * to English defaults. Consumers wire this from a shared platform-level localization block (see
+ * `%projectSelector_*%` keys in the platform's localizedStrings JSON) so every ProjectSelector in
+ * the app reads the same vocabulary.
+ *
+ * Grouping _labels_ (the radio items in the group-by menu) are NOT in this map — those live on the
+ * {@link ProjectSelectorGrouping} objects the caller passes via `availableGroupings`, so custom
+ * groupings can supply their own localized label without a separate string channel.
+ */
 export type ProjectSelectorLocalizedStrings = {
-  /** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
+  /**
+   * Names what the trigger selects (e.g. "Project"), NOT the whole accessible name. With something
+   * selected the trigger announces `"{ariaLabel}: {selection}"`, so a consumer passing `"Select
+   * project"` gets "Select project: WEB". Supply the group label alone and let the selection be
+   * appended.
+   */
+  ariaLabel?: string;
+  /** Trigger fallback text when nothing is selected. */
+  buttonPlaceholder?: string;
+  /** "No results" message inside the popover when the search has no matches. */
+  commandEmptyMessage?: string;
+  /** Placeholder for the popover's search input. */
   searchPlaceholder?: string;
-  /** Accessible label for the filter menu icon button. Defaults to `"Filter"`. */
-  filterAriaLabel?: string;
-  /** Filter menu: section heading for the grouping toggle. Defaults to `"Group"`. */
+  /** Accessible label + `title` for the group-by menu icon button. */
+  groupByAriaLabel?: string;
+  /** Group-by menu: section heading for the grouping radio group. */
   groupSectionLabel?: string;
-  /** Filter menu: section heading for the filter toggles. Defaults to `"Filter"`. */
-  filterSectionLabel?: string;
-  /** Filter menu: "By open tabs" item under the Group section. Defaults to `"By open tabs"`. */
-  filterGroupByOpenTabs?: string;
-  /** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
-  filterShowSelectedOnly?: string;
-  /** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
+  /** Group-by menu: "None" grouping radio item — the "no grouping" option. */
+  groupByNone?: string;
+  /** Section heading rendered above the "open tabs" bucket. */
   openTabsSectionHeading?: string;
-  /** Section heading for the Other projects section. Defaults to `"Your projects & resources"`. */
+  /** Section heading rendered above the "other projects" bucket. */
   otherProjectsSectionHeading?: string;
   /**
-   * Section heading rendered for the "Unknown versification" bucket in versification-grouping mode
-   * — covers projects whose versification can't be resolved at load time. Defaults to `"Unknown
-   * versification"`.
+   * Radio label used by the auto-added `openTabs` grouping (renders whenever `openTabs.length > 0`
+   * and the caller didn't already include an `openTabs` grouping in `availableGroupings`).
    */
-  versificationUnknownSectionHeading?: string;
+  autoOpenTabsGroupingLabel?: string;
   /**
-   * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
-   * Defaults to `"Bound to {group} · not currently open"`.
+   * Radio label used by the auto-added `selection` grouping (renders in `project-multi` mode when
+   * the caller didn't already include a `selection` grouping).
+   */
+  autoSelectionGroupingLabel?: string;
+  /** Auto-added selection grouping: heading over the "Selected" bucket. */
+  autoSelectionSelectedSectionHeading?: string;
+  /** Auto-added selection grouping: heading over the "Unselected" bucket. */
+  autoSelectionUnselectedSectionHeading?: string;
+  /**
+   * Tooltip on a bound-but-closed chip. `{group}` is replaced with the scroll-group letter (e.g.
+   * `"A"`).
    */
   boundButClosedTooltip?: string;
-  /** Label of the "Open" button shown on bound-but-closed rows. Defaults to `"Open"`. */
+  /** Label of the "Open" button shown on bound-but-closed rows. */
   openButtonLabel?: string;
-  /** Multi-select: "Select all" button. Defaults to `"Select all"`. */
-  selectAll?: string;
-  /** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
+  /** Multi-select: "Clear all" button (shown only when at least one pair is selected). */
   clearAll?: string;
 };
 
-const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
+/**
+ * English text for every {@link ProjectSelectorLocalizedStrings} key, used for any key a consumer
+ * leaves unset.
+ *
+ * `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
+ * bare Storybook render), not production copy: every real consumer merges its own values for these
+ * two fields on top via `localizedStrings`. They exist so the trigger never renders with an empty
+ * accessible name or empty text before localized strings resolve.
+ *
+ * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
+ * a consumer typically localizes only the handful of keys its configuration can reach, and which
+ * keys those are is a property of the configuration rather than of the component. Looping over this
+ * map keeps such a guard honest when a key is renamed or added; a hand-copied list of strings
+ * silently stops asserting anything.
+ */
+export const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
+  ariaLabel: 'Projects & resources',
+  buttonPlaceholder: 'Select a project',
+  commandEmptyMessage: 'No projects found',
   searchPlaceholder: 'Search projects & resources',
-  filterAriaLabel: 'Filter',
-  groupSectionLabel: 'Group',
-  filterSectionLabel: 'Filter',
-  filterGroupByOpenTabs: 'By open tabs',
-  filterShowSelectedOnly: 'Show selected only',
+  groupByAriaLabel: 'Group by',
+  groupSectionLabel: 'Group by',
+  groupByNone: 'None',
   openTabsSectionHeading: 'Opened project & resource tabs',
   otherProjectsSectionHeading: 'Your projects & resources',
-  versificationUnknownSectionHeading: 'Unknown versification',
+  autoOpenTabsGroupingLabel: 'Open tabs',
+  autoSelectionGroupingLabel: 'Selection',
+  autoSelectionSelectedSectionHeading: DEFAULT_SELECTED_SECTION_HEADING,
+  autoSelectionUnselectedSectionHeading: DEFAULT_UNSELECTED_SECTION_HEADING,
   boundButClosedTooltip: 'Bound to {group} · not currently open',
   openButtonLabel: 'Open',
-  selectAll: 'Select all',
   clearAll: 'Clear all',
 };
 
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): Required<ProjectSelectorLocalizedStrings> {
-  return { ...DEFAULT_STRINGS, ...partial };
+  const given = partial ?? {};
+  // Resolved field by field rather than by spreading `partial` over the defaults, because a spread
+  // cannot tell "the caller did not set this" from "the caller set it to something unusable":
+  // `buildProjectSelectorLocalizedStrings` emits a property for EVERY field, and a present-but-
+  // `undefined` property overwrites the default just as a real value would. What counts as usable
+  // is `resolveLocalizedString`'s to decide — see `isResolvedLocalizedValue` for the three states
+  // it rejects.
+  //
+  // Written out one field at a time on purpose. The `Required<…>` return type then makes a missing
+  // or misspelled field a compile error, which a key-loop or an `Object.fromEntries` round-trip
+  // both erase.
+  return {
+    // The one field where an empty string is meaningful: it is a deliberate "no accessible name
+    // here; the visible text or a labelling ancestor names this control", so it passes through
+    // rather than falling back. Matches `RecentSearches`. Whitespace-only is not that opt-out.
+    ariaLabel:
+      given.ariaLabel === ''
+        ? ''
+        : resolveLocalizedString(given.ariaLabel, PROJECT_SELECTOR_DEFAULT_STRINGS.ariaLabel),
+    buttonPlaceholder: resolveLocalizedString(
+      given.buttonPlaceholder,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.buttonPlaceholder,
+    ),
+    commandEmptyMessage: resolveLocalizedString(
+      given.commandEmptyMessage,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.commandEmptyMessage,
+    ),
+    searchPlaceholder: resolveLocalizedString(
+      given.searchPlaceholder,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.searchPlaceholder,
+    ),
+    groupByAriaLabel: resolveLocalizedString(
+      given.groupByAriaLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.groupByAriaLabel,
+    ),
+    groupSectionLabel: resolveLocalizedString(
+      given.groupSectionLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.groupSectionLabel,
+    ),
+    groupByNone: resolveLocalizedString(
+      given.groupByNone,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.groupByNone,
+    ),
+    openTabsSectionHeading: resolveLocalizedString(
+      given.openTabsSectionHeading,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.openTabsSectionHeading,
+    ),
+    otherProjectsSectionHeading: resolveLocalizedString(
+      given.otherProjectsSectionHeading,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.otherProjectsSectionHeading,
+    ),
+    autoOpenTabsGroupingLabel: resolveLocalizedString(
+      given.autoOpenTabsGroupingLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.autoOpenTabsGroupingLabel,
+    ),
+    autoSelectionGroupingLabel: resolveLocalizedString(
+      given.autoSelectionGroupingLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.autoSelectionGroupingLabel,
+    ),
+    autoSelectionSelectedSectionHeading: resolveLocalizedString(
+      given.autoSelectionSelectedSectionHeading,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.autoSelectionSelectedSectionHeading,
+    ),
+    autoSelectionUnselectedSectionHeading: resolveLocalizedString(
+      given.autoSelectionUnselectedSectionHeading,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.autoSelectionUnselectedSectionHeading,
+    ),
+    boundButClosedTooltip: resolveLocalizedString(
+      given.boundButClosedTooltip,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.boundButClosedTooltip,
+    ),
+    openButtonLabel: resolveLocalizedString(
+      given.openButtonLabel,
+      PROJECT_SELECTOR_DEFAULT_STRINGS.openButtonLabel,
+    ),
+    clearAll: resolveLocalizedString(given.clearAll, PROJECT_SELECTOR_DEFAULT_STRINGS.clearAll),
+  };
+}
+
+/**
+ * Convert the raw `%projectSelector_*%` resolved strings into a
+ * {@link ProjectSelectorLocalizedStrings} bag ready to pass as the `localizedStrings` prop. Merge
+ * consumer-specific strings (`ariaLabel`, `buttonPlaceholder`) on top afterwards.
+ */
+export function buildProjectSelectorLocalizedStrings(
+  strings: ProjectSelectorStringLookup,
+): ProjectSelectorLocalizedStrings {
+  return {
+    searchPlaceholder: readProjectSelectorString(strings, '%projectSelector_searchPlaceholder%'),
+    commandEmptyMessage: readProjectSelectorString(
+      strings,
+      '%projectSelector_commandEmptyMessage%',
+    ),
+    groupByAriaLabel: readProjectSelectorString(strings, '%projectSelector_groupByAriaLabel%'),
+    groupSectionLabel: readProjectSelectorString(strings, '%projectSelector_groupSectionLabel%'),
+    groupByNone: readProjectSelectorString(strings, '%projectSelector_groupByNone%'),
+    openTabsSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_openTabsSectionHeading%',
+    ),
+    otherProjectsSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_otherProjectsSectionHeading%',
+    ),
+    autoOpenTabsGroupingLabel: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_openTabs_label%',
+    ),
+    autoSelectionGroupingLabel: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_selection_label%',
+    ),
+    autoSelectionSelectedSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_selection_selectedSectionHeading%',
+    ),
+    autoSelectionUnselectedSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_selection_unselectedSectionHeading%',
+    ),
+    boundButClosedTooltip: readProjectSelectorString(
+      strings,
+      '%projectSelector_boundButClosedTooltip%',
+    ),
+    openButtonLabel: readProjectSelectorString(strings, '%projectSelector_openButtonLabel%'),
+    clearAll: readProjectSelectorString(strings, '%projectSelector_clearAll%'),
+  };
 }
 
 // #endregion
@@ -154,17 +395,29 @@ function scrollGroupLetterFromMap(id: ScrollGroupId): string {
 
 // #region Common props
 
+/**
+ * The footer action row's cmdk value.
+ *
+ * Cmdk derives an item's value from its rendered text unless one is given. The footer's text is a
+ * caller-supplied localized label, which could collide with a project name, so the row carries this
+ * fixed value instead. It must stay stable and must not look like a project id.
+ *
+ * Project rows already carry composite values (`rowKey shortName fullName`), so a collision is
+ * unreachable in practice and no test can pin one. Keep this sentinel anyway: it is what makes that
+ * true independently of how row values are composed later.
+ */
+const FOOTER_ACTION_VALUE = 'platform.footerAction';
+
 type CommonProps = {
   projects: readonly ProjectSelectorProject[];
   openTabs: readonly ProjectSelectorOpenTab[];
-  buttonPlaceholder?: string;
-  commandEmptyMessage?: string;
-  ariaLabel?: string;
+  /**
+   * Shadcn Button variant. Defaults to `'outline'`. Use `'default'` for a primary-fill affordance
+   * (call-to-action) when the picker is empty and the user is expected to make a choice.
+   */
   buttonVariant?: ButtonProps['variant'];
+  /** Additional classes merged onto the trigger button, after the component's own trigger classes. */
   buttonClassName?: string;
-  popoverContentClassName?: string;
-  popoverContentStyle?: CSSProperties;
-  alignDropDown?: 'start' | 'center' | 'end';
   isDisabled?: boolean;
   /**
    * When true, the trigger shows a spinner (instead of the chevron) and is disabled, signalling
@@ -172,41 +425,81 @@ type CommonProps = {
    * busy/blocked state with no spinner.
    */
   isLoading?: boolean;
+  /**
+   * All user-facing strings. Optional keys fall back to English defaults. Consumers should wire
+   * this from the platform's central `%projectSelector_*%` localization block plus any
+   * consumer-specific overrides (typically `ariaLabel` and `buttonPlaceholder`, which vary per
+   * picker role).
+   */
   localizedStrings?: ProjectSelectorLocalizedStrings;
-  /** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
-  defaultGroupByOpenTabs?: boolean;
   /**
-   * Hide the chevron icon in the trigger button. For very narrow triggers (e.g. an icon-rail
-   * sidebar ~56px wide) the chevron plus its margin consumes the entire content box and the label
-   * truncates to nothing; hiding it leaves room for a few characters of the project name. Keep the
-   * trigger visually recognizable as a control through its button variant when using this. Defaults
-   * to `false`.
-   */
-  hideTriggerChevron?: boolean;
-  /**
-   * When true, rows are grouped by `versificationId` (with the `priorityVersificationId` bucket
-   * pinned to the top). The "Group by open tabs" toggle is hidden — the two grouping modes are
-   * mutually exclusive in the same picker. When `groupByVersification` is enabled, the consumer
-   * should ensure each {@link ProjectSelectorProject} carries `versificationId` and
-   * `versificationName`.
-   */
-  groupByVersification?: boolean;
-  /**
-   * Versification id whose bucket should render first in versification grouping mode (typically the
-   * caller's active project's versification). Optional — when absent, all buckets sort
-   * alphabetically by `versificationName`.
-   */
-  priorityVersificationId?: string;
-  /**
-   * When true, the funnel/filter menu next to the search box is not rendered. Defaults to `false`.
+   * The grouping options exposed in the group-by menu, in order. Each entry is a
+   * {@link ProjectSelectorGrouping} — either one of the built-ins from {@link makeBuiltInGroupings}
+   * or a consumer-defined custom grouping.
    *
-   * For a picker whose rows are ALL open tabs (so "Group by open tabs" only toggles a section
-   * heading over an otherwise identical list) and which is single-select (so "Show selected only"
-   * never renders), the menu reduces to a control with no meaningful effect. Set this to drop the
-   * affordance rather than present an inert one. Grouping still applies per
-   * `defaultGroupByOpenTabs`; only the user-facing toggle goes away.
+   * Behavior:
+   *
+   * - **Omitted** — the component auto-derives from context: adds `openTabs` when `openTabs.length >
+   *   0`, and adds `selection` in `project-multi` mode. Pickers that don't care about the grouping
+   *   menu can leave this prop unset and get a sensible default.
+   * - **`[]`** — explicit empty. No group-by menu renders. The list opens flat.
+   * - **Length 1** — the grouping is applied and the user is locked into it: the group-by menu has
+   *   nothing to switch between so the funnel button is dropped entirely. Use this for pickers
+   *   whose grouping is the entire point (e.g. manage-books Create "Based on" locked into
+   *   versification).
+   * - **Length ≥ 2** — a group-by menu renders with a "None" radio (above a separator) plus one radio
+   *   per grouping.
+   *
+   * A caller that wants the historical set of built-ins passes `defaultGroupings` (or
+   * `makeBuiltInGroupings(strings)`) explicitly. When you pass a list — even a single-entry lock —
+   * the component uses it verbatim with no auto-additions on top.
    */
-  hideFilterMenu?: boolean;
+  availableGroupings?: readonly ProjectSelectorGrouping[];
+  /**
+   * The grouping active on initial mount, identified by `id`. When absent (or when the id isn't
+   * present in `availableGroupings`), the active grouping resolves to:
+   *
+   * - The sole entry when `availableGroupings.length === 1` (single-grouping lock),
+   * - `'openTabs'` when it's in the array,
+   * - `'none'` (flat) otherwise.
+   *
+   * Pass `'none'` — exported as {@link NO_GROUPING} — to explicitly open flat even when groupings
+   * are available.
+   */
+  defaultGrouping?: string | 'none';
+  /**
+   * Render an indicator for a row — typically a small icon distinguishing one kind of row from
+   * another, derived from the caller's own `customData`.
+   *
+   * The selector ships no taxonomy and no default mapping: `customData` is a free-form bag whose
+   * meaning belongs to whoever produced the list (Paratext project types and DBL resource types are
+   * two different vocabularies, neither owned by this library), so the caller decides both what a
+   * value means and what it looks like. Note that the conventional `customData.type` key carries a
+   * project TYPE, not a project/resource discriminator — a caller who needs the latter has to pack
+   * its own flag.
+   *
+   * **The returned node must carry its own accessible name** (an `aria-label`, or visually hidden
+   * text) unless the row's own text already conveys the distinction. The selector renders it
+   * verbatim and adds no `aria-hidden` and no description of its own, so an unlabeled icon is
+   * information conveyed by sight alone (WCAG 1.1.1). Mark it `aria-hidden` only when the name
+   * would be redundant.
+   *
+   * Runs during the selector's own render, once per filtered row, on every render, so it must be
+   * pure, cheap, and free of hooks — the row count changes as the user filters, and a hook called
+   * here would change the selector's hook count between renders and throw.
+   */
+  renderProjectIndicator?: (
+    project: ProjectSelectorProject,
+  ) => ProjectSelectorIndicator | undefined;
+  /**
+   * An action row pinned below every section, with a separator above it whenever the list has rows
+   * to divide it from. Use it for an affordance that opens a different surface — the sections
+   * partition rows, so they cannot express one.
+   *
+   * The row stays available when the list is empty, which is when an escape hatch matters most, and
+   * the "no projects" empty state still renders alongside it.
+   */
+  footerAction?: ProjectSelectorFooterAction;
 };
 
 export type ProjectSelectorProps =
@@ -223,6 +516,23 @@ export type ProjectSelectorProps =
        * native hover.
        */
       triggerLabelFormat?: 'shortName' | 'shortNameAndFullName';
+      /**
+       * Render the trigger's label yourself, in place of the derived `shortName` / `shortName -
+       * fullName` string.
+       *
+       * Receives the entry of `projects` that `selection.projectId` names, or `undefined` — which
+       * means either that nothing is selected OR that the selected id matches no entry of
+       * `projects`. The second case is reachable whenever the selection and the list come from
+       * different sources, so a caller that can name the selected project from its own state should
+       * fall back to that rather than treating `undefined` as "nothing is open".
+       *
+       * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
+       * deliberate rather than an omission: a caller reaching for this prop is rendering a label
+       * with its own hover affordance (`ToolbarCompoundLabel` carries a truncation tooltip), and
+       * two tooltips over one control is worse than none. Surface the full text from inside your
+       * own node.
+       */
+      renderTriggerLabel?: (selected: ProjectSelectorProject | undefined) => ReactNode;
     })
   | (CommonProps & {
       mode: 'project-multi';
@@ -233,17 +543,6 @@ export type ProjectSelectorProps =
        * itself). The caller is expected to open a tab via `papi.webViews.openWebView(...)`.
        */
       onOpenProjectInGroup?: (projectId: string, scrollGroupId: ScrollGroupId) => void;
-      /**
-       * Optional custom trigger label when at least one pair is selected. Receives the list of
-       * selected `(project, scrollGroupId)` tuples. Defaults to `"N: short1 (A), short2 (B),
-       * ..."`.
-       */
-      getSelectedText?: (
-        selected: ReadonlyArray<{
-          project: ProjectSelectorProject;
-          scrollGroupId?: ScrollGroupId;
-        }>,
-      ) => string;
     })
   | (CommonProps & {
       mode: 'projectScrollGroup';
@@ -299,9 +598,26 @@ type RowRenderProps = {
   onOpen: ((row: ProjectRow) => void) | undefined;
   /** Forwarded by the parent so it can scroll the selected row into view when the popover opens. */
   selectedRowRef?: RefObject<HTMLDivElement | null>;
+  /** Resolved by the parent from `renderProjectIndicator`. */
+  indicator?: ProjectSelectorIndicator;
+  /**
+   * Whether to render the fixed-width indicator column at all. True whenever the caller supplied
+   * `renderProjectIndicator`, even for rows it returned nothing for, so every row's label starts at
+   * the same offset.
+   */
+  reserveIndicatorSlot: boolean;
 };
 
-function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }: RowRenderProps) {
+function ProjectRowView({
+  row,
+  mode,
+  strings,
+  onClick,
+  onOpen,
+  selectedRowRef,
+  indicator,
+  reserveIndicatorSlot,
+}: RowRenderProps) {
   // We control Radix Tooltip's `open` prop manually because Radix's built-in pointer/focus
   // auto-detection does not fire on cmdk's `<CommandItem>` trigger (data-state stays "closed"
   // even after pointerenter / pointermove / focus). Tracking hover ourselves bypasses that
@@ -322,14 +638,12 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
   // truncation-driven open state.
   const [isExtraContentHovered, setIsExtraContentHovered] = useState(false);
 
-  const tooltipHasLanguage = Boolean(row.language || row.languageCode);
-
   // Tooltip lines that convey information NOT visible in the row text. These rows should
   // always show a tooltip on hover, regardless of whether the visible text is truncated.
   const hasExtraTooltipContent =
-    tooltipHasLanguage ||
     Boolean(row.scrollGroupScrRefLabel) ||
     row.isBoundButClosed ||
+    Boolean(indicator?.label) ||
     (row.isDisabled && Boolean(row.disabledReason));
 
   const isHovered = isTruncatedHovered || isExtraContentHovered;
@@ -384,7 +698,6 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
             }}
             onMouseDown={(event: MouseEvent) => event.stopPropagation()}
             aria-label={strings.openButtonLabel}
-            title={strings.openButtonLabel}
           >
             <ArrowRight className="tw:h-3 tw:w-3" />
             {strings.openButtonLabel}
@@ -397,7 +710,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
   const rowNode = (
     <CommandItem
       ref={row.isSelected ? selectedRowRef : undefined}
-      value={`${row.rowKey} ${row.shortName} ${row.fullName} ${row.language ?? ''} ${row.languageCode ?? ''}`}
+      value={`${row.rowKey} ${row.shortName} ${row.fullName ?? ''}`}
       onSelect={() => {
         if (row.isDisabled) return;
         onClick(row);
@@ -406,27 +719,34 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
-      data-selected={row.isSelected}
     >
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
       </span>
+      {/* Fixed-width slot, reserved for every row once the caller supplies an indicator renderer.
+          A renderer that returns a glyph for some rows and nothing for others is the expected
+          shape (an icon for resources only, say), and rendering the wrapper conditionally would
+          start those rows' labels at a different offset. `gap` on the row handles the spacing, so
+          this stays correct under RTL. */}
+      {reserveIndicatorSlot && (
+        <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
+          {indicator?.node}
+        </span>
+      )}
       {/* Row label uses a 2-line layout — shortName on top, fullName muted
           below. Each line truncates independently. Tooltip-on-clip still
           works because the wrapping span is what scrollWidth/clientWidth is
           measured on (truncation in EITHER child contributes to overflow).
-          When `fullName` is missing
-          or equal to `shortName` the second line would render the same
-          string the user already sees above (e.g. consumers that fall back
-          `fullName ?? shortName` upstream and forward an unset project
-          fullName). Suppress the muted line in that case so the row reads
-          as a single name. */}
+          The muted second line is suppressed whenever `hasDistinctFullName`
+          says there is nothing distinct to show, so the row reads as a
+          single name rather than repeating it — edit that helper, not this
+          condition, to change what counts as distinct. */}
       <span
         ref={labelRef}
         className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
       >
         <span className="tw:w-full tw:truncate tw:font-medium">{row.shortName}</span>
-        {row.fullName && row.fullName !== row.shortName && (
+        {hasDistinctFullName(row) && (
           <span className="tw:w-full tw:truncate tw:text-xs tw:text-muted-foreground">
             {row.fullName}
           </span>
@@ -455,17 +775,22 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
         // No `zIndex` override: `TooltipContent` sets the tooltip tier itself, which is above the
         // popover this row is rendered inside. Pinning it to the overlay tier (400) would put the
         // tooltip behind its own host.
-        className="tw:max-w-xs tw:text-center"
+        // Wider than the popover that triggers it, deliberately: this tooltip stacks several
+        // lines — full name, indicator meaning, scroll-group reference, disabled reason — and a
+        // cap matching the popover's own width wraps every one of them. At this width only a long
+        // full name wraps. Start-aligned rather than centred because centring lines of very
+        // different lengths reads as ragged once there are more than two of them.
+        className="tw:max-w-md tw:text-start"
       >
-        <div className="tw:font-semibold">{row.fullName}</div>
-        {tooltipHasLanguage && (
-          <div className="tw:text-sm">
-            {row.language}
-            {row.languageCode && (
-              <span className="tw:text-muted-foreground"> ({row.languageCode})</span>
-            )}
-          </div>
-        )}
+        {/* The whole label, not the full name alone: this tooltip doubles as the row's
+            truncation disclosure (`useTruncationTooltip` opens it when EITHER line is clipped), so
+            dropping the short name here would hide the very field a narrow row clipped. */}
+        {/* `dir="auto"` because the joined form is one text node with a direction-neutral
+            separator — see `PROJECT_NAME_SEPARATOR` — so a right-to-left name in a left-to-right
+            container would otherwise put the separator on the visually wrong side. */}
+        <div className="tw:font-semibold" dir="auto">
+          {formatProjectName(row)}
+        </div>
         {!row.isBoundButClosed && row.scrollGroupScrRefLabel && letter && (
           <div className="tw:text-sm">
             {row.scrollGroupScrRefLabel}
@@ -473,6 +798,17 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
           </div>
         )}
         {tooltipBoundBut && <div className="tw:text-sm tw:italic">{tooltipBoundBut}</div>}
+        {/* The indicator glyph's meaning: the row is already a tooltip trigger, so the glyph
+            cannot carry a hover label of its own without opening a second tooltip over this one.
+
+            `aria-hidden` because this is the sighted-user half only. The glyph carries the same
+            string as its own accessible name inside the row, and Radix wires an open tooltip as
+            the row's `aria-describedby`, so announcing it here too would read it twice per row. */}
+        {indicator?.label && (
+          <div className="tw:text-sm" aria-hidden>
+            {indicator.label}
+          </div>
+        )}
         {row.isDisabled && row.disabledReason && (
           <div className="tw:text-sm tw:italic tw:text-muted-foreground">{row.disabledReason}</div>
         )}
@@ -483,54 +819,70 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
 
 // #endregion
 
-// #region Filter menu
+// #region Group-by menu
 
-type FilterMenuProps = {
-  groupByOpenTabs: boolean;
-  onChangeGroupByOpenTabs: (value: boolean) => void;
-  showSelectedOnly: boolean | undefined;
-  onChangeShowSelectedOnly: ((value: boolean) => void) | undefined;
+/**
+ * Sentinel `defaultGrouping` / active-grouping value meaning "no grouping" (a flat list). Backs the
+ * group-by menu's None radio item, so it is a RESERVED {@link ProjectSelectorGrouping.id} that no
+ * consumer-defined grouping may use.
+ */
+export const NO_GROUPING = 'none';
+
+type ActiveGroupingId = string;
+
+type GroupByMenuProps = {
+  availableGroupings: readonly ProjectSelectorGrouping[];
+  activeGrouping: ActiveGroupingId;
+  onChangeGrouping: (value: ActiveGroupingId) => void;
   strings: Required<ProjectSelectorLocalizedStrings>;
 };
 
-function FilterMenu({
-  groupByOpenTabs,
-  onChangeGroupByOpenTabs,
-  showSelectedOnly,
-  onChangeShowSelectedOnly,
+function GroupByMenu({
+  availableGroupings,
+  activeGrouping,
+  onChangeGrouping,
   strings,
-}: FilterMenuProps) {
-  // A filter (as opposed to grouping) is "active" when at least one filter toggle is on.
-  // Today that's just `showSelectedOnly`; when we add more, OR them here.
-  const isFilterActive = Boolean(showSelectedOnly);
+}: GroupByMenuProps) {
+  // The button reads as a toggle that is "on" whenever a grouping is applied, so the active state
+  // is conveyed by the control itself rather than only by the section headings in the list.
+  const isGroupingActive = activeGrouping !== NO_GROUPING;
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'tw:h-8 tw:w-8 tw:shrink-0 tw:p-0',
-            // Match shadcn Toggle's "on" styling so the funnel reads as a toggle-group button
-            // that's currently pressed when a filter is active.
-            isFilterActive &&
-              'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
-          )}
-          aria-label={strings.filterAriaLabel}
-          aria-pressed={isFilterActive}
-          title={strings.filterAriaLabel}
-          onMouseDown={(event: MouseEvent) => event.preventDefault()}
-        >
-          <Filter className="tw:h-4 tw:w-4" />
-        </Button>
-      </DropdownMenuTrigger>
+      {/* The tooltip comes from the shadcn `Tooltip`, never a native `title` attribute, which would
+          render the browser-default yellow tooltip alongside the app's own styling. The enclosing
+          `TooltipProvider` lives on the selector's `PopoverContent`. */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'tw:h-8 tw:w-8 tw:shrink-0 tw:p-0',
+                // Match shadcn Toggle's "on" styling so the icon reads as a toggle-group button
+                // that's currently pressed while a grouping is active.
+                isGroupingActive &&
+                  'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
+              )}
+              aria-label={strings.groupByAriaLabel}
+              aria-pressed={isGroupingActive}
+              onMouseDown={(event: MouseEvent) => event.preventDefault()}
+            >
+              <Group className="tw:h-4 tw:w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        {/* No `zIndex` override: `TooltipContent` sets the tooltip tier itself, which is above both
+            the host popover and this menu. */}
+        <TooltipContent>{strings.groupByAriaLabel}</TooltipContent>
+      </Tooltip>
       {/* One of the few places a consumer legitimately overrides an overlay's own tier, so the
           reason is recorded here: this menu opens from inside this component's own
           `PopoverContent`. `DropdownMenuContent`'s own tier is `Z_INDEX_ABOVE_DOCK`, the same tier
           the host popover sits on, so the two TIE and the menu wins only on paint order —
           `dropdown-menu.tsx` documents that and names this tier as what a caller needing to win
-          outright should use. Verified against the filter menu opened from the selector popover.
+          outright should use. Verified against the group-by menu opened from the selector popover.
           The row tooltip above needs nothing: `TooltipContent`'s own tier already clears the
           popover. */}
       <DropdownMenuContent
@@ -539,26 +891,19 @@ function FilterMenu({
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
       >
         <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
-        <DropdownMenuCheckboxItem
-          checked={groupByOpenTabs}
-          onCheckedChange={onChangeGroupByOpenTabs}
-          onSelect={(event) => event.preventDefault()}
-        >
-          {strings.filterGroupByOpenTabs}
-        </DropdownMenuCheckboxItem>
-        {onChangeShowSelectedOnly && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>{strings.filterSectionLabel}</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              checked={Boolean(showSelectedOnly)}
-              onCheckedChange={onChangeShowSelectedOnly}
-              onSelect={(event) => event.preventDefault()}
-            >
-              {strings.filterShowSelectedOnly}
-            </DropdownMenuCheckboxItem>
-          </>
-        )}
+        <DropdownMenuRadioGroup value={activeGrouping} onValueChange={onChangeGrouping}>
+          {/* No `onSelect={preventDefault}` here — picking a grouping should close the menu
+              immediately, so the user sees the newly grouped list without a second click. */}
+          <DropdownMenuRadioItem value={NO_GROUPING}>{strings.groupByNone}</DropdownMenuRadioItem>
+          {/* Visually separate "None" from the real grouping options — "None" is the "off state"
+              and the actual grouping choices sit below the divider. */}
+          <DropdownMenuSeparator />
+          {availableGroupings.map((grouping) => (
+            <DropdownMenuRadioItem key={grouping.id} value={grouping.id}>
+              {grouping.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -567,6 +912,23 @@ function FilterMenu({
 // #endregion
 
 // #region Main component
+
+function resolveDefaultActiveGrouping(
+  availableGroupings: readonly ProjectSelectorGrouping[],
+  defaultGrouping: string | undefined,
+): ActiveGroupingId {
+  // Single-grouping lock: no choice to make, activate it unconditionally.
+  if (availableGroupings.length === 1) return availableGroupings[0].id;
+  if (defaultGrouping) {
+    if (defaultGrouping === NO_GROUPING) return NO_GROUPING;
+    if (availableGroupings.some((g) => g.id === defaultGrouping)) return defaultGrouping;
+  }
+  // Prefer 'openTabs' when it's in the menu, otherwise flat. Deliberately NOT
+  // availableGroupings[0] — a caller who restricts to e.g. ['language','type'] should still open
+  // in flat mode, not silently pick 'language'.
+  if (availableGroupings.some((g) => g.id === 'openTabs')) return 'openTabs';
+  return NO_GROUPING;
+}
 
 /**
  * Combo-box project picker with three modes:
@@ -585,8 +947,69 @@ function FilterMenu({
 export function ProjectSelector(props: ProjectSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [groupByOpenTabs, setGroupByOpenTabs] = useState(props.defaultGroupByOpenTabs ?? true);
-  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  // Memoized on the prop's identity, which is all a component can key on. Note it does NOT hold on
+  // the unresolved path: `useLocalizedStrings` rebuilds its seed object in the render body and
+  // returns it on every platform-error render, so the prop is a fresh object each time and this
+  // recomputes. That is affordable — the work is a handful of anchored regex tests — but do not
+  // read this memo as a guarantee.
+  const strings = useMemo(() => resolveStrings(props.localizedStrings), [props.localizedStrings]);
+  // Effective grouping list:
+  //
+  // - When the caller passes `availableGroupings` (even `[]`), it is taken LITERALLY. This is the
+  //   contract for "I know exactly what groupings this picker should offer" cases like the
+  //   manage-books Create "Based on" picker, which passes `[versificationGrouping]` and expects
+  //   to be locked into that single option with no group-by menu.
+  // - When the caller OMITS `availableGroupings`, the component auto-derives a sensible default
+  //   from the runtime state:
+  //     - `openTabs` when any tab is open (so pickers that show scroll-group chips also expose
+  //       the "opened tabs vs everything else" partition without ceremony).
+  //     - `selection` in `project-multi` mode (replaces the old `Show selected only` checkbox
+  //       with a Selected / Unselected partition).
+  //   Pickers that want the full built-in set (openTabs / lastUsed / language / type) pass
+  //   `defaultGroupings` or `makeBuiltInGroupings(strings)` explicitly.
+  const availableGroupings = useMemo<readonly ProjectSelectorGrouping[]>(() => {
+    if (props.availableGroupings !== undefined) return props.availableGroupings;
+    const auto: ProjectSelectorGrouping[] = [];
+    // Built through the same factories `makeBuiltInGroupings` uses, so a descriptor's shape is
+    // defined once. The labels come from the resolved strings bag rather than the raw
+    // `%projectSelector_*%` lookup, which is why these have their own `auto*` string fields.
+    if (props.openTabs.length > 0) {
+      auto.push(makeOpenTabsGrouping(strings.autoOpenTabsGroupingLabel));
+    }
+    if (props.mode === 'project-multi') {
+      auto.push(
+        makeSelectionGrouping({
+          label: strings.autoSelectionGroupingLabel,
+          selectedSectionHeading: strings.autoSelectionSelectedSectionHeading,
+          unselectedSectionHeading: strings.autoSelectionUnselectedSectionHeading,
+        }),
+      );
+    }
+    return auto;
+  }, [
+    props.availableGroupings,
+    props.openTabs.length,
+    props.mode,
+    strings.autoOpenTabsGroupingLabel,
+    strings.autoSelectionGroupingLabel,
+    strings.autoSelectionSelectedSectionHeading,
+    strings.autoSelectionUnselectedSectionHeading,
+  ]);
+  // The grouping the user picked from the menu, or `undefined` while they have not picked one.
+  // Tracking "has the user chosen?" separately from "which grouping is active?" is what lets the
+  // resolved default below keep following its inputs without ever overriding a real choice.
+  const [pickedGrouping, setPickedGrouping] = useState<ActiveGroupingId | undefined>(undefined);
+  // Re-resolves whenever its inputs change, which matters because those inputs are commonly async:
+  // a caller that omits `availableGroupings` and loads `openTabs` over the wire has an empty list
+  // on first render, so a mount-only resolution would latch 'none' and leave the list flat even
+  // after the `openTabs` radio appeared in the menu.
+  const resolvedGrouping = useMemo<ActiveGroupingId>(
+    () => resolveDefaultActiveGrouping(availableGroupings, props.defaultGrouping),
+    [availableGroupings, props.defaultGrouping],
+  );
+  // The user's choice wins permanently once made; until then the resolved default tracks the props.
+  // A picked id that later leaves `availableGroupings` degrades to flat (see `sections` below).
+  const activeGrouping = pickedGrouping ?? resolvedGrouping;
 
   // Clear the search filter when the popover closes so the next open starts
   // fresh — a persisted query across open/close confuses users who typed a
@@ -599,9 +1022,20 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // value for React DOM refs.
   // eslint-disable-next-line no-null/no-null
   const selectedRowRef = useRef<HTMLDivElement>(null);
+  // cmdk highlights an item by its `value`, and only items it has REGISTERED are candidates. The
+  // footer action is `forceMount`ed and so never registers (that is what keeps `filtered.count` at
+  // 0 so `CommandEmpty` can render), which means that when no project row is registered either —
+  // an empty list, or a search that matches nothing — cmdk has nothing to highlight and its Enter
+  // handler, which acts on the highlighted item, does nothing at all. That is precisely the case
+  // the footer exists to serve, so the highlight is seeded here instead. Arrow keys are unaffected
+  // either way: they walk `getValidItems()` in the DOM rather than the registered set.
+  const [highlightedValue, setHighlightedValue] = useState<string | undefined>(undefined);
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
-    if (!nextOpen) setQuery('');
+    if (!nextOpen) {
+      setQuery('');
+      setHighlightedValue(undefined);
+    }
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -614,8 +1048,6 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     });
     return () => window.cancelAnimationFrame(id);
   }, [open]);
-
-  const strings = resolveStrings(props.localizedStrings);
 
   const rows = useMemo(() => {
     if (props.mode === 'project') {
@@ -644,71 +1076,59 @@ export function ProjectSelector(props: ProjectSelectorProps) {
 
   const filteredRows = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    let result = rows;
-    if (needle) {
-      result = result.filter(
-        (r) =>
-          r.shortName.toLowerCase().includes(needle) ||
-          r.fullName.toLowerCase().includes(needle) ||
-          (r.language ?? '').toLowerCase().includes(needle) ||
-          (r.languageCode ?? '').toLowerCase().includes(needle),
-      );
-    }
-    if (props.mode === 'project-multi' && showSelectedOnly) {
-      result = result.filter((r) => r.isSelected);
-    }
-    return result;
-  }, [rows, query, props.mode, showSelectedOnly]);
+    if (!needle) return rows;
+    return rows.filter(
+      (r) =>
+        r.shortName.toLowerCase().includes(needle) ||
+        (r.fullName ?? '').toLowerCase().includes(needle),
+    );
+  }, [rows, query]);
 
-  // When the caller opts into
-  // versification grouping (`groupByVersification`), sections are partitioned
-  // by versificationId with the priority bucket pinned to the top. The
-  // "Group by open tabs" toggle is intentionally hidden in this mode (see
-  // FilterMenu below) — the two grouping schemes don't compose meaningfully
-  // in the same picker.
-  const sections = useMemo(
-    () =>
-      props.groupByVersification
-        ? partitionByVersification(
-            filteredRows,
-            props.priorityVersificationId,
-            strings.versificationUnknownSectionHeading,
-          )
-        : partitionAndSort(filteredRows, groupByOpenTabs),
-    [
-      filteredRows,
-      groupByOpenTabs,
-      props.groupByVersification,
-      props.priorityVersificationId,
-      strings.versificationUnknownSectionHeading,
-    ],
+  /**
+   * Every project keyed by its normalized id.
+   *
+   * Ids reach a consumer from mixed sources — the .NET data provider hands back uppercase GUIDs
+   * while the open-tabs hook lowercases them — so the key is normalized; see `normalizeProjectId`'s
+   * TSDoc.
+   */
+  const projectsById = useMemo(
+    () => new Map(props.projects.map((project) => [normalizeProjectId(project.id), project])),
+    [props.projects],
   );
 
-  // Every (project, scrollGroupId) pair available for selection — independent of the current
-  // search query or "Show selected only" filter. Used by "Select all" in multi mode so the user
-  // can select the full catalog without first clearing the search box.
-  const allPairs = useMemo<ProjectSelectorProjectPair[]>(() => {
-    if (props.mode !== 'project-multi') return [];
-    const result: ProjectSelectorProjectPair[] = [];
-    props.projects.forEach((project) => {
-      // Case-insensitive match: open-tab projectIds may be lowercased while project ids are
-      // canonical UPPERCASE. See normalizeProjectId / I12.
-      const tabs = props.openTabs.filter(
-        (t) => normalizeProjectId(t.projectId) === normalizeProjectId(project.id),
-      );
-      if (tabs.length === 0) {
-        result.push({ projectId: project.id });
-        return;
-      }
-      const seenGroups = new Set<ScrollGroupId>();
-      tabs.forEach((tab) => {
-        if (seenGroups.has(tab.scrollGroupId)) return;
-        seenGroups.add(tab.scrollGroupId);
-        result.push({ projectId: project.id, scrollGroupId: tab.scrollGroupId });
-      });
-    });
-    return result;
-  }, [props.mode, props.projects, props.openTabs]);
+  /**
+   * The project a selection names, or `undefined`.
+   *
+   * Goes through {@link projectsById} rather than scanning `props.projects` so every lookup in this
+   * component answers the same question the same way: the trigger label and the rows must agree on
+   * what "selected" means, or a mixed-case caller gets a row marked selected above a trigger still
+   * showing its placeholder. With duplicate ids a scan and a Map also disagree (`find` returns the
+   * first, the Map keeps the last).
+   */
+  const lookUpProject = useCallback(
+    (projectId: string | undefined): ProjectSelectorProject | undefined =>
+      projectId === undefined ? undefined : projectsById.get(normalizeProjectId(projectId)),
+    [projectsById],
+  );
+
+  const { renderProjectIndicator } = props;
+  const renderIndicator = useCallback(
+    (row: ProjectRow): ProjectSelectorIndicator | undefined =>
+      renderProjectIndicator ? renderProjectIndicator(row.project) : undefined,
+    [renderProjectIndicator],
+  );
+  const reserveIndicatorSlot = Boolean(renderProjectIndicator);
+
+  // The only state in which cmdk has no registered item to highlight, so the footer's Enter
+  // handling has to be seeded by hand.
+  const seedFooterHighlight = Boolean(props.footerAction) && filteredRows.length === 0;
+
+  const sections = useMemo<RowSection[]>(() => {
+    if (activeGrouping === NO_GROUPING) return partitionFlat(filteredRows);
+    const grouping = availableGroupings.find((g) => g.id === activeGrouping);
+    if (!grouping) return partitionFlat(filteredRows);
+    return partitionByGrouping(filteredRows, grouping);
+  }, [filteredRows, activeGrouping, availableGroupings]);
 
   const handleOpenProjectInGroup = (row: ProjectRow) => {
     if (row.scrollGroupId === undefined) return;
@@ -730,15 +1150,24 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       }
       case 'project-multi': {
         const current = props.selection.pairs;
+        // Case-insensitive projectId match (canonical ids are UPPERCASE, but callers may pass
+        // lowercased tab-derived ids; see normalizeProjectId). Guarantees that clicking a
+        // row toggles the SAME pair regardless of casing on either side.
+        const normalizedRowId = normalizeProjectId(row.projectId);
         const match = (p: ProjectSelectorProjectPair) =>
-          p.projectId === row.projectId && p.scrollGroupId === row.scrollGroupId;
+          normalizeProjectId(p.projectId) === normalizedRowId &&
+          p.scrollGroupId === row.scrollGroupId;
+        // ADD path filters existing matches out first — belt-and-suspenders against a stale
+        // `current` snapshot leaking a duplicate through under a rapid double-click on the same
+        // row before the parent's state update propagates back down. Under normal single-click
+        // conditions this is a no-op.
         const next = current.some(match)
           ? current.filter((p) => !match(p))
-          : [...current, { projectId: row.projectId, scrollGroupId: row.scrollGroupId }];
+          : [
+              ...current.filter((p) => !match(p)),
+              { projectId: row.projectId, scrollGroupId: row.scrollGroupId },
+            ];
         props.onChangeSelection({ pairs: next });
-        // If the user just unticked the last selected item while "Show selected only" is on,
-        // turn the filter off so they don't end up staring at an empty list.
-        if (next.length === 0 && showSelectedOnly) setShowSelectedOnly(false);
         return;
       }
       case 'projectScrollGroup': {
@@ -768,62 +1197,54 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     }
   };
 
-  const handleSelectAll = () => {
-    if (props.mode !== 'project-multi') return;
-    const existing = props.selection.pairs;
-    const existingKey = new Set(existing.map((p) => `${p.projectId}:${p.scrollGroupId ?? ''}`));
-    const merged = [...existing];
-    allPairs.forEach((pair) => {
-      const key = `${pair.projectId}:${pair.scrollGroupId ?? ''}`;
-      if (!existingKey.has(key)) {
-        existingKey.add(key);
-        merged.push(pair);
-      }
-    });
-    props.onChangeSelection({ pairs: merged });
-  };
-
   const handleClearAll = () => {
     if (props.mode !== 'project-multi') return;
     props.onChangeSelection({ pairs: [] });
-    // Clearing everything while "Show selected only" is on would leave an empty list with no
-    // obvious way out, since the toggle lives inside the filter dropdown. Turn it off.
-    if (showSelectedOnly) setShowSelectedOnly(false);
   };
 
-  const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
+  // Narrowed out of the union here rather than read inside the memo below: `props` itself is a
+  // fresh object on every render, so naming it in the dep list would make the memo never hit, and
+  // these two members exist only on the `'project'` variant so a dep list cannot name them
+  // directly.
+  const renderTriggerLabel = props.mode === 'project' ? props.renderTriggerLabel : undefined;
+  const triggerLabelFormat = props.mode === 'project' ? props.triggerLabelFormat : undefined;
+
+  const triggerContent = useMemo<{
+    node: ReactNode;
+    title: string;
+    /**
+     * The spoken form of {@link title}, when the two differ. `title` is written for the eye and can
+     * carry punctuation a screen reader reads out as a word; this drops it.
+     */
+    accessibleTitle?: string;
+    hasSelection: boolean;
+  }>(() => {
     switch (props.mode) {
       case 'project': {
-        const selected = props.projects.find((p) => p.id === props.selection.projectId);
-        let text = selected ? selected.shortName : (props.buttonPlaceholder ?? '');
-        if (
-          selected &&
-          props.triggerLabelFormat === 'shortNameAndFullName' &&
-          selected.fullName &&
-          selected.fullName !== selected.shortName
-        )
-          text = `${selected.shortName} - ${selected.fullName}`;
-        return { node: text, title: text };
+        const selected = lookUpProject(props.selection.projectId);
+        // An empty title suppresses the tooltip wrapper below — see `renderTriggerLabel`'s TSDoc.
+        if (renderTriggerLabel)
+          return { node: renderTriggerLabel(selected), title: '', hasSelection: !!selected };
+        let text = selected ? selected.shortName : strings.buttonPlaceholder;
+        if (selected && triggerLabelFormat === 'shortNameAndFullName')
+          text = formatProjectName(selected);
+        return { node: text, title: text, hasSelection: !!selected };
       }
       case 'project-multi': {
         const { pairs } = props.selection;
         if (pairs.length === 0) {
-          const text = props.buttonPlaceholder ?? '';
-          return { node: text, title: text };
+          const text = strings.buttonPlaceholder;
+          return { node: text, title: text, hasSelection: false };
         }
         type Tuple = { project: ProjectSelectorProject; scrollGroupId?: ScrollGroupId };
         const tuples: Tuple[] = [];
         pairs.forEach((pair) => {
-          const project = props.projects.find((p) => p.id === pair.projectId);
+          const project = lookUpProject(pair.projectId);
           if (project) tuples.push({ project, scrollGroupId: pair.scrollGroupId });
         });
         if (tuples.length === 0) {
-          const text = props.buttonPlaceholder ?? '';
-          return { node: text, title: text };
-        }
-        if (props.getSelectedText) {
-          const text = props.getSelectedText(tuples);
-          return { node: text, title: text };
+          const text = strings.buttonPlaceholder;
+          return { node: text, title: text, hasSelection: false };
         }
         const items = tuples
           .map(({ project, scrollGroupId }) =>
@@ -832,8 +1253,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
               : `${project.shortName} (${scrollGroupLetterFromMap(scrollGroupId)})`,
           )
           .join(', ');
-        // One pair selected → drop the count; the name already conveys the cardinality.
-        if (tuples.length === 1) return { node: items, title: items };
+        // Always render the count badge (even at 1) so the trigger is visually consistent across
+        // selection counts and stays distinguishable from single-select mode's bare-label trigger.
         const countText = tuples.length.toString();
         return {
           node: (
@@ -845,34 +1266,86 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             </>
           ),
           title: `${countText} ${items}`,
+          hasSelection: true,
         };
       }
       case 'projectScrollGroup': {
-        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        const selected = lookUpProject(props.selection.projectId);
         if (!selected) {
-          const text = props.buttonPlaceholder ?? '';
-          return { node: text, title: text };
+          const text = strings.buttonPlaceholder;
+          return { node: text, title: text, hasSelection: false };
         }
         const group = props.selection.scrollGroupId;
         if (group === undefined) {
-          return { node: selected.shortName, title: selected.shortName };
+          return { node: selected.shortName, title: selected.shortName, hasSelection: true };
         }
-        const text = `${selected.shortName} · ${scrollGroupLetterFromMap(group)}`;
-        return { node: text, title: text };
+        const groupLetter = scrollGroupLetterFromMap(group);
+        // The middle dot is a visual separator; a screen reader reads it aloud ("WEB middle dot
+        // A"). A comma is the spoken equivalent — it renders as a pause, not a word.
+        return {
+          node: `${selected.shortName} · ${groupLetter}`,
+          title: `${selected.shortName} · ${groupLetter}`,
+          accessibleTitle: `${selected.shortName}, ${groupLetter}`,
+          hasSelection: true,
+        };
       }
       default:
-        return { node: '', title: '' };
+        return { node: '', title: '', hasSelection: false };
     }
-  }, [props]);
+  }, [
+    props.mode,
+    lookUpProject,
+    props.selection,
+    renderTriggerLabel,
+    triggerLabelFormat,
+    strings.buttonPlaceholder,
+  ]);
+
+  // Auto-narrow: measure the trigger button's rendered width and hide the chevron below the
+  // threshold at which the label would otherwise truncate to nothing. Consumers control the
+  // trigger's width by wrapping the ProjectSelector in a sized container — this observer just
+  // reacts to whatever width the layout produced.
+  //
+  // Threshold: the chevron + its 8px margin eats ~24px, and the button's own padding eats another
+  // ~24px, leaving room for a few characters of label above ~100px of button width. Below that,
+  // dropping the chevron is a net win for legibility.
+  // eslint-disable-next-line no-null/no-null
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [isTriggerNarrow, setIsTriggerNarrow] = useState(false);
+  useEffect(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const update = (width: number) => {
+      setIsTriggerNarrow(width < NARROW_TRIGGER_THRESHOLD_PX);
+    };
+    update(el.getBoundingClientRect().width);
+    // Environments without ResizeObserver (jsdom, SSR) keep the one-shot measurement above and
+    // simply never re-measure. Throwing here would take down the whole React tree of every
+    // consumer, so degrade instead.
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    // Border-box width, NOT `contentRect` (which is content-box, i.e. minus padding). The
+    // narrow-mode branch below tightens the button's padding, so switching states changes
+    // contentRect but not the button's outer size — measuring contentRect would race against
+    // itself around the threshold. Border-box is stable across padding changes.
+    const observer = new ResizeObserver((entries) => {
+      entries.forEach((entry) => {
+        const [borderBox] = entry.borderBoxSize;
+        if (borderBox) update(borderBox.inlineSize);
+        else update(el.getBoundingClientRect().width);
+      });
+    });
+    observer.observe(el, { box: 'border-box' });
+    return () => observer.disconnect();
+  }, []);
 
   let triggerIcon;
-  // While the project list is loading, show a spinner in place of the chevron (even in
-  // hideTriggerChevron mode) so the user sees the selector is not ready yet. See I1.
+  // While the project list is loading, show a spinner in place of the chevron (even in narrow
+  // mode) so the user sees the selector is not ready yet.
   if (props.isLoading)
     triggerIcon = (
       <Loader2 className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:animate-spin tw:opacity-50" />
     );
-  else if (props.hideTriggerChevron) triggerIcon = undefined;
+  else if (isTriggerNarrow) triggerIcon = undefined;
   else if (props.mode === 'project-multi')
     triggerIcon = <ChevronsUpDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />;
   else triggerIcon = <ChevronDown className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />;
@@ -883,25 +1356,50 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       ? handleOpenProjectInGroup
       : undefined;
 
+  // `aria-label` REPLACES a button's text content for assistive tech, so a bare group label
+  // ("Project settings") would leave a screen-reader user unable to tell which project is
+  // selected — the one thing the visible trigger is there to say. Name the selection alongside the
+  // group label instead.
+  //
+  // Gated on `hasSelection` rather than on the title being non-empty: with nothing selected the
+  // title is the PLACEHOLDER, and "Project: Select a project" announces a selection that does not
+  // exist. `title` is separately empty when a consumer supplies `renderTriggerLabel` — the label
+  // node is arbitrary then, so the consumer owns naming it, as the Simple-mode toolbar does.
+  const triggerAriaLabel =
+    strings.ariaLabel && triggerContent.hasSelection && triggerContent.title
+      ? `${strings.ariaLabel}: ${triggerContent.accessibleTitle ?? triggerContent.title}`
+      : strings.ariaLabel || undefined;
+
   // The trigger's untruncated label is exposed through the shadcn Tooltip wrapped around the
   // PopoverTrigger below, never through a native `title` attribute: `title` surfaces the
   // browser-default yellow tooltip, inconsistent with the app's shadcn tooltip styling. Keep
   // `title` off this button so the two tooltips can never both appear.
   const triggerButton = (
     <Button
+      ref={triggerRef}
       variant={props.buttonVariant ?? 'outline'}
       role="combobox"
       aria-expanded={open}
-      aria-label={props.ariaLabel}
+      aria-label={triggerAriaLabel}
       disabled={(props.isDisabled ?? false) || (props.isLoading ?? false)}
       className={cn(
-        'tw:flex tw:w-[180px] tw:items-center tw:justify-between tw:overflow-hidden',
+        // `tw:shrink!` overrides shadcn Button's base `tw:shrink-0` (which would pin the trigger
+        // at its intrinsic width in a flex row and force overflow past sibling icons/spacers).
+        // `tw:min-w-0` then lets flex-shrink actually reduce below content width. `tw:w-full`
+        // still handles the standalone / block-parent case at 100% of the container.
+        'tw:flex tw:h-8 tw:w-full tw:min-w-0 tw:shrink! tw:items-center tw:justify-between tw:overflow-hidden tw:font-normal',
+        // Narrow triggers get a tighter internal padding + smaller text so the leading characters
+        // of the shortName stay visible in an icon-rail sidebar (~56px). Layout unchanged in the
+        // wide case.
+        isTriggerNarrow && 'tw:px-0.5 tw:text-xs',
         props.buttonClassName,
       )}
     >
       <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2 tw:overflow-hidden tw:whitespace-nowrap tw:text-start">
         {typeof triggerContent.node === 'string' ? (
-          <span className="tw:min-w-0 tw:truncate">{triggerContent.node}</span>
+          <span className="tw:min-w-0 tw:truncate" dir="auto">
+            {triggerContent.node}
+          </span>
         ) : (
           triggerContent.node
         )}
@@ -911,7 +1409,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   );
   // Wrap the trigger tooltip in its own local TooltipProvider so the selector renders standalone
   // (in stories, tests, and consumers that haven't installed a TooltipProvider). Consumers that
-  // DO install one — like the manage-books dialog — see no behavioural difference: Radix nests
+  // DO install one — like the manage-books dialog — see no behavioral difference: Radix nests
   // providers fine.
   const triggerWithTooltip = triggerContent.title ? (
     <TooltipProvider delayDuration={400}>
@@ -919,25 +1417,37 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>{triggerContent.title}</TooltipContent>
+        <TooltipContent dir="auto">{triggerContent.title}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   ) : (
     <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
   );
 
+  // The group-by menu only exists to let the user switch between groupings. With 0 or 1 groupings
+  // there is nothing to switch between (single-grouping lock), so drop the funnel button entirely.
+  const showGroupByMenu = availableGroupings.length > 1;
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       {triggerWithTooltip}
       <PopoverContent
-        align={props.alignDropDown ?? 'start'}
+        align="start"
         collisionPadding={16}
-        className={cn('tw:w-80 tw:max-w-[calc(100vw-2rem)] tw:p-0', props.popoverContentClassName)}
-        style={props.popoverContentStyle}
+        className="tw:w-80 tw:max-w-[calc(100vw-2rem)] tw:p-0"
       >
         <TooltipProvider delayDuration={400}>
-          <Command shouldFilter={false}>
-            <div className="tw:flex tw:items-center tw:border-b tw:pe-2">
+          <Command
+            shouldFilter={false}
+            // Controlled ONLY while no row is registered — see `highlightedValue`. With rows
+            // present this is `undefined`, which leaves cmdk uncontrolled and keeps its own
+            // "highlight the first item" behavior intact.
+            value={seedFooterHighlight ? (highlightedValue ?? FOOTER_ACTION_VALUE) : undefined}
+            onValueChange={setHighlightedValue}
+          >
+            {/* No `border-b` here — CommandInput's own InputGroup carries a full 1px border, and
+                stacking the two draws an unexpected second horizontal line just below the pill. */}
+            <div className="tw:flex tw:items-center tw:pe-2">
               <div className="tw:flex-1">
                 <CommandInput
                   value={query}
@@ -950,35 +1460,33 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                   spaceSelectsHighlightedItem
                 />
               </div>
-              {!props.groupByVersification && !props.hideFilterMenu && (
-                <FilterMenu
-                  groupByOpenTabs={groupByOpenTabs}
-                  onChangeGroupByOpenTabs={setGroupByOpenTabs}
-                  showSelectedOnly={props.mode === 'project-multi' ? showSelectedOnly : undefined}
-                  onChangeShowSelectedOnly={
-                    props.mode === 'project-multi' ? setShowSelectedOnly : undefined
-                  }
+              {showGroupByMenu && (
+                <GroupByMenu
+                  availableGroupings={availableGroupings}
+                  activeGrouping={activeGrouping}
+                  onChangeGrouping={setPickedGrouping}
                   strings={strings}
                 />
               )}
             </div>
-            {props.mode === 'project-multi' && (
-              <div className="tw:flex tw:justify-between tw:border-b tw:py-2 tw:pe-4 tw:ps-2">
-                <Button variant="ghost" size="sm" onClick={handleSelectAll}>
-                  {`${strings.selectAll} (${allPairs.length.toString()})`}
-                </Button>
+            {props.mode === 'project-multi' && props.selection.pairs.length > 0 && (
+              // Right-aligned "Clear all" only. There is deliberately no "Select all": selecting every
+              // project mounts a data subscription per project, so on a large installation it is a
+              // performance hazard rather than a convenience. Clear all is hidden while nothing is selected.
+              <div className="tw:flex tw:justify-end tw:border-b tw:py-2 tw:pe-4 tw:ps-2">
                 <Button variant="ghost" size="sm" onClick={handleClearAll}>
                   {`${strings.clearAll} (${props.selection.pairs.length.toString()})`}
                 </Button>
               </div>
             )}
             <CommandList>
-              <CommandEmpty>{props.commandEmptyMessage ?? 'No projects found'}</CommandEmpty>
+              <CommandEmpty>{strings.commandEmptyMessage}</CommandEmpty>
               {sections.map((section, index) => (
-                // Versification grouping yields multiple sections of the
-                // same `kind` ('versification'), so the section key must
-                // include the heading label to stay stable across re-orders.
-                <Fragment key={`${section.kind}:${section.label ?? ''}`}>
+                // Custom groupings yield multiple 'grouping' sections, so the section key must
+                // include the label (or key) to stay stable across re-orders.
+                <Fragment
+                  key={`${section.kind}:${section.groupingId ?? ''}:${section.key ?? section.label ?? ''}`}
+                >
                   <CommandGroup heading={sectionHeading(section, strings)}>
                     {section.rows.map((row) => (
                       <ProjectRowView
@@ -989,12 +1497,82 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                         onClick={handleRowClick}
                         onOpen={openButtonHandler}
                         selectedRowRef={selectedRowRef}
+                        indicator={renderIndicator(row)}
+                        reserveIndicatorSlot={reserveIndicatorSlot}
                       />
                     ))}
                   </CommandGroup>
-                  {index < sections.length - 1 && <CommandSeparator />}
+                  {/* `alwaysRender`: a plain CommandSeparator returns null as soon as cmdk's
+                      `state.search` is non-empty, so one keystroke would drop the rule between
+                      two sections that are both still on screen. */}
+                  {index < sections.length - 1 && <CommandSeparator alwaysRender />}
                 </Fragment>
               ))}
+              {props.footerAction && (
+                // Stuck to the bottom of the scroll box rather than merely last in it. The footer
+                // is the list's escape hatch, and `CommandList` is `max-h-72 overflow-y-auto`, so
+                // as a plain last child it scrolls out of reach on any list long enough to need
+                // it — which is the state a user is most likely to be looking for it in. It stays
+                // INSIDE `CommandList` because that is the subtree cmdk's `getValidItems()` walks
+                // for arrow-key, Home/End and Enter navigation; moving it out would make it
+                // pointer-only. Opaque background so rows scroll behind it rather than through it.
+                // `role="presentation"` because this wrapper exists only to position the row:
+                // without it the div breaks `CommandList`'s `role="listbox"` ownership of the
+                // footer's `role="option"`, and some assistive tech stops counting the footer in
+                // "1 of N".
+                <div role="presentation" className="tw:sticky tw:bottom-0 tw:z-10 tw:bg-popover">
+                  {/* `alwaysRender` for the reason given on the inter-section separator above.
+                      Only rendered when a section above it actually has rows — with none, the
+                      empty message is the only thing above the footer, and a rule under it with
+                      nothing to divide reads as a stray line rather than a separator. */}
+                  {filteredRows.length > 0 && (
+                    <CommandSeparator
+                      alwaysRender
+                      data-testid="project-selector-footer-separator"
+                    />
+                  )}
+                  {/* `forceMount` keeps this out of cmdk's registered-item set, so `filtered.count`
+                      stays 0 on an empty list and CommandEmpty still renders — while the node
+                      remains inside CommandList, where `getValidItems()` finds it for arrow-key,
+                      Home/End and Enter navigation. See {@link FOOTER_ACTION_VALUE} for why the
+                      value is explicit. */}
+                  <CommandItem
+                    forceMount
+                    value={FOOTER_ACTION_VALUE}
+                    data-testid="project-selector-footer-action"
+                    // cmdk renders every CommandItem as `role="option"`, which promises a screen
+                    // reader that activating it selects a value from this list. This one closes
+                    // the popover and opens a modal dialog instead, so it says so.
+                    aria-haspopup="dialog"
+                    className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
+                    onSelect={() => {
+                      props.footerAction?.onSelect();
+                      // Close through the handler rather than `setOpen`, so the search query is
+                      // cleared and the next open starts from the full list.
+                      handleOpenChange(false);
+                    }}
+                  >
+                    {/* Empty stand-ins for the check and indicator slots every project row leads
+                        with. Without them the footer's text starts ~40px to the left of every
+                        label above it — the same ragged edge `reserveIndicatorSlot` exists to
+                        prevent between rows. Mirrors `ProjectRowView`'s leading spans, so the two
+                        stay aligned if that layout changes. */}
+                    <span
+                      aria-hidden
+                      className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
+                    />
+                    {Boolean(props.renderProjectIndicator) && (
+                      <span
+                        aria-hidden
+                        className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center"
+                      />
+                    )}
+                    <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-start">
+                      {props.footerAction.label}
+                    </span>
+                  </CommandItem>
+                </div>
+              )}
             </CommandList>
           </Command>
         </TooltipProvider>
@@ -1012,7 +1590,7 @@ function sectionHeading(
       return strings.openTabsSectionHeading;
     case 'other':
       return strings.otherProjectsSectionHeading;
-    case 'versification':
+    case 'grouping':
       return section.label;
     case 'flat':
     default:

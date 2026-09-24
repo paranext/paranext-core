@@ -11,6 +11,7 @@ import {
   cleanupCommentTestProject,
   createCommentTestProject,
   removeRevelationFromProject,
+  setReferencedProjectsAndResources,
   type CommentTestProject,
 } from '../../fixtures/comment-test-helpers';
 
@@ -50,6 +51,10 @@ import {
 
 /** The top toolbar's BookChapterControl trigger. In simple mode it is the only one on the page. */
 const BCV_TRIGGER = '[aria-label="book-chapter-trigger"]';
+// The titlebar project selector composes its accessible name as
+// "Select project, {fullName} ({shortName})" (`src/renderer/components/platform-bible-toolbar.tsx`).
+// The name prefix is what separates it from the book/chapter control, which is also a `combobox`.
+const PROJECT_SELECTOR_NAME = /^Select project,/;
 
 /**
  * Book rows carry an accessible name of `English Name (ID)`, with the dimmed explanation appended
@@ -156,6 +161,16 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // so Revelation is reachable only through the open resource.
     removeRevelationFromProject(targetProject);
 
+    // Pin the target project's own reference list to itself. Without this, the Bible-texts panel's
+    // "no configured reference list" fallback (`resolveResourceSelection`'s `rows[0]` in
+    // `resource-selection.utils.ts`) silently selects the first locally-installed read-only
+    // resource instead — on any machine with one downloaded (e.g. WEB), that resource's full book
+    // list leaks into Phase 1 below and "Show more books" appears before this test ever opens its
+    // own resource. A self-reference makes `rows[0]` resolve to the target project itself, which
+    // `getOpenProjectIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) excludes as the
+    // active project — see `setReferencedProjectsAndResources`'s docblock for the full mechanism.
+    setReferencedProjectsAndResources(targetProject, [targetProject.projectId]);
+
     // Simple mode auto-opens the most recent project into its empty editor slot, asynchronously and
     // late enough to replace an editor this test opened and drag every Column 3 panel along with it.
     // Pointing the list at the target project makes that auto-open agree with this test's own open
@@ -217,7 +232,7 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // the book list below is asserted against. Naming the Revelation-less copy explicitly is what
     // keeps the rest of the test from passing against some OTHER project that happened to be
     // auto-opened into the editor column.
-    await expect(mainPage.locator('[data-slot="select-trigger"]').first()).toContainText(
+    await expect(mainPage.getByRole('combobox', { name: PROJECT_SELECTOR_NAME })).toContainText(
       targetProject.shortName,
       { timeout: 60_000 },
     );

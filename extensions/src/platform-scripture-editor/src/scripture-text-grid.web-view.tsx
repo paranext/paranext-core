@@ -3,6 +3,7 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
+  ContentZoomRoot,
   EmptyState,
   Popover,
   PopoverContent,
@@ -26,6 +27,7 @@ import {
 } from 'platform-bible-utils';
 import type { DblResourceReference, ProjectReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
 import {
   getOrderedScriptureTextGridContents,
@@ -49,8 +51,8 @@ import {
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
-import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { useTextCollectionProjectId } from './use-text-collection-project-id.hook';
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
@@ -163,19 +165,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     [localizedStrings],
   );
 
-  // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid. The
-  // 5th tuple member is the project driving the active Scripture reference (the editor's project):
-  // follow it when opened without an explicit project — e.g. from the default layout, whose tab
-  // carries no projectId. An explicit `projectId` (e.g. a direct openWebView) takes precedence.
-  const [scrRef, setScrRef, , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
-  const candidateProjectId = projectId ?? activeEditorProjectId;
+  // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
+  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
-  // `effectiveProjectId` is the project whose text collection the grid shows. It starts from the
-  // active editor and is refined by a latch effect (below, once `resources` is known) so that
-  // focusing one of the grid's own resource cells doesn't hijack it. See resolveTextCollectionProjectId.
-  const [effectiveProjectId, setEffectiveProjectId] = useState<string | undefined>(
-    candidateProjectId,
-  );
+  // The project whose text collection the grid shows. Opened from the default layout the tab carries
+  // no projectId, so this takes the first project the active editor reports and keeps it; only an
+  // explicit `projectId` moves it. See useTextCollectionProjectId.
+  const effectiveProjectId = useTextCollectionProjectId(projectId);
 
   const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
 
@@ -233,8 +229,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
   // installed project id the cell fetches chapter text with; project references need no lookup. It
   // also supplies the DBL `fullName` shown as the long name in the View Options list.
-  // Re-fetched on `refreshCounter` bumps so a newly-installed resource's `installed` flag is
-  // current when `toGridResources` resolves it.
+  // Re-fetched on `refreshCounter` bumps, which the install path fires only after waiting for the
+  // catalog's flags to be brought up to date — this read itself does not wait for them.
   const {
     data: catalog,
     isLoading: isCatalogLoading,
@@ -331,24 +327,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     effectiveProjectId,
   );
 
-  // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
-  // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch
-  // the grid to one of its own displayed resources — that project has no text collection and would
-  // blank the grid; keep the current project instead. Still follow the active editor to a genuinely
-  // different text-collection project.
-  useEffect(() => {
-    setEffectiveProjectId((previous) =>
-      resolveTextCollectionProjectId(previous, {
-        explicitProjectId: projectId,
-        candidateProjectId,
-        candidateIsOwnResource: resources.some(
-          (resource) => resource.projectId === candidateProjectId,
-        ),
-      }),
-    );
-  }, [projectId, candidateProjectId, resources]);
-
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
+
+  // Bumping the cache key is what makes the grid re-resolve, so it is this panel's "re-resolve the
+  // resource list" step and belongs in the hook's `onInstalled`.
+  const handleResourceInstalled = useCallback(() => setRefreshCounter((k) => k + 1), []);
+  const installResource = useInstallDblResource(
+    dblResourcesProvider,
+    'scripture text grid',
+    handleResourceInstalled,
+  );
 
   // Fire first-open overlay init once per resolved projectId. The server-side marker makes repeated
   // calls safe; this guard just avoids redundant round-trips within a single web-view lifetime.
@@ -465,18 +453,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         const pending = { id: resource.dblEntryUid, name: resource.displayName };
         setInstalling((prev) => [...prev, pending]);
         try {
-          await dblResourcesProvider.installDblResource(resource.dblEntryUid);
-        } catch (e: unknown) {
+          // Installs, waits for the catalog's flags to catch up, then bumps the cache key. The
+          // wait is the point: `getCachedResources` answers from a cache it corrects in the
+          // background, so re-reading without it returns the flags from before this install.
+          await installResource(resource.dblEntryUid);
+        } catch {
+          // `installResource` already logged the cause; this panel's channel for it is the toast.
           papi.notifications.send({ message: INSTALL_FAILED_KEY, severity: 'error' });
-          logger.warn(`Failed to install resource ${resource.dblEntryUid}: ${getErrorMessage(e)}`);
           return;
         } finally {
           setInstalling((prev) => prev.filter((info) => info.id !== resource.dblEntryUid));
         }
-        // Resource was just installed; bump the cache key so `getCachedResources` re-validates the
-        // `installed` flag — without this, `cachedResources` loaded at mount still shows the resource
-        // as not-installed and `toGridResources` can't resolve it to a projectId.
-        setRefreshCounter((k) => k + 1);
       }
 
       if (!textConnectionPdp) {
@@ -500,7 +487,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`);
       });
     },
-    [dblResourcesProvider, textConnectionPdp],
+    [dblResourcesProvider, installResource, textConnectionPdp],
   );
 
   const selectedResourceIds = useMemo(
@@ -614,8 +601,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
           empty (a DBL ref resolves to a cell only once the cached list loads). The
-          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`. */}
-      <div className="tw:flex-1 tw:overflow-hidden">
+          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
+
+          Named as its own zoom area ("text-collection") so its remembered level is kept apart from
+          this project's other resource panes, which resolve to the same kind/identity pair and
+          would otherwise all read one remembered level. The View Options row above stays outside so
+          it keeps its size while the grid scales. */}
+      <ContentZoomRoot area="text-collection" className="tw:flex-1 tw:overflow-hidden">
         {gridBodyState === 'catalogError' && (
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
             <RetryableErrorView
@@ -659,7 +651,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             getReorderAnnouncement={getReorderAnnouncement}
           />
         )}
-      </div>
+      </ContentZoomRoot>
     </div>
   );
 };

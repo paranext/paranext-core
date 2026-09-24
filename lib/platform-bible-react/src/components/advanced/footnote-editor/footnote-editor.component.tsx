@@ -51,6 +51,11 @@ import { UndoRedoButtons } from '@/components/basics/undo-redo-buttons.component
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
 import { EditorKeyboardShortcuts } from '@/components/basics/editor-keyboard-shortcuts.component';
+import {
+  leftEdgeRect,
+  measureRange,
+  useLivePopoverAnchor,
+} from '@/hooks/use-live-popover-anchor.hook';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
@@ -261,18 +266,20 @@ export default function FootnoteEditor({
   /* eslint-disable no-null/no-null */
   const editorRef = useRef<EditorRef | null>(null);
   const editorParentRef = useRef<HTMLDivElement>(null);
-  const outerBorderRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   /* eslint-enable no-null/no-null */
 
   // Lock the container width to its natural rendered width so content changes (e.g. switching
   // language, undo/redo enabling) don't cause the popover to resize while editing.
-  // useLayoutEffect fires after DOM layout but before paint, so getBoundingClientRect() returns
-  // the natural width. The parent PopoverContent unmounts this component on close, so the effect
-  // re-runs fresh on each open.
+  // useLayoutEffect fires after DOM layout but before paint, so the measured width is the natural
+  // width. The parent PopoverContent unmounts this component on close, so the effect re-runs fresh
+  // on each open. The computed width, not `getBoundingClientRect()`: inside a CSS-`zoom`ed ancestor
+  // (a pop-up opened from zoomed content) client rects report painted pixels, so writing one back
+  // as `style.width` would apply the zoom a second time and make the editor wider than its pop-up.
+  // The computed value is in the element's own CSS pixels and keeps sub-pixel precision.
   useLayoutEffect(() => {
     if (!containerRef.current) return;
-    const { width } = containerRef.current.getBoundingClientRect();
+    const width = parseFloat(getComputedStyle(containerRef.current).width);
     if (width > 0) containerRef.current.style.width = `${width}px`;
   }, []);
 
@@ -291,11 +298,19 @@ export default function FootnoteEditor({
   const hasInitializedEditor = useRef(false);
   const initialNoteOpsJson = useRef('');
 
-  // These control the placement of the inline markers menu by setting the location of the anchor
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
-  const [markersMenuAnchorX, setMarkersMenuAnchorX] = useState<number>();
-  const [markersMenuAnchorY, setMarkersMenuAnchorY] = useState<number>();
-  const [markersMenuAnchorHeight, setMarkersMenuAnchorHeight] = useState<number>();
+
+  /**
+   * The inline markers menu's anchor: a virtual element that reads the zero-width left edge of the
+   * selection the menu opened at, every time the menu is positioned. It is not an element placed
+   * inside this component from client-rect offsets because this component can sit inside a
+   * CSS-`zoom`ed pop-up. There, client rects are painted pixels, and an offset written back as
+   * `top`/`left` is scaled by the zoom a second time. The range's own viewport rect is correct at
+   * any zoom, and reading it live also keeps the menu beside the text when the pop-up moves or
+   * reflows. If the range can no longer be measured (its text was re-rendered away), the last rect
+   * is kept.
+   */
+  const markersMenuAnchor = useLivePopoverAnchor();
 
   const [contextMarker, setContextMarker] = useState<string | undefined>();
 
@@ -330,6 +345,33 @@ export default function FootnoteEditor({
    * note loads so a stale capture can never place a commit inside the wrong note.
    */
   const lastFocusOutSelectionRef = useRef<SelectionRange | undefined>(undefined);
+
+  /**
+   * Restores the caret when the editor's selection has been lost, leaving a live one alone.
+   *
+   * A nulled selection sends `focus` to the document END — here the note's closing marker, outside
+   * the character runs, where anything typed joins no text. {@link lastFocusOutSelectionRef} is
+   * exactly where the user last saw the caret; the note's own text is the last resort.
+   */
+  const restoreSelectionIfLost = useCallback(() => {
+    if (editorRef.current?.getSelection()) return;
+    const lastFocusOutSelection = lastFocusOutSelectionRef.current;
+    if (lastFocusOutSelection) editorRef.current?.setSelection(lastFocusOutSelection);
+    else editorRef.current?.selectNote(0);
+  }, []);
+
+  /**
+   * Puts the caret back in the note's text and focuses the editor, so the user can carry on typing
+   * after a control in the popover has taken focus.
+   *
+   * Use this wherever focus is handed back from a control that may have outlived the selection — a
+   * dropdown that replaced the note. A bare `focus` is right only where the selection is known to
+   * still be live, since with none it resolves to the end of the document.
+   */
+  const focusNoteText = useCallback(() => {
+    restoreSelectionIfLost();
+    editorRef.current?.focus();
+  }, [restoreSelectionIfLost]);
 
   // Options for the editorial component
   const options = useMemo<EditorOptions>(
@@ -369,8 +411,9 @@ export default function FootnoteEditor({
         () => setShowMarkersMenu(false),
         localizedStrings,
         contextMarker,
+        noteType,
       ),
-    [localizedStrings, contextMarker],
+    [localizedStrings, contextMarker, noteType],
   );
 
   // Makes it so that the footnote type change tooltip doesn't automatically focus when the
@@ -378,6 +421,8 @@ export default function FootnoteEditor({
   useEffect(() => {
     // This needs to be run when the marker menu closes to move the focus back to the editor.
     // The editor shouldn't be focused, however, when the markers menu is first being shown.
+    // TODO(PT-4766): route this through focusNoteText instead, so this hand-off lands the caret
+    // inside the note's text the same way the caller and note-type dropdowns do.
     if (!showMarkersMenu) editorRef.current?.focus();
   }, [noteType, showMarkersMenu]);
 
@@ -489,6 +534,32 @@ export default function FootnoteEditor({
   );
 
   /**
+   * Replaces the note in the editor with `noteOp`, then puts the caret back in the note's text.
+   *
+   * Both callers are dropdowns the user reaches mid-edit, and re-applying the note discards the
+   * editor's selection — leaving the caret on the note itself, outside the character runs, where
+   * the next keystroke joins no text.
+   *
+   * What the restore buys is the right NODE, not the right offset: the popover re-focuses its
+   * editor after the change, and that focus resolves to the end of whatever run the caret is in. It
+   * is still worth reading, because it is taken while the selection is live and inside the note's
+   * text — the focus-out capture {@link focusNoteText} otherwise falls back to is only as good as
+   * wherever focus happened to leave from, which can be the note level. Deleting this line drops
+   * the caret out of the character runs entirely; `footnote-editor.note-type-change.test.tsx` fails
+   * if it goes.
+   */
+  const replaceNoteKeepingCaret = useCallback(
+    (noteOp: DeltaOpInsertNoteEmbed) => {
+      const selectionBeforeChange = editorRef.current?.getSelection();
+      // Insert the rewritten embed, then delete the one unit it replaces.
+      editorRef.current?.applyUpdate([noteOp, { delete: 1 }]);
+      if (selectionBeforeChange) editorRef.current?.setSelection(selectionBeforeChange);
+      focusNoteText();
+    },
+    [focusNoteText],
+  );
+
+  /**
    * Writes a new caller into the note the popover is editing, exactly as
    * {@link handleNoteTypeChange} writes a new style: mutate the embed and replace it in the editor.
    * The editor is what the caller is DISPLAYED from in editable marker mode (`+` is text the user
@@ -511,10 +582,9 @@ export default function FootnoteEditor({
       }
       if (currentNoteOp.insert.note.caller === caller) return;
       currentNoteOp.insert.note.caller = caller;
-      // Insert the rewritten embed, then delete the one unit it replaces.
-      editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
+      replaceNoteKeepingCaret(currentNoteOp);
     },
-    [],
+    [replaceNoteKeepingCaret],
   );
 
   const closeAndSave = useCallback(() => {
@@ -594,7 +664,7 @@ export default function FootnoteEditor({
       }
 
       // Inserts the new footnote/cross-reference and deletes the old one — triggers handleUsjChange
-      editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
+      replaceNoteKeepingCaret(currentNoteOp);
     }
   };
 
@@ -668,20 +738,21 @@ export default function FootnoteEditor({
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
-    if (
-      outerBorderRef.current &&
-      inlineMarkerMenuItems.length &&
-      currentSelection &&
-      currentSelection.rangeCount > 0
-    ) {
-      const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
-      const footnoteEditorRect = outerBorderRef.current.getBoundingClientRect();
-      setMarkersMenuAnchorX(selectionRect.left - footnoteEditorRect.left);
-      setMarkersMenuAnchorY(selectionRect.top - footnoteEditorRect.top);
-      setMarkersMenuAnchorHeight(selectionRect.height);
-      setShowMarkersMenu(true);
-    }
-  }, [inlineMarkerMenuItems, outerBorderRef]);
+    if (!inlineMarkerMenuItems.length || !currentSelection || currentSelection.rangeCount === 0)
+      return;
+    // A selection with nothing to anchor to has nowhere to place the menu.
+    const contextElement = editorParentRef.current;
+    if (!contextElement) return;
+    const range = currentSelection.getRangeAt(0).cloneRange();
+    markersMenuAnchor.setSource({
+      measure: () => {
+        const rect = measureRange(range);
+        return rect && leftEdgeRect(rect);
+      },
+      contextElement,
+    });
+    setShowMarkersMenu(true);
+  }, [inlineMarkerMenuItems, markersMenuAnchor]);
 
   /**
    * Always-current {@link runPaletteSessionKey} (assigned below, once it exists). The palette
@@ -731,19 +802,10 @@ export default function FootnoteEditor({
             passive,
             keyForwarding,
           ),
-        restoreSelectionIfLost: () => {
-          // A nulled selection would send focus() to the document END — here the note's closing
-          // marker, where the apply lands the marker as an invalid trailing span while the typed
-          // literal strands at the real caret (live-observed: a red `\fq` after `\f*`). Restore
-          // the focus-out capture (exactly where the user last saw the caret), or land at the
-          // end of the note content as a last resort. A still-live selection is left completely
-          // alone.
-          if (!editorRef.current?.getSelection()) {
-            const lastFocusOutSelection = lastFocusOutSelectionRef.current;
-            if (lastFocusOutSelection) editorRef.current?.setSelection(lastFocusOutSelection);
-            else editorRef.current?.selectNote(0);
-          }
-        },
+        // What a lost selection costs on this path specifically: the apply lands the marker as an
+        // invalid trailing span after the note's closing marker while the typed literal strands at
+        // the real caret (live-observed: a red `\fq` after `\f*`).
+        restoreSelectionIfLost,
         focusEditor: () => editorRef.current?.focus(),
         applyItem: (selected) =>
           editorRef.current?.applyMarkerMenuSelection(selected, {
@@ -764,7 +826,7 @@ export default function FootnoteEditor({
         },
       });
     },
-    [markerPalette],
+    [markerPalette, restoreSelectionIfLost],
   );
 
   /**
@@ -1057,23 +1119,29 @@ export default function FootnoteEditor({
 
   return (
     <>
-      <div ref={containerRef} className="footnote-editor tw:grid tw:gap-[12px]">
-        <div className="tw:flex">
+      {/* `max-w-full`: the width lock below is taken before the surrounding pop-up knows how much
+          room the pane has, so the container must still give way to a narrower pop-up. */}
+      <div ref={containerRef} className="footnote-editor tw:grid tw:max-w-full tw:gap-[12px]">
+        {/* Wraps the action buttons onto their own line when a narrow (or zoomed) pop-up has no
+            room for the whole row; `flex-1` keeps them on the first line, right-aligned, otherwise. */}
+        <div className="tw:flex tw:flex-wrap tw:gap-y-2">
           <div className="tw:flex tw:gap-4">
             <FootnoteTypeDropdown
               isTypeSwitchable={isTypeSwitchable}
               noteType={noteType}
               handleNoteTypeChange={handleNoteTypeChange}
               localizedStrings={localizedStrings}
+              focusNoteText={focusNoteText}
             />
             <FootnoteCallerDropdown
               callerType={callerType}
               customCaller={customCaller}
               updateCaller={handleCallerChange}
               localizedStrings={localizedStrings}
+              focusNoteText={focusNoteText}
             />
           </div>
-          <div className="tw:flex tw:w-full tw:justify-end">
+          <div className="tw:flex tw:flex-1 tw:justify-end">
             <ButtonGroup>
               <UndoRedoButtons
                 onUndoClick={() => editorRef.current?.undo()}
@@ -1139,23 +1207,9 @@ export default function FootnoteEditor({
           </div>
         </div>
       </div>
-      <div
-        className="tw:absolute"
-        ref={outerBorderRef}
-        style={{ top: 0, left: 0, height: 0, width: 0 }}
-      />
       {/** Inline markers menu components */}
       <Popover open={showMarkersMenu}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: markersMenuAnchorY,
-            left: markersMenuAnchorX,
-            height: markersMenuAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
+        <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
         <PopoverContent
           className="tw:w-[500px] tw:p-0"
           onClick={(event) => {

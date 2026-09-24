@@ -67,6 +67,18 @@ export const isValidCheckScope = (value: string): value is CheckScopes => {
 
 /** Object containing strings for the project full and short names */
 export type ProjectOption = {
-  fullName: string;
+  /**
+   * Longer descriptive name. Optional: a project with no distinct full name omits it rather than
+   * mirroring the short name in, so the picker renders a single line for it.
+   */
+  fullName?: string;
   shortName: string;
+  /** Language name, used by the picker's Language grouping. Omitted when unknown. */
+  language?: string;
+  /**
+   * Presence flag the picker's Last-used grouping reads: any number puts the project in the
+   * "recently used" bucket. The magnitude is never compared, so it does not order anything. Omitted
+   * when the project has not been opened.
+   */
+  lastUsedAt?: number;
 };

@@ -1,0 +1,122 @@
+import { RefObject, useCallback, useMemo, useRef } from 'react';
+
+/**
+ * What a popover is placed against, re-measured every time the popover is positioned.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type LivePopoverAnchorSource = {
+  /**
+   * Reads the anchor's current viewport rect. Returns `undefined` when the source can no longer be
+   * measured; the anchor then keeps its last rect.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  measure: () => DOMRect | undefined;
+  /**
+   * An element of the content the anchor belongs to that stays in the document while the popover is
+   * open (the editor's root, not a text span the editor may re-render). The popover's positioning
+   * watches this element's scroll ancestors, its size and its movement while the popover is open.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  contextElement: Element;
+};
+
+/** A virtual element in the shape Radix's `PopoverAnchor` `virtualRef` and floating-ui accept. */
+type VirtualAnchorElement = {
+  getBoundingClientRect: () => DOMRect;
+  readonly contextElement: Element | undefined;
+};
+
+/**
+ * The anchor {@link useLivePopoverAnchor} returns.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type LivePopoverAnchor = {
+  /**
+   * Pass as `PopoverAnchor`'s `virtualRef`.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  virtualRef: RefObject<VirtualAnchorElement>;
+  /**
+   * Points the anchor at a new source. Call it before opening the popover.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  setSource: (source: LivePopoverAnchorSource) => void;
+};
+
+/**
+ * A popover anchor that follows its text instead of keeping the rect it had when the popover
+ * opened. The popover's own positioning (floating-ui's auto-update, run by Radix while the popover
+ * is open) re-reads the rect on scroll of the text's scroll container, on resize, and when the text
+ * reflows under a zoom change, so the popover stays beside its caller or selection.
+ *
+ * Hidden case: handled by holding the last usable rect. A popover can be open while its pane is
+ * hidden — the Scripture editor's footnote popover survives Escape and an outside click — and a
+ * hidden pane has no layout, so a source measures nothing there. The anchor keeps the last rect it
+ * had rather than collapsing to the pane's corner, and the next frame after the tab is shown
+ * measures again and catches up. Sources report "no measurement" by returning `undefined`; see
+ * {@link measureRange} and {@link measureElement}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export function useLivePopoverAnchor(): LivePopoverAnchor {
+  const sourceRef = useRef<LivePopoverAnchorSource | undefined>(undefined);
+  const lastRectRef = useRef<DOMRect>(new DOMRect());
+  const virtualRef = useRef<VirtualAnchorElement>({
+    getBoundingClientRect: () => {
+      const rect = sourceRef.current?.measure();
+      if (rect) lastRectRef.current = rect;
+      return lastRectRef.current;
+    },
+    get contextElement() {
+      return sourceRef.current?.contextElement;
+    },
+  });
+
+  const setSource = useCallback((source: LivePopoverAnchorSource) => {
+    sourceRef.current = source;
+    lastRectRef.current = source.measure() ?? new DOMRect();
+  }, []);
+
+  return useMemo(() => ({ virtualRef, setSource }), [setSource]);
+}
+
+/**
+ * The current viewport rect of a text range, or `undefined` when the range no longer lies in
+ * rendered text (its nodes were replaced, so it collapsed to an element boundary that has no box).
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export function measureRange(range: Range): DOMRect | undefined {
+  if (range.getClientRects().length === 0) return undefined;
+  return range.getBoundingClientRect();
+}
+
+/**
+ * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
+ * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export function leftEdgeRect(rect: DOMRect): DOMRect {
+  return new DOMRect(rect.left, rect.top, 0, rect.height);
+}
+
+/**
+ * The current viewport rect of an element, or `undefined` when the element has no layout at all —
+ * the case when it, or an ancestor, is `display: none`, as inside an inactive rc-dock tab pane.
+ * Matches {@link measureRange}'s rule: an element that IS laid out still returns its box even at
+ * zero width or height (a real, positioned point, such as a collapsed caret's element), because
+ * `getClientRects()` is empty only when nothing was painted, never merely because a box is small.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export function measureElement(element: Element): DOMRect | undefined {
+  if (element.getClientRects().length === 0) return undefined;
+  return element.getBoundingClientRect();
+}

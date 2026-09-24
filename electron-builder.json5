@@ -136,8 +136,10 @@
     // and config can replace a template plug entry but never rename or remove one. Renaming it is
     // what matters -- snapd matches stored connections by plug NAME on refresh, so an attribute-only
     // override leaves existing installs mounting the old platform. The pairing therefore lives in
-    // the `app-builder-lib` patch under `patches/`, and is enforced against this `base` value by
-    // .erb/scripts/electron-builder-snap-config.test.ts
+    // the `app-builder-lib` patch under `patches/`, and is enforced against this `base` value from
+    // both ends: .erb/scripts/electron-builder-snap-config.test.ts checks this config and the
+    // patched template, and .erb/scripts/assert-generated-snap-metadata.ts checks the snap those
+    // produced, in every workflow that builds one.
     //
     // Upstream knows: electron-builder issue #9452 root-caused the same stale `gnome-3-28-1804`
     // runtime, and PR #9517 addressed it by migrating snap builds to the `snapcraft` CLI under a

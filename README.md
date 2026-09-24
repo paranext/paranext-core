@@ -323,6 +323,8 @@ After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit
 
 Dev builds are cached under `node_modules/.cache`. If you ever suspect a stale bundle, `npm run clean:build-cache` clears every cache in that directory (Storybook's and the extensions' included) and the next build repopulates them.
 
+**`npm run build` does not build `lib/platform-bible-react`.** That library has its own build — `npm run build:pbr` from the repo root, or the faster `npm run build:basic` inside the library, which skips its lint-fix and typedoc steps — and the app loads its committed `dist/`, so a change to its source is simply absent from a running dev app until you build it. The symptom is a component behaving exactly as it did before your change — which reads as a broken fix rather than a stale bundle, and survives a restart. Build it explicitly after editing it, and commit the rebuilt `dist/` with your source change, since that output is tracked and is what consumers load.
+
 ### Starting without the .NET watcher
 
 `npm start` runs the .NET data provider under `dotnet watch`, which restores and builds the project before the provider's `Main()` runs — 15-24 seconds of dev startup, depending on how warm the MSBuild and Roslyn servers are (measured on one machine; reproduce with the [Startup performance timing](#startup-performance-timing) tooling below). If you are not editing C#, you can skip it:
@@ -388,6 +390,34 @@ PT_ANALYTICS_TEST_OVERRIDE=true npm start
 
 The value must be exactly `true`; any other value (including other truthy-looking strings) is ignored and normal resolution applies.
 
+### Analytics transport (PostHog)
+
+Analytics events are transmitted to PostHog (EU region) only in a **packaged production build**. Development builds and automated E2E runs log events to the console instead, so they make no calls to PostHog. To watch your own events reach PostHog while developing, opt in explicitly:
+
+```bash
+PT_ANALYTICS_POSTHOG=true npm start
+```
+
+The value must be exactly `true`. Test and Production are meant to be separate PostHog projects, but until the Production project has its own key both analytics environments send to the **Test** project, told apart by the `analytics_environment` property; the project keys live only in `src/extension-host/services/analytics.config.ts`. Every event carries `app_version`, `os_platform`, `os_release`, `os_arch` and `analytics_environment`, is flagged anonymous (no person profile), and has GeoIP disabled. No usage or behavioural data is sent. If you have opted in, you can [confirm that analytics events are reaching PostHog](https://eu.posthog.com/shared/K19Q0gTOWN11W_2wJPQJ-OzrCCqTag).
+
+A failed send (offline, blocked by a proxy, or an HTTP error from PostHog) is logged once at warn level, naming the event but none of its properties, and the event is dropped. `posthog-node` reports these failures through an `'error'` event rather than a rejected promise, and retries a request itself before giving up, so the warn line can appear up to about 50 seconds after launch. The debug-level `sent 'app_launch' to PostHog` line only means the SDK reported no error; the PostHog dashboard is the only proof that an event was delivered.
+
+#### Extending analytics
+
+The pipeline is built so later work plugs into one named place each, all under `src/extension-host/services/`:
+
+| To add or change                                                                | Edit                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A property on **every** event (session length, screen size, other machine info) | `getCommonProperties` in `analytics-enrichment.ts`. Vendor-neutral; a caller-supplied property of the same name wins. Never add anything that can identify a person, machine, project, language or location.                     |
+| A new **event**                                                                 | Call `trackEvent(name, properties)` from `analytics.service.ts`. Synchronous, never throws, safe before `initialize()` resolves. Only the extension host can call it today; main and renderer need a cross-process facade first. |
+| The identity behind `distinctId`                                                | `getDistinctId` in `analytics-identity.ts` (persisted installation id or consented user id). Keep `$process_person_profile: false` unless a consent decision says otherwise.                                                     |
+| Project keys or the enabled rule                                                | `analytics.config.ts` only. The Production key must never be committed; it arrives through a build-time injection.                                                                                                               |
+| A consent gate                                                                  | The top of `initialize()` in `analytics.service.ts`, before environment resolution.                                                                                                                                              |
+| Retry or an offline queue                                                       | `flushQueue` in `analytics.service.ts`: a provider rejection is the seam, and the three-bucket queue shape is meant to be persisted as is.                                                                                       |
+| Another vendor                                                                  | A new class implementing `AnalyticsProvider` (`src/shared/models/analytics.model.ts`) beside `analytics-providers/posthog-analytics.provider.ts`; swap it in from `analytics.service.ts`. Common properties survive the swap.    |
+
+Design rationale and the alternatives that were rejected are in `.context/standards/Architecture-Decisions.md` under `adr-analytics-in-extension-host` and `adr-analytics-posthog-transport`.
+
 ## GitHub Pages
 
 **[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
@@ -402,9 +432,9 @@ The value must be exactly `true`; any other value (including other truthy-lookin
 
 - Check out the utility functions, types, and classes available to use.
 
-**[Platform.Bible and Paratext 10 Studio Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
+**[Platform.Bible and Paratext 10 Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
 
-- Explore links to other resources relevant to Platform.Bible and Paratext 10 Studio.
+- Explore links to other resources relevant to Platform.Bible and Paratext 10.
 
 ## Packaging for Production
 

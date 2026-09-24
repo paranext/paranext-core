@@ -15,6 +15,7 @@
     "blessing",
     "TCL",
     "ZPL-2.1",
+    "bzip2-1.0.6",
     "Unicode-3.0",
     "Unicode-DFS-2016",
     "BlueOak-1.0.0",
@@ -99,9 +100,6 @@
     },
     "electron-updater": {
       "reason": "Declared as a root runtime dependency, but its only import in src/main/main.ts is commented out, so webpack compiles no module for it and electron-builder does not pack it either - release/app/package.json, whose closure is the one packed unbundled, declares no dependencies. Nothing this repository distributes contains it."
-    },
-    "posthog-node": {
-      "reason": "Declared as a root runtime dependency and resolved by package-lock.json, but nothing in first-party source imports it yet, so webpack compiles no module for it. It gains a row on its own the moment something does."
     }
   },
   "exceptionsNote": "A reviewed determination that clears one blocked package. Keyed by ecosystem:name and pinned to the exact license TEXT: the block returns the moment the package changes its license text, which is what a determination read off that text can no longer stand for. `version` records which version the determination was read against, so it stays re-checkable; it is provenance, not part of the key - a version bump that leaves the text byte-identical changes nothing this entry asserts.",
@@ -123,6 +121,15 @@
       "reviewer": "matt_lyons@sil.org",
       "date": "2026-08-21",
       "textSha256": "85aae6740628115550c6e67a85e8f8e70835cd5b14d4a2cb878c90c998f506db"
+    },
+    {
+      "package": "npm:posthog-node",
+      "version": "5.51.1",
+      "spdx": "(Apache-2.0 AND MIT)",
+      "reason": "package.json declares MIT, but LICENSE is the Apache-2.0 grant (PostHog and Mixpanel) followed by MIT grants for code vendored from Sentry, Meta, Expo and AgentCat, so no single-license matcher identifies it; both operands are on the allowed list.",
+      "reviewer": "rolf_heij@sil.org",
+      "date": "2026-09-23",
+      "textSha256": "a4a2a1ca3b22fe608ea29144452418e4a91f11ca44666a8a91cb72ec0a70f6ee"
     },
     {
       "package": "npm:fast-uri",

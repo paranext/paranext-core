@@ -2,6 +2,7 @@ import { localization } from '@extension-host/services/papi-backend.service';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
+import { isValidZoomFactor } from '@shared/utils/content-zoom.util';
 import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
@@ -15,6 +16,26 @@ export const platformSettings: SettingsContribution = [
         description: '%settings_platform_interfaceLanguage_description%',
         default: ['en'],
       },
+      'platform.zoomFactor': {
+        label: '%settings_platform_zoomFactor_label_2%',
+        description: '%settings_platform_zoomFactor_description%',
+        default: DEFAULT_ZOOM_FACTOR,
+      },
+      'platform.webViewContentZoom': {
+        label: '%settings_platform_webViewContentZoom_label%',
+        description: '%settings_platform_webViewContentZoom_description%',
+        default: DEFAULT_ZOOM_FACTOR,
+      },
+      'platform.webViewContentZoomMemory': {
+        label: '%settings_platform_webViewContentZoomMemory_label%',
+        default: {},
+        isHidden: true,
+      },
+      'platform.webViewContentZoomTypesWithAreas': {
+        label: '%settings_platform_webViewContentZoomTypesWithAreas_label%',
+        default: {},
+        isHidden: true,
+      },
       'platform.ptxUtilsMementoData': {
         label: '%settings_platform_ptxUtilsMementoData_label%',
         default: {},
@@ -25,20 +46,14 @@ export const platformSettings: SettingsContribution = [
         default: {},
         isHidden: true,
       },
-      'platform.requestTimeout': {
-        label: '%settings_platform_requestTimeout_label%',
-        description: '%settings_platform_requestTimeout_description%',
-        default: 30,
-      },
-      'platform.zoomFactor': {
-        label: '%settings_platform_zoomFactor_label%',
-        description: '%settings_platform_zoomFactor_description%',
-        default: DEFAULT_ZOOM_FACTOR,
-      },
+      // Hidden because the Simple/Power toggle lives in the profile popover
+      // (user-profile-popover.component.tsx), which the toolbar renders in both modes; a
+      // Settings entry for the same value would be a second, redundant switch.
       'platform.interfaceMode': {
         label: '%settings_platform_interfaceMode_label%',
         description: '%settings_platform_interfaceMode_description%',
         default: 'simple',
+        isHidden: true,
       },
       'platform.firstRunComplete': {
         label: '%settings_platform_firstRunComplete_label%',
@@ -49,6 +64,19 @@ export const platformSettings: SettingsContribution = [
         label: '%settings_platform_syncOnStartup_label%',
         default: true,
         isHidden: true,
+      },
+    },
+  },
+  // Settings a support person adjusts when helping a user troubleshoot, rather than settings a
+  // translator changes as part of day-to-day work.
+  {
+    label: '%settings_platform_supporter_group_label%',
+    description: '%settings_platform_supporter_group_description%',
+    properties: {
+      'platform.requestTimeout': {
+        label: '%settings_platform_requestTimeout_label%',
+        description: '%settings_platform_requestTimeout_description%',
+        default: 30,
       },
       'platform.showRegistrationReminderOnStartup': {
         label: '%settings_platform_showRegistrationReminderOnStartup_label%',
@@ -111,11 +139,42 @@ const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
     },
   );
 
-  if (typeof newValue !== 'number') return false;
+  if (typeof newValue !== 'number' || Number.isNaN(newValue)) return false;
   if (newValue < MIN_ZOOM_FACTOR || newValue > MAX_ZOOM_FACTOR) {
     throw new Error(errorMessage);
   }
   return true;
+};
+
+const webViewContentZoomValidator: SettingValidator<'platform.webViewContentZoom'> = async (
+  newValue: number,
+): Promise<boolean> => {
+  if (typeof newValue !== 'number' || Number.isNaN(newValue)) return false;
+  if (!isValidZoomFactor(newValue)) {
+    throw new Error(
+      formatReplacementString(
+        await localization.getLocalizedString({
+          localizeKey: '%settings_platform_zoomFactor_errorMessage%',
+        }),
+        { lowerLimit: MIN_ZOOM_FACTOR, upperLimit: MAX_ZOOM_FACTOR },
+      ),
+    );
+  }
+  return true;
+};
+
+const webViewContentZoomMemoryValidator: SettingValidator<
+  'platform.webViewContentZoomMemory'
+> = async (newValue): Promise<boolean> => {
+  if (typeof newValue !== 'object' || !newValue || Array.isArray(newValue)) return false;
+  return Object.values(newValue).every((value) => isValidZoomFactor(value));
+};
+
+const webViewContentZoomTypesWithAreasValidator: SettingValidator<
+  'platform.webViewContentZoomTypesWithAreas'
+> = async (newValue): Promise<boolean> => {
+  if (typeof newValue !== 'object' || !newValue || Array.isArray(newValue)) return false;
+  return Object.values(newValue).every((value) => typeof value === 'boolean');
 };
 
 const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async (
@@ -132,6 +191,9 @@ const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async
 };
 
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
+  'platform.webViewContentZoom': webViewContentZoomValidator,
+  'platform.webViewContentZoomMemory': webViewContentZoomMemoryValidator,
+  'platform.webViewContentZoomTypesWithAreas': webViewContentZoomTypesWithAreasValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,

@@ -178,12 +178,21 @@ The established contract for a localizable library component is four parts:
    };
    ```
 
-3. **An optional `localizedStrings?` prop** typed as that mapped type (or the shared `LanguageStrings` type from `platform-bible-utils`). Inside the component, every read goes through an English-fallback lookup so the component still renders readable text when a key is absent:
+3. **An optional `localizedStrings?` prop** typed as that mapped type (or the shared `LanguageStrings` type from `platform-bible-utils`). Inside the component, every read goes through
+   `resolveLocalizedString` so the component still renders readable text when a key is unresolved:
 
    ```tsx
-   const selectChapter =
-     localizedStrings?.['%webView_bookChapterControl_selectChapter%'] ?? 'Select Chapter';
+   const selectChapter = resolveLocalizedString(
+     localizedStrings?.['%webView_bookChapterControl_selectChapter%'],
+     'Select Chapter',
+   );
    ```
+
+   **Do not use `?? 'Select Chapter'` here.** `useLocalizedStrings` seeds its map with
+   `{ [key]: key }` and keeps that seed until strings load — permanently if the localization
+   provider errors — so an unresolved lookup arrives as the *defined* string
+   `'%webView_bookChapterControl_selectChapter%'`, which `??` returns and the component renders at
+   the user.
 
 4. **A shipped English value for every key in the tuple.** The tuple only *declares* what the
    component asks for; nothing about declaring a key produces a value. The **default** home for a
@@ -268,6 +277,22 @@ Apply these regardless of target language:
 - Capitalization: sentence case only — capitalize just the first word of a sentence/instruction plus proper nouns. Do not mirror English title case, even for tab/window/section names (e.g. "Show Recent Searches" → "Mostrar búsquedas recientes"). Exceptions that stay capitalized: proper nouns (*Internet*, *Paratext*), single letters identifying scroll groups/additional books/etc., and acronyms (*ISO*, *JSON*).
 - Not every string maps neatly to an "interactive control" (button/menu/command) or an "alert/message" — tooltips, status bar text, placeholder text, and progress labels are common ambiguous cases. Classify by function first: an ongoing process (e.g. "Saving…", "Loading…") reads differently from a completed/current state (e.g. "Saved", "Connected") or a static description (a control's purpose, a tooltip). Apply your language's convention for each case; when it's still unclear, default to the same tone as static interactive-control labels.
 - Placeholder text depends on what it's a placeholder for — it is not one category. A field expecting a specific value (e.g. a name or email field) is typically a noun phrase naming the expected content, with no verb at all. A field that suggests an action (e.g. a search box) should match the register/tone used for other interactive-control action labels in your language.
+
+### Terminology: the two zoom settings
+
+The application has two distinct zoom concepts, and calling either one plain "Zoom" in any
+language is what keeps getting them confused (they were, for a while, each other's names in
+English and Spanish). Agreed with UX on PT-4579:
+
+| Concept | Setting key | English | Spanish |
+|---|---|---|---|
+| Whole application, menus and toolbars included | `platform.zoomFactor` | Interface scaling | Escalado de la interfaz |
+| Per-pane default for tab content | `platform.webViewContentZoom` | Tab content default zoom | Zoom predeterminado del contenido de la pestaña |
+
+Use these names wherever either concept is referred to — labels, descriptions, menu items,
+tooltips, documentation — and never the bare word "Zoom" for either. The UI vocabulary page
+(`lib/platform-bible-react/src/stories/guidelines/terms.mdx`, `Pane`) carries the same rule for
+anyone writing UI copy.
 
 ### Revising an Existing Localization Decision
 

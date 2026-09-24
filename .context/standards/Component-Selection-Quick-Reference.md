@@ -187,6 +187,48 @@ Avoid:
 
 Reference: `manage-books-sidebar.component.tsx` (`mode='project'`), `manage-books-dialog.component.tsx` Copy "From" / Create "Based on" (`mode='project'`), `checklist.web-view.tsx` primary picker (`mode='project'`) and comparative-texts multi-select (`mode='project-multi'`).
 
+### Project names: short name first, through the shared helpers
+
+Never write `` `${fullName} (${shortName})` `` or `fullName && fullName !== shortName` by hand. The
+rule lives in `platform-bible-utils` (`lib/platform-bible-utils/src/project-util.ts`):
+
+| Need | Call |
+| --- | --- |
+| A project's display label | `formatProjectName({ shortName, fullName })` → `"arb - True Meaning Arabic"`, or `"arb"` when there is no distinct full name |
+| "Is the full name worth its own slot?" (two names in separate elements) | `hasDistinctFullName({ shortName, fullName })` — absent, blank and equal-to-short all count as "no", so a raw value is safe to pass |
+| The separator, when you render the two names as separate nodes | `PROJECT_NAME_SEPARATOR` |
+| Ordering a project list | `compareProjectsByName` (objects) / `compareProjectShortNames` (bare strings) |
+| Reading a raw `platform.fullName` value into a typed field | `normalizeFullName(raw)` — `undefined` for absent, empty, or blank |
+| Interpolating a joined name into a localized sentence | `isolateBidi(formatProjectName(…))` — `dir="auto"` cannot isolate an interpolated name |
+
+Two further rules the helpers cannot enforce:
+
+- **Never mirror the short name into `fullName`.** A project with no full name omits the field. A
+  mirrored value renders the same (the de-dup catches it) but claims a full name the project does
+  not have, and every consumer downstream has to un-claim it.
+- **Source `fullName` from project metadata, not `pdp.getSetting('platform.fullName')`.** That
+  setting has a contribution default — a localized `*Name Missing*` placeholder — so a data-provider
+  read cannot distinguish "no full name" from "never set one", and the placeholder renders as a real
+  name. `ProjectMetadata.fullName` is absent-when-unset by design.
+
+One exception, by design: a surface whose label is already a localized sentence composes the pair
+from a format string with `{shortName}`/`{fullName}` placeholders instead of calling
+`formatProjectName`, so a locale can reorder or re-punctuate it. The Simple-mode toolbar
+(`%projectPicker_toolbar_label_shortNameAndFullName%`) is the one such site today. Keep the English
+string in the helper's order, and exempt the site in the sweep if its wording trips the pattern.
+
+Such a surface must derive its VISIBLE label from that same string, not just its tooltip. The
+toolbar renders the two names as separate nodes so each can shrink on its own, and reads the order
+and separator off the template with `parseProjectNameTemplate`
+(`src/renderer/components/projects/project-name-template.util.ts`). Hardcoding the visible order
+beside a localizable joined form is the failure this rule exists to prevent: a locale that reorders
+the string makes the label and its own tooltip disagree.
+
+`src/renderer/components/projects/project-name-adoption.test.ts` sweeps the repo and fails the build
+on a re-inlined format or de-dup. A site that matches the pattern without being a project-name label
+goes in that file's `EXEMPT` list with a reason. Rationale and history:
+`adr-project-name-short-name-first` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
+
 ### Read-only (non-editable) projects in a picker
 
 **Decision: surface `ProjectSummary.IsEditable` (the `platform.isEditable` wire field) all the way up to the picker**, then either:

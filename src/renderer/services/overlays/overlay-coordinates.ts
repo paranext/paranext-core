@@ -18,8 +18,46 @@ export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
 }
 
 /**
+ * Parses the CSS `zoom` inline on an iframe element. Anything that is not a positive finite number
+ * — including the empty string written to clear the zoom, or no iframe at all — means unscaled.
+ *
+ * Exported so {@link getWebViewIframeZoom} and the content zoom service's own iframe-zoom fallback
+ * (which reads its iframe through its own test-only seam, not {@link getWebViewIframe}) share one
+ * parse instead of drifting apart.
+ *
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): number {
+  const zoom = Number(iframe?.style.zoom);
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+}
+
+/**
+ * Reads the CSS `zoom` the content zoom service has set on a WebView's host `<iframe>` element.
+ *
+ * A zoomed iframe's own `getBoundingClientRect()` is unchanged — only its inner viewport shrinks or
+ * grows — and the inner document measures itself in unscaled inner pixels, so an inner point at `x`
+ * renders `zoom * x` from the iframe's left edge.
+ *
+ * The platform is the only writer of this property, so the inline value is authoritative (and,
+ * unlike computed style, is defined for this non-standard property in every environment the
+ * renderer runs in).
+ *
+ * This does not cover per-area zoom — a pane that marks zoom areas carries no whole-iframe `zoom`
+ * and this always answers `1` for it. For the scale a pane's content is actually drawn at, use
+ * `getContentZoomScaleForWebView` in `web-view-content-zoom.service` instead.
+ *
+ * @param webViewId The webViewId of the iframe
+ * @returns The scale factor the iframe's contents are rendered at
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export function getWebViewIframeZoom(webViewId: string): number {
+  return parseIframeZoom(getWebViewIframe(webViewId));
+}
+
+/**
  * Translates iframe-relative coordinates to document-relative coordinates using
- * getBoundingClientRect of the WebView iframe.
+ * getBoundingClientRect of the WebView iframe and the CSS `zoom` applied to it.
  *
  * @param webViewId The webViewId of the iframe
  * @param position The iframe-relative position
@@ -33,9 +71,11 @@ export function translateCoordinates(
   if (!iframe) return position;
 
   const rect = iframe.getBoundingClientRect();
+  // Parsed from the iframe already in hand rather than looked up again by id.
+  const zoom = parseIframeZoom(iframe);
   return {
-    x: position.x + rect.left,
-    y: position.y + rect.top,
+    x: rect.left + position.x * zoom,
+    y: rect.top + position.y * zoom,
   };
 }
 

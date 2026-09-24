@@ -1219,10 +1219,10 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
-	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
-	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
-	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
-	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
@@ -1733,6 +1733,21 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	 * `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathBefore?: string;
+	/**
+	 * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
+	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
+	 * it as a key binding.
+	 *
+	 * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
+	 * the unlocalized main menu never has it. Key names are not localized, and only the first
+	 * catalogued alternative is shown.
+	 *
+	 * A `menus.json` contribution cannot set it: the menus schema rejects it, which rejects the
+	 * extension's whole `menus.json`.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	shortcut?: string;
 };
 /**
  * Group of menu items that can be combined with other groups to form a single context menu/submenu.
@@ -1806,7 +1821,7 @@ export type WebViewMenu = {
 	 * panel within its own window, which never leaves the renderer. Treat a `command` here as the
 	 * name of the action, not as something to invoke through the command service.
 	 *
-	 * The platform's own group here sits at order 100, so choose another order for yours. A
+	 * The platform's own groups here sit at orders 50 and 100, so choose another order for yours. A
 	 * single-column menu buckets every group together for the duplicate-order check, so a second
 	 * group at 100 throws — and because a failed contribution is rolled back whole, that would cost
 	 * this extension its entire `menus.json`, not just its tab items.
@@ -4674,6 +4689,109 @@ export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
  * @returns The uppercase form of the id.
  */
 export declare function normalizeProjectId(projectId: string): string;
+/** A project's display names. `fullName` is optional because not every project carries one. */
+export type ProjectNames = {
+	/** Short name, e.g. `'arb'`. Always present; this is the identifying field. */
+	shortName: string;
+	/** Longer descriptive name, e.g. `'True Meaning Arabic'`. Absent or empty on many projects. */
+	fullName?: string;
+};
+/**
+ * Whether a project's full name carries information its short name does not, and so is worth
+ * rendering as a second field.
+ *
+ * The comparison is an exact, case-sensitive `!==` on purpose: two names differing only by case are
+ * genuinely different strings a project deliberately carries, and suppressing one would hide data
+ * the user entered. Callers that render the two names in separate slots (a muted second line, a
+ * toolbar label's secondary field) use this rather than repeating the rule.
+ *
+ * Blank is absent, on the same terms as {@link normalizeFullName}: a name of spaces is present but
+ * invisible, so treating it as distinct would render a dangling separator. Applying the rule here
+ * rather than asking every caller to pre-normalize is what keeps {@link formatProjectName} safe for
+ * a raw value — including one arriving from outside the repo through a public prop.
+ *
+ * @param names The project's short and optional full name.
+ * @returns `true` when the full name is present, non-blank, and different from the short name.
+ */
+export declare function hasDistinctFullName(names: ProjectNames): boolean;
+/**
+ * Joins a project's short name to its full name in {@link formatProjectName}.
+ *
+ * Exported because a consumer that renders the two names in separate elements — a toolbar label
+ * with its own separator node, say — has to draw the same character the joined string uses, or the
+ * visible label and its own tooltip disagree the moment this changes.
+ *
+ * Not localized: it joins two proper nouns rather than translatable prose.
+ *
+ * Bidi caveat: the hyphen is direction-neutral, so it sits wherever the surrounding run puts it.
+ * Which remedy a caller needs depends on how the joined name reaches the screen:
+ *
+ * - **The joined string is an element's whole text** (a tooltip line, a trigger label): set
+ *   `dir="auto"` on that element.
+ * - **The two names are separate elements**: each gets its own direction only when it is a
+ *   block-level or flex-item box. Plain inline spans do NOT isolate — they join the surrounding run
+ *   like any other inline text — so an inline pair needs `dir="auto"` per name as well.
+ * - **The joined string is interpolated into a longer sentence** (a subtitle, a notification): an
+ *   attribute cannot help, because `dir="auto"` reads the direction of the SENTENCE's first strong
+ *   character rather than the name's. Wrap the name with {@link isolateBidi} before interpolating,
+ *   which is the character-level form of HTML's `<bdi>` and travels inside the string.
+ * - **An `aria-label`**: carries no direction at all, so the caveat does not reach it.
+ */
+export declare const PROJECT_NAME_SEPARATOR = " - ";
+/**
+ * Formats a project for display as `"{shortName} - {fullName}"`, or as the short name alone when
+ * {@link hasDistinctFullName} is false.
+ *
+ * The short name leads because it is the field that identifies a project to a Paratext user, so it
+ * is the half that must survive ellipsis truncation in a narrow container. The separator is
+ * {@link PROJECT_NAME_SEPARATOR}.
+ *
+ * @param names The project's short and optional full name.
+ * @returns The display string.
+ */
+export declare function formatProjectName(names: ProjectNames): string;
+/**
+ * Compares two project short names for display order: alphabetical, case- and accent-insensitive.
+ *
+ * The string-level form of {@link compareProjectsByName}, for a caller whose list rows are not
+ * {@link ProjectNames} objects and would otherwise allocate a throwaway one per comparison.
+ *
+ * @param a First short name.
+ * @param b Second short name.
+ * @returns Negative, zero or positive, as `Array.prototype.sort` expects.
+ */
+export declare function compareProjectShortNames(a: string, b: string): number;
+/**
+ * Compares two projects for display order: alphabetical by short name, case- and
+ * accent-insensitive.
+ *
+ * Short name rather than full name because the short name is the field that leads every project
+ * label, and a list ordered by a field the user cannot see reads as unsorted. Compares names only —
+ * a caller with its own tie-break (a scroll group, a project id) layers it on top of this result.
+ *
+ * @param a First project.
+ * @param b Second project.
+ * @returns Negative, zero or positive, as `Array.prototype.sort` expects.
+ */
+export declare function compareProjectsByName(a: ProjectNames, b: ProjectNames): number;
+/**
+ * Narrows a raw `platform.fullName` project setting to the full name, or `undefined` when the
+ * project effectively has none.
+ *
+ * The setting is typed `string`, but a project data provider yields `null` or `undefined` for a
+ * setting that was never written, and legacy projects carry `''` or a run of spaces. This is the
+ * single place that decides which of those counts as absent, so a reader can hand the raw value
+ * straight through rather than writing its own guard.
+ *
+ * Whitespace-only counts as absent: a name of spaces renders as a full name that is there but
+ * invisible, so {@link formatProjectName} would emit `'ABC - '` with a dangling separator. The
+ * returned name is not trimmed otherwise — leading or trailing space in a real name is the
+ * project's own data, and this function narrows rather than edits.
+ *
+ * @param fullName The raw setting value.
+ * @returns The full name, or `undefined` when it is absent, blank, or not a string.
+ */
+export declare function normalizeFullName(fullName: unknown): string | undefined;
 /**
  * Get a localized string representation of the time between two dates
  *
@@ -4749,6 +4867,72 @@ export type EffectiveStructureProtectionInputs = {
  * the user's own preference governs (defaulting to on when never set).
  */
 export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
+/**
+ * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
+ * a trackpad pinch. Both the platform's per-pane zoom and the Text Collection grid's per-resource
+ * zoom read a wheel this way; the platform's copy is inlined in its injected bootstrap script,
+ * which imports nothing, and a parity test keeps the two in step.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomWheelReader = {
+	/**
+	 * How many zoom steps `event` means: positive zooms IN, negative zooms OUT, 0 means the event's
+	 * travel has not yet crossed a step boundary. `scopeId` is whatever opaque string the caller uses
+	 * to key its own zoomable region — a pane's zoom area for the platform, a resource id for the
+	 * Text Collection grid — and the reader resets its accumulated travel whenever it changes.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	read(event: WheelEvent, scopeId: string): number;
+	/**
+	 * Removes every listener the reader installed to track physically-held modifier keys. A reader
+	 * with no window to listen on (see {@link ContentZoomWheelReaderOptions.window}) has nothing to
+	 * remove.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	dispose(): void;
+};
+/**
+ * Options for {@link createContentZoomWheelReader}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomWheelReaderOptions = {
+	/**
+	 * Largest number of steps one event may ask for. Default: the platform's 0.5–3.0 zoom range
+	 * expressed in units of the effective {@link ContentZoomWheelReaderOptions.zoomStep} (25 at the
+	 * default step of 0.1) — so overriding `zoomStep` scales this default with it.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	maxSteps?: number;
+	/**
+	 * Zoom step the pinch calibration is derived from. Default 0.1. Must be a positive, finite
+	 * number; the reader does not validate it, and a zero or negative step yields a meaningless
+	 * calibration.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	zoomStep?: number;
+	/**
+	 * Window the modifier listeners attach to. Default `globalThis.window`; tests pass jsdom's. When
+	 * neither exists (a reader created outside a DOM, such as under Node) the reader still reads
+	 * notch and pinch counts from the events it is handed — it just cannot tell a synthesized pinch
+	 * from a real one held down by a physically-pressed Ctrl or Cmd key.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	window?: Window;
+};
+/**
+ * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
+ * a trackpad pinch — see {@link ContentZoomWheelReader} for the full contract.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function createContentZoomWheelReader(options?: ContentZoomWheelReaderOptions): ContentZoomWheelReader;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
@@ -4941,6 +5125,96 @@ export interface PaletteItem {
 	 */
 	muted?: boolean;
 }
+/**
+ * Well-known keys the ProjectSelector's built-in groupings (`language`, `type`, `lastUsed`) read
+ * from `ProjectSelectorProject.customData`. Reference these constants rather than typing the key
+ * strings inline so a rename here surfaces at every callsite.
+ */
+export declare const PROJECT_SELECTOR_CUSTOM_DATA_KEYS: Readonly<{
+	readonly language: "language";
+	readonly type: "type";
+	readonly typeName: "typeName";
+	readonly lastUsedAt: "lastUsedAt";
+}>;
+/**
+ * The typed shape of the well-known {@link PROJECT_SELECTOR_CUSTOM_DATA_KEYS} entries. Every field
+ * is optional — a grouping whose key is missing routes that project into its "unknown" bucket (or
+ * is elided per the grouping's `unknownSectionHeading` config).
+ */
+export type ProjectSelectorCustomDataShape = {
+	/**
+	 * Language name — bucketed by exact equality by the built-in `language` grouping and used as the
+	 * section heading verbatim. Consumer supplies a localized human-readable name.
+	 */
+	language?: string;
+	/**
+	 * Locale-stable type key — bucketed by exact equality by the built-in `type` grouping. Free form;
+	 * consumers pair it with `typeName` for display.
+	 */
+	type?: string;
+	/**
+	 * Human-readable label for {@link type}. The built-in `type` grouping uses the first non-empty
+	 * `typeName` observed in a bucket as the section heading (falls back to the raw `type` key when
+	 * no row in the bucket carries one).
+	 */
+	typeName?: string;
+	/**
+	 * Millisecond-epoch timestamp of the last time the caller-relevant "use" of this project
+	 * happened.
+	 *
+	 * The built-in `lastUsed` grouping reads this as a PRESENCE FLAG, not as a sort key: any finite
+	 * number routes the project into the "Recently used" bucket and its absence routes it into
+	 * "Other". The magnitude is never compared. Rows WITHIN every bucket are ordered by the
+	 * component's own stable sort — alphabetical by short name, tie-broken by scroll group — so a
+	 * larger `lastUsedAt` does not move a project higher up the list.
+	 *
+	 * If your data source is an ordered recency list rather than per-project timestamps (as
+	 * `platformScripture.recentlyOpenedProjects.RecentProjects` returns), synthesize values via
+	 * {@link recencyMapFromOrderedIds}.
+	 */
+	lastUsedAt?: number;
+};
+/**
+ * Pack a subset of {@link ProjectSelectorCustomDataShape} into a plain record ready to assign to
+ * `ProjectSelectorProject.customData`. Keys with a wrong-typed value (or `undefined`) are omitted
+ * so groupings see them as "missing" rather than as a bogus empty string / NaN.
+ *
+ * Consumers with additional custom groupings can spread the returned record with their own keys:
+ *
+ * ```ts
+ * const customData = {
+ *   ...makeProjectSelectorCustomData({ language, type, typeName, lastUsedAt }),
+ *   versificationId, // consumer-defined key for a custom `versification` grouping
+ * };
+ * ```
+ */
+export declare function makeProjectSelectorCustomData(input: ProjectSelectorCustomDataShape): Readonly<Record<string, unknown>>;
+/**
+ * Convert a recency-ordered list of project ids (most-recent FIRST, as returned by
+ * `platformScripture.recentlyOpenedProjects.RecentProjects`) into a map of projectId → synthetic
+ * `lastUsedAt` value suitable for feeding into `ProjectSelectorProject.customData`.
+ *
+ * The recently-opened-projects service exposes order without timestamps; this helper synthesizes a
+ * monotonic descending value (higher = more recent). Projects NOT in the list get no entry, so they
+ * fall into the grouping's "Other" bucket per the built-in behavior.
+ *
+ * The synthesized ORDER is not consumed by the built-in `lastUsed` grouping, which reads
+ * `lastUsedAt` only as a presence flag and leaves each bucket in the component's stable
+ * alphabetical order. What this helper guarantees the grouping is that every listed id gets a
+ * strictly positive, unambiguously-present number. The descending values are still meaningful to a
+ * consumer-defined grouping that chooses to compare them.
+ *
+ * The synthesized values are DETERMINISTIC (do not call `Date.now()`), so calling this at render
+ * time is safe — the returned map has stable content and consumers can memoize on the input list
+ * identity.
+ *
+ * DUPLICATE IDS: the FIRST occurrence wins. The input is most-recent-first, so the earliest
+ * position is the most recent use and is the score the id keeps; later occurrences are ignored.
+ * Duplicates are reachable in practice because callers normalize ids on the way in (e.g.
+ * `orderedProjectIds.map(normalizeProjectId)`), which can collapse two differently-cased raw ids
+ * into one.
+ */
+export declare function recencyMapFromOrderedIds(orderedProjectIds: readonly string[]): ReadonlyMap<string, number>;
 export type ResourceType = "ScriptureResource" | "CommentaryResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;
@@ -4954,19 +5228,26 @@ export type DblResourceData = {
 	projectId: string;
 };
 /**
- * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or
- * by the `startsWith(dblEntryUid)` convention (the local project id of an installed DBL resource
- * begins with its DBL entry UID).
+ * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or,
+ * failing that, by the `startsWith(dblEntryUid)` convention.
+ *
+ * The prefix branch is a best-effort fallback, not an invariant. A resource project's id is
+ * unrelated to the DBL entry it was installed from: ParatextData records the entry uid in the
+ * project's settings and matches on that, so the prefix holds for many installed resources and not
+ * for others. The `projectId` the backend reports is authoritative, so the exact match is tried
+ * first — but the prefix test is a fallthrough, not an `else`, so a row naming project A can still
+ * claim a prefix-sharing project B. `buildLocalNonDblResources` depends on that today, which is
+ * what makes tightening it a behaviour change rather than a cleanup. See
+ * `adr-dbl-install-status-from-backend`.
  *
  * Both branches require the row to have been reconciled against disk at least once (`installed`, or
  * a non-empty `projectId`). A never-synced row carries `installed: false, projectId: ''`, and
  * `''.startsWith('')` is true for every string, so trusting such a row would let a stale entry for
  * a DBL-reassigned UID hide a local project whose real UID still matches.
  *
- * This is the single home for that rule. Producers on both sides of the picker consult it — the one
- * that decides which local projects are NOT already in the catalog, and the one that decides which
- * catalog row describes a downloaded project. They must agree, or a project is claimed by one and
- * disowned by the other.
+ * Producers on both sides of the picker consult this — the one that decides which local projects
+ * are NOT already in the catalog, and the one that decides which catalog row describes a downloaded
+ * project. They must agree, or a project is claimed by one and disowned by the other.
  *
  * @param row The DBL catalog row to test
  * @param localProjectId The id of the local project to test it against
@@ -6261,9 +6542,44 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private fragmentsByJsonPathInternal;
 	private indicesInUsfmByVerseRefInternal;
 	private usfmInternal;
+	/**
+	 * Messages already reported by {@link reportProblemOnce}, so each distinct problem is reported
+	 * once per instance rather than once per occurrence. A commentary or UBS Handbook repeats markers
+	 * this class's markers map does not carry tens of thousands of times per book, and a web view's
+	 * console calls cross IPC to the main process's log file, so reporting per occurrence costs work
+	 * proportional to the document.
+	 *
+	 * Keyed by full message text, so a report collapses only as far as its text repeats: the marker
+	 * reports name only the marker, while the chapter and verse reports also name a position. The set
+	 * lives as long as the instance, so a caller that builds a new instance per action reports each
+	 * problem again per action. Deliberately not reset by {@link usjChanged}: these describe the
+	 * marker, not where it appeared.
+	 */
+	private readonly reportedProblems;
 	constructor(usj: Usj, options?: UsjReaderWriterOptions);
 	usjChanged(): void;
 	private static areUsjVersionsCompatible;
+	/**
+	 * The book this document is for, for naming it in a log message.
+	 *
+	 * Reads the book marker straight off the top level of the content already in memory and stops at
+	 * the first one, so it costs nothing beyond that scan and does not walk into nested content. Only
+	 * call it on a path that is about to log — there is no reason to look for the book otherwise.
+	 *
+	 * @returns The book code, or {@link NO_BOOK_ID} if the document does not carry one
+	 */
+	private getBookIdForLogging;
+	/**
+	 * Reports `message`, unless an identical message has already been reported by this instance. See
+	 * {@link reportedProblems} for why repeats are dropped.
+	 *
+	 * Defaults to `warn` because these describe a document that is malformed or that this class had
+	 * to reinterpret. Pass `debug` for problems that are normal in a well-formed document.
+	 *
+	 * @param message Message to report
+	 * @param level Console level to report at. Defaults to `warn`
+	 */
+	private reportProblemOnce;
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	findParent<T>(jsonPathQuery: string): T | undefined;
 	/**
@@ -6657,7 +6973,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   potential adjustments to handle verse ranges differently when we know better what we ought to
 	 *   do.
 	 */
-	private static transferFragmentsInfoArrayToMaps;
+	private transferFragmentsInfoArrayToMaps;
 	/**
 	 * Generates USFM representation of the USJ document passed in and returns it along with
 	 * information about how various locations in USFM and USJ map to each other

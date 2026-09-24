@@ -49,11 +49,12 @@
  * tab nodes at all times but clips those that overflow, so `toBeAttached()` succeeds for a clipped
  * tab while `toBeVisible()` fails. {@link activateTab} handles both cases, clicking the tab directly
  * when visible and otherwise going through the `.dock-nav-more` overflow dropdown. This mirrors
- * `clickCommentsTab` in `tests/isolated/comments-tab.spec.ts`, the proven precedent for a
- * permanent, non-closable Column 3 tab.
+ * `clickCommentsTab` in `fixtures/comment-test-helpers.ts` (shared by `comments-tab.spec.ts` and
+ * `notes-content-zoom/comments-panel-content-zoom.spec.ts`), the proven precedent for a permanent,
+ * non-closable Column 3 tab.
  */
 
-import { Frame, FrameLocator, Locator, Page } from '@playwright/test';
+import { ElectronApplication, Frame, FrameLocator, Locator, Page } from '@playwright/test';
 import {
   test,
   expect,
@@ -71,6 +72,7 @@ import {
 import {
   EDITOR_HAMBURGER_SELECTOR,
   findScriptureEditorFrame,
+  navigateToolbarBcv,
 } from '../../../fixtures/scripture-editor-helpers';
 
 // The layout this suite's assertions are written against — in particular the Column 3 tab overflow
@@ -265,8 +267,13 @@ async function invokeFindFromHamburger(mainPage: Page): Promise<void> {
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
 
-  // Anchored to the exact label "Find" (%webView_platformScriptureEditor_openFind%).
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
+  // The item's accessible name is its label "Find" (%webView_platformScriptureEditor_openFind%)
+  // followed by a keyboard shortcut hint, so the match cannot be anchored to the end of the name.
+  // The trailing `(\s|$)` rules out only a longer single word, e.g. "Finder"; a sibling item whose
+  // label begins "Find " — "Find and replace…" — matches too, and the click then fails with a
+  // strict-mode violation rather than opening the wrong panel. That failure is the signal to narrow
+  // this locator to the label element instead of the whole accessible name.
+  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find(\s|$)/i });
   await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
   await findMenuItem.click();
 }
@@ -435,11 +442,25 @@ async function waitForCounterToChangeFrom(frame: FrameLocator, previous: string 
   return current;
 }
 
-/** Open the filters dropdown (the SlidersHorizontal / Toggle filters button). */
+/**
+ * Open the filters panel (the SlidersHorizontal / Toggle filters button), converging on "open" from
+ * either starting point.
+ *
+ * The button toggles a Radix popover, so a bare click closes an already-open panel as readily as it
+ * opens a closed one, and the caller rarely knows which state it is in — focus leaving the panel
+ * dismisses it, so merely filling a field elsewhere closes it. The decision reads the trigger's
+ * `aria-expanded`, which flips synchronously with Radix's open state, rather than the content's
+ * visibility, which stays true through the exit animation. `resetFindPanel` uses the same
+ * sequence.
+ */
 async function openFiltersPanel(frame: FrameLocator): Promise<void> {
   const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
-  await expect(filtersBtn).toBeVisible({ timeout: 5_000 });
-  await filtersBtn.click();
+  const matchCase = frame.locator('#matchCase');
+  await expect(async () => {
+    if (!isPopoverTriggerExpanded(await filtersBtn.getAttribute('aria-expanded')))
+      await filtersBtn.click();
+    await expect(matchCase).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 5_000 });
 }
 
 /**
@@ -449,6 +470,214 @@ async function openFiltersPanel(frame: FrameLocator): Promise<void> {
  */
 function firstResultCard(frame: FrameLocator): Locator {
   return frame.locator('[role="button"][aria-pressed]').first();
+}
+
+/** Where a piece of chapter text sits relative to the editor's scrolling viewport. */
+interface TextGeometry {
+  /** Top of the text in px below the scroll viewport's top edge; negative means above it */
+  matchTop: number;
+  /** Bottom of the text in px below the scroll viewport's top edge */
+  matchBottom: number;
+  viewportHeight: number;
+  viewportWidth: number;
+  scrollTop: number;
+}
+
+/**
+ * Finds the editor's real scroll container — the same discovery `findScrollContainer` in
+ * editor-dom.util.ts does: the nearest ancestor that is styled scrollable AND overflows — and, in
+ * one pass, optionally pins its scroll position and/or measures where `needle` sits inside it.
+ *
+ * Both browser-side actions this suite needs against the editor (pinning the scroll position for
+ * {@link showEditorAt}, measuring text for {@link readTextGeometry}) start with this identical walk,
+ * so it is written once here rather than twice: an `evaluate` callback cannot close over module
+ * scope, so a Node-side helper the callback merely CALLED would not be shippable to the browser at
+ * all — the walk has to live inside whichever function actually runs there, which means sharing it
+ * means passing this same function to both callers' `evaluate` calls.
+ *
+ * Locates the text itself rather than reading the editor's selection or Find's highlight: the
+ * editor positions its scroll from the selection, so measuring the selection would let a wrong
+ * selection pass, and Find's highlight is not guaranteed to survive a chapter load. Native
+ * `indexOf` over scripture text is acceptable here only because every needle this suite uses is
+ * plain ASCII with no combining marks after it in the WEB text.
+ *
+ * @returns `undefined` when the editor has no scrolling content, or when `needle` was given but is
+ *   not in the chapter; when `needle` is omitted, `undefined` on success too (there is nothing to
+ *   report — {@link showEditorAt} only wants the pin performed)
+ */
+function locateEditorScrollerAndAct({
+  pinTo,
+  needle,
+}: {
+  pinTo?: 'top' | 'bottom';
+  needle?: string;
+}): TextGeometry | undefined {
+  const editorContainer = document.querySelector<HTMLElement>('.editor-container');
+  if (!editorContainer) return undefined;
+  let scroller: HTMLElement | null = editorContainer;
+  while (scroller) {
+    const { overflowY } = getComputedStyle(scroller);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      scroller.scrollHeight > scroller.clientHeight
+    )
+      break;
+    scroller = scroller.parentElement;
+  }
+  if (!scroller) return undefined;
+
+  if (pinTo) scroller.scrollTop = pinTo === 'top' ? 0 : scroller.scrollHeight;
+  if (needle === undefined) return undefined;
+
+  const walker = document.createTreeWalker(editorContainer, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node && !(node.textContent ?? '').includes(needle)) node = walker.nextNode();
+  if (!node) return undefined;
+
+  const start = (node.textContent ?? '').indexOf(needle);
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, start + needle.length);
+  const rect = range.getBoundingClientRect();
+  const viewportTop = scroller.getBoundingClientRect().top + scroller.clientTop;
+  return {
+    matchTop: rect.top - viewportTop,
+    matchBottom: rect.bottom - viewportTop,
+    viewportHeight: scroller.clientHeight,
+    viewportWidth: scroller.clientWidth,
+    scrollTop: scroller.scrollTop,
+  };
+}
+
+/**
+ * Measures the first occurrence of `text` in the editor's chapter content against the element that
+ * actually scrolls that content. See {@link locateEditorScrollerAndAct}.
+ *
+ * @returns `undefined` when the editor has no scrolling content or the text is not in the chapter
+ */
+async function readTextGeometry(
+  editorFrame: Frame,
+  text: string,
+): Promise<TextGeometry | undefined> {
+  return editorFrame.evaluate(locateEditorScrollerAndAct, { needle: text });
+}
+
+/**
+ * Waits until `text` is in the chapter and has stopped moving — two reads 250 ms apart agree — and
+ * answers where it came to rest. Smooth scrolling means a single read can catch the text
+ * mid-flight.
+ */
+async function waitForGeometryToSettle(
+  editorFrame: Frame,
+  text: string,
+  timeout = 30_000,
+): Promise<TextGeometry> {
+  let previous: TextGeometry | undefined;
+  let settled: TextGeometry | undefined;
+  await expect(async () => {
+    const current = await readTextGeometry(editorFrame, text);
+    const isResting =
+      !!current &&
+      !!previous &&
+      current.scrollTop === previous.scrollTop &&
+      current.matchTop === previous.matchTop;
+    previous = current;
+    expect(isResting).toBe(true);
+    settled = current;
+  }).toPass({ timeout, intervals: [250] });
+  if (!settled) throw new Error(`"${text}" never settled in the editor`);
+  return settled;
+}
+
+/**
+ * Navigates the editor to `reference` and pins its scroll to the top or bottom of the chapter, so a
+ * test starts from a known position rather than wherever the previous test's jump left it.
+ *
+ * @param settleText Text in the target chapter used to confirm the chapter is loaded and at rest
+ */
+async function showEditorAt(
+  mainPage: Page,
+  editorFrame: Frame,
+  reference: string,
+  settleText: string,
+  pinTo: 'top' | 'bottom',
+): Promise<TextGeometry> {
+  await navigateToolbarBcv(mainPage, reference);
+  await waitForGeometryToSettle(editorFrame, settleText);
+  await editorFrame.evaluate(locateEditorScrollerAndAct, { pinTo });
+  return waitForGeometryToSettle(editorFrame, settleText);
+}
+
+/** Asserts the text came to rest entirely inside the editor's scroll viewport. */
+async function expectFullyInView(editorFrame: Frame, text: string): Promise<TextGeometry> {
+  const geometry = await waitForGeometryToSettle(editorFrame, text);
+  expect(geometry.matchTop).toBeGreaterThanOrEqual(0);
+  expect(geometry.matchBottom).toBeLessThanOrEqual(geometry.viewportHeight);
+  return geometry;
+}
+
+/**
+ * How far below the scroll viewport's top edge a scrolled-to match's first line should land.
+ * Mirrors `RANGE_SCROLL_TOP_OFFSET` in
+ * `extensions/src/platform-scripture-editor/src/editor-dom.util.ts`.
+ */
+const EXPECTED_MATCH_TOP_OFFSET = 80;
+
+/** How far the resting position may drift from that offset — a couple of lines of font metrics. */
+const MATCH_TOP_TOLERANCE = 50;
+
+/**
+ * Asserts a jump that had to scroll came to rest with the MATCH's own first line just below the top
+ * of the viewport — not merely somewhere on screen.
+ *
+ * This is what separates scrolling to the match from scrolling to the start of its verse. Both
+ * leave the match "visible" whenever the verse is short, so a visibility-only assertion cannot tell
+ * them apart: measured against the verse-start behaviour, a mid-verse match rests ~150 px lower
+ * than this band allows, because the verse's start takes the offset instead.
+ *
+ * @param verseStartText Text at the START of the match's own verse, several lines above the match.
+ *   Given it, the assertion calibrates itself against the live layout instead of a tolerance:
+ *   whatever the column width and line height turn out to be, only the offset the verse's start
+ *   would have taken can put it back on screen, so requiring it to be ABOVE the viewport is a
+ *   direct statement that the verse start is not what got the offset. Omit for a match too close to
+ *   its verse's start for the two positions to differ by a whole line.
+ */
+async function expectLandedAtTop(
+  editorFrame: Frame,
+  text: string,
+  verseStartText?: string,
+): Promise<TextGeometry> {
+  const geometry = await expectFullyInView(editorFrame, text);
+  expect(geometry.matchTop).toBeGreaterThanOrEqual(EXPECTED_MATCH_TOP_OFFSET - MATCH_TOP_TOLERANCE);
+  expect(geometry.matchTop).toBeLessThanOrEqual(EXPECTED_MATCH_TOP_OFFSET + MATCH_TOP_TOLERANCE);
+  if (verseStartText !== undefined) {
+    const verseStart = await readTextGeometry(editorFrame, verseStartText);
+    if (!verseStart) throw new Error(`"${verseStartText}" is not in the chapter on screen`);
+    expect(verseStart.matchTop).toBeLessThan(0);
+  }
+  return geometry;
+}
+
+/**
+ * Resizes the first app window's content area to `width`, keeping its height, and returns a
+ * function that restores the original size.
+ */
+async function setWindowContentWidth(
+  electronApp: ElectronApplication,
+  width: number,
+): Promise<() => Promise<void>> {
+  const original = await electronApp.evaluate(({ BrowserWindow }, newWidth) => {
+    const [appWindow] = BrowserWindow.getAllWindows();
+    const [originalWidth, originalHeight] = appWindow.getContentSize();
+    appWindow.setContentSize(newWidth, originalHeight);
+    return { width: originalWidth, height: originalHeight };
+  }, width);
+  return async () => {
+    await electronApp.evaluate(({ BrowserWindow }, size) => {
+      const [appWindow] = BrowserWindow.getAllWindows();
+      appWindow.setContentSize(size.width, size.height);
+    }, original);
+  };
 }
 
 /**
@@ -868,6 +1097,9 @@ test.describe('Search History', () => {
     // from what is already recorded, so a write reaching history here can only be explained by the
     // options-change effect itself.
     await searchInput.fill(secondTerm);
+    // Filling the search box dismisses the filters panel — it is a non-modal popover, so focus
+    // landing outside it closes it. Reopen for the second option change.
+    await openFiltersPanel(frame);
     const matchCaseCheckbox = frame.locator('#matchCase');
     await matchCaseCheckbox.click();
     await expect(matchCaseCheckbox).toBeChecked();
@@ -960,6 +1192,78 @@ test.describe('Search Filters', () => {
     await matchCaseCheckbox.press('Escape');
     await expect(wholeWordRadio).not.toBeVisible({ timeout: 5_000 });
   });
+
+  test('should keep the filters button still while a filter change re-runs the search', async ({
+    mainPage,
+  }) => {
+    // The filters button ends a right-aligned toolbar, so anything that narrows the Find panel — a
+    // scrollbar appearing, for one — slides it sideways, and the open panel anchored to it jumps.
+    // Changing a filter re-runs the search and resizes the results, which is exactly when that
+    // would happen. The shift can settle back once the search finishes, so a single before/after
+    // reading would miss it: the position is sampled on every frame from the click until a second
+    // after the new count appears.
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, FILTER_SENSITIVE_TERM);
+    const counterBefore = await frame.locator('.tw\\:tabular-nums').textContent();
+
+    await openFiltersPanel(frame);
+    const filtersButton = frame.getByRole('button', { name: /toggle filters/i });
+    const positionsDuringReRun = filtersButton
+      .evaluate(
+        (button, { previousCount, settleMs, timeoutMs }) =>
+          new Promise<number[]>((resolve) => {
+            const positions: number[] = [];
+            const startedAt = performance.now();
+            let countChangedAt: number | undefined;
+            const sample = () => {
+              positions.push(button.getBoundingClientRect().x);
+              const now = performance.now();
+              const count = button.ownerDocument.querySelector('.tw\\:tabular-nums')?.textContent;
+              if (
+                countChangedAt === undefined &&
+                typeof count === 'string' &&
+                count !== previousCount
+              )
+                countChangedAt = now;
+              const isDone =
+                countChangedAt === undefined
+                  ? now - startedAt >= timeoutMs
+                  : now - countChangedAt >= settleMs;
+              if (isDone) resolve(positions);
+              else requestAnimationFrame(sample);
+            };
+            requestAnimationFrame(sample);
+          }),
+        // Below Playwright's per-test timeout, so a re-run that never reports a new count still
+        // resolves with the positions it sampled instead of dying with no assertion output.
+        { previousCount: counterBefore, settleMs: 1_000, timeoutMs: 35_000 },
+      )
+      // Only awaited on the success path below, so a throw before that would leave this pending:
+      // the sampling loop runs its full timeout into the tests that follow, and if the worker tears
+      // the app down first the rejection surfaces unattached, as a second error on a run that
+      // already has a real failure to report.
+      .catch((): number[] => []);
+
+    let positions: number[];
+    try {
+      // Whole word moves this term's count (52 -> 51), so the counter proves the search re-ran.
+      await frame.locator('#wordRestriction-wholeWord').click();
+      await waitForCounterToChangeFrom(frame, counterBefore);
+      positions = await positionsDuringReRun;
+    } finally {
+      // Closed however this ends. A panel left open by a failure here is state the afterEach reset
+      // has to undo before it can attribute the failure to this test. Bounded and swallowed: when
+      // the failure above was the control going missing, an unbounded press waits on that same
+      // missing control for the whole 120s per-test budget and buries the real assertion error
+      // behind a timeout. `resetFindPanel` converges from either state anyway, so this is tidying.
+      await frame
+        .locator('#wordRestriction-wholeWord')
+        .press('Escape', { timeout: 2_000 })
+        .catch(() => {});
+    }
+
+    expect(new Set(positions).size).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1004,5 +1308,202 @@ test.describe('Scope Switching', () => {
       if (await resultsMessage(frame).isVisible()) return;
       throw new Error('Waiting for scope-change search to complete');
     }).toPass({ timeout: 30_000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: jumping to a result scrolls the editor to the match
+// ---------------------------------------------------------------------------
+
+/**
+ * Occurs once in the whole Bible, at the very end of Matthew 5:22 — several lines below its own
+ * verse's start, in a chapter tall enough for the match to still reach the top of the viewport.
+ *
+ * Both properties are load-bearing. A match close to its verse start, or one near the end of a
+ * chapter too short to scroll further, comes to rest in the same place whether the editor scrolls
+ * to the verse or to the match, and so cannot tell the two apart.
+ */
+const MID_CHAPTER_TERM = 'in danger of the fire of Gehenna';
+/**
+ * The start of {@link MID_CHAPTER_TERM}'s own verse (Matthew 5:22), several lines above the match.
+ * Under the verse-start behaviour this is what took the 80 px offset; under the match behaviour it
+ * is pushed off the top of the viewport. See {@link expectLandedAtTop}.
+ */
+const MID_CHAPTER_VERSE_START_TERM = 'everyone who is angry';
+/**
+ * One of the two reported repros: occurs once in the whole Bible, at the end of Genesis 10:19 — a
+ * mid-chapter verse (19 of 32) in a chapter tall enough to scroll.
+ */
+const REPORTED_REPRO_TERM = 'Lasha';
+/** Occurs first in Genesis 14:1, the top of a 24-verse chapter. */
+const CHAPTER_START_TERM = 'Ellasar';
+/** Occurs once in Genesis, in 10:32 — the chapter's last verse. */
+const CHAPTER_END_TERM = 'divided from these';
+/** A name from Matthew 1, used to confirm the editor is resting on that chapter. */
+const OTHER_CHAPTER_SETTLE_TERM = 'Zerubbabel';
+/** Content width that squeezes the editor column well below its width at the suite's 1280 px. */
+const NARROW_WINDOW_WIDTH = 960;
+
+test.describe('Jumping to a result scrolls the editor to the match', () => {
+  /**
+   * Set by the narrow-width test. Restored here rather than in that test's own `finally`, because
+   * the window belongs to the whole worker: a Playwright TEST timeout unwinds the test without
+   * running its `finally`, which would leave every later test in the worker at the narrow width.
+   */
+  let restoreWindowSize: (() => Promise<void>) | undefined;
+
+  test.afterEach(async () => {
+    const restore = restoreWindowSize;
+    restoreWindowSize = undefined;
+    await restore?.();
+  });
+
+  test('same chapter: a match below the fold scrolls into view', async ({ mainPage }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    const before = await showEditorAt(
+      mainPage,
+      editorFrame,
+      'Matthew 5:1',
+      MID_CHAPTER_TERM,
+      'top',
+    );
+    // Positive control: the match starts below the viewport, so an editor that does not scroll fails.
+    expect(before.matchTop).toBeGreaterThan(before.viewportHeight);
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
+    await firstResultCard(frame).click();
+
+    const after = await expectLandedAtTop(
+      editorFrame,
+      MID_CHAPTER_TERM,
+      MID_CHAPTER_VERSE_START_TERM,
+    );
+    expect(after.scrollTop).not.toBe(before.scrollTop);
+  });
+
+  test('the reported repro: a match at the end of a mid-chapter verse lands at the top', async ({
+    mainPage,
+  }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    const before = await showEditorAt(
+      mainPage,
+      editorFrame,
+      'Genesis 10:1',
+      REPORTED_REPRO_TERM,
+      'top',
+    );
+    // Positive control: the match starts below the viewport, so an editor that does not scroll fails.
+    expect(before.matchTop).toBeGreaterThan(before.viewportHeight);
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, REPORTED_REPRO_TERM);
+    await firstResultCard(frame).click();
+
+    // No verse-start calibration here: "Lasha" is at the end of a verse only a line or two tall, so
+    // the verse's start stays on screen either way. What this pins is the reported symptom — the
+    // match ending up off-screen — rather than telling the two scroll targets apart, which
+    // MID_CHAPTER_TERM does.
+    await expectLandedAtTop(editorFrame, REPORTED_REPRO_TERM);
+  });
+
+  test('different chapter: the match lands fully in view, not against the bottom edge', async ({
+    mainPage,
+  }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
+    // Positive control: the match's chapter is not what the editor is showing.
+    expect(await readTextGeometry(editorFrame, MID_CHAPTER_TERM)).toBeUndefined();
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
+    await firstResultCard(frame).click();
+
+    await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM, MID_CHAPTER_VERSE_START_TERM);
+  });
+
+  test('different chapter, opened with a double-click: the match lands fully in view', async ({
+    mainPage,
+  }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
+    expect(await readTextGeometry(editorFrame, MID_CHAPTER_TERM)).toBeUndefined();
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
+    await firstResultCard(frame).dblclick();
+
+    await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM, MID_CHAPTER_VERSE_START_TERM);
+  });
+
+  test('a match at the start of a chapter scrolls up into view', async ({ mainPage }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    const before = await showEditorAt(
+      mainPage,
+      editorFrame,
+      'Genesis 14:24',
+      CHAPTER_START_TERM,
+      'bottom',
+    );
+    // Positive control: the match is above the viewport.
+    expect(before.matchBottom).toBeLessThan(0);
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, CHAPTER_START_TERM);
+    await firstResultCard(frame).click();
+
+    await expectFullyInView(editorFrame, CHAPTER_START_TERM);
+  });
+
+  test('a match at the end of a chapter scrolls into view', async ({ mainPage }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    const before = await showEditorAt(
+      mainPage,
+      editorFrame,
+      'Genesis 10:1',
+      CHAPTER_END_TERM,
+      'top',
+    );
+    expect(before.matchTop).toBeGreaterThan(before.viewportHeight);
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, CHAPTER_END_TERM);
+    await firstResultCard(frame).click();
+
+    await expectFullyInView(editorFrame, CHAPTER_END_TERM);
+  });
+
+  test('at a narrow width, same-chapter and different-chapter matches land in view', async ({
+    mainPage,
+    electronApp,
+  }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    const wide = await showEditorAt(mainPage, editorFrame, 'Matthew 5:1', MID_CHAPTER_TERM, 'top');
+    restoreWindowSize = await setWindowContentWidth(electronApp, NARROW_WINDOW_WIDTH);
+
+    const narrow = await showEditorAt(
+      mainPage,
+      editorFrame,
+      'Matthew 5:1',
+      MID_CHAPTER_TERM,
+      'top',
+    );
+    // Positive control: the editor really is narrower, or this only repeats the full-width case.
+    expect(narrow.viewportWidth).toBeLessThan(wide.viewportWidth);
+    expect(narrow.matchTop).toBeGreaterThan(narrow.viewportHeight);
+
+    const sameChapterFrame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(sameChapterFrame, MID_CHAPTER_TERM);
+    await firstResultCard(sameChapterFrame).click();
+    await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM, MID_CHAPTER_VERSE_START_TERM);
+
+    await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
+    // Positive control: the match's chapter is not what the editor is showing.
+    expect(await readTextGeometry(editorFrame, MID_CHAPTER_TERM)).toBeUndefined();
+
+    const otherChapterFrame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(otherChapterFrame, MID_CHAPTER_TERM);
+    await firstResultCard(otherChapterFrame).click();
+    await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM, MID_CHAPTER_VERSE_START_TERM);
   });
 });

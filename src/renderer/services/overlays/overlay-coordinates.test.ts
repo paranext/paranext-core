@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import {
   translateCoordinates,
   getWebViewIframe,
+  getWebViewIframeZoom,
   clampToViewport,
   isWebViewVisible,
   isPositionInViewport,
@@ -88,6 +89,63 @@ describe('overlay-coordinates', () => {
     it('should return the original coordinates if iframe is not found', () => {
       const result = translateCoordinates('non-existent', { x: 10, y: 20 });
       expect(result).toEqual({ x: 10, y: 20 });
+    });
+
+    it('should scale the iframe-relative offset by the iframe CSS zoom', () => {
+      mockIframe.style.zoom = '1.5';
+      expect(mockIframe.style.zoom).toBe('1.5');
+
+      // An inner point at x renders zoom * x from the iframe's left edge, and the iframe's own
+      // rect is unchanged by its zoom: (100 + 1.5 * 300, 50 + 1.5 * 200)
+      const result = translateCoordinates('test-webview-1', { x: 300, y: 200 });
+      expect(result).toEqual({ x: 550, y: 350 });
+    });
+
+    it('should not scale when the iframe carries no CSS zoom', () => {
+      mockIframe.style.zoom = '';
+
+      const result = translateCoordinates('test-webview-1', { x: 300, y: 200 });
+      expect(result).toEqual({ x: 400, y: 250 });
+    });
+
+    it('should treat a unit-bearing CSS zoom as unscaled', () => {
+      mockIframe.style.zoom = '150%';
+      expect(mockIframe.style.zoom).toBe('150%');
+
+      const result = translateCoordinates('test-webview-1', { x: 300, y: 200 });
+      expect(result).toEqual({ x: 400, y: 250 });
+    });
+  });
+
+  describe('getWebViewIframeZoom', () => {
+    let mockIframe: HTMLIFrameElement;
+
+    beforeEach(() => {
+      mockIframe = document.createElement('iframe');
+      mockIframe.setAttribute('data-web-view-id', 'test-webview-1');
+      document.body.appendChild(mockIframe);
+    });
+
+    afterEach(() => {
+      document.body.removeChild(mockIframe);
+    });
+
+    it('reports the iframe zoom when one is set', () => {
+      mockIframe.style.zoom = '1.5';
+      expect(getWebViewIframeZoom('test-webview-1')).toBe(1.5);
+    });
+
+    it('reports 1 for an iframe with no zoom set', () => {
+      expect(getWebViewIframeZoom('test-webview-1')).toBe(1);
+    });
+
+    it('reports 1 for an iframe with an empty-string zoom', () => {
+      mockIframe.style.zoom = '';
+      expect(getWebViewIframeZoom('test-webview-1')).toBe(1);
+    });
+
+    it('reports 1 for an unknown web view id', () => {
+      expect(getWebViewIframeZoom('non-existent')).toBe(1);
     });
   });
 

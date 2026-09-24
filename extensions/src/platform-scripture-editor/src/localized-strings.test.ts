@@ -11,6 +11,8 @@ import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.c
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
+import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
+import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
 
 type LocalizedStringsFile = {
   metadata?: Record<string, { fallbackKey?: string }>;
@@ -326,6 +328,22 @@ describe.each(SAVE_NOTIFICATION_KEYS)('save notification %s', (key) => {
   });
 });
 
+// The toolbar button that opens the team layout dialog. Its label names the dialog, so it has to
+// stay in step with the dialog's own title in the platform shell's locale assets.
+describe.each([...TEAM_LAYOUT_BUTTON_STRING_KEYS])('team layout button label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
 // The correction notice names the project AND the chapter through placeholders, so those slots have
 // to survive any later edit to the string in either locale. The chapter slots matter as much as the
 // project one: a repair carried by the chapter-switch flush describes the chapter the user just
@@ -350,3 +368,22 @@ describe.each(['en', 'es'])('save failed notification in %s', (locale) => {
     ).toContain('{projectName}');
   });
 });
+
+// The personal structure-protection lock button in the editor tab header: its state tooltips, its
+// disabled tooltips, and its aria-label.
+describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
+  'structure protection label %s',
+  (key) => {
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);

@@ -252,6 +252,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-builder --publish never --linux
+          # In the same block rather than a following step: a broken snap should fail the release
+          # build here, before anything downstream treats it as a good one.
+          npm run assert:snap-metadata
 
       # The Linux failures worth debugging leave their evidence outside the build's own
       # output: snapcraft's log holds the real mksquashfs error rather than the bare
@@ -277,7 +280,7 @@ jobs:
           if-no-files-found: warn
 
       # Creates the tag, the draft and the generated notes, and attaches NO binaries. The release is
-      # a fixed point in Git history for the Paratext 10 Studio build to construct its own releases
+      # a fixed point in Git history for the Paratext 10 build to construct its own releases
       # from, not a download (see LICENSING.md, "The distributed application"). `artifacts` is an
       # optional input, so omitting it leaves everything else about the release intact.
       #

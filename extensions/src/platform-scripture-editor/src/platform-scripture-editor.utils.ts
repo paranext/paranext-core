@@ -272,6 +272,37 @@ export async function formatEditorTitle(
   return title;
 }
 
+/**
+ * The project name a tab title shows: the project's short name (`platform.name`), falling back to
+ * the project id when the setting is unavailable.
+ *
+ * Deliberately NOT `formatProjectName`. A tab strip is the most space-constrained surface in the
+ * app, so appending the full name would push the short name — the field a Paratext user identifies
+ * a project by — toward the truncation it is supposed to survive. Short-name-first holds here in
+ * the strongest form available: the short name is the only name shown.
+ *
+ * Lives here rather than inline in `main.ts`'s title callback so that the choice of setting is
+ * pinned by a test. `formatEditorTitle`'s own tests inject this name, so they stay green whichever
+ * setting feeds them; without this seam, a swap to `platform.fullName` changes every tab title and
+ * no test notices.
+ *
+ * The project-id fallback is defensive rather than reachable in production: the C# data provider
+ * special-cases `platform.name` to `scrText.Name`, and the setting carries a contribution default,
+ * so a project served by it always answers. It guards a third-party project data provider that does
+ * not, and an unavailable provider.
+ *
+ * @param papi The PAPI backend.
+ * @param projectId The project whose name the tab shows.
+ * @returns The project's short name, or the project id when it has none.
+ */
+export async function getTabTitleProjectName(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<string> {
+  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+  return (await pdp.getSetting('platform.name')) ?? projectId;
+}
+
 // #endregion Editor Title Formatting
 
 /**
@@ -1394,8 +1425,8 @@ export async function updateRelatedTextCollectionPanel(
     // provider declines to supply one. Worth an error rather than silence: a failed re-point is not
     // self-correcting. `projectId` is not in `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any
     // re-point has succeeded the panel's saved definition carries a project and `explicitProjectId`
-    // wins in `resolveTextCollectionProjectId` from then on — the scroll-group fallback that used to
-    // correct a stale panel on the next navigation no longer runs.
+    // wins in `resolveTextCollectionProjectId` from then on, and nothing but another re-point will
+    // move the panel.
     if (reloadedId === undefined)
       papi.logger.error(
         `Text Collection re-point to ${projectId} did not take: reloadWebView returned no id for panel ${existingPanel.id}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,

@@ -22,7 +22,11 @@
  * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { waitForAppReady } from '../../../fixtures/helpers';
 import {
+  COLUMN_FLOOR_CEILING_PX,
+  dragEditorColumnDividerLeft,
+  getEditorColumnWidth,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
@@ -40,13 +44,6 @@ test.use({
 /** Sub-pixel layout rounding shows up as a 1px excess that is not a real overrun. */
 const ROUNDING_TOLERANCE_PX = 1;
 
-/**
- * `SIMPLE_COLUMN_MIN_WIDTH_PX` from `simple-layout.data.ts`, plus room for the rounding the dock's
- * flex weights introduce. Asserted as an upper bound on the column, so the test states that the
- * drag really did reach the floor rather than stopping somewhere comfortable.
- */
-const COLUMN_FLOOR_CEILING_PX = 310;
-
 /** A block whose marker is more than one character, so a clipped marker is measurable. */
 const MULTI_CHARACTER_MARKER = 'q2';
 
@@ -57,6 +54,9 @@ test.describe('paragraph-style trigger at the editor column floor', () => {
     // Heavy isolated test (own Electron instance + backend-readiness gates). 3x "slow" budget.
     test.slow();
 
+    // This is a Simple-mode spec, so the onboarding tour opens on its own; suppress it before its
+    // full-screen overlay can intercept the BCV trigger click below.
+    await waitForAppReady(mainPage);
     // No `waitForHomeTab`: simple mode loads the static simpleLayout, which has no Home tab.
     await makeSampleProjectEditable();
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
@@ -76,36 +76,11 @@ test.describe('paragraph-style trigger at the editor column floor', () => {
     await expect(trigger).toContainText(MULTI_CHARACTER_MARKER);
 
     await test.step('drag the editor/resources splitter to the column floor', async () => {
-      // The second divider is the one between the editor column and the resources column.
-      const divider = mainPage.locator('.dock-divider').nth(1);
-      const dividerBox = await divider.boundingBox();
-      expect(dividerBox).not.toBeNull();
-      if (!dividerBox) return;
-
-      const startX = dividerBox.x + dividerBox.width / 2;
-      const y = dividerBox.y + dividerBox.height / 2;
-      await mainPage.mouse.move(startX, y);
-      await mainPage.mouse.down();
-      // Stepped, and with a small first nudge: rc-dock's drag manager starts tracking on the first
-      // move that differs from where the press landed, so a single jump to the target does nothing.
       // The target is far past the floor on purpose — the dock clamps at the floor, which is
       // exactly the state under test.
-      const dragPath = [startX - 5];
-      for (let x = startX - 5; x > 1; x -= 40) dragPath.push(Math.max(x - 40, 1));
-      // Sequenced through a promise chain rather than an await-in-loop: the moves have to arrive in
-      // order, and the same pattern is used in paragraph-style-trigger-narrow.spec.ts.
-      await dragPath.reduce(
-        (previous, x) => previous.then(() => mainPage.mouse.move(x, y)),
-        Promise.resolve(),
-      );
-      await mainPage.mouse.up();
-
-      const columnWidth = await mainPage
-        .locator('.dock-panel')
-        .nth(1)
-        .evaluate((el) => el.getBoundingClientRect().width);
+      await dragEditorColumnDividerLeft(mainPage, Number.POSITIVE_INFINITY);
       expect(
-        Math.round(columnWidth),
+        await getEditorColumnWidth(mainPage),
         'The drag did not reach the column floor, so the assertions below prove nothing',
       ).toBeLessThanOrEqual(COLUMN_FLOOR_CEILING_PX);
     });

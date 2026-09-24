@@ -16,13 +16,114 @@
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     },
     "%webView_find_projectSelector_searchPlaceholder%": {
-      "fallbackKey": "%manageBooks_projectSelector_searchPlaceholder%"
+      "fallbackKey": "%projectSelector_searchPlaceholder%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_searchPlaceholder% key."
+      }
     },
     "%webView_find_projectSelector_openTabsSectionHeading%": {
-      "fallbackKey": "%manageBooks_projectSelector_openTabsSectionHeading%"
+      "fallbackKey": "%projectSelector_openTabsSectionHeading%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_openTabsSectionHeading% key."
+      }
     },
     "%webView_find_projectSelector_otherProjectsSectionHeading%": {
-      "fallbackKey": "%manageBooks_projectSelector_otherProjectsSectionHeading%"
+      "fallbackKey": "%projectSelector_otherProjectsSectionHeading%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_otherProjectsSectionHeading% key."
+      }
+    },
+    "%manageBooks_projectSelector_boundButClosedTooltip%": {
+      "fallbackKey": "%projectSelector_boundButClosedTooltip%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_boundButClosedTooltip% key."
+      }
+    },
+    "%manageBooks_projectSelector_clearAll%": {
+      "fallbackKey": "%projectSelector_clearAll%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_clearAll% key."
+      }
+    },
+    "%manageBooks_projectSelector_filterAriaLabel%": {
+      "fallbackKey": "%projectSelector_groupByAriaLabel%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "The Filter menu is now the Group by menu. Superseded by the platform-wide %projectSelector_groupByAriaLabel% key."
+      }
+    },
+    "%manageBooks_projectSelector_filterGroupByOpenTabs%": {
+      "fallbackKey": "%projectSelector_grouping_openTabs_label%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_grouping_openTabs_label% key, which labels the built-in openTabs grouping."
+      }
+    },
+    "%manageBooks_projectSelector_filterSectionLabel%": {
+      "fallbackKey": "%projectSelector_groupSectionLabel%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_groupSectionLabel% key."
+      }
+    },
+    "%manageBooks_projectSelector_filterShowSelectedOnly%": {
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "ProjectSelector no longer offers a Show selected only checkbox \u2014 it was replaced by the Selection grouping, which buckets rows into Selected and Unselected."
+      }
+    },
+    "%manageBooks_projectSelector_groupSectionLabel%": {
+      "fallbackKey": "%projectSelector_groupSectionLabel%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_groupSectionLabel% key."
+      }
+    },
+    "%manageBooks_projectSelector_openButtonLabel%": {
+      "fallbackKey": "%projectSelector_openButtonLabel%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_openButtonLabel% key."
+      }
+    },
+    "%manageBooks_projectSelector_openTabsSectionHeading%": {
+      "fallbackKey": "%projectSelector_openTabsSectionHeading%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_openTabsSectionHeading% key."
+      }
+    },
+    "%manageBooks_projectSelector_otherProjectsSectionHeading%": {
+      "fallbackKey": "%projectSelector_otherProjectsSectionHeading%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_otherProjectsSectionHeading% key."
+      }
+    },
+    "%manageBooks_projectSelector_searchPlaceholder%": {
+      "fallbackKey": "%projectSelector_searchPlaceholder%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_searchPlaceholder% key."
+      }
+    },
+    "%manageBooks_projectSelector_selectAll%": {
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "ProjectSelector no longer offers a Select all button — selecting every project mounts one data subscription per project, which is a performance hazard on a large installation. Only Clear all remains."
+      }
+    },
+    "%markersChecklist_toolbar_comparativeTexts%": {
+      "fallbackKey": "%markersChecklist_toolbar_comparativeProjects%",
+      "deprecationInfo": {
+        "date": "2026-09-14",
+        "message": "Superseded by %markersChecklist_toolbar_comparativeProjects%, which says \"projects\" rather than \"texts\" to match what the picker selects."
+      }
     },
     "%manageBooks_copy_confirmMergeFromSource%": {
       "fallbackKey": "%manageBooks_copy_onlyNonExistingChapters%"
@@ -242,10 +343,6 @@
       "%manageBooks_genericError%": "An unexpected error occurred.",
       "%manageBooks_projectSelector_boundButClosedTooltip%": "Bound to {group} · not currently open",
       "%manageBooks_projectSelector_clearAll%": "Clear all",
-      "%manageBooks_projectSelector_filterAriaLabel%": "Filter",
-      "%manageBooks_projectSelector_filterGroupByOpenTabs%": "By open tabs",
-      "%manageBooks_projectSelector_filterSectionLabel%": "Filter",
-      "%manageBooks_projectSelector_filterShowSelectedOnly%": "Show selected only",
       "%manageBooks_projectSelector_groupSectionLabel%": "Group",
       "%manageBooks_projectSelector_openButtonLabel%": "Open",
       "%manageBooks_projectSelector_openTabsSectionHeading%": "Opened project & resource tabs",
@@ -254,6 +351,15 @@
       "%manageBooks_projectSelector_selectAll%": "Select all",
       "%manageBooks_projectSelector_versificationSectionHeading%": "{0} versification",
       "%manageBooks_projectSelector_versificationUnknownSectionHeading%": "Unknown versification",
+      "%manageBooks_projectType_Auxiliary%": "Auxiliary",
+      "%manageBooks_projectType_BackTranslation%": "Back translation",
+      "%manageBooks_projectType_ConsultantNotes%": "Consultant notes",
+      "%manageBooks_projectType_Daughter%": "Daughter",
+      "%manageBooks_projectType_Standard%": "Standard",
+      "%manageBooks_projectType_StudyBible%": "Study Bible",
+      "%manageBooks_projectType_StudyBibleAdditions%": "Study Bible additions",
+      "%manageBooks_projectType_TransliterationManual%": "Transliteration (manual)",
+      "%manageBooks_projectType_TransliterationWithEncoder%": "Transliteration (with encoder)",
       "%manageBooks_filter_buttonAriaLabel%": "Filter",
       "%manageBooks_filter_clearButton%": "Clear filter",
       "%manageBooks_filter_menuLabel%": "Show",
@@ -484,6 +590,7 @@
       "%webView_find_showingResultsOfMore%": "Showing {visibleNumber} of more than {totalNumber} results. Refine your search to see fewer results.",
       "%webView_find_title%": "Find",
       "%webView_find_toggleFilters%": "Toggle filters",
+      "%webView_find_filtersPanel%": "Search filters",
       "%webView_find_matchContentIn%": "Match content in",
       "%webView_find_allText%": "Any text",
       "%webView_find_allText_tooltip%": "Including introductions, titles, headings, footnotes, cross references, etc.",
@@ -616,6 +723,7 @@
       "%markersChecklist_settings_helpIconAriaLabel%": "Help",
       "%markersChecklist_toolbar_primaryProject%": "Select primary Scripture text",
       "%markersChecklist_toolbar_comparativeTexts%": "Select comparative texts",
+      "%markersChecklist_toolbar_comparativeProjects%": "Select comparative projects",
       "%markersChecklist_toolbar_verseRange%": "Select verse range",
       "%markersChecklist_toolbar_copy%": "Copy",
       "%markersChecklist_toolbar_view%": "View",

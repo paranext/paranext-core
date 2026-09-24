@@ -15,6 +15,7 @@ import {
 import {
   deepClone,
   ensureArray,
+  isString,
   escapeStringRegexp,
   getErrorMessage,
   normalizeProjectId,
@@ -568,12 +569,28 @@ async function internalGetMetadataWithRetries(
       );
   }
   if (allProjectsMetadataArray.length === 0) {
-    logger.warn(
-      `Did not find any project metadata${retryTimes > 0 ? ` on retry ${retryTimes}` : ''} for ${JSON.stringify(options)} after the grace period. If you expected to find projects for these filters, this probably indicates a problem. Maybe not all PDPFs loaded in time.`,
-    );
+    const message = `Did not find any project metadata${retryTimes > 0 ? ` on retry ${retryTimes}` : ''} for ${JSON.stringify(options)} after the grace period. If you expected to find projects for these filters, this probably indicates a problem. Maybe not all PDPFs loaded in time.`;
+    if (namesOneProject(options)) logger.debug(message);
+    else logger.warn(message);
   }
 
   return allProjectsMetadataArray;
+}
+
+/**
+ * Whether a metadata query asks after exactly one project. Such a query can legitimately come back
+ * empty: the caller asked whether that project exists and it does not (yet), and
+ * `getMetadataForProject` already reports that to its caller as a rejection, so an empty answer is
+ * not worth a warning in the production log — a consumer that retries such a lookup on a timer
+ * would otherwise write one per attempt. An unfiltered query, or one naming several projects,
+ * returning nothing still points at a platform problem and keeps its warning. An empty list is no
+ * filter at all (see `isProjectIdIncluded`), so it counts as unfiltered; an empty string is a
+ * filter that matches nothing, so it counts as naming one project.
+ */
+function namesOneProject(options: ProjectMetadataFilterOptions): boolean {
+  const { includeProjectIds } = options;
+  if (includeProjectIds === undefined) return false;
+  return isString(includeProjectIds) || includeProjectIds.length === 1;
 }
 
 function transformGetMetadataForProjectParametersToFilter(

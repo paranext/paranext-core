@@ -22,7 +22,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
     ///
     /// NOT covered, deliberately: the body of <c>RecomputeDblResourcesUpdateStatus</c> past its
     /// <c>_hasFetchedResources</c> guard — the gate and the one line joining the two halves,
-    /// <c>ProjectUpdateStatus(_resources, InstalledDblIds())</c>. Reaching it needs
+    /// <c>ProjectUpdateStatus(_resources, InstalledProjectIdsByDblId())</c>. Reaching it needs
     /// <c>_resources</c> populated, and its only writer is a live DBL download, so every test here
     /// returns at that guard. Replacing that call's arguments therefore passes the suite. Read the
     /// count below as covering the two halves, not the seam between them; the seam is verified by
@@ -36,7 +36,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
         /// <summary>
         /// A catalog entry whose <see cref="InstallableResource.ExistingScrText"/> throws. That
-        /// property is the live project-collection lookup the installed-uid set exists to avoid, so
+        /// property is the live project-collection lookup the installed-project map exists to avoid, so
         /// a test that reaches it fails loudly instead of silently depending on collection state.
         /// </summary>
         private sealed class ThrowingLookupResource : InstallableResource
@@ -156,7 +156,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string>()
+                new Dictionary<string, string>()
             );
 
             Assert.That(
@@ -168,7 +168,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// <summary>
         /// The uninstalled answer is `true` — the same value ParatextData returns, since
         /// `IsNewerThanCurrentlyInstalled` opens with `if (!Installed) return true;`. Reaching it
-        /// without touching the project collection is the whole point of the installed-uid set, and
+        /// without touching the project collection is the whole point of the installed-project map, and
         /// the throwing lookup is what proves the collection was not touched.
         /// </summary>
         [Test]
@@ -178,7 +178,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string>()
+                new Dictionary<string, string>()
             );
 
             Assert.That(updateStatus["97196133a859179b"], Is.True);
@@ -202,7 +202,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             // fake's lookup throws; the second stays on the no-lookup path.
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string> { "97196133a859179b" }
+                new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" }
             );
 
             Assert.Multiple(() =>
@@ -225,7 +225,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string> { "97196133a859179b" }
+                new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" }
             );
 
             Assert.That(updateStatus["97196133a859179b"], Is.False);
@@ -244,7 +244,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string> { "97196133a859179b" }
+                new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" }
             );
 
             Assert.That(updateStatus["97196133a859179b"], Is.True);
@@ -268,7 +268,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
                 resources,
-                new HashSet<string> { "97196133a859179b" }
+                new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" }
             );
 
             Assert.Multiple(() =>
@@ -284,14 +284,109 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// exists for, so the uid has to come back, and a project that is not a resource must not.
         /// </summary>
         [Test]
-        public void InstalledDblIds_ReturnsResourceProjectDblIdsAndSkipsOtherProjects()
+        public void InstalledProjectIdsByDblId_ReturnsResourceProjectDblIdsAndSkipsOtherProjects()
         {
-            AddInstalledResourceProject("97196133a859179b");
+            var installed = AddInstalledResourceProject("97196133a859179b");
             ScrTextCollection.Add(new DummyScrText(), true);
 
-            var installedDblIds = DblResourcesDataProvider.InstalledDblIds();
+            var installedProjectIds = DblResourcesDataProvider.InstalledProjectIdsByDblId();
 
-            Assert.That(installedDblIds, Is.EquivalentTo(new[] { "97196133a859179b" }));
+            Assert.That(
+                installedProjectIds.ProjectIdsByDblId.Keys,
+                Is.EquivalentTo(new[] { "97196133a859179b" })
+            );
+            Assert.That(installedProjectIds.IsComplete, Is.True);
+            Assert.That(
+                installedProjectIds.ProjectIdsByDblId["97196133a859179b"],
+                Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
+            );
+        }
+
+        /// <summary>
+        /// The project id a resource is installed as, keyed by its DBL entry uid. This is the whole
+        /// point of the map: a resource project's id is unrelated to the uid it was installed from,
+        /// so nothing in the local project list identifies the catalog row it belongs to, and a
+        /// front end matching the two by prefix gets it wrong for any resource whose ids diverge.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_ReportsTheProjectIdOfAnInstalledResource()
+        {
+            var installed = AddInstalledResourceProject("97196133a859179b");
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                DblResourcesDataProvider.InstalledProjectIdsByDblId()
+            );
+
+            Assert.That(
+                installStatus["97196133a859179b"],
+                Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
+            );
+        }
+
+        /// <summary>
+        /// An incomplete pass cannot tell "the scan skipped a project it could not read" from
+        /// "this resource is not installed", and the TypeScript persists what it is told. Omitting
+        /// the uid leaves the cached row alone; an empty string would demote an installed resource
+        /// and write that to user data, after which the picker reclassifies it as non-DBL.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_OmitsAnAbsentUidWhenTheScanWasIncomplete()
+        {
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                new DblResourcesDataProvider.InstalledResourceProjects(
+                    new Dictionary<string, string>(),
+                    IsComplete: false
+                )
+            );
+
+            Assert.That(installStatus.ContainsKey("97196133a859179b"), Is.False);
+        }
+
+        /// <summary>
+        /// An incomplete pass still reports what it did find — omitting those too would stop a
+        /// genuine install from ever being recognised.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_StillReportsWhatAnIncompleteScanFound()
+        {
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                new DblResourcesDataProvider.InstalledResourceProjects(
+                    new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" },
+                    IsComplete: false
+                )
+            );
+
+            Assert.That(installStatus["97196133a859179b"], Is.EqualTo("PROJ-HBKENG"));
+        }
+
+        /// <summary>
+        /// An uninstalled resource reports an empty string, never an absent key. The front end
+        /// reads an absent key as "the backend said nothing, keep what you have" and an empty
+        /// string as "not installed", so collapsing the two would make a removal undetectable.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_ReportsAnEmptyStringForAnUninstalledResource()
+        {
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                new DblResourcesDataProvider.InstalledResourceProjects(
+                    new Dictionary<string, string>(),
+                    IsComplete: true
+                )
+            );
+
+            Assert.That(installStatus.ContainsKey("97196133a859179b"), Is.True);
+            Assert.That(installStatus["97196133a859179b"], Is.EqualTo(""));
         }
 
         /// <summary>
@@ -301,16 +396,23 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// to prevent.
         /// </summary>
         [Test]
-        public void InstalledDblIds_SkipsAnUnreadableProjectAndKeepsTheRest()
+        public void InstalledProjectIdsByDblId_SkipsAnUnreadableProjectAndKeepsTheRest()
         {
             UnreadableScrText unreadable = new();
             ScrTextCollection.Add(unreadable, true);
             unreadable.IsUnreadable = true;
             AddInstalledResourceProject("6c21e835eb8ca3b2");
 
-            var installedDblIds = DblResourcesDataProvider.InstalledDblIds();
+            var installedProjectIds = DblResourcesDataProvider.InstalledProjectIdsByDblId();
 
-            Assert.That(installedDblIds, Is.EquivalentTo(new[] { "6c21e835eb8ca3b2" }));
+            Assert.That(
+                installedProjectIds.ProjectIdsByDblId.Keys,
+                Is.EquivalentTo(new[] { "6c21e835eb8ca3b2" })
+            );
+            // The flag the whole "a skipped project no longer demotes a resource" behaviour hangs
+            // on. Without this the single `isComplete = false` in the catch could be deleted and
+            // the suite would stay green, because every consumer test constructs the record itself.
+            Assert.That(installedProjectIds.IsComplete, Is.False);
         }
     }
 }

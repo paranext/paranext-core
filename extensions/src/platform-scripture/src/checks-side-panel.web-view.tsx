@@ -16,6 +16,7 @@ import {
   isPlatformError,
   LAST_SCR_BOOK_NUM,
   Mutex,
+  normalizeProjectId,
 } from 'platform-bible-utils';
 import {
   CheckInputRange,
@@ -26,6 +27,7 @@ import {
   CheckRunResult,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { projectNamesFromMetadata } from './project-names.util';
 import { CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
@@ -34,19 +36,9 @@ import {
   CHECKS_SIDE_PANEL_STRING_KEYS,
 } from './checks/checks-side-panel/checks-side-panel.component';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
-
-/**
- * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
- * `@papi`-free utils) so the utils stay importable by the presentational component and its story.
- */
-async function getProjectNames(projectId: string): Promise<ProjectOption> {
-  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const projectShortName = await pdp.getSetting('platform.name');
-  const projectFullName = await pdp.getSetting('platform.fullName');
-  return { shortName: projectShortName, fullName: projectFullName };
-}
 
 /**
  * Web-view types that should count as "open" project tabs for the picker's "Open Tabs" grouping.
@@ -109,6 +101,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useMemo(() => [defaultCheckRunnerCheckDetails], []),
   );
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('ChecksSidePanelWebView');
 
   // Project data loading
   const [projectIdsAndNames]: [{ [projectId: string]: ProjectOption }, boolean] = usePromise(
@@ -120,14 +114,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
         includeProjectInterfaces: ['Scripture', 'Paratext'],
       });
 
-      // Map through all metadata to get ids and names
-      await Promise.all(
-        allMetadata.map(async (metadata) => {
-          const names = await getProjectNames(metadata.id);
-          if (!names) return;
-          projectDict[metadata.id] = names;
-        }),
-      );
+      // Every name this panel shows comes off the metadata already fetched above, so there is no
+      // per-project read left to await.
+      allMetadata.forEach((metadata) => {
+        projectDict[metadata.id] = projectNamesFromMetadata(metadata);
+      });
 
       return projectDict;
     }, []),
@@ -726,15 +717,15 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
 
   // Shape the loaded project metadata into the list the panel renders in the project filter.
-  const projects = useMemo<ChecksSidePanelProject[]>(
-    () =>
-      Object.entries(projectIdsAndNames).map(([id, project]) => ({
-        id,
-        fullName: project.fullName,
-        shortName: project.shortName,
-      })),
-    [projectIdsAndNames],
-  );
+  const projects = useMemo<ChecksSidePanelProject[]>(() => {
+    return Object.entries(projectIdsAndNames).map(([id, project]) => ({
+      id,
+      fullName: project.fullName,
+      shortName: project.shortName,
+      language: project.language,
+      lastUsedAt: recencyMap.get(normalizeProjectId(id)),
+    }));
+  }, [projectIdsAndNames, recencyMap]);
 
   // #endregion
 
