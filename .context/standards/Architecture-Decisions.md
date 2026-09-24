@@ -816,10 +816,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     node state. `EditorRef.setUsj` once measured against node state and skipped that load: the
     numberless glyph stayed, the caret target past the number had nothing to resolve against, and
     the caret stayed where `focus()` put it — the end of the chapter, where the next keys deleted
-    text. `setUsj` now measures against the settled document (`scripture-editors`
-    `packages/platform/src/editor/Editor.tsx`), and a repair always differs from the settled
-    document it was computed from, so it always loads. A load can leave a stray browser selection
-    where the replaced text was, so an existing selection is not taken to be the user's caret.
+    text. `setUsj` skips a document equal to either the settled document or node state, so that a
+    host re-sending the text as it was does not throw away an edit in progress; the editor cannot
+    tell that re-send from this correction, so the push-back forces the load
+    (`setUsj(usj, { force: true })`, `scripture-editors` `packages/platform/src/editor/Editor.tsx`).
+    A load can leave a stray browser selection where the replaced text was, so an existing selection
+    is not taken to be the user's caret.
   - **The target is computed from the repair, never carried across from the pre-repair selection.**
     `EditorRef.getSelection()` addresses the LIVE tree while the repair works on `getUsj()`'s
     SETTLED document, and the two differ for exactly the gesture that matters: a `\c` typed under
