@@ -698,6 +698,34 @@ declare module 'shared/models/web-view.model' {
    */
   export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
   /**
+   * Attribute a web view puts on an element that is not itself scaled — a row, a column, a card — to
+   * say that a click, a focus or a Ctrl/⌘+wheel anywhere inside it means one zoom area. The value is
+   * that area's id, spelled as for {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}. The platform consults it only
+   * where no zoom area's marked element encloses the target: a marked element always wins. It changes
+   * which area the chords, the wheel and the tab menu act on; it scales nothing, and a scope naming
+   * an area the view does not render is ignored.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'data-platform-content-zoom-scope'` itself (or imports the mirror from
+   * `platform-bible-react`) and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_SCOPE_ATTRIBUTE = 'data-platform-content-zoom-scope';
+  /**
+   * Attribute a web view may add to an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} to name
+   * that zoom area for the user. The zoom indicator then reads `<label> · <level>` (for example `HSV
+   * · 120 %`) instead of the level alone. Plain text; the platform reads the first non-empty label
+   * among the area's marked elements. Areas without a label are shown as before.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'data-platform-content-zoom-label'` itself (or uses `ContentZoomRoot`'s
+   * `label` prop) and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_LABEL_ATTRIBUTE = 'data-platform-content-zoom-label';
+  /**
    * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
    * zoom area, with that area's effective factor (own level, else the Settings default):
    * `--platform-content-zoom-main`, `--platform-content-zoom-<area>`, …

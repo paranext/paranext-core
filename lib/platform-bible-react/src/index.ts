@@ -78,7 +78,9 @@ export { ConflictNoteCard } from './components/advanced/comment-list/conflict-no
 export { ContentZoomRoot } from './components/advanced/content-zoom-root.component';
 export type { ContentZoomRootProps } from './components/advanced/content-zoom-root.component';
 export {
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
   ContentZoomTextProvider,
   useContentZoomTextProps,
 } from './context/content-zoom-text.context';

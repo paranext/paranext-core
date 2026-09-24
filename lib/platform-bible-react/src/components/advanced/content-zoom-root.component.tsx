@@ -1,5 +1,8 @@
 import { createElement, forwardRef, HTMLAttributes } from 'react';
-import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from '@/context/content-zoom-text.context';
+import {
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+} from '@/context/content-zoom-text.context';
 
 /**
  * Props for {@link ContentZoomRoot}.
@@ -26,6 +29,16 @@ export type ContentZoomRootProps = HTMLAttributes<HTMLElement> & {
    * @experimental This property is unstable and may change shape or disappear without notice
    */
   as?: 'div' | 'span';
+  /**
+   * Name of this zoom area as the zoom indicator shows it: `<label> · 120 %` instead of `120 %`.
+   * Give it when a view has several areas the user could not otherwise tell apart — the Text
+   * Collection labels each resource's area with the resource's short name. Plain text. When several
+   * elements share an area id, the first one with a label names the area. Omit it and the indicator
+   * shows the level alone.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  label?: string;
 };
 
 /**
@@ -73,14 +86,18 @@ export type ContentZoomRootProps = HTMLAttributes<HTMLElement> & {
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export const ContentZoomRoot = forwardRef<HTMLElement, ContentZoomRootProps>(
-  function ContentZoomRoot({ area, as = 'div', ...props }, ref) {
-    // Built apart from the props literal below so the hyphenated attribute is not checked against
-    // the intrinsic elements' declared attributes, and spread after `props` so `area`, not a
-    // same-named entry in `props`, always wins.
-    const markerAttribute = { [CONTENT_ZOOM_ROOT_ATTRIBUTE]: area ?? '' };
+  function ContentZoomRoot({ area, as = 'div', label, ...props }, ref) {
+    // Built apart from the props literal below so the hyphenated attributes are not checked against
+    // the intrinsic elements' declared attributes, and spread after `props` so `area` and `label`,
+    // not same-named entries in `props`, always win. An empty label names nothing, so it writes no
+    // attribute at all.
+    const markerAttributes = {
+      [CONTENT_ZOOM_ROOT_ATTRIBUTE]: area ?? '',
+      ...(label ? { [CONTENT_ZOOM_LABEL_ATTRIBUTE]: label } : {}),
+    };
     // `createElement` rather than JSX: one call covers both tags, and its intrinsic-element overload
     // takes a ref typed to their shared `HTMLElement` base.
-    return createElement(as, { ...props, ...markerAttribute, ref });
+    return createElement(as, { ...props, ...markerAttributes, ref });
   },
 );
 

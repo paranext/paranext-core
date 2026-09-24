@@ -286,7 +286,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Zoom the content of the pane in or out — one step per wheel notch, or by travel for a trackpad pinch',
     category: 'Zoom',
     context:
-      'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area). A trackpad pinch also zooms with no modifier held — the browser synthesizes it as Ctrl+wheel, which the handler recognizes as pinch travel rather than a notch chord',
+      'Inside a web view — content zoom of the zoom area under the pointer, or whose zoom scope the pointer is in (else the pane’s active area). A trackpad pinch also zooms with no modifier held — the browser synthesizes it as Ctrl+wheel, which the handler recognizes as pinch travel rather than a notch chord',
     // The handler accepts Ctrl or ⌘ as the modifier on every platform, and ignores the gesture when
     // Shift or Alt is held as well.
     keys: { macOS: '⌘ wheel / ⌃ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
