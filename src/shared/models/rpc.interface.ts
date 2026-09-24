@@ -3,6 +3,7 @@ import {
   EventHandler,
   InternalRequestHandler,
   RequestParams,
+  ServerSocketLike,
 } from '@shared/data/rpc.model';
 import {
   SingleMethodDocumentation,
@@ -190,37 +191,6 @@ export interface IRpcEventRegistry {
   tryUnregister(handler: unknown, eventName: string): boolean;
   /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
   unregisterAll(handler: unknown): void;
-}
-
-/**
- * The subset of a socket the main-process RPC layer touches. Both `ws`'s server-side sockets and
- * the DOM `WebSocket` type satisfy it structurally, and so does a MessagePort wrapped to look like
- * one. `RpcServer` and `RpcWebSocketListener` are written against this rather than against
- * `WebSocket` so that main can serve a client over something other than a TCP socket.
- *
- * @experimental
- */
-export interface ServerSocketLike {
-  /**
-   * 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED, as on `WebSocket.readyState`
-   *
-   * @experimental
-   */
-  readonly readyState: number;
-  /** @experimental */
-  send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
-  /** @experimental */
-  close(code?: number, reason?: string): void;
-  /** @experimental */
-  addEventListener<K extends 'close' | 'error' | 'message'>(
-    type: K,
-    listener: (ev: WebSocketEventMap[K]) => void,
-  ): void;
-  /** @experimental */
-  removeEventListener<K extends 'close' | 'error' | 'message'>(
-    type: K,
-    listener: (ev: WebSocketEventMap[K]) => void,
-  ): void;
 }
 
 /**
