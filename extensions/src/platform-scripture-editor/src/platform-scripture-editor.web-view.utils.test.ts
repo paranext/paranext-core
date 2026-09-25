@@ -5,15 +5,22 @@
 // already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
 import { describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
-import type { EditorRef, SelectionRange } from '@eten-tech-foundation/platform-editor';
+import type {
+  DeltaOpInsertNoteEmbed,
+  EditorRef,
+  SelectionRange,
+} from '@eten-tech-foundation/platform-editor';
 import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
+  flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
+  nextEditingNoteOps,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
+  returnFocusToScriptureTextIfDocumentFocused,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
@@ -537,5 +544,176 @@ describe('parseCallerSequenceSetting', () => {
   it('keeps multi-character and non-Latin callers verbatim', () => {
     expect(parseCallerSequenceSetting('๑ ๒ ๓')).toEqual(['๑', '๒', '๓']);
     expect(parseCallerSequenceSetting('aa bb')).toEqual(['aa', 'bb']);
+  });
+});
+
+describe('returnFocusToScriptureTextIfDocumentFocused', () => {
+  function makeEditor() {
+    return { selectAfterNote: vi.fn(), focus: vi.fn() };
+  }
+
+  // A popover closed from another view must not pull focus into this editor: the user's typing
+  // would then be saved into this text instead of the one they are typing in.
+  it('does nothing while the document does not have focus', () => {
+    const editor = makeEditor();
+    const restoreSelection = vi.fn();
+
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, 2, {
+      hasFocus: () => false,
+    });
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, undefined, {
+      hasFocus: () => false,
+    });
+
+    expect(editor.selectAfterNote).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(editor.focus).not.toHaveBeenCalled();
+  });
+
+  it('restores the caret, then focuses, when no note is given', () => {
+    const editor = makeEditor();
+    const calls: string[] = [];
+    const restoreSelection = vi.fn(() => calls.push('restore'));
+    editor.focus.mockImplementation(() => calls.push('focus'));
+
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, undefined, {
+      hasFocus: () => true,
+    });
+
+    expect(calls).toEqual(['restore', 'focus']);
+    expect(editor.selectAfterNote).not.toHaveBeenCalled();
+  });
+
+  it('puts the caret just past the given note, then focuses', () => {
+    const editor = makeEditor();
+    const calls: string[] = [];
+    editor.selectAfterNote.mockImplementation(() => calls.push('selectAfterNote'));
+    editor.focus.mockImplementation(() => calls.push('focus'));
+    const restoreSelection = vi.fn();
+
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, 2, {
+      hasFocus: () => true,
+    });
+
+    expect(editor.selectAfterNote).toHaveBeenCalledWith(2);
+    expect(calls).toEqual(['selectAfterNote', 'focus']);
+    expect(restoreSelection).not.toHaveBeenCalled();
+  });
+});
+
+describe('flushRowEditsThenSave', () => {
+  /** A save debouncer whose pending state the row editor's flush can change, like the real one. */
+  function makeSave(initiallyPending: boolean) {
+    let pending = initiallyPending;
+    const flushedPromise = Promise.resolve();
+    const save = {
+      schedule: () => {
+        pending = true;
+      },
+      isPending: () => pending,
+      flush: vi.fn(() => {
+        if (!pending) return undefined;
+        pending = false;
+        return flushedPromise;
+      }),
+    };
+    return { save, flushedPromise };
+  }
+
+  it("lands the row editor's pending edits before flushing the save", () => {
+    const { save, flushedPromise } = makeSave(true);
+    const calls: string[] = [];
+    const rowEditor = { flushPendingEdits: vi.fn(() => calls.push('row')) };
+    save.flush.mockImplementationOnce(() => {
+      calls.push('save');
+      return flushedPromise;
+    });
+
+    const result = flushRowEditsThenSave(rowEditor, save);
+
+    expect(calls).toEqual(['row', 'save']);
+    expect(result).toBe(flushedPromise);
+  });
+
+  // The row's pending keystrokes are what schedules the save, so it was not pending beforehand.
+  it("flushes the save the row editor's edits scheduled when none was pending yet", () => {
+    const { save, flushedPromise } = makeSave(false);
+    const rowEditor = { flushPendingEdits: vi.fn(() => save.schedule()) };
+
+    const result = flushRowEditsThenSave(rowEditor, save);
+
+    expect(save.flush).toHaveBeenCalledOnce();
+    expect(result).toBe(flushedPromise);
+  });
+
+  it('returns undefined when nothing was pending anywhere', () => {
+    const { save } = makeSave(false);
+
+    expect(flushRowEditsThenSave(undefined, save)).toBeUndefined();
+    expect(save.flush).not.toHaveBeenCalled();
+  });
+
+  it('flushes a pending save when no row session is open', () => {
+    const { save, flushedPromise } = makeSave(true);
+
+    expect(flushRowEditsThenSave(undefined, save)).toBe(flushedPromise);
+  });
+});
+
+describe('nextEditingNoteOps', () => {
+  function noteOp(text: string): DeltaOpInsertNoteEmbed {
+    return {
+      insert: { note: { style: 'f', caller: '+', contents: { ops: [{ insert: text }] } } },
+    };
+  }
+
+  // The row editor's own apply re-keys the note. Its array must keep its identity, or the mounted
+  // row editor reloads mid-typing; and it must hold the new op, or a row editor remounted
+  // mid-session loads the note as it was when the session opened, losing the session's edits.
+  it('refreshes the same array in place when the row editor re-keyed the note', () => {
+    const editingNoteOps = [noteOp('as opened')];
+    const edited = noteOp('as edited');
+
+    const next = nextEditingNoteOps(editingNoteOps, edited, {
+      action: 'rekey',
+      reloadRowEditor: false,
+    });
+
+    expect(next).toBe(editingNoteOps);
+    expect(next?.[0]).toBe(edited);
+  });
+
+  it('hands out a fresh array when the note changed from elsewhere', () => {
+    const editingNoteOps = [noteOp('as opened')];
+    const changed = noteOp('changed in the text');
+
+    const next = nextEditingNoteOps(editingNoteOps, changed, {
+      action: 'follow-note',
+      reloadRowEditor: true,
+    });
+
+    expect(next).not.toBe(editingNoteOps);
+    expect(next).toEqual([changed]);
+  });
+
+  it('leaves the array alone when the note only moved', () => {
+    const opened = noteOp('as opened');
+    const editingNoteOps = [opened];
+
+    const next = nextEditingNoteOps(editingNoteOps, noteOp('as opened'), {
+      action: 'follow-note',
+      reloadRowEditor: false,
+    });
+
+    expect(next).toBe(editingNoteOps);
+    expect(next?.[0]).toBe(opened);
+  });
+
+  it('leaves the array alone when the note did not resolve', () => {
+    const editingNoteOps = [noteOp('as opened')];
+
+    expect(
+      nextEditingNoteOps(editingNoteOps, undefined, { action: 'rekey', reloadRowEditor: false }),
+    ).toBe(editingNoteOps);
   });
 });

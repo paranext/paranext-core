@@ -24,12 +24,19 @@ import {
 } from 'platform-bible-utils';
 import type { MutableRefObject } from 'react';
 import type {
+  DeltaOpInsertNoteEmbed,
   EditorRef,
   MarkerMenuItem as EditorMarkerMenuItem,
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
-import { markerMenuItemToPaletteItem, type MarkerMenuItem } from 'platform-bible-react';
+import {
+  markerMenuItemToPaletteItem,
+  type FootnoteEditorHandle,
+  type MarkerMenuItem,
+} from 'platform-bible-react';
 import { stripMarkerNestingPrefix } from 'platform-bible-react/experimental';
+import type { FlushableDebouncer } from './flushable-debouncer.util';
+import type { NoteSessionUpdateDecision } from './platform-scripture-editor.utils';
 import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
@@ -145,6 +152,56 @@ export function restoreSelectionIfLost(
 ): void {
   if (!editor || editor.getSelection()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
+}
+
+/**
+ * Hands DOM focus back to the Scripture text, putting the caret back first — unless this web view's
+ * document does not have focus.
+ *
+ * A close can be driven from outside this web view (a chapter change from another view or a global
+ * shortcut closes an open popover), and web views share one window: focusing here would pull focus
+ * into this editor, and the user's typing would then be saved into this text instead of the one
+ * they are typing in. `hasFocus`, not the active element, because the note editor blurs itself as
+ * it closes.
+ *
+ * @param editor The live editor handle; no-op when not mounted
+ * @param restoreSelection Puts back the caret the user left in the text
+ * @param afterNoteIndex The note to put the caret just past instead of restoring it
+ * @param ownerDocument The web view's document
+ */
+export function returnFocusToScriptureTextIfDocumentFocused(
+  editor: Pick<EditorRef, 'selectAfterNote' | 'focus'> | null | undefined,
+  restoreSelection: () => void,
+  afterNoteIndex?: number,
+  ownerDocument: Pick<Document, 'hasFocus'> = document,
+): void {
+  if (!ownerDocument.hasFocus()) return;
+  if (afterNoteIndex === undefined) restoreSelection();
+  else editor?.selectAfterNote(afterNoteIndex);
+  editor?.focus();
+}
+
+/**
+ * Lands a footnotes-pane row editor's pending edits in the document, then flushes the debounced
+ * save that reads the document — for the paths that must not lose the last few keystrokes (page
+ * teardown, and an external replace about to overwrite the document).
+ *
+ * The order matters: the row's latest keystrokes sit in the row editor's own live-apply debounce,
+ * not yet in the document, so a save flushed first would write the document without them. Landing
+ * them can itself schedule the save, which is why the save's pending state is read only
+ * afterwards.
+ *
+ * @param rowEditor The open row editor, or `undefined`/`null` when no row session is open
+ * @param save The web view's debounced save
+ * @returns The flushed save's promise, or `undefined` when no save was pending
+ */
+export function flushRowEditsThenSave(
+  rowEditor: Pick<FootnoteEditorHandle, 'flushPendingEdits'> | null | undefined,
+  save: Pick<FlushableDebouncer<unknown[]>, 'isPending' | 'flush'>,
+): Promise<void> | undefined {
+  rowEditor?.flushPendingEdits();
+  if (!save.isPending()) return undefined;
+  return save.flush();
 }
 
 /**
@@ -329,4 +386,33 @@ export function shouldSpaceCommitNoteMarker(
 export function parseCallerSequenceSetting(value: string): string[] | undefined {
   const callers = value.split(/\s+/).filter((caller) => caller.length > 0);
   return callers.length > 0 ? callers : undefined;
+}
+
+/**
+ * The ops array a footnotes-pane note session holds after an editor change, given what
+ * `decideNoteSessionUpdate` made of that change.
+ *
+ * The array's IDENTITY is what the mounted row editor reloads on, so:
+ *
+ * - `reloadRowEditor` (the note changed from elsewhere): a fresh array, which reloads the row.
+ * - `rekey` (the row editor's own apply replaced the note): the SAME array with its op replaced in
+ *   place. The mounted editor is left alone, but an editor remounted mid-session (its row keyed
+ *   afresh) loads from this array, and must load what the note now holds rather than what it held
+ *   when the session opened.
+ * - Otherwise: the array as it was.
+ *
+ * @param editingNoteOps The session's current ops array
+ * @param noteOp The session note's op as the document holds it now, if it resolved
+ * @param decision What the change does to the session
+ * @returns The array the session should hold next
+ */
+export function nextEditingNoteOps(
+  editingNoteOps: DeltaOpInsertNoteEmbed[] | undefined,
+  noteOp: DeltaOpInsertNoteEmbed | undefined,
+  decision: Pick<NoteSessionUpdateDecision, 'action' | 'reloadRowEditor'>,
+): DeltaOpInsertNoteEmbed[] | undefined {
+  if (!noteOp) return editingNoteOps;
+  if (decision.reloadRowEditor) return [noteOp];
+  if (decision.action === 'rekey' && editingNoteOps) editingNoteOps[0] = noteOp;
+  return editingNoteOps;
 }

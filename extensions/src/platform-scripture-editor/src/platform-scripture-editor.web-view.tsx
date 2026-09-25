@@ -196,13 +196,16 @@ import {
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
+  flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
+  nextEditingNoteOps,
   resolvePaletteItemStrings,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
+  returnFocusToScriptureTextIfDocumentFocused,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
@@ -1237,8 +1240,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * Where this view edits notes right now: the footnotes pane in Standard view, the popover
-   * elsewhere, and nowhere in a read-only text (where a caller click still navigates). The
-   * render-scope twin of what `noteCallerOnClick` resolves from refs at click time.
+   * elsewhere, and nowhere in a read-only text (where, in Standard view, a caller click still
+   * navigates). The render-scope twin of what `noteCallerOnClick` resolves from refs at click
+   * time.
    */
   const noteEditingSurface = resolveNoteEditingSurface({
     viewType,
@@ -1554,9 +1558,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const setEditorUsj = useRef((usj: Usj) => {
     // A reload replaces every Lexical key, the note the open editor is bound to included, so no
     // note session survives it on EITHER surface — one left open would keep applying into a note
-    // that is gone, and `replaceEmbedUpdate` can only log the stale key and drop the edit. The
-    // incoming document is authoritative: it overwrites anything the note editor had not applied
-    // yet, exactly as it overwrites the rest of the chapter.
+    // that is gone, and `replaceEmbedUpdate` can only log the stale key and drop the edit. A pane
+    // row's pending edits are saved before an external replace gets here
+    // (`flushPendingDebouncedSave`, which `useEditorPdpSync` calls first); anything else the note
+    // editor had not applied yet is overwritten, exactly as the incoming document overwrites the
+    // rest of the chapter.
     if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
     editorRef.current?.setUsj(usj);
     // The pane now shows this document's notes, so the notes remembered as published no longer
@@ -3456,16 +3462,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    *   would scroll the note they just edited out of view
    */
   const returnFocusToScriptureText = useCallback(
-    (afterNoteIndex?: number) => {
-      // A close can be driven from outside this web view (a chapter change from another view or a
-      // global shortcut closes an open popover), and web views share one window: focusing here would
-      // pull the caret out of whichever view the user is typing in. `hasFocus`, not the active
-      // element, because the note editor blurs itself as it closes.
-      if (!document.hasFocus()) return;
-      if (afterNoteIndex === undefined) restoreEditorSelection();
-      else editorRef.current?.selectAfterNote(afterNoteIndex);
-      editorRef.current?.focus();
-    },
+    (afterNoteIndex?: number) =>
+      returnFocusToScriptureTextIfDocumentFocused(
+        editorRef.current,
+        restoreEditorSelection,
+        afterNoteIndex,
+      ),
     [restoreEditorSelection],
   );
 
@@ -3771,10 +3773,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // reliability of any async work in these events. On plain blur the send proceeds normally.
   useEffect(() => {
     const flush = () => {
-      // A pane row's latest keystrokes are still inside the row editor's own apply debounce, not
-      // yet in the document this save reads.
-      if (paneEditingIndexRef.current !== undefined) paneNoteEditorRef.current?.flushPendingEdits();
-      saveUsjToPdpDebounced.flush();
+      flushRowEditsThenSave(
+        paneEditingIndexRef.current !== undefined ? paneNoteEditorRef.current : undefined,
+        saveUsjToPdpDebounced,
+      );
     };
     const flushOnBlur = () => {
       // A FOCUSED marker palette is an overlay OUTSIDE this iframe, so opening one blurs this
@@ -3804,13 +3806,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * instead of being silently discarded (see the "recent typing wins" comment there). Stable
    * identity (reads only the stable debouncer) so it never re-triggers the sync effect.
    */
-  const flushPendingDebouncedSave = useCallback(() => {
-    // A pane row's latest keystrokes are still inside the row editor's own apply debounce; landing
-    // them first puts them in the save flushed below, as recent typing in the text already is.
-    if (paneEditingIndexRef.current !== undefined) paneNoteEditorRef.current?.flushPendingEdits();
-    if (!saveUsjToPdpDebounced.isPending()) return undefined;
-    return saveUsjToPdpDebounced.flush();
-  }, [saveUsjToPdpDebounced]);
+  const flushPendingDebouncedSave = useCallback(
+    () =>
+      flushRowEditsThenSave(
+        paneEditingIndexRef.current !== undefined ? paneNoteEditorRef.current : undefined,
+        saveUsjToPdpDebounced,
+      ),
+    [saveUsjToPdpDebounced],
+  );
 
   /**
    * `Date.now()` of the last LOCAL editor edit (`undefined` until the first one). Stamped in
@@ -3913,12 +3916,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // note added or removed) that actually moved this note's content. The baseline follows
             // the row editor's own applies too, so the next such comparison is against what the row
             // is showing rather than against the ops it was first loaded with.
-            if (decision.reloadRowEditor && noteOp) editingNoteOps.current = [noteOp];
-            // The row editor's own apply keeps the array's identity, so the mounted editor is left
-            // alone, but refreshes its content: an editor REmounted mid-session (its row keyed
-            // afresh) loads from it, and must load what the note now holds.
-            else if (decision.action === 'rekey' && noteOp && editingNoteOps.current)
-              editingNoteOps.current[0] = noteOp;
+            editingNoteOps.current = nextEditingNoteOps(editingNoteOps.current, noteOp, decision);
             if (decision.refreshBaseline) editingNoteOpsBaseline.current = noteOp;
             if (decision.action === 'rekey') {
               editingNoteIsNew.current = false;
