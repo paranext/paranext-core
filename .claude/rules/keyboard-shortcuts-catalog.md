@@ -31,14 +31,15 @@ renderers (`ShortcutKeys` from `platform-bible-react`) render it as one `Kbd` pe
 
 - Menus show only the first ` / ` alternative, so list first the one a menu should teach.
 - Set `command` only if the chord works everywhere those items appear. Leave it unset for a chord
-  the main process claims regardless of focus (open work: PT-4143) or one that works only in some
-  editor views — unless the main-process handler runs the SAME command as the entry (e.g. the
-  macOS View menu's content-zoom accelerators), in which case the hint cannot lie and `command`
-  may still be set.
+  the main process handles regardless of focus (open work: PT-4143), unless that handler runs this
+  same command (the macOS View menu's content-zoom accelerators); leave it unset, too, for a chord
+  that works only in some editor views.
 - `src/shared/data/keyboard-shortcuts.data.test.ts` pins each `command`'s hint text and the menus
-  that show it, so adding or reusing one needs a deliberate update. It also rejects a chord shared
-  with a DIFFERENT main-process entry; an entry's own main-process location is excluded from that
-  check, since a handler running the entry's own command cannot make its hint lie.
+  that show it, so adding or reusing one needs a deliberate update. It rejects a chord shared with
+  a different main-process entry, and any main-process location of the entry's own except those
+  listed for that entry in `SAME_COMMAND_MAIN_PROCESS_LOCATIONS` — a handler that runs the same
+  command the menu item does. Adding an entry there is a deliberate decision, not a way to silence
+  the check.
 - A menu built in extension code rather than served by the menu data service gets no hint and
   cannot import this core-only catalog. Put the chord in `platform-bible-utils` next to the related
   constants, and have both the catalog entry's `keys` and the menu read it from there, so the two
