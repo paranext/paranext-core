@@ -1390,43 +1390,277 @@ describe('createPendingCommentAnchorSource', () => {
     expect(source.measure()).toBeUndefined();
   });
 
-  it('mark present: follows the union of its fragments at the fraction from where the caret was', () => {
-    const { container, range } = addParagraph('In the beginning');
-    // The caret sat at x=90 when the popover opened, before the mark existed.
-    stubClientRects(range, [new DOMRect(90, 105, 30, 20)]);
+  /**
+   * Where a collapsed range's caret paints, per text node, in the fake layout below. jsdom has no
+   * layout and no `Range.getClientRects` at all, so the tests install one on `Range.prototype` that
+   * reads this map; a range with its own instance stub (via `stubClientRects`) ignores it.
+   */
+  const caretLayouts = new Map<Node, (offset: number) => DOMRect>();
 
-    const source = createPendingCommentAnchorSource(range, 'abc', container);
-
-    // The editor re-rendered the selection into the pending-comment mark, splitting it into two
-    // fragments whose union is left=40, top=100, width=200, height=40.
-    addAnnotationFragment(container, 'abc', [new DOMRect(40, 100, 80, 20)]);
-    addAnnotationFragment(container, 'abc', [new DOMRect(120, 120, 120, 20)]);
-
-    // fraction = (90 - 40) / 200 = 0.25; x = 40 + 0.25 * 200 = 90 (the caret's original x).
-    expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 40 });
+  beforeEach(() => {
+    const caretRects = (range: Range) => {
+      const layout = range.collapsed ? caretLayouts.get(range.startContainer) : undefined;
+      return layout ? [layout(range.startOffset)] : [];
+    };
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value(this: Range) {
+        return caretRects(this);
+      },
+    });
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value(this: Range) {
+        return caretRects(this)[0] ?? new DOMRect();
+      },
+    });
   });
 
-  it('a wrapped selection measured before its second fragment renders is not frozen against the partial width', () => {
+  afterEach(() => {
+    caretLayouts.clear();
+    // jsdom's Range has neither method, so removing the stubs restores it exactly.
+    Reflect.deleteProperty(Range.prototype, 'getClientRects');
+    Reflect.deleteProperty(Range.prototype, 'getBoundingClientRect');
+  });
+
+  /**
+   * A fixed-width-character layout of a text node that starts at `left` on a line at `top` and
+   * wraps after `firstLineChars` characters to `nextLineLeft` on the next line.
+   */
+  type TextLayout = {
+    left: number;
+    top: number;
+    charWidth: number;
+    lineHeight: number;
+    firstLineChars: number;
+    nextLineLeft: number;
+  };
+
+  /**
+   * Lays out `textNode` as `layout` says: its caret positions for collapsed ranges, and — when it
+   * sits in an annotation fragment — the fragment's line boxes.
+   */
+  function layOut(textNode: Text, layout: TextLayout) {
+    const { left, top, charWidth, lineHeight, firstLineChars, nextLineLeft } = layout;
+    const onFirstLine = Math.min(textNode.length, firstLineChars);
+    caretLayouts.set(textNode, (offset) =>
+      offset <= onFirstLine
+        ? new DOMRect(left + offset * charWidth, top, 0, lineHeight)
+        : new DOMRect(
+            nextLineLeft + (offset - onFirstLine) * charWidth,
+            top + lineHeight,
+            0,
+            lineHeight,
+          ),
+    );
+    const lineBoxes = [new DOMRect(left, top, onFirstLine * charWidth, lineHeight)];
+    if (textNode.length > onFirstLine)
+      lineBoxes.push(
+        new DOMRect(
+          nextLineLeft,
+          top + lineHeight,
+          (textNode.length - onFirstLine) * charWidth,
+          lineHeight,
+        ),
+      );
+    const { parentElement } = textNode;
+    if (parentElement?.matches('[class^="annotationId-"]'))
+      stubClientRects(parentElement, lineBoxes);
+  }
+
+  /**
+   * A paragraph of text with a collapsed caret `caretOffset` characters in, and the popover source
+   * built for it — the state when the user asks to add a comment at a caret.
+   */
+  function openAtCaret(text: string, caretOffset: number, layout: TextLayout) {
+    const { container, paragraph } = addParagraph(text);
+    const textNode = paragraph.firstChild;
+    if (!(textNode instanceof Text)) throw new Error('The paragraph should hold one text node');
+    layOut(textNode, layout);
+    const range = document.createRange();
+    range.setStart(textNode, caretOffset);
+    range.collapse(true);
+    const source = createPendingCommentAnchorSource(range, 'abc', container);
+    return { paragraph, source };
+  }
+
+  /**
+   * The editor's re-render marking the pending comment: the paragraph's text is replaced by the
+   * text before the mark, the mark over `[markStart, markEnd)`, and the text after it. The original
+   * text node is detached, so a range in it collapses to the paragraph.
+   */
+  function renderMark(paragraph: HTMLElement, markStart: number, markEnd: number) {
+    const text = paragraph.textContent ?? '';
+    const mark = document.createElement('span');
+    mark.className = 'annotationId-abc';
+    mark.textContent = text.slice(markStart, markEnd);
+    paragraph.replaceChildren(text.slice(0, markStart), mark, text.slice(markEnd));
+    const markText = mark.firstChild;
+    if (!(markText instanceof Text)) throw new Error('The mark should hold one text node');
+    return markText;
+  }
+
+  // "In the beginning" is a spaced line; the long unspaced run the caret sits in below stands for
+  // Thai or Chinese text, where the editor marks the whole run between spaces around the caret.
+  const RUN_TEXT = 'xx abcdefghij yy';
+  const RUN_START = 3;
+  const RUN_END = 13;
+
+  it('a selection: anchors on the left edge of the union of the mark fragments', () => {
     const { container, range } = addParagraph('In the beginning');
-    // The caret sat at x=90 when the popover opened, before the mark existed.
-    stubClientRects(range, [new DOMRect(90, 105, 30, 20)]);
+    stubClientRects(range, [new DOMRect(40, 100, 200, 40)]);
 
     const source = createPendingCommentAnchorSource(range, 'abc', container);
 
-    // The mark's first measurable frame renders only the first fragment of the wrapped selection —
-    // the second line has not painted yet.
-    addAnnotationFragment(container, 'abc', [new DOMRect(40, 100, 80, 20)]);
-    source.measure();
+    // The editor re-rendered the selection into the pending-comment mark, split over two lines
+    // whose union is left=40, top=100, width=200, height=40.
+    addAnnotationFragment(container, 'abc', [new DOMRect(120, 100, 120, 20)]);
+    addAnnotationFragment(container, 'abc', [new DOMRect(40, 120, 80, 20)]);
 
-    // The second fragment paints on a later frame, completing the union used by the earlier
-    // "follows the union ... at the fraction from where the caret was" test: left=40, top=100,
-    // width=200, height=40.
-    addAnnotationFragment(container, 'abc', [new DOMRect(120, 120, 120, 20)]);
+    expect(rectNumbers(source.measure())).toEqual({ x: 40, y: 100, width: 0, height: 40 });
+  });
 
-    // fraction = (90 - 40) / 200 = 0.25; x = 40 + 0.25 * 200 = 90 (the caret's original x). A
-    // fraction taken against the first fragment alone (width 80) and then reused against the full
-    // union would instead land at x = 165.
-    expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 40 });
+  it('a caret: anchors at the caret inside the mark once the mark renders', () => {
+    // Caret 6 characters into the run "abcdefghij" (between "f" and "g").
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 6, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+
+    const mark = renderMark(paragraph, RUN_START, RUN_END);
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+
+    // x = 30 + 6 * 10.
+    expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 20 });
+  });
+
+  it('a caret in a mark that reflows onto one line (a pane widened): stays at the caret', () => {
+    // A narrow pane wraps the run: "abcde" ends line 1 and "fghij" starts line 2, so the caret
+    // 6 characters in sits on line 2.
+    const narrow = { top: 100, charWidth: 10, lineHeight: 20, firstLineChars: 5, nextLineLeft: 0 };
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 6, {
+      ...narrow,
+      left: 0,
+      firstLineChars: 8,
+    });
+    const mark = renderMark(paragraph, RUN_START, RUN_END);
+    layOut(mark, { ...narrow, left: 30 });
+    // Line 2: x = 0 + (6 - 5) * 10; the union spans both lines.
+    expect(rectNumbers(source.measure())).toEqual({ x: 10, y: 100, width: 0, height: 40 });
+
+    // The pane widens and the whole run fits on line 1.
+    layOut(mark, { ...narrow, left: 30, firstLineChars: 100 });
+
+    // x = 30 + 6 * 10, where the caret now paints.
+    expect(rectNumbers(source.measure())).toEqual({ x: 90, y: 100, width: 0, height: 20 });
+  });
+
+  it('a caret in a mark that reflows across two lines (zoomed in): stays at the caret', () => {
+    // Caret 8 characters into the run (between "h" and "i").
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 8, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    const mark = renderMark(paragraph, RUN_START, RUN_END);
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    // x = 30 + 8 * 10.
+    expect(rectNumbers(source.measure())).toEqual({ x: 110, y: 100, width: 0, height: 20 });
+
+    // Zoom 200 %: every length doubles and the run no longer fits on its line — "abcdefg" stays on
+    // line 1, "hij" wraps to line 2, taking the caret with it.
+    layOut(mark, {
+      left: 60,
+      top: 200,
+      charWidth: 20,
+      lineHeight: 40,
+      firstLineChars: 7,
+      nextLineLeft: 0,
+    });
+
+    // Line 2: x = 0 + (8 - 7) * 20; the union spans both lines, top=200, height=80.
+    expect(rectNumbers(source.measure())).toEqual({ x: 20, y: 200, width: 0, height: 80 });
+  });
+
+  it('a caret measured twice in one frame still follows a later reflow', () => {
+    // The popover's positioning can read the anchor twice in one frame, so two identical readings
+    // in a row are no sign the layout has settled for good.
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 8, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    const mark = renderMark(paragraph, RUN_START, RUN_END);
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    expect(rectNumbers(source.measure())).toEqual({ x: 110, y: 100, width: 0, height: 20 });
+    expect(rectNumbers(source.measure())).toEqual({ x: 110, y: 100, width: 0, height: 20 });
+
+    // The next frame: the pane narrows and the run wraps after "abcde", taking the caret to line 2.
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 5,
+      nextLineLeft: 0,
+    });
+
+    // Line 2: x = 0 + (8 - 5) * 10; the union spans both lines.
+    expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 100, width: 0, height: 40 });
+  });
+
+  it('a caret the rendered mark does not contain: anchors on the left edge of the mark', () => {
+    // The mark has painted only its first part so far, which ends before the caret.
+    const { paragraph, source } = openAtCaret(RUN_TEXT, RUN_START + 8, {
+      left: 0,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+    const mark = renderMark(paragraph, RUN_START, RUN_START + 4);
+    layOut(mark, {
+      left: 30,
+      top: 100,
+      charWidth: 10,
+      lineHeight: 20,
+      firstLineChars: 100,
+      nextLineLeft: 0,
+    });
+
+    expect(rectNumbers(source.measure())).toEqual({ x: 30, y: 100, width: 0, height: 20 });
   });
 });
 
@@ -1528,13 +1762,13 @@ describe('createPendingCommentCenterAnchorSource', () => {
     expect(source.measure()).toBeUndefined();
   });
 
-  it("returns a zero-size rect at the container's centre when it has layout", () => {
+  it("returns a zero-size rect at the container's center when it has layout", () => {
     const container = addEditorContainer();
     stubClientRects(container, [new DOMRect(100, 200, 300, 400)]);
 
     const source = createPendingCommentCenterAnchorSource(container);
 
-    // centre x = 100 + 300/2 = 250; centre y = 200 + 400/2 = 400; zero size.
+    // center x = 100 + 300/2 = 250; center y = 200 + 400/2 = 400; zero size.
     expect(rectNumbers(source.measure())).toEqual({ x: 250, y: 400, width: 0, height: 0 });
     expect(source.contextElement).toBe(container);
   });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -1041,4 +1041,19 @@ describe('FootnotesLayout content zoom marker', () => {
       ).toBeNull();
     },
   );
+
+  it('names the footnotes area for the zoom indicator, and names nothing without a label', () => {
+    const { container } = renderPane({ zoomAreaLabel: 'Footnotes' });
+    expect(
+      container.querySelector('[data-platform-content-zoom-root="footnotes"]'),
+    ).toHaveAttribute('data-platform-content-zoom-label', 'Footnotes');
+    cleanup();
+
+    const { container: unlabelledContainer } = renderPane();
+    const unlabelled = unlabelledContainer.querySelector(
+      '[data-platform-content-zoom-root="footnotes"]',
+    );
+    expect(unlabelled).not.toBeNull();
+    expect(unlabelled).not.toHaveAttribute('data-platform-content-zoom-label');
+  });
 });

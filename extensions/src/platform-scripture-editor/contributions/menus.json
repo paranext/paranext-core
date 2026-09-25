@@ -18,6 +18,11 @@
             "label": "%webView_platformScriptureEditor_options%",
             "order": 3
           },
+          "platformScriptureEditor.zoomSection": {
+            "label": "%webView_platformScriptureEditor_zoom%",
+            "order": 3.5,
+            "isExperimental": true
+          },
           "platformScriptureEditor.tools": {
             "label": "%webView_platformScriptureEditor_tools%",
             "order": 4
@@ -49,8 +54,8 @@
             "order": 3
           },
           "platformScriptureEditor.zoom": {
-            "column": "platformScriptureEditor.options",
-            "order": 4,
+            "column": "platformScriptureEditor.zoomSection",
+            "order": 1,
             "isExperimental": true
           },
           "platformScriptureEditor.insertTextualNotes": {
@@ -109,21 +114,24 @@
           },
           {
             "label": "%webView_platformScriptureEditor_zoomIn%",
-            "localizeNotes": "Scripture editor top menu > Options > Zoom in. Enlarges the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected.",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple mode only) > Zoom > Zoom in. Enlarges the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected. Hidden in Power mode, where the tab's own context menu offers the same item.",
             "group": "platformScriptureEditor.zoom",
             "order": 1,
             "command": "platform.webViewContentZoomIn"
           },
           {
             "label": "%webView_platformScriptureEditor_zoomOut%",
-            "localizeNotes": "Scripture editor top menu > Options > Zoom out. Shrinks the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected.",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple mode only) > Zoom > Zoom out. Shrinks the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected. Hidden in Power mode, where the tab's own context menu offers the same item.",
             "group": "platformScriptureEditor.zoom",
             "order": 2,
             "command": "platform.webViewContentZoomOut"
           },
           {
             "label": "%webView_platformScriptureEditor_resetZoomToDefault%",
-            "localizeNotes": "Scripture editor top menu > Options > Reset zoom to default. Returns whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane) to the Settings default zoom.",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple mode only) > Zoom > Reset zoom to default. Returns whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane) to the Settings default zoom. Hidden in Power mode, where the tab's own context menu offers the same item.",
             "group": "platformScriptureEditor.zoom",
             "order": 3,
             "command": "platform.webViewContentZoomReset"

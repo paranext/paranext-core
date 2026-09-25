@@ -252,9 +252,8 @@ export interface IOverlayService {
    * menu data, renders the menu, and auto-executes the selected command. Returns the command string
    * that was executed, or undefined if dismissed.
    *
-   * The menu is drawn at the content zoom of the requesting WebView's pane — of its active area,
-   * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
-   * in and nothing to compensate for.
+   * The menu is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+   * at.
    *
    * @param webViewType The webViewType to look up in the menu data service
    * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
@@ -275,9 +274,8 @@ export interface IOverlayService {
    * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
    * {@link dismissPopover} to close it programmatically.
    *
-   * The popover is drawn at the content zoom of the requesting WebView's pane — of its active area,
-   * for a pane with several zoom areas — capped to stay inside the window. There is nothing to opt
-   * in and nothing to compensate for.
+   * The popover is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+   * at.
    *
    * @param request The popover anchor, content, and behavioral options
    * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
@@ -325,10 +323,8 @@ export interface IOverlayService {
    * the palette is shown, so all filtering — the palette's own search box and text forwarded via
    * {@link updateCommandPalette} — matches against the text the user actually sees.
    *
-   * A palette shown at an anchor is drawn at the content zoom of the requesting WebView's pane — of
-   * its active area, for a pane with several zoom areas; there is nothing to opt in and nothing to
-   * compensate for. A palette shown without an anchor is centred in the window, belongs to no
-   * pane's content, and stays at interface scale.
+   * The palette is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+   * at.
    *
    * @param request The items, optional anchor position, and display options
    * @param webViewId The ID of the WebView requesting the command palette

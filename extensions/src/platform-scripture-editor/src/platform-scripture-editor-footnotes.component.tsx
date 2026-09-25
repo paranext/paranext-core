@@ -141,6 +141,12 @@ export type FootnotesLayoutProps = PropsWithChildren<{
    * nothing rather than announcing that the chapter has no footnotes.
    */
   isLoading?: boolean;
+  /**
+   * Name of the footnotes zoom area as the zoom indicator shows it (`Footnotes · 120 %`), so a zoom
+   * step in the footnotes pane is not mistaken for one in the Scripture text. Omit it and the
+   * indicator shows the level alone.
+   */
+  zoomAreaLabel?: string;
 }>;
 
 export function FootnotesLayout({
@@ -160,6 +166,7 @@ export function FootnotesLayout({
   onPaneFocusChange,
   onPaneFocusLeft,
   isLoading = false,
+  zoomAreaLabel,
 }: FootnotesLayoutProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -675,6 +682,7 @@ export function FootnotesLayout({
             <ContentZoomRoot
               ref={setFootnoteListWrapperRef}
               area="footnotes"
+              label={zoomAreaLabel}
               className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li]:pe-7"
             >
               {footnotes.length === 0 && !isLoading && (

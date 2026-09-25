@@ -1,10 +1,10 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.7.2
+version: 1.7.7
 status: active
 created: 2026-03-04
-last_updated: 2026-09-21
+last_updated: 2026-09-24
 toc: true
 ---
 
@@ -148,6 +148,8 @@ export class FeatureWebViewProvider implements IWebViewProvider {
 
 There is no id-reuse idiom that survives a close: `existingId: '?'` resolves through the **live** dock layout (`findFirstWebViewDefinitionByType` in `src/renderer/services/web-view.service-shard.ts`), so it only finds a currently-open instance — it is a **dedupe** mechanism (don't open a second instance while one is already open; see `openFind` in `extensions/src/platform-scripture/src/main.ts`), not a persistence mechanism. Once a tab is closed it is removed from the layout, and the next `openWebView` mints a fresh id with empty state. For state that must survive close/reopen (or across sessions), use user-scoped `papi.settings` instead of `useWebViewState`.
 
+Pass a stable `default` (a module-level constant or a memoized value) when the returned value feeds an effect's dependency list — an inline `[]` or `{}` is a new object every render.
+
 ### Custom Web View Options
 
 When a web view accepts custom options (project IDs, mode flags, etc.), declare a typed interface that **extends `OpenWebViewOptions`** — do not pass an inline object literal.
@@ -169,50 +171,60 @@ Reference implementations: `extensions/src/platform-scripture/src/find.web-view-
 
 ### Content Zoom Opt-In (experimental)
 
-A web view opts into per-pane content zoom by wrapping the content area **below its own toolbar** in `ContentZoomRoot` from `platform-bible-react` — one element, nothing else:
+Per-pane content zoom scales a web view's **project text** — scripture, note bodies, result snippets, resource text in its own font — and nothing else. A view opts in by marking each element that renders that text with `ContentZoomRoot` from `platform-bible-react`. Buttons, inputs, filters, headers, badges, card frames and pop-ups stay outside every marked element and keep interface scale:
 
 ```tsx
 import { ContentZoomRoot } from 'platform-bible-react';
 
-<div className="tw:flex tw:flex-col tw:h-full">
-  <Toolbar onSelectMenuItem={handleMenuItem} />
-  <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{content}</ContentZoomRoot>
-</div>;
+<ul>
+  {results.map((result) => (
+    <li key={result.id} className="tw:flex tw:items-baseline tw:gap-2">
+      <Button variant="ghost" onClick={() => goTo(result.ref)}>
+        {result.refLabel}
+      </Button>
+      <ContentZoomRoot as="span" className="scripture-font">
+        {result.text}
+      </ContentZoomRoot>
+    </li>
+  ))}
+</ul>;
 ```
 
-The platform then scales that element on Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel and the tab context menu, keeps the level in the pane's own web view definition state, remembers it per project and kind of pane, and shows the level indicator. The view contributes no handler, no state and no CSS.
+The platform then scales the marked elements on Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel and the tab context menu, keeps the level in the pane's own web view definition state, remembers it per project and kind of pane, and shows the level indicator. The view contributes no handler, no state and no CSS.
 
-`ContentZoomRoot` renders a plain `<div>` in normal flow and applies **no** classes of its own, so give it the layout classes its parent expects — `tw:flex-1 tw:min-h-0` inside a flex column — exactly as you would the element it replaces. It forwards its ref and every other `div` prop.
+`ContentZoomRoot` renders a `<div>` by default and a `<span>` with `as="span"` — use the span inside phrasing content such as a `<p>` or a table cell's inline text. It applies **no** classes of its own, forwards its ref (an `HTMLElement`) and every other prop. Flowing, editor-like text keeps one marker around the text body with every control moved out: the Scripture editor marks its editor tree and leaves the Simple-mode character-marker bar and the empty-chapter and book-not-available views outside.
 
-**Several elements may share one area id.** No `area` prop means the view's `main` area; a view with several independently zoomable panes marks each with its own id (`<ContentZoomRoot area="footnotes">`; ids are `[a-z][a-z0-9-]*`, and `default` is reserved), and several elements carrying the same id zoom together. Each id gets its own level and memory: the shortcuts act on the area holding keyboard focus, the wheel on the area under the pointer, and the tab menu on the area last used. **Areas must not nest** — a marked element inside another marked element is ignored — so mark the content, not a scroll container that also holds a second area, and keep resize handles, dividers and panel headers outside every area so they do not change size. A view that marks nothing is scaled whole at the Settings default instead (URL views immediately, other views after a roughly one-second grace) and gets no per-pane control at all.
+**Text rendered by `platform-bible-react` components.** Library components that render project text — the comment cards' scripture snippet, bodies, conflict diffs and composer — mark it only inside a `ContentZoomTextProvider`. Wrap the list in `<ContentZoomTextProvider>` (or `area="…"` for a named area) rather than in a `ContentZoomRoot`, and never both: a marked element inside another is ignored. A component that renders project text inline can take part the same way by spreading `useContentZoomTextProps()` onto the existing text element — it returns the marker attribute inside a provider and nothing outside one — never onto pop-up content or an element that contains another marker.
 
-First reference implementation: the Scripture editor's two areas, `main` for the text and `footnotes` for the footnotes pane (PT-4581).
+**Several elements share one area id.** No `area` prop means the view's `main` area; a view with several independently zoomable panes gives each its own id (`area="footnotes"`; ids are `[a-z][a-z0-9-]*`, and `default` is reserved). Card, list and table views mark every text element with the same id, and the platform zooms them as one area with one level and one memory: the shortcuts act on the area holding keyboard focus, the wheel on the area under the pointer, and the tab menu on the area last used — a click or wheel over an unmarked control or gap targets the area used last, unless a zoom scope encloses it (below), because the bootstrap resolves the area from the nearest marked ancestor, then the nearest scope. **Areas must not nest** — a marked element inside another marked element is ignored — and resize handles, dividers and panel headers stay outside every area so they do not change size. A view with its own zoom of some text keeps that inline `zoom` on an element inside the marker, never on the marker itself, where it would replace the platform's level instead of multiplying with it. A view that marks nothing, and whose web view type the platform does not declare zoomable, is not zoomed at all: it renders at 100 % content zoom, with no zoom items in its tab menu and no zoom shortcuts. Such a view is zoomable only while a marked element is rendered, so render an empty marked element while it has nothing to show.
 
-**Pop-ups follow their area.** Popovers, dropdown menus and tooltips from `platform-bible-react`
-that open from inside a `ContentZoomRoot` take that area's zoom level. Popovers and dropdown
-menus also cap their own width and height to the pane's available space and scroll their content
-if it doesn't fit; tooltips cap only width, so a tooltip taller than the available space is
-clipped at the pane's edge. A pop-up your view renders outside the area element — beside the
-content and anchored to a position in it — joins the area only when wrapped in
-`ContentZoomAreaProvider` (pass the same `area` as the root; omit it for the main area). Toolbar
-pop-ups outside every area stay at interface scale. `SelectContent`, `ContextMenuContent`,
-`MenubarContent` and `DropdownMenuSubContent` do not follow an area yet either — they render at
-interface scale even when opened from inside one. `ContentZoomRoot` and `ContentZoomAreaProvider`
-are experimental. A
-pop-up you build without these components can opt in by putting
-`data-platform-content-zoom-root="<area>"` and `data-platform-content-zoom-popup` on its portaled
-content. Those attributes only scale it: such a pop-up gets none of the library's size caps, so it
-must keep itself inside the pane. The Scripture editor's own right-click menu is drawn by the
-editor library rather than by these components; it stays at interface scale, in the text pane and
-the footnote editor pop-up alike.
+**Areas the user cannot tell apart, and unscaled containers that belong to one area.** When a view
+has several areas of the same kind — the Text Collection gives each resource its own area,
+`resource-<id>` — name each for the zoom indicator with `ContentZoomRoot`'s `label` prop
+(`<ContentZoomRoot area={zoomArea} label={resourceName}>`); the indicator then reads
+"HSV · 120 %" instead of "120 %". A container that is not itself scaled but belongs to one area —
+a row, a column or a card that holds the text together with its name and its controls — carries
+`data-platform-content-zoom-scope="<area id>"` (the name is exported as
+`CONTENT_ZOOM_SCOPE_ATTRIBUTE` from `platform-bible-react`; write the literal attribute in JSX). A
+click, a focus or Ctrl/⌘+wheel anywhere inside it then means that area. A marker inside the scope
+still decides for itself; never put the scope on a marked element, and never scale a scope element.
+Both attributes are experimental. Reference implementation: the Text Collection grid
+(`scripture-text-grid.component.tsx` for the scopes, `resource-cell-view.component.tsx` for the
+labelled markers, `resource-zoom-area.utils.ts` for the area ids).
 
-**Pop-ups requested through `papi.overlays` follow the requesting pane too.** A command palette,
-popover or context menu shown with `papi.overlays.showCommandPalette`/`showPopover`/
-`showContextMenu` renders outside your WebView, in the platform's own document — the platform
-resolves your pane's content scale for you and draws the pop-up at it, capped to stay inside the
-window. There is nothing for you to opt in: call the `papi.overlays` methods as you already do. A
-command palette shown centred (no anchor position) is not anchored to any pane's content and stays
-at interface scale, like a modal dialog.
+First reference implementations: the Scripture editor (`main` around the editor tree, `footnotes`), the Comments list (`ContentZoomTextProvider` around the cards), and the Text Collection grid (one `resource-<id>` area per resource, labelled with its name, with a zoom scope on each row and column).
+
+Card, list and table reference implementations mark each project-text element with the view's one area id: Find's result snippet, verse context and replace preview (`extensions/src/platform-scripture/src/find/search-result.component.tsx`); the four inventories' item column (`extensions/src/platform-scripture/src/checks/inventories/inventory-item-column.tsx`) plus PBR's occurrence table (`lib/platform-bible-react/src/components/advanced/inventory/occurrences-table.component.tsx`), opted in with `ContentZoomTextProvider`; the Checks card's item text (`extensions/src/platform-scripture/src/checks/checks-side-panel/check-card.component.tsx`); the Markers Checklist's text and marker tokens (`extensions/src/platform-scripture/src/components/checklist.component.tsx`); and the Lexical Tools dictionary's lemmas, glosses and definitions (`extensions/src/platform-lexical-tools/src/components/dictionary/`). Each of these web-view types is also declared zoomable in core's content-zoom declaration map, so its zoom items and shortcuts exist before any text is rendered.
+
+**Pop-ups stay at interface scale.** Menus, popovers, dropdowns and tooltips from
+`platform-bible-react`, the pop-ups requested through `papi.overlays` (`showCommandPalette`,
+`showPopover`, `showContextMenu`) and the Scripture editor's own right-click menu never take content
+zoom, even when they open from zoomed text: content zoom makes project text readable, it does not
+resize controls. Only their position follows the zoomed content. A pop-up you anchor to a position
+in the text should read that position live — `useLivePopoverAnchor` from `platform-bible-react`
+re-measures on scroll, resize and reflow — because `getBoundingClientRect()` inside a zoomed element
+already reports viewport pixels, which is what the pop-up is placed in. Never put
+`data-platform-content-zoom-root` on pop-up content: the platform zooms every element that carries it.
 
 ---
 
@@ -394,7 +406,7 @@ const factor =
 
 For a named area read `--platform-content-zoom-<areaId>`; `--platform-content-zoom-default` holds the Settings default that any area without its own level follows.
 
-If a component owns Ctrl/⌘+wheel for a sub-region of its own — the Text Collection grid's per-resource zoom does — register that listener in the **capture** phase and call `stopPropagation()`. The platform's own zoom listener sits on the bubble phase precisely so that a capture-phase handler wins.
+If a component owns Ctrl/⌘+wheel for a sub-region of its own, register that listener in the **capture** phase and call `stopPropagation()`. The platform's own zoom listener sits on the bubble phase precisely so that a capture-phase handler wins.
 
 ---
 
@@ -845,3 +857,8 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.7.0 | 2026-09-15 | Add "Content Zoom Opt-In (experimental)" (the `ContentZoomRoot` / `data-platform-content-zoom-root` marker, one root per zoom area, no nesting, the unmarked-view whole-iframe fallback) and "Content Zoom and Measurement (experimental)" (never imitate content zoom with font-size or `transform: scale`; zoomed `getBoundingClientRect` vs unzoomed `fontSize`; read `--platform-content-zoom-<area>`; capture-phase `stopPropagation` for a view owning Ctrl+wheel). Front-matter version also caught up with the 1.6.0 log row. |
 | 1.7.1 | 2026-09-18 | Note that a command palette, popover or context menu requested through `papi.overlays` follows the requesting pane's content scale automatically — nothing for the extension author to opt in. |
 | 1.7.2 | 2026-09-21 | Note that a view mounting the Scripture editor inside a zoom area hands it that area's element (`EditorOptions.contextMenuContainer`) so the editor's right-click menu takes the area's zoom. |
+| 1.7.3 | 2026-09-23 | Content Zoom Opt-In: an unmarked, undeclared view is not zoomed (no whole-view fallback); a view is zoomable only while a marked element is rendered. |
+| 1.7.4 | 2026-09-23 | Pop-ups stay at interface scale: replace "Pop-ups follow their area" and the `papi.overlays` scaling note with one rule; `ContentZoomAreaProvider`, the pop-up attribute and `EditorOptions.contextMenuContainer` are gone. |
+| 1.7.5 | 2026-09-23 | "Content Zoom Opt-In": mark the project text, not a content root — `ContentZoomRoot as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps` for library text, one id across many text elements, per-view inline zoom inside the marker. |
+| 1.7.6 | 2026-09-23 | List the card, list and table reference implementations of text-level zoom markers (Find, the inventories, Checks, the Markers Checklist, the Lexical Tools dictionary) and note that these types are declared zoomable in core. |
+| 1.7.7 | 2026-09-24 | "Content Zoom Opt-In": name areas the user cannot tell apart with `ContentZoomRoot`'s `label`, and tie unscaled rows, columns and cards to one area with `data-platform-content-zoom-scope` (both experimental); the Text Collection grid is the reference, one `resource-<id>` area per resource, with its right-click and "⋮" zoom menus running the platform's zoom commands. |

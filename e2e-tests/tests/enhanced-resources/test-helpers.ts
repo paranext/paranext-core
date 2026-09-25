@@ -27,8 +27,17 @@ export async function closeAllNonHomeDockTabs(page: Page): Promise<void> {
 export const ER_FRAME_SELECTOR = 'iframe[title="Enhanced Resource"]';
 
 export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
-export const SCRIPTURE_TEXT_GRID_TAB_TITLE = /^Scripture text$/;
-export const SCRIPTURE_TEXT_GRID_FRAME_SELECTOR = 'iframe[title="Scripture text"]';
+export const SCRIPTURE_TEXT_GRID_TAB_TITLE = /^Text Collection$/;
+export const SCRIPTURE_TEXT_GRID_FRAME_SELECTOR = 'iframe[title="Text Collection"]';
+
+/**
+ * The admin project setting the Text Collection grid builds its cells from: its
+ * `isInTextCollection`-flagged items seed the per-user overlay (`initializeTextCollectionOverlay`)
+ * and are what the grid renders (`useTextCollectionSources`). `platformScripture.modelTexts` is not
+ * part of the text collection, so seeding it shows nothing.
+ */
+const REFERENCED_PROJECTS_AND_RESOURCES_SETTING =
+  'platformScripture.referencedProjectsAndResources';
 
 /** Narrow PAPI slice used by Scripture Text Grid e2e helpers. */
 export type ScriptureTextGridPapiWindow = {
@@ -53,7 +62,7 @@ export type ScriptureTextGridPapiWindow = {
       openWebView: (
         type: string,
         layout?: unknown,
-        options?: { existingId?: string },
+        options?: { existingId?: string; projectId?: string },
       ) => Promise<string | undefined>;
     };
   };
@@ -68,7 +77,7 @@ export type FlaggedResourceItem = {
 
 type ScriptureTextGridRestorePayload = {
   projectId: string;
-  modelTexts: unknown;
+  referencedProjectsAndResources: unknown;
 };
 
 /** Module-scoped restore payload set by `flagResourcesAndOpenScriptureTextGrid`. */
@@ -107,8 +116,12 @@ export async function discoverAdminTextConnectionProject(
 }
 
 /**
- * Flag resources text-collection, seed the overlay, and open the Scripture Text Grid web view.
- * Restores the project's pre-test settings in a `finally` block.
+ * Write `items` as the project's `platformScripture.referencedProjectsAndResources` list, reset the
+ * current user's text-collection overlay and cell order, re-initialize the overlay from that list,
+ * and open the Scripture Text Grid web view bound to the project.
+ *
+ * Remembers the list's previous value for {@link restoreScriptureTextGridProjectSettings}, and
+ * writes it back itself if any step here throws.
  */
 export async function flagResourcesAndOpenScriptureTextGrid(
   page: Page,
@@ -116,7 +129,7 @@ export async function flagResourcesAndOpenScriptureTextGrid(
   items: FlaggedResourceItem[],
 ): Promise<void> {
   scriptureTextGridRestorePayload = await page.evaluate(
-    async ({ testProjectId, modelItems, webViewType }) => {
+    async ({ testProjectId, referencedItems, webViewType, settingKey }) => {
       // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
       // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
       const { papi } = window as unknown as ScriptureTextGridPapiWindow;
@@ -124,37 +137,49 @@ export async function flagResourcesAndOpenScriptureTextGrid(
         'platformScripture.textConnectionSettings',
         testProjectId,
       );
-      const originalModelTexts = await pdp.getSetting('platformScripture.modelTexts');
+      const originalReferenced = await pdp.getSetting(settingKey);
 
       try {
-        await pdp.setSetting('platformScripture.modelTexts', {
+        await pdp.setSetting(settingKey, {
           dataVersion: '1.1.0',
-          items: modelItems,
+          items: referencedItems,
         });
         await pdp.resetTextCollectionOverlay();
         await pdp.resetCellOrder();
         await pdp.initializeTextCollectionOverlay();
-        await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
-        return { projectId: testProjectId, modelTexts: originalModelTexts };
+        await papi.webViews.openWebView(webViewType, undefined, {
+          existingId: '?',
+          projectId: testProjectId,
+        });
+        return { projectId: testProjectId, referencedProjectsAndResources: originalReferenced };
       } catch (error) {
-        await pdp.setSetting('platformScripture.modelTexts', originalModelTexts);
+        await pdp.setSetting(settingKey, originalReferenced);
         await pdp.resetTextCollectionOverlay();
         await pdp.resetCellOrder();
         throw error;
       }
     },
-    { testProjectId: projectId, modelItems: items, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE },
+    {
+      testProjectId: projectId,
+      referencedItems: items,
+      webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      settingKey: REFERENCED_PROJECTS_AND_RESOURCES_SETTING,
+    },
   );
 }
 
-/** Best-effort restore for specs that mutate modelTexts. */
+/**
+ * Best-effort restore after {@link flagResourcesAndOpenScriptureTextGrid}: writes back the project's
+ * previous `platformScripture.referencedProjectsAndResources` list and resets the current user's
+ * text-collection overlay and cell order.
+ */
 export async function restoreScriptureTextGridProjectSettings(page: Page): Promise<void> {
   const restore = scriptureTextGridRestorePayload;
   if (!restore) return;
 
   await page
     .evaluate(
-      async ({ payload, webViewType }) => {
+      async ({ payload, webViewType, settingKey }) => {
         // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
         // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
         const { papi } = window as unknown as ScriptureTextGridPapiWindow;
@@ -162,12 +187,19 @@ export async function restoreScriptureTextGridProjectSettings(page: Page): Promi
           'platformScripture.textConnectionSettings',
           payload.projectId,
         );
-        await pdp.setSetting('platformScripture.modelTexts', payload.modelTexts);
+        await pdp.setSetting(settingKey, payload.referencedProjectsAndResources);
         await pdp.resetTextCollectionOverlay();
         await pdp.resetCellOrder();
-        await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
+        await papi.webViews.openWebView(webViewType, undefined, {
+          existingId: '?',
+          projectId: payload.projectId,
+        });
       },
-      { payload: restore, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE },
+      {
+        payload: restore,
+        webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+        settingKey: REFERENCED_PROJECTS_AND_RESOURCES_SETTING,
+      },
     )
     .catch(() => {
       // Ignore — cleanup is best-effort.
@@ -197,14 +229,29 @@ export type ScriptureTextGrid = {
   switchToChapterView: () => Promise<void>;
 };
 
-/** Open (or focus) the Scripture Text Grid tab and return a page object with pre-bound locators. */
-export async function openScriptureTextGrid(page: Page): Promise<ScriptureTextGrid> {
-  await page.evaluate(async (webViewType) => {
-    // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
-    const { papi } = window as unknown as ScriptureTextGridPapiWindow;
-    await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
-  }, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+/**
+ * Open (or focus) the Scripture Text Grid tab and return a page object with pre-bound locators.
+ *
+ * @param projectId The project to bind the grid to. Required whenever the grid is opened fresh (no
+ *   editor is open for `useTextCollectionProjectId` to fall back to) — pass the same id used to
+ *   seed its referenced projects and resources, or the grid renders empty.
+ */
+export async function openScriptureTextGrid(
+  page: Page,
+  projectId?: string,
+): Promise<ScriptureTextGrid> {
+  await page.evaluate(
+    async ({ webViewType, gridProjectId }) => {
+      // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+      const { papi } = window as unknown as ScriptureTextGridPapiWindow;
+      await papi.webViews.openWebView(webViewType, undefined, {
+        existingId: '?',
+        projectId: gridProjectId,
+      });
+    },
+    { webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, gridProjectId: projectId },
+  );
 
   const tab = page.locator('.dock-tab', { hasText: SCRIPTURE_TEXT_GRID_TAB_TITLE });
   await expect(tab).toBeVisible({ timeout: 15_000 });
@@ -252,6 +299,65 @@ export async function switchToChapterView(frame: FrameLocator): Promise<void> {
   await viewOptionsButton(frame).click();
   await chapterViewOption(frame).click();
   await gridBody(frame).press('Escape');
+}
+
+/**
+ * The content zoom area of one resource's row or column, read off the zoom scope the grid puts on
+ * the container (`resource-<id>`, or `text-collection` for an id that yields none).
+ */
+export async function readResourceZoomArea(resourceContainer: Locator): Promise<string> {
+  const areaId = await resourceContainer.getAttribute('data-platform-content-zoom-scope');
+  if (!areaId) throw new Error('Resource container carries no zoom scope');
+  return areaId;
+}
+
+/** The name a resource's text is labelled with for the zoom indicator (its cell label). */
+export async function readResourceZoomLabel(resourceContainer: Locator): Promise<string> {
+  const label = await resourceContainer
+    .locator('[data-platform-content-zoom-label]')
+    .first()
+    .getAttribute('data-platform-content-zoom-label');
+  if (!label) throw new Error('Resource text carries no zoom label');
+  return label;
+}
+
+/** Right-clicks a resource's text and returns the cell's own menu once it is open. */
+export async function openCellContextMenu(
+  frame: FrameLocator,
+  resourceContainer: Locator,
+): Promise<Locator> {
+  await resourceContainer
+    .locator('[data-platform-content-zoom-root]')
+    .first()
+    .click({ button: 'right' });
+  const menu = frame.getByRole('menu');
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/**
+ * Opens the "⋮" zoom options menu in a chapter-view column's header (it is revealed on hover) and
+ * returns the menu once it is open.
+ *
+ * Focus is taken off whatever holds it first. Closing a pop-up with Escape (as
+ * {@link switchToChapterView} does) returns focus to its trigger, and a focused trigger shows its
+ * tooltip until focus moves: the grid's "View Options" tooltip then hangs over the header end of
+ * the last column, exactly where that column's "⋮" sits, and takes the click.
+ */
+export async function openChapterViewZoomOptions(
+  frame: FrameLocator,
+  column: Locator,
+  resourceName: string,
+): Promise<Locator> {
+  await gridBody(frame).evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  await expect(frame.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
+  await column.hover();
+  await column.getByRole('button', { name: `Zoom options for ${resourceName}` }).click();
+  const menu = frame.getByRole('menu');
+  await expect(menu).toBeVisible();
+  return menu;
 }
 
 /**

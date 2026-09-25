@@ -62,7 +62,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/p
 import { EditorKeyboardShortcuts } from '@/components/basics/editor-keyboard-shortcuts.component';
 import {
   leftEdgeRect,
-  measureRange,
+  measureBox,
   useLivePopoverAnchor,
 } from '@/hooks/use-live-popover-anchor.hook';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
@@ -1052,7 +1052,7 @@ export default function FootnoteEditor({
     const range = currentSelection.getRangeAt(0).cloneRange();
     markersMenuAnchor.setSource({
       measure: () => {
-        const rect = measureRange(range);
+        const rect = measureBox(range);
         return rect && leftEdgeRect(rect);
       },
       contextElement,

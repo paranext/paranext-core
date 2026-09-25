@@ -1,12 +1,7 @@
 import { logger } from '@papi/frontend';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Unsubscriber } from 'platform-bible-utils';
-import {
-  leftEdgeRect,
-  LivePopoverAnchorSource,
-  measureElement,
-  measureRange,
-} from 'platform-bible-react';
+import { leftEdgeRect, LivePopoverAnchorSource, measureBox } from 'platform-bible-react';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -651,15 +646,102 @@ export function measureAnnotation(id: string): DOMRect | undefined {
   );
 }
 
+/** The text nodes under `element`, in document order. */
+function textNodesIn(element: Element): Text[] {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) if (walker.currentNode instanceof Text) nodes.push(walker.currentNode);
+  return nodes;
+}
+
+/**
+ * How far into the annotation's text a caret falls, given the text node the caret sat in before the
+ * editor re-rendered that text into the annotation.
+ *
+ * Offsets here are DOM offsets (UTF-16 code units), the unit `Range` uses, so the native string
+ * methods are the right ones; a grapheme-aware index would not line up with `caretOffset`.
+ *
+ * @param textAtOpen The text of the node the caret sat in.
+ * @param caretOffset The caret's offset in `textAtOpen`.
+ * @param annotationText The annotation's rendered text.
+ * @returns The caret's offset in `annotationText`, or `undefined` when no occurrence of
+ *   `annotationText` in `textAtOpen` contains the caret.
+ */
+function findCaretOffsetInAnnotation(
+  textAtOpen: string,
+  caretOffset: number,
+  annotationText: string,
+): number | undefined {
+  if (annotationText.length === 0) return undefined;
+  let start = textAtOpen.indexOf(annotationText);
+  while (start !== -1 && start <= caretOffset) {
+    if (caretOffset <= start + annotationText.length) return caretOffset - start;
+    start = textAtOpen.indexOf(annotationText, start + 1);
+  }
+  return undefined;
+}
+
+/**
+ * The current viewport rect of a caret that sat `caretOffset` characters into `textAtOpen` before
+ * the editor re-rendered that text into the annotation with the given ID. The caret is rebuilt as a
+ * collapsed range in the annotation's own text nodes, so its rect follows the text through any
+ * reflow — onto another line, a new pane width or a new zoom level.
+ *
+ * @param id The ID of the annotation the caret's text now renders in.
+ * @param textAtOpen The text of the node the caret sat in.
+ * @param caretOffset The caret's offset in `textAtOpen`.
+ * @returns The caret's rect, or `undefined` when the rendered annotation does not contain the caret
+ *   or paints nothing there.
+ */
+function measureCaretInAnnotation(
+  id: string,
+  textAtOpen: string,
+  caretOffset: number,
+): DOMRect | undefined {
+  const textNodes = Array.from(document.querySelectorAll(annotationSelector(id))).flatMap(
+    textNodesIn,
+  );
+  const offsetInAnnotation = findCaretOffsetInAnnotation(
+    textAtOpen,
+    caretOffset,
+    textNodes.map((node) => node.data).join(''),
+  );
+  if (offsetInAnnotation === undefined) return undefined;
+
+  // A caret on the boundary between two text nodes goes at the start of the later one, where the
+  // next character paints; one at the very end goes at the end of the last node.
+  let nodeIndex = 0;
+  let nodeStart = 0;
+  while (
+    nodeIndex < textNodes.length - 1 &&
+    offsetInAnnotation >= nodeStart + textNodes[nodeIndex].length
+  ) {
+    nodeStart += textNodes[nodeIndex].length;
+    nodeIndex += 1;
+  }
+  const caret = document.createRange();
+  caret.setStart(textNodes[nodeIndex], offsetInAnnotation - nodeStart);
+  caret.collapse(true);
+  return measureBox(caret);
+}
+
 /**
  * Builds the anchor source for the pending-comment popover, in the shape `useLivePopoverAnchor`'s
  * `setSource` takes. The editor re-renders the selected text to mark it as the pending comment,
  * which moves `range` to the start of its text node (or detaches it), so this follows two phases:
  * until the mark exists, it follows `range` itself, bailing out once the range no longer matches
- * what it was when the popover opened; once the mark exists, it follows the union of the mark's
- * rendered fragments, at the horizontal fraction along the mark's width where the caret sat when
- * the popover opened. Anchoring on a fraction of the mark's width, rather than a fixed pixel
- * offset, keeps the anchor at the caret's original position through a zoom change.
+ * what it was when the popover opened; once the mark exists, it spans the union of the mark's
+ * rendered fragments vertically, so the popover never covers the mark.
+ *
+ * Horizontally, a selection anchors on the union's left edge. A collapsed caret — where the editor
+ * marks the whole run of text between spaces around it, which in Thai or Chinese can be long enough
+ * to wrap — anchors on the caret itself: every measurement finds the caret's character offset in
+ * the mark's rendered text and measures a collapsed range there, so the anchor follows the caret
+ * through a zoom change or a pane resize, onto another line of a wrapped mark if the text reflows
+ * that way. When the rendered mark does not contain the caret (it has painted only part of its text
+ * so far), the anchor falls back to the union's left edge until it does. It also falls back to the
+ * union's left edge when the marked run spans more than one DOM text node when the popover opens:
+ * only the caret's own text node is read at open, so the mark's text is never found inside it.
  *
  * @param range The DOM range the selection had when the popover opened. The caller clones it from
  *   the live selection first, since a live selection range keeps moving as the user reads or
@@ -673,7 +755,6 @@ export function createPendingCommentAnchorSource(
   annotationId: string,
   contextElement: Element,
 ): LivePopoverAnchorSource {
-  const rangeRectAtOpen = measureRange(range);
   const { startContainer, startOffset, endContainer, endOffset } = range;
   const isRangeIntact = () =>
     startContainer.isConnected &&
@@ -681,17 +762,10 @@ export function createPendingCommentAnchorSource(
     range.startOffset === startOffset &&
     range.endContainer === endContainer &&
     range.endOffset === endOffset;
+  // Read now: the editor is about to re-render this text node into the mark.
+  const caretTextAtOpen =
+    range.collapsed && startContainer instanceof Text ? startContainer.data : undefined;
 
-  const computeFraction = (annotationRect: DOMRect): number =>
-    rangeRectAtOpen && annotationRect.width > 0
-      ? Math.min(
-          Math.max((rangeRectAtOpen.left - annotationRect.left) / annotationRect.width, 0),
-          1,
-        )
-      : 0;
-
-  let fractionInAnnotation: number | undefined;
-  let previousAnnotationRect: DOMRect | undefined;
   return {
     measure: () => {
       const annotationRect = measureAnnotation(annotationId);
@@ -699,27 +773,15 @@ export function createPendingCommentAnchorSource(
         // Between the re-render and the mark appearing, a moved range would place the popover at
         // the start of the text node; keep the last good rect instead.
         if (!isRangeIntact()) return undefined;
-        const rangeRect = measureRange(range);
+        const rangeRect = measureBox(range);
         return rangeRect && leftEdgeRect(rangeRect);
       }
-      if (fractionInAnnotation === undefined) {
-        // A selection that wraps can render only its first fragment on the frame the mark first
-        // becomes measurable — the rest of the union paints on a later frame. Freezing the fraction
-        // against that partial width would misplace the popover for as long as it stays open, so
-        // wait for two consecutive frames to report the same rect (the same stability check
-        // `isSameScrollGeometry` uses for scroll geometry) before trusting it enough to freeze.
-        // Until then, recompute the fraction from the current (possibly still-growing) rect on
-        // every frame instead of caching a partial one.
-        const isSettled =
-          previousAnnotationRect !== undefined &&
-          isSameScrollGeometry(previousAnnotationRect.left, annotationRect.left) &&
-          isSameScrollGeometry(previousAnnotationRect.width, annotationRect.width);
-        if (isSettled) fractionInAnnotation = computeFraction(annotationRect);
-        else previousAnnotationRect = annotationRect;
-      }
-      const fraction = fractionInAnnotation ?? computeFraction(annotationRect);
+      const caretRect =
+        caretTextAtOpen !== undefined
+          ? measureCaretInAnnotation(annotationId, caretTextAtOpen, startOffset)
+          : undefined;
       return new DOMRect(
-        annotationRect.left + fraction * annotationRect.width,
+        caretRect?.left ?? annotationRect.left,
         annotationRect.top,
         0,
         annotationRect.height,
@@ -756,7 +818,7 @@ export function createNoteAnchorSource(
     measure: () => {
       const target = element.isConnected ? element : getElementByKey(noteKey);
       if (!target) return undefined;
-      const rect = measureElement(target);
+      const rect = measureBox(target);
       return rect && leftEdgeRect(rect);
     },
     contextElement: element.closest('.editor-input') ?? element,
@@ -776,7 +838,7 @@ export function createPendingCommentCenterAnchorSource(
 ): LivePopoverAnchorSource {
   return {
     measure: () => {
-      const rect = measureElement(editorContainer);
+      const rect = measureBox(editorContainer);
       if (!rect) return undefined;
       return new DOMRect(rect.left + rect.width / 2, rect.top + rect.height / 2, 0, 0);
     },

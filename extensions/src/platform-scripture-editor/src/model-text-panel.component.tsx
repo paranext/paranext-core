@@ -665,13 +665,22 @@ export function ModelTextPanel({
           className={message || isWaiting ? 'tw:hidden' : 'tw:flex-1 tw:overflow-auto'}
           dir={options.textDirection}
         >
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={handleScrRefChange}
-            options={options}
-            logger={logger}
-          />
+          {/* The zoom marker sits INSIDE the scroll box, never on it or above it:
+              `scrollToVerse` adds a `getBoundingClientRect()` distance (zoomed pixels) to the
+              box's `scrollTop` (unzoomed pixels), which agree only while the box itself is
+              unscaled. Named as its own zoom area ("model-text") so its remembered level is kept
+              apart from this project's other resource panes, which resolve to the same
+              kind/identity pair and would otherwise all read one remembered level. The messages
+              and the spinner are app chrome and stay unmarked. */}
+          <ContentZoomRoot area="model-text">
+            <Editorial
+              ref={editorRef}
+              scrRef={scrRef}
+              onScrRefChange={handleScrRefChange}
+              options={options}
+              logger={logger}
+            />
+          </ContentZoomRoot>
         </div>
       </>
     );
@@ -731,25 +740,10 @@ export function ModelTextPanel({
           </Tooltip>
         </TooltipProvider>
       )}
-      {/* Named as its own zoom area ("model-text") so its remembered level is kept apart from this
-          project's other resource panes, which resolve to the same kind/identity pair and would
-          otherwise all read one remembered level. The label row above stays outside so its pinned
-          42 px height — aligned with the editor's toolbar and Column 3's tab bar — doesn't scale
-          with the content.
-
-          This element is only reached once the panel has a project, has a configured readiness, has
-          resolved to a displayable resource, has not just failed an install, and is not mid-pick or
-          mid-install. None of the earlier returns for those states (no project; readiness not
-          configured; not found/unresolvable; install failed; selecting/installing) mark a zoom area,
-          so while any of them is on screen this pane reports no area and offers no per-pane zoom
-          control until content arrives; what the platform does with a pane that reports no areas is
-          core's to define and document. Acceptable: each of those states shows only chrome — a
-          prompt, a spinner or an error — with no scripture content to scale. Some of them (an
-          unconfigured readiness, a failed install) can stay on screen indefinitely without that
-          changing. */}
-      <ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
-        {renderContent()}
-      </ContentZoomRoot>
+      {/* The label row stays outside the zoom area (marked inside the editor's scroll box in
+          `renderContent`) so its pinned 42 px height — aligned with the editor's toolbar and
+          Column 3's tab bar — doesn't scale with the content. */}
+      <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent()}</div>
     </div>
   );
 }
