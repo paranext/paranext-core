@@ -127,7 +127,7 @@ describe('papiPortBroker', () => {
     ]);
   });
 
-  test('answers once per page load: a second request gets a port error and is warned about', () => {
+  test('refuses a second request while the window’s channel is open, with a port error and a warning', () => {
     const fake = makeFakeWebContents();
     registerWindow(fake.webContents, 'w1');
     fake.requestPort();
@@ -137,9 +137,11 @@ describe('papiPortBroker', () => {
     expect(mockAcceptLocalClient).toHaveBeenCalledTimes(1);
     expect(fake.mainFrame.postMessage).toHaveBeenCalledTimes(2);
     expect(fake.mainFrame.postMessage).toHaveBeenLastCalledWith(PAPI_PORT_ERROR_CHANNEL, {
-      reason: 'This page already has a PAPI port; a page gets exactly one per load',
+      reason: 'This window already has an open PAPI port; a window gets one at a time',
     });
-    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('already has a PAPI port'));
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('already has an open PAPI port'),
+    );
   });
 
   test('refuses a request whose sender is not the top frame, or has no frame', () => {
@@ -200,9 +202,7 @@ describe('papiPortBroker', () => {
     expect(mockAcceptLocalClient).toHaveBeenCalledTimes(2);
   });
 
-  test('a peer close frees the slot so a later request in the same load is still refused', () => {
-    // The page keeps its first port for its whole life; a port closed by the page (an extension
-    // calling close on a stolen port, say) must not let a second request through
+  test('a peer close frees the window for a new request', () => {
     const fake = makeFakeWebContents();
     registerWindow(fake.webContents, 'w1');
     fake.requestPort();
@@ -210,7 +210,31 @@ describe('papiPortBroker', () => {
     ports[0].emit('close');
     fake.requestPort();
 
-    expect(mockAcceptLocalClient).toHaveBeenCalledTimes(1);
+    expect(mockAcceptLocalClient).toHaveBeenCalledTimes(2);
+    expect(fake.mainFrame.postMessage).toHaveBeenLastCalledWith(
+      PAPI_PORT_CHANNEL,
+      { windowId: 'w1' },
+      [{ fake: 'port2', index: 1 }],
+    );
+  });
+
+  test('a reload that starts before the old page asks still serves the new page', () => {
+    // The old page keeps running until the new document commits, so its request can land after
+    // the navigation started; when it unloads, its port closes and the new page must be served
+    const fake = makeFakeWebContents();
+    registerWindow(fake.webContents, 'w1');
+    fake.navigate({ isMainFrame: true, isSameDocument: false });
+    fake.requestPort();
+
+    ports[0].emit('close');
+    fake.requestPort();
+
+    expect(mockAcceptLocalClient).toHaveBeenCalledTimes(2);
+    expect(fake.mainFrame.postMessage).toHaveBeenLastCalledWith(
+      PAPI_PORT_CHANNEL,
+      { windowId: 'w1' },
+      [{ fake: 'port2', index: 1 }],
+    );
   });
 
   test('replies with portError and grants nothing when the network service refuses', () => {
@@ -249,7 +273,7 @@ describe('papiPortBroker', () => {
     );
     expect(ports[0].close).toHaveBeenCalled();
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('window w1'));
-    // The undelivered grant does not use up the page's one request
+    // A port that was never delivered does not leave the window counted as connected
     fake.requestPort();
     expect(mockAcceptLocalClient).toHaveBeenCalledTimes(2);
     expect(fake.mainFrame.postMessage).toHaveBeenLastCalledWith(
