@@ -21,6 +21,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  ShortcutKeys,
   Z_INDEX_OVERLAY,
 } from 'platform-bible-react';
 import {
@@ -209,7 +210,11 @@ function renderMenuItems(
           onSelect={() => onSelect({ itemId: item.id })}
         >
           {item.label}
-          {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
+          {item.shortcut && (
+            <DropdownMenuShortcut className="tw:tracking-normal">
+              <ShortcutKeys hint={item.shortcut} />
+            </DropdownMenuShortcut>
+          )}
         </DropdownMenuItem>,
       );
       i += 1;

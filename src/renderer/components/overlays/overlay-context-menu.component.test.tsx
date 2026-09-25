@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
   OverlayContextMenuPresentational,
@@ -86,6 +86,30 @@ describe('OverlayContextMenuPresentational', () => {
     );
 
     expect(screen.getByRole('separator')).toBeInTheDocument();
+  });
+
+  it('shows the shortcut as keycaps beside an item that has one, and nothing beside one without', () => {
+    const items: OverlayContextMenuItem[] = [
+      { type: 'item', id: 'find', label: 'Find', shortcut: 'Ctrl+F' },
+      { type: 'item', id: 'other', label: 'Other' },
+    ];
+
+    render(
+      <OverlayContextMenuPresentational
+        items={items}
+        position={position}
+        onSelect={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    const find = screen.getByRole('menuitem', { name: /^Find/ });
+    const shortcut = find.querySelector('[data-slot="dropdown-menu-shortcut"]');
+    expect(shortcut).not.toBeNull();
+    expect(within(find).getByText('Ctrl').tagName).toBe('KBD');
+    expect(within(find).getByText('F').tagName).toBe('KBD');
+    const other = screen.getByRole('menuitem', { name: 'Other' });
+    expect(other.querySelector('[data-slot="dropdown-menu-shortcut"]')).toBeNull();
   });
 
   describe('submenu', () => {

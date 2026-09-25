@@ -47,6 +47,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
+  ShortcutKeys,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -269,7 +270,11 @@ function renderTabMenuItems(
         }}
       >
         {item.label}
-        {item.shortcut && <ContextMenuShortcut>{item.shortcut}</ContextMenuShortcut>}
+        {item.shortcut && (
+          <ContextMenuShortcut className="tw:tracking-normal">
+            <ShortcutKeys hint={item.shortcut} />
+          </ContextMenuShortcut>
+        )}
       </ContextMenuItem>
     );
   });

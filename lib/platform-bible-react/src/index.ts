@@ -225,6 +225,11 @@ export {
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
 export {
+  getShortcutKeycaps,
+  ShortcutKeys,
+  type ShortcutKeysProps,
+} from './components/basics/shortcut-keys.component';
+export {
   /** @deprecated 2026-06-08 Use {@link CheckboxGroup} instead. */
   default as Checklist,
   CheckboxGroup,

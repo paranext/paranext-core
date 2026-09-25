@@ -2602,6 +2602,47 @@ export type InterfaceLanguagePickerProps = {
  */
 export declare function InterfaceLanguagePicker({ languages, value, onChange, localizedStrings, className, id, }: InterfaceLanguagePickerProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Splits one already-resolved keyboard shortcut hint — a single key combination, with no `/`
+ * alternatives and no catalog no-equivalent marker — into the keys {@link ShortcutKeys} renders as
+ * separate keycaps.
+ *
+ * @param hint One key combination, e.g. `⌥⇧⌘L`, `Ctrl+Shift+N`, or `F12`
+ * @returns The keys in press order, and what to show between their keycaps: `'+'` for the
+ *   Windows/Linux spelling, `''` for the macOS spelling, where the symbols sit adjacent
+ * @experimental This function is unstable and may change or disappear without notice
+ */
+export declare function getShortcutKeycaps(hint: string): {
+	keycaps: string[];
+	separator: "+" | "";
+};
+/**
+ * Props for {@link ShortcutKeys}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShortcutKeysProps = {
+	/**
+	 * One already-resolved keyboard shortcut hint to render as keycaps — a single key combination,
+	 * such as a menu item's `shortcut` string. Not a raw keyboard shortcuts catalog `keys` string:
+	 * that may hold several `/`-separated alternatives or a no-equivalent marker, neither of which
+	 * this component parses.
+	 */
+	hint: string;
+};
+/**
+ * Renders a keyboard shortcut hint as keycaps: a single key is a lone {@link Kbd}, while a
+ * combination puts every key in its own `Kbd` inside a `KbdGroup`. The Windows/Linux `+` renders as
+ * plain text between the keycaps rather than as part of one; macOS symbols sit adjacent with
+ * nothing between them.
+ *
+ * `dir="ltr"` is set on the `KbdGroup` itself, not an enclosing element, so the keycap order
+ * survives a right-to-left layout: `KbdGroup` is `inline-flex`, and flex item order follows the
+ * `direction` property.
+ *
+ * @experimental This component is unstable and may change or disappear without notice
+ */
+export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
+/**
  * @deprecated 2026-06-08 Use {@link CheckboxGroupProps} instead. `ChecklistProps` is kept as the
  *   existing export for backward compatibility and will be removed in a future release.
  */

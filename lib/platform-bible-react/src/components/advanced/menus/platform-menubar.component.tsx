@@ -26,6 +26,7 @@ import {
 import { RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
+import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import { getSortedMenuColumns, getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
@@ -84,7 +85,11 @@ const getMenubarContent = (
                   {item.iconPathAfter && (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
-                  {item.shortcut && <MenubarShortcut>{item.shortcut}</MenubarShortcut>}
+                  {item.shortcut && (
+                    <MenubarShortcut className="tw:tracking-normal">
+                      <ShortcutKeys hint={item.shortcut} />
+                    </MenubarShortcut>
+                  )}
                 </MenubarItem>
               ) : (
                 <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
