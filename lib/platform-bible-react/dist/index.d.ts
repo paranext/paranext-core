@@ -857,6 +857,14 @@ export type ContentZoomTextProviderProps = {
 	 */
 	area?: string;
 	/**
+	 * Name of the zoom area as the zoom indicator shows it (`<label> · 120 %`), written on every text
+	 * element the provider marks, the way `ContentZoomRootProps.label` is on its marker. Plain text.
+	 * Omit it, or pass an empty string, and the indicator shows the level alone.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	label?: string;
+	/**
 	 * The subtree whose library components mark the project text they render.
 	 *
 	 * @experimental This property is unstable and may change shape or disappear without notice
@@ -874,19 +882,21 @@ export type ContentZoomTextProviderProps = {
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function ContentZoomTextProvider({ area, children }: ContentZoomTextProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function ContentZoomTextProvider({ area, label, children }: ContentZoomTextProviderProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The props a component spreads onto the existing element that renders project text inline. Inside
  * a {@link ContentZoomTextProvider} the props carry `data-platform-content-zoom-root` set to the
- * provider's area (`''` for the main area); outside one they are empty. Spread them onto the text
- * element itself rather than adding a wrapper, and never onto pop-up content or an element that
- * contains another marked element.
+ * provider's area (`''` for the main area), plus `data-platform-content-zoom-label` when the
+ * provider names the area; outside one they are empty. Spread them onto the text element itself
+ * rather than adding a wrapper, and never onto pop-up content or an element that contains another
+ * marked element.
  *
- * @returns The marker attribute inside a provider; an empty object outside one
+ * @returns The marker (and label) attributes inside a provider; an empty object outside one
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function useContentZoomTextProps(): {
 	[CONTENT_ZOOM_ROOT_ATTRIBUTE]?: string;
+	[CONTENT_ZOOM_LABEL_ATTRIBUTE]?: string;
 };
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;

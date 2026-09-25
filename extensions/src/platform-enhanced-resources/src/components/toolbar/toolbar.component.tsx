@@ -80,6 +80,18 @@ type ToolbarLocalizedStrings = {
 };
 
 export type ResearchTab = 'dictionary' | 'encyclopedia' | 'media' | 'maps';
+
+/**
+ * The string key naming each research tab, as the tab bar shows it. The view also names the entries
+ * zoom area after the tab on screen with these, so the zoom indicator reads `Dictionary · 120 %`.
+ */
+export const RESEARCH_TAB_LABEL_KEYS: Readonly<Record<ResearchTab, ToolbarLocalizedStringKey>> =
+  Object.freeze({
+    dictionary: '%enhancedResources_toolbar_tab_dictionary%',
+    encyclopedia: '%enhancedResources_toolbar_tab_encyclopedia%',
+    media: '%enhancedResources_toolbar_tab_media%',
+    maps: '%enhancedResources_toolbar_tab_maps%',
+  });
 export type MarbleScope = 'current-verse' | 'current-section' | 'current-chapter' | 'current-sense';
 export type HighlightMode = 'none' | 'all-research-terms';
 export type ScriptDisplayMode = 'script' | 'transliteration' | 'both';

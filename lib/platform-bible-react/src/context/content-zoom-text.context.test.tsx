@@ -15,7 +15,7 @@ function ProjectText({ children }: { children: string }) {
   return (
     <span
       data-testid="project-text"
-      // The hook returns only the content-zoom marker attribute, or nothing.
+      // The hook returns only the content-zoom marker and label attributes, or nothing.
       // eslint-disable-next-line react/jsx-props-no-spreading
       {...contentZoomTextProps}
     >
@@ -55,6 +55,38 @@ describe('content-zoom-text context', () => {
       CONTENT_ZOOM_ROOT_ATTRIBUTE,
       'entries',
     );
+  });
+
+  it('names the area on every text element when the provider has a label', () => {
+    render(
+      <ContentZoomTextProvider area="entries" label="Dictionary">
+        <ProjectText>λόγος</ProjectText>
+        <ProjectText>word</ProjectText>
+      </ContentZoomTextProvider>,
+    );
+    screen.getAllByTestId('project-text').forEach((element) => {
+      expect(element).toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE, 'entries');
+      expect(element).toHaveAttribute(CONTENT_ZOOM_LABEL_ATTRIBUTE, 'Dictionary');
+    });
+  });
+
+  it('writes no label for a provider without one or with an empty one', () => {
+    render(
+      <>
+        <ContentZoomTextProvider area="entries">
+          <ProjectText>unlabelled</ProjectText>
+        </ContentZoomTextProvider>
+        <ContentZoomTextProvider area="footnotes" label="">
+          <ProjectText>empty label</ProjectText>
+        </ContentZoomTextProvider>
+      </>,
+    );
+    const [unlabelled, emptyLabel] = screen.getAllByTestId('project-text');
+    // Positive control: both are marked, so the missing label is not a missing marker.
+    expect(unlabelled).toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE, 'entries');
+    expect(emptyLabel).toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE, 'footnotes');
+    expect(unlabelled).not.toHaveAttribute(CONTENT_ZOOM_LABEL_ATTRIBUTE);
+    expect(emptyLabel).not.toHaveAttribute(CONTENT_ZOOM_LABEL_ATTRIBUTE);
   });
 
   it('marks no element of its own', () => {
