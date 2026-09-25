@@ -18,13 +18,13 @@ import {
   ProjectSelectorLocalizedStrings,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
-  resolveLocalizedString,
   makeBuiltInGroupings,
 } from 'platform-bible-react/experimental';
 import {
   formatReplacementString,
   LanguageStrings,
   makeProjectSelectorCustomData,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
@@ -257,6 +257,9 @@ export function ChecksSidePanel({
   const getScopeLabel = useCallback(
     (scopeValue: string) => {
       if (isValidCheckScope(scopeValue)) {
+        // TODO(PT-4103): Raw read - renders the key while strings load, and permanently if
+        // localization fails. `no-nullish-localized-fallback` cannot see it (there is no `??`), so
+        // it will not turn up in that sweep's warning list.
         return localizedStrings[CHECK_SCOPE_FILTER_STRINGS[scopeValue]];
       }
       return scopeValue; // Fallback for invalid scope values

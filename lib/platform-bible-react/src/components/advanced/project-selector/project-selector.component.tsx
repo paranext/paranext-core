@@ -21,12 +21,12 @@ import {
   getLocalizeKeyForScrollGroupId,
   hasDistinctFullName,
   normalizeProjectId,
+  resolveLocalizedString,
   type ScrollGroupId,
 } from 'platform-bible-utils';
 import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
-import { resolveLocalizedString } from '@/utils/localization.util';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -154,10 +154,20 @@ const NARROW_TRIGGER_THRESHOLD_PX = 100;
 // #region Localized strings
 
 /**
- * Every user-facing string the selector can render. All keys are optional; unset values fall back
- * to English defaults. Consumers wire this from a shared platform-level localization block (see
- * `%projectSelector_*%` keys in the platform's localizedStrings JSON) so every ProjectSelector in
- * the app reads the same vocabulary.
+ * Every user-facing string the selector can render. Consumers wire this from a shared
+ * platform-level localization block (see `%projectSelector_*%` keys in the platform's
+ * localizedStrings JSON) so every ProjectSelector in the app reads the same vocabulary.
+ *
+ * All keys are optional, and each field falls back to its English default independently. A field
+ * falls back when it is unset AND when it is set to a value that cannot be shown to a user: a raw
+ * localization key (`%…%`-shaped, which is what an unresolved lookup returns), an empty string, or
+ * whitespace only. So passing a bag straight from `useLocalizedStrings` is safe — keys that have
+ * not resolved yet render English rather than their own key text.
+ *
+ * `ariaLabel` is the one exception: an explicitly empty string is honored as a deliberate opt-out,
+ * meaning "a labelling ancestor names this control, do not add a second accessible name".
+ * Whitespace is not an opt-out and still falls back, since a whitespace-only label leaves the
+ * control with no accessible name by accident rather than by intent.
  *
  * Grouping _labels_ (the radio items in the group-by menu) are NOT in this map — those live on the
  * {@link ProjectSelectorGrouping} objects the caller passes via `availableGroupings`, so custom
@@ -219,7 +229,9 @@ export type ProjectSelectorLocalizedStrings = {
  * `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
  * bare Storybook render), not production copy: every real consumer merges its own values for these
  * two fields on top via `localizedStrings`. They exist so the trigger never renders with an empty
- * accessible name or empty text before localized strings resolve.
+ * accessible name or empty text before localized strings resolve — with one deliberate exception:
+ * an explicitly empty `ariaLabel` is honored as an opt-out rather than replaced by this default.
+ * See `resolveStrings`.
  *
  * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
  * a consumer typically localizes only the handful of keys its configuration can reach, and which
@@ -246,86 +258,47 @@ export const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalized
   clearAll: 'Clear all',
 };
 
+/**
+ * Every field of {@link ProjectSelectorLocalizedStrings}, derived from
+ * `PROJECT_SELECTOR_DEFAULT_STRINGS` so the list cannot drift from the type:
+ * `PROJECT_SELECTOR_DEFAULT_STRINGS` is annotated `Required<…>`, so a field added to the type — or
+ * a field misspelled here — is a compile error at that literal, and this list picks up the new
+ * field with no further edit.
+ */
+const PROJECT_SELECTOR_STRING_FIELDS =
+  // `Object.keys` erases the key type; the assertion restores what
+  // `PROJECT_SELECTOR_DEFAULT_STRINGS`'s `Required<…>` annotation already guarantees, and is what
+  // lets the resolve loop below index both bags.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  Object.keys(PROJECT_SELECTOR_DEFAULT_STRINGS) as (keyof ProjectSelectorLocalizedStrings)[];
+
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): Required<ProjectSelectorLocalizedStrings> {
   const given = partial ?? {};
   // Resolved field by field rather than by spreading `partial` over the defaults, because a spread
   // cannot tell "the caller did not set this" from "the caller set it to something unusable":
-  // `buildProjectSelectorLocalizedStrings` emits a property for EVERY field, and a present-but-
-  // `undefined` property overwrites the default just as a real value would. What counts as usable
+  // `buildProjectSelectorLocalizedStrings` emits a property for every shared field, and a
+  // present-but-`undefined` property overwrites the default just as a real value would. What counts
+  // as usable
   // is `resolveLocalizedString`'s to decide — see `isResolvedLocalizedValue` for the three states
   // it rejects.
   //
-  // Written out one field at a time on purpose. The `Required<…>` return type then makes a missing
-  // or misspelled field a compile error, which a key-loop or an `Object.fromEntries` round-trip
-  // both erase.
-  return {
-    // The one field where an empty string is meaningful: it is a deliberate "no accessible name
-    // here; the visible text or a labelling ancestor names this control", so it passes through
-    // rather than falling back. Matches `RecentSearches`. Whitespace-only is not that opt-out.
-    ariaLabel:
-      given.ariaLabel === ''
-        ? ''
-        : resolveLocalizedString(given.ariaLabel, PROJECT_SELECTOR_DEFAULT_STRINGS.ariaLabel),
-    buttonPlaceholder: resolveLocalizedString(
-      given.buttonPlaceholder,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.buttonPlaceholder,
-    ),
-    commandEmptyMessage: resolveLocalizedString(
-      given.commandEmptyMessage,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.commandEmptyMessage,
-    ),
-    searchPlaceholder: resolveLocalizedString(
-      given.searchPlaceholder,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.searchPlaceholder,
-    ),
-    groupByAriaLabel: resolveLocalizedString(
-      given.groupByAriaLabel,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.groupByAriaLabel,
-    ),
-    groupSectionLabel: resolveLocalizedString(
-      given.groupSectionLabel,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.groupSectionLabel,
-    ),
-    groupByNone: resolveLocalizedString(
-      given.groupByNone,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.groupByNone,
-    ),
-    openTabsSectionHeading: resolveLocalizedString(
-      given.openTabsSectionHeading,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.openTabsSectionHeading,
-    ),
-    otherProjectsSectionHeading: resolveLocalizedString(
-      given.otherProjectsSectionHeading,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.otherProjectsSectionHeading,
-    ),
-    autoOpenTabsGroupingLabel: resolveLocalizedString(
-      given.autoOpenTabsGroupingLabel,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.autoOpenTabsGroupingLabel,
-    ),
-    autoSelectionGroupingLabel: resolveLocalizedString(
-      given.autoSelectionGroupingLabel,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.autoSelectionGroupingLabel,
-    ),
-    autoSelectionSelectedSectionHeading: resolveLocalizedString(
-      given.autoSelectionSelectedSectionHeading,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.autoSelectionSelectedSectionHeading,
-    ),
-    autoSelectionUnselectedSectionHeading: resolveLocalizedString(
-      given.autoSelectionUnselectedSectionHeading,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.autoSelectionUnselectedSectionHeading,
-    ),
-    boundButClosedTooltip: resolveLocalizedString(
-      given.boundButClosedTooltip,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.boundButClosedTooltip,
-    ),
-    openButtonLabel: resolveLocalizedString(
-      given.openButtonLabel,
-      PROJECT_SELECTOR_DEFAULT_STRINGS.openButtonLabel,
-    ),
-    clearAll: resolveLocalizedString(given.clearAll, PROJECT_SELECTOR_DEFAULT_STRINGS.clearAll),
-  };
+  // The per-field guarantee lives on `PROJECT_SELECTOR_DEFAULT_STRINGS` (and the `Required<…>`
+  // return type) rather than on a written-out object literal here: every field the type declares
+  // must appear there, so
+  // it is still a compile error to add a field to the type and leave it unhandled, and the loop
+  // below then covers the new field automatically.
+  const resolved = { ...PROJECT_SELECTOR_DEFAULT_STRINGS };
+  PROJECT_SELECTOR_STRING_FIELDS.forEach((key) => {
+    resolved[key] = resolveLocalizedString(given[key], PROJECT_SELECTOR_DEFAULT_STRINGS[key]);
+  });
+  // `ariaLabel` is the one field where an empty string is meaningful: it is a deliberate "no
+  // accessible name here; the visible text or a labelling ancestor names this control", so it passes
+  // through rather than falling back. Matches `RecentSearches`. Whitespace-only is not that opt-out,
+  // which is why this tests for `''` exactly rather than for a blank string.
+  if (given.ariaLabel === '') resolved.ariaLabel = '';
+  return resolved;
 }
 
 /**

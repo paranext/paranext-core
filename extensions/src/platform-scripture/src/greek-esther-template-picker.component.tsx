@@ -11,6 +11,7 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from 'platform-bible-react';
+import { resolveLocalizedString } from 'platform-bible-utils';
 
 /**
  * Pure presentational component for the Greek Esther template chooser. WP-002 in the manage-books
@@ -107,7 +108,7 @@ export function GreekEstherTemplatePicker({
   localizedStrings = {},
 }: GreekEstherTemplatePickerProps) {
   const t = (key: GreekEstherTemplatePickerLocalizedStringKey) =>
-    localizedStrings[key] ?? ENGLISH_FALLBACKS[key];
+    resolveLocalizedString(localizedStrings[key], ENGLISH_FALLBACKS[key]);
 
   const [selected, setSelected] = useState<GreekEstherTemplate>(defaultTemplate);
 

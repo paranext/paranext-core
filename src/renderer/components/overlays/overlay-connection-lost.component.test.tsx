@@ -191,6 +191,42 @@ describe('ConnectionLostOverlay', () => {
     ).toBeInTheDocument();
   });
 
+  // A value that is some OTHER key is just as unshowable as the key the component asked for, and an
+  // exact `value === key` comparison passes it through and renders `%…%` text at the user.
+  it('renders English text when a key resolves to some other raw key', () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([
+      { ...RESOLVED_STRINGS, [CONNECTION_LOST_TITLE_KEY]: '%a_different_key%' },
+      true,
+    ]);
+    render(<ConnectionLostOverlay />);
+
+    act(() => {
+      loseConnection();
+    });
+
+    const alert = screen.getByRole('alertdialog');
+    expect(alert).not.toHaveTextContent('%');
+    expect(alert).toHaveTextContent(ENGLISH_FALLBACKS[CONNECTION_LOST_TITLE_KEY]);
+  });
+
+  // Whitespace leaves the banner with a heading the user cannot read, which is the same failure as
+  // no heading at all — so it takes the English fallback rather than rendering blank.
+  it('renders English text when a key resolves to whitespace only', () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([
+      { ...RESOLVED_STRINGS, [CONNECTION_LOST_TITLE_KEY]: '   ' },
+      true,
+    ]);
+    render(<ConnectionLostOverlay />);
+
+    act(() => {
+      loseConnection();
+    });
+
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      ENGLISH_FALLBACKS[CONNECTION_LOST_TITLE_KEY],
+    );
+  });
+
   // The scrim blocks pointers, not keyboards. Without a focus trap, Tab off Reload walks into the
   // toolbar and dock, where every control is still focusable and Enter-activatable over the socket
   // that just died — the silent failure this state exists to end, reached by keyboard.

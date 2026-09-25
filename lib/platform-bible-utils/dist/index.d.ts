@@ -5084,6 +5084,50 @@ export declare const localizedStringsDocumentSchema: {
 	};
 };
 /**
+ * Whether a value read out of a localized-strings map carries text that can actually be shown to a
+ * user.
+ *
+ * Three states fail that test, and only one of them is nullish:
+ *
+ * - `undefined` — the lookup produced nothing, or a builder emitted a field it could not populate.
+ * - A raw localization key — `useLocalizedStrings` seeds its result with `{ [key]: key }` and keeps
+ *   that seed for the whole first render pass, and permanently if the localization provider errors.
+ *   A key is a non-empty string, so the usual `localizedStrings[key] ?? 'Default'` idiom does NOT
+ *   fall back: it hands back the literal `%some_key%` and renders it at the user.
+ * - Blank or whitespace-only text — a label of spaces is indistinguishable on screen from an empty
+ *   one, and leaves the control with no accessible name. That reads as broken rather than as
+ *   untranslated, so it belongs on the fallback path too.
+ *
+ * @param value The value read out of a localized-strings map, if any.
+ * @returns Whether `value` carries real localized text.
+ */
+export declare function isResolvedLocalizedValue(value: string | undefined): value is string;
+/**
+ * Reads one entry out of a localized-strings map, or `undefined` when that entry carries nothing
+ * showable yet.
+ *
+ * The map-and-key companion to {@link resolveLocalizedString}, for the callers that have no fallback
+ * of their own to offer and need to pass the absence onward — a notice that should not render at
+ * all rather than render in English, say. Values are read as `unknown` so a map whose entries are
+ * not statically known to be strings (a grouping-label lookup, for instance) can use the same
+ * reader instead of growing its own `typeof` guard.
+ *
+ * @param strings A localized-strings map.
+ * @param key The key to read.
+ * @returns The entry when it carries real localized text, `undefined` otherwise.
+ */
+export declare function localizedStringOrUndefined(strings: {
+	readonly [key: LocalizeKey]: unknown;
+}, key: LocalizeKey): string | undefined;
+/**
+ * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
+ *
+ * @param value The value read out of a localized-strings map, if any.
+ * @param fallback Text to show when `value` does not carry real localized text.
+ * @returns `value` when {@link isResolvedLocalizedValue} accepts it, `fallback` otherwise.
+ */
+export declare function resolveLocalizedString(value: string | undefined, fallback: string): string;
+/**
  * One selectable item in a command/marker palette. The dependency-free shared shape consumed by
  * every layer that handles palette items — the renderer overlay service's `CommandPaletteItem`
  * extends it, `platform-bible-react`'s `FootnoteEditor` marker palette uses it directly, and

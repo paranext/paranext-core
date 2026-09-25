@@ -368,10 +368,20 @@ export type ProjectSelectorFooterAction = {
 	onSelect: () => void;
 };
 /**
- * Every user-facing string the selector can render. All keys are optional; unset values fall back
- * to English defaults. Consumers wire this from a shared platform-level localization block (see
- * `%projectSelector_*%` keys in the platform's localizedStrings JSON) so every ProjectSelector in
- * the app reads the same vocabulary.
+ * Every user-facing string the selector can render. Consumers wire this from a shared
+ * platform-level localization block (see `%projectSelector_*%` keys in the platform's
+ * localizedStrings JSON) so every ProjectSelector in the app reads the same vocabulary.
+ *
+ * All keys are optional, and each field falls back to its English default independently. A field
+ * falls back when it is unset AND when it is set to a value that cannot be shown to a user: a raw
+ * localization key (`%…%`-shaped, which is what an unresolved lookup returns), an empty string, or
+ * whitespace only. So passing a bag straight from `useLocalizedStrings` is safe — keys that have
+ * not resolved yet render English rather than their own key text.
+ *
+ * `ariaLabel` is the one exception: an explicitly empty string is honored as a deliberate opt-out,
+ * meaning "a labelling ancestor names this control, do not add a second accessible name".
+ * Whitespace is not an opt-out and still falls back, since a whitespace-only label leaves the
+ * control with no accessible name by accident rather than by intent.
  *
  * Grouping _labels_ (the radio items in the group-by menu) are NOT in this map — those live on the
  * {@link ProjectSelectorGrouping} objects the caller passes via `availableGroupings`, so custom
@@ -432,7 +442,9 @@ export type ProjectSelectorLocalizedStrings = {
  * `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
  * bare Storybook render), not production copy: every real consumer merges its own values for these
  * two fields on top via `localizedStrings`. They exist so the trigger never renders with an empty
- * accessible name or empty text before localized strings resolve.
+ * accessible name or empty text before localized strings resolve — with one deliberate exception:
+ * an explicitly empty `ariaLabel` is honored as an opt-out rather than replaced by this default.
+ * See `resolveStrings`.
  *
  * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
  * a consumer typically localizes only the handful of keys its configuration can reach, and which
@@ -616,14 +628,6 @@ export declare const NO_GROUPING = "none";
  * row with a diagonally-struck chip and an "Open" button.
  */
 export declare function ProjectSelector(props: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
-/**
- * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
- *
- * @param value The value read out of a localized-strings map, if any.
- * @param fallback Text to show when `value` does not carry real localized text.
- * @returns `value` when {@link isResolvedLocalizedValue} accepts it, `fallback` otherwise.
- */
-export declare function resolveLocalizedString(value: string | undefined, fallback: string): string;
 /**
  * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
  * the result as the `localizedStrings` prop.

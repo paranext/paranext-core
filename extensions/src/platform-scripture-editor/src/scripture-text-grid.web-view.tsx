@@ -23,6 +23,7 @@ import {
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import type { DblResourceReference, ProjectReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -36,7 +37,6 @@ import {
 import { resolveDblLongName } from './scripture-text-grid/view-options-long-name.utils';
 import {
   DOWNLOADED_NO_PROJECT_KEY,
-  resolveLocalizedString,
   resolvePickerNotice,
   VIEW_OPTIONS_NOTICE_STRING_KEYS,
 } from './scripture-text-grid/view-options-notice.utils';
@@ -158,10 +158,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const zoom = useResourceContentZoom(webViewId, useWebViewState);
   const zoomMenuLabels = useMemo<ZoomMenuLabels>(
     () => ({
-      zoomIn: localizedStrings[ZOOM_IN_KEY],
-      zoomOut: localizedStrings[ZOOM_OUT_KEY],
-      reset: localizedStrings[RESET_ZOOM_KEY],
-      options: localizedStrings[ZOOM_OPTIONS_KEY],
+      zoomIn: resolveLocalizedString(localizedStrings[ZOOM_IN_KEY], 'Zoom in'),
+      zoomOut: resolveLocalizedString(localizedStrings[ZOOM_OUT_KEY], 'Zoom out'),
+      reset: resolveLocalizedString(localizedStrings[RESET_ZOOM_KEY], 'Reset zoom'),
+      options: resolveLocalizedString(
+        localizedStrings[ZOOM_OPTIONS_KEY],
+        'Zoom options for {resourceName}',
+      ),
     }),
     [localizedStrings],
   );
@@ -207,14 +210,22 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     (context: ChapterContextResource) => {
       setChapterContext(context);
       setAnnouncement(
-        buildChapterContextOpenedMessage(localizedStrings[ARIA_OPENED_KEY] ?? '', context.label),
+        buildChapterContextOpenedMessage(
+          resolveLocalizedString(
+            localizedStrings[ARIA_OPENED_KEY],
+            'Chapter view opened for {resourceReference}',
+          ),
+          context.label,
+        ),
       );
     },
     [localizedStrings],
   );
   const handleCloseChapterContext = useCallback(() => {
     setChapterContext(undefined);
-    setAnnouncement(localizedStrings[ARIA_CLOSED_KEY] ?? '');
+    setAnnouncement(
+      resolveLocalizedString(localizedStrings[ARIA_CLOSED_KEY], 'Chapter view closed'),
+    );
   }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -433,16 +444,25 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   const getReorderHandleLabel = useCallback(
     (resourceName: string) =>
-      formatReplacementString(localizedStrings[REORDER_HANDLE_KEY] ?? '', { resourceName }),
+      formatReplacementString(
+        resolveLocalizedString(localizedStrings[REORDER_HANDLE_KEY], 'Reorder {resourceName}'),
+        { resourceName },
+      ),
     [localizedStrings],
   );
   const getReorderAnnouncement = useCallback(
     (resourceName: string, position: number, total: number) =>
-      formatReplacementString(localizedStrings[REORDER_ANNOUNCEMENT_KEY] ?? '', {
-        resourceName,
-        position,
-        total,
-      }),
+      formatReplacementString(
+        resolveLocalizedString(
+          localizedStrings[REORDER_ANNOUNCEMENT_KEY],
+          'Moved {resourceName} to position {position} of {total}',
+        ),
+        {
+          resourceName,
+          position,
+          total,
+        },
+      ),
     [localizedStrings],
   );
 
@@ -560,7 +580,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
+                    aria-label={resolveLocalizedString(
+                      localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+                      'View Options',
+                    )}
                     // Explicit themed colors so the icon is visible in both light and dark themes; a
                     // plain ghost button inherits the (un-themed) default color and vanishes on dark
                     // tabs.
@@ -570,7 +593,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>{localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}</TooltipContent>
+              <TooltipContent>
+                {resolveLocalizedString(localizedStrings[VIEW_OPTIONS_BUTTON_KEY], 'View Options')}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
@@ -588,10 +613,12 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               // controls. Show the "no project" prompt only when there is genuinely no project (not
               // during the brief load after one is bound).
               disabled={!sources || !textConnectionPdp}
+              // A disabled control with no explanation reads as broken, so this one keeps its
+              // English wording when the lookup has not resolved rather than going silent.
               disabledMessage={
                 effectiveProjectId
                   ? undefined
-                  : resolveLocalizedString(localizedStrings, NO_PROJECT_KEY)
+                  : resolveLocalizedString(localizedStrings[NO_PROJECT_KEY], 'No project selected.')
               }
               localizedStrings={localizedStrings}
             />
@@ -601,8 +628,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       {/* Grid body: a message when nothing is renderable, otherwise the verse-cell rows.
           Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
-          empty (a DBL ref resolves to a cell only once the cached list loads). The
-          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
+          empty (a DBL ref resolves to a cell only once the cached list loads). The grid branch
+          renders while strings are still loading, so every string it passes down resolves to
+          English rather than relying on that guard.
 
           The body itself is not a zoom area: each cell marks only its resource's text, with that
           resource's own area (`resource-<id>`, see `resource-zoom-area.utils.ts`), so the cells'
@@ -615,8 +643,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
             <RetryableErrorView
               icon={<CloudOff />}
-              message={localizedStrings[CATALOG_ERROR_KEY]}
-              retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
+              message={resolveLocalizedString(
+                localizedStrings[CATALOG_ERROR_KEY],
+                "Couldn't load the list of available resources.",
+              )}
+              retryLabel={resolveLocalizedString(localizedStrings[CATALOG_RETRY_KEY], 'Try again')}
               onRetry={refetchCatalog}
             />
           </div>
@@ -628,15 +659,24 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             <EmptyState
               id="scripture-text-grid-empty-state"
               className="tw:text-center"
-              message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
-                viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
-              })}
+              message={formatReplacementString(
+                resolveLocalizedString(
+                  localizedStrings[EMPTY_STATE_KEY],
+                  'No texts to display. Open {viewOptionsLabel} to choose which texts to show.',
+                ),
+                {
+                  viewOptionsLabel: resolveLocalizedString(
+                    localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+                    'View Options',
+                  ),
+                },
+              )}
             />
           </div>
         )}
         {gridBodyState === 'grid' && (
           <ScriptureTextGrid
-            ariaLabel={localizedStrings[TITLE_KEY]}
+            ariaLabel={resolveLocalizedString(localizedStrings[TITLE_KEY], 'Text Collection')}
             resources={resources}
             scrRef={scrRef}
             setScrRef={setScrRef}
@@ -646,11 +686,20 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             chapterContext={chapterContext}
             onChapterContextChange={handleChapterContextChange}
             onChapterContextClose={handleCloseChapterContext}
-            closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-            cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
+            closeChapterContextLabel={resolveLocalizedString(
+              localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY],
+              'Close chapter view',
+            )}
+            cellAccessibleNameTemplate={resolveLocalizedString(
+              localizedStrings[CELL_ACCESSIBLE_NAME_KEY],
+              '{resourceName}, {reference}',
+            )}
             onReorder={handleReorder}
             getReorderHandleLabel={getReorderHandleLabel}
-            reorderHint={localizedStrings[REORDER_HINT_KEY]}
+            reorderHint={resolveLocalizedString(
+              localizedStrings[REORDER_HINT_KEY],
+              'Drag or press arrow keys to reorder',
+            )}
             getReorderAnnouncement={getReorderAnnouncement}
           />
         )}

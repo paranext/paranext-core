@@ -15,7 +15,6 @@ import {
   buildSelectionGroupingStrings,
   makeBuiltInGroupings,
   makeSelectionGrouping,
-  resolveLocalizedString,
   type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
@@ -30,6 +29,7 @@ import {
   isPlatformError,
   makeProjectSelectorCustomData,
   normalizeProjectId,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
@@ -543,8 +543,10 @@ global.webViewComponent = function ChecklistWebView({
     if (!hideMatches) return undefined;
     const excluded = data?.excludedCount ?? 0;
     if (excluded <= 0) return undefined;
-    const template =
-      localizedStrings['%markersChecklist_matches_omitted%'] ?? '{count} Matches Omitted';
+    const template = resolveLocalizedString(
+      localizedStrings['%markersChecklist_matches_omitted%'],
+      '{count} Matches Omitted',
+    );
     return formatReplacementString(template, { count: String(excluded) });
   }, [hideMatches, data?.excludedCount, localizedStrings]);
 

@@ -181,6 +181,7 @@ describe("Checks side panel project selector — the panel's own strings unresol
   const UNRESOLVED_STRINGS: LanguageStrings = Object.fromEntries(
     CHECKS_SIDE_PANEL_STRING_KEYS.map((key) => [key, key]),
   );
+  const RAW_KEY = /%[^%\s]+%/;
 
   it("keeps the panel's own placeholder wording rather than the picker's generic English", () => {
     render(
@@ -190,6 +191,9 @@ describe("Checks side panel project selector — the panel's own strings unresol
     const trigger = screen.getByRole('combobox', { name: 'Your projects & resources' });
     expect(trigger).toHaveTextContent('No project');
     expect(trigger).not.toHaveTextContent('Select a project');
+    // Asserting the English wording alone would still pass if a raw key sat beside it in the
+    // trigger. Nothing the trigger renders may be a key, whatever its prefix.
+    expect(trigger.textContent ?? '').not.toMatch(RAW_KEY);
   });
 
   it("keeps the panel's own empty message inside the popover", async () => {
@@ -197,7 +201,6 @@ describe("Checks side panel project selector — the panel's own strings unresol
     // popover is open. Any `%…%` key, whatever its prefix — a sweep narrowed to
     // `%webView_checksSidePanel_` would miss the shared `%projectSelector_*%` block the popover
     // also renders.
-    const RAW_KEY = /%[^%\s]+%/;
     const user = setupUser();
     render(
       <ChecksSidePanel {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />,

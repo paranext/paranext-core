@@ -46,7 +46,6 @@ import {
   ScopeWithRange,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
-  resolveLocalizedString,
   makeBuiltInGroupings,
   summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';
@@ -55,6 +54,7 @@ import {
   LanguageStrings,
   LocalizedStringValue,
   makeProjectSelectorCustomData,
+  resolveLocalizedString,
   ScrollGroupId,
   Section,
 } from 'platform-bible-utils';
@@ -862,6 +862,9 @@ export function Find({
 
   // Only offered when the project actually has extra material. Telling a project with none that
   // Find "can't include" it explains an absence that isn't Find's doing.
+  // TODO(PT-4103): Raw read - renders the key while strings load, and permanently if localization
+  // fails. `no-nullish-localized-fallback` cannot see it (there is no `??`), so it will not turn up
+  // in that sweep's warning list.
   const extraMaterialNotSearchedExplanation = useMemo(
     () =>
       hasExcludedExtraMaterial
@@ -876,16 +879,18 @@ export function Find({
   // Supplied only while something is blocked: an always-present explanation would disable scopes
   // everywhere.
   //
-  // Falls back to the key itself, as the library's own `localizeString` does. `localizedStrings` is
-  // an open index signature, so a key that went unrequested reads as `undefined` with no compile
-  // error — and an `undefined` explanation here would leave both scopes ENABLED while the query
-  // gate still rejects them, which is the one outcome worse than showing a raw key.
+  // Always resolves to text: `localizedStrings` is an open index signature, so a key that went
+  // unrequested reads as `undefined` with no compile error, and an `undefined` explanation would
+  // leave both scopes ENABLED while the query gate still rejects them.
   const disabledScopeExplanations = useMemo(() => {
     const blockedScopes = FIND_AVAILABLE_SCOPES.filter((availableScope) =>
       isScopeBlockedByExtraMaterial(availableScope, verseRef.book),
     );
     if (blockedScopes.length === 0) return undefined;
-    const explanation = localizedStrings[EXTRA_MATERIAL_SCOPE_KEY] ?? EXTRA_MATERIAL_SCOPE_KEY;
+    const explanation = resolveLocalizedString(
+      localizedStrings[EXTRA_MATERIAL_SCOPE_KEY],
+      "Find doesn't search extra material.",
+    );
     return Object.fromEntries(blockedScopes.map((blockedScope) => [blockedScope, explanation]));
   }, [verseRef.book, localizedStrings]);
 
@@ -1486,9 +1491,10 @@ export function Find({
           <ResultsPlaceholder
             domId={extraMaterialPlaceholderDomId}
             testId={EXTRA_MATERIAL_PLACEHOLDER_TEST_ID}
-            message={
-              localizedStrings[EXTRA_MATERIAL_SCOPE_RESULTS_KEY] ?? EXTRA_MATERIAL_SCOPE_RESULTS_KEY
-            }
+            message={resolveLocalizedString(
+              localizedStrings[EXTRA_MATERIAL_SCOPE_RESULTS_KEY],
+              "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.",
+            )}
           />
         )}
         {(() => {

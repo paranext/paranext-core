@@ -554,11 +554,12 @@ describe('unresolved localized strings', () => {
     // only the popover's.
     await user.click(screen.getByRole('button', { name: 'Group by' }));
 
-    // The English assertions are what carry this test. A raw-key sweep would add nothing: the
-    // builder above already rejected every key-as-value, so no raw key can reach this DOM under
-    // any behavior of the merge. The consumer-override test below is where a sweep bites.
     expect(screen.getByPlaceholderText('Search projects & resources')).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: 'None' })).toBeInTheDocument();
+    // The load-bearing half: asserting the English string alone would still pass if the fallback
+    // were reached some other way. Nothing may render a raw key.
+    expect(screen.queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
+    expect(screen.queryAllByText(RAW_KEY)).toHaveLength(0);
   });
 
   it('falls back to English when a consumer overrides with its own unresolved keys', async () => {
@@ -657,7 +658,12 @@ describe('unresolved localized strings', () => {
       />,
     );
 
-    expect(screen.getByRole('combobox', { name: 'Padded label' })).toBeInTheDocument();
+    // Asserted on the raw attribute, not the accessible name: name computation normalizes
+    // whitespace, so a `name: 'Padded label'` query passes whether or not the value was trimmed.
+    expect(screen.getByRole('combobox', { name: 'Padded label' })).toHaveAttribute(
+      'aria-label',
+      '  Padded label  ',
+    );
   });
 
   // A partially-translated locale is the realistic case: one bag carries resolved strings, raw
