@@ -42,7 +42,7 @@ const mockResourceCell = vi.fn(
       data-zoom-area={zoomArea}
     >
       <span>{`${resourceRef.label}@${scrRef.verseNum}`}</span>
-      <span data-testid={`cell-text-${resourceRef.projectId}`}>verse text</span>
+      <span data-testid={`verse-text-${resourceRef.projectId}`}>verse text</span>
       {cellWindow.isOpen
         ? createPortal(
             <div role="dialog" aria-label={`Window from ${resourceRef.label}`}>
@@ -830,7 +830,7 @@ describe('ScriptureTextGrid — events from inside a verse item', () => {
   it('opens the chapter view for a click on the verse text', () => {
     const onChapterContextChange = renderActivatableGrid();
 
-    fireEvent.click(screen.getByTestId('cell-text-b'));
+    fireEvent.click(screen.getByTestId('verse-text-b'));
 
     expect(onChapterContextChange).toHaveBeenCalledWith(resources[1]);
   });

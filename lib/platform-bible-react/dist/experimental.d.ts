@@ -69,7 +69,10 @@ export type ProjectSelectorProject = {
 	 * selection but can't toggle it again.
 	 */
 	isDisabled?: boolean;
-	/** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
+	/**
+	 * Human-readable explanation surfaced in the row tooltip, and to screen readers as the row's
+	 * description, when `isDisabled` is true.
+	 */
 	disabledReason?: string;
 	/**
 	 * Consumer-owned extra fields read by `ProjectSelectorGrouping.getGroupKey` implementations. The
@@ -713,6 +716,15 @@ export interface ResourcePickerDialogProps {
 	 * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
 	 */
 	allowDeselect?: boolean;
+	/**
+	 * Returns why a resource cannot be picked, or `undefined` when it can. Applies to the "Installed"
+	 * and "Available to Download" rows only, so a resource that is already selected can still be
+	 * deselected.
+	 *
+	 * A row with a reason is shown dimmed with a lock icon and is not selectable. The reason appears
+	 * in a tooltip on hover and keyboard focus, and is the row's description for screen readers.
+	 */
+	getDisabledReason?: (resource: DblResourceData) => string | undefined;
 	/** Called when the user clicks a resource row to select it */
 	onSelect: (resource: DblResourceData) => void;
 	/**
@@ -769,7 +781,7 @@ export declare function getResourcePickerBodyState(input: {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, getDisabledReason, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Whether a resource belongs to the section of the catalogue currently on display. An undefined
  * `resourceType` means "no type filter", so everything matches, as does an empty array — that is

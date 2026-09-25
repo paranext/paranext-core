@@ -5229,7 +5229,8 @@ export type DblResourceData = {
 	projectId: string;
 	/**
 	 * Whether licensing terms prohibit using this resource as a model or base for a new translation,
-	 * so pickers for those must not offer it. Absent on rows that did not come from the DBL catalog.
+	 * so pickers for those must not offer it. Set by the platform-get-resources extension on the rows
+	 * it serves; absent when it could not tell.
 	 */
 	isRestrictedAsModelText?: boolean;
 };

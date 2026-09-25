@@ -992,7 +992,7 @@ describe('ResourceCellView copyright indicator', () => {
 });
 
 describe('ResourceCellView right-click inside something opened from the cell', () => {
-  it('leaves the zoom menu closed for a right-click in a window portalled out of the cell', async () => {
+  it('leaves the right-click menu closed for a right-click in a window portalled out of the cell', async () => {
     // The copyright details window renders into document.body, but React still delivers its
     // events to the cell it was opened from
     const portalledWindow = createPortal(
@@ -1004,19 +1004,12 @@ describe('ResourceCellView right-click inside something opened from the cell', (
     renderCells(
       <ResourceCellView
         state="ready"
+        zoomArea={ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
-        localizedStrings={zoomLabels}
+        localizedStrings={menuStrings}
         editor={<span>verse</span>}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        zoomMenuLabels={{
-          zoomIn: 'Zoom In',
-          zoomOut: 'Zoom Out',
-          reset: 'Reset Zoom',
-          options: 'Zoom options',
-        }}
+        zoomMenuLabels={zoomMenuLabels}
         copyrightIndicator={portalledWindow}
       />,
     );
@@ -1024,10 +1017,10 @@ describe('ResourceCellView right-click inside something opened from the cell', (
     const isNotCancelled = fireEvent.contextMenu(screen.getByText('Copyright text'));
 
     expect(isNotCancelled).toBe(true);
-    expect(screen.queryByRole('menuitem', { name: 'Zoom In' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Copy' })).not.toBeInTheDocument();
 
     // The same right-click on the verse text does open it
     fireEvent.contextMenu(screen.getByText('verse'));
-    expect(await screen.findByRole('menuitem', { name: 'Zoom In' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
   });
 });
