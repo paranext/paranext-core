@@ -47,19 +47,21 @@ export type BrokerWebContents = {
 type MessageChannelFactory = () => { port1: MessagePortMainLike; port2: unknown };
 
 type WindowPortState = {
-  socket: MessagePortServerSocket | undefined;
   /**
-   * Whether the current page load has been handed its port. A page gets exactly one; extension code
-   * shares the page's origin and can reach the preload's bridge, so a second request in the same
-   * load is refused rather than answered. Reset when the page is replaced.
+   * The window's live channel to main, if it has one. A window has at most one at a time: extension
+   * code shares the page's origin and can reach the preload's bridge, so a request while this is
+   * set is refused rather than answered. It is cleared when the channel closes, from either end,
+   * and only then can the window be served again. Keying this on the channel rather than on a page
+   * load means an old page that asks after a reload has started, and then unloads, cannot leave the
+   * new page refused.
    */
-  hasGrantedPortForCurrentLoad: boolean;
+  socket: MessagePortServerSocket | undefined;
 };
 
 const NAVIGATED_AWAY_REASON = 'page navigated away';
 const RENDERER_GONE_REASON = 'renderer process gone';
-const ALREADY_GRANTED_REASON =
-  'This page already has a PAPI port; a page gets exactly one per load';
+const ALREADY_CONNECTED_REASON =
+  'This window already has an open PAPI port; a window gets one at a time';
 
 const windowStates = new Map<string, WindowPortState>();
 
@@ -108,8 +110,7 @@ function grantPort(windowId: string, state: WindowPortState, frame: BrokerFrame)
     return;
   }
   state.socket = socket;
-  state.hasGrantedPortForCurrentLoad = true;
-  // A peer close frees the slot but not the grant: the page keeps its one port for its whole life
+  // However the channel closes, the window can then be served again
   socket.addEventListener('close', () => {
     if (state.socket === socket) state.socket = undefined;
   });
@@ -117,11 +118,10 @@ function grantPort(windowId: string, state: WindowPortState, frame: BrokerFrame)
   try {
     frame.postMessage(PAPI_PORT_CHANNEL, grant, [port2]);
   } catch (error) {
-    // The page never received the port, so it has not used up its one request
+    // The page never received the port, so the window must not count as connected
     const reason = getErrorMessage(error);
     logger.warn(`Could not deliver a PAPI port to window ${windowId}: ${reason}`);
     closePort(state, 1011, reason);
-    state.hasGrantedPortForCurrentLoad = false;
   }
 }
 
@@ -134,7 +134,7 @@ function grantPort(windowId: string, state: WindowPortState, frame: BrokerFrame)
  * @param windowId The window's platform id, which labels its RPC server `renderer:<windowId>`
  */
 export function registerWindow(webContents: BrokerWebContents, windowId: string): void {
-  const state: WindowPortState = { socket: undefined, hasGrantedPortForCurrentLoad: false };
+  const state: WindowPortState = { socket: undefined };
   windowStates.set(windowId, state);
 
   webContents.ipc.on(PAPI_PORT_REQUEST_CHANNEL, (event) => {
@@ -147,13 +147,11 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
       );
       return;
     }
-    if (state.hasGrantedPortForCurrentLoad) {
-      logger.warn(
-        `Window ${windowId} already has a PAPI port for this page; refusing a second request`,
-      );
+    if (state.socket) {
+      logger.warn(`Window ${windowId} already has an open PAPI port; refusing a second request`);
       // Answered rather than ignored so a second socket in the page fails at once instead of
       // waiting out its connect timeout
-      postPortError(windowId, frame, ALREADY_GRANTED_REASON);
+      postPortError(windowId, frame, ALREADY_CONNECTED_REASON);
       return;
     }
     grantPort(windowId, state, frame);
@@ -163,15 +161,12 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
     if (!doesNavigationReplaceRendererRegistrations(details)) return;
     // The page's own unload usually closed the port already; this covers a page that never got to
     closePort(state, 1001, NAVIGATED_AWAY_REASON);
-    state.hasGrantedPortForCurrentLoad = false;
   });
 
   webContents.on('render-process-gone', () => {
     // Closed here rather than left to the port's own close notification, which can arrive after
     // the reload's navigation has already replaced the socket, so the crash always reads as 1006
     closePort(state, 1006, RENDERER_GONE_REASON);
-    // The reloaded page must be allowed to ask
-    state.hasGrantedPortForCurrentLoad = false;
   });
 
   webContents.on('destroyed', () => {
