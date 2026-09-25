@@ -112,6 +112,8 @@
   "%history_recentSearches_ariaLabel%": "Show recent searches",
   "%home_dialog_title%": "Home",
   "%insertNote%": "Insert Note",
+  "%interfaceLanguage_restartPrompt_message%": "Restart to finish switching the interface language.",
+  "%interfaceLanguage_restartPrompt_restartNow%": "Restart now",
   "%mainMenu_about%": "About Platform.Bible",
   "%mainMenu_downloadInstallResources%": "Download/Install Resources",
   "%mainMenu_edit%": "Edit",

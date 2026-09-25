@@ -28,6 +28,7 @@ import {
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useRegistrationValidity } from '@renderer/hooks/use-registration-validity.hook';
 import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
 import {
   getOfferedLanguageDefaults,
   switchInterfaceLanguage,
@@ -223,9 +224,11 @@ export function UserProfilePopover() {
       logger.warn('UserProfilePopover: cannot set interface language; the setting is unavailable');
       return;
     }
-    setInterfaceLanguage(next).catch((e: unknown) => {
-      logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
-    });
+    setInterfaceLanguage(next)
+      .then(() => offerRestartAfterInterfaceLanguageChange(safeInterfaceLanguage, next))
+      .catch((e: unknown) => {
+        logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
+      });
   };
 
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
