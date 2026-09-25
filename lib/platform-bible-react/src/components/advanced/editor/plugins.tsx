@@ -8,7 +8,7 @@
  * Shadcn/Lexical Editor Documentation: https://shadcn-editor.vercel.app/docs/
  */
 
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { AutoFocusPlugin } from '@lexical/react/LexicalAutoFocusPlugin';
@@ -38,10 +38,12 @@ export function Plugins({
   placeholder = 'Start typing ...',
   autoFocus = false,
   onClear,
+  actions,
 }: {
   placeholder?: string;
   autoFocus?: boolean;
   onClear?: (clearFn: () => void) => void;
+  actions?: ReactNode;
 }) {
   const [, setFloatingAnchorElem] = useState<HTMLDivElement | undefined>(undefined);
 
@@ -56,7 +58,17 @@ export function Plugins({
       {/* toolbar plugins */}
       <ToolbarPlugin>
         {() => (
-          <div className="tw:sticky tw:top-0 tw:z-10 tw:flex tw:gap-2 tw:overflow-auto tw:border-b tw:p-1">
+          // Sticky, but deliberately with no z-index of its own. `position: sticky` pins relative
+          // to the nearest scrolling ancestor, not this element's own overflow — `Plugins` is
+          // shared by consumers (e.g. the comments panel's editor, whose scrolling ancestor is the
+          // thread list) where the toolbar does need to stay pinned while its container scrolls.
+          // With z-index left at its default (auto), this box establishes no stacking level of its
+          // own, so a host's positioned chrome with an explicit z-index (e.g. a sticky panel
+          // header) paints above it on stacking order rather than losing to it on DOM position.
+          <div
+            data-testid="editor-format-toolbar"
+            className="tw:sticky tw:top-0 tw:flex tw:gap-2 tw:overflow-auto tw:border-b tw:p-1"
+          >
             <FontFormatToolbarPlugin />
           </div>
         )}
@@ -77,7 +89,14 @@ export function Plugins({
         <ClearEditorPlugin />
         {/* editor plugins */}
       </div>
-      {/* actions plugins */}
+      {actions && (
+        <div
+          data-slot="editor-actions"
+          className="tw:flex tw:flex-row tw:items-center tw:gap-2 tw:border-t tw:px-2 tw:py-1.5"
+        >
+          {actions}
+        </div>
+      )}
     </div>
   );
 }

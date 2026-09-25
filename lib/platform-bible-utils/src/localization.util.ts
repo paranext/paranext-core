@@ -20,8 +20,9 @@ import { LocalizeKey } from './extension-contributions/menus.model';
  *
  * `lib/eslint-plugin-paranext/src/rules/no-nullish-localized-fallback.ts` carries a deliberate
  * second copy of this pattern — the plugin does not depend on this workspace — and the two must
- * agree. That rule's test suite pins the agreement against a shared table of values; change both
- * together.
+ * agree. Each side's tests classify the same table of values, but the table is duplicated rather
+ * than imported, so editing one pattern alone fails a test while editing a pattern AND its own
+ * table together ships drift silently. Change both together, tables included.
  */
 const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
 
@@ -44,7 +45,12 @@ const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
  * @returns Whether `value` carries real localized text.
  */
 export function isResolvedLocalizedValue(value: string | undefined): value is string {
-  return value !== undefined && !LOCALIZATION_KEY_PATTERN.test(value) && value.trim() !== '';
+  // Guards the type, not just narrows it: this ships to every extension through
+  // `platform-bible-utils`, so it is reachable from untyped extension JS and from a contribution
+  // carrying an explicit `null`. Without this clause those reach `value.trim()` and throw, and a
+  // throw on a render path blanks the view.
+  if (typeof value !== 'string') return false;
+  return !LOCALIZATION_KEY_PATTERN.test(value) && value.trim() !== '';
 }
 
 /**

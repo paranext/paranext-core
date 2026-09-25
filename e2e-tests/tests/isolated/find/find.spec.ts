@@ -49,8 +49,9 @@
  * tab nodes at all times but clips those that overflow, so `toBeAttached()` succeeds for a clipped
  * tab while `toBeVisible()` fails. {@link activateTab} handles both cases, clicking the tab directly
  * when visible and otherwise going through the `.dock-nav-more` overflow dropdown. This mirrors
- * `clickCommentsTab` in `tests/isolated/comments-tab.spec.ts`, the proven precedent for a
- * permanent, non-closable Column 3 tab.
+ * `clickCommentsTab` in `fixtures/comment-test-helpers.ts` (shared by `comments-tab.spec.ts` and
+ * `notes-content-zoom/comments-panel-content-zoom.spec.ts`), the proven precedent for a permanent,
+ * non-closable Column 3 tab.
  */
 
 import { ElectronApplication, Frame, FrameLocator, Locator, Page } from '@playwright/test';
@@ -266,8 +267,13 @@ async function invokeFindFromHamburger(mainPage: Page): Promise<void> {
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
 
-  // Anchored to the exact label "Find" (%webView_platformScriptureEditor_openFind%).
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
+  // The item's accessible name is its label "Find" (%webView_platformScriptureEditor_openFind%)
+  // followed by a keyboard shortcut hint, so the match cannot be anchored to the end of the name.
+  // The trailing `(\s|$)` rules out only a longer single word, e.g. "Finder"; a sibling item whose
+  // label begins "Find " — "Find and replace…" — matches too, and the click then fails with a
+  // strict-mode violation rather than opening the wrong panel. That failure is the signal to narrow
+  // this locator to the label element instead of the whole accessible name.
+  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find(\s|$)/i });
   await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
   await findMenuItem.click();
 }

@@ -15,6 +15,7 @@ import { useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useWindowBlockingOverlay } from '@renderer/hooks/use-window-blocking-overlay.hook';
 import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
 import { CANCEL_ENTER_ZOOM_STYLE } from '@renderer/components/overlays/full-screen-dialog.util';
 import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
@@ -34,8 +35,8 @@ export const CONNECTION_LOST_MESSAGE_KEY = '%overlay_connectionLost%' satisfies 
 export const CONNECTION_LOST_RELOAD_KEY = '%overlay_connectionLostReload%' satisfies LocalizeKey;
 /**
  * Referenced as `{%product_name%}` inside the message, and expanded by `formatReplacementString`,
- * so the app name lives in one place and swaps cleanly for Paratext 10 Studio. Fetched alongside
- * the message rather than hardcoded for the same reason every other product-named string is.
+ * so the app name lives in one place and swaps cleanly for Paratext 10. Fetched alongside the
+ * message rather than hardcoded for the same reason every other product-named string is.
  */
 export const PRODUCT_NAME_KEY = '%product_name%' satisfies LocalizeKey;
 
@@ -279,6 +280,8 @@ export function ConnectionLostOverlay() {
     // is what makes a reload a real recovery rather than a cosmetic one.
     window.location.reload();
   }, []);
+
+  useWindowBlockingOverlay(isConnectionLost);
 
   if (!isConnectionLost) return undefined;
 

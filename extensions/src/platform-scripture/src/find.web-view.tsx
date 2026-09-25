@@ -45,6 +45,7 @@ import {
   WordRestriction,
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { projectNamesFromMetadata } from './project-names.util';
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
 import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
 import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
@@ -120,31 +121,6 @@ const DEFAULT_RECENT_SEARCHES: string[] = [];
 type ProjectNamesById = {
   [id: string]: Pick<FindProject, 'shortName' | 'fullName' | 'language'>;
 };
-
-/**
- * Gets the short name, full name, and language of a project from its ID. Kept in the webview (not
- * the shared, `@papi`-free utils) so the utils stay importable by the presentational component and
- * its story.
- *
- * `platform.language` feeds the picker's Language grouping; it degrades to `undefined` (an "unknown
- * language" bucket) rather than failing the whole lookup, since a project without it is still
- * perfectly searchable.
- */
-async function getProjectNames(
-  projectId: string,
-): Promise<Pick<FindProject, 'shortName' | 'fullName' | 'language'>> {
-  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
-    pdp.getSetting('platform.name'),
-    pdp.getSetting('platform.fullName'),
-    pdp.getSetting('platform.language').catch(() => undefined),
-  ]);
-  return {
-    shortName: projectShortName,
-    fullName: projectFullName,
-    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
-  };
-}
 
 /**
  * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in
@@ -403,29 +379,10 @@ global.webViewComponent = function FindWebView({
         includeProjectInterfaces: ['Scripture', 'Paratext'],
       });
 
-      // `allSettled`, NOT `all`. These are independent per-project reads, and `usePromise` has no
-      // `.catch` around its factory — so with `all`, one project whose PDP or `platform.name` read
-      // rejects would reject the whole batch, the rejection would escape this callback, and neither
-      // `setValue` nor `setIsLoading(false)` would ever run: `projectIdsAndNames` would stay `{}`
-      // and `isLoadingProjects` stuck `true`, permanently. That state is UNRECOVERABLE here,
-      // because the refetch effect and the reassignment effect's canonical-id gate both wait on
-      // `isLoadingProjects` — the one path that could retry is gated off by the failure itself. And
-      // the batch spans every Scripture/Paratext project, not just open ones, so a single bad
-      // project would take out the whole picker. Skip the failures, keep the rest.
-      const projectNameResults = await Promise.allSettled(
-        allMetadata.map(async (metadata) => ({
-          id: metadata.id,
-          names: await getProjectNames(metadata.id),
-        })),
-      );
-      projectNameResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          projectDict[result.value.id] = result.value.names;
-          return;
-        }
-        logger.warn(
-          `Find: could not read names for project ${allMetadata[index].id}; omitting it from the project picker: ${getErrorMessage(result.reason)}`,
-        );
+      // Every name the picker shows comes off the metadata already fetched above, so there is no
+      // per-project read left that could fail and take the whole picker with it.
+      allMetadata.forEach((metadata) => {
+        projectDict[metadata.id] = projectNamesFromMetadata(metadata);
       });
 
       return projectDict;

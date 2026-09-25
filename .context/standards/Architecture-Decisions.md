@@ -171,6 +171,82 @@ step, no automation. Just a record.
   OS focus, only serves callers with no window, such as the extension host.
 - **Source:** PT-4238; PR #2736.
 
+## adr-all-projects-routes-to-home: the title bar's "more projects" affordance routes to Home rather than making the project picker send/receive-aware
+
+_The affordance is labelled "More projects…" in the title bar today; the PRD calls it "All projects…"
+and the rename lands with the `ProjectSelector` migration (PT-4549). Both names mean this entry._
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** PRD IAN-NN-2.3 asks for a way to reach projects the title-bar picker's list does not
+  show, including projects that exist on the send/receive server but not yet on this machine. The
+  picker's list is built entirely from local metadata — `use-project-picker-data.hook.ts` never calls
+  `getSharedProjects` — so the affordance existed but could not reach the server. Making the picker
+  itself server-aware was constrained by two facts: `paratextBibleSendReceive.getSharedProjects` is
+  registered only through Paratext 10 Studio's patch layer, so calling it from core would throw in
+  plain Platform.Bible; and there is no app-wide offline signal (three identical
+  `// TODO: Hook into something that checks for whether the platform is in offline mode` sit in the
+  socket and XHR services). Meanwhile Home — `extensions/src/platform-get-resources/` — already
+  merges local and shared projects, de-duplicates them by `projectId`, gates its own server fetch on
+  the `platformGetResources.isSendReceiveAvailable` command (Home is an extension web view, so the
+  renderer-side `useSendReceiveAvailability` hook is not reachable from it), and offers Get rather
+  than Open for rows not on disk.
+- **Decision:** The affordance opens Home. Core does not call `getSharedProjects`, gains no
+  send/receive awareness in the picker, and needs no build-flavour gate on the affordance — Home
+  degrades to a local-only list where send/receive is absent. Home owns the honesty requirement
+  instead: it now distinguishes "the server could not be reached" from "the server has no projects"
+  with an explicit banner, because a silent fallback to the local half tells an offline user their
+  projects do not exist.
+- **Alternatives:** **Make the picker call `getSharedProjects` and render server rows inline** —
+  rejected: it throws in plain Platform.Bible, duplicates the merge and de-duplication Home already
+  does, and would need its own outage handling. **Gate the affordance on send/receive availability**
+  — rejected once the target became Home: the gate's only rationale was avoiding that throw, and
+  applying it anyway would hide a working "all projects on disk" surface from plain Platform.Bible.
+  **Route to the Send/Receive dialog** — rejected by the PRD itself, since send/receive is intended
+  to be replaced by Home. **Show the unfiltered Home, resources included** — how this first shipped,
+  and rejected on the demo feedback below: the resource rows are noise on a path that starts in a
+  project picker. **Cache the server's project list for offline use** — deferred: a cached list
+  cannot be acted on, because a user who is offline cannot sync the project the cache would show.
+- **Consequences:** Home is the single surface that reconciles local and server projects, so a defect
+  in that reconciliation is fixed once. The picker stays local-only by design, which is worth
+  restating on any future picker ticket that reads its list as incomplete. The
+  `platform.projectPicker` dialog now has no caller in core — it is kept rather than removed because
+  the dialog type is part of the public `DialogTypes` surface an extension can still open, so
+  retiring it is a breaking change that belongs to its own decision, not a side effect of this one.
+  Revisit if
+  `getSharedProjects` moves out of the Studio patch layer into core, or if an app-wide offline signal
+  lands — either would make an inline, server-aware picker cheap enough to reconsider. The affordance
+  needs no build-flavour gate, but it does inherit a data-driven one: the picker renders its dropdown
+  only when it has items (`hasProjectPickerItems`), so a user with no local project metadata — including
+  after `MAX_METADATA_FETCH_RETRIES` is exhausted in `use-project-picker-data.hook.ts` — cannot reach
+  Home through it. That is an awkward state rather than a dead end, because `menus.json` contributes
+  `%mainMenu_open%` → `platformGetResources.openHome` with no `hiddenInterfaceModes`, and
+  `dockHomeInThisWindow` auto-opens Home when the dock empties. Home's availability check is also a
+  second implementation of what `src/renderer/hooks/use-send-receive-availability.hook.ts` already
+  models — a shorter retry window that fails closed rather than open — and the two cannot be merged
+  without a module shared across the renderer/web-view boundary, so unifying them is deferred rather
+  than done here.
+- **Amended 2026-09-18 (PT-4552, demo feedback):** the affordance opens Home **scoped to editable
+  projects**, leaving out the published resources. The open question this entry recorded — whether
+  Home's resource rows are noise on this path or the other half of "get me to the project I mean" —
+  was decided against real use at the demo: noise. The scoping is a property of the launch, not of
+  the tab, so it is carried as an optional `shouldShowProjectsOnly` argument to
+  `platformGetResources.openHome`, written into the web view's `state` by unconditional assignment
+  (`buildHomeWebViewState`) so a restored layout or a later menu open clears it, and read back with
+  `useWebViewState`. Every other entry point to Home still lists both. Reusing an already-open Home
+  raises its tab without consulting the provider, so fresh options never reach it; the command
+  reloads that web view when — and only when — the scoping differs
+  (`shouldReloadHomeForProjectsOnly`), because the rebuild is the slowest thing on this path. The
+  cost this adds is a second Home configuration to keep working, which is what the entry warned
+  about; it is accepted because the alternative is a project picker whose "more" leads to a list of
+  things that are not projects.
+- **Amended 2026-09-21 (PT-4549, `ProjectSelector` migration):** the data-driven gate this entry
+  described is gone. The picker is now a `ProjectSelector` whose trigger stays reachable with an
+  empty list, and the affordance is its `footerAction` row rather than a bare `<button>` inside a
+  `SelectContent` that only mounted alongside items — so a user with no local project metadata can
+  reach Home through it after all. The controlled-`open` state that closed the dropdown by hand is
+  gone with it: `ProjectSelector` closes its own popover when the footer row is activated.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014
@@ -261,7 +337,7 @@ step, no automation. Just a record.
   pick a key that is genuinely free — F8/F9 are taken by chapter/book navigation in
   `src/main/verse-navigation-shortcuts.util.ts`). Do **not** build a general declarative keybinding
   API for a single shortcut. Every added branch also requires a matching `KeyboardShortcutEntry` in
-  `src/stories/keyboard-shortcuts.data.ts` (mandated by `.claude/rules/keyboard-shortcuts-catalog.md`).
+  `src/shared/data/keyboard-shortcuts.data.ts` (mandated by `.claude/rules/keyboard-shortcuts-catalog.md`).
 - **Alternatives:** (a) renderer-level global `keydown` — rejected: web-view iframes are
   `about:srcdoc`, so their key events don't bubble to the top renderer; coverage gaps unless
   duplicated into every web-view. (b) Build a declarative keybinding-contribution API — **deferred**:
@@ -635,6 +711,98 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-closed-source-command-doc-altitude: Command docs for closed-source-backed PAPI commands describe caller-visible guarantees, not the current implementer's mechanism
+
+- **Date:** 2026-09-05
+- **Status:** Accepted
+- **Context:** PR #2771 (PT-4483) fixed `paratextBibleSendReceive.syncProjects`'s doc comments (the
+  C# stub's XML doc and `src/@types/paratext-bible-send-receive/index.d.ts`'s TSDoc), which had
+  drifted from the real Paratext 10 Studio implementation — a closed-source patch
+  (`paratext-10-studio` `repo-patches/paranext-core.patch`, `SyncProjectsCore`). A first draft of the
+  fix encoded Studio's specific first-sync mechanism directly (an initial batch of 5 projects, then
+  one at a time, stopping once a non-Observer role is found), verified against the actual patch
+  source. Code review (Reviewable, `katherinejensen00`, with direct access to that patch) found the
+  new text itself over-generalized: for accounts with five or fewer shared projects, or accounts
+  where the user has no editable role on any of them, the described "stops early, rather than
+  syncing the whole account" claim doesn't hold — the whole account downloads regardless, just via a
+  different path through the same mechanism. Fixing that specific overgeneralization in place would
+  still have left the doc asserting Studio's tunable constants (batch size, the role check) as part
+  of the command's contract — constants this repo cannot verify, cannot test against (the stub
+  throws/no-ops; no core test exercises the real logic), and has no way to detect drifting the next
+  time Studio's patch is regenerated (`save-repo-patches`).
+- **Decision:** Doc comments for a command whose real implementation is closed-source or otherwise
+  swappable (today: anything backed by `paratext-bible-send-receive`, i.e. any command whose
+  `@throws` documents a `PlatformUnimplementedException` for builds that don't implement it, naming
+  the current implementer only as an example) describe caller-visible **guarantees** only — what a
+  caller may rely on and must not assume — never the current implementer's specific mechanism or
+  tuning constants. Concretely, `syncProjects`'s zero-local-projects case now reads "an
+  implementation is expected to try to make at least one project available for the current user to
+  work in, if the account has one — but may stop short of downloading every shared project in the
+  account, trading completeness for performance. Callers MUST NOT assume every shared project is
+  present locally once this resolves," replacing the batch/role-check description. Promoted to a
+  standing rule: `.claude/rules/architecture/closed-source-command-docs.md`.
+- **Alternatives:**
+  - **Encode the known implementation for convenience** (what the first draft did) — rejected:
+    useful once, but ties this repo's doc to a private repo's tunable constants with no verification
+    path and no drift signal; exactly what produced the overgeneralization this decision responds
+    to.
+  - **Keep it vague, point readers to the other repo** — rejected: readers of this repo (including a
+    future AI agent) might not have access to or knowledge of the actual implementation(s); a bare
+    pointer elsewhere is unactionable for them and doesn't tell a caller what it can safely assume.
+  - **Leave the pre-PR wording**, which understated the behavior — rejected: it was the original bug
+    this PR fixed (claimed the no-ID form only ever syncs already-local projects, when a true first
+    sync can and should also acquire the account's first project).
+- **Consequences:** This doc can no longer be invalidated by a Studio-side regeneration of
+  `repo-patches/paranext-core.patch` that changes a tuning constant, since it no longer asserts one.
+  The tradeoff is genuinely less specific information in-repo for someone who wants to reason
+  precisely about first-sync latency or batching — that detail now only exists in the Studio patch
+  itself, which the rule file points to. If a future need arises to expose implementation-specific
+  timing/behavior to core (e.g. for a startup-performance budget), it should be surfaced through an
+  explicit signal (a return value, an event) rather than encoded into a doc comment describing a
+  different implementation's internals. Upstreamed 2026-09-18 via
+  `paratext-bible-internal-extensions#200` (merged), closing the drift-on-re-sync risk this decision
+  flagged. That review round also surfaced a real (if narrow) bug in the underlying implementation —
+  `seenConnectedIds` not seeded before the connected-resource scan, causing a double-sync when a
+  primary project is also connected to another primary in the same call — tracked separately as
+  PT-4602 (open as of 2026-09-21), since it's a code fix in the Studio patch, not a doc fix.
+- **Source:** PT-4483, review of #2771.
+
+## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
+
+- **Date:** 2026-09-15
+- **Status:** Superseded by adr-comment-filter-presets-over-axes. This design (the `Filters` trigger,
+  its popover, and `buildFilterChips`) shipped briefly, then was replaced two days later by two
+  always-visible `Select`s once the filter model itself collapsed from four orthogonal axes to a
+  closed preset set — exactly the "axis count small enough to fit inline" case this entry's own
+  Revisit clause named. `buildFilterChips` no longer exists anywhere in `comment-list.component.tsx`
+  or the rest of the branch. Read this entry as the reasoning of 2026-09-15, not as the current
+  toolbar design.
+- **Context:** The comments panel filtered on five orthogonal axes, each a `Select` with a 128px
+  minimum width, in a wrapping toolbar row. In a 320px panel that already wrapped to three rows
+  (~112px of chrome). Adding two more axes (date, author) would have made it four rows (~148px) —
+  most of a comment card — in the same change whose goal was fitting more comments on screen. The
+  axis labels are long by necessity (`All resolved statuses`, `All read statuses`), so they cannot
+  be shortened into fitting.
+- **Decision:** Collapse every axis behind a single `Filters` trigger opening a popover that gives
+  each axis a labelled full-width row, and render a dismissible chip beside the trigger for each
+  axis not at its default. A fresh list therefore shows the trigger alone (~48px), below the
+  previous baseline rather than above it. Implemented in `CommentListPanel` in
+  `extensions/src/legacy-comment-manager/src/comment-list.component.tsx`, via a chip-building
+  helper that no longer exists there (see this entry's Status).
+- **Alternatives:**
+  - *Seven inline dropdowns.* Smallest diff, but spends most of a comment card on chrome.
+  - *Drop the `min-w-32` floor so triggers size to content.* Measured and rejected: the shipped
+    default labels already exceed 128px at `text-sm`, so removing the floor does not shrink the
+    default state — it only lets flex-shrink truncate harder, producing adjacent triggers both
+    reading `All r…`.
+- **Consequences:** Axis controls are no longer in the DOM until the popover opens, which any E2E
+  test locating them directly must account for. Visible axis names need their own localization keys
+  — reusing the `aria-label` keys yields row headings like "Filter by resolved status" and chip
+  dismiss labels like "Clear Filter by resolved status filter". Nested overlays inside the popover
+  (a `Select`, or the author axis's own `Popover`) must re-portal into the popover's own container
+  or they read as outside clicks; `PopoverPortalContainerProvider` is the existing mechanism, and
+  `scope-selector.component.tsx` is the reference consumer. **Revisit** if an axis count small
+  enough to fit inline returns, or if chips prove less discoverable than visible dropdowns in use.
 ## adr-column-3-panels-are-told-their-project: A Column 3 panel is told its project by the switch; it never infers one from the scroll group
 
 - **Date:** 2026-08-27
@@ -755,6 +923,129 @@ step, no automation. Just a record.
     so the held admin list can stay on the outgoing project while the per-user list and overlay
     resubscribe to the incoming one.
 - **Source:** PT-4423, which fixes PT-4238.
+
+## adr-comment-drafts-follow-filters: An uncommitted comment draft is filtered like any other thread, unlike Paratext 9
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** In Paratext 9, a thread with an uncommitted draft is exempt from every filter — it
+  always shows, regardless of what the user has filtered to. PT10's comment list is filtered
+  server-side: `buildCommentThreadSelector` (`comment-list-filters.model.ts`) turns the preset and
+  scope selection into a `LegacyCommentThreadSelector` sent to the data provider's
+  `getCommentThreads` query, and the web view only ever narrows that already-queried result further
+  (see the `visibleCommentThreads` memo in `comment-list.web-view.tsx`). `LegacyCommentThreadSelector`
+  (`types/legacy-comment-manager.d.ts`) has no way to ask for "the filtered results, plus these
+  specific extra thread ids regardless of the filter" — its `threadId` field is a single optional
+  `string`, not a set. A thread the query excluded never reaches the web view's result set, so
+  nothing client-side can add it back in.
+- **Decision:** Let drafts be filtered like any other thread. Only the `unsaved` preset narrows the
+  query result down to threads that have a draft (`visibleCommentThreads` in
+  `comment-list.web-view.tsx`); every other preset or scope hides a drafted thread exactly as it
+  would hide any other thread that doesn't match. The `unsaved` preset keeps Paratext 9's "Unsaved
+  comments" label (`localizedStrings.json`) as a deliberate parity choice, even though this
+  implementation auto-saves drafts to `localStorage` on every change — so what's literally true of a
+  draft here is that it's unsent, not unsaved. Naming parity with Paratext 9 was judged to outweigh
+  literal accuracy; this is a knowing tradeoff, not an oversight to "fix" later.
+  **Amended 2026-09-21:** the nine preset labels (`presetToLabelKey`, `comment-list-filters.model.ts`)
+  were also made grammatically parallel — each a noun phrase naming a set of comments (`unresolved`:
+  "Unresolved comments", `resolved`: "Resolved comments", `conflict`: "Conflicts", etc.) instead of
+  the prior mix of noun phrases and bare adjectives (`"Unresolved"`, `"Resolved"`, `"Conflict"`).
+  Paratext 9's own labels (`ThreadFilterSelectionAdapter.cs`) are themselves non-parallel — "All
+  notes", "Unread and unresolved", "Unsaved notes" — so this is the same kind of wording decision as
+  the "comments" (not PT9's "notes") and "Unsaved comments" choices already recorded above:
+  consistency of the label set as presented in one dropdown was judged to outweigh literal wording
+  parity with PT9. Both `en` and `es` were updated together, keeping Spanish masculine agreement with
+  *comentarios* (e.g. `conflict`: "Conflictos", `resolved`: "Comentarios resueltos").
+- **Alternatives:**
+  - Reproduce Paratext 9's always-show-drafted-threads behavior by merging drafted thread ids into
+    the query result on the client regardless of scope/preset. Rejected: it doesn't fit
+    `LegacyCommentThreadSelector`'s single-`threadId` shape, and even widening that field to a set
+    would still need the *provider's* own filtering to skip a listed thread's normal exclusion
+    criteria, which the query interface has no way to express. It would also surprise a user who
+    deliberately scoped the list to one book or chapter by showing a thread from outside that scope.
+- **Consequences:** A user with a draft on a thread the current scope or preset excludes will not see
+  that thread until they switch to `unsaved` (or to a scope/preset that includes it) — the draft
+  itself is not lost, just not visible. Revisit if this proves confusing enough in practice; the fix
+  would need either an "or match this specific thread" query clause or a client-side merge layered on
+  top of the query result, not just a wider `threadId` type.
+
+## adr-comment-filter-presets-over-axes: Four orthogonal comment-filter axes collapse into one closed preset set
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** The comment filters used to be four independent axes (`resolved`, `read`, `type`,
+  `assignment`), each a separate control, composing to many combinations. The axes were never
+  offered as separate controls to compose freely in the first place, and most combinations were
+  never reachable through the UI — so the composability was flexibility nobody could use, not
+  flexibility being removed. Separately, `adr-collapsed-multi-axis-filter-toolbar` had just collapsed
+  a five-axis toolbar behind a popover to fit a narrow panel; once the axis count itself shrank, that
+  popover's reason to exist went with it (see that entry's Status for detail).
+- **Decision:** Replace the four legacy axes with `CommentFilters = { preset: CommentPreset }`, a
+  closed set of nine named presets representing the combinations users actually work in (`all`,
+  `unresolved`, `unread`, `unread-and-unresolved`, `resolved`, `unresolved-assigned-to-me`,
+  `unread-assigned-to-me`, `unsaved`, `conflict` — see `presetToLabelKey` in
+  `comment-list-filters.model.ts`), plus a separate four-value `ScopeFilter` axis for the Scripture
+  range. Both render as always-visible inline `Select`s (`FilterDropdown` in
+  `comment-list.component.tsx`) rather than behind any popover or trigger. The deprecated four-axis
+  shape (`LegacyCommentFilters`) is still accepted at the filter boundaries (`openCommentList`,
+  `setFilters`) and mapped onto the closest preset via `LEGACY_AXES_TO_PRESET`/`presetFromLegacyAxes`
+  in `comment-list-filters.model.ts`.
+- **Alternatives:**
+  - Keep the four axes composable but render only the two visible controls, deriving a preset from
+    the underlying combination. Rejected for the same reason as keeping the axes at all: preserving
+    an internal cross-product representation buys nothing once the presented surface is a closed set.
+  - Keep `adr-collapsed-multi-axis-filter-toolbar`'s popover-and-chips toolbar and simply reduce the
+    axis count within it. Rejected once two axes fit inline on one row — the popover's own
+    justification (chrome cost of five-plus axes in a narrow panel) no longer applied.
+- **Consequences:** Two legacy axis values have no counterpart in the new preset set and are
+  unrepresentable: `assignment: 'team'` and `'unassigned'`, and `type: 'comments'` / `read: 'read'`
+  in combination with an otherwise-active axis. `presetFromLegacyAxes` falls back to `'all'` for any
+  legacy combination without an exact match rather than guessing which axis to drop — see
+  `LegacyCommentFilters`'s TSDoc in `types/legacy-comment-manager.d.ts` for the full mapping table and
+  the reasoning per row. A future need to compose two presets together (e.g. "unresolved AND assigned
+  to me AND unread") needs either a new named preset or a return to axis composition — revisit if the
+  preset list keeps growing to cover combinations rather than shrinking.
+
+## adr-comment-machine-local-storage: Per-machine comment state (drafts, filter selection) lives in `localStorage`, not per-user project settings
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** Comment drafts (an unsent reply, a pending assignee change, an unsaved edit) and the
+  user's filter/scope selection both need to survive a reload, but neither is data other project
+  members should see. Per-user project settings normally live under
+  `{projectDirectory}/Extensions/`, but that directory is not covered by PT9's ignore list —
+  `ParatextData/Repository/VersionedText.cs` excludes only `local/**`, `PA7/**`, and `InDesign/**` —
+  so anything written there travels to every other user on the next Send/Receive. A draft is a
+  half-written comment; transmitting it would leak a user's unsent thoughts to their team the moment
+  they sync. A filter selection is a personal view preference that should neither transmit to
+  teammates nor follow a user to a different machine.
+- **Decision:** Persist both comment drafts (`comment-draft-store.ts`) and the filter/scope selection
+  (`comment-filter-store.ts`) in `localStorage`, keyed `legacyCommentManager.<kind>.<projectId>`.
+- **Alternatives:** An earlier implementation on this same branch stored the filter selection through
+  a C# project-data type (`CommentFilterSelection`, exposed via
+  `ParatextProjectDataProvider.GetUserCommentFilters`/`SetUserCommentFilters`) backed by
+  `UserProjectSettings`, writing to `{projectDirectory}/Extensions/UserSettings-{userId}.xml`. It was
+  removed (`refactor(comments): drop the project-data path for filter selections`) once the
+  Send/Receive exposure above was identified: that store is scoped per user already, but per-user is
+  a broader guarantee than per-machine, and `Extensions/` is exactly the directory that travels in
+  sync. Comment drafts never went through an equivalent project-data path — they were `localStorage`
+  from their first commit on this branch — so this alternative applies specifically to the filter
+  selection, not to drafts.
+- **Consequences:** `localStorage` failures (storage unavailable, a sandboxed context) are swallowed
+  in both stores, so persistence degrades silently to "never persists" — a user sees no error, just a
+  selection or draft that doesn't survive a reload, rather than a visible failure. Neither drafts nor
+  the filter selection follow a user between machines or survive a profile reset; that is required
+  behavior for drafts (they must never travel) and an accepted tradeoff for the filter selection (a
+  view preference, not project data). This decision closes the Send/Receive leak, but `localStorage`
+  is private only from OTHER MACHINES and other project members, not from other code running on this
+  one: it is scoped per browser origin, not per web view, and every web view iframe in this renderer
+  shares the SAME origin and gets `allow-same-origin` by default (`src/renderer/services/web-view.
+  service-shard.ts`; see also `src/renderer/services/local-storage.service.ts`'s own doc, which states
+  this sharing directly). So any other extension's web view open in the same window can read (and
+  write) `legacyCommentManager.drafts.*`/`legacyCommentManager.filters.*` directly — this store adds
+  no isolation between extensions, only between machines and between project members. Accepted
+  because the threat this ADR is answering is Send/Receive leakage to teammates, not cross-extension
+  isolation within one user's own running app.
 
 ## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
 
@@ -1108,6 +1399,38 @@ step, no automation. Just a record.
   public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
   generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
+## adr-cross-project-comment-list-follows-scroll-group: A cross-project comment list follows the window's scroll group, not a coerced all-books scope
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** `openCommentList` (`extensions/src/legacy-comment-manager/src/main.ts`) can be targeted at
+  a project other than the triggering web view's (e.g. the S/R results dialog opening a different
+  project's comment list). Such a cross-project open leaves `editorScrollGroupId` undefined, because
+  the triggering web view's scroll group belongs to the wrong project. An earlier version of this
+  code coerced a `current-chapter` scope filter to all-books (`UNFILTERED`) in that case, with a
+  `logger.warn`, on the reasoning that a cross-project open has no editor to derive "current chapter"
+  from. That coercion and its `current-chapter`-only reach were removed in ffc6e4dfad2 without a
+  decision record, and the scope set has since widened to include `current-verse` too, so the
+  question is now broader than the deleted code answered.
+- **Decision:** No coercion. A cross-project comment list's `current-*` scopes resolve against
+  `useWebViewScrollGroupScrRef`'s fallback — scroll group 0, the window's active-project position —
+  rather than being withheld or redirected to all-books. This keeps all four scopes always offered
+  (`adr-comment-filter-presets-over-axes`) instead of a project-dependent subset, and it is workable
+  because a scroll-group reference is a book/chapter/verse (BCV) triple, which is project-agnostic:
+  GEN 1 names the same location in either project.
+- **Alternatives:** Keep coercing `current-chapter` (and, by extension, `current-verse`) to
+  all-books for a cross-project target — rejected: it special-cased one scope, would need
+  duplicating for the newer `current-verse` scope, and traded a merely BCV-unmapped scope for one
+  that silently drops the user's chosen scope. Suppress the `current-*` scopes from the panel
+  entirely for a cross-project list — rejected: nothing distinguishes a cross-project list from any
+  other at the point the panel renders the scope picker, and the user can already reach the same
+  state by hand (opening a same-project list, then switching the toolbar's project picker), so
+  withholding the scopes only on the command's own open path would be inconsistent.
+- **Consequences:** A BCV is project-agnostic in reference, not in content — `useBcvSyncScroll` still
+  carries `TODO (PT-4031): Handle versification`, so a cross-project `current-*` scope can show a
+  mismatched result where the two projects' versifications diverge at that reference. That gap is
+  accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
+- **Source:** external code review, finding 16.
 ## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
 
 - **Date:** 2026-09-01
@@ -1196,7 +1519,9 @@ step, no automation. Just a record.
   installed trivially fails its "is the installed copy the newest" test — so the front end clears
   `updateAvailable` for any row it reconciles as not installed rather than persisting a flag that
   describes nothing. That keeps the cached flag meaning what the list renders it as: "the copy on
-  disk is out of date".
+  disk is out of date". Both `refreshResourceFlags` and the `recomputeDblResourcesUpdateStatus`
+  method it calls through are now marked `@experimental` / `'x-experimental': true`, because this
+  recompute contract remains untested beyond its one caller.
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
 
 ## adr-dbl-install-status-from-backend: The backend is the authority on which DBL resources are installed, and on which project id
@@ -1250,6 +1575,9 @@ step, no automation. Just a record.
   styles; it was judged below the bar for its own work and is not reproduced. Folding the install lookup into the existing single
   pass removed the per-row `ExistingScrText` scans from the catalog projection as well, so the
   projection now costs one collection pass rather than one per catalogued row.
+  `recomputeDblResourcesInstallStatus` is now marked `@experimental` / `'x-experimental': true` for
+  the same reason as its sibling in `adr-dbl-cache-recompute-on-read` — the contract remains
+  untested beyond its one caller.
 - **Source:** PT-4484; builds directly on `adr-dbl-cache-recompute-on-read`.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
@@ -1302,10 +1630,11 @@ step, no automation. Just a record.
   stylesheet is also vendored three times (the extension's `_usj-nodes.scss`, the
   `platform-bible-react` demo `usj-nodes.css`, and the upstream `scripture-editors` source), each
   re-synced by hand.
-- **Decision:** The coverage test parses the stylesheet itself into flat `selector { declarations }`
-  blocks, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
-  cascade: a `[dir='ltr']` rule beats a direction-agnostic one, table rows excluded because they never
-  render as `.para`) and the expected `--verse-text-start` map from negative `text-indent`, then
+- **Decision:** The coverage test parses the stylesheet itself with `postcss`, reads its top-level
+  rules, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
+  cascade: a `[dir='ltr']` rule beats a direction-agnostic one; `\tr` excluded because a real table
+  row renders as `<tr>`, not `.para`, while the obsolete `\tr1`/`\tr2` still convert to paragraphs
+  and so are compensated) and the expected `--verse-text-start` map from negative `text-indent`, then
   asserts the gutter block matches in both directions: every derived marker present with the same
   value, and no gutter entry without a base rule calling for it. The parser's blind spots are
   themselves asserted away — a setter nested in an at-rule, a direction-qualified gutter rule, a
@@ -1321,8 +1650,21 @@ step, no automation. Just a record.
   five markers. **Assert the copies are byte-identical** — rejected: the copies legitimately diverge
   (SCSS versus CSS, host-specific rules), so a byte comparison would either fail permanently or need a
   hand-maintained exclusion list with the same staleness problem. **Parse with `postcss`** — declined
-  for now: the flat parser plus its blind-spot assertions is ~100 lines and reads without a dependency;
-  a real parser becomes worth it if the stylesheet grows nesting the assertions cannot exclude.
+  at first: the flat parser plus its blind-spot assertions was ~100 lines and read without a
+  dependency. **Amended 2026-09-17:** adopted. The upstream review of the same test demonstrated
+  that the flat regex could be fooled without any assertion firing — among them a selector list
+  mixing gutter and base selectors, a `margin` shorthand inside an at-rule, a value wrapped across
+  lines, `!important`, hyphenated marker classes — each provable only with a probe. Both twins now
+  parse with `postcss`, which core already depended on and the upstream package added as a dev
+  dependency; the SCSS copy has no SCSS syntax in the rules under test, so it parses as plain CSS.
+  Per-selector classification comes from the parser, and a tracked property set anywhere but
+  directly in a top-level marker rule (inside an at-rule, or an at-rule nested in the rule) fails
+  rather than being silently unread. The remaining semantic limits — selectors classified by class
+  token rather than resolved against the DOM, the cascade approximated as "direction-qualified beats
+  agnostic", `calc()` values reported rather than evaluated, direction read from `[dir=…]`/`:dir()`
+  only — are stated in the test header. The same review also showed that `\tr1` and `\tr2`, though
+  obsolete in `usfm.sty`, still convert to paragraphs, so they are compensated again and only `\tr`
+  is excluded; PR #2807 had removed them on the earlier round's advice.
 - **Consequences:** Adding an indented marker to the base rules without compensating it fails the
   build; so does adding a compensation nothing calls for. Re-syncing a copy from upstream is checked
   structurally for this block, so the cross-copy pin comments in the two `usj-nodes-styles.test.ts`
@@ -1336,7 +1678,8 @@ step, no automation. Just a record.
   `usj-nodes.css`. The pattern generalises to any "for every X in
   this file there must be a Y" invariant over a generated or vendored asset: derive X from the asset,
   assert the parser's blind spots, keep a small independent oracle.
-- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; upstream
+- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; the follow-up PR
+  #2827 (`pt-4313-coverage-test-review-followup`) and its review; upstream
   `paranext/scripture-editors` PR #10.
 
 ## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
@@ -1563,6 +1906,67 @@ step, no automation. Just a record.
   longer derived from a window-scoped suffix at all. See `adr-web-view-ids-are-unique-from-birth` for
   the id scheme that replaced it.
 - **Source:** PT-4464.
+
+## adr-editor-context-menu-follows-its-area-via-a-container: The editor library renders its context menu into an element the host supplies
+
+- **Date:** 2026-09-18
+- **Status:** Withdrawn (2026-09-23). The option this entry relies on, `EditorOptions.contextMenuContainer`,
+  is not part of the editor library: as of 2026-09-23 it is no longer pursued
+  (paranext/scripture-editors#17, to be closed unmerged), so no host hands the editor a container and
+  its right-click menu stays at interface scale. The entry is kept below as the record of what was
+  considered.
+- **Context:** The Scripture editor's right-click menu is drawn by `ContextMenuPlugin` in
+  `paranext/scripture-editors`, not by our `ContextMenuContent`. It portalled hand-built markup to
+  `document.body`, outside every zoom area, so at 200 % it stayed at interface scale beside text
+  twice its size — at the text pane and inside the footnote editor pop-up alike.
+- **Decision:** the library takes an optional `EditorOptions.contextMenuContainer?: () =>
+  HTMLElement | undefined` getter. It calls that getter once, inside its own `contextmenu`
+  handler, and stores the returned element in state — never during render. Inside that element the
+  menu inherits the area's CSS `zoom`; it divides its viewport coordinates by
+  `Element.currentCSSZoom`, clamps to the container's rect narrowed by every clipping ancestor and
+  the viewport, and caps its height to that box. Every host that mounts the editor inside a zoom
+  area supplies that area's `ContentZoomRoot` element: the editor web view for the text pane, the
+  Model Text panel, the Bible Texts / Commentaries panel, and the Enhanced Resources web view for
+  its scripture pane. `FootnoteEditor` overrides the container with its own root, because the web
+  view's value would otherwise flow through `FootnoteEditor`'s own `...editorOptions` spread and
+  bind the pop-up's menu against the text pane's box instead of the pop-up's own.
+- **Alternatives:**
+  - stamping `data-platform-content-zoom-root` + `data-platform-content-zoom-popup` on the
+    portalled element, as our own pop-ups do — rejected: it puts our attribute names and
+    `--platform-content-zoom-*` variable names inside a library that also serves Scribe and the
+    PERF demos, where `currentCSSZoom` is a standard property that needs no convention;
+  - a generic attribute bag the host fills in — the positioning still lives in the library, keyed
+    off an attribute it does not understand;
+  - positioning the menu from here — the plugin owns the `contextmenu` event and the clamp, and
+    the host cannot see the menu's measured size;
+  - dropping the menu's hard-coded 14px font and 200px width — measured irrelevant: CSS `zoom`
+    scales `px` lengths, so those already scale; changing them would restyle the menu at 100 %.
+- **Consequences:**
+  - the library gains no knowledge of this platform; the only shared vocabulary is a standard DOM
+    property;
+  - a fixed-position menu is not clipped by a scrolling ancestor, so staying inside the pane is
+    computed rather than inherited — the clipping-ancestor walk is load-bearing in split layouts;
+  - resolving the container lazily, inside the `contextmenu` handler, rather than reading it during
+    render is load-bearing, not incidental: an earlier shape that called the host's getter during
+    render made React Compiler abandon optimizing the whole component
+    (`react-hooks/preserve-manual-memoization`). The getter shape also lets both hosts pass a
+    stable `useCallback`, or a plain ref read, with no `useState` and no memo churn of their own;
+  - the capped menu's outer element gets `overflowY: auto` while the inner `<ul>` still carries
+    `editor.css`'s own `max-height: 200px; overflow-y: scroll`; a short pane at zoom 200 % or more
+    with a full menu can bind both constraints at once, producing two nested scroll regions with
+    only one visible scrollbar (`scrollbar-width: none` hides the inner one). Left as is:
+    collapsing the two caps would mean changing the library's own stylesheet for every host, and
+    the menu was usable in hand checks at 200 %. Revisit if a user reports a menu that will not
+    scroll to its last item;
+  - the fix reaches core through the `platform-yalc` pin, so the behaviour lives in
+    `scripture-editors` and core holds only the call sites;
+  - a host that mounts the editor inside a zoom area and does not supply its area's element leaves
+    its right-click menu at interface size against `document.body`, with no other signal, so each
+    host's tests pin its wiring. `scripture-text-grid`'s `resource-cell-view` is not a host of this
+    kind: it zooms its cells itself and intercepts `onContextMenuCapture` with its own menu — the
+    grid web view always supplies the labels that enable it, and only a story or test renders a cell
+    without them — so the editor's menu never opens there.
+- **Source:** PT-4713.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
@@ -2554,6 +2958,38 @@ step, no automation. Just a record.
   branch edits it, which is a standing source of merge conflicts; see
   `adr-decision-log-sorted-insertion` for how entry placement addresses that.
 
+## adr-list-selection-on-a-dedicated-visual-channel: List selection is encoded on a channel of its own, never on a background already carrying status
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Comment cards encoded three meanings on their background at once — unread
+  (`bg-accent`), resolved (`bg-muted`) and read — and selection was bolted onto the same channel.
+  It failed three ways: the "read" surface used `--primary-foreground`, a text-on-primary token
+  that renders near-white in the paratext-dark theme, so unselected cards appeared near-white on a
+  dark ground while the selected one went dark; in the default light theme selected-vs-unselected
+  differed by ΔL ≈ 1.6%; and selection was not encoded *at all* for resolved or unread threads,
+  because their status classes won regardless of selection.
+- **Decision:** Keep status on the background and give selection its own channel — a 4px leading
+  bar (`border-s-4`, a logical property so it follows RTL) plus elevation, with the bar's width
+  reserved by a transparent border on every card so selecting one does not shift its content. The
+  surface token is `--card`. See the `Card` className in
+  `lib/platform-bible-react/src/components/advanced/comment-list/comment-thread.component.tsx`.
+- **Alternatives:**
+  - *A filled accent background for the selected card.* Forces unread onto a dot or bolded sender,
+    which relocates content the requirement forbade.
+  - *A ring outline.* Collides with the card's real focus ring (`focus:ring-2 focus:ring-ring`), so
+    selection and keyboard focus would render identically.
+- **Consequences:** The bar token is `--foreground`, chosen by measurement rather than by name:
+  `--primary` scores 2.38:1 against the card in paratext-dark and `--ring` scores 2.32:1 in
+  paratext-light, each below the WCAG 3:1 non-text minimum and each failing in a *different* theme,
+  while `--foreground` clears it on both the `card` and `muted` surfaces in all four themes with a
+  13.79 worst case. `active-comment-bar-contrast.test.ts` enumerates the themes structurally from
+  `index.css` and asserts both the choice and the rejection, so a theme edit that changes either
+  fails loudly. Moving every card to `bg-card` also means `--card` equals `--background` in three of
+  the four themes, so an inter-thread gap stops reading as separation and a divider becomes
+  load-bearing. **Revisit** for any list row whose background already carries state — the same
+  overload is the general case, not a comments-specific one.
+
 ## adr-localized-string-resolution-helper: One predicate decides whether a localized value can be shown, and it lives in `platform-bible-utils`
 
 - **Date:** 2026-09-17
@@ -2568,6 +3004,14 @@ step, no automation. Just a record.
   `createCrashedViewLocalizer` in `src/renderer/components/`, and a same-named but
   different-signature `resolveLocalizedString(map, key)` in
   `extensions/src/platform-scripture-editor/src/scripture-text-grid/view-options-notice.utils.ts`.
+  The hook is not the only producer of a raw key, and fixing it alone would not have worked:
+  `getLocalizedString`/`getLocalizedStrings` in
+  `src/extension-host/services/localization.service-host.ts` also return `localizeKey` itself when
+  nothing resolves in any requested or fallback language, and that is a pinned contract
+  (`localization.service-host.test.ts`, "Keys returned with localizeKeys that do not exist"). A raw
+  key therefore arrives from two independent layers, which is the strongest argument for judging the
+  *value* rather than patching a producer — and a maintainer who reads the seed as the whole root
+  cause will go fix the wrong layer.
 - **Decision:** One implementation in `lib/platform-bible-utils/src/localization.util.ts` —
   `isResolvedLocalizedValue`, plus the two readers built on it: `resolveLocalizedString` (value +
   fallback, for a caller that owns English text) and `localizedStringOrUndefined` (map + key, for a
@@ -2585,7 +3029,12 @@ step, no automation. Just a record.
   the private copies — rejected: three implementations of one rule drift, which is how the
   signature collision arose. (c) Export from `platform-bible-utils/experimental` — rejected: the
   lint rule names this import path in its message, and pointing contributors at a no-guarantees
-  tier is a bad trade for a one-boolean contract.
+  tier is a bad trade for a one-boolean contract. (d) Fix it at the producer instead — have
+  `getLocalizedStrings` omit unresolved keys so absence becomes representable and `??` starts working
+  — rejected: it is a breaking change to a contract pinned by tests and relied on by callers that
+  expect every requested key present, it would not help the hook's own seed, and it trades a
+  value-shape test every consumer can apply locally for a cross-process behavior change. Worth
+  revisiting if the two-producer split ever becomes a maintenance problem in its own right.
 - **Consequences:** `platform-bible-utils` is the canonical import path, named by
   `paranext/no-nullish-localized-fallback`. The collapsed copies widen their fallback path slightly:
   they compared `value === key` (exact self-match), while `isResolvedLocalizedValue` rejects any
@@ -2598,6 +3047,83 @@ step, no automation. Just a record.
   require rebuilding react. **Revisit** if a consumer ever
   needs to distinguish "absent" from "seeded with its key", which this predicate deliberately merges.
 - **Source:** follow-up from PR #2829 review finding 16.
+
+## adr-log-file-writes-queued: Main's log file writes are queued and coalesced, trading tail durability for an event loop that never blocks on log disk I/O
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `electron-log`'s file transport defaults to `sync: true`, which appends to the log
+  file with one `fs.writeFileSync` per line (`File.js` `writeLine`). Every log call therefore sits
+  on the calling process's critical path, and a web view's `console.*` calls are forwarded to the
+  main process by `spyRendererConsole`, so a hot logging path inside an iframe spends main-process
+  event-loop time on disk I/O. A marker-serialization path that logged once per marker occurrence
+  emitted ~10^5 messages for a single commentary book; the resulting serialized appends hung the
+  app for minutes and saturated the Windows disk queue badly enough that the desktop and Task
+  Manager stopped responding. The volume bug is worth fixing on its own, but any future hot log
+  path has the same reach, so the transport itself is the durable exposure.
+- **Decision:** Set `log.transports.file.sync = false` in `src/shared/services/logger.service.ts`,
+  **in main only**. `electron-log` then queues each line and, whenever a write is already in
+  flight, joins the whole accumulated queue into the next single `fs.writeFile` — so a burst costs
+  one write per disk round-trip instead of one per message, and no log call blocks main's disk
+  I/O. This is the library's own supported mode, not a patch. Main is the process that must never
+  stall: it owns the UI, and it is where every web view's forwarded console calls land. The
+  extension host is deliberately left synchronous — it ends its graceful shutdown with
+  `process.exit()` (`extension-host.ts`), which runs no pending I/O callback, so queuing there
+  would silently discard its shutdown diagnostics (including a `Failed to deactivate extensions`
+  error) on every run; and its own log level is `error` when packaged, so it does not need the
+  protection for the flood this decision responds to.
+- **Alternatives:** Keeping synchronous writes and rate-limiting or de-duplicating at the log
+  ingress — rejected as the primary defense; it preserves durability exactly but only guards the
+  paths the throttle anticipates, leaving the transport able to stall on the next unthrottled one.
+  (De-duplication is still worth doing at individual noisy sites, and was, for the marker
+  warnings — the two are complementary, not substitutes.) Async for most levels plus a second
+  synchronous transport for `error`, so the last error before a crash is always durable — rejected
+  for now as two transports to keep in step for a narrow gain, since errors are rare and do not
+  flood; revisit if crash reports turn up truncated at an error.
+- **Consequences:**
+  - *Queued lines die with the process.* Lines still queued are lost if the process dies without
+    running the pending write, so a hard kill can cost the most recent messages — precisely in the
+    flood or slow-disk case where the queue is deepest, which is a real loss of crash-diagnostic
+    fidelity accepted in exchange for the app not freezing. `electron-log` exposes no public flush,
+    though the queue state is reachable (`transports.file.getFile()` carries `asyncWriteQueue` and
+    `hasActiveAsyncWriting`), so a bounded drain is implementable if one of the costs below starts
+    to bite.
+  - *Exiting without draining loses the line just logged.* Two main-process paths do it:
+    `main.ts`'s second-instance branch logs the handed-off `process.argv` and then calls
+    `app.exit()`, which skips before-quit/will-quit, making protocol-handoff bugs undiagnosable
+    from the log; and any future `process.exit()` in main would do the same. The obvious repair —
+    flipping `sync` back to `true` just before such a log — **does not work**, and fails silently:
+    `FileRegistry.provide` returns an already-created `File` before it reads `writeAsync`, and
+    `File.writeAsync` is set only in the constructor with no setter, so the flag is fixed once
+    anything has written to the log. Toggling it afterwards is a no-op, and whether it happens to
+    take effect depends on nothing having logged earlier in that process — an ordering dependency
+    with no error and nothing to test against. A durable fix has to drain the queue or avoid the
+    transport for that line.
+  - *In-app reads of the log go stale, not just crash-time ones.* `platform.getLogFileContent`
+    reads the file straight off disk, and Usersnap attaches its result to a user's bug report, so a
+    report filed during a flood can carry a log that stops short of the problem being reported.
+    Tracked as `PT-4523`.
+  - *Rotation fires late.* It compares `maxSize` — 3 MB, set in
+    `src/node/utils/log-archiver.util.ts`, which also replaces `archiveLogFn` with a 5-file rotating
+    chain — against `initialSize + bytesWritten`, and `bytesWritten` only advances once a write
+    completes, so a burst can push the file past `maxSize` before it rotates.
+  - *Main and the extension host interleave by batch.* They share `main.log`
+    (`getDefaultFileName` returns it for every process type except renderer and worker), so the
+    unit of interleaving between them is now a coalesced batch rather than a single line; since
+    Node's `fs.writeFile` loops on partial writes, a very large batch could in principle be split
+    and interleaved mid-line. That is unlikely for regular files and costs only log legibility,
+    never app behavior, so it is accepted rather than designed around.
+  - *Not unit-tested.* What matters is that a flood cannot block the loop, which is not observable
+    at this seam, and asserting the property was set would only mirror the implementation.
+  - *The per-message CPU cost remains.* This closes the write path, not the whole per-message
+    cost: the hook in `setUpLogger` (`src/shared/utils/logger.utils.ts`) still calls
+    `identifyCaller()` — `new Error()` plus a regex per stack frame — synchronously for every
+    message it does not early-return on, so a flood of messages above the transport's level still
+    spends main CPU proportional to its volume. Reducing per-message volume at the source therefore
+    remains worthwhile even with writes queued, which is why the de-duplication in
+    `UsjReaderWriter` is complementary to this decision rather than redundant with it.
+- **Source:** PT-4514; `electron-log@5.4.1` `src/node/transports/file/File.js` (`writeLine`,
+  `nextAsyncWrite`) and `src/node/transports/file/index.js` (`sync`, `writeAsync`).
 
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
@@ -2633,6 +3159,125 @@ step, no automation. Just a record.
   hardening if such layouts recur.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
+
+## adr-menu-close-focus-restores-without-the-ring: A pointer-closed menu returns focus to its trigger without showing the focus ring
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** Radix returns focus to the trigger whenever a menu closes. The tab menu's trigger is a
+  `Button`, which styles focus with `tw:focus-visible:border-ring` and `tw:focus-visible:ring-3`, so
+  after a pointer-driven close the ring sat on the trigger while the pointer was somewhere else —
+  measured as a near-black `border-color` plus a 3px ring. Declining the focus return removes the
+  ring but drops focus to `<body>`, so the next Tab restarts at the top of the document and a screen
+  reader loses its place; `stories/guidelines/dismissal-patterns.mdx` requires returning focus to the
+  opener, citing WCAG 2.4.3.
+- **Decision:** Let Radix restore focus exactly as it always has, and suppress only the ring.
+  `TabDropdownMenu` marks the trigger with `data-quiet-focus` when the close followed a pointer
+  interaction, and CSS hides the ring while that attribute is present; the next keydown or blur
+  clears it, which is what brings the ring back for keyboard users. Which device the user last used
+  comes from the document-wide tracker in `utils/focus.util.ts`. Focus is drawn through three
+  channels and all three must go: the ring and the border yield to the attribute's Tailwind classes,
+  but `outline` is cleared **inline** by `hideFocusRing`. That asymmetry is load-bearing — Tailwind
+  emits utilities inside `@layer utilities`, and an unlayered rule in the host document outranks
+  every layered rule whatever its specificity, so a web view that styles `:focus-visible` itself
+  (the scripture editor does, in `_editor-overrides.scss`) beats any class the component could add.
+  Because `Button` carries `tw:transition-all`, such an outline animates rather than switching, so
+  even a rule whose final colour is `transparent` paints a visible line on the way there.
+- **Alternatives:** (a) **Decline the focus return** — built first and rejected: it satisfies the ring
+  complaint but breaks the tab order and the dismissal guideline. (b) **Ask the browser for an
+  unindicated focus** via `focus({ focusVisible: false })` — also built, and it works in Chromium 145,
+  but the app ships Electron 39 (Chromium 142), where Blink ignores the option and the ring returns;
+  the Storybook run passes because Playwright bundles a newer Chromium than the product. (c) **Track
+  the input device with handlers on the menu itself** — misses the Escape that Radix consumes from its
+  own document listener, so a real keyboard dismissal is misread as a pointer close. (d) **Put the
+  behavior in `DropdownMenuContent`** so every menu gets it — deferred, not rejected; see consequences.
+- **Consequences:** Only the tab menus behave this way. The application menubar and the other menu
+  triggers keep Radix's default, so the app has two close-focus behaviors until someone unifies them.
+  Between a pointer close and the user's next keystroke, focus sits on the trigger with nothing to
+  show where it is — a brief, deliberate gap in WCAG 2.4.7. The keydown that ends it clears the mark
+  before it acts, so pressing Enter paints the ring on the trigger it is about to reopen. The same
+  gap applies to assistive input that emulates a pointer (switch access, head and eye pointers, some
+  touch-screen-reader modes): a `pointerdown` is all the tracker sees, so such a user is treated as a
+  pointer user, and the gap ends at their next keystroke or blur. The gap is not opened at all under
+  `forced-colors: active`: forced colors drops the ring (a box-shadow) and repaints the border in a
+  system color whether or not the trigger has focus, leaving `outline` as the only indicator, so
+  `hideFocusRing` does nothing there. Because
+  the suppression is ordinary CSS and an inline style rather than a browser capability, it
+  behaves the same in the shipped Electron as in a newer Chromium. Automated coverage stops at the
+  signal rather than the paint: the jsdom test pins that focus returns and that the attribute tracks
+  the closing input, and `tab-dropdown-menu-focus.stories.tsx` adds the `:focus-visible` half that
+  jsdom cannot judge. Neither can assert the ring itself — the Storybook harness does not paint the
+  trigger's ring at all, so an assertion on it would pass whatever the code did. That the attribute
+  removes a ring the user can see is confirmed by hand in the running app.
+- **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
+  found not to work in the shipped runtime.
+
+## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** Menus needed titled sections (e.g. the target design for Simple's Project menu,
+  to be implemented in PT-4534: Project / View / Insert / Tools). Every menu column already carries a
+  required, localized `label`; `TabDropdownMenu` stacked columns as divider-separated sections and
+  discarded the label. The interface-mode filter removes items, never columns, and at least one
+  shipping column (`platformScriptureEditor.info`) has no items in any mode.
+- **Decision:** `TabDropdownMenu` renders each non-empty column as a section headed by its label,
+  in every interface mode, but only when two or more non-empty sections remain. Columns with no
+  items render nothing — no heading, no separator — so hiding every item in a column hides the
+  section. Headings are opt-in per call site (`showSectionHeadings`), turned on by Platform.Bible's
+  tab chrome — `TabToolbar` and `TabFloatingMenu` — so a library consumer rendering its own menu
+  data into `TabDropdownMenu` keeps the previous unlabeled look. The menubar (whose columns are its
+  top-level triggers) and single-column context/tab menus have no section headings.
+- **Alternatives:** A `label` on menu groups — rejected: groups have none, the group schema is a
+  two-branch closed `oneOf`, and columns already express sections. Headings in Simple mode only —
+  rejected: needs the interface mode threaded into every consumer of a shared component, and
+  headings help Power too. Always heading a lone section — rejected: it only repeats the trigger.
+  Headings unconditionally for every `TabDropdownMenu` consumer — rejected: the component's
+  documented behavior was that column labels are ignored, so an out-of-repo consumer would see its
+  menus change without asking.
+- **Consequences:** Power's scripture editor and markers checklist menus gain headings. Adding a
+  column now adds a visible heading, so column labels must read as section titles. A submenu item
+  counts as content even when its submenu is empty, so a section can survive with only an empty
+  flyout in it.
+- **Source:** PT-4532 (parent PT-4530); showing headings in both interface modes was agreed during
+  implementation, 2026-09-11.
+
+## adr-menu-shortcut-hints-joined-from-catalog: Menu shortcut hints are joined from the keyboard shortcuts catalog by the menu data service
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** Menus should show the keyboard shortcut for a command. Shortcuts are handled in three
+  unrelated places (main-process `before-input-event`, `useHotkeys`, per-web-view handlers), and the
+  only per-OS display strings live in the hand-maintained catalog. The menu that most needs hints —
+  the scripture editor's Project menu — is rendered inside the extension's iframe, which cannot
+  import `src/shared`.
+- **Decision:** The catalog lives in `src/shared/data/keyboard-shortcuts.data.ts`, and an entry's
+  optional `command` names the PAPI command its chord runs. The extension-host menu data service
+  sets `MenuItemContainingCommand.shortcut` on matching items in the localized menus it serves,
+  using the first alternative for `process.platform`. Renderers only display it, and the menus
+  schema rejects it from contributions. An entry gets a `command` only if its chord works
+  everywhere those items appear, so focus-blind main-process chords (PT-4143) and view-gated
+  chords get none. `keyboard-shortcuts.data.test.ts` pins each `command`'s hint and the menus
+  that show it, and rejects a chord shared with a main-process entry.
+- **Alternatives:** A `shortcut` property in `menus.json` — rejected: every manifest would need
+  re-authoring against a closed schema, and a hint declared in a manifest sits apart from the
+  catalog entry that records its handler. Renderers reading the catalog directly — rejected:
+  extension-rendered menus cannot import it. A lookup table inside `platform-bible-react` —
+  rejected: app-specific command names in the shared component library, and a second source of
+  truth.
+- **Consequences:** Third-party extensions cannot declare hints. The unlocalized main menu (the
+  native macOS menu) carries none. Menus the editor package builds itself (its right-click menu)
+  cannot show them. The catalog is bundled into the extension host. Hints are per operating
+  system, never per view, so a chord that works only in some editor views cannot be joined. Any
+  menu that reuses a `command` inherits its hint, which `keyboard-shortcuts.data.test.ts` pins for
+  bundled menus only. Commands from extensions outside this repo cannot get hints, because
+  `command` is typed against this repo's `CommandNames` and the test scans only bundled manifests.
+  Menus built in TypeScript compile with `shortcut` set even though the schema rejects it in
+  `menus.json`. Key names are English catalog strings, not localized, so a hint reads `Ctrl+Shift+N`
+  in a translated menu; the Localization-Guide asks for key names to go through
+  `getLocalizeKeyForPhysicalKey`, and routing them there is follow-up work (PT-4629).
+- **Source:** PT-4532 (parent PT-4530); sourcing hints in the menu data service was agreed during
+  implementation, 2026-09-11.
 
 ## adr-menus-always-available-gate-at-submission: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
 
@@ -3187,8 +3832,9 @@ step, no automation. Just a record.
 - **Consequences:** `paratext-10-studio` generates and commits its own pair, copies it over this
   repository's in its clone before packaging, and runs `--verify-shipping-set` on every platform
   and `--verify` on Linux against its own lock. An identifier a downstream entry needs (`PSF-2.0`,
-  `OpenSSL`, `blessing`, `TCL` and `ZPL-2.1` today) is added to `allowed` here, because `allowed`
-  is what `reachableIds` walks to decide which canonical texts the committed corpus index holds.
+  `OpenSSL`, `blessing`, `TCL`, `ZPL-2.1` and `bzip2-1.0.6` today) is added to `allowed` here,
+  because `allowed` is what `reachableIds` walks to decide which canonical texts the committed
+  corpus index holds.
   The overlay reaches `build-corpus-index.ts` like every other policy reader, so a downstream that
   runs the corpus builder with it set rewrites the committed index in its clone; `corpus-texts.ts`
   asserts the index is exactly what the committed policy reaches, so such an index fails CI here
@@ -3262,6 +3908,38 @@ step, no automation. Just a record.
   on persisted slots.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
+
+## adr-opaque-menu-surfaces: Menu and select surfaces are opaque; shadcn's translucent menu color is not used
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** The shadcn preset applied on 2026-04-16 (`npx shadcn apply --preset b6rt8cvlC`, commit
+  `a61ca3b913c`) set `menuColor: "default-translucent"` in `lib/platform-bible-react/components.json`.
+  That gave `DropdownMenuContent`, `DropdownMenuSubContent`, `ContextMenuContent`,
+  `ContextMenuSubContent`, `MenubarContent`, `MenubarSubContent` and `SelectContent` a 70%
+  `bg-popover` plus a `::before` backdrop-blur layer. Over scripture text the menus were hard to read.
+  In a scrolling menu the blur layer scrolled away with the items, and it never covered the scrollbar
+  gutter, so the scrollbar always sat on the bare 70% background. The Simple PRD requires opaque,
+  readable menus and popovers.
+- **Decision:** Remove the translucent classes from those seven surfaces, each edit annotated
+  `// CUSTOM:`, and set `menuColor` to `"default"` so the shadcn CLI stops emitting the translucent
+  variant. Nothing in this repo reads `menuColor`; it is an input to the external CLI, and it does
+  not stop `shadcn add` from regenerating these files — only from regenerating them translucent.
+  The real backstop is `Shadcn/Overlay Surface Opacity`
+  (`lib/platform-bible-react/src/stories/shadcn-ui/overlay-surface-opacity.stories.tsx`), which opens
+  each surface in a real browser across every Storybook theme and also checks `opacity` on each
+  surface and its ancestors.
+- **Alternatives:** (a) **a higher alpha** (e.g. 95%) — still see-through over dense text, and keeps the
+  scrolling blur-layer defect. (b) **keep the blur but pin the layer** so it does not scroll — keeps a
+  see-through surface the PRD rejects, plus a compositing cost on every open menu. (c) **opaque
+  overrides at each consumer** — every present and future menu consumer would need one, and each one
+  that forgets regresses.
+- **Consequences:** Applies to Power as well as Simple, since these are shared components. A future
+  `/upgrade-shadcn` that re-applies a preset with a translucent menu color would reintroduce the
+  classes; the `// CUSTOM:` comments carry the intent through that upgrade, and the Storybook test
+  fails if the translucent background returns.
+- **Source:** PT-4535, which adopts PT-4101; the translucency arrived with the preset in commit
+  `a61ca3b913c`.
 
 ## adr-package-verifies-the-document-not-the-shipping-set: `npm run package` runs the check a patched clone can answer
 
@@ -3501,6 +4179,50 @@ step, no automation. Just a record.
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-paste-inserts-only-what-was-pasted: A paste never invents or deletes a paragraph marker
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** In Standard view markers are literal text, so a whole-paragraph copy carries the
+  paragraph's own `\p ` literal. Pasting one at an existing paragraph's content start therefore puts
+  two paragraph-marker occurrences on the line. An earlier build (scripture-editors, PT-4201)
+  resolved that by dropping the HOST paragraph's glyph — `$withoutRedundantOwnPrefix` — so pasting
+  `\q1 asdf` at `\p ‖fdsa` produced a single `\q1 asdffdsa` paragraph with the `\p` gone and the
+  host's own content re-tagged. It was added to un-skip a copy→paste round-trip test whose target is
+  an empty `\p` scaffold, and the "stray empty paragraph" it removed was that scaffold; it was never
+  recorded or reviewed as a product decision. Keeping it out of TYPED input then required a paste
+  provenance apparatus (a per-commit armed flag plus a set of pended node keys, to carry "this
+  rebuild came from a paste" across a deferred settle), which in turn let the read-only settle and
+  the mutating rebuild disagree about a deferred paste's shape.
+- **Decision:** A paste inserts what was pasted and nothing else. It never deletes a marker the user
+  did not select, and it never invents one they did not paste. Two paragraph markers in a row is what
+  the bytes say, and the line splits — leaving an empty predecessor — exactly as typing the same
+  bytes does. This matches Paratext 9, whose `NormalizeTokenUsfm` (`ParatextData/UsfmToken.cs`)
+  writes a line break before a Paragraph token whenever the output already has content and the
+  tokens are not already carrying their own whitespace (its legacy USFM-2.0-conversion mode skips
+  this) — exactly the two-markers-in-a-row case here. The corollary is the injection half: a
+  multi-line paste replays each line break as a paragraph split, and the engine injects a marker
+  prefix onto every fresh split paragraph so it is not read as marker-deleted — that injection is
+  now skipped when the paragraph's own text already opens with a paragraph-marker literal.
+- **Alternatives:** Keep the dedup only for an EMPTY host paragraph — rejected: the shape is not
+  produced by any gesture in this app (Enter opens the marker palette rather than creating an empty
+  paragraph), P9 keeps the empty paragraph anyway, and it would have preserved the whole provenance
+  apparatus for a case nobody reaches. Keep the dedup and fix the settle divergence instead —
+  rejected: it fixes the symmetry of a rule that should not exist.
+- **Consequences:** pasting a whole-paragraph copy at a paragraph's content start now leaves an empty
+  paragraph ahead of the pasted one, which is a visible change and the P9-parity shape. Round-trip
+  tests that seeded an empty host and expected the paste to swallow it now assert the host and strip
+  it. `isPasteRebuild`, `Tier2Context.pasteRebuildArmed` and `pastePendedKeys` are gone, so the
+  read-only settle (`$settledUsj`) and the mutating rebuild call `$buildParaFragment` with identical
+  arguments and can no longer disagree — Invariant IV holds by construction rather than by
+  bookkeeping. Removing the dedup also surfaced a defect it had masked: every `\b` in a pasted
+  document gained an empty `\p` in front of it (16 in the 2sa fixture), because a blank-line marker
+  carries neither content nor a separator and so never resolved the injected prefix away — closed by
+  the same injection-skip rule above (`$suppliesOwnParaMarker` in `markerEditDeletion.utils.ts`):
+  `\b`'s own text is nothing but the marker literal, so it qualifies via that rule's end-of-run case.
+- **Source:** `/code-review` of scripture-editors #13 + paranext-core #2656, and the follow-up
+  triage with the epic lead.
+
 ## adr-per-project-selection-collapses-scroll-groups: Per-project consumers collapse multi-scroll-group projects themselves
 
 - **Date:** 2026-09-14
@@ -3568,12 +4290,55 @@ step, no automation. Just a record.
 - **Consequences:** Ctrl+F works only in tabs that mount the hook, so **each new scripture tab type
   is an opt-in** — the real coverage gap of the renderer-level approach, and the one thing the
   main-process handler would have given for free. Adding a tab type is one hook call plus a resolved
-  source project. The catalog entry `scripture-find` in `src/stories/keyboard-shortcuts.data.ts` lists
+  source project. The catalog entry `scripture-find` in `src/shared/data/keyboard-shortcuts.data.ts` lists
   the hook plus every mount site, so the current coverage is greppable in one place; keeping it
   accurate is what stops the gap from going unnoticed. **Revisit** if (b) is ever built, or once
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
+
+## adr-per-web-view-state-lives-in-the-definition: Per-web-view state lives in the web view definition; user defaults and cross-instance memory live in settings
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Per-pane content zoom (epic PT-4575) needs three different lifetimes for one number:
+  the level the pane on screen is at now, the level to hand the next pane of the same project and
+  kind, and the user's default for panes that have never been zoomed. The platform already has a
+  home for the first — a web view's own `state` inside its `SavedWebViewDefinition`, written through
+  `updateWebViewDefinition` and read back in a view with `useWebViewState`. That store is the one the
+  dock layout serializes, so it survives a restart and travels with the tab when the tab moves to
+  another window (`adr-web-view-ids-are-unique-from-birth`, `adr-durable-window-ids`). An April
+  prototype of this feature (PR #2211) instead kept a `Record<webViewId, factor>` inside a renderer
+  zoom service and mirrored it into a hidden setting, making the pane's own level a second copy that
+  had to be reconciled with the definition on every open, move, reload and close.
+- **Decision:** Per-web-view state of any kind lives in that web view's `SavedWebViewDefinition.state`,
+  written with `updateWebViewDefinition`. State that must outlive a single pane — a user-level
+  default, or "what this project's editor was last set to" — lives in **user settings**: a visible
+  setting for the default the user controls, a hidden one for the memory. Services keep no parallel
+  store keyed by web view id. Content zoom is the first feature written to the rule: the pane's own
+  levels are `platform.contentZoomLevels` in the definition state, the default and the per-project
+  memory are `platform.webViewContentZoom` and `platform.webViewContentZoomMemory`
+  (`src/renderer/services/web-view-content-zoom.service.ts`). Definition state that belongs to a
+  project carries the identity it belongs to: the levels are stamped with
+  `platform.contentZoomIdentity` (`kind:identity`), written and removed with them, because a pane
+  re-pointed at another project keeps its web view id and the view spreads its own saved state onto
+  the new definition — so without the stamp the previous project's levels are indistinguishable from
+  levels chosen for the new one.
+- **Alternatives:** (a) **A per-view service with its own hidden `Record` store** — the April
+  content-zoom prototype, PR #2211 — rejected: two stores for one value, and the one that is not the
+  definition has to be taught by hand about every lifecycle event the definition gets for free.
+  (b) **Everything in settings, keyed by web view id** — rejected: ids are minted per pane and never
+  reused, so such a setting grows without bound and needs a pruning story; that cost is accepted only
+  for the memory setting, which is keyed by project and kind rather than by pane, and even there,
+  whether to prune at all is decided in PT-4585. (c) **Everything in the definition, nothing in settings** —
+  rejected: a level that dies with its pane cannot answer "the same zoom next time I open this
+  project", which is what Paratext 9 does (`ParatextBase/DefaultZoomMemento.cs`).
+- **Consequences:** Per-pane state travels through restart, window move and layout share for free, and
+  a feature that wants it writes no storage code. In exchange, definition state is semi-public — it
+  is visible in a shared layout and readable by the view itself — so nothing sensitive belongs there,
+  and every key needs a name that cannot collide, hence the `platform.`-prefixed key. **Revisit** if a
+  per-pane value ever grows larger than a layout file should reasonably carry.
+- **Source:** PT-4576 (PR #2803) and PT-4580, epic PT-4575; the rejected alternative is PR #2211.
 
 ## adr-per-window-focus-ring-keys-off-broadcast-window-id: A per-window focus ring keys off a main-broadcast window id, not local DOM focus
 
@@ -3796,6 +4561,52 @@ step, no automation. Just a record.
   lives in the hosts.
 - **Source:** PT-4433 (NN5d, Sprint 89 Simple Quality), resource-picker dead-ends.
 
+## adr-picker-row-truncates-never-scrolls: A picker row truncates and starts its short name at the leading edge; it never scrolls horizontally
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** Platform.Bible has several project/resource pickers that list the same three things —
+  a short name, a full name and a language — and each had made its own layout decisions. Two of Ian
+  NN-3.3's four defects were the result. `ResourcePickerDialog` laid its rows out in an `auto`
+  table whose short-name cell was `whitespace-nowrap`, inside a container asking only for
+  `overflow-y: auto`; CSS computes the unspecified axis from `visible` to `auto`, so one long
+  resource name widened the table and produced a horizontal scrollbar that pushed the language
+  column off the right edge. Measured in the running app at a 560px dialog: `scrollWidth` 782
+  against `clientWidth` 514. Separately, the "Select project" dialog right-aligned its short name
+  while `ResourcePickerDialog` and the titlebar `ProjectSelector` both left-aligned theirs, so the
+  same list of the same projects read differently depending on how the user got there. Neither is
+  interesting on its own; what makes them worth recording is that a third picker added later would
+  have picked its own answer again.
+- **Decision:** One layout contract for every picker row — **truncate, never scroll**; **truncation
+  must not hide anything**; **the short name starts at the leading edge**. Stated as invariants
+  rather than as one picker's mechanism, because the three surfaces are a table, a CSS grid and a
+  cmdk list and each reaches them a different way: `ResourcePickerDialog` fixes its columns with a
+  `colgroup` rather than per-cell widths (its section-heading rows span all columns and cannot carry
+  them), `ProjectPicker` floors its grid tracks at `minmax(0,…)`, and `ProjectSelector` inherits
+  `overflow-x: hidden` from the shared `CommandList`.
+
+  The invariants are written out, with what each one rules out and how to test it, in
+  [`.claude/rules/ux/picker-row-layout.md`](../../.claude/rules/ux/picker-row-layout.md) — that is
+  the copy to follow and to keep current. This entry keeps the reasoning and the history; restating
+  the rule in both places would guarantee that one of them eventually describes a superseded
+  version.
+- **Alternatives:** **Wrap long names onto a second line** — rejected: it makes row heights ragged
+  in a list whose whole job is fast visual scanning, and the language column still has to go
+  somewhere. **Allow horizontal scrolling with a scroll affordance** — rejected: a name being long
+  is not a reason to hide a column the user never asked to lose, and the PRD is explicit that
+  "horizontal scroll is always bad". **Express the alignment through WI-24's shared project-name
+  helper**, as PT-4551 proposed — rejected because that helper formats a name *string*
+  (short-name-first, de-duplication) and alignment is layout; it has no place to put this.
+- **Consequences:** A new picker follows this entry rather than re-deriving an answer, and the
+  guard against regression is per-surface: the layout half is pinned in a real browser by the
+  `LongNamesDoNotScrollHorizontally` story (jsdom reports `scrollWidth` and `clientWidth` as 0, so
+  it cannot see this class of defect at all), and the hover-label and alignment halves by jsdom
+  tests. Because the contract is written here and not carried by shared code, a picker that ignores
+  it fails no test until someone adds one — **revisit** and extract shared row components if a
+  fourth surface appears, at which point the duplication would outweigh the coupling.
+- **Source:** PT-4551 (Ian NN-3.3 (a) and (d)), with the overflow mechanism measured in the running
+  app rather than inferred.
+
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26
@@ -3889,6 +4700,88 @@ step, no automation. Just a record.
 - **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
   measured against the top of the multi-window stack.
 
+## adr-pop-ups-follow-their-content-zoom-area: A pop-up takes the zoom of the area it opens from
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** pop-ups portal to `document.body`, outside the zoom area, so they rendered at
+  interface scale next to zoomed content, and a hand-wrapped editor popover was misplaced at
+  200 %.
+- **Decision:** a pop-up takes the zoom of the area it opens from. `ContentZoomRoot` publishes
+  its area through React context, and the library's popover, dropdown menu and tooltip mark
+  their portaled content with the area and a pop-up flag and cap their size by the zoom factor.
+  The platform bootstrap never counts flagged content as a pane or anchors the indicator on it.
+  `ContentZoomAreaProvider` covers pop-ups rendered outside the area element.
+
+  A pop-up the platform itself draws outside the web view — the command palette, popover and
+  context menu requested through `papi.overlays`, portalled by `OverlayHost` into the renderer's
+  own document rather than into the requesting pane's iframe — takes the same rule by a different
+  route: it cannot see the pane's `--platform-content-zoom-<area>` custom property, since that
+  property lives on the requesting iframe's own document, so `OverlayHost` reads the requesting
+  pane's scale directly from the content-zoom service (`getContentZoomScaleForWebView`) and passes
+  it down to `OverlayCommandPalette`, `OverlayPopover` and `OverlayContextMenu` as a plain prop.
+  The request carries no area, so the scale is that of the pane's active area — the one last clicked
+  or focused. That is the area the user is working in when they open a pop-up by click or key, and
+  it can differ from the opener's area for a pop-up opened by hover in a pane with several areas.
+  Each applies it as CSS `zoom`, capped by the space Radix reports available divided by the scale —
+  the same shape as the library's own cap. The popover and command palette combine that cap with the
+  size cap actually in force via `min()` once zoomed — the caller's `maxWidth`/`maxHeight` when one
+  was supplied, the component's own default otherwise, so a zoomed pop-up keeps its default bound
+  rather than losing it; the context menu takes no caller size cap at all.
+
+  **Where the `zoom` goes, and why it is not on the Radix content element.** For a pop-up that draws
+  an arrow, the zoom and all the sizing go on a wrapper div *inside* `Popover.Content`, with
+  `Popover.Arrow` left outside that wrapper as a direct child of the content. Radix requires the
+  arrow to be a content descendant and positions it by writing an inline pixel offset on it; inside
+  a zoomed element the browser reads that offset as a pre-zoom length and scales it a second time,
+  so the arrow lands at `offset × scale` instead of `offset` — and where the true offset is small,
+  the doubled value trips floating-ui's arrow clamp and collapses onto the content's own corner.
+  Radix's own placement of the pop-up is unaffected, because the popper wrapper it positions sits
+  outside the content element entirely. CSS `zoom` on a child still grows its parent's layout box,
+  so the pop-up still scales with the pane.
+
+  **The inner wrapper owns sizing, and it owns all of it.** The shared `PopoverContent` supplies a
+  fixed `tw:w-72` width, `tw:flex tw:flex-col tw:gap-2.5` layout and `tw:p-2.5` padding, and a
+  pop-up's content renderers return fragments — so their children were direct flex items of that
+  element. Moving the content inward moves it out of reach of every one of those, which is a
+  behaviour change at interface scale and not only when zoomed. So the wrapper must take over the
+  width, the flex layout and the padding together, with `width: 'auto'` and `tw:p-0` on
+  `Popover.Content` so the fixed class cannot reassert itself over the wrapper. Splitting them —
+  taking the padding inward and leaving the width and gap behind — silently resizes and respaces
+  the pop-up at every scale. Taking them inward also makes them scale with the content, which is
+  what following the pane's zoom means.
+
+  Anything Radix positions with an inline pixel offset inside a zoomed element has this defect. At
+  the time of writing the arrow is the only such element in the platform's own overlays: the context
+  menu draws no arrow, and its sub-menu content portals out of the zoomed subtree.
+
+  `OverlayHost` is deliberately the one place that depends on the content-zoom
+  service: `OverlayContextMenu` is part of the generated extension-facing declaration bundle, and an
+  import of the service from there would publish it — including its test-only seams — to extension
+  authors. A command palette shown centred, with no anchor position, is not anchored to any pane's
+  content and stays at interface scale, as does a modal dialog.
+- **Alternatives:**
+  - per-call-site `ContentZoomRoot` wraps with a `zoomArea` prop threaded through the comment
+    list (repeated at every site, easy to forget);
+  - the bootstrap detecting Radix pop-ups and copying the trigger's area (depends on Radix
+    internals);
+  - keeping pop-ups at interface scale (rejected by the product owner).
+- **Consequences:**
+  - six shadcn files carry `CUSTOM` changes - three functional (popover, dropdown menu, tooltip)
+    and three recording the components that do not follow an area yet;
+  - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
+    (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
+    when first opened from zoomed content. The Scripture editor's right-click menu is not one of
+    these — it is drawn by the editor library and stays at interface scale; see
+    `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn);
+  - a pop-up portaled into a container inside another area inherits that container's zoom;
+  - a command palette blocks the window's input while open, so the pane it was drawn for cannot
+    change underneath it; a popover and a context menu do not block input, so a zoom chord pressed
+    while one is open re-scales the pane behind it and the overlay keeps the level it was drawn at
+    until it closes — accepted, not a bug to be fixed later.
+- **Source:** PT-4634; the outside-the-web-view extension (`papi.overlays` command palette,
+  popover, context menu) by PT-4712.
+
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
 - **Date:** 2026-08-27
@@ -3946,6 +4839,80 @@ step, no automation. Just a record.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
 
+## adr-project-name-short-name-first: Project names lead with the short name, through one shared helper
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** Two surfaces formatted project names in two different orders — the Simple-mode
+  toolbar rendered `True Meaning Arabic (arb)` while `ProjectSelector`'s `shortNameAndFullName`
+  rendered `arb - True Meaning Arabic` — and each carried its own copy of the
+  `fullName && fullName !== shortName` de-dup rule. Five sites sorted project lists by three
+  different keys, so the same projects ordered differently depending on which surface listed them.
+- **Decision:** Wherever a surface shows both names, the short name leads, joined to the full name
+  by a non-localized `" - "`. Five helpers live in `platform-bible-utils` — the one package every
+  consumer already depends on: `formatProjectName`, `hasDistinctFullName`, `PROJECT_NAME_SEPARATOR`,
+  `compareProjectsByName` (plus its string-level `compareProjectShortNames`), and `normalizeFullName`
+  for reading the raw setting. Every formatting and sorting site calls them. Lists sort by
+  `shortName` at `sensitivity: 'base'`; a site with its own tie-break layers it on top. Two surfaces
+  deliberately show the short name ALONE rather than the pair — tab titles (see Consequences) and
+  `home.component.tsx`'s resource cards — so "short name first" is a rule about order, not a
+  requirement that every surface show both. A sweep test (`project-name-adoption.test.ts`) fails the
+  build when the FORMATTING/de-dup rule is re-inlined; it is line- and identifier-based and does not
+  see a re-inlined sort at all, so the sort half rests on review and the helper's own tests.
+- **Alternatives:** **Keep long-name-first and change `ProjectSelector` instead** — rejected: the
+  short name is what a Paratext user identifies a project by and the field that must survive
+  truncation, so leading with it means the identifying half is never the half that is clipped.
+  **Sort by `fullName`** (what three of the five sites did) — rejected: with the short name leading
+  the label, a `fullName` sort orders on a field the user cannot see, so the list reads as unsorted.
+  **Per-consumer tests alone, without the sweep** — rejected: they pin today's consumers and say
+  nothing about the next surface added, which is the failure this exists to prevent.
+- **Consequences:** Supersedes the toolbar's documented long-name-first rationale. Three sort sites
+  now share one comparator: `ProjectSelector`'s own `compareRows`, the renderer picker's
+  "More projects" list, and the sync-status popover. Only two of those change what a user sees — the
+  renderer picker, which sorted by `fullName` before, and the sync-status popover, which gains the
+  case-insensitivity it lacked. Find and the checks side panel look like a third and fourth: they
+  hand `ProjectSelector` a list, and it re-sorts every section it renders, so their own order was
+  never observable and they pass their rows through unsorted. `secondaryFirst` on
+  `ToolbarCompoundLabel` loses its only in-repo consumer but is retained, because the component is in
+  the stable barrel and removing a documented prop is a breaking change.
+  `ProjectSelectorProject.fullName` — and the extension-side `FindProject`/`ProjectOption` rows that
+  feed it — became optional so a project with no full name stops mirroring its short name into that
+  field. Surfaces that name a project read `fullName` from project metadata rather than
+  `pdp.getSetting('platform.fullName')`: that setting's contribution default is a localized
+  `*Name Missing*` placeholder, so a data-provider read cannot tell "no full name" from "never set
+  one" and would render the placeholder as a real name. Tab titles deliberately do NOT call
+  `formatProjectName`: a tab strip is the most space-constrained surface in the app, so appending
+  the full name would push the short name toward the truncation leading with it is meant to avoid.
+  They show the short name alone, which `getTabTitleProjectName` now pins to the `platform.name`
+  setting. DBL resource labels follow the same rule even though a resource carries a
+  `displayName`/`fullName` pair rather than the `platform.name`/`platform.fullName` project
+  settings: `getRefLabel` and Share Layout's `formatResourceDisplayName` pass `displayName` in the
+  helper's `shortName` slot. Sites that merely fill a long-name slot the UI renders after the short
+  name compose no label and keep their own separator — View Options joins with an em dash. The
+  Simple-mode toolbar is the one surface that composes the pair from a localized format string
+  (`%projectPicker_toolbar_label_shortNameAndFullName%` and the trigger's `%..._trigger_label_2%`) rather
+  than calling `formatProjectName`: its label and its accessible name are already localized
+  sentences, and a locale that needs to reorder or re-punctuate the pair can only do so in the
+  string. It is an exempted sweep site, and the English strings render the same order the helper
+  does, so the two cannot disagree about which name leads. `ProjectItem`, the renderer picker's row
+  type, is optional-`fullName` like its three siblings, so the "More projects" dialog leaves the
+  full-name column empty rather than repeating the short name in it.
+
+  The toolbar's long-name-first strings shipped on `main` before this change landed, so they are
+  retired rather than edited: `%projectPicker_toolbar_label_nameAndShortName%`,
+  `%..._label_shortNameOnly%` and `%..._trigger_label%` keep their shipped values and carry
+  `deprecationInfo` in `metadata.json`, and the short-name-first wording lives in new keys. An
+  in-place edit would have been invisible to a downstream consumer or a translator working from an
+  older export. The new spoken trigger name also separates the pair with a comma rather than a
+  hyphen, which several screen readers announce as "dash".
+
+  A surface that composes the pair from a format string must drive its VISIBLE label from that same
+  string, not only its tooltip. The toolbar renders the two names as separate nodes so each can
+  shrink independently, and reads the order and separator off the template with
+  `parseProjectNameTemplate`. Hardcoding the visible order beside a localizable joined form is the
+  failure this guards against: a locale that reorders the string would make the label and its own
+  tooltip disagree.
+
 ## adr-project-selector-consumer-driven-groupings: ProjectSelector groupings are consumer-supplied descriptors over an untyped `customData` bag
 
 - **Date:** 2026-09-14
@@ -3985,10 +4952,288 @@ step, no automation. Just a record.
   out-of-repo consumer (e.g. Paratext 10 Studio) must absorb at once.
 - **Source:** PR #2673 (project-selector groupings).
 
+## adr-project-selector-footer-action-is-data: `footerAction` is a data prop, not a render prop
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** The titlebar picker needs a "More projects…" affordance below the list.
+  `customSections` partitions rows and cannot express an action that opens a different surface.
+  cmdk 1.1.1 constrains how such a row can be built: navigation runs through `getValidItems()`,
+  which queries only inside `CommandList`, so a row rendered outside it is mouse-only — the
+  accessibility gap the bare `<button>` this work replaced.
+- **Decision:** `footerAction` is a **data** prop — `{ label, onSelect }` — not a render prop. The
+  selector owns the markup: a `forceMount` `CommandItem` inside `CommandList`, with an explicit
+  stable `value` and an `alwaysRender` separator.
+- **Alternatives considered:**
+  - **A render prop returning a `ReactNode`.** Rejected: it lets a consumer hand back a bare
+    `<button>`, reproducing the exact defect the prop exists to remove, and it cannot be enforced
+    by review at every future call site.
+  - **Rendering the action outside `CommandList`.** Rejected as mouse-only, for the same
+    `getValidItems()` reason the context describes.
+- **Consequences:** Callers cannot style the row or put arbitrary content in it; a future need for
+  that is a reason to widen the data shape, not to switch to a render prop. `forceMount` keeps the
+  row out of cmdk's registered-item set, so `CommandEmpty` still renders on an empty list — the two
+  behaviors are coupled and must be asserted together.
+
+## adr-project-selector-per-bucket-row-order: A grouping descriptor owns its bucket's row order, via an optional comparator
+
+- **Date:** 2026-09-19
+- **Status:** Accepted
+- **Context:** `ProjectSelector` sorted every bucket by its own canonical order (alphabetical by
+  `shortName`, tie-broken by scroll group). A grouping whose meaning implies an order — a bucket
+  ordered by a caller-side score, say — had no way to express it, so the picker lane's first plan
+  was a parallel `customSections` API: ordered `{ id, label, match, compare? }` descriptors selected
+  by a `'custom'` grouping option. `adr-project-selector-consumer-driven-groupings` then landed from
+  #2673 and made the bucketing half of that redundant — `getGroupKey` / `getSectionHeading` /
+  `compareSections` already let a consumer express "Recent / Your projects". Only row order inside a
+  bucket was still unreachable.
+- **Decision:** No parallel sections API. `ProjectSelectorGrouping` gains one optional member,
+  `compareProjects`, a standard comparator over `ProjectSelectorProject`. Ties fall back to the
+  canonical order, which keeps a project fanned across several scroll groups in a stable sequence,
+  since a comparator seeing only the project cannot tell those rows apart. It is ignored where the
+  descriptor does not own the bucketing: the `'openTabs'` and `'selection'` groupings, any grouping
+  with no `getGroupKey`, and the unknown bucket — whose rows are precisely the ones the grouping
+  could not classify, so its own axis cannot order them.
+- **Alternatives considered:**
+  - **`customSections` — a second, parallel descriptor API.** Rejected once the grouping descriptors
+    landed: two ways to say "these are my sections" is one too many, and the sections half of it was
+    already expressible. Adding a `'custom'` member to the grouping option union would also have
+    re-centralized in the component knowledge that `adr-project-selector-consumer-driven-groupings`
+    had just pushed out to consumers.
+  - **Sorting every bucket by the caller's comparator, including the unknown one.** Rejected: the
+    unknown bucket collects rows the grouping's own axis could not classify, so ordering them by
+    that axis is meaningless.
+  - **Making the canonical order itself configurable.** Rejected: that is a component-wide knob for
+    a per-grouping concern, and it would let one consumer's ordering leak across every grouping the
+    picker offers.
+- **Consequences:** A list can now mix two orders — a comparator-ordered bucket above an
+  alphabetical "Other" — which the `compareProjects` TSDoc calls out for callers. The built-in
+  `lastUsed` grouping deliberately supplies no comparator: it reads `lastUsedAt` as a presence flag
+  for bucketing only, and its rows stay alphabetical, matching what
+  `platform-bible-utils/src/project-selector-custom-data.ts` documents.
+- **Source:** PR #2790 (project-selector type indicator and per-bucket row order).
+
+## adr-project-selector-stays-experimental: ProjectSelector keeps its experimental entry point while its shape is still moving
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** `ProjectSelector` is the platform's shared project/resource picker, and the picker
+  lane adds capabilities to it across several consecutive work items — a row type indicator and
+  per-bucket row order here, an "All projects…" footer affordance and further consumers after. The
+  question was whether to move it to the stable barrel now, on the strength of its consumer count,
+  or leave it on `platform-bible-react/experimental` until the surface settles.
+- **Decision:** It stays on `experimental`. The capabilities land; the barrel move does not. The
+  stable barrel is a support promise, and the component is still acquiring surface with each
+  consumer — `renderProjectIndicator`, `ProjectSelectorGrouping.compareProjects`, and the footer
+  affordance deferred to the next item all arrived or will arrive after the promotion was first
+  proposed.
+- **Alternatives considered:**
+  - **Promote now.** Rejected: it fixes the public shape at the point of greatest churn. The
+    immediately preceding work item is the evidence — #2673 removed roughly 16 public
+    `ProjectSelectorProps` members and replaced the component's fixed grouping prop set with
+    consumer-supplied descriptors (see `adr-project-selector-consumer-driven-groupings`). A change
+    of that size is what `experimental` exists to allow, and it landed weeks before promotion was
+    proposed, not years.
+  - **Promote with the experimental barrel kept as a deprecated re-export.** Rejected: that entry
+    point's own header declares no stability guarantee and promises no deprecation cycle, so the
+    shim would buy nothing while putting the component in two bundles.
+- **Consequences:** Consumers import from `platform-bible-react/experimental` and accept the
+  no-guarantee contract, which is what they already did. Renames and prop reshapes stay free until
+  promotion. Promotion becomes its own work item, whose entry criterion is that a consumer can be
+  added without adding a prop — and it should carry the API-surface TSDoc and localized-key
+  conventions the stable barrel expects, rather than bundling them into a capability change.
+
+  Two sharp edges were found at this point and written up in
+  [`.context/designs/PT-4549-followup-projectselector-accessible-name.md`](../designs/PT-4549-followup-projectselector-accessible-name.md).
+  The first — `ariaLabel` REPLACING the trigger's visible label in the accessible-name computation,
+  so every consumer passing a control-only name hid the selected project from screen readers — was
+  fixed in the library under PT-4550: the component composes `"{ariaLabel}: {selection}"` itself, so
+  its consumers no longer each have to. The second is still deliberately carried on `experimental`
+  and should be settled before promotion: read-only is consumer-derived through
+  `renderProjectIndicator`, which leaves the row tooltip unable to explain the padlock to sighted
+  pointer users.
+
+## adr-provider-lookup-is-a-fan-out: A project data provider lookup is a cross-process fan-out; reactive consumers diff and cache, they never look up per item per change
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** `projectDataProviders.get(projectInterface, projectId)` looks cheap at the call site
+  and is not. It runs `projectLookupService.getMetadataForProject`, which waits for a matching PDP
+  factory and then asks EVERY registered factory for `getAvailableProjects`
+  (`src/shared/models/project-lookup.service-model.ts`, `internalGetMetadata`); each layering
+  factory in the extension host answers that by asking every other factory again, so one renderer
+  lookup reaches the C# factories several times over. PT-4597 showed what that costs when a
+  consumer treats it as free: the Simple-mode toolbar's `useOpenProjectBookIds` tore down and
+  rebuilt every `booksPresent` subscription on any change to the set of open project ids, resolving
+  a provider per open project each time. A resource panel republishing its navigable project ids in
+  a loop (~15 writes/s) turned that into ~20,000 lookups and ~52,000 extension-host-to-C# requests
+  in three minutes; .NET stopped answering, the extension host's socket to main died, and the app
+  hung. The PT-4501 late-unsubscriber throttle (#2772) had already fixed one flapping input to the
+  same hook, which shows that fixing inputs one at a time does not close the class.
+- **Decision:** Two rules, one at each end. (1) A **reactive consumer** whose inputs can change
+  repeatedly — a hook or effect keyed on the set of open web views, a selection, a setting that
+  another surface writes — acts on the **diff** of that set: it acquires only what joined, releases
+  only what left, and keeps resolved providers (and failed lookups) for its own lifetime so a
+  member that leaves and rejoins costs a subscription, not a lookup. A failed lookup, a provider
+  that could not be subscribed to, or one whose setting could not be read, is kept for a bounded
+  delay (30 seconds in the hook) and then looked up afresh by a timer the failed subscription arms
+  for itself, without waiting for the project to leave and rejoin (leaving cancels the timer),
+  whatever the failure was: the lookup service's `No project found` is also what a
+  late-registering factory or a mid-session resource install produces, so no message text is
+  treated as a permanent verdict. The attempts are not capped: an id that never resolves costs one
+  fan-out per delay for as long as its view stays open, which after rule (1) is a handful of
+  requests, and the lookup service logs an empty answer to a query that names one project at debug
+  rather than warn, so a project the platform does not know costs no production log line per
+  attempt. A setting read that throws still warns per attempt, from the data-provider service: a
+  project that exists and cannot be read is a genuine anomaly, and in-tree base providers answer a
+  setting they do not store with its contributed default rather than a failure, so that path is
+  not reached by a provider that merely lacks `booksPresent`. A real value delivered by the
+  subscription clears the stamp (not the subscribe resolving, which proves only that the listener
+  attached), and a member that cannot report contributes no books rather than its previous list.
+  `useOpenProjectBookIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) is the
+  reference implementation; the scroll-group service's `ensureVersificationSubscribed` is the
+  older in-tree instance and evicts immediately on failure, so, being pull-driven and re-read on
+  every conversion, it pays a fan-out per conversion for a project that never resolves — a gap
+  outside this decision, not a pattern it endorses. (2)
+  The **lookup service stays a broadcast** with no cache of its own for now: which factories serve
+  which project changes as factories register, as resources install, and as layering factories
+  come and go, and a stale answer there is a correctness bug for every caller, not a performance
+  one. The cost of a lookup is therefore the consumer's to bound.
+- **Alternatives:** (a) **Cache or coalesce inside `projectLookupService`** — deferred, not
+  rejected: an in-flight de-duplication (identical concurrent queries share one fan-out) is safe
+  and would help every caller, but a value cache needs invalidation on factory register/unregister
+  and on project install, which the lookup service cannot observe completely today. Worth doing as
+  platform work under its own ticket; it does not remove rule (1), because a rebuild-everything
+  consumer still pays a subscription round trip per member per change. (b) **Debounce the
+  consumer's input** — hides a flap but keeps the per-member cost, and delays legitimate updates by
+  the debounce window; a diff costs nothing when the set is unchanged, so it needs no delay.
+  (c) **Read `booksPresent` through one aggregating service** instead of a provider per project —
+  a larger redesign that would still have to answer where that service gets its providers from.
+  (d) **One process-level provider cache shared by the toolbar hook and the scroll-group service**
+  — open, not rejected: the two caches key on the same project ids in the same renderer, so a
+  project both consumers hold costs two fan-outs. They differ in shape (the scroll-group cache is
+  pull-driven and re-read on every conversion; the hook's is push-driven and consulted on join or
+  by its retry timer), so a shared cache would have to carry the retry policy of the push-driven
+  consumer. Worth doing when a third consumer appears. (e) **Heal from network events instead of a
+  timer** — `use-project-picker-data.hook.ts` already does this for the same failure mode,
+  refetching on `platform.onDidChangeProjects` and on `object:onDidCreateNetworkObject` filtered
+  to PDP factories, debounced. It costs nothing while idle and heals in about 200 ms. Not chosen
+  for the hook: three more network subscriptions against one timer, and the events miss a C#
+  factory that starts serving an id without a new factory registering. Remains the right shape
+  for a consumer that must heal fast.
+- **Consequences:** Reviewers should flag `projectDataProviders.get`, `getMetadataForProject`, or
+  `getMetadataForAllProjects` inside a React effect, a subscription callback, or any loop whose
+  trigger can fire repeatedly, and ask how the caller bounds it. A project whose lookup,
+  subscribe or setting read failed is retried by a timer after the delay, in place, so a project
+  the backend begins serving later in the session is picked up within one delay of its failure,
+  never sooner; a consumer that needs it sooner takes alternative (e). Reviewers of any
+  `subscribeSetting` consumer should also know that a read failure is a value in the callback, not
+  a rejection, so a catch around the subscribe does not see it. The retry mutates the toolbar's
+  book list on its own cadence, without a user action: a project that fails while the picker is
+  open loses its books from the list mid-interaction, accepted over showing books that cannot be
+  navigated to. A subscription that dies without reporting a failure (a provider whose network
+  object is disposed by an extension host restart while the subscription stays registered
+  locally) is not covered by the timer; as of 2026-09-24 it is tracked on PT-4592.
+  The flap sources that exposed this are tracked as PT-4592 (a panel republishing its navigable
+  project ids while its reference list resolves transiently empty) and PT-4743 (one installed
+  resource yielding two picker rows under two project id spellings). Revisit rule (2) if a
+  platform-level in-flight de-duplication lands. Rule (1) is restated for agents in
+  `.claude/rules/architecture/provider-lookups-fan-out.md`.
+
+## adr-pt9-interlinear-selected-reads: Publish the size limit and allow callers to select individual files or all at once
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** `adr-pt9-legacy-data-as-parsed-models` bounded `getPt9InterlinearData` with an
+  aggregate size cap so one response could not cross the transport's message limit and tear down the
+  C# connection. A real project reached that cap: a 36-book Swahili glossing project totals 74.7 MiB
+  of interlinear files against a 50 MiB cap set as a generous safe limit, so every read was refused
+  and the project could not be imported at all. Measured, its files serialize to 54.1 MiB -
+  comfortably inside the 100 MiB transport limit - so the cap, which bounds source bytes as a proxy
+  for serialized size, was what refused it rather than the limit it stands in for. The manifest
+  shared the cap, so the project could not even be listed.
+- **Decision:** Set the ceiling from measurement, and bound one response rather than the project.
+  (0) **The ceiling is raised to 80 MiB:** measured across that project's 38 files, the response
+  serializes to 0.72x the on-disk XML in aggregate and never above 0.76x for any single file of
+  consequence, because the indentation and close tags PT9 writes outweigh the attribute keys the
+  parsed shape emits. 80 MiB stays a generous safe limit on those numbers: a full response lands
+  near 58 MiB, the ceiling holds even if the serialized form were as large as the source - a third
+  more than anything measured - and a response at that worst case is still 20 MiB inside the
+  transport's 100 MiB limit. (1) **Selection by request parameter:** `getPt9InterlinearData` takes
+  an optional selector of manifest paths. Reading a scoped part of a project by request parameter,
+  rather than the whole of it, is what the platform's chapter and book getters already do, though
+  they take a `VerseRef` domain key; the in-repo precedent for an optional selector object is
+  `GetCommentThreads(CommentThreadSelector)`, which this one deliberately differs from - a sealed
+  record with `JsonUnmappedMemberHandling.Disallow` rather than a lenient mutable class whose
+  converter ignores unmapped members. A project of any size is read a group of files at a time, and
+  the groups reassemble to exactly what one unselected read would return, except `setups` and
+  `hasAssociatedLexicalProject`, which repeat on every response; take them from any one. (2) **The
+  manifest is not capped:** it carries one fixed-length digest per file however large the file is,
+  and it is what a caller selects with, so a project too large to read at once must still be able to
+  list what it holds. (3) **The manifest
+  describes its files and carries the ceiling:** each entry carries `sizeBytes` and, for a book
+  file, the `glossLanguage`/`bookId` its root element declares, so a caller can group its reads and
+  name the books it must leave out before transferring anything, and the manifest carries the
+  ceiling those sizes are measured against as a top-level field. (4) **Silent absence is always an
+  error:** a selector naming an unknown path, or naming no paths, fails with INVALID_ARGUMENT rather
+  than serving a payload that a caller importing file by file would record as a book holding no
+  data.
+- **Alternatives:** (a) **Raise the ceiling and stop there** - rejected: the measurement justifies a
+  raise, and the project that forced this now fits under it, but a ceiling of any value refuses the
+  project after next. Raising it without selection buys one project. (b) **Fix the transport
+  instead** - measure the serialized response before it is written and fail the one request,
+  removing the connection-teardown failure mode for every provider. Still the right platform fix and
+  still unaddressed; it raises the ceiling but does not remove it, so selection is needed either
+  way. (c) **A more compact payload encoding** - measured: 70% of the book payload is repeated JSON
+  key names, so tuple encoding plus interned identifiers would cut 46.5 MiB to roughly 13 MiB. A
+  large constant-factor win, but it is an optimization with its own contract break; it does not make
+  project size irrelevant, and it can land later on its own evidence. (d) **Documenting the ceiling
+  in prose only** - rejected because a types-only declaration offers no constant to import, so every
+  consumer would carry a copy that can silently stop matching what is enforced. (e) **Serving it
+  from a sibling getter, or on every manifest entry** - rejected: a second call to correlate, or a
+  platform constant repeated per file, where one top-level field on the response that already
+  carries the sizes costs neither.
+- **Consequences:** Project size stops deciding whether the book corpus can be imported. The project
+  that forced this now fits in a single read, so selection is what makes size irrelevant in general
+  rather than what rescues this one project. Selection is per file, though, so `Lexicon.xml` and
+  `WordAnalyses.xml` - single per-project files that grow with the corpus and cannot be split -
+  remain bounded by the ceiling; a project whose analyses file alone passes it has that data
+  unreadable through this interface until reads can be finer than a file. A consumer must now read
+  the manifest before the data, which was already the change-detection path. The uncapped manifest's
+  cost scales with the corpus rather than with any ceiling, so the request timeout is its effective
+  bound. The setups file is deliberately not charged to the cap - it is served whatever the
+  selection and is never a manifest key, so charging it would refuse a selection a caller had sized
+  correctly.
+
+  Each selected read re-runs the file scan, so reading a project one file at a time repeats that
+  scan once per file. Measured on a real project it is a low-single-digit share of import time -
+  parsing and transferring the files dominate - so the scan is deliberately not cached: the gain
+  would not pay for a cache whose invalidation had to track Send/Receive.
+
+  The ceiling is arithmetic over the transport's message limit, so that limit is declared as
+  `MAX_WEBSOCKET_PAYLOAD_BYTES` in `src/shared/data/rpc.model.ts` and passed as `maxPayload` to the
+  WebSocket server. That pins the server's receive path, which is the hop a C# data provider
+  response crosses and the one this ceiling is measured against; the extension host's own client
+  still takes the `ws` package default on its receive, so the other half remains on a library value.
+  At 80 MiB a response may inflate 1.25x its on-disk size before crossing the limit, where the 50
+  MiB cap allowed 2.0x, so the margin is thinner than it was and neither number can be changed
+  without re-checking the other.
+
+  The selector addresses files by manifest path, so it assumes a book and gloss language keep that
+  path between the manifest poll and the read that follows it. PT9's own writer always nests a book
+  file under `Interlinear_<lang>/`, so this holds in practice; the contract a consumer is given is
+  to rebuild `paths` from a fresh manifest rather than replay a stored list.
+- **Source:** PR #2838. The over-cap project described in Context, imported against the
+  projectInterface `adr-pt9-legacy-data-as-parsed-models` introduced in PR #2707; every byte figure
+  here is a measurement taken against that project's files.
+
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
 - **Date:** 2026-08-25
-- **Status:** Accepted
+- **Status:** Accepted; decision (2) and the size-cap consequence superseded in part by
+  `adr-pt9-interlinear-selected-reads`, which keeps the polled hashed manifest but enriches its
+  entries, removes the cap from the manifest, and bounds a data read by a caller-chosen selection
+  rather than by the whole project. Everything else here stands.
 - **Context:** Importing Paratext 9 interlinear data into a Platform.Bible extension requires core
   to expose project-folder files extensions cannot otherwise reach (extensions have no filesystem
   access, and `ExtensionData` is confined to its own store). PT9 keeps this data in per-language
@@ -4517,6 +5762,67 @@ step, no automation. Just a record.
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
 
+## adr-resource-panes-name-their-zoom-areas: The Text Collection grid and the Bible Texts / Commentaries / Model Text panels each name their own zoom area, because they share one project identity; Enhanced Resources retires its private zoom
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** PT-4582/PT-4583 extended `adr-zoom-composition`'s per-pane content zoom to the
+  Resources views: the Text Collection grid, the Bible Texts / Commentaries / Model Text panels, and
+  the Enhanced Resources viewer. `memoryIdentityFor`
+  (`src/renderer/services/web-view-content-zoom.service.ts`) keys a pane's remembered level on its
+  web-view definition's `projectId` (normalized) paired with a `ContentZoomKind`
+  (`'editor' | 'resource' | 'notes'`, `src/shared/models/content-zoom.model.ts`). For the Text
+  Collection grid and for the Bible Texts, Commentaries and Model Text panels, that `projectId` is
+  the *container* project — the resource actually on screen (`selectedRef.projectId` in
+  `resource-text-panel.component.tsx`) never reaches the definition — so all four resolve to the
+  same kind and the same identity; with the unnamed `main` area they would all read and remember one
+  shared zoom level, and zooming one would silently change the others. PT-4582's own ticket
+  description assumed the opposite — that the definition carried the displayed resource's project —
+  which the code does not do. Separately, the Enhanced Resources viewer already carried its own zoom
+  control — `scripturePaneZoom`, a font-size multiplier driven by its own `window` `keydown` handler
+  for the same Ctrl+`=`/`-`/`0` chords the platform mechanism claims, with its menu items living in
+  the toolbar outside every pane — that the new mechanism had to either absorb or retire. The two
+  handlers collided rather than one shadowing the other: both were registered bubble-phase on
+  `window` and neither stopped propagation, so a single keypress drove the private font-size
+  multiplier *and* the platform's content zoom.
+- **Decision:**
+  - The four resource views each name their own `ContentZoomRoot` area — `text-collection`
+    (`scripture-text-grid.web-view.tsx`), `bible-texts` and `commentaries` (both
+    `resource-text-panel.component.tsx`, selected by `resourceType`), and `model-text`
+    (`model-text-panel.component.tsx`) — so their remembered levels stay apart from each other
+    although kind and identity are identical for all four.
+  - Enhanced Resources marks three areas rather than one: an unnamed area around
+    `EnhancedScripturePane`, `entries` around its tab set, and `footnotes` in the footnotes pane's
+    resizable panel (`enhanced-resource.web-view.tsx`, `footnotes-pane.component.tsx`). Its body is
+    genuinely three independently resizable panes; a single area would remove the user's existing
+    ability to enlarge just the Bible text relative to the other two. Its private `scripturePaneZoom`
+    is deleted outright rather than migrated — state, prop chain, toolbar menu items, their localized
+    strings, and the keyboard-catalog entries for the retired handler all go — and the platform
+    mechanism covers all three panes from a clean start.
+- **Alternatives:**
+  - Adding per-view values to `ContentZoomKind` (one kind per resource panel) instead of naming
+    areas — rejected: it reads tidier at each call site, but edits a core model file for no
+    behavioral gain over an area id, and a new kind would be needed for every future resource-panel-
+    shaped view.
+  - Carrying Enhanced Resources' stored `scripturePaneZoom` value into the scripture pane's area at
+    startup — rejected: it would require the view to write state the platform now owns and seeds,
+    against the "views do not build their own zoom stacks" rule in `adr-zoom-composition`.
+- **Consequences:** `adr-zoom-composition`'s statement that the Text Collection grid's per-resource
+  zoom "stays" holds unchanged: it nests inside the grid's own `text-collection` area and multiplies
+  with it, and this work only wraps that area — it does not touch the per-resource mechanism. The
+  grid's own wheel/pinch handling (`use-resource-zoom-input.hook.ts`) now reads notches and pinches
+  through `createContentZoomWheelReader` from `platform-bible-utils`, while the platform's injected
+  bootstrap (`web-view-content-zoom.bootstrap-script.ts`) keeps its own separate copy of the same
+  notch/pinch reading for chrome-driven chords; `web-view-content-zoom.wheel-parity.test.ts` pins
+  both copies to identical totals over the same Ctrl-held wheel sequences, so their step arithmetic
+  cannot silently drift apart. It does not compare their physical-modifier tracking (a held Control
+  or ⌘, a pointer event reporting Ctrl, clearing on blur), which is what tells a macOS mouse notch
+  from a trackpad pinch. Enhanced Resources has no leftover zoom fallback that could fall out of
+  step with the platform mechanism. The Scripture editor's right-click menu stays at interface scale in
+  every one of these panes; see `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn).
+- **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
+  PT-4583 (Enhanced Resources viewer).
+
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
 - **Date:** 2026-09-03
@@ -4862,11 +6168,11 @@ step, no automation. Just a record.
   startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
-## adr-share-layout-renders-without-a-catalog: Share Layout always renders, and states what it cannot show
+## adr-share-layout-renders-without-a-catalog: The Team layout dialog always renders, and states what it cannot show
 
 - **Date:** 2026-09-03
 - **Status:** Accepted
-- **Context:** `ShareLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
+- **Context:** `TeamLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
   Confirm writes that snapshot back over `platformScripture.referencedProjectsAndResources`. Every
   input to that snapshot is indistinguishable from a legitimate empty value while it is in flight: a
   project setting resolves to its `defaultValue` (`createUseDataHook`), the personal lists are
@@ -4878,21 +6184,43 @@ step, no automation. Just a record.
   to do with DBL) out of reach, and on a core build with no DBL credentials the dialog would then
   never open at all, because `notConfigured` is the normal state there.
 - **Decision:** The dialog blocks on **delivery**, not on success. It renders a spinner until
-  `canWrite`, all three project settings, both personal lists and the catalog have each settled once
+  `canWrite`, all four project settings (`referencedProjectsAndResources`, `modelTexts`,
+  `sharedLayoutDefaultTab` and the team structure lock `structureProtected`), both personal lists
+  and the catalog have each settled once
   — and then it always renders, whatever the catalog said. References it cannot classify stay in
   `otherResources` (round-tripped unchanged by Confirm, as before) and are **counted out loud** in a
   notice above the tabs, carrying a retry only when the reason is recoverable. The settle gate
   latches on the FIRST settle, so a retry driven from inside the mounted dialog cannot unmount the
   body and discard the admin's in-progress edits.
+
+  The gate **is** the snapshot: the latch captures every value the body mounts from into one state
+  object, and the body is rendered from that object rather than from the live memos beside it. So
+  the props the body mounted with and the values Confirm reference-compares its result against are
+  the same objects by construction. Read live at render time they would agree only by timing — the
+  latching effect and the render it triggers happen to flush in one turn — and a delivery landing in
+  that window would make every untouched field fail its comparison and write.
+
+  One exception re-opens the snapshot: a catalog arriving after the body mounted, while the admin
+  has edited nothing. Without a catalog both tab lists mount EMPTY (every saved `dblResource` is
+  unclassifiable), so a dialog that promises a review of what is about to be shared shows nothing at
+  all, and the retry cannot fix it. That case re-captures the seed and remounts the body. A body
+  with edits in it is never re-seeded — a remount discards them — so it keeps the mount-time
+  partition, and the hidden-resource count is pinned to that partition rather than recomputed live,
+  or the caveat would vanish the moment the catalog landed and leave the empty lists reading as the
+  truth.
 - **Alternatives:** **Keep blocking on a failed catalog** — rejected: it makes a transient provider
   registration (~10s of background retries) hide unrelated settings, and a retry landing after the
   body mounted cannot fix a snapshot anyway, which is what the delivery gate already handles.
   **Render with no catalog and say nothing** — rejected: that is the dead end this epic exists to
   remove, under a heading that promises a review of what is about to be shared.
-- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate, or it
-  reintroduces the erasure. A surface that cannot show part of its own subject should say how much
-  it is hiding rather than rendering a short list silently.
-- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13).
+- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate AND
+  to the latched seed, or it reintroduces the erasure — a field compared against a live value
+  instead of the seed writes whenever that value moves under an open dialog, which is reachable
+  from a catalog retry, another admin's write, or an S/R delivery. A surface that cannot show part
+  of its own subject should say how much it is hiding rather than rendering a short list silently,
+  and a caveat about what a snapshot omits has to be pinned to that snapshot, not recomputed from
+  data the snapshot is no longer following.
+- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13); PT-4557 review round 4 (A-1 to A-4).
 
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 
@@ -4965,6 +6293,46 @@ step, no automation. Just a record.
   as a local literal — and is now bound to a shared constant; see
   `adr-window-min-width-shared-constant`.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## adr-simple-mode-tab-menu-offers-zoom-only: Simple mode's tab menu is the platform's own contributed menu, narrowed to the content-zoom group
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Simple mode had no tab menu at all, because every item the platform's tab menu could
+  offer — floating, moving to another window — is a no-op there: floating targets a second window
+  Simple mode does not have, and moving reaches windows Simple mode does not expose. Content zoom is
+  the first per-tab action that is meaningful in both modes: zooming a tab's content behaves
+  identically whether or not a second window exists. The menu converter flattens contributed groups
+  into one list with separators, and a converted item no longer says which group it came from, so
+  narrowing a menu to one group has to happen on the contributed menu before conversion, not after.
+- **Decision:** Both interface modes read the same contributed tab menu. Simple mode narrows it to
+  the `platform.tabZoom` group before conversion; items in that group are shown disabled on a tab
+  whose web view marks no zoom area, read from the content-zoom resolver at the moment the menu
+  opens. A tab hosting no web view gets no menu at all in either mode. The menu renders only once the
+  interface mode is known, so a tab never briefly shows the wrong mode's menu before the setting
+  resolves.
+- **Alternatives:** **Keep Simple mode menu-less and rely on chords alone** — rejected: a keyboard
+  shortcut with no menu entry is not discoverable, and content zoom is meant to be found by browsing
+  the tab menu. **Disable items by area presence at the contribution level** — rejected: whether a
+  view marks a zoom area is a signal that only resolves asynchronously, well after the menu contract
+  is declared, so it cannot gate what the contribution itself offers. **A per-item
+  `hiddenInterfaceModes` field** — rejected: that mechanism hides individual items, but the need here
+  is to restrict an entire menu to one group, which a per-item hide cannot express without listing
+  every other item's id.
+- **Consequences:** Simple mode now pays one contributed-menu read per tab at mount, the same
+  mount-time cost Power mode already paid. The tab menu is reachable only where a tab bar is visible,
+  which in Simple mode is Column 3 alone — so the editor pane, which has no visible tab bar, needs
+  its own entry point to content zoom; that entry point is the editor's own hamburger menu, delivered
+  together with the editor's zoom areas. Product narrowed PT-4578's scope on 2026-09-16: the tab-menu
+  route to content zoom is required only where Simple mode already has a visible, interactive tab bar
+  — Column 3 — not on the editor's own tab, whose hamburger menu is its sole entry point instead. The
+  headless Column 1/2 tab bars keep their existing `pointer-events: none`; this feature does not make
+  them interactive to reach that parity. The disabled state is a snapshot taken when the menu opens,
+  not a subscription: a zoom area that arrives while the menu is up leaves the items greyed until the
+  menu is closed and reopened. That bounds the cost to a menu left open across a pane's first
+  moments, and it is why the items are greyed rather than hidden — the shape of the menu does not
+  change under the pointer.
+- **Source:** PT-4578 (PR #2821), epic PT-4575.
 
 ## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
@@ -5350,6 +6718,49 @@ step, no automation. Just a record.
   which matters because project CSS is layered over a base sheet.
 - **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
 
+## adr-tab-bar-drop-zone-app-side-target: The whole tab bar accepts tab drops through an app-registered rc-dock drop target, not a patched or stretched rc-dock tab
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** In Power mode, a tab dropped on a tab bar's empty remainder did nothing: rc-dock only
+  registers drop targets per tab (`TabCache.onDragOver` in `node_modules/rc-dock/src/DockTabs.tsx`),
+  and its `after-tab` indicator is a fixed 30px strip. Users aiming at "the end of the bar" got a
+  silent no-op — the defect reported as PT-3288. This decision addresses that defect but does not
+  close it; PT-3330 tracks the follow-up.
+- **Decision:** Render `TabBarDropZone` (`src/renderer/components/docking/tab-bar-drop-zone.component.tsx`)
+  through `TabGroup.panelExtra` beside the "+" button. It is an rc-dock `DragDropDiv` that fills
+  the bar's remainder and appends the dragged tab or panel with `dockMove(source, panel, 'middle')`.
+  Acceptance mirrors rc-dock's own gates for this app's group config
+  (`resolveTabBarDropZoneSource`) instead of inventing rules. During a drag, "+" slides to the bar's
+  end, and absolutely positioned pseudo-elements extend the zone's hit area backward over the last
+  tab's trailing half and forward over "+" and the bar's trailing padding, so the bar reads as one
+  target and flex layout never changes. The drawn indicator over that claimed trailing half is
+  widened toward a legible minimum width, capped so it never reaches back further than the region
+  the hit area actually claims — and the zone accepts a drop there if and only if it claimed that
+  region, so the visible indicator and the acceptance decision can never disagree. rc-dock's
+  edge-split layer is moved below the app's taller tab bar. rc-dock is patched only for bugs (the
+  `isPopupDiv` fix this work needed), never for features, and is pinned to exactly the patched
+  version.
+- **Alternatives:** Stretch the last tab's hit area, as proposed upstream (ticlo/rc-dock#222) —
+  rejected: it changes the tab's measured size, which rc-tabs' overflow math reads. Patch
+  `TabCache` to accept past the last tab — rejected: a feature patch that has to be carried across
+  every upgrade. Widen the zone's real box with a negative margin during a drag — rejected: on a
+  crowded bar it feeds back into flex sizing, resizes the tab strip mid-drag, and can move tabs in
+  or out of the overflow dropdown.
+- **Consequences:** The app depends on rc-dock internals: DOM classes, drag-listener ordering, and
+  `setDropRect` semantics. `src/renderer/components/docking/README.md` lists them as an upgrade
+  checklist, and the `docking` e2e subset exercises the layout that unit tests cannot. Simple mode has
+  no `panelExtra`, so no zone; the CSS that hides rc-tabs' idle overflow box applies in both modes. On
+  a last tab too narrow for even the widened indicator to reach a visible width, the zone leaves that
+  tab uncovered and rc-dock's own per-tab handler takes the drop there instead — the same outcome,
+  reached through a different target. On a crowded bar the zone's own box is squeezed to zero width,
+  so the forward hit extension over the gap before "+", "+" itself, and the bar's trailing padding
+  also refuses every drop there — roughly a button's width plus a gap and the trailing padding of
+  dead space that accepts nothing, though a release past the last visible tab still appends through
+  rc-dock's own per-tab target. Revisit if rc-dock gains a native bar-level drop target, or
+  when the PT-3330 follow-up reshapes tab-bar dropping.
+- **Source:** Reported defect PT-3288; implemented in PR #2767 and its review.
+
 ## adr-tab-menu-channel-and-window-naming: The tab context menu is a contribution channel, and a window is named by its content
 
 - **Date:** 2026-08-25
@@ -5501,6 +6912,68 @@ step, no automation. Just a record.
   not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
   `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
   a manual pass rather than by automation.
+
+## adr-team-lock-lives-in-the-team-layout-dialog: The team-wide USFM structure lock is staged in the Team layout dialog, not toggled from the toolbar
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** The editor toolbar carried two adjacent lock buttons: a personal structure-protection
+  toggle (`Lock`/`LockOpen`, Ctrl/Cmd+Shift+L) and, for admins only, a team-wide one
+  (`Shield`/`ShieldOff`, Ctrl/Cmd+Alt+Shift+L) wired straight to
+  `platformScripture.structureProtected`. Two near-identical icon buttons whose only difference is
+  *whose* structure they lock is not a distinction a toolbar can make. Putting the team-wide lock in
+  the Team layout dialog instead was the original design intent — raised by Sebastian in a comment on
+  the design document — which did not carry into the implementation design, so the toolbar pair got
+  built. PT-4557's NTH-2 then proposed resolving the ambiguity a different way: one button for
+  translators plus a popover for admins.
+- **Decision:** The team-wide lock moves out of the toolbar entirely and becomes a switch in the Team
+  layout dialog's middle column, staged and saved with the rest of the layout — restoring the
+  original intent, approved by the product owner. The toolbar keeps the personal toggle alone. The
+  NTH-2 admin popover was built first and then abandoned: it reproduced the ambiguity it was meant to
+  remove — a control that *looks* like the personal toggle beside it but changes a setting for
+  everyone — and it applied on click, so a team-wide change had no review step. Two rules follow.
+  (1) **Structure protection is a Simple-mode feature end to end.** `isProtectionActive` is
+  `interfaceMode === 'simple'`, so in Power mode the lock is unenforced and the toolbar renders no
+  toggle — and the dialog's only opener is itself Simple-mode-gated, so the lock is authored and
+  enforced in the same mode. The toolbar's admin button was likewise Simple-only before this PR, so
+  removing it takes nothing away from Power mode. Opening the dialog in Power mode is noted as future
+  work at its call site; whoever does that must decide what the lock means there, since the setting
+  has no effect in Power mode today. (2) **Staged, not
+  immediate.** The lock joins the dialog's other settings behind Save, so an admin sees what they are
+  about to change for the team before it happens — and Cancel must discard it.
+- **Alternatives:** **(a) The NTH-2 admin popover on the toolbar** — built, then rejected: see above.
+  **(b) Keep the second toolbar button as it was** — rejected: two look-alike icon buttons whose only
+  difference is scope, with no review step on the team-wide one. **(c) Write the lock immediately on
+  toggle while staging everything else in the same dialog** — rejected: the Applying Changes
+  guideline forbids interleaving immediate- and explicit-apply controls as siblings, and the one
+  control that reaches every translator is the worst place to break that rule. **(d) Put it in
+  project settings instead** — rejected: it is a statement about what the team's editor does, which
+  is what the Team layout dialog is for; splitting it out would leave an admin setting the team's
+  layout in one place and the team's editing rules in another.
+- **Consequences:** The lock now has exactly one control in the whole app, so this dialog's failure
+  modes are its failure modes: a refused write must not be reported as a save, and a setting that
+  could not be READ must not be written back (its `false` fallback would unlock structure for every
+  translator on the project). Both are handled in `team-layout.dialog.tsx` and pinned by tests. Three
+  localization keys for the retired project-wide toolbar toggle were deprecated with no successor.
+  An admin opening the dialog only to flip the lock must not publish anything else: `handleConfirm`
+  writes each setting only when its own field changed, because on a project that has never shared a
+  layout the resource lists are seeded from the admin's *personal* selections — compared against
+  the seed the body was MOUNTED with, not the wrapper's live memos, which a catalog retry from
+  inside the open dialog re-identities. Two further consequences of that write path: a field whose
+  setter is momentarily `undefined` (its data provider unresolved, a window the mount gate is
+  deliberately latched across) counts as a FAILED save rather than a skipped one; and the four
+  writes are independent and non-atomic, so they are gathered with `allSettled` and the failure
+  message states that the save may be partial and that the dialog's values are the intended end
+  state, rather than promising a rollback that does not happen. And because the lock
+  is now saved as part of the team layout, it joins `readLayoutSignature`
+  (`shared-layout-receiver.model.ts`): every setting that dialog writes must be fingerprinted there,
+  or an admin who changes only that setting produces an identical signature and the team is never
+  notified — worst of all for the lock, the one change that REMOVES a capability from them. One question is still
+  open: the modal shell renders a ✕ that resolves the dialog with `undefined`, discarding the staged
+  edits silently, which a staged-commit dialog should not offer beside Cancel — whether to remove it
+  or make it behave as Cancel is with the product owner. Tracked separately from PT-4557, which
+  this entry closes, in `~/Desktop/PT-4557-followup-close-button-discards-staged-edits.md`.
+- **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25; round 3 A1, A2, A3).
 
 ## adr-theme-hosted-in-main: The theme service is hosted in main, and each window caches the current theme
 
@@ -5828,17 +7301,21 @@ step, no automation. Just a record.
   `extensions/.eslintrc.cjs` is its own root config for everything under `extensions/`, so a rule
   registered only in the top-level `.eslintrc.js` never reached extension source at all — a rule
   registered there alone reaches only 69 of the repo's 136 sites, excluding the 67 in `extensions`
-  and, with them, the most important known instance,
-  `extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.component.tsx:619`.
+  and, with them, the most important known instance, the `t` lookup callback in
+  `extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.component.tsx`.
 - **Decision:** The rule keys on the *type* of the indexed object (assignable to `LanguageStrings`,
   or indexed by `LocalizeKey`), making it the plugin's first type-aware rule. `src/test.utils.ts`
   gains a `typeAwareRuleTester` alongside the existing untyped one, backed by a fixture tsconfig in
   `src/fixtures/`. The rule is registered at `warn` in `.eslintrc.js` (not in `.eslintrc.ai.js`), and
-  additionally in `extensions/.eslintrc.cjs`, scoped to this one rule, inside that file's existing
-  `#region Overrides to rules from paranext-core` block — the region already reserved for rules that
-  don't apply to the shared extension-template baseline. Placing it there, rather than duplicating
-  the whole file's rule set, is a human decision made to limit the friction at the next template
-  merge, not one the agent implementing the rule made on its own. A type-aware rule also throws when
+  additionally in `extensions/.eslintrc.cjs`, scoped to this one rule. That file's
+  `#region shared with …paranext-extension-template` opens at line 1 and closes at the last line, so
+  every rule block inside it — including `#region Overrides to rules from paranext-core`, which is
+  nested within it and whose only prior occupant is a rule the template does have — is template-shared.
+  The registration is therefore placed in a `#region paranext-core only` block AFTER the shared region
+  closes, mutating the exported config (`module.exports.plugins.push('paranext')` plus the rule and its
+  two overrides). Keeping it out of the shared region, rather than duplicating the whole file's rule
+  set, is a human decision made to limit the friction at the next template merge, not one the agent
+  implementing the rule made on its own. A type-aware rule also throws when
   `ESLintUtils.getParserServices` is called on a file linted without type information, which ESLint
   turns into a rule-loading failure that aborts the entire run rather than skipping the file; this
   broke `npm run lint` once the rule was registered, because `lib/browserslist-config-detect-electron`
@@ -5859,9 +7336,14 @@ step, no automation. Just a record.
   information during lint (already computed — `.eslintrc.js` sets
   `parserOptions.project: './tsconfig.lint.json'`) and of a mandatory stand-down path for any file
   linted without a type-checked program. `extensions/.eslintrc.cjs` is marked at its own top of file
-  as shared with `paranext-extension-template`, which has no `eslint-plugin-paranext`; adding this
-  override diverges the two files and will surface as a conflict or a no-op line at the next template
-  merge. `npm run lint`'s aggregate count for this rule (203) is inflated by the root `workspaces`
+  as shared with `paranext-extension-template`, which has no `eslint-plugin-paranext` —
+  the plugin is a root-only `file:./lib/eslint-plugin-paranext` dependency and is never published.
+  Enabling the rule needs BOTH a `plugins` entry and the rule registration, and an unresolvable
+  `plugins` entry is not a skipped rule: it is `Failed to load plugin 'paranext'`, a hard failure
+  that aborts the entire ESLint run for every file in that repo. That is why both edits are made
+  outside the shared region rather than inside it — a wholesale propagation of the shared region no
+  longer carries them, and the divergence is confined to a clearly-labelled block the template does
+  not copy. `npm run lint`'s aggregate count for this rule (203) is inflated by the root `workspaces`
   array (`["lib/*","extensions","extensions/src/*"]`), which lints extension source twice — a
   distortion that affects every rule's aggregate, not just this one, and is worth remembering the
   next time a lint count is read as a site count. The rule's warning count is the follow-up sweep's
@@ -5908,6 +7390,134 @@ step, no automation. Just a record.
   determination AND the text to reproduce, not a relaxation of the gate.
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
+
+## adr-usersnap-lives-in-product-patch: Usersnap keys and Help items live in the product's repo patch; core ships empty constants
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** The Usersnap account core's feedback forms used to share was lost (PT-3923), and
+  product decided that the live Usersnap integration is Paratext 10 only (PT-4530, question 13).
+  Usersnap's space and project keys are write-only client keys, so they are not secrets, but they
+  identify one product's Usersnap space and do not belong in a public repo that other products build
+  on. Paratext 10 already carries its product-specific changes to core as a repo patch.
+- **Decision:** Core keeps the Usersnap service and commands (`initializeUsersnapApi` and
+  `openUsersnapForm` in `src/renderer/services/usersnap.service.ts`) but ships the
+  `USERSNAP_SPACE_API_KEY`, `USERSNAP_PROJECT_REPORT_ISSUE_API_KEY` and
+  `USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY` constants in `src/shared/data/platform.data.ts` empty, and
+  no items in the `platform.helpFeedback` menu group (`src/extension-host/data/menu.data.json`).
+  Paratext 10's `repo-patches/paranext-core.patch` (in the `paratext-10-studio` repo) sets the keys
+  and re-adds the two items, `platform.usersnapSubmitIdea` and `platform.usersnapReportIssue`; as of
+  2026-09-24 that patch change is paratext-10-studio PR #194, open and stacked on paranext-core
+  PR #2855. The
+  main-process display-media handler that serves the widget's native screenshot is registered only
+  when the space key is set (`registerDisplayMediaRequestHandler` in
+  `src/main/services/display-media-request.util.ts`), and it serves only the window's top frame
+  (`selectDisplayMediaSource`). Code running in that frame's origin shares the grant, which includes
+  web views created with the default `allowSameOrigin`.
+- **Alternatives:** **Keys as `{{ productInfo.* }}` tokens replaced at build time** — rejected: dev
+  runs of a temp build would carry the unreplaced tokens and send them to Usersnap. **Keep the keys
+  in core** — rejected: the repo is public and the keys are product-specific. **Grant capture only
+  while a feedback form is open** — not done: the exposure it would remove is an installed
+  extension's same-origin web view capturing the pixels of an isolated web view, judged not worth a
+  renderer-to-main signal. Revisit if a product ships untrusted extensions.
+- **Consequences:** Platform.Bible makes no Usersnap request, registers no display-media handler,
+  and tells a user who reaches a feedback command that the forms are not available in this build.
+  The exact-equality main-menu pins in
+  `src/extension-host/services/menu-data.service-host.contributions.test.ts` expect the two
+  feedback items exactly when `USERSNAP_SPACE_API_KEY` is set, so they hold in core and in a
+  patched build alike; the empty `platform.helpFeedback` group and the
+  `%mainMenu_feedbackForm_screenshot%` / `%mainMenu_feedbackForm_textArea%` labels stay in core as
+  anchors for the patch. Any core change touching a file the patch edits requires regenerating the
+  Paratext 10 patch.
+- **Source:** PT-4558 (PR #2855).
+
+## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
+
+- **Date:** 2026-09-15
+- **Status:** Accepted (narrows `adr-app-global-shortcuts-in-main`; refines `adr-per-web-view-ctrl-f-for-find`)
+- **Context:** Content zoom (epic PT-4575) is scoped to one **pane**, and a pane may hold several
+  independently zoomable areas — the Scripture editor's text and its footnotes list. Acting on the
+  right one needs the id of the web view the user is in and the area holding the caret or the
+  pointer. The main process, which claimed Ctrl+`+`/`-`/`0` in its `before-input-event` handler for
+  app-wide zoom, has neither: it can name the focused window, not the focused tab, and it cannot see
+  which element inside an `about:srcdoc` iframe has focus. `adr-per-web-view-ctrl-f-for-find` already
+  settled this shape of problem for Ctrl+F by moving the listener into the view and holding it in one
+  shared hook — but that hook is extension code every view has to mount, and content zoom has to work
+  for views that know nothing about it, including plain-HTML ones.
+- **Decision:** The chords are handled inside each web view by the **platform's own injected
+  bootstrap** (`getContentZoomBootstrapScript` in
+  `src/renderer/services/web-view-content-zoom.bootstrap-script.ts`), appended to the script the
+  renderer already injects into every non-URL web view. It targets the area holding keyboard focus,
+  else the area under the pointer for the wheel, else the pane's last active area, and acts with the
+  pane's own id. This is `adr-per-web-view-ctrl-f-for-find`'s shared hook taken one step further: the
+  shared handler is platform-injected, so a view opts in by marking **content**, not by mounting
+  code. The bootstrap prefers in-process functions the window's web-view shard binds on the iframe's
+  `window` and falls back to the three PAPI commands `platform.webViewContentZoomIn` / `…Out` /
+  `…Reset`, which keeps `adr-renderer-registers-no-names` intact — the names are registered by the
+  router, not by the renderer — and keeps a wheel burst off the network. Main gave up the chords in
+  PT-4577 (PR #2821): the three Windows/Linux `before-input-event` zoom branches were deleted,
+  `platform.zoomIn` and `platform.zoomOut` stay as commands with no default chord, macOS binds
+  explicit View-menu items carrying ⌘=/⌘-/⌘0 in place of the native `zoomIn`/`zoomOut`/`resetZoom`
+  roles, and a renderer top-document `keydown` listener covers the case where keyboard focus is on
+  window chrome — the tab bar, the reference box, a toolbar button — where no iframe sees the key at
+  all. The three chord copies — the window-chrome listener, the in-view bootstrap and the macOS
+  View-menu accelerators — are all built from one table, `CONTENT_ZOOM_CHORDS` in
+  `src/shared/models/content-zoom.model.ts`; the bootstrap gets it serialized into the script it
+  injects, the same way the injected stylesheet's rule template travels there. The View menu carries
+  a hidden ⇧⌘= duplicate so ⌘+, which is what a Mac reports for that chord, reaches the menu path
+  too.
+- **Alternatives:** (a) **Keep it in main and route to the focused window** — rejected: main knows the
+  window, not the pane and not the area; the same objection `adr-per-web-view-ctrl-f-for-find`
+  records. (b) **A renderer window-level listener that forwards keys into the right iframe** —
+  rejected as the general mechanism: it is focus-blind, since the renderer cannot see which element
+  inside a sandboxed iframe holds the caret, and it adds a hop to keep in sync. It survives only as
+  the narrow window-chrome case above, where there is no iframe to ask. (c) **A shared React hook
+  every view mounts**, as Find does — rejected here: it would make zoom an opt-in for *code* rather
+  than for *content*, it would repeat the coverage gap that decision already names, and plain-HTML
+  views could not opt in at all.
+- **Consequences:** A view that marks no zoom area ignores the chords entirely — the bootstrap does
+  not even register its wheel listener while a pane has no areas — and the platform scales such a view
+  whole at the Settings default instead. On Windows and Linux this is what a user notices first:
+  Ctrl+`+`, Ctrl+`-` and Ctrl+`0` now do nothing anywhere except a view that answers them itself —
+  today the Scripture editor and the comment list, through the zoom areas they mark, and Enhanced
+  Resources, through the keydown handler it has always had for its own scripture-pane zoom
+  (`extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx`). Main
+  no longer claims those chords, nothing replaces them, and a pane with no marked area deliberately
+  leaves the keystroke to whoever else may want it rather than swallowing it for no effect. So a user
+  on the Text Collection — whose own pane zoom is wheel and menu only — or on any view that marks no
+  area, such as Home or an inventory, presses Ctrl+0 and nothing happens. That is the intended cost of scoping zoom to a pane rather than to the window,
+  and it shrinks as views adopt the mechanism (the Text Collection grid in PT-4582, Enhanced
+  Resources in PT-4583). The bootstrap listens in the **bubble** phase on purpose, so
+  a view that owns Ctrl+wheel for a sub-region keeps precedence by stopping propagation in the capture
+  phase; the Text Collection grid's per-resource zoom does exactly that
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts`).
+  On macOS the chord arrives through the menu accelerator rather than through the iframe, so it
+  resolves the pane's *active* area rather than the area holding the caret; the bootstrap's
+  `pointerdown`/`focusin` tracking re-converges the two, except while a click's own answering refocus
+  into another area is being suppressed — that one move is held off so the clicked area stays the
+  target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once. The
+  window-chrome listener also stands down behind the three full-screen overlays that bypass
+  `OverlayHost` (connection lost, workspace updating, first run), not only behind a modal dialog:
+  the level is persisted, so a zoom made behind one of those would outlive it. The in-view bootstrap
+  needs no gate of its own, because all three of those covers are Radix modal dialogs: each takes
+  keyboard focus out of the web views while it is up and hands it back when it goes, so no chord
+  reaches a view from behind a cover.
+  **Revisit** if a second platform-injected shortcut appears
+  — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
+- **Amended 2026-09-19 (PT-4582/PT-4583):** four statements above no longer hold. Enhanced
+  Resources' own `keydown` handler for its scripture-pane zoom — named above as what answers the
+  chords — is gone; the view now answers through the three areas it marks (`main`, `entries`,
+  `footnotes`), the same mechanism as the Scripture editor and the comment list, not a handler of
+  its own. The list of views above also omitted two more that now answer the same way: the Text
+  Collection grid marks `text-collection`, and the Bible Texts, Commentaries and Model Text resource
+  panels mark `bible-texts`, `commentaries` and `model-text` respectively. The Text Collection is
+  therefore no longer an example of a pane "whose own pane zoom is wheel and menu only" — Ctrl+`0`
+  with the grid focused now changes its pane level too. A view that marks no area at all, such as
+  Home or an inventory, still ignores the chords, which remains an accurate example of the cost
+  described above. And the forward reference to "the Text Collection grid in PT-4582, Enhanced
+  Resources in PT-4583" is resolved: both landed together in this same work.
+- **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
+  chord ownership), epic PT-4575.
 
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
@@ -6304,3 +7914,58 @@ step, no automation. Just a record.
   drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
   adding the ordering tests in `z-index.test.tsx` and this decision record.
+
+## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Platform.Bible had one scaling control — the app-wide Electron zoom behind the
+  `platform.zoomFactor` setting, which scales the chrome along with everything else — plus a
+  project-level font size the editor's Standard view honours, plus two private per-view zooms that
+  grew where the platform had nothing to offer (the Text Collection grid's per-resource factor, and
+  the Enhanced Resources viewer's own handler). Adding a per-pane zoom on top of that raises two
+  questions at once: what the layers multiply out to on screen, and what the new layer is implemented
+  with. Spikes S1 and S2 of the epic's investigation measured the candidates on the real Scripture
+  editor.
+- **Decision:** On screen a pane shows **Electron zoom × project font size × content zoom** — the
+  content zoom of the area, its own level if it has one, otherwise the Settings default — with the
+  Text Collection's per-resource factor multiplying inside the grid's area. Content zoom composes
+  with the project font size and never replaces or resets it: it scales whatever base size the area
+  already has, and reset returns to the Settings default, not to the project font size. It is
+  implemented as CSS `zoom` on each element carrying `data-platform-content-zoom-root`, driven by a
+  custom property per area (`--platform-content-zoom-<areaId>`, falling back to
+  `--platform-content-zoom-default`). **Zoom areas are a platform capability**: a view marks one or
+  more non-nested areas and the platform owns the targeting (focus, then pointer, then last active
+  area, except that the chords stay on the last active area rather than trust a caret the view
+  itself just moved), the per-area state, the memory and the indicator. Views do not build their
+  own zoom stacks.
+- **Alternatives:** (a) **A font-size cascade on the content root** — rejected: it does not reach the
+  editor's rendered scripture, which sets its own sizes (PT-4167), so the one view the feature exists
+  for would not scale. (b) **`transform: scale`** — rejected: it breaks hit-testing, so clicks and
+  caret placement land off-target, which S1 reproduced. (c) **Scaling the whole `<iframe>` for every
+  view** — rejected for adapted views: it scales the view's own toolbar with its content, which is
+  exactly what NN-1 forbids; it is kept only as the fallback for a view that marks no area, and for
+  URL views, where nothing can be injected. (d) **Letting each view implement its own zoom**, as the
+  grid and Enhanced Resources already had to — rejected: four near-copies of clamping, stepping,
+  storage and indicator, with no shared memory and no consistent chord.
+- **Consequences:** A view opts in with one attribute and gets targeting, state, memory, the indicator
+  and the chords for free; the cost is the CSS `zoom` measurement mismatch — inside an area
+  `getBoundingClientRect` is in zoomed pixels while `getComputedStyle(...).fontSize` is not — which
+  every consumer of both has to handle by reading the area's variable (documented in
+  `Extension-Development-Guide.md` and `Component-Builder-Patterns.md`). The Text Collection grid's
+  per-resource zoom predates this decision and stays, nesting inside the grid's own area and
+  multiplying with it: it is the documented exception, not a precedent, and PT-4582 marks the grid
+  pane's own area around it and leaves it in place; moving it onto the platform mechanism is not
+  scheduled. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view carries a
+  private zoom any more.
+
+  The whole-iframe fallback applies as soon as a pane loads and is dropped the moment the view
+  reports an area, and which view types mark areas is remembered per type so the decision is right
+  before the content loads from the second open onwards. The first-ever open of a marking type on a
+  machine still shows one frame-scaled moment: only the view can say whether it marks an area, and
+  it can only say so after it has drawn. A type recorded as marking areas is not moved back by a
+  pane of that type reporting none, so a view that stops marking areas keeps its panes unscaled
+  until the record is cleared.
+- **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
+  recorded here by PT-4580; the chord-targeting exception added by PT-4711; the immediate fallback
+  and the per-type expectation added by PT-4714.

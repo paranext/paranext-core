@@ -16,10 +16,10 @@ import {
   CHECKS_SIDE_PANEL_STRING_KEYS,
 } from './checks-side-panel.component';
 
-// jsdom implements none of ResizeObserver, IntersectionObserver, matchMedia, or scrollIntoView, and
-// the render path touches all four: platform-bible-react's Popover/Select wire ResizeObservers and
-// the shared components query media features. No-op stubs keep rendering from throwing so these
-// tests can assert on what is rendered.
+// jsdom implements none of ResizeObserver, IntersectionObserver, or matchMedia, and the render path
+// touches all three: platform-bible-react's Popover/Select wire ResizeObservers and the shared
+// components query media features. No-op stubs keep rendering from throwing so these tests can
+// assert on what is rendered. scrollIntoView is shimmed repo-wide in vitest.setup.ts.
 beforeAll(() => {
   // `vi.stubGlobal` accepts `unknown`, so these no-op stubs need no type assertion to stand in for
   // the real constructors — only `observe`/`disconnect` are ever reached from this render path.
@@ -46,7 +46,6 @@ beforeAll(() => {
     })),
   );
 
-  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = vi.fn();
   // Radix's PopoverContent calls scrollTo when it focuses children, which these tests reach by
   // opening the project picker.
   if (!Element.prototype.scrollTo) Element.prototype.scrollTo = vi.fn();
@@ -55,9 +54,9 @@ beforeAll(() => {
 /**
  * This panel's own keys whose values are merged onto the `ProjectSelector`'s `localizedStrings` bag
  * as `ariaLabel`, `buttonPlaceholder` and `commandEmptyMessage`. Like the shared
- * `%projectSelector_*%` block they must resolve to a real value — the picker treats any localize
- * key as its own value as "not localized yet" and falls back to English, whatever the key's
- * prefix.
+ * `%projectSelector_*%` block they must resolve to a real value; see the header comment in
+ * `../../project-selector.test-utils` for why a stub's choice here decides which path a test
+ * takes.
  */
 const PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS: readonly LocalizeKey[] = [
   '%webView_checksSidePanel_projectFilter_projectsAndResources%',
@@ -160,8 +159,17 @@ function getGroupByTrigger(): HTMLElement {
   return menuTriggers[0];
 }
 
+/**
+ * The project selector's trigger, matched on the leading group label alone: once a project is
+ * selected the trigger names it too (`"<group label>: <project>"`), so the whole accessible name
+ * moves with the selection while the label that identifies the control does not.
+ */
+function getProjectSelectorTrigger(): HTMLElement {
+  return screen.getByRole('combobox', { name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`) });
+}
+
 async function openGroupByMenu(user: ReturnType<typeof setupUser>) {
-  await user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL }));
+  await user.click(getProjectSelectorTrigger());
   await user.click(getGroupByTrigger());
 }
 
@@ -173,6 +181,7 @@ describe("Checks side panel project selector — the panel's own strings unresol
   const UNRESOLVED_STRINGS: LanguageStrings = Object.fromEntries(
     CHECKS_SIDE_PANEL_STRING_KEYS.map((key) => [key, key]),
   );
+  const RAW_KEY = /%[^%\s]+%/;
 
   it("keeps the panel's own placeholder wording rather than the picker's generic English", () => {
     render(
@@ -182,15 +191,27 @@ describe("Checks side panel project selector — the panel's own strings unresol
     const trigger = screen.getByRole('combobox', { name: 'Your projects & resources' });
     expect(trigger).toHaveTextContent('No project');
     expect(trigger).not.toHaveTextContent('Select a project');
+    // Asserting the English wording alone would still pass if a raw key sat beside it in the
+    // trigger. Nothing the trigger renders may be a key, whatever its prefix.
+    expect(trigger.textContent ?? '').not.toMatch(RAW_KEY);
   });
 
-  it('renders no raw localization key in the picker trigger', () => {
+  it("keeps the panel's own empty message inside the popover", async () => {
+    // The trigger assertion above cannot reach this: `commandEmptyMessage` only renders once the
+    // popover is open. Any `%…%` key, whatever its prefix — a sweep narrowed to
+    // `%webView_checksSidePanel_` would miss the shared `%projectSelector_*%` block the popover
+    // also renders.
+    const user = setupUser();
     render(
       <ChecksSidePanel {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />,
     );
 
-    const trigger = screen.getByRole('combobox', { name: 'Your projects & resources' });
-    expect(trigger.textContent ?? '').not.toMatch(/%[^%\s]+%/);
+    await user.click(screen.getByRole('combobox', { name: 'Your projects & resources' }));
+    const popover = await screen.findByRole('dialog');
+
+    expect(await within(popover).findByText('No projects found')).toBeInTheDocument();
+    expect(within(popover).queryAllByText(RAW_KEY)).toHaveLength(0);
+    expect(within(popover).queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
   });
 });
 

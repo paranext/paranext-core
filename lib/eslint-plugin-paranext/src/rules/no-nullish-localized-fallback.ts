@@ -175,7 +175,6 @@ export default createRule({
       deadKeyFallback:
         "This fallback is dead code: its text is the key itself, so whenever '{{operator}}' fires it hands the user the raw key ('%…%') instead of readable text. Delete it, or use resolveLocalizedString(value, fallback) from platform-bible-utils if real fallback text is wanted.",
       useResolveLocalizedString: 'Wrap in resolveLocalizedString(value, fallback)',
-      deleteDeadKeyFallback: 'Delete the dead fallback',
     },
   },
   defaultOptions: [],
@@ -225,32 +224,39 @@ export default createRule({
       const isDeadKeyFallback =
         sourceCode.getText(node.right) === sourceCode.getText(left.property);
 
+      // A dead key fallback gets a diagnostic but no suggestion. Neither mechanical rewrite is
+      // safe: wrapping keeps the key as the fallback text, the user-visible `%…%` this rule
+      // exists to stop, while deleting the operator removes a runtime guard. On an unrequested
+      // key the read is `undefined` at runtime yet still types as `string` (the repo runs with
+      // `noUncheckedIndexedAccess` off), so the deletion silently turns a rendered key into
+      // nothing rendered at all, and on a `{[k in Key]?: string}` bag it widens the enclosing
+      // helper's return to `string | undefined`. Choosing real fallback text is a judgment the
+      // author has to make.
+      if (isDeadKeyFallback) {
+        context.report({
+          node,
+          messageId: 'deadKeyFallback',
+          data: { operator: node.operator },
+        });
+        return;
+      }
+
       context.report({
         node,
-        messageId: isDeadKeyFallback ? 'deadKeyFallback' : 'nullishLocalizedFallback',
+        messageId: 'nullishLocalizedFallback',
         data: { operator: node.operator },
-        // Wrapping a dead key fallback would keep the key as the fallback text, which is the
-        // user-visible `%…%` this rule exists to stop. Offer the deletion instead; choosing real
-        // fallback text is a judgment the author has to make, not something a fixer can guess.
-        suggest: isDeadKeyFallback
-          ? [
-              {
-                messageId: 'deleteDeadKeyFallback',
-                fix: (fixer) => fixer.replaceText(node, sourceCode.getText(node.left)),
-              },
-            ]
-          : [
-              {
-                messageId: 'useResolveLocalizedString',
-                fix: (fixer) => [
-                  ...importResolveHelperFixes(fixer, sourceCode),
-                  fixer.replaceText(
-                    node,
-                    `${RESOLVE_HELPER_NAME}(${sourceCode.getText(node.left)}, ${sourceCode.getText(node.right)})`,
-                  ),
-                ],
-              },
+        suggest: [
+          {
+            messageId: 'useResolveLocalizedString',
+            fix: (fixer) => [
+              ...importResolveHelperFixes(fixer, sourceCode),
+              fixer.replaceText(
+                node,
+                `${RESOLVE_HELPER_NAME}(${sourceCode.getText(node.left)}, ${sourceCode.getText(node.right)})`,
+              ),
             ],
+          },
+        ],
       });
     }
 

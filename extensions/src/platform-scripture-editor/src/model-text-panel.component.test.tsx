@@ -694,7 +694,7 @@ describe('ModelTextPanel', () => {
     expect(header).toHaveClass('tw:flex');
     expect(header).not.toHaveClass('tw:truncate');
 
-    const label = within(header).getByText('World English Bible (WEB)');
+    const label = within(header).getByText('WEB - World English Bible');
     expect(label).not.toBe(header);
     expect(label).toHaveClass('tw:truncate');
   });
@@ -707,5 +707,38 @@ describe('ModelTextPanel', () => {
 
     expect(screen.getByRole('button', { name: 'More info' })).toBeInTheDocument();
     expect(screen.getByText('Detail text here.')).toBeInTheDocument();
+  });
+
+  it('renders the resource text in the direction its project declares', async () => {
+    const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'rtl' }));
+    renderPanel({
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', id: 'proj-local', name: 'LocalRes', source: 'admin' }],
+      }),
+      dblResources: [LOCAL_NON_DBL_RESOURCE],
+      getResourceChapter,
+    });
+    const container = screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID);
+    // The container is hidden until the chapter has loaded, so this is the load completing.
+    await waitFor(() => expect(container).not.toHaveClass('tw:hidden'));
+    expect(container).toHaveAttribute('dir', 'rtl');
+  });
+
+  it('falls back to ltr for a text direction a project cannot declare', async () => {
+    // A project always declares ltr or rtl (direction cannot be guessed for a minority language),
+    // so `auto` never reaches the editor even if the setting somehow holds it.
+    const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'auto' }));
+    renderPanel({
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', id: 'proj-local', name: 'LocalRes', source: 'admin' }],
+      }),
+      dblResources: [LOCAL_NON_DBL_RESOURCE],
+      getResourceChapter,
+    });
+    const container = screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID);
+    await waitFor(() => expect(container).not.toHaveClass('tw:hidden'));
+    expect(container).toHaveAttribute('dir', 'ltr');
   });
 });

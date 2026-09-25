@@ -323,6 +323,8 @@ After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit
 
 Dev builds are cached under `node_modules/.cache`. If you ever suspect a stale bundle, `npm run clean:build-cache` clears every cache in that directory (Storybook's and the extensions' included) and the next build repopulates them.
 
+**`npm run build` does not build `lib/platform-bible-react`.** That library has its own build — `npm run build:pbr` from the repo root, or the faster `npm run build:basic` inside the library, which skips its lint-fix and typedoc steps — and the app loads its committed `dist/`, so a change to its source is simply absent from a running dev app until you build it. The symptom is a component behaving exactly as it did before your change — which reads as a broken fix rather than a stale bundle, and survives a restart. Build it explicitly after editing it, and commit the rebuilt `dist/` with your source change, since that output is tracked and is what consumers load.
+
 ### Starting without the .NET watcher
 
 `npm start` runs the .NET data provider under `dotnet watch`, which restores and builds the project before the provider's `Main()` runs — 15-24 seconds of dev startup, depending on how warm the MSBuild and Roslyn servers are (measured on one machine; reproduce with the [Startup performance timing](#startup-performance-timing) tooling below). If you are not editing C#, you can skip it:
@@ -402,9 +404,9 @@ The value must be exactly `true`; any other value (including other truthy-lookin
 
 - Check out the utility functions, types, and classes available to use.
 
-**[Platform.Bible and Paratext 10 Studio Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
+**[Platform.Bible and Paratext 10 Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
 
-- Explore links to other resources relevant to Platform.Bible and Paratext 10 Studio.
+- Explore links to other resources relevant to Platform.Bible and Paratext 10.
 
 ## Packaging for Production
 

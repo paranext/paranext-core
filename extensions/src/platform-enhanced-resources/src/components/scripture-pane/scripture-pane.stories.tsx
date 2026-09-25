@@ -66,10 +66,6 @@ const EDITOR_WRAPPER_STYLE = `
  *   in readonly mode. The scripture stories mount the live editor with USJ data, the same way
  *   `enhanced-resource.web-view.stories.tsx` does. That render path is proven to work in
  *   Storybook.
- * - ZOOM: there is NO in-app zoom slider. `scripturePaneZoom` is a numeric prop driven by the View
- *   menu / Ctrl+± / Ctrl+0. It is exposed here as a Storybook `number`/range CONTROL (in the
- *   Controls addon panel), not as fake in-pane UI. The `Zoomed` story pins a fixed value for
- *   snapshots.
  * - The marble HOVER POPOVER + backend tooltip lifecycle (mouseenter -> papi.overlays.showPopover ->
  *   erProxy.buildTooltipData -> ...) CANNOT be exercised here: there is no `papi.overlays` overlay
  *   service and no live `erProxy` network object in Storybook. The component swallows the resulting
@@ -96,16 +92,9 @@ const meta: Meta<typeof EnhancedScripturePane> = {
     usj: MATTHEW_2_USJ,
     annotations: [],
     scrRef: SCR_REF_MAT_2_1,
-    scripturePaneZoom: 1,
     localizedStringsWithLoadingState: [localizedStrings, false],
   },
   argTypes: {
-    // Zoom is the View-menu-driven font scale (Ctrl+± / Ctrl+0). Exposed as a real Storybook range
-    // control - NOT as in-pane UI, since the app itself has no zoom slider.
-    scripturePaneZoom: {
-      control: { type: 'range', min: 0.75, max: 2, step: 0.25 },
-      description: 'Font scale applied to the rendered scripture (1.0 = 100%). View-menu driven.',
-    },
     filteredTokenSurface: {
       control: 'text',
       description: 'Surface form of the filtered token; drives the filter-active status banner.',
@@ -134,9 +123,9 @@ type Story = StoryObj<typeof EnhancedScripturePane>;
 
 /**
  * Default - the live Editorial render over real WEB Matthew 2 USJ. Fully interactive per REV-006:
- * the component uses its own real state internally, and reviewers drive the props (zoom, filter
- * surface, loading/error/empty) from the Storybook Controls panel rather than via fake in-pane
- * widgets. Snapshot disabled because the Lexical editor mounts asynchronously.
+ * the component uses its own real state internally, and reviewers drive the props (filter surface,
+ * loading/error/empty) from the Storybook Controls panel rather than via fake in-pane widgets.
+ * Snapshot disabled because the Lexical editor mounts asynchronously.
  */
 export const Default: Story = {
   parameters: { chromatic: { disableSnapshot: true } },
@@ -151,17 +140,6 @@ export const Default: Story = {
  */
 export const WithScripture: Story = {
   parameters: { chromatic: { disableSnapshot: true } },
-};
-
-/**
- * Zoomed - the live render at 1.5x font scale, demonstrating the `scripturePaneZoom` prop the View
- * menu drives. Confirms the prop applies without any in-pane control.
- */
-export const Zoomed: Story = {
-  parameters: { chromatic: { disableSnapshot: true } },
-  args: {
-    scripturePaneZoom: 1.5,
-  },
 };
 
 /** Loading - the Skeleton placeholder (aria-busy). Top-level state; overrides empty/scripture. */

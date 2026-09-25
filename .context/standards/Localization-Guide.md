@@ -1,16 +1,16 @@
 ---
 title: Localization Guide
 description: Mandatory localization patterns for all user-facing text in paranext-core — UI web views (TS) and C# backend services.
-version: 1.7.0
+version: 1.8.0
 status: active
 created: 2026-03-04
-last_updated: 2026-07-28
+last_updated: 2026-09-24
 toc: true
 ---
 
 # Localization Guide
 
-> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+> Verified against paranext-core origin/main `d1a6eb38a16` — 2026-09-24.
 
 This guide documents localization patterns for paranext-core. All user-facing text MUST be localized — this applies to both UI web views (TypeScript/React) and C# backend services whose output reaches the user.
 
@@ -696,6 +696,7 @@ This was learned the hard way: the markers-checklist port shipped two backend st
 
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
+| 1.8.0   | 2026-09-24 | Rewrote the component-localization guidance (§3) around the shared value-shape reader: every read goes through `resolveLocalizedString` from `platform-bible-utils`, with a new normative "Do not use `??` here" passage explaining why the nullish idiom is dead — `useLocalizedStrings` seeds its map with `{ [key]: key }`, and the localization service returns the key itself when nothing resolves, so an unresolved lookup is a *defined* string that `??` passes to the user. Notes that this holds on the `Partial<Record<…>>` prop shape too, even though an indexed read of it is genuinely `string \| undefined`, and that `noUncheckedIndexedAccess` is off repo-wide so TypeScript flags neither the bug nor the now-dead `??`. Named `paranext/no-nullish-localized-fallback` as the rule that catches it. Sourced from PT-4673. |
 | 1.7.0   | 2026-07-28 | Ported from the embedded profile (authored 2026-06-18, landed via #2438): Added "Testing Localized C# Backends" section: `DummyPapiClient.SendRequestAsync<T>` returns `default(T)` for unregistered services, so `GetLocalizedString` falls back to its `defaultValue` and wire integration tests still see English when a fallback is supplied — a green literal-asserting test does not prove resolution works. Added "Porting PT9 Features" section: don't inherit PT9's English-only surfaces (e.g. early-startup error dialogs shown before the localizer bootstraps) — the PT10 equivalent MUST be internationalized; catalogue PT9 `Localizer.Str` user-facing strings during discovery so all keys are known before backend TDD (markers-checklist shipped two strings as English literals because the gap was found late). Cross-referenced `pt9-archaeologist.md` and `test-runner/reference.md`. |
 | 1.6.0   | 2026-07-28 | Code-review pass on the 1.5.0 additions. Fixed TOC section order (Spanish now listed before Text Direction, matching the body). Added the source Google Doc link and a "Last synced" date to the Spanish section. Split out language-agnostic content into a new "Translation Style (All Languages)" subsection under Conventions (terminology priority, plain vocabulary, non-literal clarity, length, neutral error tone, sentence-case capitalization, classifying ambiguous UI text, placeholder-text categorization) so it's not scoped to Spanish only. Closed a gap in Spanish verb-mood rules for tooltips/placeholders/progress indicators/status-bar labels (gerund for in-progress, past participle for current-state, infinitive as the default fallback), with Spanish examples. Reworded the "Favor de + infinitive" guidance from "non-standard" to a regional-preference note, since it's a well-established Mexican/Latin American variant the team simply isn't adopting. Added a "Flag Unclear or Non-Standard English Source Text" step to the Localization Pattern. Documented `getLocalizeKeyForPhysicalKey`/`NameablePhysicalKey` (landed via [#2590](https://github.com/paranext/paranext-core/pull/2590), merged 2026-07-30) and the per-language policy for translating vs. preserving physical key names. Moved "Revising an Existing Localization Decision" under "Existing Strings Are Immutable" as a named, meaning-preservation-scoped exception (`Exception: Fixing Errors or Applying a Revised Style Rule`), and clarified the sync direction (Google Doc first, then this guide, then shipped strings). Fixed the `formatReplacementStringToArray` example's placeholder count to match its cited reference implementation and added the missing `.map`/`Fragment` key-wrapping it also uses. Documented a real correctness defect in the `interleavePlaceholders` duplicate helper (its `\w+` regex silently drops hyphenated placeholder names) and filed [PT-4269](https://paratextstudio.atlassian.net/browse/PT-4269) to track migrating it to the shared utility. |
 | 1.5.0   | 2026-07-27 | Added "Embedding JSX in Localized Text with formatReplacementStringToArray" section (mid-sentence JSX interpolation, e.g. links/`Kbd` elements, via the existing `formatReplacementStringToArray` utility — was previously undocumented and had already been reimplemented once as a local helper; also notes to use the shadcn `Kbd`/`KbdGroup` components and, once merged, `getLocalizeKeyForPhysicalKey` for key names rather than hardcoding them). Added "Spanish (es) Localization Decisions" section distilled from the team's "Localization decisions - Paratext 10 Studio" Google Doc (Spanish tab): regional-variant/priority guidance, formal `usted` register, error-message templates, capitalization rules, and verb-mood rules (infinitive for controls, conjugated imperative for messages/alerts). French tab exists but is not yet authoritative, so not captured. |

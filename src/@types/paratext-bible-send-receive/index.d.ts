@@ -1,10 +1,10 @@
 // Core's copy of the type seam with the closed-source `paratext-bible-send-receive` extension
-// (shipped with Paratext 10 Studio). It declares the subset of that extension's contract that this
+// (shipped with Paratext 10). It declares the subset of that extension's contract that this
 // repository consumes — commands, network events, and the payload types they reference — so core
 // and its bundled extensions can talk to Send/Receive with real types.
 //
 // Derived from
-// https://github.com/paranext/paratext-bible-internal-extensions/blob/0d01d96b71f43af0e94749e5092728831072dba4/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
+// https://github.com/paranext/paratext-bible-internal-extensions/blob/4421feebe3f4f88830d74c17bd8e51e602c954fe/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
 // NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
 // added in core before the upstream adopts them). Do not replace the module block wholesale.
@@ -12,14 +12,14 @@
 // declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
 // two, and upstream the improvement instead.
 // DELIBERATE DIVERGENCE — do not "restore" these to match upstream on a re-sync. Each is optional
-// here because a shipped Paratext 10 Studio build answers without it; making it required turns each
+// here because a shipped Paratext 10 build answers without it; making it required turns each
 // consumer's `?? fallback` into a lint-flagged unnecessary coalesce, and removing that coalesce
-// crashes an older Studio build on the missing value:
+// crashes an older Paratext 10 build on the missing value:
 //   * `SyncState.syncingProjectIds` — required in the upstream file above.
 //   * `SyncActivitySnapshot.projectIds` — no upstream declaration to diverge from yet; this whole
 //     type, `getSyncActivity` and `onSyncActivityChanged` are declared here ahead of the Paratext 10
-//     Studio patch that raises the signal, the same way the write-gate seam
-//     (`getAutoSyncBlocking` / `onSyncWriteLockChanged`) is.
+//     patch that raises the signal, the same way the write-gate seam (`getAutoSyncBlocking` /
+//     `onSyncWriteLockChanged`) is.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -327,10 +327,10 @@ declare module 'paratext-bible-send-receive' {
      *   reports a change on every read.
      *
      * Optional in core's copy only: it was added to the Send/Receive contract after the version
-     * shipping in some builds, so a Paratext 10 Studio build predating that change answers
-     * `getSyncState` without it. ABSENT means "this build cannot say" and consumers must handle it
-     * by falling back to a status that names no projects; PRESENT AND EMPTY means "nothing is
-     * syncing", per the invariant above. The two must not be conflated.
+     * shipping in some builds, so a Paratext 10 build predating that change answers `getSyncState`
+     * without it. ABSENT means "this build cannot say" and consumers must handle it by falling back
+     * to a status that names no projects; PRESENT AND EMPTY means "nothing is syncing", per the
+     * invariant above. The two must not be conflated.
      */
     syncingProjectIds?: string[];
   };
@@ -362,8 +362,8 @@ declare module 'paratext-bible-send-receive' {
    * (`main/startup-tasks.ts` and `syncOnProjectSwitch`). That is what makes a Simple-mode startup
    * sync visible.
    *
-   * Only a Paratext 10 Studio build emits this. Public Platform.Bible carries this declaration but
-   * no implementation behind it, so both surfaces are absent there and a consumer must fall back
+   * Only a Paratext 10 build emits this. Public Platform.Bible carries this declaration but no
+   * implementation behind it, so both surfaces are absent there and a consumer must fall back
    * rather than assume idle.
    *
    * @experimental This type is unstable and may change shape or disappear without notice
@@ -482,9 +482,8 @@ declare module 'papi-shared-types' {
      * rejection as the final answer.
      *
      * @returns The current {@link SyncState}. Its `syncingProjectIds` may be ABSENT: a Paratext 10
-     *   Studio build predating that field answers without it, so treat missing as "the syncing
-     *   projects are unknown" rather than as "nothing is syncing" — `isSyncing` is what answers the
-     *   latter.
+     *   build predating that field answers without it, so treat missing as "the syncing projects
+     *   are unknown" rather than as "nothing is syncing" — `isSyncing` is what answers the latter.
      * @throws `PlatformUnimplementedException` when the Send/Receive extension is not part of this
      *   build, which is the case for public Platform.Bible.
      * @experimental This command is unstable and may change or disappear without notice
@@ -500,8 +499,7 @@ declare module 'papi-shared-types' {
      * {@link CommandHandlers['paratextBibleSendReceive.getAutoSyncBlocking']} and unlike most
      * Send/Receive commands, it is registered by core's own `SyncActivityNotifierService` rather
      * than the extension, so it is answered on plain Platform.Bible too — always an idle snapshot
-     * there, since only the Paratext 10 Studio patch carries the run bracket that reports
-     * activity.
+     * there, since only the Paratext 10 patch carries the run bracket that reports activity.
      *
      * An in-memory read; cheap enough to call on mount and on each state change. The realistic
      * failure mode is a cold-start race: if the dotnet process has not registered the command
@@ -537,21 +535,38 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
 
     /**
-     * Syncs projects: sends/receives each project, then reads each project's connected resources
-     * and projects (one level deep — connections of connections are not included) and
-     * sends/receives connected translation projects or DBL-updates connected resources as needed.
-     * Unknown project IDs are skipped. Deduplication is handled internally.
+     * Syncs projects: sends/receives the given projects, then handles connected resources and
+     * projects for the project(s) this call settles on: connected translation projects are
+     * sent/received, connected resources are DBL-updated. Connections are followed one level only —
+     * connections of connections are not included. Unknown project IDs are skipped.
      *
      * This signature matches this repository's C# stub (`String[]? projectIds`, no return value),
-     * which core itself calls (e.g. the startup sync passes `undefined` to mean "sync all"). The
-     * Send/Receive extension's own declaration also returns the S/R results; core does not consume
-     * them.
+     * which core itself calls with `undefined` — see the cases below for what that actually syncs.
+     * The Send/Receive extension's own declaration also returns the S/R results; core does not
+     * consume them. Callers MUST NOT assume every shared project is present locally once this
+     * resolves, no matter which form `projectIds` took.
      *
-     * @param projectIds IDs of the projects to sync. If omitted, all shared projects that are
-     *   already present locally (i.e., not new) are synced. If provided, only projects already
-     *   present locally are synced; new projects (not yet received) and unknown IDs are skipped.
+     * @param projectIds IDs of the projects to sync.
+     *
+     *   - If provided, each given ID is synced regardless of whether it is already present locally — a
+     *       `new` (not yet downloaded) project among them is downloaded, not skipped, though an
+     *       implementation may still exclude a given id for reasons outside the caller's control
+     *       (e.g., an unsupported project version, or the project being otherwise ineligible).
+     *   - If omitted and at least one shared project the account knows about is already present locally
+     *       (not new), every locally-present shared project is synced; new projects are left
+     *       alone.
+     *   - If omitted and no shared project the account knows about is present locally yet (whether a
+     *       genuine first sync, or every previously-local project has since gone missing from
+     *       disk), an implementation is expected to try to make at least one project available for
+     *       the current user to work in, if the account has one — but may stop short of downloading
+     *       every shared project in the account, trading completeness for performance.
+     *   - An empty array is a no-op.
+     *
      * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
+     *   this command (e.g., Paratext 10)
+     * @throws When another Send/Receive is already in progress — rejects fail-fast rather than
+     *   queuing behind it — and for ordinary failure conditions such as an unregistered user or a
+     *   lost server connection.
      */
     'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
     /**
@@ -578,7 +593,7 @@ declare module 'papi-shared-types' {
      * them.
      *
      * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
+     *   this command (e.g., Paratext 10)
      */
     'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
 
@@ -593,7 +608,7 @@ declare module 'papi-shared-types' {
      *   implementation that silently ignored an id-less cancel would leave that caller's UI
      *   reporting a cancel it never performed. Core's toolbar sync popover is such a caller.
      * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
+     *   this command (e.g., Paratext 10)
      */
     'paratextBibleSendReceive.cancelSync': (notificationId?: string | number) => Promise<void>;
 
@@ -620,7 +635,7 @@ declare module 'papi-shared-types' {
      *   attempt may not have been made at all (e.g. the request was refused while a sync was in
      *   progress), and a later retry can succeed
      * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
+     *   this command (e.g., Paratext 10)
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.breakSyncLock': (
@@ -634,11 +649,10 @@ declare module 'papi-shared-types' {
      *
      * Note: this command is served from the dotnet process. Unlike most Send/Receive commands it is
      * registered by core's own `SendReceiveBlockNotifierService` rather than the extension, so it
-     * is answered on plain Platform.Bible too (always not-blocking there — only Paratext 10 Studio
-     * arms the gate). The realistic failure mode is a cold-start race: if the dotnet process has
-     * not registered the command within main's retry budget (~9s), the request rejects — callers
-     * should keep their fail-safe not-blocking default, and there is no re-query until PT-4265
-     * lands.
+     * is answered on plain Platform.Bible too (always not-blocking there — only Paratext 10 arms
+     * the gate). The realistic failure mode is a cold-start race: if the dotnet process has not
+     * registered the command within main's retry budget (~9s), the request rejects — callers should
+     * keep their fail-safe not-blocking default, and there is no re-query until PT-4265 lands.
      *
      * @returns The write gate's current snapshot
      * @experimental This command is unstable and may change or disappear without notice
@@ -654,7 +668,7 @@ declare module 'papi-shared-types' {
     /**
      * Emitted by the dotnet process whenever the S/R write gate arms or disarms, carrying the
      * gate's full current {@link SyncWriteLockSnapshot}. Fires for ALL sync types (manual +
-     * scheduled + session). The gate only ever arms in Paratext 10 Studio builds — never in plain
+     * scheduled + session). The gate only ever arms in Paratext 10 builds — never in plain
      * Platform.Bible, where the only emission is a single not-blocking baseline snapshot each time
      * the backend (re)starts (every build emits that baseline).
      *
@@ -670,8 +684,8 @@ declare module 'papi-shared-types' {
      *
      * Registered by core's own `SyncActivityNotifierService`, so EVERY build emits it — an idle
      * baseline once per backend (re)start, exactly like `onSyncWriteLockChanged`. Only Paratext 10
-     * Studio builds carry the run bracket that reports real activity, so in public Platform.Bible
-     * the baseline is all a subscriber ever hears.
+     * builds carry the run bracket that reports real activity, so in public Platform.Bible the
+     * baseline is all a subscriber ever hears.
      *
      * That baseline fires ONCE PER BACKEND START, not once per subscriber, and this event carries
      * no replay: a subscriber that starts mid-sync has already missed it, and the next thing it

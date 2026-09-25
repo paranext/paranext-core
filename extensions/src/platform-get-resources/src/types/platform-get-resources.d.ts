@@ -46,6 +46,7 @@ declare module 'platform-get-resources' {
      * removing a resource, where the user is already waiting on their own action.
      *
      * @returns Whether an update is available, keyed by DBL Entry UID.
+     * @experimental
      */
     recomputeDblResourcesUpdateStatus: () => Promise<DblResourceUpdateStatus>;
     /**
@@ -65,6 +66,7 @@ declare module 'platform-get-resources' {
      *
      * @returns The local project id of each catalogued resource, keyed by DBL Entry UID; an empty
      *   string for one that is not installed.
+     * @experimental
      */
     recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
     /**
@@ -131,9 +133,15 @@ declare module 'papi-shared-types' {
     /**
      * Opens a new Home web view and returns the WebView id
      *
+     * @param shouldShowProjectsOnly Open Home scoped to editable projects, leaving out the
+     *   published resources that otherwise share its list. Set by entry points that are asking "get
+     *   me to one of my projects"; Home's own entry points omit it and list both. Applies to the
+     *   open it is passed on only — it does not stick to the tab.
      * @returns WebView id for new Home WebView or `undefined` if not created
      */
-    'platformGetResources.openHome': () => Promise<string | undefined>;
+    'platformGetResources.openHome': (
+      shouldShowProjectsOnly?: boolean,
+    ) => Promise<string | undefined>;
 
     /**
      * Opens a "New Tab" web view and returns the WebView id
@@ -175,6 +183,8 @@ declare module 'papi-shared-types' {
      * updating or removing a resource — and then re-read the catalog, or the read will return the
      * flags from before the change. Without it an updated resource keeps its "update available"
      * flag until the catalog is read a second time, because nothing else about the row changes.
+     *
+     * @experimental
      */
     'platformGetResources.refreshResourceFlags': () => Promise<void>;
 

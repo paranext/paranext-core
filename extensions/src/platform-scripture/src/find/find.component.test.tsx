@@ -21,10 +21,11 @@ import { LocalizedBookData } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS } from './replace-preview-types';
 
-// jsdom implements none of ResizeObserver, IntersectionObserver, matchMedia, or scrollIntoView, and
-// the render path touches all four: platform-bible-react's Tooltip/Popover wire ResizeObservers, the
-// results container calls scrollIntoView, and the shared components query media features. No-op stubs
-// keep rendering from throwing so these tests can assert on what is rendered.
+// jsdom implements none of ResizeObserver, IntersectionObserver, or matchMedia, and the render path
+// touches all three: platform-bible-react's Tooltip/Popover wire ResizeObservers and the shared
+// components query media features. No-op stubs keep rendering from throwing so these tests can
+// assert on what is rendered. The results container also calls scrollIntoView, which is shimmed
+// repo-wide in vitest.setup.ts.
 beforeAll(() => {
   // `vi.stubGlobal` accepts `unknown`, so these no-op stubs need no type assertion to stand in for
   // the real constructors — only `observe`/`disconnect` are ever reached from this render path.
@@ -51,7 +52,6 @@ beforeAll(() => {
     })),
   );
 
-  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = vi.fn();
   // Radix's PopoverContent calls scrollTo when it focuses children, which the project
   // selector tests below reach by opening the picker.
   if (!Element.prototype.scrollTo) Element.prototype.scrollTo = vi.fn();
@@ -60,8 +60,8 @@ beforeAll(() => {
 /**
  * Find's own keys whose values are merged onto the `ProjectSelector`'s `localizedStrings` bag as
  * `ariaLabel`, `buttonPlaceholder` and `commandEmptyMessage`. Like the shared `%projectSelector_*%`
- * block they must resolve to a real value — the picker treats any localize key as its own value as
- * "not localized yet" and falls back to English, whatever the key's prefix.
+ * block they must resolve to a real value; see the header comment in
+ * `../project-selector.test-utils` for why a stub's choice here decides which path a test takes.
  */
 const PICKER_BOUND_FIND_KEYS: readonly LocalizeKey[] = [
   '%webView_find_projectSelector_label%',
@@ -304,7 +304,9 @@ function setupUser() {
 }
 
 function openProjectSelector(user: ReturnType<typeof setupUser>) {
-  return user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL }));
+  return user.click(
+    screen.getByRole('combobox', { name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`) }),
+  );
 }
 
 /** Opens the Find filters panel, which is where every filter control lives */
@@ -321,6 +323,7 @@ describe("Find project selector — Find's own strings unresolved", () => {
   const UNRESOLVED_STRINGS: LanguageStrings = Object.fromEntries(
     FIND_LOCALIZED_STRING_KEYS.map((key) => [key, key]),
   );
+  const RAW_KEY = /%[^%\s]+%/;
 
   it("keeps Find's own placeholder wording rather than the picker's generic English", () => {
     render(<Find {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />);
@@ -328,13 +331,24 @@ describe("Find project selector — Find's own strings unresolved", () => {
     const trigger = screen.getByRole('combobox', { name: 'Project' });
     expect(trigger).toHaveTextContent('No open projects or resources');
     expect(trigger).not.toHaveTextContent('Select a project');
+    // Asserting the English wording alone would still pass if a raw key sat beside it in the
+    // trigger. Nothing the trigger renders may be a key, whatever its prefix.
+    expect(trigger.textContent ?? '').not.toMatch(RAW_KEY);
   });
 
-  it('renders no raw localization key in the picker trigger', () => {
+  it("keeps Find's own empty message inside the popover", async () => {
+    // The trigger assertion above cannot reach this: `commandEmptyMessage` only renders once the
+    // popover is open. Any `%…%` key, whatever its prefix — a sweep narrowed to `%webView_find_`
+    // would miss the shared `%projectSelector_*%` block the popover also renders.
+    const user = setupUser();
     render(<Find {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />);
 
-    const trigger = screen.getByRole('combobox', { name: 'Project' });
-    expect(trigger.textContent ?? '').not.toMatch(/%[^%\s]+%/);
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    const popover = await screen.findByRole('dialog');
+
+    expect(await within(popover).findByText('No projects found')).toBeInTheDocument();
+    expect(within(popover).queryAllByText(RAW_KEY)).toHaveLength(0);
+    expect(within(popover).queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
   });
 });
 
@@ -342,15 +356,17 @@ describe('Find project selector — simple interface mode', () => {
   it('appends the scroll group letter to the trigger in power mode', () => {
     render(<Find {...buildProps()} />);
 
-    expect(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL })).toHaveTextContent(
-      'WEB · A',
-    );
+    expect(
+      screen.getByRole('combobox', { name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`) }),
+    ).toHaveTextContent('WEB · A');
   });
 
   it('shows the bare project short name in the trigger when scroll groups are hidden', () => {
     render(<Find {...buildProps({ hideScrollGroups: true })} />);
 
-    const trigger = screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL });
+    const trigger = screen.getByRole('combobox', {
+      name: new RegExp(`^${PROJECT_SELECTOR_LABEL}`),
+    });
     expect(trigger).toHaveTextContent('WEB');
     // The separator is what carries the group letter in power mode; its absence is the assertion.
     expect(trigger).not.toHaveTextContent('·');
@@ -1502,10 +1518,9 @@ describe('Find — current reference in extra material', () => {
   });
 });
 
-// `buildProps` stubs every localized string as its own key, which is exactly what
-// `useLocalizedStrings` hands a consumer before the strings arrive. `RecentSearches` treats a raw
-// key as not-yet-localized and falls back to its English default, so this — not the key — is the
-// button's accessible name here. That fallback is what keeps a `%key%` off the screen when it is
+// `buildProps` stubs every localized string as its own key (see `../project-selector.test-utils`),
+// so `RecentSearches` is on its English fallback path and this — not the key — is the button's
+// accessible name. That fallback is what keeps a `%key%` off the screen when the label is also
 // rendered as visible tooltip text.
 const RECENT_SEARCHES_LABEL = 'Show recent searches';
 

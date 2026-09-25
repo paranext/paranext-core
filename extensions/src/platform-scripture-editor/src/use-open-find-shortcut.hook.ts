@@ -8,7 +8,8 @@ import { getOpenFindTriggerArgs } from './find-trigger.util';
  * so there is one Ctrl+F→`openFind` implementation: the Scripture editor passes its own project,
  * and the read-only reference panels (model text, Bible text, commentary) pass the displayed
  * resource's project — never the panel's own container project. macOS uses Ctrl (not Cmd) to match
- * the rest of the app; see the `scripture-find` entry in `src/stories/keyboard-shortcuts.data.ts`.
+ * the rest of the app; see the `scripture-find` entry in
+ * `src/shared/data/keyboard-shortcuts.data.ts`.
  *
  * While no scripture is resolved (a panel still loading its resource, or an editor with no project)
  * Ctrl+F is left alone: the key is not consumed and the reason is logged, so the keystroke is never

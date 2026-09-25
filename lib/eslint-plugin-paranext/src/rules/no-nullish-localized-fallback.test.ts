@@ -149,20 +149,17 @@ typeAwareRuleTester.run('no-nullish-localized-fallback', rule, {
       ],
     },
     {
-      // Falling back to the key itself is dead code rather than user-visible breakage. The only
-      // suggestion offered deletes the fallback: wrapping it would keep the key as the fallback
-      // text, which is the raw `%…%` the rule exists to stop.
+      // Falling back to the key itself is dead code rather than user-visible breakage, and it is
+      // reported with NO suggestion: wrapping would keep the key as the fallback text, the raw
+      // `%…%` the rule exists to stop, while deleting the operator drops a runtime guard on a read
+      // that types as `string` but is `undefined` when the key was never requested. `suggestions:
+      // []` pins the absence — omitting the property asserts nothing.
       code: `${imports}\nconst t = localizedStrings[key] ?? key;`,
       filename,
       errors: [
         {
           messageId: 'deadKeyFallback',
-          suggestions: [
-            {
-              messageId: 'deleteDeadKeyFallback',
-              output: `${imports}\nconst t = localizedStrings[key];`,
-            },
-          ],
+          suggestions: [],
         },
       ],
     },

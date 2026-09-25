@@ -107,6 +107,9 @@ export function ResourceCollectionOptions({
               <span className="tw:shrink-0" dir="auto">
                 {name}
               </span>
+              {/* An em dash rather than `PROJECT_NAME_SEPARATOR`: this is a long-name SLOT the row
+                  renders after the short name, not a joined label, and the panel's own typography
+                  uses the em dash. The order still leads with the short name. */}
               <span
                 className="tw:min-w-0 tw:flex-1 tw:truncate"
                 dir="auto"

@@ -4,6 +4,7 @@
 /* eslint-disable no-type-assertion/no-type-assertion */
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useMemo, useState } from 'react';
+import { BookOpen, FileText } from 'lucide-react';
 import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   ProjectSelector,
@@ -95,6 +96,62 @@ type Story = StoryObj<typeof ProjectSelector>;
 
 // #region project (single)
 
+/**
+ * Projects that have no full name: `fullName` is omitted, not mirrored from `shortName`.
+ * `hasDistinctFullName` collapses each row to a single line either way, but omitting is what a
+ * consumer should build — mirroring claims a full name the project does not have, and every surface
+ * then has to un-claim it.
+ */
+const shortOnlyProjects: ProjectSelectorProject[] = sampleProjects.map((p) => ({
+  id: p.id,
+  shortName: p.shortName,
+}));
+
+/** The short-name-only selector, parameterized over the one thing the two stories differ in. */
+function ShortNameTriggerLabelStory({ openTabs }: { openTabs: ProjectSelectorOpenTab[] }) {
+  const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+  return (
+    <div className="tw:w-80">
+      <ProjectSelector
+        mode="project"
+        projects={shortOnlyProjects}
+        openTabs={openTabs}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        localizedStrings={{ buttonPlaceholder: 'Select a project', ariaLabel: 'Project' }}
+        triggerLabelFormat="shortName"
+        buttonClassName="tw:w-full"
+      />
+    </div>
+  );
+}
+
+export const ShortNameTriggerLabel: Story = {
+  render: () => <ShortNameTriggerLabelStory openTabs={sampleOpenTabs} />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`triggerLabelFormat="shortName"` (the default) renders only the selected project\'s short name in the trigger. This story pairs the format with fixtures that omit `fullName` so the popover rows also collapse to a single line — the trigger and rows both read the short name only. Compare with `WideTriggerLabel` at the same width to see the `{shortName} - {fullName}` variant with distinct names.',
+      },
+    },
+  },
+};
+
+export const ShortNameTriggerLabelNoScrollGroups: Story = {
+  // No project is open in any scroll group, so the right-side scroll-group chips are suppressed and
+  // every row renders in muted text (the "not open anywhere" state).
+  render: () => <ShortNameTriggerLabelStory openTabs={[]} />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Same no-full-name setup as `ShortNameTriggerLabel`, but with no open tabs. The scroll-group chips on the right disappear and every row renders muted (the "not open anywhere" state), yielding the plainest single-line row layout the selector can render.',
+      },
+    },
+  },
+};
+
 export const SingleProject: Story = {
   render: () => {
     const [projectId, setProjectId] = useState<string | undefined>('esvus16');
@@ -167,6 +224,55 @@ export const NarrowRailTrigger: Story = {
       description: {
         story:
           "Wrapper width is `tw:w-14` (~56px). The component observes its own trigger width and, below the internal narrow threshold (~100px), drops the chevron and tightens the padding automatically — the label's leading characters stay legible in an icon-rail sidebar. Consumers do not opt into this; they just size the wrapper and the selector adapts.",
+      },
+    },
+  },
+};
+
+export const CompoundTriggerLabelWithFooterAction: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    const [dialogOpenCount, setDialogOpenCount] = useState(0);
+    return (
+      <div className="tw:flex tw:flex-col tw:gap-2">
+        <ProjectSelector
+          mode="project"
+          projects={sampleProjects}
+          openTabs={sampleOpenTabs}
+          selection={{ projectId }}
+          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+          localizedStrings={{ ariaLabel: 'Project' }}
+          // A two-part label: short name leading, full name trailing in muted text. The callback
+          // owns the WHOLE trigger, including the nothing-selected case, which is why it has to
+          // answer `undefined` itself rather than falling back to `buttonPlaceholder`.
+          renderTriggerLabel={(selected) =>
+            selected ? (
+              <span className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-1">
+                <span className="tw:truncate tw:font-medium">{selected.shortName}</span>
+                <span className="tw:min-w-0 tw:truncate tw:text-xs tw:opacity-60">
+                  {selected.fullName}
+                </span>
+              </span>
+            ) : (
+              'Select a project'
+            )
+          }
+          footerAction={{
+            label: 'More projects…',
+            onSelect: () => setDialogOpenCount((n) => n + 1),
+          }}
+        />
+        <p className="tw:text-xs tw:opacity-60">
+          &ldquo;More projects…&rdquo; selected {dialogOpenCount.toString()} time(s)
+        </p>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`renderTriggerLabel` and `footerAction` together, as the titlebar project picker combines them: the trigger renders a compound short-name/full-name label instead of the derived string, and a footer row below the last section opens a different surface (here, just a counter standing in for a "More projects…" dialog). The footer separator is a plain rule with `alwaysRender` so it survives an active search query, and it renders only when a section above it has rows.',
       },
     },
   },
@@ -724,6 +830,63 @@ export const RestrictedGroupings: Story = {
       description: {
         story:
           '`availableGroupings=[languageGrouping, typeGrouping]` narrows the filter menu to just those two. `defaultGrouping="type"` opens with type-grouping active. Two groupings → the "None" radio + both options render normally (single-grouping lock only kicks in when there is exactly one option).',
+      },
+    },
+  },
+};
+
+// #endregion
+
+// #region type indicators
+
+export const ProjectAndResourceIndicators: Story = {
+  name: 'Type indicators (projects vs resources)',
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <ProjectSelector
+        mode="project"
+        projects={typedProjects}
+        openTabs={[]}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        localizedStrings={{
+          buttonPlaceholder: 'Select a project or resource',
+          ariaLabel: 'Project or resource',
+        }}
+        renderProjectIndicator={(project) => {
+          const type = project.customData?.type;
+          const Icon = type === 'ScriptureResource' ? BookOpen : FileText;
+          const typeName = project.customData?.typeName;
+          // A row whose project carries no type still needs a name for its glyph — the fixture's
+          // uncategorized entry exercises that path.
+          const typeLabel =
+            (typeof typeName === 'string' ? typeName : undefined) ??
+            (typeof type === 'string' ? type : undefined) ??
+            'Uncategorized';
+          // The glyph is the only visual carrier of "project or resource", so give it an
+          // accessible name of its own instead of hiding it from assistive tech.
+          //
+          // No native `title`: a selector row is itself a tooltip trigger, so a `title` inside one
+          // opens the browser's default tooltip on top of the app's. `label` is the way in — the
+          // selector puts it in the row tooltip, which is the sighted-user half of the same job.
+          return {
+            node: (
+              <span role="img" aria-label={typeLabel}>
+                <Icon className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+              </span>
+            ),
+            label: typeLabel,
+          };
+        }}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `customData.type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon specifically for the `ScriptureResource` type, a document icon for everything else. The selector renders whatever node the caller returns and cannot know what a glyph means, so naming it is the caller's job: each icon here sits in a `role=\"img\"` wrapper labelled with the project's type, which is what a screen reader announces. The hover half goes through the returned `label` rather than a native `title`, because the row is already a tooltip trigger and a `title` inside one opens a second tooltip over the first.",
       },
     },
   },

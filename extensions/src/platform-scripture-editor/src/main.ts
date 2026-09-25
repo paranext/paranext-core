@@ -37,6 +37,7 @@ import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getTabTitleProjectName,
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
   openOrUpdateRelatedPanels,
@@ -608,10 +609,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       unformattedTitle,
       projectId,
       isReadOnlyForTitle,
-      async (projectIdFormat) => {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
-        return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
-      },
+      async (projectIdFormat) => getTabTitleProjectName(papi, projectIdFormat),
       papi.localization.getLocalizedStrings,
     );
 
@@ -1377,7 +1375,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Feature flag (default on): gate the Scripture Text Grid web view. When off, the provider is
-  // not registered so the view cannot be opened or restored. The PT10 Studio default-layout
+  // not registered so the view cannot be opened or restored. The Paratext 10 default-layout
   // inclusion is gated by the same setting in the paratext-10-studio repo.
   // Kick off the settings read now but DON'T await it here — awaiting would serialize every
   // registration below this line behind a single settings round-trip. It is resolved at the end.

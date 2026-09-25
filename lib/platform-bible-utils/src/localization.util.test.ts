@@ -51,10 +51,6 @@ describe('resolveLocalizedString', () => {
     // some other key's raw text, and that is no more showable than the requested key's own.
     expect(resolveLocalizedString('%some_other_key%', 'Previous chapter')).toBe('Previous chapter');
   });
-
-  test('falls back on whitespace-only text that an exact-key comparison would accept', () => {
-    expect(resolveLocalizedString('   ', 'Previous chapter')).toBe('Previous chapter');
-  });
 });
 
 describe('isResolvedLocalizedValue', () => {
@@ -63,6 +59,26 @@ describe('isResolvedLocalizedValue', () => {
     expect(isResolvedLocalizedValue(undefined)).toBe(false);
     expect(isResolvedLocalizedValue('%projectSelector_clearAll%')).toBe(false);
     expect(isResolvedLocalizedValue('  ')).toBe(false);
+  });
+
+  test('treats percent-wrapped copy with no interior percent as a key — the documented trade-off', () => {
+    // Pinned because it looks like a bug to the next reader: `LOCALIZATION_KEY_PATTERN`'s TSDoc
+    // accepts this cost deliberately. Loosening the pattern to "rescue" these must fail here
+    // rather than silently turn that TSDoc into a lie.
+    expect(isResolvedLocalizedValue('%100%')).toBe(false);
+    expect(isResolvedLocalizedValue('%%')).toBe(false);
+  });
+
+  test('rejects a non-string rather than throwing', () => {
+    // Reachable from untyped extension JS and from a contribution carrying an explicit `null`,
+    // where TypeScript guards nothing. A throw here would blank a view mid-render, so the values
+    // are fed in the untyped shape a real caller would hand over: parsed JSON, whose `null` and
+    // number arms the declared signature never admits.
+    const untypedValues: string[] = JSON.parse('[null, 42, {}, ""]');
+    untypedValues.forEach((value) => {
+      expect(isResolvedLocalizedValue(value)).toBe(false);
+    });
+    expect(isResolvedLocalizedValue(undefined)).toBe(false);
   });
 });
 

@@ -1,6 +1,10 @@
 import papi, { logger } from '@papi/frontend';
 import type { DblResourceData, ResourceType } from 'platform-bible-utils';
-import { doesCatalogRowCoverProject, getErrorMessage } from 'platform-bible-utils';
+import {
+  doesCatalogRowCoverProject,
+  getErrorMessage,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -17,7 +21,12 @@ import {
 export type DownloadedResource = {
   projectId: string;
   name: string;
-  fullName: string;
+  /**
+   * Absent when the resource has no full name distinct from its short one. Deliberately not
+   * mirrored from `name`: a mirrored value claims a full name the resource does not have, which
+   * every consumer then has to un-claim.
+   */
+  fullName?: string;
   language: string;
 };
 
@@ -61,7 +70,7 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
     return metadata.map((data) => ({
       projectId: data.id,
       name: data.name ?? data.id,
-      fullName: data.fullName ?? data.name ?? data.id,
+      fullName: normalizeFullName(data.fullName),
       language: data.language ?? '',
     }));
   } catch (e) {
@@ -203,8 +212,8 @@ function downloadedToRow(
  * Union referenced items with downloaded-but-unreferenced projects, deduped (referenced wins).
  *
  * The per-reference-kind typing this applies is mirrored by `splitResourcesByTab` in
- * `src/renderer/components/dialogs/share-layout.utils.ts`, which sorts the same setting into the
- * Share Layout dialog's tabs. It cannot import from an extension, so the two are kept in step by
+ * `src/renderer/components/dialogs/team-layout.utils.ts`, which sorts the same setting into the
+ * Team layout dialog's tabs. It cannot import from an extension, so the two are kept in step by
  * hand: change a typing rule here and change it there.
  *
  * They currently disagree in two ways, documented in full on that function. One is deliberate — a

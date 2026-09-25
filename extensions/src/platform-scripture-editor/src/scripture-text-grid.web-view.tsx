@@ -3,6 +3,7 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
+  ContentZoomRoot,
   EmptyState,
   Popover,
   PopoverContent,
@@ -205,14 +206,22 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     (context: ChapterContextResource) => {
       setChapterContext(context);
       setAnnouncement(
-        buildChapterContextOpenedMessage(localizedStrings[ARIA_OPENED_KEY] ?? '', context.label),
+        buildChapterContextOpenedMessage(
+          resolveLocalizedString(
+            localizedStrings[ARIA_OPENED_KEY],
+            'Chapter view opened for {resourceReference}',
+          ),
+          context.label,
+        ),
       );
     },
     [localizedStrings],
   );
   const handleCloseChapterContext = useCallback(() => {
     setChapterContext(undefined);
-    setAnnouncement(localizedStrings[ARIA_CLOSED_KEY] ?? '');
+    setAnnouncement(
+      resolveLocalizedString(localizedStrings[ARIA_CLOSED_KEY], 'Chapter view closed'),
+    );
   }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -431,16 +440,25 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   const getReorderHandleLabel = useCallback(
     (resourceName: string) =>
-      formatReplacementString(localizedStrings[REORDER_HANDLE_KEY] ?? '', { resourceName }),
+      formatReplacementString(
+        resolveLocalizedString(localizedStrings[REORDER_HANDLE_KEY], 'Reorder {resourceName}'),
+        { resourceName },
+      ),
     [localizedStrings],
   );
   const getReorderAnnouncement = useCallback(
     (resourceName: string, position: number, total: number) =>
-      formatReplacementString(localizedStrings[REORDER_ANNOUNCEMENT_KEY] ?? '', {
-        resourceName,
-        position,
-        total,
-      }),
+      formatReplacementString(
+        resolveLocalizedString(
+          localizedStrings[REORDER_ANNOUNCEMENT_KEY],
+          'Moved {resourceName} to position {position} of {total}',
+        ),
+        {
+          resourceName,
+          position,
+          total,
+        },
+      ),
     [localizedStrings],
   );
 
@@ -558,7 +576,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
+                    aria-label={resolveLocalizedString(
+                      localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+                      'View Options',
+                    )}
                     // Explicit themed colors so the icon is visible in both light and dark themes; a
                     // plain ghost button inherits the (un-themed) default color and vanishes on dark
                     // tabs.
@@ -568,7 +589,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>{localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}</TooltipContent>
+              <TooltipContent>
+                {resolveLocalizedString(localizedStrings[VIEW_OPTIONS_BUTTON_KEY], 'View Options')}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
@@ -602,14 +625,22 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
           empty (a DBL ref resolves to a cell only once the cached list loads). The
-          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`. */}
-      <div className="tw:flex-1 tw:overflow-hidden">
+          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
+
+          Named as its own zoom area ("text-collection") so its remembered level is kept apart from
+          this project's other resource panes, which resolve to the same kind/identity pair and
+          would otherwise all read one remembered level. The View Options row above stays outside so
+          it keeps its size while the grid scales. */}
+      <ContentZoomRoot area="text-collection" className="tw:flex-1 tw:overflow-hidden">
         {gridBodyState === 'catalogError' && (
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
             <RetryableErrorView
               icon={<CloudOff />}
-              message={localizedStrings[CATALOG_ERROR_KEY]}
-              retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
+              message={resolveLocalizedString(
+                localizedStrings[CATALOG_ERROR_KEY],
+                "Couldn't load the list of available resources.",
+              )}
+              retryLabel={resolveLocalizedString(localizedStrings[CATALOG_RETRY_KEY], 'Try again')}
               onRetry={refetchCatalog}
             />
           </div>
@@ -647,7 +678,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             getReorderAnnouncement={getReorderAnnouncement}
           />
         )}
-      </div>
+      </ContentZoomRoot>
     </div>
   );
 };

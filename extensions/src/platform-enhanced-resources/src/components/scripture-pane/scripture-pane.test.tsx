@@ -397,6 +397,20 @@ describe('EnhancedScripturePane', () => {
     });
   });
 
+  it('hands Editorial no context-menu container, so the editor keeps its menu at interface scale', () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+
+    // Positive control: the options object reached the editor, so the absence below is real.
+    expect(lastEditorialOptions?.nodes).toBeDefined();
+    expect(lastEditorialOptions).not.toHaveProperty('contextMenuContainer');
+  });
+
   it('exports the localized string keys as a frozen array', () => {
     expect(Object.isFrozen(ENHANCED_SCRIPTURE_PANE_STRING_KEYS)).toBe(true);
     expect(ENHANCED_SCRIPTURE_PANE_STRING_KEYS).toContain(

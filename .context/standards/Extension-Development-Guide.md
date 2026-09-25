@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.0.0
+version: 1.1.2
 status: active
 created: 2026-03-04
-last_updated: 2026-03-04
+last_updated: 2026-09-21
 ---
 
 # Extension Development Guide
@@ -293,6 +293,64 @@ view, so it refuses to guess instead: an open that would create fails, while a p
 - Use semantic color variables (e.g., `tw:bg-card`) instead of hardcoded colors
 - Support RTL/LTR layouts using logical properties (`start`/`end` instead of `left`/`right`)
 
+### Content Zoom (experimental)
+
+A WebView opts into per-pane **content zoom** by marking the one element that wraps its content — the region below its own toolbar — and nothing else:
+
+```tsx
+import { ContentZoomRoot } from 'platform-bible-react';
+
+globalThis.webViewComponent = function MyWebView() {
+  return (
+    <div className="tw:flex tw:flex-col tw:h-full">
+      <MyToolbar />
+      <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+        <MyContent />
+      </ContentZoomRoot>
+    </div>
+  );
+};
+```
+
+That is the whole opt-in. The platform then scales the marked element on Ctrl/⌘+`+`/`-`/`0`, on Ctrl/⌘+wheel and from the tab context menu, remembers the level for that project and kind of pane, and shows the brief level indicator over the region that changed. You write no key handler, no state and no CSS.
+
+- **One element per zoom area.** A *zoom area* is a named part of a view that zooms as one and keeps its own level. `<ContentZoomRoot>` with no `area` prop is the view's `main` area — it renders the marker attribute with an empty value, and that empty value *is* the contract, not an oversight. A view with several independently zoomable panes names each one, `<ContentZoomRoot area="footnotes">`, and each area then gets its own level and its own memory. Ids are lower-case letters, digits and hyphens starting with a letter (`[a-z][a-z0-9-]*`); `default` is reserved by the platform. Several elements may carry the same id — they zoom together.
+- **Areas must not nest.** A marked element inside another marked element is ignored (and logged once). Mark the content itself, not a scroll container that also holds a second area. Dividers, resize handles, banners and panel headers stay **outside** every area so they keep their size while the content scales.
+- **Plain-HTML WebViews** put the attribute on that element directly — `<div data-platform-content-zoom-root>` for the main area, `<div data-platform-content-zoom-root="footnotes">` for a named one. `ContentZoomRoot` is only the React convenience wrapper over the same attribute; `CONTENT_ZOOM_ROOT_ATTRIBUTE` is exported beside it so you never have to spell the string.
+- **Measuring inside a zoomed area.** The platform applies CSS `zoom` to the marked element, so `getBoundingClientRect()` inside it reports **zoomed** pixels while `getComputedStyle(element).fontSize` reports the **unzoomed** value. Code that converts between the two must read the factor itself, from the CSS custom property `--platform-content-zoom-<areaId>` on the WebView's `documentElement` (`--platform-content-zoom-main` for the unnamed area), falling back to `--platform-content-zoom-default`, which holds the Settings default that any area without its own level follows. (This mismatch is the PT-4167 caveat.)
+- **If your view owns Ctrl/⌘+wheel for a sub-region of its own**, register that listener in the **capture** phase and call `stopPropagation()`. The platform's listener is deliberately on the bubble phase so that a view which does this keeps precedence; the Text Collection grid's per-resource zoom works exactly that way (`extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts`).
+- **A view that marks nothing still scales, but as a whole.** The platform sets CSS `zoom` on the view's `<iframe>` at the Settings default, so the view's own toolbar scales with its content and there is no per-pane level, no shortcut and no indicator. URL WebViews get that treatment immediately — nothing can be injected into them — and other views get it about a second after load if no area has been reported by then. Mark a content root to get content-only zoom and per-pane control; leave it unmarked and your whole view simply follows the user's default.
+- **Keep the terminology apart**, in your copy and in your identifiers. *Interface scaling* (the `platform.zoomFactor` setting) scales the **whole application**, chrome included; it is labelled "Interface scaling" in Settings. *Content zoom* is per **pane** and scales only marked content; its default is the `platform.webViewContentZoom` setting, labelled "Tab content default zoom" in Settings. Say **pane**, not "tab", for the thing that zooms — one tab may hold several panes, as the Scripture editor holds a text pane and a footnotes pane.
+- **Simple mode's tab menu shows only the `platform.tabZoom` group.** It narrows the platform's contributed tab menu to that one group before rendering it, so an extension's own tab-menu contribution appears in Power mode only, never in Simple mode.
+
+`ContentZoomRoot`, `CONTENT_ZOOM_ROOT_ATTRIBUTE` and the `data-platform-content-zoom-root` contract are **experimental** and may change without notice.
+
+**Pop-ups follow their area.** Popovers, dropdown menus and tooltips from `platform-bible-react`
+that open from inside a `ContentZoomRoot` take that area's zoom level. Popovers and dropdown
+menus also cap their own width and height to the pane's available space and scroll their content
+if it doesn't fit; tooltips cap only width, so a tooltip taller than the available space is
+clipped at the pane's edge. A pop-up your view renders outside the area element — beside the
+content and anchored to a position in it — joins the area only when wrapped in
+`ContentZoomAreaProvider` (pass the same `area` as the root; omit it for the main area). Toolbar
+pop-ups outside every area stay at interface scale. `SelectContent`, `ContextMenuContent`,
+`MenubarContent` and `DropdownMenuSubContent` do not follow an area yet either — they render at
+interface scale even when opened from inside one. `ContentZoomRoot` and `ContentZoomAreaProvider`
+are experimental. A
+pop-up you build without these components can opt in by putting
+`data-platform-content-zoom-root="<area>"` and `data-platform-content-zoom-popup` on its portaled
+content. Those attributes only scale it: such a pop-up gets none of the library's size caps, so it
+must keep itself inside the pane. The Scripture editor's own right-click menu is drawn by the
+editor library rather than by these components; it stays at interface scale, in the text pane and
+the footnote editor pop-up alike.
+
+**Pop-ups requested through `papi.overlays` follow the requesting pane too.** A command palette,
+popover or context menu shown with `papi.overlays.showCommandPalette`/`showPopover`/
+`showContextMenu` renders outside your WebView, in the platform's own document — the platform
+resolves your pane's content scale for you and draws the pop-up at it, capped to stay inside the
+window. There is nothing for you to opt in: call the `papi.overlays` methods as you already do. A
+command palette shown centred (no anchor position) is not anchored to any pane's content and stays
+at interface scale, like a modal dialog.
+
 ---
 
 ## Contributions
@@ -440,3 +498,6 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
 | 1.0.0   | 2026-03-04 | Initial version |
+| 1.1.0   | 2026-09-15 | Add "Content Zoom (experimental)" under WebViews — the `ContentZoomRoot` / `data-platform-content-zoom-root` opt-in, one root per zoom area, the no-root whole-view fallback, the zoomed-`getBoundingClientRect` vs unzoomed-`fontSize` caveat, the capture-phase rule for views owning Ctrl+wheel, and the Interface-Scaling / content-zoom terminology split. |
+| 1.1.1   | 2026-09-18 | Note that a command palette, popover or context menu requested through `papi.overlays` follows the requesting pane's content scale automatically — nothing for the extension author to opt in. |
+| 1.1.2   | 2026-09-21 | Note that a view mounting the Scripture editor inside a zoom area hands it that area's element (`EditorOptions.contextMenuContainer`) so the editor's right-click menu takes the area's zoom. |

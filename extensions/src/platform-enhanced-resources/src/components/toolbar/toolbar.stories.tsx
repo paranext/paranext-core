@@ -48,7 +48,7 @@ type Story = StoryObj<typeof Toolbar>;
  * local state so reviewers can:
  *
  * - Open the hamburger view-menu and toggle Show footnotes / Show translations / H&G display modes /
- *   fire Find/Close/Zoom commands
+ *   fire Find/Close commands
  * - Click the BCV button (logs — wiring lives in phase-3-ui FN-015)
  * - Toggle the "all research terms" highlight
  * - Click the info button (logs — wiring opens MarbleGuide in phase-3-ui FN-016)
@@ -109,9 +109,6 @@ export const Default: Story = {
               placeholderAction('Phase-3-ui wires this to CopyrightOverlay open=true.'),
             onFindInResource: () => placeholderAction('Phase-3-ui wires this to FindReplaceForm.'),
             onCloseWindow: () => placeholderAction('Phase-3-ui wires this to webView.close().'),
-            onZoomIn: () => placeholderAction('Zoom in (wired in phase-3-ui).'),
-            onZoomOut: () => placeholderAction('Zoom out (wired in phase-3-ui).'),
-            onZoomReset: () => placeholderAction('Zoom reset (wired in phase-3-ui).'),
           }}
         />
 

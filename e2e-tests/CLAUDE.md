@@ -1,5 +1,7 @@
 # E2E Test Instructions
 
+Running the isolated suite natively on Windows: see `tests/isolated/README.md#running-on-windows`.
+
 ## Where to put new E2E tests
 
 | What you're testing | Where it goes | How to run |
@@ -89,6 +91,14 @@ one of these.
 - **Find search history persists to `dev-appdata/extensions/platformScripture/user-data/`**, caps at
   15 entries, and survives the test, the Electron process, and the whole run. A history assertion
   that passed yesterday can fail today on what an earlier run left behind.
+- **The real OS clipboard is shared with the developer's desktop, and nothing restores it.**
+  `clipboard-usfm-round-trip.spec.ts` reaches it through `electronApp.evaluate(({ clipboard }) =>
+  …)` — the main-process module, outside the renderer's permission surface — so a run leaves its
+  last payload sitting in the machine-wide clipboard. It is not confined by `isolatedProjectRoot`
+  or the temp `userDataDir`, which do contain everything else that spec touches. Two consequences:
+  a paste in the developer's own editor after a run yields test USFM, and a spec that reads the
+  clipboard must overwrite it with a sentinel before the copy it means to measure — otherwise the
+  read cannot distinguish its own copy from what a previous run or retry attempt left there.
 
 ## Reading a failing run
 
@@ -105,6 +115,11 @@ one of these.
 - **Fail-then-pass is reported as "flaky", and flaky is a defect.** `retries` is 1 locally and 2 in
   CI. Never re-run to get green: an order-dependent test is telling you it depends on state it does
   not control.
+- **`PAPI websocket server failed to bind: listen EADDRINUSE …` or `Settings service undefined`** —
+  a previous app instance still holds port 8876, so the new app's server can't bind and its
+  renderer connects to the leftover one instead. Check the app's own log (`logs/main.log` under its
+  temp profile) for what it saw, and `netstat -ano | findstr :8876` (Windows) or `ss -ltnp` (Linux)
+  for who holds the port; see `tests/isolated/README.md` for the Windows recovery commands.
 
 ## Window size and DevTools
 

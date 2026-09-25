@@ -82,20 +82,6 @@
         "command": "platform.showOnboardingTour"
       },
       {
-        "label": "%mainMenu_feedbackForm_textArea%",
-        "localizeNotes": "Application main menu > Help > Submit an idea",
-        "group": "platform.helpFeedback",
-        "order": 1,
-        "command": "platform.usersnapSubmitIdea"
-      },
-      {
-        "label": "%mainMenu_feedbackForm_screenshot%",
-        "localizeNotes": "Application main menu > Help > Report a bug / Send feedback",
-        "group": "platform.helpFeedback",
-        "order": 2,
-        "command": "platform.usersnapReportIssue"
-      },
-      {
         "label": "%mainMenu_openDeveloperDocumentation%",
         "hiddenInterfaceModes": ["simple"],
         "localizeNotes": "Application main menu > Help > Open Developer Documentation. Hidden in Simple mode: it addresses extension developers, not translators",
@@ -157,9 +143,31 @@
   },
   "defaultWebViewTabMenu": {
     "groups": {
+      "platform.tabZoom": { "order": 50, "isExtensible": false, "isExperimental": true },
       "platform.tabWindow": { "order": 100, "isExtensible": true, "isExperimental": true }
     },
     "items": [
+      {
+        "label": "%tab_contextMenu_zoomIn%",
+        "localizeNotes": "Tab context menu > Zoom in. Enlarges the pane last used in this tab (for a tab with one pane, its whole content); the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 100,
+        "command": "platform.webViewContentZoomIn"
+      },
+      {
+        "label": "%tab_contextMenu_zoomOut%",
+        "localizeNotes": "Tab context menu > Zoom out. Shrinks the pane last used in this tab (for a tab with one pane, its whole content); the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 200,
+        "command": "platform.webViewContentZoomOut"
+      },
+      {
+        "label": "%tab_contextMenu_resetZoom%",
+        "localizeNotes": "Tab context menu > Reset zoom to default. Returns the pane last used in this tab (for a tab with one pane, its whole content) to the default size set in Settings; the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 300,
+        "command": "platform.webViewContentZoomReset"
+      },
       {
         "label": "%tab_contextMenu_floatPanel%",
         "localizeNotes": "Tab context menu > Float tab",

@@ -138,13 +138,6 @@ module.exports = {
 
     'import/no-unresolved': ['error', { ignore: ['@papi'] }],
 
-    // Localized lookups must not fall back with `??`/`||`: an unresolved lookup returns the raw
-    // key, a defined string, so the fallback never runs. Use `resolveLocalizedString` from
-    // `platform-bible-utils`. See .context/standards/Localization-Guide.md.
-    // Deliberately the only `paranext/*` rule enabled here — the plugin's `recommended`/`strict`
-    // configs are not pulled in, so no other paranext rule runs on extension source.
-    'paranext/no-nullish-localized-fallback': 'warn',
-
     // #endregion
   },
   globals: {
@@ -195,20 +188,6 @@ module.exports = {
         // Dropping some rules for storybook stories
         'no-alert': 'off', // alert is fine here
         'jsx-a11y/control-has-associated-label': 'off', // no need for a11y
-        // Stories stand in fake localized strings, so a fallback there is scaffolding rather than
-        // a lookup that reaches a user. The exemption stops at the story file itself: a shared
-        // helper such as `*.test-utils.ts` mirrors production shape, so the rule stays on there.
-        'paranext/no-nullish-localized-fallback': 'off',
-      },
-    },
-    {
-      files: ['*.test.ts', '*.test.tsx', '*.spec.ts', '*.spec.tsx'],
-      rules: {
-        // Tests construct localized-string maps directly, so a fallback there is scaffolding
-        // rather than a lookup that reaches a user. The exemption stops at the test file itself:
-        // a shared helper such as `*.test-utils.ts` mirrors production shape, so the rule stays
-        // on there.
-        'paranext/no-nullish-localized-fallback': 'off',
       },
     },
   ],
@@ -222,7 +201,7 @@ module.exports = {
   // Note: this folder's package.json does not contain these plugins or any other eslint packages
   // because eslint was finding multiple copies of plugins and failing. So we use the packages from
   // repo root instead
-  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null', 'paranext'],
+  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null'],
   settings: {
     'import/resolver': {
       // See https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-575727774 for line below
@@ -242,5 +221,39 @@ module.exports = {
     },
   },
 };
+
+// #endregion
+
+// #region paranext-core only - requires eslint-plugin-paranext
+
+// `eslint-plugin-paranext` is a root-only `file:./lib/eslint-plugin-paranext` dependency and is
+// never published, so `paranext-extension-template` cannot resolve it. An unresolvable `plugins`
+// entry is a hard ESLint load failure that aborts the run for every file - not a skipped rule -
+// so this registration is kept outside the shared region above, where a template merge will not
+// carry it over.
+module.exports.plugins.push('paranext');
+
+// Localized lookups must not fall back with `??`/`||`: an unresolved lookup returns the raw key, a
+// defined string, so the fallback never runs. Use `resolveLocalizedString` from
+// `platform-bible-utils`. See .context/standards/Localization-Guide.md.
+// Deliberately the only `paranext/*` rule enabled here - the plugin's `recommended`/`strict`
+// configs are not pulled in, so no other paranext rule runs on extension source.
+// `warn` while the existing call sites are swept; the sweep and the escalation to `error` are
+// TODO(PT-4103).
+module.exports.rules['paranext/no-nullish-localized-fallback'] = 'warn';
+
+// Later overrides win, so these turn the rule off for the two file kinds that stand in fake
+// localized strings. Scoped to the story and test files themselves; a shared helper such as
+// `*.test-utils.ts` mirrors production shape and keeps the rule on.
+module.exports.overrides.push(
+  {
+    files: ['*.stories.tsx'],
+    rules: { 'paranext/no-nullish-localized-fallback': 'off' },
+  },
+  {
+    files: ['*.test.ts', '*.test.tsx', '*.spec.ts', '*.spec.tsx'],
+    rules: { 'paranext/no-nullish-localized-fallback': 'off' },
+  },
+);
 
 // #endregion
