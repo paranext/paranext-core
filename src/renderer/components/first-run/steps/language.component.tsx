@@ -1,5 +1,6 @@
 import { useData, useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
 import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
+import { switchInterfaceLanguage } from '@shared/data/interface-languages.data';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { InterfaceLanguagePicker, type LanguageInfo } from 'platform-bible-react';
@@ -66,7 +67,7 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
       toast.error(strings['%firstRun_language_setFailed%']);
       return;
     }
-    setInterfaceLanguage([tag, ...safeInterfaceLanguage.filter((l) => l !== tag)]).catch(
+    setInterfaceLanguage(switchInterfaceLanguage(safeInterfaceLanguage, tag)).catch(
       (e: unknown) => {
         logger.warn(`LanguageStep: failed to set interface language: ${getErrorMessage(e)}`);
         toast.error(strings['%firstRun_language_setFailed%']);
