@@ -631,7 +631,7 @@ describe('insertNoteAtCurrentSelectionCore', () => {
   }
 
   // Falsifiability: this must go RED if the read-only check is deleted or moved below the
-  // snapshot — verified by hand against a temporarily reordered/deleted implementation.
+  // snapshot.
   it('skips both the snapshot and the marker insert when read-only', async () => {
     const { calls, insertMarker, commitSnapshot } = makeDeps();
     await insertNoteAtCurrentSelectionCore(

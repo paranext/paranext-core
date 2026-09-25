@@ -14,14 +14,15 @@
  * claims it either way — that assumption is untestable from this repo's own unit tests, which mock
  * the editor, and CI's `test:e2e:smoke` project does not run the isolated e2e spec that would catch
  * it either. Two more editor-side behaviors this extension leans on for the same menu are guarded
- * alongside it: a scroll whose target is inside the menu must not close it (needed for the
- * scrollable option list this PR adds), and the highlighted item must follow `mousemove`, not
- * `mouseenter` alone (needed so a menu clamped under a stationary pointer doesn't pre-highlight an
- * item the user never moved onto). (b) A book (`\id`) whose content is more than a single string
- * (e.g. `[text, a note]`) must survive a settle round-trip. The three insert-context-menu entry
- * points this extension adds (footnote/cross-reference/endnote) are gated only on read-only, not on
- * "is this an `\id` line", so an editor that truncates multi-item book content on settle silently
- * loses project text the moment any of them is used at the start of a book.
+ * alongside it: a scroll whose target is inside the menu must not close it (needed for the context
+ * menu's scrollable option list, `_editor-overrides.scss`), and the highlighted item must follow
+ * `mousemove`, not `mouseenter` alone (needed so a menu clamped under a stationary pointer doesn't
+ * pre-highlight an item the user never moved onto). (b) A book (`\id`) whose content is more than a
+ * single string (e.g. `[text, a note]`) must survive a settle round-trip. The three
+ * insert-context-menu entry points this extension adds (footnote/cross-reference/endnote) are gated
+ * only on read-only, not on "is this an `\id` line", so an editor that truncates multi-item book
+ * content on settle silently loses project text the moment any of them is used at the start of a
+ * book.
  *
  * Both are genuine merge-order gates, not a fixed-in-this-repo regression test: whether they pass
  * depends entirely on what `dev-packages.json` currently resolves for `platform-editor`, and
@@ -226,11 +227,11 @@ describe('editor context-menu merge-order contract (STAGED @eten-tech-foundation
     }
   });
 
-  // A scroll INSIDE the menu must not close it (needed so the scrollable option list this PR adds
-  // is actually usable), but the close-on-scroll listener must still be a real target check, not a
-  // no-op — proven by the positive control below, which shows a scroll OUTSIDE the menu still closes
-  // it. Without the target check, the in-menu scroll would close the menu too, and the first
-  // assertion would fail.
+  // A scroll INSIDE the menu must not close it (needed so the context menu's scrollable option
+  // list in `_editor-overrides.scss` is actually usable), but the close-on-scroll listener must
+  // still be a real target check, not a no-op — proven by the positive control below, which shows a
+  // scroll OUTSIDE the menu still closes it. Without the target check, the in-menu scroll would
+  // close the menu too, and the first assertion would fail.
   it('does not close the menu on a scroll inside it, but does on a scroll outside it (control)', async () => {
     const { editorInput } = await renderEditor(paragraphUsj);
 
@@ -255,10 +256,10 @@ describe('editor context-menu merge-order contract (STAGED @eten-tech-foundation
   });
 
   // The highlight must follow `mousemove`, not `mouseenter`: a menu clamped into the viewport under
-  // a stationary pointer (round-1 finding #2) fires a `mouseenter` with no real pointer motion, and
-  // an editor keyed on it would pre-highlight an item the user never moved onto. Falsifiable: an
-  // editor keyed on `mouseenter` instead would set `aria-selected`/`.selected` on the FIRST
-  // assertion already, before `mousemove` is ever dispatched.
+  // a stationary pointer fires a `mouseenter` with no real pointer motion, and an editor keyed on
+  // it would pre-highlight an item the user never moved onto. Falsifiable: an editor keyed on
+  // `mouseenter` instead would set `aria-selected`/`.selected` on the FIRST assertion already,
+  // before `mousemove` is ever dispatched.
   it('highlights an option on mousemove, not on mouseenter alone', async () => {
     const { editorInput } = await renderEditor(paragraphUsj);
     await act(async () => {
