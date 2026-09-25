@@ -99,8 +99,21 @@ async function getLocalizedFileUris(): Promise<string[]> {
   return entries;
 }
 
-/** Load the contents of all localization files from disk */
+/**
+ * Load the contents of all localization files from disk, then signal that `loadedLocales` is
+ * complete (or that loading failed) so the interface-language validator can stop waiting.
+ */
 async function loadAllLocalizationData() {
+  try {
+    await readAllLocalizationFiles();
+    markLoadedLocalesReady();
+  } catch (error) {
+    markLoadedLocalesFailed(getErrorMessage(error));
+    throw error;
+  }
+}
+
+async function readAllLocalizationFiles() {
   const localizeFileUris = await getLocalizedFileUris();
   const baseLocalizedStringsDoc: LocalizedStringDataContribution = {
     localizedStrings: {},
@@ -161,7 +174,8 @@ async function loadAllLocalizationData() {
 
 async function getDefaultLanguages() {
   const languagesFromSetting = await settingsService.get('platform.interfaceLanguage');
-  if (languagesFromSetting) return languagesFromSetting;
+  // Copy: callers change the list they get, and the settings service returns the stored array.
+  if (languagesFromSetting) return [...languagesFromSetting];
 
   const currentLocaleLanguage = getCurrentLocale();
   return [currentLocaleLanguage];
@@ -366,8 +380,10 @@ class LocalizationDataProviderEngine
   }
 
   async getLocalizedStrings({ localizeKeys, locales = [] }: LocalizationSelectors) {
-    const languages =
-      locales.length > 0 ? locales : await settingsService.get('platform.interfaceLanguage');
+    // Copy: the list is shortened below, and the settings service returns the stored array.
+    const languages = [
+      ...(locales.length > 0 ? locales : await settingsService.get('platform.interfaceLanguage')),
+    ];
 
     // This will remove languages with no data from languages so that work only needs to be done once
     // rather than doing it for every key.
@@ -427,16 +443,14 @@ class LocalizationDataProviderEngine
     throw new Error('setAvailableInterfaceLanguages disabled');
   }
 
-  // getSetupDialogLanguages doesn't use instance state but cannot be static because it implements
-  // the IDataProviderEngine<LocalizationDataDataTypes> interface
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getSetupDialogLanguages() {
+    const offeredLanguages = await this.getAvailableInterfaceLanguages();
     await waitForResyncContributions();
     const englishData = localizedStringsDocumentCombiner.getLocalizedStringData(BACKUP_LANGUAGE);
     return computeSetupDialogLanguages(
       englishData,
       (tag) => localizedStringsDocumentCombiner.getLocalizedStringData(tag),
-      filterToOffered(loadedLocales),
+      offeredLanguages,
     );
   }
 
@@ -459,7 +473,6 @@ export async function initialize(): Promise<void> {
       const executor = async () => {
         try {
           await loadAllLocalizationData();
-          markLoadedLocalesReady();
           const engine = new LocalizationDataProviderEngine();
           dataProvider = await dataProviderService.registerEngine(
             localizationServiceProviderName,
@@ -469,7 +482,6 @@ export async function initialize(): Promise<void> {
           engine.subscribeToInterfaceLanguageChanges();
           resolve();
         } catch (error) {
-          markLoadedLocalesFailed(getErrorMessage(error));
           reject(error);
         }
       };
@@ -483,7 +495,6 @@ export async function initialize(): Promise<void> {
 export const testingLocalizationService = {
   implementLocalizationDataProviderEngine: async () => {
     await loadAllLocalizationData();
-    markLoadedLocalesReady();
     const engine = new LocalizationDataProviderEngine();
     engine.subscribeToInterfaceLanguageChanges();
     return engine;

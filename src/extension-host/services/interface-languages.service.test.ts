@@ -26,7 +26,10 @@ describe('getAllLoadedInterfaceLanguages', () => {
       settled = true;
       return value;
     });
-    await Promise.resolve();
+    // A macrotask lets every pending promise step run, so a signal that resolved early shows here.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
     expect(settled).toBe(false);
 
     Object.assign(languages.loadedLocales, LOADED);
@@ -35,7 +38,14 @@ describe('getAllLoadedInterfaceLanguages', () => {
     await expect(pending).resolves.toEqual(LOADED);
   });
 
-  it('rejects when the locale files could not be loaded', async () => {
+  it('rejects a caller that is already waiting when the locale files could not be loaded', async () => {
+    const languages = await freshModule();
+    const pending = languages.getAllLoadedInterfaceLanguages();
+    languages.markLoadedLocalesFailed('No files found in localization folder');
+    await expect(pending).rejects.toBe('No files found in localization folder');
+  });
+
+  it('rejects a later caller when the locale files could not be loaded', async () => {
     const languages = await freshModule();
     languages.markLoadedLocalesFailed('No files found in localization folder');
     await expect(languages.getAllLoadedInterfaceLanguages()).rejects.toBe(
