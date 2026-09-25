@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
-import { ComponentProps, useEffect, useState } from 'react';
+import { ComponentProps, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
+import { FOOTNOTES_PANE_ATTRIBUTE } from './editor-dom.util';
 
 vi.mock('@papi/frontend', () => ({
   logger: { warn: vi.fn(), debug: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -108,6 +109,17 @@ function renderPane(overrides: Partial<ComponentProps<typeof FootnotesLayout>> =
     </FootnotesLayout>,
   );
 }
+
+describe('FootnotesLayout pane element', () => {
+  // `focusPaneSelectedRow` (editor-dom.util.ts) finds the pane's selected row through
+  // `FOOTNOTES_PANE_ATTRIBUTE`; nothing else checks that this element still carries it.
+  it('carries FOOTNOTES_PANE_ATTRIBUTE, and is the ancestor of its rows', () => {
+    renderPane();
+    const paneElement = document.querySelector(`[${FOOTNOTES_PANE_ATTRIBUTE}]`);
+    expect(paneElement).not.toBeNull();
+    expect(paneElement).toContainElement(screen.getByRole('listbox'));
+  });
+});
 
 describe('FootnotesLayout close button', () => {
   it('renders a close button labeled from localized strings that calls onClose', () => {
@@ -284,33 +296,39 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
     expect(onPaneFocusLeft).not.toHaveBeenCalled();
   });
 
-  // An overlay is portalled outside the pane, so its own blur never reaches the pane.
-  it('reports a move out of an overlay the row editor opened', () => {
+  // An overlay the HOST renders as a sibling of FootnotesLayout - where the real app's
+  // comment-editor popover lives - is not a React descendant of the pane, so its own blur never
+  // reaches the pane. (This is unlike the row editor's OWN portalled dropdowns and menus, rendered
+  // from `renderEditingFootnote`: those stay React descendants of the pane wherever the portal
+  // places them in the DOM, so their blur reaches `handlePaneBlur` the ordinary way - see the test
+  // above.)
+  it('reports a move out of an overlay rendered as a sibling of the pane', () => {
     const onPaneFocusLeft = vi.fn();
     const onPaneFocusChange = vi.fn();
-    renderPane({
-      onPaneFocusLeft,
-      onPaneFocusChange,
-      editingFootnoteIndex: 1,
-      renderEditingFootnote: () => (
-        <>
-          <input data-testid="row-editor" />
-          {createPortal(
-            <div data-slot="popover-content">
-              <button type="button" data-testid="overlay-item">
-                comment
-              </button>
-            </div>,
-            document.body,
-          )}
-        </>
-      ),
-      children: (
-        <button type="button" data-testid="text">
-          text
-        </button>
-      ),
-    });
+    render(
+      <>
+        <FootnotesLayout
+          usj={usjWithTwoNotes}
+          showMarkers
+          useWebViewState={useWebViewStateMock}
+          localizedStrings={localizedStrings}
+          onClose={() => {}}
+          onPaneFocusLeft={onPaneFocusLeft}
+          onPaneFocusChange={onPaneFocusChange}
+          editingFootnoteIndex={1}
+          renderEditingFootnote={() => <input data-testid="row-editor" />}
+        >
+          <button type="button" data-testid="text">
+            text
+          </button>
+        </FootnotesLayout>
+        <div data-slot="popover-content">
+          <button type="button" data-testid="overlay-item">
+            comment
+          </button>
+        </div>
+      </>,
+    );
     screen.getByTestId('row-editor').focus();
     screen.getByTestId('overlay-item').focus();
     expect(onPaneFocusLeft).not.toHaveBeenCalled();
@@ -510,6 +528,59 @@ describe('FootnotesLayout pane focus reporting', () => {
     expect(onPaneFocusChange).toHaveBeenCalledTimes(1);
     expect(onPaneFocusChange).toHaveBeenCalledWith(true);
   });
+
+  // Entering edit mode swaps a focused row's `<li>` for the row editor, and the real row editor
+  // claims focus of its own accord only after a zero-delay timeout (never synchronously in the same
+  // commit) - so there is a frame where the previously-focused element is gone and the new one has
+  // not taken focus yet. That frame must not read as the pane losing focus.
+  it('does not report losing focus while a focused row enters edit mode and its editor claims focus after a zero-delay timeout', async () => {
+    function RowEditor() {
+      // The ref needs to start out with null for it to work as an element ref
+      // eslint-disable-next-line no-null/no-null
+      const inputRef = useRef<HTMLInputElement>(null);
+      useEffect(() => {
+        const timer = setTimeout(() => inputRef.current?.focus(), 0);
+        return () => clearTimeout(timer);
+      }, []);
+      return <input ref={inputRef} data-testid="row-editor" />;
+    }
+    const onPaneFocusChange = vi.fn();
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      onPaneFocusChange,
+      usj: usjWithTwoNotes,
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props}>
+        <div />
+      </FootnotesLayout>,
+    );
+    screen.getAllByRole('option')[1].focus();
+    expect(onPaneFocusChange).toHaveBeenLastCalledWith(true);
+
+    rerender(
+      <FootnotesLayout
+        {...props}
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <RowEditor />}
+      >
+        <div />
+      </FootnotesLayout>,
+    );
+
+    // Let the row editor's zero-delay focus timeout run.
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+
+    expect(screen.getByTestId('row-editor')).toHaveFocus();
+    expect(onPaneFocusChange).not.toHaveBeenCalledWith(false);
+  });
 });
 
 describe('FootnotesLayout focus request that asks the pane to take focus', () => {
@@ -668,6 +739,104 @@ describe('FootnotesLayout selection across USJ changes', () => {
 
     expect(onSelectedFootnoteChange).not.toHaveBeenCalledWith(undefined);
     expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+  });
+
+  // Ending a session with nothing left to flush (Escape well after the last keystroke, or clicking
+  // away) changes nothing in the document, so no USJ parse runs in that update - the ended row's
+  // index must not be held onto past that update, or a later unrelated notes change misreads
+  // whatever note now sits at that index as still being the one that was edited.
+  it('deselects a row on a later notes change after its editing session ended without a document change', () => {
+    const onSelectedFootnoteChange = vi.fn();
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      onSelectedFootnoteChange,
+      focusRequest: { index: 1 },
+    };
+    const usjWithThreeNotes = usjWithNotes('alpha', 'beta', 'gamma');
+    const { rerender } = render(
+      <FootnotesLayout
+        {...props}
+        usj={usjWithThreeNotes}
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <div data-testid="row-editor" />}
+      >
+        <div />
+      </FootnotesLayout>,
+    );
+    onSelectedFootnoteChange.mockClear();
+
+    // Editing ends with no document change: the same `usj` object reference, so the parse effect
+    // does not run this update.
+    rerender(
+      <FootnotesLayout {...props} usj={usjWithThreeNotes}>
+        <div />
+      </FootnotesLayout>,
+    );
+
+    // An unrelated notes change: the first note is deleted, so index 1 - still the selection - now
+    // holds "gamma", a genuinely different note from the "beta" that was being edited.
+    rerender(
+      <FootnotesLayout {...props} usj={usjWithNotes('beta', 'gamma')}>
+        <div />
+      </FootnotesLayout>,
+    );
+
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(undefined);
+    expect(screen.queryByRole('option', { selected: true })).not.toBeInTheDocument();
+  });
+
+  // `editingFootnoteIndexRef` only reflects the CURRENT `editingFootnoteIndex` once the mirroring
+  // effect has run at least once past mount. A test that starts editing already in progress at
+  // mount never exercises the mirror - the ref's initial value already matches - so this starts
+  // without an editing row and only begins editing on a later update.
+  it('keeps a row selected through a content edit after entering edit mode on a later update', () => {
+    const onSelectedFootnoteChange = vi.fn();
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      onSelectedFootnoteChange,
+      focusRequest: { index: 1 },
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
+        <div />
+      </FootnotesLayout>,
+    );
+    onSelectedFootnoteChange.mockClear();
+
+    // Start editing the already-selected row on a later update (not at mount).
+    rerender(
+      <FootnotesLayout
+        {...props}
+        usj={usjWithTwoNotes}
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <div data-testid="row-editor" />}
+      >
+        <div />
+      </FootnotesLayout>,
+    );
+    onSelectedFootnoteChange.mockClear();
+
+    // A live-apply content edit to the row being edited.
+    rerender(
+      <FootnotesLayout
+        {...props}
+        usj={usjWithNotes('alpha', 'beta typed more')}
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <div data-testid="row-editor" />}
+      >
+        <div />
+      </FootnotesLayout>,
+    );
+
+    expect(onSelectedFootnoteChange).not.toHaveBeenCalledWith(undefined);
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(1);
+    expect(screen.getByTestId('row-editor')).toBeInTheDocument();
   });
 });
 

@@ -245,10 +245,15 @@ export function FootnotesLayout({
   // current when that effect reads it within the same commit.
   const editingFootnoteIndexRef = useRef(editingFootnoteIndex);
   /**
-   * The row whose editing just ended, until the next USJ parse. Ending a session flushes the row
-   * editor's last keystrokes, so the row's final content and the end of editing arrive in the same
-   * commit: this effect has already cleared `editingFootnoteIndexRef` by the time the parse below
-   * sees content the selection has not, and that row is still the selection.
+   * The row whose editing just ended, honored only by the parse effect below IN THE SAME COMMIT —
+   * an effect declared after that one clears it again once the commit is done, whether or not the
+   * parse ran (see that effect's own comment). Ending a session by committing new content flushes
+   * the row editor's last keystrokes, so the row's final content and the end of editing arrive in
+   * the same commit: this effect has already cleared `editingFootnoteIndexRef` by the time the
+   * parse below runs, and it reads content the selection has not, so that row is still the
+   * selection. Ending a session with nothing left to flush (e.g. Escape well after the last
+   * keystroke) changes nothing for the parse to react to, so no parse runs that commit, and the
+   * marker must not linger to be misread by whatever unrelated notes change parses next.
    */
   const endedEditingFootnoteIndexRef = useRef<number | undefined>(undefined);
   useEffect(() => {
@@ -308,6 +313,16 @@ export function FootnotesLayout({
       );
     }
   }, [usj]);
+
+  // Clears the ended-editing marker at the end of every commit that changed `editingFootnoteIndex`,
+  // whether or not the parse effect above ran in that same commit. Declared AFTER that effect so it
+  // still sees the marker in the commit editing ended in (effects run in declaration order): when
+  // the parse ran there, it already cleared the marker itself and this is a no-op; when it did not
+  // (the USJ prop did not change in that commit), this is what keeps the marker from surviving into
+  // a later, unrelated parse, where it would misread that parse's row as still being edited.
+  useEffect(() => {
+    endedEditingFootnoteIndexRef.current = undefined;
+  }, [editingFootnoteIndex]);
 
   const [containerHeight, setContainerHeight] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -549,8 +564,12 @@ export function FootnotesLayout({
 
   // Where focus lands, judged from the document rather than from the pane's own blur: the blur
   // cannot see a return to the text after focus first left the document, nor a move out of an
-  // overlay portalled outside the pane (which is not a pane descendant, so its blur never reaches
-  // the pane at all).
+  // overlay the HOST renders as a SIBLING of this component (e.g. the comment-editor popover in the
+  // real app) - not a React descendant of the pane, so its blur never reaches the pane's own
+  // handler. (A portal does not itself create that gap: the row editor's OWN dropdowns and menus,
+  // rendered from inside this component's `renderEditingFootnote`, are still React descendants of
+  // the pane wherever the portal places them in the DOM, so their blur reaches `handlePaneBlur` the
+  // ordinary way.)
   useEffect(() => {
     const doc = paneContainerRef.current?.ownerDocument ?? document;
     const handleFocusIn = (event: globalThis.FocusEvent) => {
@@ -564,10 +583,23 @@ export function FootnotesLayout({
     return () => doc.removeEventListener('focusin', handleFocusIn);
   }, [reportPaneFocusLost, onPaneFocusLeft]);
 
+  /**
+   * `editingFootnoteIndex` as of the previous commit, read by the re-check effect below before it
+   * overwrites this with the current value — the "was editing" half of the transition it cares
+   * about.
+   */
+  const previousEditingFootnoteIndexRef = useRef(editingFootnoteIndex);
+
   // A focused row editor that unmounts (a reload or a chapter change closing it) takes focus with
-  // it without a blur the pane can see, leaving focus nowhere - so re-check after every change to
-  // the editing row.
+  // it without a blur the pane can see, leaving focus nowhere - so re-check when editing ENDS.
+  // Scoped to that transition alone: entering edit mode also swaps the row's element (a focused
+  // `<li>` for the editor), and the editor claims focus itself only after a zero-delay timeout, so
+  // checking on that transition too would read the in-between frame - where nothing in the pane
+  // holds focus yet - as the pane having lost focus.
   useEffect(() => {
+    const wasEditing = previousEditingFootnoteIndexRef.current !== undefined;
+    previousEditingFootnoteIndexRef.current = editingFootnoteIndex;
+    if (!wasEditing || editingFootnoteIndex !== undefined) return;
     const { activeElement } = paneContainerRef.current?.ownerDocument ?? document;
     if (activeElement && isInsidePaneOrItsOverlays(activeElement, paneContainerRef)) return;
     reportPaneFocusLost();
@@ -602,7 +634,10 @@ export function FootnotesLayout({
         >
           <div
             ref={paneContainerRef}
-            // `FOOTNOTES_PANE_ATTRIBUTE`, spelled out: a JSX attribute name cannot be computed.
+            // Kept as a literal rather than `{...{ [FOOTNOTES_PANE_ATTRIBUTE]: '' }}`:
+            // `react/jsx-props-no-spreading` forbids spreading onto a DOM element. Must match
+            // `FOOTNOTES_PANE_ATTRIBUTE` in `editor-dom.util.ts`, which `focusPaneSelectedRow`
+            // queries for — pinned by a test that finds this element through that constant.
             data-footnotes-pane=""
             className="tw:relative tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
             onFocus={handlePaneFocus}
