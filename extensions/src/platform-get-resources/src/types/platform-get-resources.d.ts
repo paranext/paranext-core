@@ -173,10 +173,11 @@ declare module 'papi-shared-types' {
      * Returns DBL resources from memory cache.
      *
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
-     * existing cached data.
+     * existing cached data. Concurrent calls share one fetch.
      *
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
-     * @throws When the fetch itself fails. Callers that render an error state with a retry should
+     * @throws When the fetch itself fails — including when the DBL cannot be reached, for example
+     *   offline — and no catalog is cached. Callers that render an error state with a retry should
      *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
      *   change the answer.
      */

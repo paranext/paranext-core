@@ -6,6 +6,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { WebViewProps } from '@papi/core';
+import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
+import type { EffectiveResourceReference } from 'platform-scripture';
+import type { PickerResource } from './downloaded-resources.utils';
+import { RESOURCE_TEXT_WAITING_TEST_ID } from './resource-text-panel.component';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -233,6 +237,34 @@ function renderZeroState(resourceType: 'ScriptureResource' | 'Commentary' = 'Scr
   return render(<ResourceTextPanel {...props} />);
 }
 
+/**
+ * A `useWebViewState` stub that records every setter it hands out, keyed by state key, so a test
+ * can assert what a render published without re-deriving `usePublishNavigableProjectIds`'s own
+ * logic. `persisted` seeds what a key reads back, standing in for earlier saved state.
+ */
+function makeTrackedWebViewState(
+  resourceType: 'ScriptureResource' | 'Commentary',
+  persisted: Record<string, unknown> = {},
+) {
+  const setters = new Map<string, ReturnType<typeof vi.fn>>();
+  const useWebViewState = vi.fn(
+    // useWebViewState is generic (key → TState) and its real return tuple also carries a
+    // resetWebViewState function, which none of these tests need — mocks can't express the
+    // genericity, so the reset slot is a no-op `vi.fn()` purely to keep the tuple's shape.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (key: string, defaultValue: any): [any, (val: any) => void, () => void] => {
+      if (key === 'resourceType') return [resourceType, vi.fn(), vi.fn()];
+      let setter = setters.get(key);
+      if (!setter) {
+        setter = vi.fn();
+        setters.set(key, setter);
+      }
+      return [key in persisted ? persisted[key] : defaultValue, setter, vi.fn()];
+    },
+  );
+  return { useWebViewState, setters };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -437,5 +469,101 @@ describe('ResourceTextPanel — install against a stale catalog', () => {
 
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalledWith(CHAPTER_USJ));
     expect(mockUseProjectData).toHaveBeenLastCalledWith('platformScripture.USJ_Chapter', 'WEB1');
+  });
+});
+
+// A configured DBL reference the (failed) catalog would otherwise be needed to resolve. Its
+// presence is what makes readiness `catalogError` rather than `empty` — see
+// `getResourcePanelReadiness`.
+const CONFIGURED_DBL_REFERENCE: EffectiveResourceReference = {
+  type: 'dblResource',
+  name: 'Configured DBL Resource',
+  id: 'abc123',
+  source: 'admin',
+};
+
+/** A locally-installed project the picker resolved without the catalog (a `downloaded` row). */
+const DOWNLOADED_ROW: PickerResource = {
+  reference: { type: 'project', name: 'Local Project', id: 'local-project-1' },
+  source: 'downloaded',
+  isAdminLocked: false,
+  type: 'ScriptureResource',
+  installed: true,
+  projectId: 'local-project-1',
+};
+
+/** A catalog that already failed, with nothing resolved from it. */
+const FAILED_CATALOG = {
+  dblResources: [],
+  isLoadingResources: false,
+  isCatalogReady: false,
+  hasCatalogError: true,
+  refetchCatalog: vi.fn(),
+};
+
+describe('ResourceTextPanel — catalog failure keeps resolved rows visible', () => {
+  it('renders a row that resolved locally, and publishes its project id, when the catalog failed', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource');
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    // Not the catalog-error view: its message has no translation in this test's localized-strings
+    // mock, so it would render its own raw key if shown.
+    expect(
+      screen.queryByText('%webView_resourcePanel_catalogUnavailable%'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Local Project/ })).toBeInTheDocument();
+    expect(screen.getByTestId(RESOURCE_TEXT_WAITING_TEST_ID)).toBeInTheDocument();
+
+    expect(setters.get(NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY)).toHaveBeenCalledWith([
+      DOWNLOADED_ROW.projectId,
+    ]);
+  });
+
+  it('still shows the catalog-error view when the catalog failed and nothing resolved locally', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      [NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY]: ['persisted-project'],
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
+    // A failed catalog is no answer about what is displayed, so the saved list is kept.
+    const setNavigableProjectIds = setters.get(NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY);
+    expect(setNavigableProjectIds).toBeDefined();
+    expect(setNavigableProjectIds).not.toHaveBeenCalled();
+  });
+
+  it('waits for local rows still loading instead of showing the catalog-error view', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([undefined, true]);
+
+    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource');
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(
+      screen.queryByText('%webView_resourcePanel_catalogUnavailable%'),
+    ).not.toBeInTheDocument();
+    // The still-loading picker rows are what the wait is for, so the loading view (the live region
+    // `LoadingView` renders) must be what's shown instead of the catalog-error view being absent.
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

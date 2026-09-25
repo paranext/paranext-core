@@ -11,6 +11,7 @@ import {
   ZOOM_OUT_KEY,
 } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import type { GridResource } from './grid-resources.utils';
 
 /**
  * The Scripture Text Grid row: one cell per shown resource, all synced to the active scrRef, laid
@@ -41,6 +42,13 @@ const resources = [
   { resourceId: 'heb', projectId: 'heb', label: 'עברית' },
 ];
 
+const resourcesWithUnresolvedCells: GridResource[] = [
+  { resourceId: 'web', projectId: 'web', label: 'WEB' },
+  { resourceId: 'niv', projectId: undefined, label: 'NIV', unresolvedReason: 'unverified' },
+  { resourceId: 'esv', projectId: undefined, label: 'ESV', unresolvedReason: 'checking' },
+  { resourceId: 'nlt', projectId: undefined, label: 'NLT', unresolvedReason: 'notInstalled' },
+];
+
 /** Bounds the grid so its `h-full` layout behaves like a real web-view pane. */
 const GRID_BOX_STYLE: React.CSSProperties = {
   height: '360px',
@@ -62,6 +70,26 @@ export const Row: Story = {
     <GridBox>
       <ScriptureTextGrid
         resources={resources}
+        scrRef={scrRef}
+        setScrRef={noop}
+        ariaLabel="Text Collection"
+        onChapterContextChange={noop}
+      />
+    </GridBox>
+  ),
+};
+
+/**
+ * A row mixing a resolved cell with the three unresolved placeholder states — `unverified`,
+ * `checking`, and `notInstalled` — so reviewers can confirm they are distinguishable side by side.
+ * These are decided before any PAPI data arrives, so they render even against Storybook's inert
+ * stubs.
+ */
+export const RowWithUnresolvedCells: Story = {
+  render: () => (
+    <GridBox>
+      <ScriptureTextGrid
+        resources={resourcesWithUnresolvedCells}
         scrRef={scrRef}
         setScrRef={noop}
         ariaLabel="Text Collection"

@@ -13,6 +13,7 @@ import {
   UNAVAILABLE_KEY,
   ResourceCellView,
   COPY_KEY,
+  INSTALL_UNVERIFIED_KEY,
 } from './resource-cell-view.component';
 
 // jsdom doesn't ship a ResizeObserver (needed by Radix portal content). A stub is sufficient since
@@ -47,6 +48,7 @@ const localizedStrings = {
   [FAILED_KEY]: 'Download failed',
   [EMPTY_KEY]: 'No text for this verse',
   [BOOK_NOT_AVAILABLE_KEY]: 'Book not in this text',
+  [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this text is installed",
 };
 
 /** The zoom area the cells under test mark their text with. */
@@ -141,6 +143,23 @@ describe('ResourceCellView row smoke', () => {
     expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
     expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
     expect(screen.queryByText('Resource is loading\u2026')).not.toBeInTheDocument();
+  });
+
+  it('unverified: says it could not check \u2014 not "not installed", no retry wording, no editor', () => {
+    renderCells(
+      <ResourceCellView
+        state="unverified"
+        zoomArea={ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
+    expect(screen.getByText("Couldn't check whether this text is installed")).toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
   });
 
   it('mixed direction: LTR and RTL cells apply independent dir', () => {
@@ -410,19 +429,30 @@ describe('ResourceCellView right-click menu', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('leaves the browser menu alone on a cell whose resource is not installed', () => {
+  it.each([
+    ['whose resource is not installed', 'unavailable', 'Resource not installed'],
+    [
+      'whose install could not be checked',
+      'unverified',
+      "Couldn't check whether this text is installed",
+    ],
+  ] as const)('leaves the browser menu alone on a cell %s', (_, state, text) => {
     renderCells(
       <ResourceCellView
-        state="unavailable"
+        state={state}
         zoomArea={ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
-        localizedStrings={{ ...menuStrings, [NOT_INSTALLED_KEY]: 'Resource not installed' }}
+        localizedStrings={{
+          ...menuStrings,
+          [NOT_INSTALLED_KEY]: 'Resource not installed',
+          [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this text is installed",
+        }}
         editor={undefined}
       />,
     );
-    const event = createEvent.contextMenu(screen.getByText('Resource not installed'));
-    fireEvent(screen.getByText('Resource not installed'), event);
+    const event = createEvent.contextMenu(screen.getByText(text));
+    fireEvent(screen.getByText(text), event);
     expect(event.defaultPrevented).toBe(false);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });

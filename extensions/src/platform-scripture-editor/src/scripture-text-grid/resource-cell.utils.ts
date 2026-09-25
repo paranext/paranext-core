@@ -6,15 +6,17 @@ import {
 } from '../platform-scripture-editor.utils';
 
 /**
- * The five visual states a ResourceCell can be in; only `ready` renders Editorial.
+ * The visual states a ResourceCell can be in; only `ready` renders Editorial.
  *
- * - `unavailable`: the resource's project could not be resolved (e.g., not installed or absent from
- *   the cached resource list). The cell shows a static "Resource unavailable" label.
+ * - `unavailable`: not installed as far as the grid can tell: a catalog row or the disk scan said so,
+ *   or the catalog is healthy and the scan had no answer. Shows "Resource not installed".
  * - `downloading`: data is still loading — shows a spinner.
  * - `failed`: data loaded but returned a PlatformError — shows "Resource unavailable" + "Download
  *   failed".
  * - `bookNotAvailable`: the resource simply does not contain the current book. Distinct from `failed`
  *   because nothing went wrong and retrying a download cannot help.
+ * - `unverified`: nothing could say whether it is installed — the catalog failed and the disk scan
+ *   did not answer. Shows "Resource unavailable" with an explanation, never "not installed".
  * - `ready`: data is present — shows Editorial (or the empty-verse label when the slice is empty).
  */
 export type ResourceCellState =
@@ -22,14 +24,15 @@ export type ResourceCellState =
   | 'downloading'
   | 'ready'
   | 'failed'
-  | 'bookNotAvailable';
+  | 'bookNotAvailable'
+  | 'unverified';
 
 /**
  * Derives a cell's fetch state from observable data. The resource download/management flow owns the
  * actual download; this only visualizes it: a missing book in the resource on screen →
  * `bookNotAvailable`; any other PlatformError → `failed`; still loading / no value → `downloading`;
- * else `ready`. The caller must handle the `'unavailable'` state separately (when `projectId` is
- * `undefined`) before calling this function.
+ * else `ready`. The caller must handle the `'unavailable'` and `'unverified'` states separately
+ * (when `projectId` is `undefined`) before calling this function.
  *
  * `bookNotAvailable` requires the failure to name BOTH the book and the resource the cell is
  * showing right now. A cell re-keys its chapter subscription on the grid's shared reference, and a
@@ -48,7 +51,7 @@ export function deriveCellState(args: {
   isLoading: boolean;
   currentBookNum: number;
   projectId: string | undefined;
-}): Exclude<ResourceCellState, 'unavailable'> {
+}): Exclude<ResourceCellState, 'unavailable' | 'unverified'> {
   const { usjPossiblyError, isLoading, currentBookNum, projectId } = args;
   if (isPlatformError(usjPossiblyError)) {
     // Parsed once and compared, rather than calling `isMissingBookOnScreen` and then

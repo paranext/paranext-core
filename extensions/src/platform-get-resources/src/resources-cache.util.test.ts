@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
-import { reconcileCachedResources } from './resources-cache.util';
+import { parsePersistedCatalog, reconcileCachedResources } from './resources-cache.util';
 
 const INSTALLED_WITH_UPDATE: DblResourceData = {
   dblEntryUid: 'abc123',
@@ -247,5 +247,37 @@ describe('reconcileCachedResources', () => {
     expect(resources[0].updateAvailable).toBe(false);
     expect(resources[1]).toBe(laterUnchanged);
     expect(isChanged).toBe(true);
+  });
+});
+
+describe('parsePersistedCatalog', () => {
+  const ROW: DblResourceData = {
+    dblEntryUid: 'uid-1',
+    displayName: 'WEB',
+    fullName: 'World English Bible',
+    bestLanguageName: 'English',
+    type: 'ScriptureResource',
+    size: 1,
+    installed: true,
+    updateAvailable: false,
+    projectId: 'PROJ1',
+  };
+
+  it('returns the persisted rows', () => {
+    expect(parsePersistedCatalog(JSON.stringify([ROW]))).toEqual([ROW]);
+  });
+
+  it.each([
+    ['nothing stored', undefined],
+    ['an empty string', ''],
+    ['a non-string', 42],
+    ['malformed JSON', '[{'],
+    ['a non-array', '{"a":1}'],
+  ])('returns undefined for %s', (_label, persisted) => {
+    expect(parsePersistedCatalog(persisted)).toBeUndefined();
+  });
+
+  it('discards an empty persisted catalog', () => {
+    expect(parsePersistedCatalog('[]')).toBeUndefined();
   });
 });

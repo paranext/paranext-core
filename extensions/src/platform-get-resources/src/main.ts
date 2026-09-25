@@ -24,7 +24,7 @@ import {
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
-import { reconcileCachedResources } from './resources-cache.util';
+import { parsePersistedCatalog, reconcileCachedResources } from './resources-cache.util';
 import tailwindStyles from './tailwind.css?inline';
 
 const GET_RESOURCES_WEB_VIEW_TYPE = 'platformGetResources.getResources';
@@ -44,6 +44,7 @@ let hasFetchStarted = false;
 let syncInFlight: Promise<void> | undefined;
 /** Whether `syncInFlight` refreshes `updateAvailable` as well as the install flags. */
 let doesSyncInFlightRecomputeUpdateStatus = false;
+let onDemandFetch: Promise<DblResourceCatalog> | undefined;
 
 async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
@@ -84,13 +85,11 @@ async function startBackgroundFetchResources(): Promise<void> {
           return undefined;
         }
       },
-      // A build with no DBL credentials has arrived at its answer; retrying it nine more times
-      // cannot change it. Only `notReady` is worth another attempt.
-      (catalog) => !!catalog && shouldStopBackgroundFetch(catalog),
+      shouldStopBackgroundFetch,
       { maxAttempts: 10, delayMs: 1000 },
     );
-    if (result === undefined)
-      logger.warn('Background DBL resources fetch failed after 10 attempts');
+    if (result === undefined || (result.status === 'unavailable' && result.reason === 'notReady'))
+      logger.warn('Background DBL resources fetch ended without a catalog');
   });
 }
 
@@ -305,6 +304,23 @@ async function refreshResourceFlags(shouldRecomputeUpdateStatus = true): Promise
   await syncAfterInFlight(shouldRecomputeUpdateStatus);
 }
 
+/** The mutex-guarded body of an on-demand fetch; see {@link getCachedResources}'s single-flight. */
+async function fetchCatalogOnDemand(): Promise<DblResourceCatalog> {
+  return fetchMutex.runExclusive(async () => {
+    if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
+    try {
+      // Awaited deliberately: returning the promise un-awaited from inside this `try` would let a
+      // rejection bypass the logging below entirely.
+      return await fetchAndCacheResources();
+    } catch (e) {
+      // Rethrown rather than flattened to an "unavailable" result. A caller can offer a retry
+      // that might actually work for a failure; it cannot for a build with no DBL credentials.
+      logger.warn(`getCachedResources on-demand fetch failed: ${getErrorMessage(e)}`);
+      throw e;
+    }
+  });
+}
+
 async function getCachedResources(): Promise<DblResourceCatalog> {
   if (cachedResources !== undefined) {
     // Run the installed-flag sync in the background so the dialog open is never blocked by
@@ -317,20 +333,12 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
     return { status: 'available', resources: cachedResources };
   }
 
-  return fetchMutex.runExclusive(async () => {
-    if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
-    try {
-      // Awaited deliberately: returning the promise un-awaited from inside this `try` would let a
-      // rejection bypass the logging below entirely.
-      return await fetchAndCacheResources();
-    } catch (e) {
-      // Rethrown rather than flattened to an "unavailable" result. A caller can offer a retry that
-      // might actually work for a failure; it cannot for a build with no DBL credentials, and
-      // collapsing the two here is what makes that distinction unrecoverable upstream.
-      logger.warn(`getCachedResources on-demand fetch failed: ${getErrorMessage(e)}`);
-      throw e;
-    }
+  // Concurrent readers join one fetch rather than each queueing its own behind the lock — with no
+  // catalog cached, a slow failure would otherwise push every reader past its own command timeout.
+  onDemandFetch ??= fetchCatalogOnDemand().finally(() => {
+    onDemandFetch = undefined;
   });
+  return onDemandFetch;
 }
 
 /**
@@ -344,16 +352,22 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
  */
 async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
-    await getCachedResources();
+    // A failed catalog fetch must not cost the local list: for an offline user with no cached
+    // catalog, these rows are the only resources the picker can offer.
+    try {
+      await getCachedResources();
+    } catch (e) {
+      logger.debug(`Listing local resources without a DBL catalog: ${getErrorMessage(e)}`);
+    }
     // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
     // `getCachedResources` returns before its background sync finishes. Wait for that sync and read
     // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
     // than emitted a second time as a synthetic non-DBL one.
     await ensureInstalledFlagsSynced();
-    // An absent catalog means one has never been fetched on this profile (a fetched catalog is
-    // persisted and reloaded on activation), so there is nothing for these projects to duplicate
-    // and no reason to withhold them. Suppressing them here would hide side-loaded resources from
-    // exactly the offline, never-connected users most likely to have them.
+    // An absent catalog means there is no DBL list in hand: none was ever fetched on this profile,
+    // an emptied persisted one was discarded, or this session's fetch failed. In each case there is
+    // nothing for these projects to duplicate and no reason to withhold them. Suppressing them here
+    // would hide side-loaded resources from exactly the offline users most likely to rely on them.
     const dblCatalog = cachedResources ?? [];
 
     const allMetadata = await getLocalProjectMetadata();
@@ -424,11 +438,9 @@ export async function activate(context: ExecutionActivationContext) {
   executionToken = context.executionToken;
 
   try {
-    const cached = await papi.storage.readUserData(executionToken, RESOURCES_CACHE_KEY);
-    if (typeof cached === 'string' && cached.length > 0) {
-      const parsed: DblResourceData[] = JSON.parse(cached);
-      cachedResources = parsed;
-    }
+    cachedResources = parsePersistedCatalog(
+      await papi.storage.readUserData(executionToken, RESOURCES_CACHE_KEY),
+    );
   } catch {
     // No cached data from previous session
   }
