@@ -29,7 +29,7 @@ Sources: the PT-4540 Jira comment from Sebastian (UX), and Todd (product owner) 
 
 ## Backspace/Delete: kept separate
 
-The Backspace/Delete behaviour lives entirely in the editor's own commit, which is PR 1's "C" commit. **Nothing in this plan's Tasks 0–6 depends on it**, and no task here touches Backspace or Delete. If Ian decides deletion should be refused instead, the host work is the Appendix task, landed as **one separate commit** on top of the rest. Nothing else in this plan changes in that case. The only place Backspace appears in the main tasks is manual QA step 4, which is marked as depending on which way the decision goes.
+The Backspace/Delete behaviour lives entirely in the editor's own commit, which is PR 1's "C" commit. **Nothing in this plan's Tasks 0–6 depends on it**, and no task here touches Backspace or Delete. If Ian decides deletion should be refused instead, the host work is the Appendix task, landed as **one separate commit** on top of the rest. Nothing else in this plan changes in that case. The only place Backspace appears in the main tasks is manual QA step 6, which is marked as depending on which way the decision goes.
 
 ## Global Constraints
 
@@ -38,7 +38,7 @@ The Backspace/Delete behaviour lives entirely in the editor's own commit, which 
 - Pinned editor interface names (PR 1). Use them exactly:
   - `EditorRef.getSelectedParaMarker(): string | undefined`
   - `EditorProps.onParaMarkerMenuRequest?: () => void`
-  - the selected-row class `psc-para-marker-selected` (with `aria-selected="true"`) on the paragraph element
+  - the selected-row class `psc-para-marker-selected` on the paragraph element; the editor exposes the selected glyph to assistive technology via `aria-activedescendant` on its root, not `aria-selected` on the row
 
   **No refusal class or attribute exists**; do not reference `psc-para-marker-refused`.
 - `dev-packages.json` pins the branch and is **not edited** (spec §5.1). Commit `package-lock.json` only if `npm install` changes it.
@@ -282,7 +282,8 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
   - The menu is open iff `isMenuOpen && !isStructureProtected`.
   - The trigger button reports `true` on open and `false` on close.
   - Picking an item runs the item's action, then reports `false`.
-  - On every close, it calls `onReturnFocusToEditor` and prevents Radix's return to the trigger, **unless** it closed because of an outside interaction. In that case focus stays where the user put it (Radix's non-modal popover already skips its own trigger refocus then).
+  - On every close, it calls `onReturnFocusToEditor` and prevents Radix's return to the trigger, **unless** it closed because of an outside interaction. In that case focus stays where the user put it (Radix's non-modal popover already skips its own trigger refocus then). Clicking the trigger button again to close the menu counts as a normal close, not an outside interaction, so it also returns focus to the editor.
+  - The web view's `onReturnFocusToEditor` restores a lost caret from the focus-out snapshot before focusing the editor, so a caret nulled while the popover was open lands back where the user left it instead of at the document end.
 
 This mirrors `CharacterMarkerControl` (`character-marker-control/character-marker-control.component.tsx`), whose `closingMarkerMenuItems` wraps each action with a close, and whose `onClose` refocuses the editor.
 
@@ -926,7 +927,7 @@ The gutter lies outside the paragraph's box: the glyph is absolutely positioned 
 Demo copy decision: `lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css` is **not** changed. Its Storybook stories never enable `hasGutterParaMarkers`, so the class cannot occur there. `usj-nodes-scss-coverage.test.ts` compares only the gutter indent-compensation maps, which this rule does not touch.
 
 **Files:**
-- Modify: `extensions/src/platform-scripture-editor/src/_usj-nodes.scss` (header comment, plus a new block after the `verse-delete-armed` `@media (prefers-reduced-motion: reduce)` block)
+- Modify: `extensions/src/platform-scripture-editor/src/_usj-nodes.scss` (header comment, plus a new block after the gutter-markers section's RTL rules)
 - Test: `extensions/src/platform-scripture-editor/src/usj-nodes-styles.test.ts`
 - Create: `extensions/src/platform-scripture-editor/src/paragraph-marker-selection-contrast.test.ts`
 
@@ -972,6 +973,18 @@ In `usj-nodes-styles.test.ts`, insert this `describe` immediately before `descri
 
     it('uses no pseudo-element, which the focus box and book code already own', () => {
       expect(declarations).not.toMatch(/\.psc-para-marker-selected[^{,]*::?(?:before|after)/);
+    });
+
+    it('paints the selected glyph after the base gutter glyph rule, which has equal specificity', () => {
+      // Equal specificity (0,6,0): source order decides.
+      const baseGlyph = '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child';
+      const selectedGlyph =
+        '.psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child';
+      const baseIndex = declarations.indexOf(baseGlyph);
+      const selectedIndex = declarations.indexOf(selectedGlyph);
+      expect(baseIndex).toBeGreaterThanOrEqual(0);
+      expect(selectedIndex).toBeGreaterThanOrEqual(0);
+      expect(selectedIndex).toBeGreaterThan(baseIndex);
     });
   });
 ```
@@ -1067,18 +1080,18 @@ describe('selected paragraph marker bar contrast', () => {
 - [ ] **Step 3: Run both to verify they fail**
 
 Run: `npm run test --workspace=extensions/src/platform-scripture-editor -- --run usj-nodes-styles`
-Expected: FAIL on the three positive `selected paragraph marker row` cases (`expected undefined to contain …`). The pseudo-element case passes.
+Expected: FAIL on the four positive `selected paragraph marker row` cases (`expected undefined to contain …`, and the order-pin case on a `toBeGreaterThanOrEqual` against `-1`). The pseudo-element case passes.
 
 Run: `npm run test --workspace=extensions/src/platform-scripture-editor -- --run paragraph-marker-selection-contrast`
 Expected: FAIL only on `ties the sweep to the token…` (`expected undefined to match …`). The 8 per-theme cases and both rejections already pass, because they measure tokens rather than the stylesheet.
 
 - [ ] **Step 4: Add the styles**
 
-In `_usj-nodes.scss`, insert the following after the closing `}` of the `@media (prefers-reduced-motion: reduce) { .verse-delete-armed .verse-selected { … } }` block:
+In `_usj-nodes.scss`, insert the following after the gutter-markers section's RTL rules (the closing `}` of `.psc-gutter-markers[dir='rtl'] .para > .marker…, .psc-gutter-markers[dir='rtl'] .book > .marker…`), not the `verse-delete-armed` block: the selected-glyph rule below ties in specificity with the base `.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child` rule, so it has to come after it in source order to win.
 
 ```scss
 /* Paragraph-marker selection (paragraph-structure view). The editor puts `psc-para-marker-selected`
-   (and aria-selected) on the paragraph whose gutter marker is the selection. Selection gets a
+   on the paragraph whose gutter marker is the selection. Selection gets a
    channel of its own, per adr-list-selection-on-a-dedicated-visual-channel: a surface fill plus a
    4px leading bar, never the active-text focus box (which owns this element's ::after), and no
    pseudo-element. The gutter lies outside the paragraph's box — the glyph is absolutely positioned
@@ -1270,22 +1283,24 @@ Pointer flow:
 1. Click the `\li2` glyph in the gutter. Expect the whole row (gutter and text) highlighted with a fill and a leading bar, the glyph bold, and no caret blinking in the text or glyph. The reference in the toolbar does not change.
 2. Click the toolbar paragraph dropdown and pick `\q1`. Expect that paragraph, and only it, to become `\q1`. **The menu closes**, focus is back in the editor, the highlight stays on that paragraph, and the reference still has not moved.
 3. Open the dropdown again with the mouse and press Escape. Expect the menu to close with focus back in the editor: the next step works without clicking.
-4. *(Depends on the Backspace/Delete decision.)* With the marker selected, press Backspace.
-   - **Merge (current decision):** the paragraph joins the one before it, exactly as Backspace at the start of its text would. One Undo restores it exactly. With the structure locked (step 8), you get the "Structure is locked" notification and nothing changes.
+4. With the caret in ordinary text (no marker selected), open the dropdown with the mouse and press Escape. Expect focus back in the editor with the caret exactly where it was, not at the end of the chapter.
+5. Click the dropdown button again to close it. Expect focus back in the editor.
+6. *(Depends on the Backspace/Delete decision.)* With the marker selected, press Backspace.
+   - **Merge (current decision):** the paragraph joins the one before it, exactly as Backspace at the start of its text would. One Undo restores it exactly. With the structure locked (step 11), you get the "Structure is locked" notification and nothing changes.
    - **Refuse (only if the Appendix task has landed):** nothing is deleted, and the hint reads "To change this marker, press Enter or use the paragraph style menu".
-5. Click the glyph again, open the dropdown with the mouse, then click into another paragraph's text. Expect the menu to close and the caret to land where you clicked, not back on the marker.
+7. Click the glyph again, open the dropdown with the mouse, then click into another paragraph's text. Expect the menu to close and the caret to land where you clicked, not back on the marker.
 
 Keyboard flow:
-6. Click a marker glyph, then press Enter. Expect the paragraph menu to open with focus in its search box. Type `q2` and press Enter: the paragraph is retagged, the menu closes, and focus is back in the editor with the marker still selected.
-7. Press Alt+↓ on a selected marker. Expect the same menu to open. Press Escape.
-8. Press → on a selected marker. Expect the highlight to go and the caret to sit at the start of that paragraph's text. Then check that ←/→/↑/↓ with the caret in ordinary text behave exactly as on `main`: the arrows never stop on a marker.
+8. Click a marker glyph, then press Enter. Expect the paragraph menu to open with focus in its search box. Type `q2` and press Enter: the paragraph is retagged, the menu closes, and focus is back in the editor with the marker still selected.
+9. Press Alt+↓ on a selected marker. Expect the same menu to open. Press Escape.
+10. Press → on a selected marker. Expect the highlight to go and the caret to sit at the start of that paragraph's text. Then check that ←/→/↑/↓ with the caret in ordinary text behave exactly as on `main`: the arrows never stop on a marker.
 
 Refusals and states:
-9. Lock the structure (Ctrl+Shift+L / ⇧⌘L). Select a marker and press Enter. Expect the notification "Structure is locked. Paragraph and verse markers cannot be changed." and no menu. Unlock: the menu does not open by itself.
-10. Switch through all four themes (light, dark, paratext-light, paratext-dark). Expect the bar to be clearly visible in each and the fill to read as a highlight. The active-text focus box, if shown, should still be distinguishable from it.
-11. Open an RTL project, or set a project to RTL. Expect the highlight and bar on the right, across the right gutter.
-12. With VoiceOver (macOS) on, select a marker. Note what is announced (the row carries `aria-selected="true"`) and record it in the PR description. Spec §4.9 asks for this to be checked, and for an adjustment if the root role makes it ineffective; that adjustment would be editor-side.
-13. Other dropdowns: open the character-marker control, pick a marker, and confirm it closes. The paragraph dropdown should now feel the same.
+11. Lock the structure (Ctrl+Shift+L / ⇧⌘L). Select a marker and press Enter. Expect the notification "Structure is locked. Paragraph and verse markers cannot be changed." and no menu. Unlock: the menu does not open by itself.
+12. Switch through all four themes (light, dark, paratext-light, paratext-dark). Expect the bar to be clearly visible in each and the fill to read as a highlight. The active-text focus box, if shown, should still be distinguishable from it.
+13. Open an RTL project, or set a project to RTL. Expect the highlight and bar on the right, across the right gutter.
+14. With VoiceOver (macOS) on, select a marker. Note what is announced via the root's `aria-activedescendant`, not `aria-selected`, and record it in the PR description. Spec §4.9 asks for this to be checked, and for an adjustment if the root role makes it ineffective; that adjustment would be editor-side.
+15. Other dropdowns: open the character-marker control, pick a marker, and confirm it closes. The paragraph dropdown should now feel the same.
 
 - [ ] **Step 5: Record open questions for the reviewer**
 
@@ -1308,7 +1323,7 @@ The PR body ends with `🤖 Generated with [Claude Code](https://claude.com/clau
 4. **No keyboard entry into marker selection** (Decision 2). The spec's arrow stops and ↑/↓ walk are dropped editor-side. This host plan catalogs only Enter / Alt+↓, and leaves the arrow-exclusion comment unchanged.
 5. **No invariants-doc entry on either side** (spec §4.8 and its host mirror). The editor PR dropped its §4.8 entry: a Standard-view contract is the wrong home for a paragraph-structure-view rule, and the entry predated the invariants owner's sign-off. The sign-off conversation is simpler now that deletion goes through the existing content-caret Backspace.
 6. **`<Editorial>` needs no editor-side change.** It spreads every `EditorProps` field except `children` into `<Editor>`, so `onParaMarkerMenuRequest` arrives as soon as PR 1 adds it.
-7. **Contrast test location and data source.** The ADR's precedent (`active-comment-bar-contrast.test.ts`) lives in platform-bible-react and parses `index.css`. This rule lives in the extension, so the test sits beside `_usj-nodes.scss` and reads `src/shared/data/themes.data.json`. `.editor-inner` in `_editor.scss` still declares `background: #fff`, so if a theme's editor surface is not `--background` in practice, manual QA step 10 is what catches it.
+7. **Contrast test location and data source.** The ADR's precedent (`active-comment-bar-contrast.test.ts`) lives in platform-bible-react and parses `index.css`. This rule lives in the extension, so the test sits beside `_usj-nodes.scss` and reads `src/shared/data/themes.data.json`. `.editor-inner` in `_editor.scss` still declares `background: #fff`, so if a theme's editor surface is not `--background` in practice, manual QA step 12 is what catches it.
 8. **Demo copy of `usj-nodes.css` not changed.** Its stories never enable gutter markers.
 9. **Read-only projects.** The spec is silent here. With no toolbar paragraph menu in read-only, Enter / Alt+↓ on a selected marker is ignored by the host; a structure-locked project gets the lock notification instead.
 10. **Local editor testing path.** The staging script prefers `dev-packages/scripture-editors`, which exists in this checkout. Task 0 switches it to PR 1's branch, and back to `platform-yalc` for intake.
@@ -1317,7 +1332,7 @@ The PR body ends with `🤖 Generated with [Claude Code](https://claude.com/clau
 
 ## Appendix: contingency task — refusal hint (only if Ian chooses refusal)
 
-**Do not execute unless the Backspace/Delete decision changes to "refuse with a hint".** If it does, the editor re-adds its refusal signal (`psc-para-marker-refused` plus `data-para-marker-refused-intent`, set on the editor root and cleared on the next selection change), and this task lands as **one separate commit** after Task 5. Fold its manual-QA "Refuse" branch (step 4) into Task 6.
+**Do not execute unless the Backspace/Delete decision changes to "refuse with a hint".** If it does, the editor re-adds its refusal signal (`psc-para-marker-refused` plus `data-para-marker-refused-intent`, set on the editor root and cleared on the next selection change), and this task lands as **one separate commit** after Task 5. Fold its manual-QA "Refuse" branch (step 6) into Task 6.
 
 The steps and code below are unchanged from the original host plan's Task 4. Two adjustments apply:
 - Its sub-steps commit once, at the end.

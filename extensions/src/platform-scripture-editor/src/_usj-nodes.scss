@@ -3015,7 +3015,7 @@ span.read img {
 }
 
 /* Paragraph-marker selection (paragraph-structure view). The editor puts `psc-para-marker-selected`
-   (and aria-selected) on the paragraph whose gutter marker is the selection. Selection gets a
+   on the paragraph whose gutter marker is the selection. Selection gets a
    channel of its own, per adr-list-selection-on-a-dedicated-visual-channel: a surface fill plus a
    4px leading bar, never the active-text focus box (which owns this element's ::after), and no
    pseudo-element. The gutter lies outside the paragraph's box — the glyph is absolutely positioned
