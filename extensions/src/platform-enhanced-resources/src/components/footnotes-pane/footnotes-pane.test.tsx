@@ -84,4 +84,19 @@ describe('EnhancedResourceFootnotesPane', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0);
     expect(screen.getByTestId('children')).toBeTruthy();
   });
+
+  it('names the footnotes zoom area for the zoom indicator', () => {
+    const { container } = render(
+      <EnhancedResourceFootnotesPane
+        usj={SAMPLE_USJ}
+        isVisible
+        useWebViewState={mockUseWebViewState}
+        zoomAreaLabel="Footnotes"
+      >
+        <div>scripture pane child</div>
+      </EnhancedResourceFootnotesPane>,
+    );
+    const marker = container.querySelector('[data-platform-content-zoom-root="footnotes"]');
+    expect(marker).toHaveAttribute('data-platform-content-zoom-label', 'Footnotes');
+  });
 });

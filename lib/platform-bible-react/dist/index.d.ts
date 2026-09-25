@@ -700,6 +700,117 @@ export declare function localizeOrFallback(key: LocalizeKey, localizedStrings: L
  */
 export declare function ConflictNoteCard({ comment, localizedStrings, availableActions, resolvedResolution, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Props for {@link ContentZoomRoot}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLElement> & {
+	/**
+	 * Id of the zoom area this element belongs to: lower-case letters, digits and hyphens, starting
+	 * with a letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit
+	 * this prop for the view's main area. A view with several independently zoomable panes gives each
+	 * its own id — the Scripture editor uses `footnotes` for its footnotes pane.
+	 *
+	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
+	 * a warning once.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	area?: string;
+	/**
+	 * Element to render: `'div'` (the default) or `'span'`. Use `'span'` inside phrasing content — a
+	 * `<p>`, a heading, or a table cell's inline text — where a `div` is not allowed.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	as?: "div" | "span";
+	/**
+	 * Name of this zoom area as the zoom indicator shows it: `<label> · 120 %` instead of `120 %`.
+	 * Give it when a view has several areas the user could not otherwise tell apart — the Text
+	 * Collection labels each resource's area with the resource's short name. Plain text. When several
+	 * elements share an area id, the first one with a label names the area. Omit it and the indicator
+	 * shows the level alone.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	label?: string;
+};
+/**
+ * Marks an element that renders project text — scripture, note bodies, result snippets, resource
+ * text in its own font — so the platform scales it with the pane's content zoom.
+ *
+ * Mark the text, not the region around it. Buttons, inputs, filters, headers, badges, card frames
+ * and pop-ups stay outside every marked element and keep interface scale. Several elements may
+ * share one area id and zoom together, so a card, list or table view marks each text element with
+ * the same id; flowing, editor-like text keeps one marker around the text body. Areas must not nest
+ * — a marked element found inside another marked element is ignored.
+ *
+ * The platform scales marked elements on Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel and the tab context menu,
+ * remembers the level per area and shows the zoom indicator; the view writes nothing else. A view
+ * that marks no area gets no content zoom unless the platform declares its web view type zoomable.
+ * Your view is zoomable only while at least one element carrying `data-platform-content-zoom-root`
+ * is rendered: the tab menu's zoom items, Ctrl/⌘ + `+`/`-`/`0` and Ctrl/⌘+wheel appear and act only
+ * then. If your view shows nothing to zoom for a while (before a search, while loading), render an
+ * empty marked element so the controls stay available.
+ *
+ * Pop-ups opened from inside stay at interface scale; anchor them to live positions
+ * (`useLivePopoverAnchor`) so they open beside zoomed content.
+ *
+ * Renders a `div` by default and a `span` with `as="span"`, in normal flow, with no classes of its
+ * own — the caller supplies whatever layout classes its parent expects. Library components that
+ * render project text mark it themselves inside a `ContentZoomTextProvider`; do not wrap such a
+ * provider's subtree in a `ContentZoomRoot`.
+ *
+ * Measurement caveat: inside a zoomed area, `getBoundingClientRect()` reports zoomed pixels, while
+ * `getComputedStyle(el).fontSize` does not reflect the zoom factor. To read the factor itself, look
+ * up the `--platform-content-zoom-<areaId>` custom property (`--platform-content-zoom-main` for the
+ * unnamed area, `--platform-content-zoom-default` as a fallback) on the view's `documentElement`.
+ *
+ * @example
+ *
+ * ```tsx
+ * <li>
+ *   <Button onClick={goToVerse}>{verseRef}</Button>
+ *   <ContentZoomRoot as="span" className="scripture-font">
+ *     {snippet}
+ *   </ContentZoomRoot>
+ * </li>;
+ * ```
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const ContentZoomRoot: import("react").ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLElement> & {
+	/**
+	 * Id of the zoom area this element belongs to: lower-case letters, digits and hyphens, starting
+	 * with a letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit
+	 * this prop for the view's main area. A view with several independently zoomable panes gives each
+	 * its own id — the Scripture editor uses `footnotes` for its footnotes pane.
+	 *
+	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
+	 * a warning once.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	area?: string;
+	/**
+	 * Element to render: `'div'` (the default) or `'span'`. Use `'span'` inside phrasing content — a
+	 * `<p>`, a heading, or a table cell's inline text — where a `div` is not allowed.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	as?: "div" | "span";
+	/**
+	 * Name of this zoom area as the zoom indicator shows it: `<label> · 120 %` instead of `120 %`.
+	 * Give it when a view has several areas the user could not otherwise tell apart — the Text
+	 * Collection labels each resource's area with the resource's short name. Plain text. When several
+	 * elements share an area id, the first one with a label names the area. Omit it and the indicator
+	 * shows the level alone.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	label?: string;
+} & import("react").RefAttributes<HTMLElement>>;
+/**
  * Attribute a content-zoom-eligible element carries to mark it as one zoom area. Its value is the
  * zoom area id; an empty value marks the view's `main` area. Mirrors `CONTENT_ZOOM_ROOT_ATTRIBUTE`
  * in paranext-core's `src/shared/models/web-view.model.ts`. This library cannot import that module
@@ -711,154 +822,82 @@ export declare function ConflictNoteCard({ comment, localizedStrings, availableA
  */
 export declare const CONTENT_ZOOM_ROOT_ATTRIBUTE = "data-platform-content-zoom-root";
 /**
- * Attribute the platform's pop-up components put, next to {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, on
- * pop-up content opened from a zoom area. It tells the platform the element is pop-up content that
- * follows an area's zoom, not a pane of its own. Mirrors `CONTENT_ZOOM_POPUP_ATTRIBUTE` in
- * paranext-core's `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
+ * Attribute a web view puts on an element that is not itself scaled — a row, a column, a card — to
+ * tie a click, a focus or a Ctrl/⌘+wheel anywhere inside it to one zoom area. Its value is that
+ * area's id, spelled as for {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}. A marked element inside it still
+ * decides for itself, and the attribute scales nothing, so never put it on a marked element.
+ * Mirrors `CONTENT_ZOOM_SCOPE_ATTRIBUTE` in paranext-core's `src/shared/models/web-view.model.ts`;
+ * the literal is duplicated here for the same reason as {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, and a
+ * platform test compares the two constants.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare const CONTENT_ZOOM_POPUP_ATTRIBUTE = "data-platform-content-zoom-popup";
+export declare const CONTENT_ZOOM_SCOPE_ATTRIBUTE = "data-platform-content-zoom-scope";
 /**
- * Prefix of the CSS custom properties the platform sets on a web view's root element, one per zoom
- * area, holding that area's zoom factor (`--platform-content-zoom-main`, …). Mirrors
- * `CONTENT_ZOOM_CSS_VARIABLE_PREFIX` in paranext-core's `src/shared/models/web-view.model.ts`; a
- * platform test keeps the two equal.
+ * Attribute that names a zoom area for the user: put on an element carrying
+ * {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, it makes the platform's zoom indicator read `<label> ·
+ * <level>` (for example `HSV · 120 %`) instead of the level alone. `ContentZoomRoot` writes it from
+ * its `label` prop. Mirrors `CONTENT_ZOOM_LABEL_ATTRIBUTE` in paranext-core's
+ * `src/shared/models/web-view.model.ts`; a platform test compares the two constants.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = "--platform-content-zoom-";
+export declare const CONTENT_ZOOM_LABEL_ATTRIBUTE = "data-platform-content-zoom-label";
 /**
- * CSS custom property holding the Settings default zoom factor, the fallback for an area without a
- * variable of its own. Mirrors `CONTENT_ZOOM_DEFAULT_CSS_VARIABLE` in paranext-core's
- * `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
+ * Props for {@link ContentZoomTextProvider}.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = "--platform-content-zoom-default";
-/**
- * Id of the view's unnamed main zoom area, the fallback used when {@link useContentZoomArea} reports
- * the empty string. Mirrors `MAIN_CONTENT_ZOOM_AREA` in paranext-core's
- * `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare const MAIN_CONTENT_ZOOM_AREA_ID = "main";
-/**
- * Props for {@link ContentZoomAreaProvider}.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export type ContentZoomAreaProviderProps = {
+export type ContentZoomTextProviderProps = {
 	/**
-	 * Id of the zoom area the wrapped content belongs to, with the same rules as
+	 * Id of the zoom area the project text inside belongs to, with the same rules as
 	 * `ContentZoomRootProps.area`. Omit it for the view's main area.
 	 *
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	area?: string;
 	/**
-	 * The content that belongs to the area.
+	 * Name of the zoom area as the zoom indicator shows it (`<label> · 120 %`), written on every text
+	 * element the provider marks, the way `ContentZoomRootProps.label` is on its marker. Plain text.
+	 * Omit it, or pass an empty string, and the indicator shows the level alone.
 	 *
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
-	children?: React$1.ReactNode;
+	label?: string;
+	/**
+	 * The subtree whose library components mark the project text they render.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	children: React$1.ReactNode;
 };
 /**
- * Tells pop-ups rendered inside it which zoom area they belong to, without marking any element
- * itself. `ContentZoomRoot` already does this for everything rendered inside it; use this provider
- * for a pop-up that belongs to an area but is rendered outside that area's element — for example a
- * popover the view renders beside its content and anchors to a position in the text.
+ * Opts the library components inside it into marking the project text they render — a comment's
+ * scripture snippet, body, conflict diff and composer, for example — so that text scales with the
+ * pane's content zoom while the components' buttons, badges and frames keep interface scale.
+ * Outside a provider those components mark nothing.
  *
- * Popovers and dropdown menus from this library that open inside an area are scaled with that
- * area's zoom and cap their own width and height to the pane, scrolling their content if it doesn't
- * fit; tooltips are scaled with the area's zoom too but cap only their width, so a tooltip taller
- * than the available space is clipped at the pane's edge. Dropdown sub-menu content does not follow
- * an area yet.
+ * The provider marks no element itself. Do not also wrap its subtree in a `ContentZoomRoot`: a
+ * marked element found inside another marked element is ignored.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function ContentZoomAreaProvider({ area, children }: ContentZoomAreaProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function ContentZoomTextProvider({ area, label, children }: ContentZoomTextProviderProps): import("react/jsx-runtime").JSX.Element;
 /**
- * The zoom area the calling component is rendered in: `''` for the view's main area, the area id
- * for a named area, or `undefined` outside every `ContentZoomRoot` and `ContentZoomAreaProvider`.
+ * The props a component spreads onto the existing element that renders project text inline. Inside
+ * a {@link ContentZoomTextProvider} the props carry `data-platform-content-zoom-root` set to the
+ * provider's area (`''` for the main area), plus `data-platform-content-zoom-label` when the
+ * provider names the area; outside one they are empty. Spread them onto the text element itself
+ * rather than adding a wrapper, and never onto pop-up content or an element that contains another
+ * marked element.
  *
+ * @returns The marker (and label) attributes inside a provider; an empty object outside one
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function useContentZoomArea(): string | undefined;
-/**
- * Props for {@link ContentZoomRoot}.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLDivElement> & {
-	/**
-	 * Id of the zoom area this element wraps: lower-case letters, digits and hyphens, starting with a
-	 * letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit this
-	 * prop for the view's main area. A view with several independently zoomable panes gives each its
-	 * own id — the Scripture editor uses `footnotes` for its footnotes pane.
-	 *
-	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
-	 * a warning once.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	area?: string;
+export declare function useContentZoomTextProps(): {
+	[CONTENT_ZOOM_ROOT_ATTRIBUTE]?: string;
+	[CONTENT_ZOOM_LABEL_ATTRIBUTE]?: string;
 };
-/**
- * Marks one independently zoomable content area within a web view.
- *
- * The platform scales a marked area in response to Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel, and the tab
- * context menu; it remembers the chosen level per area and shows the zoom indicator. The view
- * itself writes nothing else to make zoom work.
- *
- * Several elements may share one area id and zoom together. Areas must not nest — a marked element
- * found inside another marked element is ignored. Keep toolbars, dividers and headers outside the
- * marked element so they are not scaled along with the content.
- *
- * Popovers and dropdown menus from this library that open from inside the element follow its zoom
- * and cap their own width and height to the pane, scrolling their content if it doesn't fit;
- * tooltips follow the zoom too but cap only their width, so a tooltip taller than the available
- * space is clipped at the pane's edge. Dropdown sub-menu content does not follow an area yet. A
- * pop-up rendered outside the element (beside the content, anchored to a position in it) belongs to
- * the area only when wrapped in {@link ContentZoomAreaProvider}.
- *
- * This component renders a plain `div` in normal flow and applies no classes of its own — the
- * caller supplies whatever layout classes its parent expects.
- *
- * Measurement caveat: inside a zoomed area, `getBoundingClientRect()` reports zoomed pixels, while
- * `getComputedStyle(el).fontSize` does not reflect the zoom factor. To read the factor itself, look
- * up the `--platform-content-zoom-<areaId>` custom property (`--platform-content-zoom-main` for the
- * unnamed area, `--platform-content-zoom-default` as a fallback) on the view's `documentElement`.
- *
- * A view that marks no area at all is scaled as a whole at the Settings default zoom level and gets
- * no per-pane zoom control.
- *
- * @example
- *
- * ```tsx
- * <Toolbar />
- * <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
- *   <EditorContent />
- * </ContentZoomRoot>
- * ```
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare const ContentZoomRoot: import("react").ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & {
-	/**
-	 * Id of the zoom area this element wraps: lower-case letters, digits and hyphens, starting with a
-	 * letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit this
-	 * prop for the view's main area. A view with several independently zoomable panes gives each its
-	 * own id — the Scripture editor uses `footnotes` for its footnotes pane.
-	 *
-	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
-	 * a warning once.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	area?: string;
-} & import("react").RefAttributes<HTMLDivElement>>;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -4246,9 +4285,11 @@ export declare function useHasContentBelow(scrollerRef: React$1.RefObject<HTMLEl
  */
 export type LivePopoverAnchorSource = {
 	/**
-	 * Reads the anchor's current viewport rect. Returns `undefined` when the source can no longer be
-	 * measured; the anchor then keeps its last rect.
+	 * Reads the anchor's current viewport rect. Called every time the popover is positioned, which
+	 * can be more than once per frame.
 	 *
+	 * @returns The anchor's rect in viewport coordinates, or `undefined` when the source can no
+	 *   longer be measured; the anchor then keeps its last rect.
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	measure: () => DOMRect | undefined;
@@ -4278,8 +4319,10 @@ export type LivePopoverAnchor = {
 	 */
 	virtualRef: React$1.RefObject<VirtualAnchorElement>;
 	/**
-	 * Points the anchor at a new source. Call it before opening the popover.
+	 * Points the anchor at a new source and measures it at once, so the popover opens against it
+	 * rather than against the previous source. Call it before opening the popover.
 	 *
+	 * @param source What the anchor follows from now on.
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
 	setSource: (source: LivePopoverAnchorSource) => void;
@@ -4295,35 +4338,68 @@ export type LivePopoverAnchor = {
  * hidden pane has no layout, so a source measures nothing there. The anchor keeps the last rect it
  * had rather than collapsing to the pane's corner, and the next frame after the tab is shown
  * measures again and catches up. Sources report "no measurement" by returning `undefined`; see
- * {@link measureRange} and {@link measureElement}.
+ * {@link measureBox}.
  *
+ * @example
+ *
+ * ```tsx
+ * const anchor = useLivePopoverAnchor();
+ * const [isOpen, setIsOpen] = useState(false);
+ *
+ * const openAtSelection = () => {
+ *   const selection = window.getSelection();
+ *   if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
+ *   // Clone the range: the live selection keeps moving while the popover is open.
+ *   const range = selection.getRangeAt(0).cloneRange();
+ *   // Point the anchor at its source BEFORE opening, so the popover never opens at a stale rect.
+ *   anchor.setSource({
+ *     measure: () => {
+ *       const rect = measureBox(range);
+ *       return rect && leftEdgeRect(rect);
+ *     },
+ *     contextElement: editorRef.current,
+ *   });
+ *   setIsOpen(true);
+ * };
+ *
+ * return (
+ *   <Popover open={isOpen} onOpenChange={setIsOpen}>
+ *     <PopoverAnchor virtualRef={anchor.virtualRef} />
+ *     <PopoverContent>…</PopoverContent>
+ *   </Popover>
+ * );
+ * ```
+ *
+ * @returns A stable anchor (the same object on every render): its `virtualRef` goes to
+ *   `PopoverAnchor`, and its `setSource` points it at what to follow.
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function useLivePopoverAnchor(): LivePopoverAnchor;
 /**
- * The current viewport rect of a text range, or `undefined` when the range no longer lies in
- * rendered text (its nodes were replaced, so it collapsed to an element boundary that has no box).
+ * The current viewport rect of a text range or an element, for a {@link LivePopoverAnchorSource}'s
+ * `measure`.
  *
+ * A target counts as unmeasurable only when it paints no box at all (`getClientRects()` is empty),
+ * never merely because its box is small: a zero-width or zero-height box — a collapsed caret, an
+ * empty element — is still a real, positioned point.
+ *
+ * @param target The range or element to measure.
+ * @returns The target's bounding rect in viewport coordinates, or `undefined` when it paints
+ *   nothing: a range whose text the editor replaced (it collapsed to an element boundary that has
+ *   no box), or an element with no layout because it or an ancestor is `display: none`, as inside
+ *   an inactive rc-dock tab pane.
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function measureRange(range: Range): DOMRect | undefined;
+export declare function measureBox(target: Range | Element): DOMRect | undefined;
 /**
  * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
  * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
  *
+ * @param rect The rect to take the left edge of, such as a selection's box from {@link measureBox}.
+ * @returns A new rect at `rect`'s left and top, with zero width and `rect`'s height.
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare function leftEdgeRect(rect: DOMRect): DOMRect;
-/**
- * The current viewport rect of an element, or `undefined` when the element has no layout at all —
- * the case when it, or an ancestor, is `display: none`, as inside an inactive rc-dock tab pane.
- * Matches {@link measureRange}'s rule: an element that IS laid out still returns its box even at
- * zero width or height (a real, positioned point, such as a collapsed caret's element), because
- * `getClientRects()` is empty only when nothing was painted, never merely because a box is small.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare function measureElement(element: Element): DOMRect | undefined;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */

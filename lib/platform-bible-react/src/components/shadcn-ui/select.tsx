@@ -76,11 +76,8 @@ function SelectTrigger({ className, size = 'default', children, ...props }: Sele
 }
 
 /** @inheritdoc Select */
-// CUSTOM: This Radix-popper content does not read the content-zoom area context yet, unlike
-// PopoverContent, DropdownMenuContent and TooltipContent — it renders at interface scale even when
-// opened from inside a zoom area. Whatever first needs a Select that follows one should read
-// useContentZoomArea() here and apply the same marker attributes and factor-divided size caps
-// PopoverContent uses.
+// CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
+// scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function SelectContent({
   className,
   children,

@@ -10,7 +10,6 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
-import { contentZoomOverlayStyle } from '@renderer/components/overlays/overlay-content-zoom.util';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -87,13 +86,6 @@ export type OverlayContextMenuPresentationalProps = {
   items: OverlayContextMenuItem[];
   /** Document-relative position for the menu */
   position: { x: number; y: number };
-  /**
-   * The scale the requesting pane draws its content at. The menu is drawn at the same scale, so it
-   * matches the text it belongs to. 1 leaves the rendered output exactly as it is.
-   *
-   * @experimental This field is unstable and may change or disappear without notice
-   */
-  contentScale?: number;
   /** Called when the user selects a menu item */
   onSelect: (result: OverlayContextMenuResult) => void;
   /** Called when the menu is dismissed without a selection */
@@ -255,7 +247,6 @@ function renderMenuItems(
 export function OverlayContextMenuPresentational({
   items,
   position,
-  contentScale = 1,
   onSelect,
   onDismiss,
 }: OverlayContextMenuPresentationalProps) {
@@ -294,10 +285,7 @@ export function OverlayContextMenuPresentational({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         className="overlay-context-menu-content"
-        style={{
-          zIndex: Z_INDEX_OVERLAY,
-          ...contentZoomOverlayStyle(contentScale, 'dropdown-menu'),
-        }}
+        style={{ zIndex: Z_INDEX_OVERLAY }}
         align="start"
         side="bottom"
         sideOffset={0}
@@ -312,14 +300,6 @@ export function OverlayContextMenuPresentational({
 
 type OverlayContextMenuProps = {
   overlay: Extract<OverlayEntry, { type: 'contextMenu' }>;
-  /**
-   * The requesting pane's content scale, read and supplied by `OverlayHost` — see
-   * {@link OverlayContextMenuPresentationalProps.contentScale}. Undefined draws at interface scale,
-   * matching the presentational component's own default.
-   *
-   * @experimental This field is unstable and may change or disappear without notice
-   */
-  contentScale?: number;
 };
 
 /**
@@ -331,7 +311,7 @@ type OverlayContextMenuProps = {
  * use {@link OverlayContextMenuPresentational} instead, which accepts plain props without requiring
  * an `OverlayEntry`.
  */
-export function OverlayContextMenu({ overlay, contentScale }: OverlayContextMenuProps) {
+export function OverlayContextMenu({ overlay }: OverlayContextMenuProps) {
   const hasResolved = useRef(false);
 
   const localizeKeys = useMemo(() => collectContextMenuKeys(overlay.items), [overlay.items]);
@@ -361,7 +341,6 @@ export function OverlayContextMenu({ overlay, contentScale }: OverlayContextMenu
     <OverlayContextMenuPresentational
       items={localizedItems}
       position={overlay.position}
-      contentScale={contentScale}
       onSelect={handleSelect}
       onDismiss={handleDismiss}
     />

@@ -107,7 +107,7 @@ Set up pre-requisites, build, and run:
    sudo apt-get install libappindicator3-1 libasound2 libdrm2 libdrm-nouveau2 libgbm1 libgl1 libgtk-3-0 libnspr4 libnss3 libsecret-1-0 libtinfo5 libxss1
    ```
 
-2. If you want to build the app package locally (i.e. by running `npm run package`) also run [these commands](https://github.com/paranext/paranext-core/blob/main/.github/workflows/package-main.yml#L78-L86).
+2. If you want to build the app package locally (i.e. by running `npm run package`) also run the commands in the `Install snap tools on Linux` step of [`package-main.yml`](https://github.com/paranext/paranext-core/blob/main/.github/workflows/package-main.yml).
 
 If you are developing on Ubuntu 24.04 with AppArmor, you will need to modify `package.json` locally to add the `--no-sandbox` flag to `electronmon`. For example:
 

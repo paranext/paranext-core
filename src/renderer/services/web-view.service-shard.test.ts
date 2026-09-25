@@ -3289,6 +3289,22 @@ describe('content zoom wiring', () => {
     );
   });
 
+  test('tells the bootstrap the declared default area of a declared type, and none for an undeclared one', async () => {
+    respondToLayoutRequestsWithoutOpeningHome();
+    const module = await primeWebViewOpenPath();
+    const { dockLayout, addWebViewToDockCalls } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+
+    await module.openWebView('test.type', { type: 'tab' });
+    await module.openWebView('platformScriptureEditor.modelText', { type: 'tab' });
+
+    expect(addWebViewToDockCalls).toHaveLength(2);
+    expect(String(addWebViewToDockCalls[0].content)).toContain('const DECLARED_AREA = undefined;');
+    expect(String(addWebViewToDockCalls[1].content)).toContain(
+      'const DECLARED_AREA = "model-text";',
+    );
+  });
+
   test('gives a URL web view no injected content-zoom script or style', async () => {
     respondToLayoutRequestsWithoutOpeningHome();
     const module = await primeWebViewOpenPath();
@@ -3334,9 +3350,9 @@ describe('content zoom wiring', () => {
 
     expect(addWebViewToDockCalls).toHaveLength(1);
     const content = String(addWebViewToDockCalls[0].content);
-    // Such a view cannot run the bootstrap, so it can never report the area it marks; the platform
-    // scales its whole iframe instead, and an area rule would scale the marked element again. The
-    // two strings below belong to the baked `<style>` element alone — the bootstrap's own source is
+    // Such a view cannot run the bootstrap, so it never reports the area it marks and is not
+    // zoomable; an area rule would still scale the marked element, to a level nothing in the pane
+    // can change. The two strings below belong to the baked `<style>` element alone — the bootstrap's own source is
     // still spliced in (inert, since nothing runs it) and names the same id in single quotes.
     expect(content).not.toContain('id="platform-content-zoom-styles"');
     expect(content).not.toContain(':root{--platform-content-zoom-default:');

@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+// No mocks needed: unlike the module under test below, this one has no module-level code that
+// touches the mocked services, so it can be imported normally rather than after the mocks.
+import { platformProjectSettings } from './core-project-settings-info.data';
 
 vi.mock('@extension-host/services/papi-backend.service', () => ({
   localization: {
@@ -88,7 +91,7 @@ describe('content zoom settings', () => {
     const group = groups[0];
     expect(group.properties['platform.webViewContentZoom']).toMatchObject({
       label: '%settings_platform_webViewContentZoom_label%',
-      description: '%settings_platform_webViewContentZoom_description%',
+      description: '%settings_platform_webViewContentZoom_description_2%',
       default: 1,
     });
     expect(group.properties['platform.webViewContentZoomMemory']).toMatchObject({
@@ -97,10 +100,11 @@ describe('content zoom settings', () => {
     });
   });
 
-  it('labels the whole-application zoom with the renamed key, leaving the shipped one for fallback', () => {
+  it('labels the whole-application zoom with the renamed key and describes it in percentages', () => {
     const [group] = Array.isArray(platformSettings) ? platformSettings : [platformSettings];
     expect(group.properties['platform.zoomFactor']).toMatchObject({
       label: '%settings_platform_zoomFactor_label_2%',
+      description: '%settings_platform_zoomFactor_description_2%',
     });
   });
 
@@ -108,7 +112,8 @@ describe('content zoom settings', () => {
     const validate = coreSettingsValidators['platform.webViewContentZoom'];
     if (!validate) throw new Error('validator missing');
     await expect(validate(1.2, 1, {})).resolves.toBe(true);
-    await expect(validate(0.4, 1, {})).rejects.toThrow('Allowed range is 0.5 to 3.');
+    // Percentages, the way Settings shows the value, with a narrow no-break space before `%`.
+    await expect(validate(0.4, 1, {})).rejects.toThrow('Allowed range is 50\u202f% to 300\u202f%.');
     await expect(validate(Number.NaN, 1, {})).resolves.toBe(false);
   });
 
@@ -117,6 +122,12 @@ describe('content zoom settings', () => {
     if (!validate) throw new Error('validator missing');
     await expect(validate(1.2, 1, {})).resolves.toBe(true);
     await expect(validate(Number.NaN, 1, {})).resolves.toBe(false);
+  });
+
+  it('states the whole-UI zoom range in percentages when it rejects a value', async () => {
+    const validate = coreSettingsValidators['platform.zoomFactor'];
+    if (!validate) throw new Error('validator missing');
+    await expect(validate(3.5, 1, {})).rejects.toThrow('Allowed range is 50\u202f% to 300\u202f%.');
   });
 
   it('validates the memory as a record of in-range numbers', async () => {
@@ -145,35 +156,14 @@ describe('content zoom settings', () => {
     /* eslint-enable no-null/no-null */
   });
 
-  it('contributes a hidden web view content zoom area-types setting', () => {
-    const group = groups[0];
-    expect(group.properties['platform.webViewContentZoomTypesWithAreas']).toMatchObject({
-      default: {},
-      isHidden: true,
-    });
-  });
-
-  it('accepts an object of booleans for the area-types setting', async () => {
-    const validate = coreSettingsValidators['platform.webViewContentZoomTypesWithAreas'];
-    if (!validate) throw new Error('validator missing');
-    await expect(validate({ 'platformScriptureEditor.react': true }, {}, {})).resolves.toBe(true);
-    await expect(validate({}, {}, {})).resolves.toBe(true);
-  });
-
-  it('rejects a non-object or a non-boolean value for the area-types setting', async () => {
-    const validate = coreSettingsValidators['platform.webViewContentZoomTypesWithAreas'];
-    if (!validate) throw new Error('validator missing');
-    // @ts-expect-error ts(2345) - intentional bad input
-    await expect(validate([], {}, {})).resolves.toBe(false);
-    // @ts-expect-error ts(2345) - intentional bad input
-    await expect(validate(undefined, {}, {})).resolves.toBe(false);
-    // `null` is the only input that reaches the guard's own null branch — `undefined` is rejected
-    // one line earlier by the `typeof !== 'object'` arm, and `typeof null` is `'object'`.
-    // @ts-expect-error ts(2345) - intentional bad input
-    // eslint-disable-next-line no-null/no-null -- intentionally testing null rejection at runtime
-    await expect(validate(null, {}, {})).resolves.toBe(false);
-    // @ts-expect-error ts(2322) - intentional bad input
-    await expect(validate({ 'some.view': 1 }, {}, {})).resolves.toBe(false);
+  it('does not declare or validate the per-type zoom-area record', () => {
+    const all = groups.flatMap((group) => Object.keys(group.properties));
+    // Positive control: the neighboring content-zoom settings are still declared.
+    expect(all).toContain('platform.webViewContentZoomMemory');
+    expect(all).not.toContain('platform.webViewContentZoomTypesWithAreas');
+    expect(Object.keys(coreSettingsValidators)).not.toContain(
+      'platform.webViewContentZoomTypesWithAreas',
+    );
   });
 });
 
@@ -229,7 +219,6 @@ describe('settings layout', () => {
       'platform.zoomFactor',
       'platform.webViewContentZoom',
       'platform.webViewContentZoomMemory',
-      'platform.webViewContentZoomTypesWithAreas',
       'platform.ptxUtilsMementoData',
       'platform.paratextDataLastRegistryDataCachedTimes',
       'platform.interfaceMode',
@@ -241,5 +230,34 @@ describe('settings layout', () => {
     const all = groups.flatMap((group) => Object.keys(group.properties));
     expect(new Set(all).size).toBe(all.length);
     expect(all.sort()).toEqual(expectedKeys.sort());
+  });
+});
+
+describe('content zoom settings are core (user) settings, never project settings', () => {
+  // ProjectSettingsContribution is a single group OR a group array (same shape `platformSettings`
+  // itself takes above); `platformProjectSettings` happens to be one group today, but this reads it
+  // the same normalized way rather than assuming so.
+  const projectSettingGroups = Array.isArray(platformProjectSettings)
+    ? platformProjectSettings
+    : [platformProjectSettings];
+
+  it('is registered only under platformSettings, with no matching key in platformProjectSettings', () => {
+    // Send/Receive's project sync reaches settings registered as ProjectSettingsContribution
+    // (`platformProjectSettings`, `core-project-settings-info.data.ts`) — the ScrText-backed keys
+    // like `platform.isEditable` and `platform.language`. The content-zoom keys are per-window UI
+    // state, registered instead under `platformSettings` (SettingsContribution), a separate
+    // registration surface with no project-sync marker of its own. This pins that split by
+    // construction: a future edit that moved either key onto `platformProjectSettings` would put
+    // per-window zoom state on the one registration surface a project sync can reach.
+    expect(groups.some((group) => 'platform.webViewContentZoom' in group.properties)).toBe(true);
+    expect(groups.some((group) => 'platform.webViewContentZoomMemory' in group.properties)).toBe(
+      true,
+    );
+    expect(
+      projectSettingGroups.some((group) => 'platform.webViewContentZoom' in group.properties),
+    ).toBe(false);
+    expect(
+      projectSettingGroups.some((group) => 'platform.webViewContentZoomMemory' in group.properties),
+    ).toBe(false);
   });
 });

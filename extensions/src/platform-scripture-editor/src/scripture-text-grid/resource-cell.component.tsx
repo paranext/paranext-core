@@ -3,7 +3,13 @@ import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import { useExtraValidMarkers } from 'platform-bible-react';
-import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+} from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
@@ -12,8 +18,7 @@ import {
   ResourceCellView,
   type ZoomMenuLabels,
 } from './resource-cell-view.component';
-import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
-import type { ResourceZoomController } from './use-resource-zoom.hook';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 
@@ -33,7 +38,13 @@ type ResourceCellProps = {
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
   viewMode?: 'chapter' | 'verse';
-  /** Per-resource zoom controller; when omitted the cell renders without zoom surfaces. */
+  /**
+   * Content zoom area of this resource's text (`resource-<id>`, or the `text-collection` fallback).
+   * The grid computes it once per resource, so a resource's verse row and chapter view always name
+   * the same area.
+   */
+  zoomArea: string;
+  /** The resource zoom controller; when omitted the cell renders without zoom surfaces. */
   zoom?: ResourceZoomController;
   /** Localized zoom menu copy, passed straight to the view. */
   zoomMenuLabels?: ZoomMenuLabels;
@@ -62,6 +73,7 @@ export function ResourceCell({
   scrRef,
   setScrRef,
   viewMode = 'chapter',
+  zoomArea,
   zoom,
   zoomMenuLabels,
   showDragHandle,
@@ -127,12 +139,15 @@ export function ResourceCell({
     [resourceRef.projectId, usjPossiblyError, isLoading, scrRef.book],
   );
 
-  // #region Zoom — computed here so the callbacks and bound-state are available for the view's
-  // kebab dropdown and the right-click zoom menu rendered by ResourceCellView.
+  // #region Zoom — the enabled states and actions of this resource's zoom items, for the view's
+  // "⋮" dropdown and right-click menu. The level is the platform's; the controller reads it and
+  // sends the platform's zoom commands for this resource's area.
   const zoomFactor = zoom ? zoom.getZoom(resourceRef.resourceId) : undefined;
   const canZoomIn = zoomFactor === undefined || zoomFactor < MAX_ZOOM_FACTOR;
   const canZoomOut = zoomFactor === undefined || zoomFactor > MIN_ZOOM_FACTOR;
-  const canReset = zoomFactor !== undefined && zoomFactor !== DEFAULT_ZOOM_FACTOR;
+  // Reset has something to undo only while the resource has a level of its own; without one it
+  // already follows the Tab content default zoom.
+  const canReset = zoom ? zoom.hasOwnLevel(resourceRef.resourceId) : false;
   const handleZoomIn = useCallback(
     () => zoom?.adjustZoom(resourceRef.resourceId, 1),
     [zoom, resourceRef.resourceId],
@@ -231,11 +246,11 @@ export function ResourceCell({
     <ResourceCellView
       state={state}
       label={resourceRef.label}
+      zoomArea={zoomArea}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
-      zoomFactor={zoomFactor}
       canZoomIn={canZoomIn}
       canZoomOut={canZoomOut}
       canReset={canReset}

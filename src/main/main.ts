@@ -228,11 +228,11 @@ import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { adjustZoomFactor } from '@shared/utils/content-zoom.util';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
 import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
+  adjustZoomFactor,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -2800,8 +2800,8 @@ async function main() {
     {
       method: {
         summary:
-          'Increase the app-wide interface scaling — menus, toolbars and content — by 10 %, ' +
-          'stepping from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom ' +
+          'Increase the app-wide interface scaling — menus, toolbars and content — to the next ' +
+          '10 % mark in that direction. Has no default keyboard shortcut; per-pane content zoom ' +
           'uses platform.webViewContentZoomIn.',
         params: [],
         result: {
@@ -2820,8 +2820,8 @@ async function main() {
     {
       method: {
         summary:
-          'Decrease the app-wide interface scaling — menus, toolbars and content — by 10 %, ' +
-          'stepping from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom ' +
+          'Decrease the app-wide interface scaling — menus, toolbars and content — to the next ' +
+          '10 % mark in that direction. Has no default keyboard shortcut; per-pane content zoom ' +
           'uses platform.webViewContentZoomOut.',
         params: [],
         result: {

@@ -1,39 +1,91 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CONTENT_ZOOM_CSS_VARIABLE_PREFIX as LIBRARY_CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
-  CONTENT_ZOOM_DEFAULT_CSS_VARIABLE as LIBRARY_CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
-  CONTENT_ZOOM_POPUP_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_POPUP_ATTRIBUTE,
+  CONTENT_ZOOM_LABEL_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE,
-  MAIN_CONTENT_ZOOM_AREA_ID as LIBRARY_MAIN_CONTENT_ZOOM_AREA_ID,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_SCOPE_ATTRIBUTE,
 } from 'platform-bible-react';
-import {
-  MAIN_CONTENT_ZOOM_AREA,
-  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-} from '@shared/models/web-view.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import * as webViewModel from '@shared/models/web-view.model';
+import { isValidContentZoomAreaId } from '@shared/utils/content-zoom.util';
 import {
   CONTENT_ZOOM_COMMANDS,
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
+  CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_IDENTITY_STATE_KEY,
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
   CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
-  CONTENT_ZOOM_POPUP_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   getContentZoomCssVariable,
+  getContentZoomDeclaration,
   getContentZoomKind,
 } from './content-zoom.model';
+import * as contentZoomModel from './content-zoom.model';
 
 describe('content-zoom.model', () => {
-  it('maps first-party web view types to kinds', () => {
-    expect(getContentZoomKind(SCRIPTURE_EDITOR_WEBVIEW_TYPE)).toBe('editor');
-    expect(getContentZoomKind('platformEnhancedResources.enhancedResource')).toBe('resource');
-    expect(getContentZoomKind('platformScriptureEditor.scriptureTextGrid')).toBe('resource');
+  it('declares every first-party zoomable web view type with its kind and default area', () => {
+    const declared = Object.fromEntries(CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE);
+    expect(declared).toEqual({
+      [SCRIPTURE_EDITOR_WEBVIEW_TYPE]: { kind: 'editor', defaultArea: 'main' },
+      'platformEnhancedResources.enhancedResource': { kind: 'resource', defaultArea: 'main' },
+      // Each resource in the grid is its own area and the grid itself has none, so a grid showing
+      // no resource has nothing to zoom.
+      'platformScriptureEditor.scriptureTextGrid': { kind: 'resource' },
+      'platformScriptureEditor.modelText': { kind: 'resource', defaultArea: 'model-text' },
+      'platformScriptureEditor.bibleTexts': { kind: 'resource', defaultArea: 'bible-texts' },
+      'platformScriptureEditor.commentaries': { kind: 'resource', defaultArea: 'commentaries' },
+      'legacyCommentManager.commentList': { kind: 'notes', defaultArea: 'main' },
+      'legacyCommentManager.commentListPanel': { kind: 'notes', defaultArea: 'main' },
+      'platformScripture.find': { kind: 'find', defaultArea: 'main' },
+      'platformScripture.characterInventory': { kind: 'inventory', defaultArea: 'main' },
+      'platformScripture.repeatedWordsInventory': { kind: 'inventory', defaultArea: 'main' },
+      'platformScripture.markersInventory': { kind: 'inventory', defaultArea: 'main' },
+      'platformScripture.punctuationInventory': { kind: 'inventory', defaultArea: 'main' },
+      'platformScripture.checksSidePanel': { kind: 'checks', defaultArea: 'main' },
+      'platformScripture.markersChecklist': { kind: 'checklist', defaultArea: 'main' },
+      'platformLexicalTools.dictionary': { kind: 'dictionary', defaultArea: 'main' },
+    });
+  });
+
+  it('declares only kinds whose views mark their text in this repository', () => {
+    const kinds = new Set(
+      Array.from(CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.values(), ({ kind }) => kind),
+    );
+    expect([...kinds].sort()).toEqual([
+      'checklist',
+      'checks',
+      'dictionary',
+      'editor',
+      'find',
+      'inventory',
+      'notes',
+      'resource',
+    ]);
+    expect(getContentZoomDeclaration('paratextBibleWordList.react')).toBeUndefined();
+    expect(getContentZoomDeclaration('paratextBibleSendReceive.compareVersions')).toBeUndefined();
+  });
+
+  it('gives every declared default area an id the platform accepts', () => {
+    const defaultAreas = Array.from(CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.values()).flatMap(
+      ({ defaultArea }) => (defaultArea === undefined ? [] : [defaultArea]),
+    );
+    // Positive control: all but the Text Collection grid declare one.
+    expect(defaultAreas).toHaveLength(CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.size - 1);
+    defaultAreas.forEach((defaultArea) => {
+      expect(isValidContentZoomAreaId(defaultArea)).toBe(true);
+    });
+  });
+
+  it('reads a declaration and its kind by web view type, and nothing for an undeclared type', () => {
+    expect(getContentZoomDeclaration('platformScripture.find')).toEqual({
+      kind: 'find',
+      defaultArea: 'main',
+    });
     expect(getContentZoomKind('platformScriptureEditor.modelText')).toBe('resource');
-    expect(getContentZoomKind('platformScriptureEditor.bibleTexts')).toBe('resource');
-    expect(getContentZoomKind('platformScriptureEditor.commentaries')).toBe('resource');
-    expect(getContentZoomKind('legacyCommentManager.commentList')).toBe('notes');
-    expect(getContentZoomKind('legacyCommentManager.commentListPanel')).toBe('notes');
+    expect(getContentZoomDeclaration('platformGetResources.home')).toBeUndefined();
     expect(getContentZoomKind('platformGetResources.home')).toBeUndefined();
   });
 
@@ -44,6 +96,8 @@ describe('content-zoom.model', () => {
     expect(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE).toBe('--platform-content-zoom-default');
     expect(getContentZoomCssVariable('footnotes')).toBe('--platform-content-zoom-footnotes');
     expect(CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe('data-platform-content-zoom-root');
+    expect(CONTENT_ZOOM_SCOPE_ATTRIBUTE).toBe('data-platform-content-zoom-scope');
+    expect(CONTENT_ZOOM_LABEL_ATTRIBUTE).toBe('data-platform-content-zoom-label');
     expect(CONTENT_ZOOM_STYLE_ELEMENT_ID).toBe('platform-content-zoom-styles');
     expect(CONTENT_ZOOM_COMMANDS.in).toBe('platform.webViewContentZoomIn');
     expect(CONTENT_ZOOM_COMMANDS.out).toBe('platform.webViewContentZoomOut');
@@ -58,13 +112,19 @@ describe('content-zoom.model', () => {
     expect(LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe(CONTENT_ZOOM_ROOT_ATTRIBUTE);
   });
 
-  it('keeps the library pop-up attribute and zoom variables equal to the platform constants', () => {
-    expect(LIBRARY_CONTENT_ZOOM_POPUP_ATTRIBUTE).toBe(CONTENT_ZOOM_POPUP_ATTRIBUTE);
-    expect(LIBRARY_CONTENT_ZOOM_CSS_VARIABLE_PREFIX).toBe(CONTENT_ZOOM_CSS_VARIABLE_PREFIX);
-    expect(LIBRARY_CONTENT_ZOOM_DEFAULT_CSS_VARIABLE).toBe(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE);
+  it('keeps the library scope and label attributes equal to the platform constants', () => {
+    expect(LIBRARY_CONTENT_ZOOM_SCOPE_ATTRIBUTE).toBe(CONTENT_ZOOM_SCOPE_ATTRIBUTE);
+    expect(LIBRARY_CONTENT_ZOOM_LABEL_ATTRIBUTE).toBe(CONTENT_ZOOM_LABEL_ATTRIBUTE);
+    // Positive control: both sides are defined, so the equality is not undefined === undefined.
+    expect(CONTENT_ZOOM_SCOPE_ATTRIBUTE).toBeTruthy();
+    expect(LIBRARY_CONTENT_ZOOM_LABEL_ATTRIBUTE).toBeTruthy();
   });
 
-  it('keeps the library main-area id equal to the platform constant', () => {
-    expect(LIBRARY_MAIN_CONTENT_ZOOM_AREA_ID).toBe(MAIN_CONTENT_ZOOM_AREA);
+  it('publishes no pop-up attribute: pop-ups are never marked as zoomed content', () => {
+    // Positive controls: the area marker is published from both modules.
+    expect(webViewModel).toHaveProperty('CONTENT_ZOOM_ROOT_ATTRIBUTE');
+    expect(contentZoomModel).toHaveProperty('CONTENT_ZOOM_ROOT_ATTRIBUTE');
+    expect(webViewModel).not.toHaveProperty('CONTENT_ZOOM_POPUP_ATTRIBUTE');
+    expect(contentZoomModel).not.toHaveProperty('CONTENT_ZOOM_POPUP_ATTRIBUTE');
   });
 });

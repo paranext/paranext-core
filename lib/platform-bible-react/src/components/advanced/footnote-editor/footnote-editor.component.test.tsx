@@ -2,7 +2,7 @@
 import { forwardRef, ReactNode, useImperativeHandle } from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
-import { ContentZoomAreaProvider } from '@/components/advanced/content-zoom-root.component';
+import { ContentZoomRoot } from '@/components/advanced/content-zoom-root.component';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type {
@@ -318,16 +318,13 @@ describe('FootnoteEditor inline markers menu placement', () => {
   it('places the menu at the left edge of the live selection rect, not at an offset inside the pop-up', async () => {
     // jsdom has no layout, so any element's client rect is all zeros. An anchor placed inside the
     // pop-up from offsets would therefore put the menu at the origin; the selection's own rect is
-    // what the menu must sit against (it is also correct inside a zoomed pop-up, where written-back
-    // offsets would be scaled twice).
+    // what the menu must sit against (it stays correct when the text around the pop-up is zoomed).
     let restoreRange = stubRangeRect(new DOMRect(120, 50, 30, 10));
     try {
       const { editorInput } = renderFootnoteEditor(
         { view: { markerMode: 'visible', hasSpacing: true, isFormattedFont: true } },
         undefined,
-        ({ children }) => (
-          <ContentZoomAreaProvider area="footnotes">{children}</ContentZoomAreaProvider>
-        ),
+        ({ children }) => <ContentZoomRoot area="footnotes">{children}</ContentZoomRoot>,
       );
       // The `\` menu offers the markers allowed inside the caret's context marker.
       await act(async () => {
@@ -349,11 +346,10 @@ describe('FootnoteEditor inline markers menu placement', () => {
         expect(getMenuPositioner().style.transform).toMatch(/^translate\(120px, (64|46)px\)$/),
       );
 
-      // The menu is a pop-up of the same zoom area, marked on its own content.
-      expect(getMenuPositioner().querySelector('[data-slot="popover-content"]')).toHaveAttribute(
-        'data-platform-content-zoom-root',
-        'footnotes',
-      );
+      // Opened from inside a zoom area, the menu stays at interface scale: it carries no marker.
+      expect(
+        getMenuPositioner().querySelector('[data-slot="popover-content"]'),
+      ).not.toHaveAttribute('data-platform-content-zoom-root');
 
       // The anchor is read again when the menu is repositioned, so the menu follows its text.
       restoreRange();
