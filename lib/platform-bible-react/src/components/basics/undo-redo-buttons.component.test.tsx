@@ -81,16 +81,25 @@ describe('UndoRedoButtons keyboard shortcut hints', () => {
     expect(screen.queryByText('+')).not.toBeInTheDocument();
   });
 
-  test('shows the macOS redo chord as three adjacent keycaps with no separator', async () => {
+  test('shows the macOS redo chord as three adjacent keycaps with no separator, in Shift-Command-Z order', async () => {
     setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36');
     const user = userEvent.setup();
     render(<UndoRedoButtons onUndoClick={vi.fn()} onRedoClick={vi.fn()} />);
     await user.hover(screen.getByRole('button', { name: '%redoButton_tooltip%' }));
-    await screen.findByRole('tooltip');
+    const tooltip = await screen.findByRole('tooltip');
     expect(allCopiesAre('⌘', 'KBD')).toBe(true);
     expect(allCopiesAre('⇧', 'KBD')).toBe(true);
     expect(allCopiesAre('Z', 'KBD')).toBe(true);
     expect(screen.queryByText('+')).not.toBeInTheDocument();
+    // Modifier order per the keyboard-shortcuts guideline (⌃ ⌥ ⇧ ⌘): Shift before Command.
+    const keycapGroups = tooltip.querySelectorAll('[data-slot="kbd-group"]');
+    expect(keycapGroups.length).toBeGreaterThan(0);
+    keycapGroups.forEach((group) => {
+      const keycapTexts = Array.from(group.querySelectorAll('[data-slot="kbd"]')).map(
+        (kbd) => kbd.textContent,
+      );
+      expect(keycapTexts).toEqual(['⇧', '⌘', 'Z']);
+    });
   });
 
   test('showKeyboardShortcuts={false} renders no keycap in the tooltip', async () => {
