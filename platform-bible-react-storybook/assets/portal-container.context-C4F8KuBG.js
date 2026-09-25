@@ -1,0 +1,1 @@
+import{e as t,j as c}from"./iframe-BuAslHK5.js";function a(){const e=t.createContext(null);function n({container:r,children:i}){return c.jsx(e.Provider,{value:r,children:i})}function o(){return t.useContext(e)??void 0}return{PortalContainerProvider:n,usePortalContainer:o}}export{a as c};
