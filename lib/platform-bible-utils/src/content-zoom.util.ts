@@ -27,6 +27,58 @@ export const MAX_ZOOM_FACTOR = 3;
 export const ZOOM_STEP = 0.1;
 
 /**
+ * How each operating system spells a content-zoom keyboard chord for display: macOS symbols with no
+ * separator, Windows and Linux key names joined with `+`.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomShortcut = Readonly<{
+  /** MacOS spelling, e.g. `⌘=` */
+  macOS: string;
+  /** Windows spelling, e.g. `Ctrl++` */
+  windows: string;
+  /** Linux spelling, e.g. `Ctrl++` */
+  linux: string;
+}>;
+
+/**
+ * The chord that zooms a pane's content in, as a menu shows it on each operating system. Core's
+ * keyboard-shortcuts catalog and every menu that shows this hint read it from here, so a menu built
+ * outside the menu data service cannot drift from the catalog.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export const CONTENT_ZOOM_IN_SHORTCUT: ContentZoomShortcut = {
+  macOS: '⌘=',
+  windows: 'Ctrl++',
+  linux: 'Ctrl++',
+};
+
+/**
+ * The chord that zooms a pane's content out, as a menu shows it on each operating system. See
+ * {@link CONTENT_ZOOM_IN_SHORTCUT}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export const CONTENT_ZOOM_OUT_SHORTCUT: ContentZoomShortcut = {
+  macOS: '⌘-',
+  windows: 'Ctrl+-',
+  linux: 'Ctrl+-',
+};
+
+/**
+ * The chord that returns a pane's content to its default zoom, as a menu shows it on each operating
+ * system. See {@link CONTENT_ZOOM_IN_SHORTCUT}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export const CONTENT_ZOOM_RESET_SHORTCUT: ContentZoomShortcut = {
+  macOS: '⌘0',
+  windows: 'Ctrl+0',
+  linux: 'Ctrl+0',
+};
+
+/**
  * Clamps a zoom factor into `[MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR]`.
  *
  * @param factor The zoom factor to clamp
