@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { usxStringToUsj, Usj, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import {
+  hasAlignableVerse,
+  hasAnyRenderableText,
   parseVerseRange,
   verseRangeIncludes,
   sliceUsjToVerse,
@@ -368,5 +370,113 @@ describe('sliceUsjToVerse — boundaries and empty', () => {
 `;
     const { isEmpty } = sliceUsjToVerse(usxStringToUsj(usxCharWhitespace), 5);
     expect(isEmpty).toBe(true);
+  });
+});
+
+describe('hasAlignableVerse', () => {
+  const chapterWith = (paras: string) =>
+    usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="GEN" style="id">Sample</book>
+  <chapter number="1" style="c" sid="GEN 1" />
+  ${paras}
+</usx>
+`);
+
+  it('finds a verse in an ordinary paragraph', () => {
+    expect(
+      hasAlignableVerse(
+        chapterWith('<para style="p"><verse number="1" style="v" sid="GEN 1:1" />text</para>'),
+      ),
+    ).toBe(true);
+  });
+
+  it('reports none for a chapter of prose with no verse markers', () => {
+    expect(hasAlignableVerse(chapterWith('<para style="ip">Introduction only.</para>'))).toBe(
+      false,
+    );
+  });
+
+  it('reports none when the only verses live in a table', () => {
+    // The editor makes no verse block for a verse inside a table, so the aligned grid would show an
+    // empty column: the placeholder is the honest answer, not a blank.
+    expect(
+      hasAlignableVerse(
+        chapterWith(
+          '<table><row style="tr"><cell style="tc1" align="start"><verse number="1" style="v" sid="GEN 1:1" />in a table</cell></row></table>',
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it('reports none for an empty chapter', () => {
+    expect(hasAlignableVerse(chapterWith(''))).toBe(false);
+  });
+
+  it('finds a verse nested below the paragraph, which the editor still groups into a block', () => {
+    // Only direct children were inspected before, so a marker one level down was reported as
+    // unalignable and the column showed a placeholder instead of the text it would have rendered.
+    expect(
+      hasAlignableVerse(
+        chapterWith(
+          '<para style="p"><char style="wj"><verse number="1" style="v" sid="GEN 1:1" />text</char></para>',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('reports none for a reversed bridge, which upstream leaves with no placeable range', () => {
+    // Upstream removes both range attributes when it cannot parse the marker into an ascending
+    // range, so no row rule matches and the block is never shown. Saying the chapter is alignable
+    // would leave a blank column with no explanation.
+    expect(
+      hasAlignableVerse(
+        chapterWith('<para style="p"><verse number="3-1" style="v" sid="GEN 1:3" />text</para>'),
+      ),
+    ).toBe(false);
+  });
+
+  it('reports none for a verse numbered past the last row the grid declares', () => {
+    expect(
+      hasAlignableVerse(
+        chapterWith('<para style="p"><verse number="201" style="v" sid="GEN 1:201" />text</para>'),
+      ),
+    ).toBe(false);
+  });
+
+  it('still counts the highest verse the grid does declare a row for', () => {
+    expect(
+      hasAlignableVerse(
+        chapterWith('<para style="p"><verse number="200" style="v" sid="GEN 1:200" />text</para>'),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('hasAnyRenderableText', () => {
+  const chapterWith = (paras: string) =>
+    usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="GEN" style="id">Sample</book>
+  <chapter number="1" style="c" sid="GEN 1" />
+  ${paras}
+</usx>
+`);
+
+  it('finds prose that carries no verse marker', () => {
+    // This is what tells "nothing here is verse-shaped, but the other views can show it" from
+    // "this chapter is empty" — which decides whether pointing the reader elsewhere is useful.
+    expect(hasAnyRenderableText(chapterWith('<para style="ip">Introduction only.</para>'))).toBe(
+      true,
+    );
+  });
+
+  it('reports none for a book created before any text was entered', () => {
+    // A blank chapter arrives as a successful, empty USJ rather than as an error.
+    expect(hasAnyRenderableText(chapterWith(''))).toBe(false);
+  });
+
+  it('does not count the book and chapter chrome as text', () => {
+    expect(hasAnyRenderableText(chapterWith('<para style="p"> </para>'))).toBe(false);
   });
 });

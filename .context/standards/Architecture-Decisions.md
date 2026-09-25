@@ -171,6 +171,92 @@ step, no automation. Just a record.
   OS focus, only serves callers with no window, such as the extension host.
 - **Source:** PT-4238; PR #2736.
 
+## adr-aligned-grid-flattens-the-editor-dom: The verse-aligned grid flattens the editor's own DOM into its subgrid chain, and places verses by explicit row
+
+- **Date:** 2026-09-07
+- **Status:** Accepted
+- **Context:** PT-4184 adds a Scripture Text Grid view where verse N of every resource shares a row.
+  Selecting and copying a passage down a column has to keep working, which means one editor per
+  column rather than one per cell — so the elements the layout must position
+  (`div.verse-block[data-verse-start|-end]`, from PT-4304 upstream) sit inside
+  `@eten-tech-foundation/platform-editor`'s DOM: `.editor-container` > `.editor-inner` >
+  `.editor-input`. CSS subgrid reaches a descendant only if every level between it and the grid root
+  stops generating a box, and a scroll container's children cannot take part in an ancestor's grid
+  at all. PT-4304's proof showed the chain survives this repo's own cell chrome, but modelled only
+  those wrappers, not the editor's three.
+- **Decision:** Flatten the whole chain — this repo's cell padding wrapper and the editor's three
+  wrappers — with `display: contents`, from one stylesheet
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/aligned-grid.styles.ts`)
+  injected only while this view is mounted, and give the cell content wrapper a `contentOverflow`
+  prop so it stops being a scroll container here. Place each verse block by an explicit `grid-row`
+  derived from its own `data-verse-start`/`-end`, through generated static rules rather than JS:
+  subgrid alone lays blocks out in document order, so one resource missing a verse would shift every
+  row below it. Declare a fixed 200 verse rows on the root; unoccupied rows collapse to zero height,
+  so no chapter has to be measured first.
+- **Alternatives considered:** **One editor per cell**, which would keep the editor's DOM out of the
+  chain — rejected because it breaks copying a continuous passage down a column, the reason PT-4064
+  chose this approach. **JS height synchronisation** — rejected: the view is meant to align natively,
+  and measurement degrades exactly where per-resource zoom puts columns at different font sizes,
+  which native rows handle for free. **Asking upstream for a flat DOM** — a change to a shared editor
+  for one consumer; revisit if a second consumer needs it. **Computing the row count from the
+  chapter** — an async versification lookup, or lifting each cell's USJ into the parent, to save rows
+  that cost nothing.
+- **Consequences:** This view is coupled to three class names it does not own, and a rename upstream
+  breaks alignment *silently* — the grid still renders, just unaligned. Three things watch for that:
+  a unit test pins the selectors, a contract test reads the installed editor bundle and fails when a
+  name or export the layout depends on is gone, a Storybook story reproduces the markup so Chromatic
+  sees the layout, and an e2e test measures real block geometry across columns in the running app.
+  Scrolling to a reference is explicit, because Lexical skips the DOM-selection write — and the
+  scroll-into-view inside it — for a read-only editor. Placement is opt-in: verse blocks are hidden
+  by default and shown by the row rule that places them, so a block the rules cannot place — one
+  upstream emitted with no parsable range, or a verse numbered above 200 — is dropped rather than
+  auto-placed into the first free row of the shared grid, which would silently misalign that column
+  from there down. Such a verse is therefore not readable in this view (it still is in Verse and
+  Chapter view); revisit the row count if a versification ever exceeds 200. Per-resource zoom lands
+  on the verse blocks here rather than on the resource's content-zoom marker as it does in the
+  other views (`adr-text-collection-resources-are-zoom-areas`). The marker sits inside the chain, so
+  it must be `display: contents`, and the column's content wrapper around it is a subgrid box, where
+  `zoom` would scale the used value of the shared row tracks it inherits. So the stylesheet pins the
+  marker's own zoom to 1, overriding the platform's rule for it, and the verse blocks take the area's
+  level from the platform's `--platform-content-zoom-<area>` variable. The marker stays rendered, so
+  the resource is still a zoom area the platform reports, names in its indicator and targets with
+  Ctrl+wheel and the zoom menus. The coupling is to that variable's name, which PAPI documents for
+  web views to read, and to the platform's marker rule staying less specific than the stylesheet's.
+
+  Three decisions follow from the row model rather than from taste, so they are recorded here:
+
+  - **Everything between verse blocks is hidden**, not section headings alone: the rule suppresses
+    every non-verse-block child of the editor root, so chapter descriptions and intro material
+    inside the chapter go with them. All of it sits between verse blocks, so it has no row of its
+    own, and it is translation-specific — showing it per column would put a heading beside verse 5
+    in one text and verse 6 in another. Placing it instead on the row of the verse it precedes is
+    not expressible in CSS (no selector reaches a following sibling's attributes) and would need JS.
+    The model still carries it, so a later pass can span one across a full-width row keyed to a
+    reference resource; until then the reference screenshot's clean look is what ships.
+  - **Rows are visual, not announced.** The grid is a group of labeled column regions. ARIA table
+    semantics would need a row-major DOM, which the one-editor-per-column requirement rules out;
+    verse numbers rendered at the start of each block are what let a screen-reader user correlate
+    columns. Flagged for AT validation with the rest of this surface.
+  - **A reference scrolls flush under the sticky header**, with no context above it. The Scripture
+    editor deliberately leaves `VERSE_NUMBER_SCROLL_OFFSET` (80px, `editor-dom.util.ts`) above the
+    verse, so in Simple mode the two surfaces land the same reference differently — on purpose; do
+    not "fix" either to match the other. Flush-to-top shows the whole aligned row with every column
+    starting at the same verse boundary, which is what the grid is for, and spends none of a short
+    port on preceding verses (80px is a quarter of a ~300px chapter cell). The cost is that poetry
+    or a continued sentence starts mid-thought. The Text Collection's chapter surfaces follow the
+    same answer (PT-4543). Agreed in review of #2781, 2026-09-23.
+
+  `BLOCK_VERSE_VIEW_MODE` and the `verse-block` DOM exist only in the editor built from
+  `scripture-editors`' `platform-yalc` branch, which `dev-packages.json` names and
+  `stage-dev-packages` builds into `dev-packages/staging/platform-editor`, the `file:` dependency both
+  manifests declare (`adr-dev-packages-staged-file-deps`). There is no registry version to bump for
+  it. A tree whose staged editor is stale or was never built — `npm ci --ignore-scripts` without
+  `npm run stage-dev-packages` first — gets an editor without the mode, and this view then renders
+  empty columns; `upstream-editor-contract.test.ts` fails by name in that case rather than leaving
+  it to be diagnosed from the layout.
+- **Source:** PT-4184, building on PT-4304's subgrid-chain proof and extending it to the editor's own
+  wrappers.
+
 ## adr-all-projects-routes-to-home: the title bar's "more projects" affordance routes to Home rather than making the project picker send/receive-aware
 
 _The affordance is labelled "More projects…" in the title bar today; the PRD calls it "All projects…"

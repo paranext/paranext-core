@@ -40,8 +40,8 @@ import {
   readFactor,
   sendCommandWithId,
 } from '../../fixtures/scripture-editor-helpers';
+import { closeAllNonHomeDockTabs } from './test-helpers';
 import {
-  closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
   flagResourcesAndOpenScriptureTextGrid,
   openCellContextMenu,
@@ -51,8 +51,9 @@ import {
   readResourceZoomLabel,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-} from './test-helpers';
-import type { FlaggedResourceItem, ScriptureTextGrid } from './test-helpers';
+  type FlaggedResourceItem,
+  type ScriptureTextGrid,
+} from './scripture-text-grid.page';
 
 const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
   .split(',')
