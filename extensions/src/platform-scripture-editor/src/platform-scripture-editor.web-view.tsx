@@ -3278,7 +3278,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           try {
             if (usjFromPdp && editorRef.current) {
               usjSentToPdp.current = usjFromPdp;
-              setEditorUsj.current(usjFromPdp);
+              // Forced: when the refused edit is a marker edit still in progress — a chapter or
+              // verse number retyped — the stored document can equal the editor's own record from
+              // before that edit, which the editor would take for a re-send of old text and keep
+              // the refused edit on screen.
+              setEditorUsj.current(usjFromPdp, { force: true });
             }
           } catch (innerError) {
             logger.error(
