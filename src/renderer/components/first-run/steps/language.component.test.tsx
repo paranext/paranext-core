@@ -102,6 +102,13 @@ describe('LanguageStep', () => {
     expect(mockSetInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
   });
 
+  test('switching away from a language that is not offered drops it', async () => {
+    hookState.interfaceLanguage = ['fr'];
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    await userEvent.click(screen.getByText('Español'));
+    expect(mockSetInterfaceLanguage).toHaveBeenCalledWith(['es']);
+  });
+
   test('shows a current language that is not offered by its real autonym', () => {
     hookState.interfaceLanguage = ['fr']; // has a locale file but is not offered
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);

@@ -2,17 +2,22 @@ import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
 import { Setting } from './setting.component';
 
 type LanguagesStub = Record<string, { autonym: string }>;
-type UiLanguageSelectorStubProps = { knownUiLanguages: LanguagesStub; primaryLanguage: string };
+type UiLanguageSelectorStubProps = {
+  knownUiLanguages: LanguagesStub;
+  primaryLanguage: string;
+  onLanguagesChange?: (newUiLanguages: string[]) => void;
+};
 
 // Lets a test stand in for the loaded offered languages; unset means "still loading", which hands
 // back the component's own default list the way useData does before data arrives.
 const availableLanguages = vi.hoisted(() => {
-  const state: { loaded?: LanguagesStub } = {};
+  const state: { loaded?: LanguagesStub | PlatformError } = {};
   return state;
 });
 // Records what the component hands UiLanguageSelector; renders nothing.
@@ -473,18 +478,55 @@ describe('platform.webViewContentZoom stepper', () => {
 });
 
 describe('interface language selector', () => {
-  const renderLanguageSetting = (setting: string[]) =>
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const renderLanguageSetting = (setting: string[], setSetting = vi.fn()) =>
     render(
       // A user setting, so it takes validateOtherSetting rather than baseProps' project validator.
       <Setting
-        setSetting={vi.fn()}
+        setSetting={setSetting}
         isLoading={false}
-        validateOtherSetting={vi.fn()}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
         settingKey="platform.interfaceLanguage"
         setting={setting}
         label="Interface language"
       />,
     );
+
+  /** Picks `tag` as the primary language the way UiLanguageSelector reports it, then writes. */
+  const choosePrimary = async (tag: string, fallbackLanguages: string[]) => {
+    act(() => {
+      lastSelectorProps()?.onLanguagesChange?.([
+        tag,
+        ...fallbackLanguages.filter((language) => language !== tag),
+      ]);
+    });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+  };
+
+  it('switching the primary language keeps the other offered languages, the old primary included', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    renderLanguageSetting(['es', 'en'], setSetting);
+    await choosePrimary('en', ['en']);
+    expect(setSetting).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  it('switching the primary language drops languages that are not offered', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    renderLanguageSetting(['fr', 'zh-hans', 'es'], setSetting);
+    await choosePrimary('en', ['zh-hans', 'es']);
+    expect(setSetting).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  it('offers exactly English and Español when the offered languages cannot be read', () => {
+    availableLanguages.loaded = newPlatformError('Localization service unavailable');
+    renderLanguageSetting(['en']);
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual(['en', 'es']);
+  });
 
   it('offers exactly English and Español while the languages load', () => {
     renderLanguageSetting(['en']);

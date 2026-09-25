@@ -28,6 +28,10 @@ import {
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useRegistrationValidity } from '@renderer/hooks/use-registration-validity.hook';
 import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
+import {
+  getOfferedLanguageDefaults,
+  switchInterfaceLanguage,
+} from '@shared/data/interface-languages.data';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -61,11 +65,8 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_appearance_system%',
 ];
 
-/** Shown while the offered languages load: exactly the offered languages. */
-const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
-  en: { autonym: 'English' },
-  es: { autonym: 'Español' },
-};
+/** Shown while the offered languages load, or if they cannot be read: exactly the offered languages. */
+const DEFAULT_AVAILABLE_LANGUAGES = getOfferedLanguageDefaults();
 
 /**
  * Placeholder passed as the default value for the `CurrentTheme` data hook so it has something
@@ -213,7 +214,7 @@ export function UserProfilePopover() {
   const handleLanguageChange = (value: string) => {
     if (value === '') return;
     if (value === primaryLanguage) return;
-    const next = [value, ...safeInterfaceLanguage.filter((l) => l !== value)];
+    const next = switchInterfaceLanguage(safeInterfaceLanguage, value);
     // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
     // try/catch around this call cannot see it. A missing setter is a real runtime state, not a
     // type formality — `useSetting` has no setter while the subscription is throttled — so say so
