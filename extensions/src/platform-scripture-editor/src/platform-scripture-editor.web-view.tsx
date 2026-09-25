@@ -1372,8 +1372,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // Opening the paragraph switcher's Radix popover takes focus off `.editor-input`, where Lexical's
-  // blur processing can null the selection — and `formatPara` needs one, so the retag would refuse.
-  // The `\` and Enter palettes restore it the same way before they apply.
+  // blur processing can null a caret selection — and `formatPara` needs a selection, so the retag
+  // would refuse. A selected paragraph marker survives the blur and is left as it is. The `\` and
+  // Enter palettes restore the same way before they apply.
   const restoreEditorSelection = useCallback(() => {
     restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
   }, []);

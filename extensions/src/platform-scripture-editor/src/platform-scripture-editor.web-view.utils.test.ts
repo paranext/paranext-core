@@ -322,11 +322,12 @@ describe('resolveFootnotesPaneAutoVisibility', () => {
 describe('restoreSelectionIfLost', () => {
   const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
 
-  /** Editor stub exposing only the two selection methods the helper consults. */
-  function makeEditor(liveSelection: SelectionRange | undefined) {
+  /** Editor stub exposing only the selection methods the helper consults. */
+  function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
     return {
       getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
       setSelection: vi.fn(),
+      getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
     };
   }
 
@@ -344,6 +345,17 @@ describe('restoreSelectionIfLost', () => {
       start: { jsonPath: '$.content[2].content[0]', offset: 0 },
     };
     const editor = makeEditor(liveSelection);
+
+    restoreSelectionIfLost(editor, snapshot);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('leaves a selected paragraph marker alone, so the dropdown retags that paragraph', () => {
+    // `getSelection()` reports undefined for a marker selection — a USJ selection is a text range
+    // and cannot represent a selected node — yet the selection is live. Restoring the snapshot over
+    // it would move the retag to whichever paragraph last held the caret.
+    const editor = makeEditor(undefined, 'li2');
 
     restoreSelectionIfLost(editor, snapshot);
 
