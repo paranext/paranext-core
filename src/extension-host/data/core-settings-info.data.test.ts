@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+// Resolves to the mock below: vitest hoists `vi.mock` above every import.
+import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages.service';
 // No mocks needed: unlike the module under test below, this one has no module-level code that
 // touches the mocked services, so it can be imported normally rather than after the mocks.
 import { platformProjectSettings } from './core-project-settings-info.data';
@@ -8,8 +10,12 @@ vi.mock('@extension-host/services/papi-backend.service', () => ({
     getLocalizedString: vi.fn(async () => 'Allowed range is {lowerLimit} to {upperLimit}.'),
   },
 }));
-vi.mock('@shared/services/localization.service', () => ({
-  localizationService: { getAvailableInterfaceLanguages: vi.fn(async () => ({ en: {} })) },
+vi.mock('@extension-host/services/interface-languages.service', () => ({
+  getAllLoadedInterfaceLanguages: vi.fn(async () => ({
+    en: { autonym: 'English' },
+    es: { autonym: 'Español' },
+    fr: { autonym: 'Français' },
+  })),
 }));
 
 // Import the module under test after the mocks above so its module-level code sees them.
@@ -259,5 +265,39 @@ describe('content zoom settings are core (user) settings, never project settings
     expect(
       projectSettingGroups.some((group) => 'platform.webViewContentZoomMemory' in group.properties),
     ).toBe(false);
+  });
+});
+
+describe('platform.interfaceLanguage validator', () => {
+  const validate = coreSettingsValidators['platform.interfaceLanguage'];
+
+  it('accepts a language that has a locale file but is not offered', async () => {
+    await expect(validate?.(['fr'], ['en'], {})).resolves.toBe(true);
+  });
+
+  it('accepts offered and hidden languages together', async () => {
+    await expect(validate?.(['es', 'fr'], ['en'], {})).resolves.toBe(true);
+  });
+
+  it('rejects a language with no locale file', async () => {
+    await expect(validate?.(['xx'], ['en'], {})).resolves.toBe(false);
+  });
+
+  it('rejects names inherited from Object.prototype', async () => {
+    await expect(validate?.(['constructor'], ['en'], {})).resolves.toBe(false);
+    await expect(validate?.(['toString'], ['en'], {})).resolves.toBe(false);
+  });
+
+  it('rejects an empty list', async () => {
+    await expect(validate?.([], ['en'], {})).resolves.toBe(false);
+  });
+
+  it('fails the write when the locale files could not be loaded', async () => {
+    vi.mocked(getAllLoadedInterfaceLanguages).mockRejectedValueOnce(
+      'No files found in localization folder',
+    );
+    await expect(validate?.(['en'], ['en'], {})).rejects.toBe(
+      'No files found in localization folder',
+    );
   });
 });

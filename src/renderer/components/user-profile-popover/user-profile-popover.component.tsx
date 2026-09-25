@@ -27,6 +27,12 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useRegistrationValidity } from '@renderer/hooks/use-registration-validity.hook';
+import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
+import {
+  getOfferedLanguageDefaults,
+  switchInterfaceLanguage,
+} from '@shared/data/interface-languages.data';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -60,9 +66,8 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_appearance_system%',
 ];
 
-const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
-  en: { autonym: 'English' },
-};
+/** Shown while the offered languages load, or if they cannot be read: exactly the offered languages. */
+const OFFERED_LANGUAGE_DEFAULTS = getOfferedLanguageDefaults();
 
 /**
  * Placeholder passed as the default value for the `CurrentTheme` data hook so it has something
@@ -195,18 +200,21 @@ export function UserProfilePopover() {
 
   const [availableLanguagesPossiblyError] = useData(
     localizationService.dataProviderName,
-  ).AvailableInterfaceLanguages(undefined, DEFAULT_AVAILABLE_LANGUAGES);
+  ).AvailableInterfaceLanguages(undefined, OFFERED_LANGUAGE_DEFAULTS);
   const availableLanguages: Record<string, LanguageInfo> = isPlatformError(
     availableLanguagesPossiblyError,
   )
-    ? DEFAULT_AVAILABLE_LANGUAGES
+    ? OFFERED_LANGUAGE_DEFAULTS
     : availableLanguagesPossiblyError;
-  const sortedLanguageEntries = sortLanguageEntries(Object.entries(availableLanguages));
+  // Show the current primary language even when not offered, so it appears pressed.
+  const sortedLanguageEntries = sortLanguageEntries(
+    Object.entries(includeCurrentLanguages(availableLanguages, [primaryLanguage])),
+  );
 
   const handleLanguageChange = (value: string) => {
     if (value === '') return;
     if (value === primaryLanguage) return;
-    const next = [value, ...safeInterfaceLanguage.filter((l) => l !== value)];
+    const next = switchInterfaceLanguage(safeInterfaceLanguage, value);
     // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
     // try/catch around this call cannot see it. A missing setter is a real runtime state, not a
     // type formality — `useSetting` has no setter while the subscription is throttled — so say so
@@ -215,9 +223,11 @@ export function UserProfilePopover() {
       logger.warn('UserProfilePopover: cannot set interface language; the setting is unavailable');
       return;
     }
-    setInterfaceLanguage(next).catch((e: unknown) => {
-      logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
-    });
+    setInterfaceLanguage(next)
+      .then(() => offerRestartAfterInterfaceLanguageChange(safeInterfaceLanguage, next))
+      .catch((e: unknown) => {
+        logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
+      });
   };
 
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);

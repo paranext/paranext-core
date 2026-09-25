@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { getShippedLocaleTags } from '@node/utils/locale-assets.test-helper';
-import { languageDetails } from './language-details.data';
+import { languageDetails } from '@shared/data/language-details.data';
 
-// Real shipped locale files drive this test so a NEW locale added without a curated autonym fails
+// Lives under src/node/ rather than next to language-details.data.ts because it reads the
+// filesystem. Real shipped locale files drive this test so a NEW locale added without a curated autonym fails
 // the build instead of silently showing its raw code (e.g. "zh-hans") in the picker.
 const localeTags = getShippedLocaleTags();
 

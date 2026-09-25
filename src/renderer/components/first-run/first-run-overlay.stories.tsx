@@ -23,7 +23,6 @@ const meta: Meta<typeof FirstRunGate> = {
     setFirstRunLanguageMock({
       interfaceLanguage: ['en'],
       setupLanguages: SETUP_LANGUAGES,
-      availableLanguages: SETUP_LANGUAGES,
     });
     return resetFirstRunLanguageMock;
   },
