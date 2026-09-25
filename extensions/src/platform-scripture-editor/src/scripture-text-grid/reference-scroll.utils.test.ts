@@ -107,17 +107,32 @@ describe('findVerseBlockForVerse', () => {
  * bridged verse: one marker covering two verses, and `'3a'` a sub-verse marker.
  *
  * @param markers `data-number` values the cell renders, in document order.
+ * @param hidden `data-number` values rendered inside content with no layout box.
  * @returns The port element, not attached to the document (nothing here needs layout).
  */
-function buildChapterPort(markers: string[]): HTMLElement {
+function buildChapterPort(markers: string[], hidden: string[] = []): HTMLElement {
   const port = document.createElement('div');
   markers.forEach((number) => {
     const marker = document.createElement('span');
     marker.dataset.marker = 'v';
     marker.dataset.number = number;
+    setLaidOut(marker, !hidden.includes(number));
     port.append(marker);
   });
   return port;
+}
+
+/**
+ * Gives an element the one piece of layout the chapter finder reads — whether it has a layout box,
+ * which a laid-out element reports as at least one client rect. jsdom lays nothing out.
+ *
+ * @param element The element to script.
+ * @param isLaidOut Whether it has a layout box.
+ */
+function setLaidOut(element: HTMLElement, isLaidOut: boolean): void {
+  Object.defineProperty(element, 'getClientRects', {
+    value: () => (isLaidOut ? [new DOMRect()] : []),
+  });
 }
 
 describe('findVerseMarkerForVerse', () => {
@@ -140,8 +155,62 @@ describe('findVerseMarkerForVerse', () => {
     expect(findVerseMarkerForVerse(port, 3)?.dataset.number).toBe('2');
   });
 
-  it('lands on the first marker for a reference above the chapter (verse 0)', () => {
-    // Verse 0 is front matter, which carries no verse marker of its own.
+  /**
+   * A chapter port whose editor content opens with blocks above verse 1 — a chapter number, a
+   * heading, a superscription — as the Scripture editor renders them.
+   *
+   * @param frontMatter One entry per block above the verses; `hidden` gives it no layout box.
+   * @returns The port, and the blocks in document order.
+   */
+  function buildChapterPortWithFrontMatter(frontMatter: { hidden?: boolean }[]) {
+    const port = buildChapterPort([]);
+    const content = document.createElement('div');
+    content.className = 'editor-input';
+    const blocks = frontMatter.map(({ hidden }) => {
+      const block = document.createElement('p');
+      setLaidOut(block, !hidden);
+      return block;
+    });
+    const verses = document.createElement('p');
+    setLaidOut(verses, true);
+    ['1', '2'].forEach((number) => {
+      const marker = document.createElement('span');
+      marker.dataset.marker = 'v';
+      marker.dataset.number = number;
+      verses.append(marker);
+    });
+    content.append(...blocks, verses);
+    port.append(content);
+    return { port, blocks };
+  }
+
+  it('lands at the top of the chapter for a reference above verse 1 (verse 0)', () => {
+    // Verse 0 names front matter — an intro, a heading, a Psalm superscription — which sits above
+    // verse 1's marker, so landing on that marker would scroll the very thing it names away. The
+    // Scripture editor, the model text and the reference panels all go to the chapter top.
+    const { port, blocks } = buildChapterPortWithFrontMatter([{}, {}]);
+
+    expect(findVerseMarkerForVerse(port, 0)).toBe(blocks[0]);
+  });
+
+  it('skips a front-matter block with no layout box for verse 0', () => {
+    // A hidden block (the editor renders some markers `display:none`) reads an all-zero rect, and
+    // scrolling to that would send the port somewhere unrelated to the chapter top.
+    const { port, blocks } = buildChapterPortWithFrontMatter([{ hidden: true }, {}]);
+
+    expect(findVerseMarkerForVerse(port, 0)).toBe(blocks[1]);
+  });
+
+  it('leaves the port alone when the verse it lands on has no layout box', () => {
+    // The editor keeps unknown markers — an `\esb` sidebar, a `\periph` — in the DOM but hides them
+    // outside Standard view, and their verses with them. Scrolling to a hidden marker's all-zero
+    // rect would drift the port toward the top on every check.
+    expect(
+      findVerseMarkerForVerse(buildChapterPort(['26', '27', '28'], ['27']), 27),
+    ).toBeUndefined();
+  });
+
+  it('falls back to the first marker for verse 0 when no editor content has rendered', () => {
     expect(findVerseMarkerForVerse(buildChapterPort(['1', '2']), 0)?.dataset.number).toBe('1');
   });
 
@@ -312,6 +381,47 @@ describe('isMarkerFullyInPortView', () => {
 
     expect(isMarkerFullyInPortView(port, block)).toBe(true);
   });
+  /**
+   * A 300-tall chapter port with a horizontal scrollbar along its bottom, as a Windows or Linux
+   * classic scrollbar reserves when an indented poetry line overflows the column.
+   *
+   * @param zoom CSS zoom on an ancestor: on-screen pixels per layout pixel.
+   * @param markerTop On-screen top of the verse marker.
+   * @returns The port and the marker.
+   */
+  function buildPortWithScrollbar(zoom: number, markerTop: number) {
+    const port = document.createElement('div');
+    const marker = document.createElement('span');
+    port.append(marker);
+    Object.defineProperty(port, 'offsetHeight', { value: 300 });
+    Object.defineProperty(port, 'clientHeight', { value: 285 }); // a 15px scrollbar
+    port.getBoundingClientRect = () => new DOMRect(0, 0, 0, 300 * zoom);
+    marker.getBoundingClientRect = () => new DOMRect(0, markerTop, 0, 20 * zoom);
+    return { port, marker };
+  }
+
+  it('counts a marker behind the horizontal scrollbar as NOT showing', () => {
+    // 270..290 against a visible area ending at 285: the reader sees neither the verse number nor
+    // its verse, so declining to scroll would look like the reference move did nothing.
+    const { port, marker } = buildPortWithScrollbar(1, 270);
+
+    expect(isMarkerFullyInPortView(port, marker)).toBe(false);
+  });
+
+  it('still counts a marker just above the scrollbar as showing', () => {
+    const { port, marker } = buildPortWithScrollbar(1, 260);
+
+    expect(isMarkerFullyInPortView(port, marker)).toBe(true);
+  });
+
+  it('measures the scrollbar in on-screen pixels under zoom', () => {
+    // At 2x the visible area ends at 570 on screen. Mixing the layout-pixel `clientHeight` (285)
+    // with on-screen rects would put the edge 285px too high and call this marker hidden.
+    const { port, marker } = buildPortWithScrollbar(2, 520);
+
+    expect(isMarkerFullyInPortView(port, marker)).toBe(true);
+    expect(isMarkerFullyInPortView(port, buildPortWithScrollbar(2, 540).marker)).toBe(false);
+  });
 });
 
 /**
@@ -349,24 +459,13 @@ function buildChapterPortWithMarker(markerTop: number, markerHeight: number) {
 
 describe('port math with a chapter cell, whose header is outside the port', () => {
   it('counts a marker the aligned grid would call header-covered as showing', () => {
-    // A marker in the port's top 25px. In the aligned grid a 20-tall sticky header sits INSIDE the
-    // port, so the same geometry starts behind it and reads as covered; here the header is a
+    // A marker in the port's top 15px. In the aligned grid a 20-tall sticky header sits INSIDE the
+    // port, so the same geometry is wholly behind it and reads as covered; here the header is a
     // sibling and contributes nothing, so the marker is genuinely visible. Header placement is the
     // only difference between the two answers, which is the adjacency this pins.
-    const { port, marker } = buildChapterPortWithMarker(5, 20);
+    const { port, marker } = buildChapterPortWithMarker(0, 15);
 
     expect(isBlockInPortView(port, marker)).toBe(true);
-  });
-
-  it('does not count a marker clipped by the bottom edge as showing', () => {
-    // A verse marker is one line and its verse text follows AFTER it, so a marker hanging off the
-    // bottom edge means the reader can see a verse number and none of its verse. Counting that as
-    // showing would make the leave-a-visible-verse-alone rule decline to scroll, and the reference
-    // move would appear to do nothing. The aligned grid's whole verse block is the opposite case,
-    // which is why that layout keeps `isBlockInPortView` — see the aligned tests above.
-    const { port, marker } = buildChapterPortWithMarker(290, 20);
-
-    expect(isMarkerFullyInPortView(port, marker)).toBe(false);
   });
 
   it('scrolls a marker to the top of the port with no header allowance', () => {
@@ -403,6 +502,9 @@ function resolvedVerse(element: HTMLElement | undefined): number | undefined {
 // the same way. `data-verse-start` decides a grid row, so it is always an integer (the generated
 // rules are `grid-row-start:N`, and `isPlacedBlock` drops anything else); the inline layout's
 // `data-number` is the raw `\v` number, so it carries sub-verse letters and bridges verbatim.
+//
+// Verse 0 is deliberately absent. The grid has no row for front matter, so it lands on the lowest
+// verse; a chapter cell shows the front matter and lands at the chapter top, as the editor does.
 //
 // What this pins is which VERSE a reference resolves to, not which element wins — the layouts
 // return different kinds of element, and a tie-break that picks `3b` over `3a` still answers
@@ -444,13 +546,6 @@ describe('the two finders resolve a reference to the same verse', () => {
       markers: ['2', '3a', '3b'],
       verseNum: 3,
       expected: 3,
-    },
-    {
-      why: 'a reference above the first verse',
-      blocks: ['1', '2', '3'],
-      markers: ['1', '2', '3'],
-      verseNum: 0,
-      expected: 1,
     },
     {
       why: 'a reference past the last verse',

@@ -19,11 +19,7 @@ type ScriptureTextGridProps = {
   resources: GridResource[];
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
-  /**
-   * Whether this web view is rendered, from `useViewVisibility` at the web view's root — owned
-   * there alongside `scrRef` rather than asked for here, so the one answer is subscribed to once
-   * however many cells this renders.
-   */
+  /** Whether this web view is showing; owned by the web view, which explains why. */
   isViewVisible: boolean;
   /** Accessible name for the list/group region (the web view passes the localized tab title). */
   ariaLabel?: string;
@@ -281,8 +277,10 @@ export function ScriptureTextGrid({
   // box only becomes a scroll port when an ancestor constrains the cell's height:
   // `ResourceCellView`'s root is `flex flex-col` with no height of its own, so it takes one only as
   // a stretched flex item. Scrolling here instead would leave that box unable to overflow, and a
-  // scroll-group move would silently do nothing on this surface alone. Same chain as the
-  // chapter-context split below; the chapter row reaches the same end with `overflow-y-hidden`.
+  // scroll-group move would silently do nothing on this surface alone. The inner wrapper must stay a
+  // row for the same reason: stretching on its cross axis is what gives the cell its height. The
+  // chapter-context split below uses the same height chain; the chapter row reaches the same end
+  // with `overflow-y-hidden`.
   const [onlyResource] = resources;
   if (resources.length === 1 && onlyResource) {
     return (
@@ -298,9 +296,7 @@ export function ScriptureTextGrid({
             main axis and takes no `className` of its own. Without it the header band and a short
             `[data-cell-placeholder]` hug the inline start at the message's width instead of
             spanning the pane; prose hides it, so it shows only in the downloading/unavailable/
-            failed/empty states. The height chain above is what makes the cell's content box a
-            scroll port, so it must stay a row: stretching on the cross axis is what gives the cell
-            its height. */}
+            failed/empty states. */}
         <div className="tw:flex tw:min-h-0 tw:flex-1 tw:[&>*]:flex-1">
           <ResourceCell
             resourceRef={onlyResource}
@@ -346,13 +342,14 @@ export function ScriptureTextGrid({
         <div role="status" aria-live="polite" className="tw:sr-only">
           {reorderAnnouncement}
         </div>
-        {resources.map((resource) => (
+        {resources.map((resource, orderIndex) => (
           <ResourceColumn
             key={resource.resourceId}
             resource={resource}
             scrRef={scrRef}
             setScrRef={setScrRef}
             isViewVisible={isViewVisible}
+            orderIndex={orderIndex}
             cellViewMode="chapter"
             className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
             reorder={buildReorder(resource)}

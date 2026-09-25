@@ -3897,24 +3897,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   column, the single-resource full-width view — rendered a whole chapter and never scrolled to the
   scroll group's verse (PT-4543, duplicate PT-4170). Verse mode needs no scroll, because
   `sliceUsjToVerse` has already reduced the cell to the reference's verse. Two candidate
-  implementations already existed: the aligned grid's controller (added by PT-4184/#2781 as
-  `use-aligned-reference-scroll.hook.ts`, renamed here to `use-reference-scroll.hook.ts`) and an older settle loop in `resource-text-panel.component.tsx`. The two
-  layouts expose different verse anchors: the editor's block-verse layout wraps each verse in a
+  implementations already existed: the aligned grid's controller (now
+  `use-reference-scroll.hook.ts`, formerly `use-aligned-reference-scroll.hook.ts`) and an older
+  settle loop in `resource-text-panel.component.tsx`. The two layouts expose different verse anchors: the editor's block-verse layout wraps each verse in a
   placed element carrying `data-verse-start`, and is emitted only under `BLOCK_VERSE_VIEW_MODE`,
   while the inline layout emits a bare `span[data-marker="v"][data-number]`.
-- **Decision:** One hook serves both layouts, with the two things the layouts disagree on injected:
-  the verse lookup as a `VerseTargetFinder`, and the "can the reader already see it" test as a
-  `TargetVisibilityTest`. The aligned grid takes both defaults — `findVerseBlockForVerse` and
-  `isBlockInPortView`, whose any-part-showing rule is right for a whole verse block. A chapter cell
-  passes `findVerseMarkerForVerse` and `isMarkerFullyInPortView`, because its target is a
-  zero-content `\v` marker span: any-part-showing would count a marker clipped at the bottom edge as
-  visible while the reader sees a verse number and none of its verse, and the
-  leave-a-visible-verse-alone rule would then decline to scroll. An earlier form of this change
-  forked `isBlockInPortView` on target height instead, which silently gave the Grid view containment
-  semantics too — a change to a view this work does not own, and one that contradicted the first
-  rule in `useReferenceScroll`'s own docstring. Injecting keeps each layout's answer at its own call
-  site; `aligned-grid.component.tsx` is unchanged, so the Grid view keeps exactly the behavior
-  PT-4184/#2781 reviewed. Plus an `isEnabled` flag so a view that is scrolled by an ancestor can
+- **Decision:** One hook serves both layouts, with what the layouts disagree on injected: the verse
+  lookup as a `VerseTargetFinder`, the "can the reader already see it" test as a
+  `TargetVisibilityTest`, and the room left above the target as `leadInPx`. The aligned grid passes
+  `findVerseBlockForVerse` and keeps the defaults — `isBlockInPortView`, whose any-part-showing rule
+  is right for a whole verse block, and no lead-in — so its scroll behavior is unchanged. A chapter
+  cell passes `findVerseMarkerForVerse`, `isMarkerFullyInPortView` and `VERSE_NUMBER_SCROLL_OFFSET`,
+  because its target is a zero-content `\v` marker span: any-part-showing would count a marker
+  clipped at the bottom edge as visible while the reader sees a verse number and none of its verse,
+  and the leave-a-visible-verse-alone rule would then decline to scroll. A chapter cell also passes
+  an echo latch (`publishedScrRefRef`): a click deep inside a long verse publishes a verse whose
+  marker is above the fold, so the visibility test alone would scroll the clicked text away. The
+  grid needs no latch, because a clicked block is by construction still on screen. Plus an
+  `isEnabled` flag so a view that is scrolled by an ancestor can
   keep the hook call unconditional while reading no geometry. The port math is shared without a
   per-layout branch because `getFirstVisibleY` looks the resource-name header up *inside* the port:
   a chapter cell's header is the port's sibling and so contributes nothing, while the aligned grid's
@@ -3928,7 +3928,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `findScrollContainer` found no overflowing container — so a short port silently skips the scroll
   and never retries. (c) *Scroll via `scrollToVerse`* — only its selector transfers; its
   `findScrollContainer`/`getTopWithinScrollContainer`/`behavior: 'smooth'` math is superseded by an
-  explicit port and `scrollPortToBlock`.
+  explicit port and `scrollPortToBlock`. (d) *Fork `isBlockInPortView` on target height* instead
+  of injecting the visibility test — rejected: it silently gives the Grid view containment
+  semantics too, so a partly visible block the reader clicked would jump to the top.
 - **Consequences:** Adding a third Text Collection layout means writing a finder, not a scroll
   controller. The header-outside-the-port adjacency is now load-bearing — moving
   `[data-cell-header]` inside `[data-cell-content]` would offset every chapter-mode scroll by the
@@ -3939,7 +3941,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   runs the older settle loop; converging it onto this hook is deliberately deferred rather than
   widening this change into a file #2781 does not touch. Revisit if a layout ever needs a genuinely
   different scroll *policy* rather than a different anchor or visibility test.
-- **Source:** PT-4543, stacked on PT-4184/#2781.
+- **Source:** PT-4543.
 
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 

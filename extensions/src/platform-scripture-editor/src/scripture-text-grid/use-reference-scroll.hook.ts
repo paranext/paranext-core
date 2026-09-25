@@ -12,6 +12,36 @@ import {
 /** Scroll positions within a pixel of each other are the same position. */
 const SCROLL_MATCH_TOLERANCE_PX = 1;
 
+/** Per-layout settings for {@link useReferenceScroll}. */
+export type ReferenceScrollOptions = {
+  /**
+   * Default `true`. `false` turns the hook off — no target lookup, no geometry reads, no mutation
+   * observer — for a view whose layout is scrolled by an ancestor or that has nothing to scroll to,
+   * where a React hook still has to be called unconditionally.
+   */
+  isEnabled?: boolean;
+  /**
+   * How this layout decides the reader can already see the target, so the port is left alone.
+   * Default {@link isBlockInPortView}: a whole verse block counts as seen when any of it shows,
+   * while a one-line verse marker has to fit completely for its verse to be readable.
+   */
+  isTargetVisible?: TargetVisibilityTest;
+  /**
+   * Holds the reference this view itself last published, so the update that bounces back off the
+   * scroll group can be told from a genuine navigation and skipped. Must be a stable ref: it is an
+   * effect dependency.
+   */
+  publishedScrRefRef?: RefObject<SerializedVerseRef | undefined>;
+  /** Room to leave above the target, in pixels; see `scrollPortToBlock`. Default `0`. */
+  leadInPx?: number;
+  /**
+   * Changing it re-arms the scroll, as a new reference does. A chapter column passes its position
+   * in the row: reordering moves a column's DOM node, and a scroll container that is moved loses
+   * its scroll position.
+   */
+  rearmKey?: unknown;
+};
+
 /**
  * Keeps a Text Collection scroll port scrolled to the scroll-group reference.
  *
@@ -23,18 +53,19 @@ const SCROLL_MATCH_TOLERANCE_PX = 1;
  *
  * - A verse already on screen is left where it is. Clicking a verse reports it as the new reference,
  *   and scrolling it to the top under the reader's cursor would be the wrong answer to a click.
- *   This is the same rule `useBcvSyncScroll` implements for the comment list. Where the anchor is a
- *   whole verse block that rule is enough on its own — a reference this view published is, by
- *   construction, still on screen. A one-line marker anchor is not: a click deep inside a long
- *   verse publishes a verse whose marker is above the fold, so a chapter cell also passes
- *   `publishedScrRefRef` and the echo is skipped outright.
+ *   This is the same rule `useBcvSyncScroll` implements for the comment list. A view whose anchor
+ *   can be off screen while its verse is not also passes `publishedScrRefRef` (see the re-arm
+ *   effect).
  * - A reference is re-checked as content arrives, because content that renders late adds height above
  *   the target and pushes it back off screen.
  * - Once the reader scrolls the port themselves, this stops until the reference changes.
  *
- * Serves both layouts. Which element represents a verse is the one thing they disagree on, so the
- * lookup is injected: the aligned grid passes `findVerseBlockForVerse` and scrolls its single grid
- * root; a chapter cell passes `findVerseMarkerForVerse` and scrolls its own content box.
+ * Serves both layouts. They disagree on which element represents a verse, on when the reader can
+ * already see it, and on how much room to leave above it, so all three are injected: the aligned
+ * grid passes `findVerseBlockForVerse` and keeps the block defaults, scrolling its single grid
+ * root; a chapter cell passes `findVerseMarkerForVerse` with `isMarkerFullyInPortView` and
+ * `VERSE_NUMBER_SCROLL_OFFSET`, scrolling its own content box. The finder is required but the other
+ * two default to the block framing, so a marker-based caller must pass all three.
  *
  * @param portRef The scroll port — the grid root in the aligned view, the cell's content box in a
  *   chapter cell.
@@ -42,34 +73,21 @@ const SCROLL_MATCH_TOLERANCE_PX = 1;
  * @param isViewVisible Whether the view is visible, from `useViewVisibility`. Taken as a parameter
  *   so a view calls `useViewVisibility` once however many consumers of this hook it renders.
  * @param findTarget How to find the element representing a verse in this view's layout.
- * @param options `isEnabled` (default `true`) turns the hook off — no target lookup, no geometry
- *   reads, no mutation observer — for a view whose layout is scrolled by an ancestor or that has
- *   nothing to scroll to, where a React hook still has to be called unconditionally.
- *   `isTargetVisible` (default {@link isBlockInPortView}) is how this layout decides the reader can
- *   already see the target, and so that the port should be left alone. Injected beside `findTarget`
- *   because it is the second thing the layouts disagree on: a whole verse block counts as seen when
- *   any of it shows, while a one-line verse marker has to fit completely for its verse to be
- *   readable. `publishedScrRefRef` holds the reference this view itself last published, so the
- *   update that bounces back off the scroll group can be told from a genuine navigation and
- *   skipped.
+ * @param options See {@link ReferenceScrollOptions}.
  */
 export function useReferenceScroll(
   portRef: RefObject<HTMLElement | null>,
   scrRef: SerializedVerseRef,
   isViewVisible: boolean,
   findTarget: VerseTargetFinder,
-  options?: {
-    isEnabled?: boolean;
-    isTargetVisible?: TargetVisibilityTest;
-    publishedScrRefRef?: RefObject<SerializedVerseRef | undefined>;
-    leadInPx?: number;
-  },
+  options?: ReferenceScrollOptions,
 ): void {
   const {
     isEnabled = true,
     isTargetVisible = isBlockInPortView,
     publishedScrRefRef,
     leadInPx,
+    rearmKey,
   } = options ?? {};
   // Where this hook last left the port. A scrollTop that no longer matches means the reader moved
   // it, so the reference is left alone until it changes. `undefined` re-arms.
@@ -85,17 +103,18 @@ export function useReferenceScroll(
   const scrRefRef = useRef(scrRef);
   scrRefRef.current = scrRef;
 
-  // Set once the reader has moved the port for the current reference. From then on nothing here
-  // will move it again, so the observer below stops doing any work at all rather than re-deciding
-  // that on every batch. Only ever set from inside `requestScroll`, which runs only while the view
-  // is visible — a hidden pane's scrollTop is not the reader's doing and must not stand this down.
+  // Set once nothing here should move the port again for the current reference: the reader moved
+  // it, or the reference is the echo of their own click. From then on the observer below stops doing
+  // any work at all rather than re-deciding that on every batch, and a check already queued does
+  // nothing. The reader-moved case is only detected inside `requestScroll`, which runs only while
+  // the view is visible — a hidden pane's scrollTop is not the reader's doing.
   const hasStoodDownRef = useRef(false);
 
   // An inactive dock tab has no layout: geometry reads return zero and the scroll would silently do
   // nothing. Deferring collapses every request made while hidden into one catch-up on activation
   // (`.claude/rules/cross-view-sync-hidden-views.md`).
   const requestScroll = useRunWhenVisible(isViewVisible, () => {
-    if (!isEnabled) return;
+    if (!isEnabled || hasStoodDownRef.current) return;
     const port = portRef.current;
     if (!port) return;
 
@@ -161,7 +180,7 @@ export function useReferenceScroll(
     appliedScrollTopRef.current = undefined;
     hasStoodDownRef.current = false;
     requestScroll();
-  }, [isEnabled, targetReference, requestScroll, publishedScrRefRef]);
+  }, [isEnabled, targetReference, requestScroll, publishedScrRefRef, rearmKey]);
 
   // The reference usually changes before the chapter it points into has rendered, and in the
   // aligned view each column arrives separately, so re-check as the DOM changes. Several editors

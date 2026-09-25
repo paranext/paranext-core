@@ -12,12 +12,13 @@ export const ALIGNED_GRID_CLASS = 'scripture-text-grid-aligned';
 /**
  * Custom property carrying a column's zoom factor down to its verse blocks.
  *
- * Zoom cannot sit on the column's content wrapper here the way it does in the other views: that
- * wrapper is a `grid-template-rows: subgrid` box, and `zoom` scales the used value of the lengths
- * inside it — including the row tracks it inherits from the shared grid, so a zoomed column would
- * measure its rows against a different scale than its neighbours. Zooming the verse blocks instead
- * leaves the tracks alone and keeps the row model intact: a row is still as tall as its tallest
- * cell, that cell is simply zoomed.
+ * Zoom cannot sit on a box inside the column here the way it sits on `[data-cell-pad]` in the other
+ * views: the content wrapper is a `grid-template-rows: subgrid` box, the pad generates no box at
+ * all, and `zoom` scales the used value of the lengths inside the wrapper — including the row
+ * tracks it inherits from the shared grid, so a zoomed column would measure its rows against a
+ * different scale than its neighbours. Zooming the verse blocks instead leaves the tracks alone and
+ * keeps the row model intact: a row is still as tall as its tallest cell, that cell is simply
+ * zoomed.
  */
 export const ALIGNED_ZOOM_PROPERTY = '--aligned-zoom';
 

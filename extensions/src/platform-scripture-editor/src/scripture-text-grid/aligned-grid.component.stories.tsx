@@ -98,13 +98,8 @@ function StubColumn({
         >
           <span className="tw:truncate tw:text-xs tw:font-medium tw:text-primary">{label}</span>
         </div>
-        <div
-          data-cell-content
-          className="tw:flex-1 tw:overflow-visible"
-          dir={textDirection}
-          style={buildZoomStyle(zoomFactor)}
-        >
-          <div data-cell-pad className="tw:p-2">
+        <div data-cell-content className="tw:flex-1 tw:overflow-visible" dir={textDirection}>
+          <div data-cell-pad className="tw:p-2" style={buildZoomStyle(zoomFactor)}>
             {placeholder === undefined ? (
               <div className="editor-container">
                 <div className="editor-inner">

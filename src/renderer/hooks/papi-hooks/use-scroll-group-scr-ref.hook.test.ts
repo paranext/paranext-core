@@ -473,7 +473,7 @@ describe('useScrollGroupScrRef on a detached (independent-ref) view', () => {
 // reference panels deliberately leave the field alone (`createResourceTextPanelProvider` in
 // `platform-scripture-editor`'s `main.ts`), so the default is the only reason they track the
 // editor's reference in Simple mode. Pinned here rather than left to the one-line `?? 0`, because
-// nothing at those call sites states the dependency and a reader there cannot see it.
+// those call sites only state the dependency in a comment, and a comment cannot fail.
 describe('useScrollGroupScrRef with no scroll group in the definition', () => {
   it('reports group 0 rather than reporting no group', async () => {
     const { useScrollGroupScrRef } = await import(

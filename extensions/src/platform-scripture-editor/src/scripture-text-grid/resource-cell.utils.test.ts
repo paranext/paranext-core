@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveCellState } from './resource-cell.utils';
+import { deriveCellState, isUsjForChapter } from './resource-cell.utils';
 
 const platformError = { platformErrorVersion: 1, message: 'boom' };
 
@@ -102,5 +102,37 @@ describe('deriveCellState', () => {
         ...onScreen,
       }),
     ).toBe('ready');
+  });
+});
+
+describe('isUsjForChapter', () => {
+  const usjOf = (...content: unknown[]) => ({ type: 'USJ', version: '3.1', content });
+  const book = (code: string) => ({ type: 'book', marker: 'id', code });
+  const chapter = (number: string) => ({ type: 'chapter', marker: 'c', number });
+
+  it('matches the chapter the reference names', () => {
+    expect(isUsjForChapter(usjOf(book('JHN'), chapter('3')), 'JHN', 3)).toBe(true);
+  });
+
+  it('rejects the chapter still in hand from before a navigation', () => {
+    // A data hook keeps serving the previous selector's chapter for a render after the reference
+    // moves, so a cell can be `ready` while showing the wrong chapter.
+    expect(isUsjForChapter(usjOf(book('JHN'), chapter('1')), 'JHN', 3)).toBe(false);
+  });
+
+  it('rejects the same chapter number in a different book', () => {
+    expect(isUsjForChapter(usjOf(book('MAT'), chapter('3')), 'JHN', 3)).toBe(false);
+  });
+
+  it('matches content that names no chapter, since there is nothing to contradict the reference', () => {
+    // A chapter-0 intro, or a resource whose chapter data carries no `\c`.
+    expect(isUsjForChapter(usjOf(book('JHN'), { type: 'para', marker: 'ip' }), 'JHN', 0)).toBe(
+      true,
+    );
+  });
+
+  it('does not match a value that is not USJ', () => {
+    expect(isUsjForChapter(undefined, 'JHN', 3)).toBe(false);
+    expect(isUsjForChapter({ platformErrorVersion: 1, message: 'boom' }, 'JHN', 3)).toBe(false);
   });
 });

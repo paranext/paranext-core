@@ -4,6 +4,27 @@
 > branch, based on `pt-4184-grid` ([#2781](https://github.com/paranext/paranext-core/pull/2781)).
 > Once implemented, the code is the authority; read the current files rather than this document.
 
+## Changed during implementation
+
+The shipped code departs from the design below in these ways; each is the current rule.
+
+- **Echo latch added, reversing decision 4.** A click deep inside a long verse publishes a verse
+  whose marker is above the fold, so "leave a visible verse alone" does not cover it. Chapter cells
+  pass `publishedScrRefRef` and the hook skips the echo.
+- **Marker visibility rule.** Chapter cells pass `isMarkerFullyInPortView` as `isTargetVisible`:
+  a one-line marker must fit completely, where `isBlockInPortView` (still the grid's default) counts
+  any part showing.
+- **Lead-in.** Chapter cells pass `VERSE_NUMBER_SCROLL_OFFSET` as `leadInPx`; the grid stays flush.
+- **Visibility is a parameter.** The hook takes `isViewVisible` rather than calling
+  `useViewVisibility`, so its tests pass a value instead of mocking the hook.
+- **Readiness and chapter gate.** A chapter cell enables the hook only when it is `ready` and its
+  USJ names the reference's chapter (`isUsjForChapter`); otherwise a navigation scrolls the chapter
+  being left, and the loading placeholder's clamp stands the hook down.
+- **Zoom moved below the port.** `'box'` zoom sits on `[data-cell-pad]`, not on the
+  `[data-cell-content]` scroll port, because CSS `zoom` on the port breaks the `scrollTop` math.
+- **Single-resource layout rebuilt.** Its wrapper no longer scrolls; a flex chain gives the cell a
+  height so its own content box is the scroll port.
+
 PT-4543 · duplicates PT-4170 · blocks PT-4544 (WI-18)
 
 ## Problem
@@ -395,8 +416,6 @@ already positioned and did not animate; scroll by hand and confirm the sync stan
 reference changes; uncheck a resource in View Options and confirm the shrink does not read as a
 reader scroll.
 
-`npm run typecheck` is skipped by team preference — lint and build cover it.
-
 ## Out of scope
 
 - **Converging `resource-text-panel.component.tsx` onto this hook.** It still runs the older settle
@@ -406,13 +425,3 @@ reader scroll.
   outer verse list is a different feature.
 - **Sub-verse anchors.** `\v 3a` and `\v 3b` both parse to start 3; the first in document order wins.
   The aligned view's equivalent collision is filed upstream as PT-4559.
-
-## Sequencing
-
-Branch `pt-4543-chapter-verse-scroll`, based on `pt-4184-grid`. PR targets `pt-4184-grid`; retarget
-to `main` and rebase once #2781 merges rather than relying on GitHub's auto-retarget.
-
-Risks: #2781 is not yet approved (`reviewDecision: REVIEW_REQUIRED`), so its shape can shift — re-run
-these tests after any force-push. Its merge is gated on the upstream editor publishing `0.8.16`
-(both manifests pin `~0.8.15`), which gates this too. If #2781 is reworked or dropped, this falls
-back to authoring the generic utils on `main`.

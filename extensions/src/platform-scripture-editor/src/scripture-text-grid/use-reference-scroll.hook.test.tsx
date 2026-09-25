@@ -178,7 +178,7 @@ describe('useReferenceScroll while hidden', () => {
 describe('useReferenceScroll while visible', () => {
   it('leaves a verse that is already showing where it is', () => {
     // Clicking a verse reports it as the new reference, so scrolling it to the top would be the
-    // wrong answer to a click. It is also why this hook needs no echo latch.
+    // wrong answer to a click.
     const port = buildPort();
 
     renderScroll(
@@ -306,6 +306,32 @@ describe('useReferenceScroll echo latch', () => {
     navigateTo(12);
 
     expect(port.scrollTop).toBe(BELOW_THE_FOLD);
+  });
+
+  it('drops a check queued before the echo arrived', async () => {
+    // A chapter still rendering queues a check per frame. If the reader clicks before that frame
+    // runs, the queued check must not scroll for the reference the click just published.
+    const port = buildPort();
+    let target: HTMLElement | undefined;
+    const publishedScrRefRef: RefObject<SerializedVerseRef | undefined> = { current: undefined };
+    const { navigateTo } = renderScroll(port, () => target, { publishedScrRefRef });
+    target = buildTarget(port, BELOW_THE_FOLD);
+
+    await act(async () => {
+      port.append(document.createElement('div'));
+      // Let the observer queue its frame, but not run it.
+      await Promise.resolve();
+    });
+    publishedScrRefRef.current = reference(9);
+    navigateTo(9);
+    await act(
+      () =>
+        new Promise((resolve) => {
+          requestAnimationFrame(() => resolve(undefined));
+        }),
+    );
+
+    expect(port.scrollTop).toBe(0);
   });
 
   it('discards a latch whose echo never arrived, so a later move to that verse still scrolls', () => {

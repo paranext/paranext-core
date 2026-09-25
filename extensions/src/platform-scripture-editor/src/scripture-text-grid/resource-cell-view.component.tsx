@@ -64,7 +64,7 @@ export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; o
 export type ZoomTarget = 'box' | 'blocks';
 
 /**
- * The content wrapper's zoom style.
+ * The zoom style for `[data-cell-pad]`, the box inside the cell's content wrapper.
  *
  * @param zoomFactor Current factor, or `undefined` when this cell has no zoom controller.
  * @param zoomTarget Where the factor should land.
@@ -120,10 +120,12 @@ export type ResourceCellViewProps = {
   /** Current zoom factor for this resource (1 = default). */
   zoomFactor?: number;
   /**
-   * Where the zoom factor lands. `'box'` (default) scales the content wrapper with the `zoom`
-   * property. `'blocks'` publishes the factor as a custom property and leaves the wrapper unscaled,
-   * which is what the aligned grid needs: the wrapper is a subgrid box there, and zooming it would
-   * scale the shared row tracks it inherits along with the text (`ALIGNED_ZOOM_PROPERTY`).
+   * Where the zoom factor lands. `'box'` (default) scales `[data-cell-pad]` with the `zoom`
+   * property — inside the content wrapper, never on it, because the wrapper is a chapter cell's
+   * scroll port and CSS `zoom` on a scroll port breaks its `scrollTop` arithmetic. `'blocks'`
+   * publishes the factor as a custom property and scales nothing itself, which is what the aligned
+   * grid needs: its wrappers are subgrid boxes there, and zooming one would scale the shared row
+   * tracks it inherits along with the text (`ALIGNED_ZOOM_PROPERTY`).
    */
   zoomTarget?: ZoomTarget;
   /** False when the factor is at MAX_ZOOM_FACTOR. */
@@ -366,8 +368,13 @@ export function ResourceCellView({
     : undefined;
 
   const contentStyle = buildContentStyle(zoomFactor, zoomTarget);
+  // A scroll port has scroll anchoring off: the reference scroll tells the reader's scrolling from
+  // its own by comparing `scrollTop`, and anchoring rewrites it as content arrives above the verse,
+  // which is the case the re-check exists for. See the aligned grid root's `overflow-anchor` rule.
   const contentOverflowClass =
-    contentOverflow === 'visible' ? 'tw:overflow-visible' : 'tw:overflow-auto';
+    contentOverflow === 'visible'
+      ? 'tw:overflow-visible'
+      : 'tw:overflow-auto tw:[overflow-anchor:none]';
 
   return (
     <div

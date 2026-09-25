@@ -9,7 +9,7 @@ import {
 } from 'platform-bible-react';
 
 /**
- * The offset in pixels from the top of the window to scroll to show the verse number.
+ * How far below the top of its scroll container a scrolled-to verse number lands, in pixels.
  *
  * Shared rather than restated so every view that lands on a reference frames it the same way: the
  * Scripture editor, the model text panel, the reference panels and the Text Collection's chapter

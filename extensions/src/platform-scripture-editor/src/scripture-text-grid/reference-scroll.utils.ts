@@ -92,23 +92,40 @@ export function findVerseBlockForVerse(
 const VERSE_MARKER_SELECTOR = 'span[data-marker="v"][data-number]';
 
 /**
+ * The first block of a cell's editor content that has a layout box — the top of the chapter.
+ *
+ * Blocks with no layout box are skipped: an element rendered `display:none` reads an all-zero rect,
+ * which would send the port somewhere unrelated to the chapter top.
+ *
+ * @param port One cell's content box.
+ * @returns The block, or `undefined` when no editor content has rendered.
+ */
+function findFirstLaidOutBlock(port: HTMLElement): HTMLElement | undefined {
+  const content = port.querySelector('.editor-input');
+  if (!content) return undefined;
+  return [...content.children].find(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && child.getClientRects().length > 0,
+  );
+}
+
+/**
  * The verse marker to scroll to for a reference, in a cell rendering the editor's inline layout.
  *
  * The chapter-mode counterpart of {@link findVerseBlockForVerse}, and deliberately the same rule:
  * prefer a marker starting exactly at the verse, else the nearest marker starting before it. That
  * fallback is what lands a reference inside a bridge — `\v 14-15` emits no `[data-number="15"]`, so
  * an exact match alone never resolves verse 15. It also puts a reference in a versification gap on
- * the preceding verse, and a reference above the first marker (verse 0 front matter) at the top of
- * the chapter.
+ * the preceding verse.
+ *
+ * A reference above verse 1 (verse 0: an intro, a heading, a superscription) returns the chapter's
+ * first laid-out block instead of any marker, so the port lands at the top of the chapter the way
+ * the Scripture editor's `scrollToVerse` does. Landing on verse 1's marker would scroll away the
+ * very front matter the reference names. Unlike the aligned grid, which has no row for front
+ * matter, a chapter cell shows it.
  *
  * Unlike {@link findVerseBlockForVerse} there is no upper bound to respect: the inline layout places
- * no verse on a fixed row, so every rendered marker is a candidate. That finder's `isPlacedBlock`
- * has a second effect this one deliberately does not copy: it also screens out elements with no
- * layout box, whose all-zero rect would send the reader to the top of the chapter and pin them
- * there. The hazard is generic, but the guard is not free — it costs a `getBoundingClientRect()`
- * per candidate on a scan that runs for every mutation frame — and no case is known where the
- * editor emits a `span[data-marker="v"]` without a layout box in the inline layout. Nothing in this
- * repo hides one. Add the screen here if such a case turns up; it was weighed, not overlooked.
+ * no verse on a fixed row, so every rendered marker is a candidate.
  *
  * Sub-verse markers (`\v 3a`, `\v 3b`) both resolve to verse 3 and the earlier one wins, which puts
  * the reader at the start of the verse. The aligned layout's equivalent collision is worse — both
@@ -116,12 +133,34 @@ const VERSE_MARKER_SELECTOR = 'span[data-marker="v"][data-number]';
  *
  * @param port Element containing the rendered markers — one cell's content box.
  * @param verseNum Verse to scroll to.
- * @returns The marker to bring into view, or `undefined` when none has rendered yet.
+ * @returns The marker to bring into view, or `undefined` when none has rendered yet or the one it
+ *   lands on has no layout box.
  */
 export function findVerseMarkerForVerse(
   port: HTMLElement,
   verseNum: number,
 ): HTMLElement | undefined {
+  const target = findNearestVerseMarker(port, verseNum);
+  // The editor keeps unknown markers (an `\esb` sidebar, a `\periph`) in the DOM but hides them
+  // outside Standard view, verses included. A hidden marker's all-zero rect would drift the port
+  // toward the top on every check, so leave the port alone. Only the chosen target is screened: a
+  // rect read per candidate would cost too much on a scan that runs every mutation frame.
+  return target && target.getClientRects().length > 0 ? target : undefined;
+}
+
+/**
+ * {@link findVerseMarkerForVerse}'s lookup, before its screen for a target with no layout box.
+ *
+ * @param port One cell's content box.
+ * @param verseNum Verse to scroll to.
+ * @returns The chosen target, or `undefined` when none has rendered yet.
+ */
+function findNearestVerseMarker(port: HTMLElement, verseNum: number): HTMLElement | undefined {
+  if (verseNum < 1) {
+    const chapterTop = findFirstLaidOutBlock(port);
+    if (chapterTop) return chapterTop;
+  }
+
   // The common case — the reference names a verse the chapter starts — is answerable without
   // collecting every marker, and this runs on each frame in which the cell's editor mutates.
   if (Number.isInteger(verseNum) && verseNum >= 1) {
@@ -166,13 +205,34 @@ export function findVerseMarkerForVerse(
  * from here so they cannot disagree about it — reading a block as visible against one origin and
  * scrolling it to another is off by the border width.
  *
- * @param port The scroll port (the grid root).
+ * @param port The scroll port.
  * @returns The viewport Y of the first visible content pixel.
  */
 function getFirstVisibleY(port: HTMLElement): number {
   const headerHeight =
     port.querySelector<HTMLElement>('[data-cell-header]')?.getBoundingClientRect().height ?? 0;
   return port.getBoundingClientRect().top + port.clientTop + headerHeight;
+}
+
+/**
+ * The viewport-relative Y where the port's visible content ends: above its bottom border and above
+ * a horizontal scrollbar, which sits inside the border box that `getBoundingClientRect` reports. A
+ * classic scrollbar (Windows, Linux) appears when an indented poetry line, whose indent is sized in
+ * `vw`, overflows a narrow column.
+ *
+ * `clientTop`/`clientHeight` are layout pixels while rects are on-screen pixels, and the two differ
+ * under CSS `zoom` on an ancestor, so the layout values are scaled by the port's own rect-to-layout
+ * ratio. A port with no layout height (an environment that lays nothing out) falls back to the
+ * rect's bottom.
+ *
+ * @param port The scroll port.
+ * @returns The viewport Y just past the last visible content pixel.
+ */
+function getLastVisibleY(port: HTMLElement): number {
+  const rect = port.getBoundingClientRect();
+  if (port.offsetHeight === 0 || port.clientHeight === 0) return rect.bottom;
+  const scale = rect.height / port.offsetHeight;
+  return rect.top + (port.clientTop + port.clientHeight) * scale;
 }
 
 /**
@@ -212,8 +272,8 @@ export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolea
  * decline to scroll. Demanding the marker fit completely is what makes the verse readable.
  *
  * A target taller than the visible area can never fit, so it falls back to the any-part-showing
- * rule rather than being called hidden forever. That also covers a port reporting no visible area
- * at all — a hidden pane, or an environment that lays nothing out.
+ * rule rather than being called hidden forever. A port reporting no visible area at all takes the
+ * same fallback, where nothing counts as showing, so the caller scrolls.
  *
  * @param port The scroll port — the cell's content box in a chapter cell.
  * @param marker The verse marker to test.
@@ -222,13 +282,13 @@ export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolea
 export function isMarkerFullyInPortView(port: HTMLElement, marker: HTMLElement): boolean {
   const markerRect = marker.getBoundingClientRect();
   const firstVisibleY = getFirstVisibleY(port);
-  const portBottom = port.getBoundingClientRect().bottom;
+  const portBottom = getLastVisibleY(port);
   if (markerRect.height >= portBottom - firstVisibleY) return isBlockInPortView(port, marker);
   return markerRect.top >= firstVisibleY && markerRect.bottom <= portBottom;
 }
 
 /**
- * Scrolls `port` so `block` sits just below the sticky header.
+ * Scrolls `port` so `block` sits `leadInPx` below the sticky header.
  *
  * Flush, with no context above it, unlike the Scripture editor's `VERSE_NUMBER_SCROLL_OFFSET` — a
  * deliberate difference; see `adr-aligned-grid-flattens-the-editor-dom` before changing either.
@@ -237,8 +297,8 @@ export function isMarkerFullyInPortView(port: HTMLElement, marker: HTMLElement):
  * ancestors to bring the grid itself into view. Instant, not smooth: this also runs as the catch-up
  * when a hidden tab is activated, where there is nothing to animate from.
  *
- * @param port The scroll port (the grid root).
- * @param block The verse block to bring to the top of the port.
+ * @param port The scroll port.
+ * @param block The verse target (block or marker) to bring to the top of the port.
  * @param leadInPx How much room to leave above the target, so the reader keeps a little of the
  *   preceding verse for context. Defaults to none, which is what the aligned grid wants: its verse
  *   blocks carry their own padding, so their rect top is already the padding edge. A position above

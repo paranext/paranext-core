@@ -65,3 +65,35 @@ export function deriveCellState(args: {
   if (isLoading || usjPossiblyError === undefined) return 'downloading';
   return 'ready';
 }
+
+/**
+ * Whether a chapter's USJ is the chapter a reference names, going by the book and chapter nodes the
+ * content itself carries.
+ *
+ * A data hook keeps serving the previous selector's result until the new subscription's first
+ * update lands, and raises `isLoading` only in an effect, so for a render after the reference moves
+ * a cell can read as `ready` while still holding the chapter the reader left. This is how a caller
+ * tells the two apart. Content that names no chapter (a chapter-0 intro, or chapter data without a
+ * `\c`) has nothing to contradict the reference, so it matches.
+ *
+ * @param usj The chapter data, or whatever the data hook currently holds.
+ * @param book The reference's book code.
+ * @param chapterNum The reference's chapter number.
+ * @returns True when `usj` is USJ that does not name a different book or chapter.
+ */
+export function isUsjForChapter(usj: unknown, book: string, chapterNum: number): boolean {
+  if (typeof usj !== 'object' || !usj || !('content' in usj) || !Array.isArray(usj.content))
+    return false;
+  let namesChapter = false;
+  let namesThisChapter = false;
+  let namesOtherBook = false;
+  usj.content.forEach((node: unknown) => {
+    if (typeof node !== 'object' || !node || !('type' in node)) return;
+    if (node.type === 'book' && 'code' in node && node.code !== book) namesOtherBook = true;
+    if (node.type === 'chapter' && 'number' in node) {
+      namesChapter = true;
+      if (node.number === `${chapterNum}`) namesThisChapter = true;
+    }
+  });
+  return !namesOtherBook && (!namesChapter || namesThisChapter);
+}

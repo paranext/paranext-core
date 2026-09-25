@@ -359,7 +359,8 @@ describe('ResourceCellView zoom UI', () => {
     // the target's viewport rect and the port's `scrollTop` in different coordinate spaces, so the
     // port would overshoot the verse by the zoom factor.
     const port = container.querySelector('[data-cell-content]');
-    expect(port instanceof HTMLElement && port.style.zoom).toBeFalsy();
+    // 'missing' fails the check if the element is absent; jsdom reads an unset `zoom` as undefined.
+    expect(port instanceof HTMLElement ? port.style.zoom : 'missing').toBeFalsy();
   });
 
   it('publishes the factor as a custom property instead when zoomTarget is "blocks"', () => {
@@ -381,7 +382,8 @@ describe('ResourceCellView zoom UI', () => {
     // blocks instead; `[data-cell-pad]` is `display:contents` there, so the property inherits
     // through it without generating a box.
     const pad = container.querySelector('[data-cell-pad]');
-    expect(pad instanceof HTMLElement && pad.style.zoom).toBeFalsy();
+    // 'missing' fails the check if the element is absent; jsdom reads an unset `zoom` as undefined.
+    expect(pad instanceof HTMLElement ? pad.style.zoom : 'missing').toBeFalsy();
     expect(pad?.style.getPropertyValue('--aligned-zoom')).toBe('1.4');
   });
 
@@ -838,10 +840,15 @@ describe('ResourceCellView content scroll ownership', () => {
     editor: <div data-testid="editor" />,
   };
 
-  it('scrolls its own content by default', () => {
+  it('scrolls its own content by default, with scroll anchoring off', () => {
+    // The reference scroll tells the reader's scrolling from its own by comparing `scrollTop`, and
+    // scroll anchoring rewrites `scrollTop` without either of them — the aligned grid's root turns
+    // it off for the same reason.
     const { container } = renderCells(<ResourceCellView {...baseProps} />);
 
-    expect(container.querySelector('[data-cell-content]')).toHaveClass('tw:overflow-auto');
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).toHaveClass('tw:overflow-auto');
+    expect(content).toHaveClass('tw:[overflow-anchor:none]');
   });
 
   it('hands scrolling to an ancestor when asked, so an aligned grid can own the scroll port', () => {
@@ -854,6 +861,7 @@ describe('ResourceCellView content scroll ownership', () => {
     const content = container.querySelector('[data-cell-content]');
     expect(content).toHaveClass('tw:overflow-visible');
     expect(content).not.toHaveClass('tw:overflow-auto');
+    expect(content).not.toHaveClass('tw:[overflow-anchor:none]');
   });
 
   it('exposes the layout anchors the aligned grid styles hook onto', () => {
@@ -866,12 +874,11 @@ describe('ResourceCellView content scroll ownership', () => {
   });
 
   it('keeps the header OUTSIDE the content box, which the chapter scroll depends on', () => {
-    // `getFirstVisibleY` measures a sticky header by looking for `[data-cell-header]` INSIDE the
-    // port. In a chapter cell the header is the port's sibling, so that lookup finds nothing and
+    // `getFirstVisibleY` treats any `[data-cell-header]` INSIDE the port as a sticky header covering
+    // its top. In a chapter cell the header is the port's sibling, so that lookup finds nothing and
     // contributes no offset — which is the only reason the port math needs no per-layout branch.
-    // Making this header sticky inside the scroll box (the natural way to keep a column label
-    // visible while scrolling, and what the aligned grid does with its own row-1 headers) would
-    // silently land every chapter-mode scroll one header-height too low.
+    // Moving the header inside the port as a NON-sticky element would offset every chapter-mode
+    // scroll by its height, since it scrolls away while still being counted as covering the top.
     const { container } = renderCells(<ResourceCellView {...baseProps} />);
 
     expect(container.querySelector('[data-cell-content] [data-cell-header]')).toBeNull();
