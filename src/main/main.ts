@@ -96,7 +96,6 @@ import {
   addWindow,
   announceRoutingTargetChange,
   countWindowsThatCouldBeTheLastOne,
-  doesNavigationReplaceRendererRegistrations,
   focusWindow,
   getFocusedWindowId,
   getTargetWindowId,
@@ -920,7 +919,16 @@ async function main() {
     );
     // Before `loadURL` below: the page asks for its PAPI port as soon as its preload runs, so the
     // handler has to exist first. Registered on the WebContents, so it survives reloads.
-    registerWindowWithPapiPortBroker(newWindow.webContents, windowId);
+    //
+    // A window is routable only while it has a live PAPI channel and its window service shard has
+    // registered over it, so the ready mark follows the channel: it is cleared whenever the window's
+    // port closes, and the shard registering over the next port sets it again. A navigation that
+    // starts and is abandoned leaves the channel, and the mark, alone; one that completes, or a
+    // crash, closes the channel and clears the mark; and a reload that ends on an error page still
+    // clears it, because the old page's port has closed.
+    registerWindowWithPapiPortBroker(newWindow.webContents, windowId, {
+      onPortClosed: () => markWindowNotReady(windowId),
+    });
 
     // Tie the window to its persisted identity so layout persistence can serve and save it. If the
     // entry has gone (the user closed it while this window was starting), `assignEntryToWindow`
@@ -1217,16 +1225,6 @@ async function main() {
         `Reloading window ${windowId} after its renderer died (attempt ${reloadDecision.attempt} of ${MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS}); it becomes routable again when its window service shard reappears`,
       );
       newWindow.webContents.reload();
-    });
-    // A reload replaces the page and everything it registered, the same as a crash does. This also
-    // fires for the very first load, before the window was ever ready, which changes nothing.
-    //
-    // Deliberately NOT `did-start-loading`: that is a whole-tab signal with no frame information,
-    // and every web view in the app is an in-page iframe in this page, so it fires again every time
-    // the user opens a tab — which would strip a fully working window of its readiness with nothing
-    // to restore it. See `doesNavigationReplaceRendererRegistrations` for which navigations count.
-    newWindow.webContents.on('did-start-navigation', (details) => {
-      if (doesNavigationReplaceRendererRegistrations(details)) markWindowNotReady(windowId);
     });
     newWindow.webContents.on(
       // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs

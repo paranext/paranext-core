@@ -365,6 +365,84 @@ describe('papiPortBroker', () => {
     expect(ports[0].postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ code: 1001 }));
   });
 
+  describe('onPortClosed', () => {
+    test('is told once, with the window id, when the page closes its port', () => {
+      const onPortClosed = vi.fn();
+      const fake = makeFakeWebContents();
+      registerWindow(fake.webContents, 'w1', { onPortClosed });
+      fake.requestPort();
+
+      ports[0].emit('close');
+
+      expect(onPortClosed).toHaveBeenCalledTimes(1);
+      expect(onPortClosed).toHaveBeenCalledWith('w1');
+    });
+
+    test('is told once when a main-frame navigation commits', () => {
+      const onPortClosed = vi.fn();
+      const fake = makeFakeWebContents();
+      registerWindow(fake.webContents, 'w1', { onPortClosed });
+      fake.requestPort();
+
+      fake.navigateCommit(true);
+      // The port's own close notification follows main closing it, and must not count again
+      ports[0].emit('close');
+
+      expect(onPortClosed).toHaveBeenCalledTimes(1);
+      expect(onPortClosed).toHaveBeenCalledWith('w1');
+    });
+
+    test('is told once when the renderer crashes', () => {
+      const onPortClosed = vi.fn();
+      const fake = makeFakeWebContents();
+      registerWindow(fake.webContents, 'w1', { onPortClosed });
+      fake.requestPort();
+
+      fake.crash();
+
+      expect(onPortClosed).toHaveBeenCalledTimes(1);
+      expect(onPortClosed).toHaveBeenCalledWith('w1');
+    });
+
+    test('is told once when main closes the window’s port', () => {
+      const onPortClosed = vi.fn();
+      const fake = makeFakeWebContents();
+      registerWindow(fake.webContents, 'w1', { onPortClosed });
+      fake.requestPort();
+
+      closeWindowPort('w1', 1001, 'window closing');
+
+      expect(onPortClosed).toHaveBeenCalledTimes(1);
+      expect(onPortClosed).toHaveBeenCalledWith('w1');
+    });
+
+    test('is not told when a navigation starts and never commits', () => {
+      const onPortClosed = vi.fn();
+      const fake = makeFakeWebContents();
+      registerWindow(fake.webContents, 'w1', { onPortClosed });
+      fake.requestPort();
+
+      fake.navigateStart(true);
+
+      expect(onPortClosed).not.toHaveBeenCalled();
+    });
+
+    test('is not told when a port the page never received is closed', () => {
+      const onPortClosed = vi.fn();
+      const fake = makeFakeWebContents();
+      registerWindow(fake.webContents, 'w1', { onPortClosed });
+      fake.mainFrame.postMessage.mockImplementationOnce(() => {
+        throw new Error('Render frame was disposed before WebFrameMain could be accessed');
+      });
+
+      fake.requestPort();
+
+      // Positive control: the undelivered port really was closed
+      expect(ports[0].close).toHaveBeenCalled();
+      expect(onPortClosed).not.toHaveBeenCalled();
+    });
+  });
+
   test('a late destroyed signal from an old window leaves a newer window under the same id registered', () => {
     const oldWindow = makeFakeWebContents();
     const newWindow = makeFakeWebContents();

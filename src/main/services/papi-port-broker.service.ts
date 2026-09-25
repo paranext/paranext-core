@@ -102,7 +102,22 @@ function postPortError(windowId: string, frame: BrokerFrame, reason: string): vo
   }
 }
 
-function grantPort(windowId: string, state: WindowPortState, frame: BrokerFrame): void {
+/** How main hears about a registered window's channel */
+export type BrokerWindowOptions = {
+  /**
+   * Called once each time a port the window's page received closes, from either end and for any
+   * reason. Not called for a port the page never received, nor for an old port that closes after
+   * the window has already been served a new one.
+   */
+  onPortClosed?: (windowId: string) => void;
+};
+
+function grantPort(
+  windowId: string,
+  state: WindowPortState,
+  frame: BrokerFrame,
+  options: BrokerWindowOptions,
+): void {
   const { port1, port2 } = createMessageChannel();
   const socket = new MessagePortServerSocket(port1);
   try {
@@ -115,13 +130,18 @@ function grantPort(windowId: string, state: WindowPortState, frame: BrokerFrame)
     return;
   }
   state.socket = socket;
-  // However the channel closes, the window can then be served again
+  let wasDelivered = false;
+  // However the channel closes, the window can then be served again. A close main starts runs this
+  // synchronously, before `closePort` clears the state, so every close of the current port counts
   socket.addEventListener('close', () => {
-    if (state.socket === socket) state.socket = undefined;
+    if (state.socket !== socket) return;
+    state.socket = undefined;
+    if (wasDelivered) options.onPortClosed?.(windowId);
   });
   const grant: PapiPortGrant = { windowId };
   try {
     frame.postMessage(PAPI_PORT_CHANNEL, grant, [port2]);
+    wasDelivered = true;
   } catch (error) {
     // The page never received the port, so the window must not count as connected
     const reason = getErrorMessage(error);
@@ -137,8 +157,13 @@ function grantPort(windowId: string, state: WindowPortState, frame: BrokerFrame)
  *
  * @param webContents The window's `WebContents`
  * @param windowId The window's platform id, which labels its RPC server `renderer:<windowId>`
+ * @param options How main hears about the window's channel closing
  */
-export function registerWindow(webContents: BrokerWebContents, windowId: string): void {
+export function registerWindow(
+  webContents: BrokerWebContents,
+  windowId: string,
+  options: BrokerWindowOptions = {},
+): void {
   const state: WindowPortState = { socket: undefined };
   windowStates.set(windowId, state);
 
@@ -159,7 +184,7 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
       postPortError(windowId, frame, ALREADY_CONNECTED_REASON);
       return;
     }
-    grantPort(windowId, state, frame);
+    grantPort(windowId, state, frame, options);
   });
 
   // Closed when a main-frame navigation commits, not when it starts: a navigation can start and
