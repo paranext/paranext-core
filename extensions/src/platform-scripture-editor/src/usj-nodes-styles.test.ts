@@ -271,6 +271,18 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     it('uses no pseudo-element, which the focus box and book code already own', () => {
       expect(declarations).not.toMatch(/\.psc-para-marker-selected[^{,]*::?(?:before|after)/);
     });
+
+    it('paints the selected glyph after the base gutter glyph rule, which has equal specificity', () => {
+      // Equal specificity (0,6,0): source order decides.
+      const baseGlyph = '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child';
+      const selectedGlyph =
+        '.psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child';
+      const baseIndex = declarations.indexOf(baseGlyph);
+      const selectedIndex = declarations.indexOf(selectedGlyph);
+      expect(baseIndex).toBeGreaterThanOrEqual(0);
+      expect(selectedIndex).toBeGreaterThanOrEqual(0);
+      expect(selectedIndex).toBeGreaterThan(baseIndex);
+    });
   });
 
   describe('cross-copy drift pins (must agree with the demo copy in platform-bible-react)', () => {
