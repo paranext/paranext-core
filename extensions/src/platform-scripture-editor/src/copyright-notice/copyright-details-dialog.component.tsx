@@ -55,7 +55,7 @@ function CopyrightNoticeDetails({ notice, localizedStrings }: CopyrightNoticeDet
       {keyed(
         formatReplacementStringToArray(format, {
           name: <bdi>{notice.name}</bdi>,
-          fullName: <bdi>{notice.fullName || notice.name}</bdi>,
+          fullName: <bdi>{notice.fullName}</bdi>,
           years: notice.copyrightYears,
           permissionsLink: (
             <a
