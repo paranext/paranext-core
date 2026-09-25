@@ -2419,7 +2419,7 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
-  it('reads a pane definition for its declaration once, until the pane is updated or forgotten', async () => {
+  it('reads a pane definition for its declaration once, keeping it across updates until the pane is forgotten', async () => {
     const getDefinition = vi.fn((id: string) => definitions.get(id));
     __setContentZoomDepsForTesting({ getDefinition });
     await initializeContentZoomService();
@@ -2435,11 +2435,19 @@ describe('web-view-content-zoom.service', () => {
     expect(isContentZoomable('editor-9')).toBe(true);
     expect(getDefinition).toHaveBeenCalledTimes(1);
 
-    // An update may change the pane's type, so the answer follows the updated definition.
-    definitions.set('editor-9', { ...editor, webViewType: 'thirdParty.view' });
+    // A pane's type cannot change while it is open (`webViewType` is not an updatable property),
+    // so an update — a zoom step's state write, a re-pointed project — keeps the declaration. The
+    // definition read back here reports another type, which no live pane can, so an answer that
+    // followed it would show the declaration was read again.
+    definitions.set('editor-9', {
+      ...editor,
+      webViewType: 'thirdParty.view',
+      projectId: 'proj-B',
+      state: { other: 1 },
+    });
     if (!onDidUpdateWebViewCallback) throw new Error('test setup: no web-view update subscriber');
     onDidUpdateWebViewCallback({ webView: requireDefinition('editor-9') });
-    expect(isContentZoomable('editor-9')).toBe(false);
+    expect(isContentZoomable('editor-9')).toBe(true);
 
     // A forgotten pane's id may come back as another view, so its declaration is read afresh.
     forgetContentZoom('editor-9');
