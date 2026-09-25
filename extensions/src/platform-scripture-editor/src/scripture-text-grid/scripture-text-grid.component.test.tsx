@@ -3,12 +3,16 @@ import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { CONTENT_ZOOM_SCOPE_ATTRIBUTE } from 'platform-bible-react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
-import type { ResourceZoomController } from './use-resource-zoom.hook';
+
+const { mockWarn } = vi.hoisted(() => ({ mockWarn: vi.fn() }));
+vi.mock('@papi/frontend', () => ({ logger: { warn: mockWarn } }));
 
 const mockResourceCell = vi.fn(
   ({
     resourceRef,
+    zoomArea,
     scrRef,
     // setScrRef stays in the type (so mock.calls[n][0].setScrRef type-checks in the setter-sync test)
     // but is not destructured here because it is not used in the rendered JSX.
@@ -18,6 +22,9 @@ const mockResourceCell = vi.fn(
     onReorderKeyDown,
   }: {
     resourceRef: { label: string; projectId: string; resourceId: string };
+    zoomArea: string;
+    zoom?: unknown;
+    zoomMenuLabels?: unknown;
     scrRef: { verseNum: number };
     setScrRef: (scrRef: unknown) => void;
     viewMode?: string;
@@ -25,7 +32,11 @@ const mockResourceCell = vi.fn(
     reorderHandleLabel?: string;
     onReorderKeyDown?: (event: React.KeyboardEvent) => void;
   }) => (
-    <div data-testid={`cell-${resourceRef.projectId}`} data-view-mode={viewMode}>
+    <div
+      data-testid={`cell-${resourceRef.projectId}`}
+      data-view-mode={viewMode}
+      data-zoom-area={zoomArea}
+    >
       {`${resourceRef.label}@${scrRef.verseNum}`}
       {showDragHandle ? (
         // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
@@ -50,10 +61,6 @@ vi.mock('./resource-cell.component', () => ({
   ResourceCell: (props: Parameters<typeof mockResourceCell>[0]) => mockResourceCell(props),
 }));
 
-vi.mock('./use-resource-zoom-input.hook', () => ({
-  useResourceZoomInput: vi.fn(),
-}));
-
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
   return {
@@ -76,34 +83,16 @@ const resources = [
   { resourceId: 'r-c', projectId: 'c', label: 'עברית' },
 ];
 
-type RenderOptions = { zoom?: ResourceZoomController };
-
-function renderGrid(gridResources: typeof resources, options: RenderOptions = {}) {
-  const result = render(
-    <ScriptureTextGrid
-      resources={gridResources}
-      scrRef={scrRef}
-      setScrRef={setScrRef}
-      {...(options.zoom ? { zoom: options.zoom } : {})}
-    />,
+function renderGrid(gridResources: typeof resources) {
+  return render(
+    <ScriptureTextGrid resources={gridResources} scrRef={scrRef} setScrRef={setScrRef} />,
   );
-  return {
-    ...result,
-    rerender: (nextResources: typeof resources, nextOptions: RenderOptions = {}) =>
-      result.rerender(
-        <ScriptureTextGrid
-          resources={nextResources}
-          scrRef={scrRef}
-          setScrRef={setScrRef}
-          {...(nextOptions.zoom ? { zoom: nextOptions.zoom } : {})}
-        />,
-      ),
-  };
 }
 
 // Reset between tests so per-test assertions on the mock's calls aren't polluted by prior renders.
 beforeEach(() => {
   mockResourceCell.mockClear();
+  mockWarn.mockClear();
 });
 
 describe('ScriptureTextGrid', () => {
@@ -360,44 +349,12 @@ describe('ScriptureTextGrid — chapter view', () => {
     expect(document.querySelector('[data-resource-id="r2"]')).not.toBeNull();
   });
 
-  it('prunes zoom entries for resources no longer present', () => {
-    const zoom: ResourceZoomController = {
-      getZoom: () => 1,
-      setZoomForResource: vi.fn(),
-      adjustZoom: vi.fn(),
-      resetZoom: vi.fn(),
-      pruneToResourceIds: vi.fn(),
-    };
-    const { rerender } = renderGrid(
-      [
-        { resourceId: 'r1', projectId: 'p1', label: 'WEB' },
-        { resourceId: 'r2', projectId: 'p2', label: 'NIV' },
-      ],
-      { zoom },
-    );
-    expect(zoom.pruneToResourceIds).toHaveBeenLastCalledWith(['r1', 'r2']);
-    rerender([{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }], { zoom });
-    expect(zoom.pruneToResourceIds).toHaveBeenLastCalledWith(['r1']);
-  });
-
-  it('does not call pruneToResourceIds when the resource list is empty (prevents data loss during source loading)', () => {
-    const zoom: ResourceZoomController = {
-      getZoom: () => 1,
-      setZoomForResource: vi.fn(),
-      adjustZoom: vi.fn(),
-      resetZoom: vi.fn(),
-      pruneToResourceIds: vi.fn(),
-    };
-    renderGrid([], { zoom });
-    expect(zoom.pruneToResourceIds).not.toHaveBeenCalled();
-  });
-
-  it('single-resource container exposes data-resource-id so the zoom input hook can resolve the target', () => {
+  it('single-resource container exposes data-resource-id so an element inside it can be traced to its resource', () => {
     renderGrid([{ resourceId: 'r-solo', projectId: 'p-solo', label: 'SOLO' }]);
     expect(document.querySelector('[data-resource-id="r-solo"]')).not.toBeNull();
   });
 
-  it('chapter-context region exposes data-resource-id for its resource so Ctrl+wheel zoom works over the split panel', () => {
+  it('chapter-context region exposes data-resource-id for its resource', () => {
     render(
       <ScriptureTextGrid
         resources={resources}
@@ -687,5 +644,157 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
       />,
     );
     expect(screen.getByTestId('grip-r-a')).toHaveFocus();
+  });
+});
+
+describe('ScriptureTextGrid — zoom areas', () => {
+  /** The zoom scope each element carries, read through the exported attribute name. */
+  const scopesOf = (elements: HTMLElement[]) =>
+    elements.map((element) => element.getAttribute(CONTENT_ZOOM_SCOPE_ATTRIBUTE));
+
+  it('gives each resource its own area, the same one in its verse row and its chapter panel', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    const cellsOfB = screen.getAllByTestId('cell-b');
+    // Positive control: the verse row and the chapter panel both render resource b.
+    expect(cellsOfB).toHaveLength(2);
+    expect(cellsOfB.map((cell) => cell.getAttribute('data-zoom-area'))).toEqual([
+      'resource-r-b',
+      'resource-r-b',
+    ]);
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-zoom-area', 'resource-r-a');
+    expect(screen.getByTestId('cell-c')).toHaveAttribute('data-zoom-area', 'resource-r-c');
+  });
+
+  it('puts the zoom scope with its resource’s area on every verse row and on the chapter panel', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[2]}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    expect(scopesOf(screen.getAllByRole('listitem'))).toEqual([
+      'resource-r-a',
+      'resource-r-b',
+      'resource-r-c',
+    ]);
+    expect(screen.getByTestId('scripture-text-grid-chapter-context')).toHaveAttribute(
+      CONTENT_ZOOM_SCOPE_ATTRIBUTE,
+      'resource-r-c',
+    );
+  });
+
+  it('puts the zoom scope on every chapter-view column', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+      />,
+    );
+    expect(scopesOf(screen.getAllByRole('region'))).toEqual([
+      'resource-r-a',
+      'resource-r-b',
+      'resource-r-c',
+    ]);
+    expect(
+      ['cell-a', 'cell-b', 'cell-c'].map((testId) =>
+        screen.getByTestId(testId).getAttribute('data-zoom-area'),
+      ),
+    ).toEqual(['resource-r-a', 'resource-r-b', 'resource-r-c']);
+  });
+
+  it('puts the zoom scope on the single-resource region', () => {
+    renderGrid([{ resourceId: 'r-solo', projectId: 'p-solo', label: 'SOLO' }]);
+    expect(screen.getByRole('region')).toHaveAttribute(
+      CONTENT_ZOOM_SCOPE_ATTRIBUTE,
+      'resource-r-solo',
+    );
+    expect(screen.getByTestId('cell-p-solo')).toHaveAttribute('data-zoom-area', 'resource-r-solo');
+  });
+
+  it('falls back to the shared text-collection area for an id with nothing to keep, warning once', () => {
+    // The grid remembers which ids it has warned about for the whole session, so no other test in
+    // this file may use this id.
+    const gridResources = [{ resourceId: '日本語', projectId: 'jp', label: 'JP' }, resources[0]];
+    const { rerender } = render(
+      <ScriptureTextGrid resources={gridResources} scrRef={scrRef} setScrRef={setScrRef} />,
+    );
+    rerender(
+      <ScriptureTextGrid resources={[...gridResources]} scrRef={scrRef} setScrRef={setScrRef} />,
+    );
+    expect(screen.getByTestId('cell-jp')).toHaveAttribute('data-zoom-area', 'text-collection');
+    expect(scopesOf(screen.getAllByRole('listitem'))).toEqual(['text-collection', 'resource-r-a']);
+    expect(mockWarn).toHaveBeenCalledTimes(1);
+    expect(String(mockWarn.mock.calls[0][0])).toContain('"日本語"');
+  });
+
+  it('hands every cell the zoom controller and menu labels, in all four layouts', () => {
+    const zoom = {
+      getZoom: () => 1,
+      hasOwnLevel: () => false,
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
+    };
+    const zoomMenuLabels = { zoomIn: 'in', zoomOut: 'out', reset: 'reset', options: 'options' };
+    const everyCellGotThem = () =>
+      mockResourceCell.mock.calls.every(
+        ([cellProps]) => cellProps.zoom === zoom && cellProps.zoomMenuLabels === zoomMenuLabels,
+      );
+
+    const verseView = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[0]}
+        onChapterContextChange={vi.fn()}
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    // Positive control: three verse rows plus the chapter panel rendered.
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(4);
+    expect(everyCellGotThem()).toBe(true);
+    verseView.unmount();
+
+    mockResourceCell.mockClear();
+    const chapterView = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(3);
+    expect(everyCellGotThem()).toBe(true);
+    chapterView.unmount();
+
+    mockResourceCell.mockClear();
+    render(
+      <ScriptureTextGrid
+        resources={[resources[0]]}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(1);
+    expect(everyCellGotThem()).toBe(true);
   });
 });

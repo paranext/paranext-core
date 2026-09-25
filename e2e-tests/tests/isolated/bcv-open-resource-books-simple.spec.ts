@@ -14,6 +14,10 @@ import {
   setReferencedProjectsAndResources,
   type CommentTestProject,
 } from '../../fixtures/comment-test-helpers';
+import {
+  openSimpleModeEditor,
+  SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE,
+} from '../../fixtures/simple-mode-columns.page';
 
 /**
  * End-to-end proof that the top toolbar's book/chapter/verse control reaches a book that exists
@@ -71,61 +75,14 @@ const GENESIS_ITEM = bookItemSelector('Genesis', 'GEN');
 const DIMMED_BOOK_CLASS_PATTERN = /tw:text-muted-foreground\/50/;
 
 /**
- * `webViewType`s of the fixed Column 2 scripture-editor slot and Column 3 Bible-texts panel in the
- * simple layout (`src/renderer/components/docking/simple-layout.data.ts`). Every materialization of
- * a baked layout mints each web view a fresh id (`mintFreshWebViewIds` in
+ * `webViewType` of the fixed Column 3 Bible-texts panel in the simple layout
+ * (`src/renderer/components/docking/simple-layout.data.ts`). Every materialization of a baked
+ * layout mints each web view a fresh id (`mintFreshWebViewIds` in
  * `src/renderer/components/docking/mint-web-view-ids.util.ts`), so a slot can only be identified by
- * type — its id is read live via {@link waitForOpenWebViewIdByType}.
- *
- * The Scripture editor slot must be in the dock state before `openScriptureEditor` is called —
- * simple mode routes the open to that slot as a tab replacement, which fails outright if the target
- * tab is not there yet.
+ * type — its id is read live via {@link waitForOpenWebViewIdByType}. The Column 2 editor slot's type
+ * is {@link SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE}.
  */
-const SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
-
-/**
- * `openScriptureEditor` sequentially awaits the `openOrUpdateRelatedPanels` commands — five for an
- * editable project, four for a read-only resource — each of which opens or re-points a Column 3
- * panel, so the combined response routinely exceeds the default 30 s PAPI request timeout.
- */
-const OPEN_EDITOR_TIMEOUT_MS = 150_000;
-
-/**
- * Opens the editable Scripture editor for `projectId`, retrying a dock "Replacing tab failed"
- * rejection. That failure is a known race: `openOrUpdateRelatedPanels` re-points the Column 3
- * panels, and the resulting dock rebuild can briefly remove the editor slot this open is trying to
- * replace. A short delay and retry settles it.
- *
- * @param projectId The project to open in the editor column
- * @returns The web view id of the editor the open produced
- */
-async function openScriptureEditor(projectId: string, maxRetries = 2): Promise<string> {
-  // Sequential retry loop: each attempt must await the PAPI response and find out whether it was
-  // the dock race before deciding whether to retry, so the awaits cannot be parallelized.
-  /* eslint-disable no-await-in-loop */
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    if (attempt > 0)
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 2_000);
-      });
-    try {
-      const editorId = await sendPapiRequestOnce<string | undefined>(
-        'command:platformScriptureEditor.openScriptureEditor',
-        [projectId],
-        undefined,
-        OPEN_EDITOR_TIMEOUT_MS,
-      );
-      if (editorId) return editorId;
-      throw new Error(`openScriptureEditor returned no web view id for project ${projectId}`);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (attempt >= maxRetries || !message.includes('Replacing tab failed')) throw e;
-    }
-  }
-  /* eslint-enable no-await-in-loop */
-  throw new Error(`Could not open a Scripture editor for project ${projectId}`);
-}
 
 // DEV_NOISY=false keeps the test-only extensions and their tabs out of the layout, so the only web
 // views carrying a project are the ones this test puts there.
@@ -179,9 +136,17 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
   });
 
   test.afterAll(() => {
-    cleanupCommentTestProject(targetProject);
-    cleanupCommentTestProject(resourceProject);
-    restoreRecentProjects?.();
+    // Each step on its own: a project folder Windows still holds open makes its delete throw, which
+    // must skip neither the other delete nor the recent-projects restore.
+    try {
+      try {
+        cleanupCommentTestProject(targetProject);
+      } finally {
+        cleanupCommentTestProject(resourceProject);
+      }
+    } finally {
+      restoreRecentProjects?.();
+    }
   });
 
   test('offers a book from an open resource, greyed, and navigates to it', async ({ mainPage }) => {
@@ -213,7 +178,7 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
 
     // ── Phase 1: only the Revelation-less project is open ──────────────────────────────────────
     await waitForPapiMethodRegistered('command:platformScriptureEditor.openScriptureEditor');
-    const editorId = await openScriptureEditor(targetProject.projectId);
+    const editorId = await openSimpleModeEditor(targetProject.projectId);
     await expect(mainPage.locator(`iframe[data-web-view-id="${editorId}"]`)).toBeAttached({
       timeout: 60_000,
     });

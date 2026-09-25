@@ -20,7 +20,10 @@ import {
 } from './platform-scripture-editor.utils';
 
 type LocalizedStringsFile = {
-  metadata?: Record<string, { fallbackKey?: string }>;
+  metadata?: Record<
+    string,
+    { fallbackKey?: string; deprecationInfo?: { date: string; message: string } }
+  >;
   localizedStrings: Record<string, Record<string, string>>;
 };
 
@@ -274,6 +277,48 @@ describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) =>
 
   it('Spanish label differs from English', () => {
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The Text Collection cell's zoom items and "⋮" button use these four keys, so they are requested
+// by the cell and must carry no deprecation notice. Shipped keys are immutable, so their values are
+// pinned as shipped.
+describe('Text Collection per-resource zoom strings', () => {
+  const zoomKeys = [
+    '%webView_scriptureTextGrid_cell_zoomIn%',
+    '%webView_scriptureTextGrid_cell_zoomOut%',
+    '%webView_scriptureTextGrid_cell_resetZoom%',
+    '%webView_scriptureTextGrid_cell_zoomOptions%',
+  ];
+
+  it.each(zoomKeys)('%s is requested by the cell and is not marked deprecated', (key) => {
+    expect(RESOURCE_CELL_STRING_KEYS).toContain(key);
+    expect(metadata?.[key]?.deprecationInfo).toBeUndefined();
+  });
+
+  it('reads deprecation notices from this file at all', () => {
+    // Positive control for the absence above: a key that is retired does carry one.
+    expect(
+      metadata?.['%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%']
+        ?.deprecationInfo,
+    ).toBeDefined();
+  });
+
+  it('keeps the shipped English and Spanish values', () => {
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Zoom in');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Zoom out');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_resetZoom%']).toBe('Reset zoom');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
+      'Zoom options for {resourceName}',
+    );
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Acercar');
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Alejar');
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_resetZoom%']).toBe(
+      'Restablecer zoom',
+    );
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
+      'Opciones de zoom para {resourceName}',
+    );
   });
 });
 

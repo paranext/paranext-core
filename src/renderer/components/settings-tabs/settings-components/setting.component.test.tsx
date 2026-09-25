@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
 import { Setting } from './setting.component';
@@ -43,6 +43,7 @@ const ZOOM_STRINGS = {
   '%settings_platform_webViewContentZoom_increase%': 'Increase default zoom',
   '%settings_platform_webViewContentZoom_decrease%': 'Decrease default zoom',
   '%settings_platform_webViewContentZoom_reset%': 'Reset default zoom',
+  '%settings_zoomStepper_percentInput%': 'Percentage',
 };
 
 // The error block renders two localized labels; the tests that assert an error is (still) on screen
@@ -53,6 +54,12 @@ const ERROR_STRINGS = {
   '%settings_errorMessages_invalidValue%': 'Invalid value',
   '%settings_errorMessages_notWritableYet%': 'Setting not writable yet',
 };
+
+/** The stepper's percentage field, which shows the factor as a whole percentage. */
+const percentField = () => screen.getByRole('textbox', { name: 'Percentage' });
+
+/** Matches a displayed percentage; `\s` covers the narrow no-break space production puts before `%`. */
+const showsPercent = (percent: number) => new RegExp(`^${percent}\\s%$`, 'u');
 
 // Props shared by every case below; only settingKey/setting/label (and `disabled`) differ per test,
 // so each spreads this and passes just those (same idea as the renderPanel helper in
@@ -352,10 +359,9 @@ describe('a setting with no writer', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Increase default zoom' }));
-    // The readout is `aria-live`, so a jump here is announced to a screen-reader user as a change
-    // that was never written.
-    expect(screen.getByText('120 %')).toBeInTheDocument();
-    expect(screen.queryByText('130 %')).toBeNull();
+    // A jump here would be a percentage shown (and, after a press, announced) that was never written.
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+    expect(percentField()).toBeDisabled();
   });
 });
 
@@ -371,7 +377,7 @@ describe('platform.webViewContentZoom stepper', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
   });
 
-  it('renders the zoom stepper instead of a text box', () => {
+  it('renders the zoom stepper instead of a decimal text box', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([ZOOM_STRINGS, false]);
     render(
       <Setting
@@ -382,8 +388,9 @@ describe('platform.webViewContentZoom stepper', () => {
         label="Tab content default zoom"
       />,
     );
-    expect(screen.getByText('120 %')).toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Tab content default zoom' })).toBeInTheDocument();
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+    expect(screen.queryByDisplayValue('1.2')).toBeNull();
   });
 
   it('writes the stepped factor through setSetting', async () => {
@@ -435,8 +442,46 @@ describe('platform.webViewContentZoom stepper', () => {
       vi.useRealTimers();
     }
   });
+});
 
-  it('still renders a text box for the app-wide zoom factor', () => {
+const INTERFACE_SCALING_STRINGS = {
+  '%settings_platform_zoomFactor_increase%': 'Increase interface scaling',
+  '%settings_platform_zoomFactor_decrease%': 'Decrease interface scaling',
+  '%settings_platform_zoomFactor_reset%': 'Reset interface scaling',
+  '%settings_platform_zoomFactor_atMaximum%': 'Already at the largest interface scaling (300 %)',
+  '%settings_zoomStepper_percentInput%': 'Percentage',
+};
+
+describe('platform.zoomFactor stepper', () => {
+  beforeAll(() => {
+    // Radix Tooltip uses ResizeObserver; jsdom doesn't provide it.
+    global.ResizeObserver = class {
+      // jsdom stub: empty no-op intentionally has no `this` usage
+      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+      observe() {}
+      // jsdom stub: empty no-op intentionally has no `this` usage
+      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+      unobserve() {}
+      // jsdom stub: empty no-op intentionally has no `this` usage
+      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+      disconnect() {}
+    };
+  });
+
+  beforeEach(() => {
+    // Both label families are available, so a stepper that borrowed the content-zoom wording
+    // would find it and the per-key assertions below would catch that.
+    vi.mocked(useLocalizedStrings).mockReturnValue([
+      { ...ZOOM_STRINGS, ...INTERFACE_SCALING_STRINGS },
+      false,
+    ]);
+  });
+
+  afterEach(() => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
+  it('shows Interface scaling as a percentage stepper instead of a decimal text box', () => {
     render(
       <Setting
         setSetting={baseProps.setSetting}
@@ -446,7 +491,88 @@ describe('platform.webViewContentZoom stepper', () => {
         label="Interface scaling"
       />,
     );
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Interface scaling' })).toBeInTheDocument();
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+    expect(screen.queryByDisplayValue('1.2')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Increase interface scaling' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Increase default zoom' })).toBeNull();
+  });
+
+  it('writes the stepped factor through setSetting', async () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.zoomFactor"
+        setting={1.2}
+        label="Interface scaling"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Increase interface scaling' }));
+    await waitFor(() => expect(baseProps.setSetting).toHaveBeenCalledWith(1.3));
+  });
+
+  it('resets Interface scaling to 100 %', async () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.zoomFactor"
+        setting={1.2}
+        label="Interface scaling"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reset interface scaling' }));
+    await waitFor(() => expect(baseProps.setSetting).toHaveBeenCalledWith(1));
+  });
+
+  it('commits a typed percentage as the stored factor', async () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.zoomFactor"
+        setting={1}
+        label="Interface scaling"
+      />,
+    );
+    fireEvent.change(percentField(), { target: { value: '137' } });
+    fireEvent.keyDown(percentField(), { key: 'Enter' });
+    await waitFor(() => expect(baseProps.setSetting).toHaveBeenCalledWith(1.37));
+  });
+
+  it('names the Interface scaling limit, not the content-zoom one, at the maximum', async () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        settingKey="platform.zoomFactor"
+        setting={3}
+        label="Interface scaling"
+      />,
+    );
+    act(() => {
+      screen.getByRole('button', { name: 'Increase interface scaling' }).focus();
+    });
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'Already at the largest interface scaling (300 %)',
+    );
+  });
+
+  it('still renders a text box for other number settings', () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        settingKey="platform.requestTimeout"
+        setting={30}
+        label="Request timeout"
+      />,
+    );
+    expect(screen.getByDisplayValue('30')).toBeInTheDocument();
     expect(screen.queryByRole('group')).toBeNull();
   });
 });

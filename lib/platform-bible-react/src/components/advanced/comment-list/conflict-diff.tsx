@@ -1,3 +1,4 @@
+import { useContentZoomTextProps } from '@/context/content-zoom-text.context';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { sanitizeHtml } from 'platform-bible-utils';
 import { COMMENT_BODY_PROSE_CLASSES } from './comment-list.utils';
@@ -34,9 +35,14 @@ export const sanitizeDiffHtml = (html: string) => trimDiffSpanWhitespace(sanitiz
 
 /** Renders already-sanitized PT9 diff HTML with the shared diff coloring. */
 export function DiffHtml({ html }: { html: string }) {
+  const contentZoomTextProps = useContentZoomTextProps();
   return (
     <div
       className={DIFF_HTML_CLASSES}
+      // The diff is project text: it zooms with the comment it belongs to inside a
+      // ContentZoomTextProvider.
+      // eslint-disable-next-line react/jsx-props-no-spreading
+      {...contentZoomTextProps}
       // The content is PT9 HTML; sanitized by the caller before injecting.
       // eslint-disable-next-line react/no-danger
       dangerouslySetInnerHTML={{ __html: html }}

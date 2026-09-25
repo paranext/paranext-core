@@ -23,12 +23,19 @@ export type Bound = {
  * chrome-keys/bootstrap chord-rule parity test (`web-view-content-zoom.chord-parity.test.ts`),
  * which drives this installation alongside `registerContentZoomChromeKeys` and compares the action
  * each one takes for the same keystroke.
+ *
+ * `declaredArea` is the default area core declares for the pane's web view type, as the shard
+ * passes it.
  */
 export function install(
   webViewId: string,
   html: string,
   bound?: Partial<Bound>,
   levels: { [areaId: string]: number } = {},
+  // `default-param-last` (the airbnb base rule, not the TS-aware variant) does not recognize a
+  // plain `declaredArea?: string` as coming after a default parameter, so this needs a real `=`
+  // default rather than only the `?` marker.
+  declaredArea: string | undefined = undefined,
 ): { papi: PapiLike; bound: Bound } {
   document.head.innerHTML = getContentZoomStyleElement('n', 1, levels);
   document.body.innerHTML = html;
@@ -47,7 +54,7 @@ export function install(
   // Exercises the bootstrap exactly as it runs inside a web view: injected as source text and
   // evaluated, not imported as a module.
   // eslint-disable-next-line no-new-func
-  new Function(getContentZoomBootstrapScript(webViewId))();
+  new Function(getContentZoomBootstrapScript(webViewId, declaredArea))();
   return { papi, bound: allBound };
 }
 

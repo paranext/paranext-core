@@ -50,7 +50,6 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
-  ContentZoomAreaProvider,
   ContentZoomRoot,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
@@ -60,7 +59,7 @@ import {
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
-  measureRange,
+  measureBox,
   Popover,
   PopoverAnchor,
   PopoverContent,
@@ -237,6 +236,8 @@ const EDITOR_LOAD_DELAY_TIME = 200;
  */
 const PDP_SAVE_DEBOUNCE_MS = 700;
 
+const FOOTNOTES_ZOOM_AREA_LABEL_KEY: LocalizeKey = '%webView_footnoteList_header%';
+
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
@@ -266,6 +267,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...[...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS].map(
     paragraphMarkerNameKey,
   ),
+  // The footnotes pane's name on the zoom indicator.
+  FOOTNOTES_ZOOM_AREA_LABEL_KEY,
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
     .filter((item) => !!item),
@@ -298,16 +301,16 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 
 /**
- * The footnote editor popover's minimum width: 500 px, yielding to the zoomed width cap (the pane's
- * available width divided by the zoom factor) so a zoomed popover still fits a narrow pane. Until
- * Radix has published the available width, the viewport width stands in for it: the footnote editor
- * locks its own width on its first layout, which happens before that.
+ * The footnote editor popover's minimum width: 500 px, yielding to the pane's available width so
+ * the popover still fits a narrow pane. Until Radix has published the available width, the viewport
+ * width stands in for it: the footnote editor locks its own width on its first layout, which
+ * happens before that.
  *
  * Set inline rather than as a Tailwind arbitrary class: the web view's SCSS + PostCSS pipeline
  * drops a rule whose value is this `min()` expression, so the minimum is an inline style.
  */
 const FOOTNOTE_POPOVER_MIN_WIDTH =
-  'min(500px, calc(var(--radix-popover-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))';
+  'min(500px, var(--radix-popover-content-available-width, 100vw))';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
@@ -1946,7 +1949,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (!contextElement) return;
       markersMenuAnchor.setSource({
         measure: () => {
-          const rect = measureRange(range);
+          const rect = measureBox(range);
           return rect && leftEdgeRect(rect);
         },
         contextElement,
@@ -3706,23 +3709,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     const editorTree = (
       <TwoStepDeleteTooltipOverlay>
-        <EditorKeyboardShortcuts editorRef={editorRef}>
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={setScrRefNoScroll}
-            options={options}
-            logger={logger}
-            onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
-            onSelectionChange={handleSelectionChange}
-            onStateChange={(state) => {
-              setCanUndo(state.canUndo);
-              setCanRedo(state.canRedo);
-              setBlockMarker(state.blockMarker);
-              setContextMarker(state.contextMarker);
-            }}
-          />
-        </EditorKeyboardShortcuts>
+        {/* The Scripture text's `main` zoom area holds the editor and nothing else. The overlays
+            around it — this one's Backspace/Delete hint, the paragraph-marker tooltips and the
+            Simple-mode character-marker bar — stay at interface scale and place themselves from
+            rect differences, which a zoomed element reports in the same viewport pixels. The area
+            sits INSIDE this overlay rather than around it because the overlay positions its hint
+            relative to its own wrapper: inside the zoom, the hint's CSS offsets would be multiplied
+            by the zoom factor and land away from the verse. The wrapper holds no text itself. */}
+        <ContentZoomRoot>
+          <EditorKeyboardShortcuts editorRef={editorRef}>
+            <Editorial
+              ref={editorRef}
+              scrRef={scrRef}
+              onScrRefChange={setScrRefNoScroll}
+              options={options}
+              logger={logger}
+              onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
+              onSelectionChange={handleSelectionChange}
+              onStateChange={(state) => {
+                setCanUndo(state.canUndo);
+                setCanRedo(state.canRedo);
+                setBlockMarker(state.blockMarker);
+                setContextMarker(state.contextMarker);
+              }}
+            />
+          </EditorKeyboardShortcuts>
+        </ContentZoomRoot>
       </TwoStepDeleteTooltipOverlay>
     );
 
@@ -3916,17 +3928,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
-          The Scripture text zoom area: the toolbar and the footnotes-pane divider live outside it,
-          in the surrounding layout; the editor and everything it renders inline (including the
-          Simple-mode character-marker bar) scale with the text. Content that portals out of it
-          (menus, pop-ups) is not inside the area: the library's popovers, dropdown menus and
-          tooltips opened from inside follow it through the area `ContentZoomRoot` provides, while
-          the editor's own right-click menu stays at interface scale. */}
+          The zoom area is inside `renderEditor()`, around the editor tree only. */}
       <InPortal node={editorPortalNode}>
         <PortalContents>
-          <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
-            {renderEditor()}
-          </ContentZoomRoot>
+          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderEditor()}</div>
         </PortalContents>
       </InPortal>
       <div
@@ -3991,6 +3996,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   useWebViewState={useWebViewState}
                   showMarkers={options.view?.markerMode !== 'hidden'}
                   focusRequest={footnotePaneFocusRequest}
+                  zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
                 >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                   <OutPortal node={editorPortalNode} />
@@ -4006,66 +4012,64 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         )}
       </div>
       {/* The popovers below are rendered beside the editor and anchored to live positions in its
-          text (see useLivePopoverAnchor), so they belong to the text's zoom area, scale with it,
-          and follow the text when it scrolls or reflows. */}
-      <ContentZoomAreaProvider>
-        {/** Inline markers menu components */}
-        <Popover open={showMarkersMenu}>
-          <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
-          <PopoverContent
-            className="tw:w-[500px] tw:p-0"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-          >
-            <MarkerMenu
-              markerMenuItems={inlineMarkerMenuItems}
-              localizedStrings={localizedStrings}
-              searchRef={markerMenuSearchRef}
-              searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
-            />
-          </PopoverContent>
-        </Popover>
-        {/** Footnote editor components */}
-        <Popover open={showFootnoteEditor}>
-          <PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />
-          <PopoverContent
-            className="tw:w-max tw:p-[10px]"
-            style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}
-          >
-            <FootnoteEditor
-              classNameForEditor="scripture-font"
-              noteOps={editingNoteOps.current}
-              noteKey={editingNoteKey.current}
-              onClose={onFootnoteEditorClose}
-              onNoteEdit={onFootnoteEditorNoteEdit}
-              scrRef={scrRef}
-              editorOptions={options}
-              defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
-              localizedStrings={localizedStrings}
-              parentEditorRef={editorRef}
-              markerPalette={footnoteMarkerPalette}
-            />
-          </PopoverContent>
-        </Popover>
-        {/** Comment editor for creating new comment threads */}
-        <Popover open={showCommentEditor}>
-          <PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />
-          {/* `always`: re-measured every frame while open. Marking the selection as the pending
+          text (see useLivePopoverAnchor), so they follow the text when it scrolls or reflows. They
+          stay at interface scale. */}
+      {/** Inline markers menu components */}
+      <Popover open={showMarkersMenu}>
+        <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
+        <PopoverContent
+          className="tw:w-[500px] tw:p-0"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <MarkerMenu
+            markerMenuItems={inlineMarkerMenuItems}
+            localizedStrings={localizedStrings}
+            searchRef={markerMenuSearchRef}
+            searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
+          />
+        </PopoverContent>
+      </Popover>
+      {/** Footnote editor components */}
+      <Popover open={showFootnoteEditor}>
+        <PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />
+        <PopoverContent
+          className="tw:w-max tw:p-[10px]"
+          style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}
+        >
+          <FootnoteEditor
+            classNameForEditor="scripture-font"
+            noteOps={editingNoteOps.current}
+            noteKey={editingNoteKey.current}
+            onClose={onFootnoteEditorClose}
+            onNoteEdit={onFootnoteEditorNoteEdit}
+            scrRef={scrRef}
+            editorOptions={options}
+            defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+            localizedStrings={localizedStrings}
+            parentEditorRef={editorRef}
+            markerPalette={footnoteMarkerPalette}
+          />
+        </PopoverContent>
+      </Popover>
+      {/** Comment editor for creating new comment threads */}
+      <Popover open={showCommentEditor}>
+        <PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />
+        {/* `always`: re-measured every frame while open. Marking the selection as the pending
               comment re-renders the text under the anchor without any scroll, resize or layout
               shift that would otherwise trigger a re-measure. */}
-          <PopoverContent className="tw:w-[400px] tw:p-[10px]" updatePositionStrategy="always">
-            <CommentEditor
-              assignableUsers={commentEditorAssignableUsers}
-              onSave={onCommentEditorSave}
-              onClose={onCommentEditorCancel}
-              localizedStrings={localizedStrings}
-              initialAssignedUser={lastAssignedUser}
-            />
-          </PopoverContent>
-        </Popover>
-      </ContentZoomAreaProvider>
+        <PopoverContent className="tw:w-[400px] tw:p-[10px]" updatePositionStrategy="always">
+          <CommentEditor
+            assignableUsers={commentEditorAssignableUsers}
+            onSave={onCommentEditorSave}
+            onClose={onCommentEditorCancel}
+            localizedStrings={localizedStrings}
+            initialAssignedUser={lastAssignedUser}
+          />
+        </PopoverContent>
+      </Popover>
     </div>
   );
 };

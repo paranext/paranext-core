@@ -44,6 +44,12 @@ export type FootnotesLayoutProps = PropsWithChildren<{
    * consistent).
    */
   focusRequest?: { index: number };
+  /**
+   * Name of the footnotes zoom area as the zoom indicator shows it (`Footnotes · 120 %`), so a zoom
+   * step in the footnotes pane is not mistaken for one in the Scripture text. Omit it and the
+   * indicator shows the level alone.
+   */
+  zoomAreaLabel?: string;
 }>;
 
 export function FootnotesLayout({
@@ -53,6 +59,7 @@ export function FootnotesLayout({
   useWebViewState,
   onFootnoteSelected,
   focusRequest,
+  zoomAreaLabel,
 }: FootnotesLayoutProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -282,7 +289,11 @@ export function FootnotesLayout({
         >
           {/* Footnotes zoom area: the pane's own padding (on the ResizablePanel above) and its
               resize handle stay outside so they keep their size while the list content scales. */}
-          <ContentZoomRoot area="footnotes" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+          <ContentZoomRoot
+            area="footnotes"
+            label={zoomAreaLabel}
+            className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+          >
             <FootnoteList
               classNameForItems="scripture-font"
               listId={footnoteListKey}

@@ -1172,6 +1172,15 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
+ * holds nothing the user wrote. A translation project with editing switched off still syncs: its
+ * Scripture text is locked, but the user can still add comments to it. The window-close and
+ * shutdown syncs (`getWritableEditorProjectIds` in `src/main/shutdown-tasks.ts`) do not yet draw
+ * the same line: they drop every editor whose saved `isReadOnly` is set, and an editor opened with
+ * a project ID (Home, New Tab, the title-bar picker) takes that flag from `platform.isEditable`, so
+ * an `Editable=F` project is synced here but not when its window closes or the app quits
+ * (PT-4786).
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
@@ -1186,7 +1195,7 @@ export async function syncOnProjectSwitch(
     );
   }
 
-  if (outgoingProjectId) {
+  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
     try {
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
         outgoingProjectId,
@@ -1235,13 +1244,13 @@ export async function finalizeProjectSwitch(
   // tab within it.
   syncOnProjectSwitch(papi, projectId, undefined);
   if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
-    // The rebuilt Simple layout stamps `projectId` onto the tabs of the static layout, but the Text
-    // Collection is merged in afterwards from the default-layout supplement, which carries none — so
-    // this is the one Column 3 panel that arrives unbound from a mode switch and would otherwise
-    // fall back to the scroll group's (outgoing) source project. Ordered before `applyForProject`
-    // for the same reason the editor-column switch is: the re-point settles the panel's content
-    // before the shared layout picks which tab to front. It swallows its own failures, so no
-    // try/catch here.
+    // Normally a no-op: `runProjectBoundSimpleSwitch` (`src/renderer/services/
+    // web-view.service-shard.ts`) bakes `projectId` into every merged supplement tab with
+    // `applyProjectIdToTabs` before this runs, so the Text Collection arrives already bound and
+    // the call returns at its skip guard. Kept as a safety net for a caller that skips the bake.
+    // Ordered before `applyForProject` for the same reason the editor-column switch is: a re-point
+    // settles its content before the shared layout picks which tab to front. It swallows its own
+    // failures, so no try/catch here.
     await updateRelatedTextCollectionPanel(papi, projectId);
     await applyForProject?.(projectId);
   }
@@ -1262,6 +1271,32 @@ export async function finalizeProjectSwitch(
 // #region Text Connection Panels
 
 /**
+ * Whether `projectId` is a published resource rather than a translation project.
+ *
+ * `platform.isPublished` is the project-kind classification. `platform.isEditable` is not a
+ * substitute: it is a project-wide switch on editing the Scripture text, so a translation project
+ * can have it off.
+ *
+ * Read from the project's `platform.base` PDP rather than `projectLookup.getMetadataForProject`,
+ * because the setting is the authoritative value while the metadata field is optional.
+ *
+ * A failed read counts as "not published", the setting's own default: following a project is
+ * recoverable on the next switch, while staying put would leave a panel silently on the outgoing
+ * project.
+ */
+async function isProjectPublished(papi: typeof PapiBackend, projectId: string): Promise<boolean> {
+  try {
+    const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+    return (await pdp.getSetting('platform.isPublished')) === true;
+  } catch (e) {
+    papi.logger.warn(
+      `Could not read platform.isPublished for ${projectId} (${getErrorMessage(e)}); treating it as a translation project`,
+    );
+    return false;
+  }
+}
+
+/**
  * Opens or updates the model text and the various views to be displayed in tabs in "column 3" (
  * reference texts, commentaries, comments, Text Collection, etc.) for a project.
  *
@@ -1269,17 +1304,19 @@ export async function finalizeProjectSwitch(
  * re-pointed. Find is NOT here: it needs the id of the editor web view the switch produces, so it
  * is re-pointed separately by {@link updateRelatedFindPanel} once that editor exists.
  *
+ * The Text Collection is the one panel that declines to follow a published resource; see
+ * {@link updateRelatedTextCollectionPanel}.
+ *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
- * @param isProjectEditable Whether `projectId` names an editable translation project rather than a
- *   read-only resource opened in the editor column. Only the Scripture Text Grid honors it; the
- *   other Column 3 panels follow the editor either way.
  */
 export async function openOrUpdateRelatedPanels(
   papi: typeof PapiBackend,
   projectId: string,
-  isProjectEditable: boolean,
 ): Promise<void> {
+  // Started first so the settings round trip overlaps the four panel commands below instead of
+  // adding to the switch's latency.
+  const isPublishedPromise = isProjectPublished(papi, projectId);
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
   } catch (e) {
@@ -1308,10 +1345,8 @@ export async function openOrUpdateRelatedPanels(
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
   }
-  // A text collection is built from an editable project's settings, so a read-only resource opened
-  // in the editor column must not re-point it. Not wrapped like the four above: this one swallows
-  // its own failures (see its TSDoc).
-  if (isProjectEditable) await updateRelatedTextCollectionPanel(papi, projectId);
+  // Not wrapped like the four above: this one swallows its own failures (see its TSDoc).
+  await updateRelatedTextCollectionPanel(papi, projectId, isPublishedPromise);
 }
 
 /**
@@ -1369,13 +1404,16 @@ export function resolveGridProviderProjectId(
  * _requires_ a remount: it reads admin layout settings through `useBufferedLayoutSetting`, which
  * documents itself as built for consumers that switch projects via `reloadWebView` and NOT safe for
  * ones that change `projectId` in place (it would keep serving the previous project's held value,
- * and it `logger.warn`s if it detects that). Without any re-point the panel would fall back to
- * inferring its project from the scroll group's source project — the project that last SET the
- * group's reference, which a project switch does not change — and would keep rendering the outgoing
- * project's texts until the user next navigated.
+ * and it `logger.warn`s if it detects that). Without any re-point the panel would keep rendering
+ * the outgoing project's texts indefinitely: an unbound grid seeds itself once from the window's
+ * `ActiveEditorProjectId` and keeps that project from then on (see
+ * `resolveTextCollectionProjectId`), so only a re-point moves it.
  *
- * Three deliberate constraints:
+ * Four deliberate constraints:
  *
+ * - Never follows a published resource (see `isProjectPublished`): a resource has no collection of
+ *   its own, so following it would cost a reload, and the in-memory state it drops, for an empty
+ *   panel. The rule lives here rather than in a caller so every re-point path applies it.
  * - Never creates a panel when none is open. The Text Collection has no open command and no menu
  *   entry: its only open path is the default-layout supplement, which puts it in Column 3 from
  *   startup. So "not open" means the tab was closed in Power mode or the
@@ -1403,10 +1441,14 @@ export function resolveGridProviderProjectId(
  *
  * @param papi The instance of papi to read web view definitions with and request the reload from
  * @param projectId The id of the project whose text collection the panel should show
+ * @param isPublishedPromise Whether `projectId` is a published resource. A caller that already
+ *   started this read passes it in so the round trip overlaps its own work; otherwise it is read
+ *   here, and only once a reload is still in question.
  */
 export async function updateRelatedTextCollectionPanel(
   papi: typeof PapiBackend,
   projectId: string,
+  isPublishedPromise?: Promise<boolean>,
 ): Promise<void> {
   let existingPanel: SavedWebViewDefinition | undefined;
   try {
@@ -1431,6 +1473,8 @@ export async function updateRelatedTextCollectionPanel(
       normalizeProjectId(existingPanel.projectId) === normalizeProjectId(projectId))
   )
     return;
+
+  if (await (isPublishedPromise ?? isProjectPublished(papi, projectId))) return;
 
   try {
     // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
@@ -1462,20 +1506,31 @@ export async function updateRelatedTextCollectionPanel(
 
 /**
  * Re-points the Find panel at `projectId`, the way {@link openOrUpdateRelatedPanels} re-points the
- * rest of Column 3. Kept separate, and called after the editor's own web view exists, because Find
- * needs `editorWebViewId`: it caches that id and uses it to select and highlight a clicked result
- * in the editor, and a project switch that replaces the editor tab mints a new one. Running this
- * alongside the other panels would hand Find the id of the editor being replaced.
+ * rest of Column 3. Called after the editor's own web view exists because Find caches
+ * `editorWebViewId` to select and highlight a clicked result, and a project switch that replaces
+ * the editor tab mints a new one.
  *
- * Find is re-pointed without being opened, the same way {@link updateRelatedTextCollectionPanel}
- * treats the Text Collection. In Simple mode it is part of the fixed layout from startup, so it is
- * always already there; anywhere else it is a panel the user opened deliberately, and a project
- * switch is not a request to open it.
+ * Re-points without opening, like {@link updateRelatedTextCollectionPanel}: a project switch is not
+ * a request to open a panel that isn't there.
+ *
+ * Deliberately has no editability or project-kind condition: Find follows the editor onto a
+ * read-only project or a published resource because searching is a read (see
+ * `adr-find-follows-editor-to-read-only`).
+ *
+ * Only Simple mode re-points Find. The mode is read here, fresh, rather than taken from the caller:
+ * a project switch can run long enough for the user to change mode mid-way, and reloading Power
+ * mode's Find onto the switched project would be wrong.
+ *
+ * Hidden case: in Simple mode Find's tab is usually inactive when this runs. The reload remounts
+ * Find, whose render is data-driven, so it shows the right project when next shown. But a Find that
+ * restores a previous search runs it immediately, hidden or not, and the auto-search held back by
+ * `useRunWhenVisible` runs again when the tab is shown, so the search, and the clearing of results
+ * it starts with, happens twice. A known gap, tracked as PT-4418.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
  *
- * @param papi The instance of papi to send the command
+ * @param papi The instance of papi to read the interface mode with and send the command
  * @param projectId The id of the project Find should search from now on
  * @param editorWebViewId Id of the editor web view the switch produced
  */
@@ -1485,6 +1540,7 @@ export async function updateRelatedFindPanel(
   editorWebViewId: string | undefined,
 ): Promise<void> {
   try {
+    if ((await papi.settings.get('platform.interfaceMode')) !== 'simple') return;
     await papi.commands.sendCommand(
       'platformScripture.updateFindProject',
       projectId,

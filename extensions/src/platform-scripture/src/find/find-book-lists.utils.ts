@@ -69,9 +69,9 @@ export type FindBookLists = {
  *
  * Pass `undefined` when the project's book list is not known: while the setting is still resolving,
  * or after the read failed. `availableBookIds` then comes back `undefined` rather than empty, which
- * is what keeps a persisted book selection from being pruned away against a list nobody has read
- * yet. An EMPTY array is a real answer — a project with no searchable books — and is reported as
- * such, which is a genuine case here because extra material is excluded.
+ * keeps the derived display and search list from being narrowed against a book list not yet known.
+ * An EMPTY array is a real answer — a project with no searchable books — and is reported as such,
+ * which is a genuine case here because extra material is excluded.
  *
  * TODO(PT-4414): The `availableBookIds`/`localizableBookIds` split exists only to compensate for
  * excluding extra material; collapse it back into one list when that exclusion goes away.

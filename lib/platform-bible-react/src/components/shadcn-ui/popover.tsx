@@ -8,9 +8,6 @@ import { cn } from '@/utils/shadcn-ui/utils';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 // CUSTOM: Import shared z-index constant to ensure popovers stack above the dock
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
-// CUSTOM: Import the content-zoom area context so a popover opened from zoomed content follows
-// that area's zoom
-import { getContentZoomPopupStyle, useContentZoomArea } from '@/context/content-zoom-area.context';
 
 /**
  * The Popover component displays rich content in a portal, triggered by a button. This component is
@@ -113,6 +110,8 @@ function PopoverPortalContainerProvider({
 /* #endregion CUSTOM */
 
 /** @inheritdoc Popover */
+// CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
+// scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function PopoverContent({
   className,
   align = 'center',
@@ -125,8 +124,6 @@ function PopoverContent({
   const dir: Direction = readDirection();
   // CUSTOM: Read portal container override (see PopoverPortalContainerContext above) so nested popovers stay inside modal dialogs.
   const portalContainer = React.useContext(PopoverPortalContainerContext);
-  // CUSTOM: Read the content-zoom area this popover was opened from (undefined outside every area)
-  const zoomArea = useContentZoomArea();
   return (
     // CUSTOM: When a PopoverPortalContainerProvider is in scope, portal into its container
     // instead of the default document.body so nested popovers stay inside modal dialogs.
@@ -138,43 +135,12 @@ function PopoverContent({
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation; removed tw:z-50 to use shared constant below
           'pr-twp tw:flex tw:w-72 tw:origin-(--radix-popover-content-transform-origin) tw:flex-col tw:gap-2.5 tw:rounded-lg tw:bg-popover tw:p-2.5 tw:text-sm tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:outline-hidden tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',
-          // CUSTOM: Inside a content-zoom area, cap the width at the space Radix reports as available,
-          // divided by the area's zoom factor: Radix measures in unzoomed pixels while this element's
-          // own lengths are zoomed, so the division keeps a zoomed popover inside the pane
-          // CUSTOM: Falls back to 100vw until Radix's size middleware publishes the real available
-          // width, so the measuring pass gets a real cap instead of an invalid var() computing to none
-          zoomArea !== undefined &&
-            'tw:max-w-[calc(var(--radix-popover-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1))]',
-          // CUSTOM: Inside a content-zoom area, also cap the height at the space Radix reports as
-          // available, divided by the area's zoom factor, so a tall zoomed popover stays inside the
-          // pane vertically too (same unzoomed-vs-zoomed pixel reason as the width cap above). The
-          // box scrolls, so content that cannot shrink to the capped size stays inside it instead of
-          // painting past its edges. That makes this element a clipping ancestor for anything
-          // rendered inside it: the editor's right-click menu portals into the footnote editor's
-          // root, a descendant, and stays inside this box only because the editor library clamps
-          // the menu against its clipping ancestors. A nested pop-up that does not do that would
-          // be clipped here.
-          // CUSTOM: Falls back to 100vh until Radix's size middleware publishes the real available
-          // height, so the measuring pass gets a real cap instead of an invalid var() computing to none
-          zoomArea !== undefined &&
-            'tw:max-h-[calc(var(--radix-popover-content-available-height,100vh)/var(--platform-content-zoom-popup-factor,1))] tw:overflow-y-auto',
           className,
         )}
         // CUSTOM: z-index uses shared constant instead of default tw:z-50, ensuring popover renders above the dock
-        // CUSTOM: Inside a content-zoom area, also carry the area's zoom factor, which both the width
-        // and the height cap above divide by
-        style={{
-          zIndex: Z_INDEX_ABOVE_DOCK,
-          ...(zoomArea === undefined ? undefined : getContentZoomPopupStyle(zoomArea)),
-          ...style,
-        }}
+        style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
         // CUSTOM: Apply document direction for RTL layout support
         dir={dir}
-        // CUSTOM: Inside a content-zoom area, mark the content with that area so the platform's zoom
-        // rule scales it, and flag it as pop-up content so the platform never counts it as a pane.
-        // It is portaled out of the area element, so it is a marker of its own, not a nested one.
-        data-platform-content-zoom-root={zoomArea}
-        data-platform-content-zoom-popup={zoomArea === undefined ? undefined : ''}
         {...props}
       />
     </PopoverPrimitive.Portal>

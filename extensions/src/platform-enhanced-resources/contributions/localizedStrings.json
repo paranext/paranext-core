@@ -126,6 +126,9 @@
     "%enhancedResources_toolbar_menu_showFootnotes%": {
       "notes": "View-menu item: toggles the footnote pane below the scripture pane (BHV-302)."
     },
+    "%enhancedResources_footnotesPane_zoomAreaLabel%": {
+      "notes": "Name of the footnotes pane on the zoom indicator, shown as '<name> · 120 %' while the pane's text is zoomed."
+    },
     "%enhancedResources_toolbar_menu_showTranslations%": {
       "notes": "View-menu item: toggles the translations column in the research pane (BHV-303)."
     },
@@ -505,6 +508,7 @@
       "%enhancedResources_toolbar_tab_media%": "Media",
       "%enhancedResources_toolbar_tab_maps%": "Maps",
       "%enhancedResources_toolbar_menu_showFootnotes%": "Show footnotes",
+      "%enhancedResources_footnotesPane_zoomAreaLabel%": "Footnotes",
       "%enhancedResources_toolbar_menu_showTranslations%": "Show translations",
       "%enhancedResources_toolbar_menu_showTranslationsWithResource%": "Show translations ({resourceShortName})",
       "%enhancedResources_toolbar_menu_hebrewHeader%": "Hebrew",
@@ -627,7 +631,8 @@
       "%enhancedResources_ribbon_updateAvailable_description%": "Hay una version mas reciente de este recurso mejorado disponible.",
       "%enhancedResources_ribbon_updateAvailable_downloadDisabled%": "Descargar ahora (deshabilitado)",
       "%enhancedResources_ribbon_imageWarning_title%": "Solo imagenes en miniatura",
-      "%enhancedResources_ribbon_imageWarning_description%": "Solo las imagenes en miniatura estan instaladas. La descarga de imagenes estara disponible en una version futura."
+      "%enhancedResources_ribbon_imageWarning_description%": "Solo las imagenes en miniatura estan instaladas. La descarga de imagenes estara disponible en una version futura.",
+      "%enhancedResources_footnotesPane_zoomAreaLabel%": "Notas al pie"
     }
   }
 }
