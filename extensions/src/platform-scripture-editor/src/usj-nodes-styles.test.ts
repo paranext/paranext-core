@@ -237,6 +237,42 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     });
   });
 
+  describe('selected paragraph marker row', () => {
+    // The editor marks the paragraph whose gutter marker is selected with `psc-para-marker-selected`.
+    // Selection gets a channel of its own (adr-list-selection-on-a-dedicated-visual-channel): a
+    // fill and a leading bar that reach across the gutter, never the active-text focus box.
+    const declarations = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+    const block = (selector: string) =>
+      declarations.match(
+        new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`),
+      )?.[1];
+
+    it('fills the row and draws the leading bar in the contrast-tested token (LTR)', () => {
+      const ltr = block('.psc-gutter-markers .psc-para-marker-selected');
+      expect(ltr).toContain('background-color: var(--accent)');
+      expect(ltr).toMatch(/box-shadow:[^;]*var\(--accent\)[^;]*var\(--foreground\)/);
+      // Toward inline-start, which is the left in LTR.
+      expect(ltr).toMatch(/box-shadow:\s*calc\(4px - var\(--psc-para-marker-selection-reach\)\)/);
+    });
+
+    it('mirrors the fill and bar to the right in RTL', () => {
+      const rtl = block(".psc-gutter-markers[dir='rtl'] .psc-para-marker-selected");
+      expect(rtl).toMatch(/box-shadow:[^;]*var\(--accent\)[^;]*var\(--foreground\)/);
+      expect(rtl).toMatch(/box-shadow:\s*calc\(var\(--psc-para-marker-selection-reach\) - 4px\)/);
+    });
+
+    it('strengthens the selected glyph', () => {
+      const glyph = block(
+        '.psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child',
+      );
+      expect(glyph).toContain('color: var(--foreground)');
+    });
+
+    it('uses no pseudo-element, which the focus box and book code already own', () => {
+      expect(declarations).not.toMatch(/\.psc-para-marker-selected[^{,]*::?(?:before|after)/);
+    });
+  });
+
   describe('cross-copy drift pins (must agree with the demo copy in platform-bible-react)', () => {
     // The two vendored copies of the editor stylesheet (this one and
     // lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css) are pinned at
