@@ -73,6 +73,17 @@ describe('content zoom markers (Enhanced Resources)', () => {
     expect(webView).not.toContain('<ContentZoomRoot area="entries"');
   });
 
+  it('ties the whole entries panel, tab bar and gaps included, to the entries area with a zoom scope', () => {
+    // Only the entry text is marked, so without the scope a Ctrl/⌘+wheel over a card's padding, the
+    // gap between entries or the tab bar would reach no marker and fall back to the area used last,
+    // usually the Bible text. How the platform resolves a scope is covered by the bootstrap's own
+    // "zoom scope" tests; this pins that the panel carries one.
+    expect(webView).toMatch(
+      /<ResizablePanel [^>]*data-platform-content-zoom-scope="entries"[^>]*> (?:\{\/\*.*?\*\/\} )?<EnhancedResourceTabBar/,
+    );
+    expect(webView.match(/data-platform-content-zoom-scope=/g)).toHaveLength(1);
+  });
+
   it('renders the semantic domain dialog outside the entries provider', () => {
     // The dialog renders hook consumers, and React context would reach them through the portal if
     // it were mounted inside the provider.
