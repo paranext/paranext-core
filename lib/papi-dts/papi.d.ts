@@ -2518,6 +2518,12 @@ declare module 'shared/data/papi-port.model' {
    */
   export const PAPI_PORT_CLOSE_FRAME_TYPE = 'papi:close';
   /**
+   * Reason a port adapter reports when its port closes with no close frame first, alongside code 1006
+   *
+   * @experimental
+   */
+  export const PORT_CLOSED_WITHOUT_FRAME_REASON = 'port closed without a close frame';
+  /**
    * The in-band close frame. Distinguishable from every JSON-RPC payload, which is a string.
    *
    * @experimental
@@ -2587,6 +2593,85 @@ declare module 'client/services/web-socket.interface' {
    * implementation. We can adjust as needed at that point.
    */
   export type IWebSocket = WebSocket;
+}
+declare module 'shared/data/papi-port-close-handshake' {
+  import { PapiPortCloseFrame, SyntheticCloseEvent } from 'shared/data/papi-port.model';
+  /**
+   * What an adapter hands the handshake: its own port primitives, and what to do once closed
+   *
+   * @experimental
+   */
+  export type PortCloseHandshakeHooks = {
+    /**
+     * Post a close frame on the port. May throw; the close still completes.
+     *
+     * @experimental
+     */
+    postFrame(frame: PapiPortCloseFrame): void;
+    /**
+     * Close the port
+     *
+     * @experimental
+     */
+    closePort(): void;
+    /**
+     * Called exactly once, when the connection is closed for whatever reason: detach from the port,
+     * record the closed state, and dispatch `event` to the adapter's close listeners
+     *
+     * @experimental
+     */
+    onClosed(event: SyntheticCloseEvent): void;
+  };
+  /**
+   * One connection's close handshake. Records the close exactly once, whichever side or event caused
+   * it.
+   *
+   * @experimental
+   */
+  export type PortCloseHandshake = {
+    /**
+     * Whether the connection has closed. Once true, nothing more is reported.
+     *
+     * @experimental
+     */
+    readonly isClosed: boolean;
+    /**
+     * Close on purpose: post a close frame, report the close, then close the port. A no-op once
+     * closed.
+     *
+     * @param code WebSocket close code. Defaults to 1000.
+     * @param reason Human-readable reason. Defaults to empty.
+     * @experimental
+     */
+    close(code?: number, reason?: string): void;
+    /**
+     * Offer a message that arrived on the port. A close frame is reported as the peer's close and the
+     * port is closed; anything arriving once closed is dropped.
+     *
+     * @param data The message's `data`
+     * @returns `true` when the message was consumed here, `false` when it is for the adapter to
+     *   deliver
+     * @experimental
+     */
+    handleIncoming(data: unknown): boolean;
+    /**
+     * The port's own `close` event arrived. Reported as 1006 unless the handshake already finished.
+     *
+     * @experimental
+     */
+    handlePortClosed(): void;
+  };
+  /**
+   * Create the close handshake for one connection
+   *
+   * @param target The adapter, reported as the close event's `target`
+   * @param hooks The adapter's port primitives and close handling
+   * @experimental
+   */
+  export function createPortCloseHandshake(
+    target: unknown,
+    hooks: PortCloseHandshakeHooks,
+  ): PortCloseHandshake;
 }
 declare module 'renderer/services/message-port-web-socket' {
   /**
@@ -2669,7 +2754,7 @@ declare module 'renderer/services/message-port-web-socket' {
     /** @experimental */
     onclose: ((this: WebSocket, ev: CloseEvent) => unknown) | null;
     private port;
-    private hasClosed;
+    private readonly handshake;
     private readonly listeners;
     /**
      * @param provider How to obtain the port
@@ -2703,8 +2788,8 @@ declare module 'renderer/services/message-port-web-socket' {
     private failToOpen;
     private onPortMessage;
     private onPortClose;
-    /** Record the close, detach from the port, and tell close listeners exactly once */
-    private finish;
+    /** Detach from the port and tell close listeners; the handshake calls this exactly once */
+    private onClosed;
     private emit;
   }
   export default MessagePortWebSocket;

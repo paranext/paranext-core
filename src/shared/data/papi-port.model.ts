@@ -109,6 +109,13 @@ export function isPapiPortMainWorldMessage(data: unknown): data is PapiPortMainW
 export const PAPI_PORT_CLOSE_FRAME_TYPE = 'papi:close';
 
 /**
+ * Reason a port adapter reports when its port closes with no close frame first, alongside code 1006
+ *
+ * @experimental
+ */
+export const PORT_CLOSED_WITHOUT_FRAME_REASON = 'port closed without a close frame';
+
+/**
  * The in-band close frame. Distinguishable from every JSON-RPC payload, which is a string.
  *
  * @experimental

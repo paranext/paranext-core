@@ -1,9 +1,9 @@
-import { isCleanCloseCode, ServerSocketLike } from '@shared/data/rpc.model';
+import { ServerSocketLike } from '@shared/data/rpc.model';
 import {
-  createPapiPortCloseFrame,
-  createSyntheticCloseEvent,
-  isPapiPortCloseFrame,
-} from '@shared/data/papi-port.model';
+  createPortCloseHandshake,
+  PortCloseHandshake,
+} from '@shared/data/papi-port-close-handshake';
+import { SyntheticCloseEvent } from '@shared/data/papi-port.model';
 import { bindClassMethods } from '@shared/utils/util';
 
 /**
@@ -22,8 +22,6 @@ export type MessagePortMainLike = {
 
 type SocketEventName = 'close' | 'error' | 'message';
 type SocketListener = (ev: unknown) => void;
-
-const PORT_CLOSED_WITHOUT_FRAME_REASON = 'port closed without a close frame';
 
 /**
  * Presents the main end of a renderer's `MessagePort` as the socket `RpcServer` and
@@ -46,10 +44,15 @@ export class MessagePortServerSocket implements ServerSocketLike {
     message: new Set(),
   };
 
-  private hasClosed = false;
+  private readonly handshake: PortCloseHandshake;
 
   constructor(private readonly port: MessagePortMainLike) {
     bindClassMethods.call(this);
+    this.handshake = createPortCloseHandshake(this, {
+      postFrame: (frame) => port.postMessage(frame),
+      closePort: () => port.close(),
+      onClosed: this.onClosed,
+    });
     port.on('message', this.onPortMessage);
     port.on('close', this.onPortClose);
     // Nothing is delivered on a MessagePortMain — not a message, not even `close` — until it is
@@ -58,15 +61,12 @@ export class MessagePortServerSocket implements ServerSocketLike {
   }
 
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
-    if (this.hasClosed) return;
+    if (this.handshake.isClosed) return;
     this.port.postMessage(data);
   }
 
   close(code: number = 1000, reason: string = ''): void {
-    if (this.hasClosed) return;
-    this.port.postMessage(createPapiPortCloseFrame(code, reason));
-    this.finish(code, reason, isCleanCloseCode(code));
-    this.port.close();
+    this.handshake.close(code, reason);
   }
 
   addEventListener<K extends SocketEventName>(
@@ -88,27 +88,19 @@ export class MessagePortServerSocket implements ServerSocketLike {
   }
 
   private onPortMessage({ data }: { data: unknown }): void {
-    if (this.hasClosed) return;
-    if (isPapiPortCloseFrame(data)) {
-      this.finish(data.code, data.reason, isCleanCloseCode(data.code));
-      this.port.close();
-      return;
-    }
+    if (this.handshake.handleIncoming(data)) return;
     this.listeners.message.forEach((listener) => listener({ data }));
   }
 
   private onPortClose(): void {
-    if (this.hasClosed) return;
-    this.finish(1006, PORT_CLOSED_WITHOUT_FRAME_REASON, false);
+    this.handshake.handlePortClosed();
   }
 
-  /** Record the close, detach from the port, and tell close listeners exactly once */
-  private finish(code: number, reason: string, wasClean: boolean): void {
-    this.hasClosed = true;
+  /** Detach from the port and tell close listeners; the handshake calls this exactly once */
+  private onClosed(event: SyntheticCloseEvent): void {
     this.readyState = 3;
     this.port.off('message', this.onPortMessage);
     this.port.off('close', this.onPortClose);
-    const event = createSyntheticCloseEvent(this, code, reason, wasClean);
     this.listeners.close.forEach((listener) => listener(event));
   }
 }
