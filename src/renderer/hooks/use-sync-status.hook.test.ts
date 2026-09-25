@@ -640,6 +640,8 @@ describe('useSyncStatus', () => {
       });
 
       expect(result.current.status).toBe(expected);
+      // The verdict came from the backend, so a caller offering the claim's detail has none to show.
+      expect(result.current.isVerdictFromBackendOnly).toBe(true);
     },
   );
 
@@ -668,6 +670,40 @@ describe('useSyncStatus', () => {
     });
 
     expect(result.current.status).toBe('synced');
+  });
+
+  it('keeps the claim’s verdict for a run it saw, even when the outcome is dated later', async () => {
+    // Both verdicts describe the SAME run here, and the backend's closing snapshot is dated after
+    // the claim's results — which is the ordinary ordering, since the run bracket closes last.
+    // Ordering them by time would hand an ordinary sync to the coarse verdict and take the detail
+    // view's entry point with it, so the claim having seen the run has to settle it first.
+    commands.mockGetSyncState(
+      { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
+      completedStateFor({ PROJ1: 'succeeded' }, '2026-09-18T10:00:00Z'),
+    );
+    seedActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    const { emitSyncStateChanged } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('syncing');
+
+    emitSyncStateChanged({ isSyncing: false });
+    pushActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'failed',
+      completedAt: '2026-09-18T10:05:00Z',
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('synced');
+    // And the verdict is the claim's, so the caller can still offer the detail behind it.
+    expect(result.current.isVerdictFromBackendOnly).toBe(false);
   });
 
   it('reports the backend outcome when it describes a later run than the claim’s verdict', async () => {

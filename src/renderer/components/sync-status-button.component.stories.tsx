@@ -30,12 +30,18 @@ const LONG_NAME_PROJECT = [
 ];
 
 /**
- * What a story names. `isVerdictFromBackendOnly` defaults to false — the ordinary case, where
- * send/receive reported the verdict itself and the details behind it exist — so only the story
- * about a verdict the backend reported has to say otherwise.
+ * What a story names. `isVerdictFromBackendOnly` defaults to false — the ordinary case, where the
+ * Send/Receive extension reported the verdict itself and the detail behind it exists — so only a
+ * story about a verdict the backend reported has to say otherwise.
  */
-type StoryStatus = Omit<SyncStatusMock, 'isVerdictFromBackendOnly'> &
-  Partial<Pick<SyncStatusMock, 'isVerdictFromBackendOnly'>>;
+type StoryStatus = Omit<SyncStatusMock, 'isVerdictFromBackendOnly'> & {
+  isVerdictFromBackendOnly?: boolean;
+};
+
+/** Fills in what a story left unsaid, so a new `SyncStatusInfo` field is defaulted in one place. */
+function resolveStatus(status: StoryStatus): SyncStatusMock {
+  return { isVerdictFromBackendOnly: false, ...status };
+}
 
 /**
  * Each story wraps the button in its own provider so stories rendered together on the autodocs page
@@ -43,7 +49,7 @@ type StoryStatus = Omit<SyncStatusMock, 'isVerdictFromBackendOnly'> &
  * stable across re-renders.
  */
 function withSyncStatus(status: StoryStatus) {
-  const mock: SyncStatusMock = { isVerdictFromBackendOnly: false, ...status };
+  const mock = resolveStatus(status);
   return function StoryDecorator(Story: ComponentType) {
     return (
       <SyncStatusMockContext.Provider value={mock}>
@@ -72,8 +78,8 @@ function withSyncEndingAfterCancel(syncingProjects: SyncStatusMock['syncingProje
     const mock = useMemo<SyncStatusMock>(
       () =>
         hasEnded
-          ? { status: 'failed', syncingProjects: [], isVerdictFromBackendOnly: false }
-          : { status: 'syncing', syncingProjects, isVerdictFromBackendOnly: false },
+          ? resolveStatus({ status: 'failed', syncingProjects: [] })
+          : resolveStatus({ status: 'syncing', syncingProjects }),
       // `syncingProjects` is the decorator factory's own argument, fixed for the story's lifetime.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [hasEnded],
@@ -248,14 +254,27 @@ export const PopoverFailed: Story = {
 };
 
 /**
- * A sync send/receive never saw — the Simple-mode startup sync — which the backend itself reported
- * as failed. The popover states the outcome and stops there: "View sync details" opens
- * send/receive's own last results, which describe a DIFFERENT sync, so there is no detail to offer
- * for this one.
+ * A sync the Send/Receive extension never saw — the Simple-mode startup sync — which the backend
+ * itself reported as failed. "View sync details" stays in place but is inert, with a line saying
+ * why: it opens that extension's own last results, which describe a DIFFERENT sync. Dimmed rather
+ * than removed, because this popover updates live and taking a control away under someone who is in
+ * it drops their focus.
  */
 export const PopoverFailedFromBackend: Story = {
   decorators: [
     withSyncStatus({ status: 'failed', syncingProjects: [], isVerdictFromBackendOnly: true }),
+  ],
+  play: openPopover,
+};
+
+/**
+ * The same arrangement for a sync that SUCCEEDED. The detail behind a success belongs to just as
+ * different a sync, so the link is dimmed here too — the case most likely to read as a bug if the
+ * control simply vanished once a startup sync finished well.
+ */
+export const PopoverSyncedFromBackend: Story = {
+  decorators: [
+    withSyncStatus({ status: 'synced', syncingProjects: [], isVerdictFromBackendOnly: true }),
   ],
   play: openPopover,
 };

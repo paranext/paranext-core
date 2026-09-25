@@ -53,7 +53,7 @@ const SYNC_ACTIVITY_WATCHDOG_INTERVAL_MS = 30_000;
 const KNOWN_SYNC_OUTCOMES: Record<SyncOutcome, true> = { succeeded: true, failed: true };
 
 function isKnownSyncOutcome(outcome: unknown): outcome is SyncOutcome {
-  return isString(outcome) && Object.keys(KNOWN_SYNC_OUTCOMES).includes(outcome);
+  return isString(outcome) && Object.hasOwn(KNOWN_SYNC_OUTCOMES, outcome);
 }
 
 /**

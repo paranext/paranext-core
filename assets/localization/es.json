@@ -635,6 +635,7 @@
   "%toolbar_sync_popover_failed%": "La última sincronización no finalizó. Abra el estado de sincronización para ver los detalles.",
   "%toolbar_sync_popover_idle%": "No hay ninguna sincronización en curso.",
   "%toolbar_sync_popover_last_sync_unfinished%": "La última sincronización no finalizó.",
+  "%toolbar_sync_popover_no_details%": "Los detalles de esta sincronización no están disponibles.",
   "%toolbar_sync_popover_synced%": "La última sincronización finalizó.",
   "%toolbar_sync_popover_unknown%": "El estado de sincronización no está disponible en este momento.",
   "%toolbar_sync_progress_item%": "{item} — {percent} %",

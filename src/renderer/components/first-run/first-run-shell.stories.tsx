@@ -5,10 +5,7 @@ import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.compon
 // embeds the real LanguageStep, whose PAPI hooks would otherwise return raw keys / English-only in
 // Storybook. Opting in renders real English chrome and a realistic multi-language picker.
 import { withFirstRunLanguage } from '../../../../.storybook/mocks/first-run-language-mock-channel';
-import {
-  DEFAULT_INTERNET_SETTINGS,
-  InternetSettingsMockContext,
-} from '../../../../.storybook/mocks/internet-settings-mock-channel';
+import { withInternetSettings } from '../../../../.storybook/mocks/internet-settings-mock-channel';
 
 const SETUP_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
@@ -38,15 +35,7 @@ export const Language: Story = { args: { entryStep: 'language' } };
 // states live in `steps/internet-settings-step.stories.tsx`; the shell needs it to render at all.
 export const InternetSettings: Story = {
   args: { entryStep: 'internetSettings' },
-  decorators: [
-    (Story) => (
-      <InternetSettingsMockContext.Provider
-        value={{ isProviderRegistered: true, value: DEFAULT_INTERNET_SETTINGS, isLoading: false }}
-      >
-        <Story />
-      </InternetSettingsMockContext.Provider>
-    ),
-  ],
+  decorators: [withInternetSettings()],
 };
 export const Identify: Story = { args: { entryStep: 'identify' } };
 export const SyncConsent: Story = { args: { entryStep: 'syncConsent' } };

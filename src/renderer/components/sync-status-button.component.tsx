@@ -68,8 +68,9 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_cancelling%',
   '%toolbar_sync_open_status%',
   '%toolbar_sync_popover_cancelled%',
-  '%toolbar_sync_popover_last_sync_unfinished%',
   '%toolbar_sync_popover_idle%',
+  '%toolbar_sync_popover_last_sync_unfinished%',
+  '%toolbar_sync_popover_no_details%',
   '%toolbar_sync_popover_synced%',
   '%toolbar_sync_popover_unknown%',
   '%toolbar_sync_progress_item%',
@@ -754,9 +755,24 @@ export function SyncStatusButton() {
                 </Button>
               </>
             ) : (
-              <p data-testid="toolbar-sync-popover-status" className="tw:text-sm">
-                {popoverStatusMessage}
-              </p>
+              <>
+                <p data-testid="toolbar-sync-popover-status" className="tw:text-sm">
+                  {popoverStatusMessage}
+                </p>
+                {/*
+                 * Says why the link below it is inert, rather than leaving the user to work out
+                 * that the one control on offer does nothing. The verdict above is still the whole
+                 * truth about the sync; what is missing is the per-project detail behind it.
+                 */}
+                {isVerdictFromBackendOnly && (
+                  <p
+                    data-testid="toolbar-sync-popover-no-details"
+                    className="tw:text-xs tw:text-muted-foreground"
+                  >
+                    {localizedStrings['%toolbar_sync_popover_no_details%']}
+                  </p>
+                )}
+              </>
             )}
             {/*
              * The way through to per-project conflicts, failure messages and warnings. This compact
@@ -764,21 +780,25 @@ export function SyncStatusButton() {
              * the sync status web view is the only place the detail behind a failure exists, so
              * without this link a failed sync would be reported with nowhere to go.
              *
-             * Withheld when the verdict came from the backend's own signal, because that view shows
-             * send/receive's last results — a DIFFERENT sync — so the link would answer "what
+             * Inert when the verdict came from the backend's own signal, because that view shows
+             * send/receive's last results — a DIFFERENT sync — so following it would answer "what
              * happened?" with an unrelated sync's detail.
+             *
+             * `aria-disabled` rather than unmounting, for the same reason Cancel above uses it: this
+             * popover updates live, so a verdict arriving while the user is in it would otherwise
+             * remove the control under them and drop focus to `<body>`, and the next Tab would
+             * restart from the top of the document.
              */}
-            {!isVerdictFromBackendOnly && (
-              <Button
-                data-testid="toolbar-sync-view-details-button"
-                variant="link"
-                size="sm"
-                className="tw:h-6 tw:self-start tw:px-0"
-                onClick={handleViewDetails}
-              >
-                {localizedStrings['%toolbar_sync_view_details%']}
-              </Button>
-            )}
+            <Button
+              data-testid="toolbar-sync-view-details-button"
+              variant="link"
+              size="sm"
+              className="tw:h-6 tw:self-start tw:px-0 tw:aria-disabled:pointer-events-none tw:aria-disabled:opacity-50"
+              aria-disabled={isVerdictFromBackendOnly}
+              onClick={isVerdictFromBackendOnly ? undefined : handleViewDetails}
+            >
+              {localizedStrings['%toolbar_sync_view_details%']}
+            </Button>
           </div>
         </PopoverContent>
       </Popover>

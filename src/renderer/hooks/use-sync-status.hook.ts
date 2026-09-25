@@ -641,10 +641,11 @@ export function useSyncStatus(): SyncStatusInfo {
   useEvent(onDidReloadExtensions, handleExtensionsReloaded);
 
   /**
-   * The run the activity signal is reporting, and whether the claim saw it too. When that run ends,
-   * {@link isClaimVerdictStale} uses this to say whether the claim's verdict describes it or an
-   * earlier sync. The claim seeing it has to be recorded while the run is still going, because
-   * afterwards `claimStatus` no longer separates the two cases.
+   * The run the activity signal is reporting — or the last one it reported — and whether the claim
+   * saw that same run. The claim seeing it has to be recorded while the run is still going, because
+   * afterwards `claimStatus` no longer separates the two cases. Once it ends, `didClaimSee` still
+   * describes that run, which is what tells a verdict about THIS sync apart from one an unrelated
+   * earlier sync left behind.
    *
    * Tracked DURING RENDER rather than in an effect, which would settle the flag one commit late —
    * and that commit renders, and announces, the claim's earlier verdict as this run's. The toolbar
@@ -654,14 +655,17 @@ export function useSyncStatus(): SyncStatusInfo {
    */
   const [activityRun, setActivityRun] = useState({ isSyncing: false, didClaimSee: false });
   if (activitySyncing) {
-    const didClaimSee = activityRun.didClaimSee || claimStatus === 'syncing';
+    // A run that has just opened starts this over, so the claim is only ever recorded as having
+    // seen THIS run rather than inheriting that from the one before it.
+    const didClaimSee =
+      (activityRun.isSyncing && activityRun.didClaimSee) || claimStatus === 'syncing';
     if (!activityRun.isSyncing || didClaimSee !== activityRun.didClaimSee)
       setActivityRun({ isSyncing: true, didClaimSee });
   } else if (activityRun.isSyncing) {
     // `undefined` (the signal cannot tell) lands here too, and deliberately: a run it reported and
     // can no longer account for has an unknowable outcome, which is what `unknown` says. Only the
     // never-was-syncing case falls through, because there is no run to have lost track of.
-    setActivityRun({ isSyncing: false, didClaimSee: false });
+    setActivityRun({ isSyncing: false, didClaimSee: activityRun.didClaimSee });
     if (!activityRun.didClaimSee) setIsClaimVerdictStale(true);
   }
 
@@ -715,8 +719,13 @@ export function useSyncStatus(): SyncStatusInfo {
     if (!outcomeStatus) return claimVerdict(claimStatus);
     // The claim reached no verdict of its own, so the backend's outcome is the only one on offer.
     if (claimStatus === 'idle' || claimStatus === 'unknown') return backendVerdict(outcomeStatus);
-    // Two verdicts from two signals. The one describing the run that finished later is this sync's;
-    // the other belongs to a sync its own signal never saw.
+    // The claim saw the run this outcome describes, so both verdicts are about the SAME sync and
+    // its per-project results are the richer account. Ordering them by time here would compare two
+    // clocks for one run — and the run bracket closes last, so the coarse verdict would usually
+    // win, taking the way into the detail behind it along with it.
+    if (activityRun.didClaimSee) return claimVerdict(claimStatus);
+    // Two verdicts from two signals, each about a run the other never saw. The one describing the
+    // run that finished later is this sync's.
     const outcomeAt = readTimestamp(activityCompletedAt);
     if (outcomeAt !== undefined && claimVerdictAt !== undefined)
       return outcomeAt > claimVerdictAt ? backendVerdict(outcomeStatus) : claimVerdict(claimStatus);

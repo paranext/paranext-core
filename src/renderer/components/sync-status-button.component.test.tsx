@@ -43,6 +43,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_open_status%': 'Test Sync status',
       '%toolbar_sync_popover_cancelled%': 'Test The last sync was cancelled.',
       '%toolbar_sync_popover_last_sync_unfinished%': 'Test last sync did not finish',
+      '%toolbar_sync_popover_no_details%': 'Test details are not available for this sync',
       '%toolbar_sync_popover_idle%': 'Test no sync running',
       '%toolbar_sync_popover_synced%': 'Test last sync finished',
       '%toolbar_sync_popover_unknown%': 'Test status unavailable',
@@ -709,9 +710,11 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
     });
   });
 
-  it('offers no sync details for a verdict only the backend reported', async () => {
-    // That view shows send/receive's own last results, which describe a DIFFERENT sync, so the link
-    // would answer "what happened?" with an unrelated sync's detail.
+  it('leaves the sync details link inert for a verdict only the backend reported', async () => {
+    // That view shows send/receive's own last results, which describe a DIFFERENT sync, so
+    // following the link would answer "what happened?" with an unrelated sync's detail. It stays
+    // MOUNTED, though: this popover updates live, and removing a control under a user who is in it
+    // drops focus to `<body>`.
     const fireSyncActivityChanged = captureSyncActivityEvent();
     mockSyncStateAndActivity(IDLE_STATE, { isSyncing: true, projectIds: [] });
     render(<SyncStatusButton />);
@@ -724,17 +727,38 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
         'Test last sync did not finish',
       );
     });
-    expect(screen.queryByTestId('toolbar-sync-view-details-button')).not.toBeInTheDocument();
+    const viewDetails = screen.getByTestId('toolbar-sync-view-details-button');
+    expect(viewDetails).toBeInTheDocument();
+    expect(viewDetails).toHaveAttribute('aria-disabled', 'true');
+    // And the popover says why, rather than leaving the user to discover that the one control on
+    // offer does nothing.
+    expect(screen.getByTestId('toolbar-sync-popover-no-details')).toBeInTheDocument();
+
+    fireEvent.click(viewDetails);
+
+    expect(vi.mocked(sendCommand)).not.toHaveBeenCalledWith(
+      'paratextBibleSendReceive.openSyncStatus',
+    );
   });
 
   it('offers sync details for a verdict send/receive reported itself', async () => {
-    // The other half: where the results behind the verdict exist, the way into them stays.
+    // The other half: where the results behind the verdict exist, the link is live.
     mockSyncState(completedState({ a: 'failed' }));
     render(<SyncStatusButton />);
 
     fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
 
-    expect(await screen.findByTestId('toolbar-sync-view-details-button')).toBeInTheDocument();
+    const viewDetails = await screen.findByTestId('toolbar-sync-view-details-button');
+    expect(viewDetails).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByTestId('toolbar-sync-popover-no-details')).not.toBeInTheDocument();
+
+    fireEvent.click(viewDetails);
+
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'paratextBibleSendReceive.openSyncStatus',
+      );
+    });
   });
 
   // The other half: a failure nobody asked for is still reported as a failure.

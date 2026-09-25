@@ -307,6 +307,26 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public void SyncActivityState_KeepsItsTwoValueConstructionAndDeconstruction()
+        {
+            // The Paratext 10 Studio patch builds and reads these from outside this repository, so
+            // promoting a property to a positional parameter would break a build this repo cannot
+            // see. Both halves below stop compiling if that ever happens, which is the alarm.
+            var state = new SyncActivityState(true, new[] { "PROJ1" })
+            {
+                Outcome = SyncOutcome.Failed,
+            };
+
+            var (isSyncing, projectIds) = state;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(isSyncing, Is.True);
+                Assert.That(projectIds, Is.EquivalentTo(new[] { "PROJ1" }));
+            });
+        }
+
+        [Test]
         public void SyncActivityState_DefaultValueComparesAndHashesWithoutThrowing()
         {
             // A publisher's dedupe field (`if (snapshot == _last) return;`) starts at `default`,

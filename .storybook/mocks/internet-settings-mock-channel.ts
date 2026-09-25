@@ -11,7 +11,7 @@
  * without pulling that mock into `tsc` typecheck. See
  * `.storybook/mocks/first-run-language-mock-channel.ts`.
  */
-import { createContext } from 'react';
+import { createContext, createElement, type ComponentType, type ReactElement } from 'react';
 
 /** Story-controlled state for the internet-settings data provider and its data. */
 export type InternetSettingsMock = {
@@ -43,3 +43,20 @@ export const DEFAULT_INTERNET_SETTINGS = {
   selectedServer: 'Production' as const,
   proxyPort: 0,
 };
+
+/**
+ * Story decorator pointing the internet-settings hooks at `mock`. Defaults to the ordinary case —
+ * provider registered, settings loaded — so each story names only what it changes. Resolved once
+ * per decorator so the provider's value keeps one identity across re-renders.
+ */
+export function withInternetSettings(mock: Partial<InternetSettingsMock> = {}) {
+  const value: InternetSettingsMock = {
+    isProviderRegistered: true,
+    value: DEFAULT_INTERNET_SETTINGS,
+    isLoading: false,
+    ...mock,
+  };
+  return function StoryDecorator(Story: ComponentType): ReactElement {
+    return createElement(InternetSettingsMockContext.Provider, { value }, createElement(Story));
+  };
+}
