@@ -203,12 +203,14 @@ const flushZeroDelayTimers = () =>
   });
 
 describe('ParagraphStyleTrigger menu', () => {
-  it('opens when the editor asks for it', () => {
+  it('opens when the editor asks for it', async () => {
     render(<MenuHarness onReturnFocusToEditor={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Editor asks for the menu' }));
 
     expect(queryMenu()).toBeInTheDocument();
+    // Usable by keyboard alone the instant it opens, same as the character-marker menu beside it.
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
   });
 
   it('stays closed when the editor asks while the structure is protected', () => {
@@ -272,6 +274,24 @@ describe('ParagraphStyleTrigger menu', () => {
     await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
     await flushZeroDelayTimers();
     expect(onReturnFocusToEditor).not.toHaveBeenCalled();
+  });
+
+  it('returns focus to the editor when it is closed by clicking the trigger again', async () => {
+    // Radix reports a pointer-down on the trigger itself as an outside interaction, which would
+    // otherwise strand focus on the button instead of returning it to the editor.
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    const trigger = screen.getByRole('button', { name: TRIGGER_NAME });
+    fireEvent.click(trigger);
+    expect(queryMenu()).toBeInTheDocument();
+    await flushZeroDelayTimers();
+
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await flushZeroDelayTimers();
+    expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1);
   });
 
   it('refocuses the editor again on the next close after an outside interaction', async () => {
