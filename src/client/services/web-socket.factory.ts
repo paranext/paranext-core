@@ -5,11 +5,12 @@
  */
 
 import { isRenderer } from '@shared/utils/internal-util';
+import type { PapiPortBridge } from '@shared/data/papi-port.model';
 import { IWebSocket } from './web-socket.interface';
 
-/** The part of the preload's bridge that says a MessagePort to main can be requested */
+/** Where the preload puts its bridge; absent outside Electron */
 type GlobalWithPapiBridge = typeof globalThis & {
-  electronAPI?: { papi?: { requestPort?: unknown } };
+  electronAPI?: { papi?: PapiPortBridge };
 };
 
 /**
@@ -22,7 +23,8 @@ export const createWebSocket = async (url: string): Promise<IWebSocket> => {
     // Electron hands the page a MessagePort to main, which survives an OS suspend; a Chromium
     // WebSocket does not. A page with no bridge (a non-Electron host) keeps the WebSocket.
     const bridgedGlobal: GlobalWithPapiBridge = globalThis;
-    if (typeof bridgedGlobal.electronAPI?.papi?.requestPort === 'function') {
+    const bridge: PapiPortBridge | undefined = bridgedGlobal.electronAPI?.papi;
+    if (typeof bridge?.requestPort === 'function') {
       const [{ MessagePortWebSocket }, { createElectronPapiPortProvider }] = await Promise.all([
         import('@renderer/services/message-port-web-socket'),
         import('@renderer/services/electron-papi-port-provider'),
