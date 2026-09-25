@@ -154,7 +154,9 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
   });
 
   webContents.on('destroyed', () => {
-    windowStates.delete(windowId);
+    // A window id can be reused by a new window before this one's `destroyed` arrives; only forget
+    // the entry this registration made
+    if (windowStates.get(windowId) === state) windowStates.delete(windowId);
   });
 }
 
