@@ -176,8 +176,8 @@ through whatever contains that byte on its own side; where one side has bytes th
 position in front of them snaps to the nearest byte both sides share, and the position just past
 them is exact. There is no separate outbound-snap/inbound-refuse split — one aligner serves both
 directions, each end of a range resolved on its own. Outbound: `getSelection` and `onSelectionChange`
-answer `undefined` only when there is no selection (or the layout has no USJ locations at all), never
-because a position could not be translated — every real caret has a location. While an edit is
+answer `undefined` only when there is no selection, never because a position could not be
+translated — every real caret has a location. While an edit is
 pending, typed bytes the settled document carries as an attribute are reported as that attribute's
 location (a typed `\cat x\cat*` is the note's `category`; a typed figure's `|src="…"` is its
 `file`). With `|lemma="grace"` pending (settles to `|grace`), the settled value start
@@ -197,10 +197,12 @@ definition. The editor's position functions therefore take its view options; pas
 editor is running, never a default.
 
 **`onUsjChange`'s `usj` payload is a SETTLED, synchronous snapshot.** It equals `getUsj()` at the
-moment of emission, fires synchronously within the commit's own listener pass, exactly once per
-content commit and in commit order — including once, not twice, after a `setUsj` reload. A
-selection-only commit emits nothing. `ops` stay a LIVE view of the same commit, so a host that needs
-both reads `usj` for content and `ops` for the tree-level change; neither substitutes for the other.
+moment of emission, fires synchronously within the commit's own listener pass, once per commit that
+changes the settled document or carries delta ops, in commit order — including once, not twice,
+after a `setUsj` reload. A commit that does neither emits nothing, and so does a selection-only
+commit or one tagged as an annotation, cursor, or selection change. The block verse layout emits
+nothing: it is read-only. `ops` stay a LIVE view of the same commit, so a host that needs both reads
+`usj` for content and `ops` for the tree-level change; neither substitutes for the other.
 
 **Notes are counted in the SETTLED document.** `selectNote(index)` counts and selects against
 `getUsj()`'s notes; a note still pending as a typed literal gets the caret placed at the literal's

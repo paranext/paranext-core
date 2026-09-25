@@ -3051,9 +3051,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // updates report, while programmatic applies (e.g. the footnote popover's
       // `replaceEmbedUpdate` save) report `'remote'`. An EXTERNAL apply (`setEditorUsj` →
       // `EditorRef.setUsj`) must never refresh this stamp, and it cannot: the editor loads
-      // external content under its change-suppression tag (`EXTERNAL_USJ_MUTATION_TAG`, excluded
-      // by `DeltaOnChangePlugin`'s ignore list), so it never reaches this callback at all — the
-      // source gate is belt-and-braces on top of that.
+      // external content under its change-suppression tag (`EXTERNAL_USJ_MUTATION_TAG`, skipped by
+      // the editor's own single commit listener, `handleCommit` in `Editor.tsx`), so it never
+      // reaches this callback at all — the source gate is belt-and-braces on top of that.
       if (source === 'local') lastLocalEditTimestamp.current = Date.now();
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in.
