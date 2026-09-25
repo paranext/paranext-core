@@ -211,7 +211,7 @@ function renderMenuItems(
         >
           {item.label}
           {item.shortcut && (
-            <DropdownMenuShortcut className="tw:tracking-normal">
+            <DropdownMenuShortcut>
               <ShortcutKeys hint={item.shortcut} />
             </DropdownMenuShortcut>
           )}
