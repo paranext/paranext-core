@@ -266,8 +266,9 @@ const unknownAreasLoggedByWebViewId = new Map<WebViewId, Set<string>>();
 /**
  * Each pane's declaration (`undefined` for an undeclared type), read once from its definition.
  * Every tab title asks {@link isContentZoomable} on each render, and a definition read walks the
- * dock layout. Dropped when the pane's definition is updated (its type may change) and when it is
- * forgotten.
+ * dock layout. Kept across definition updates, since a pane's web view type cannot change while it
+ * is open (`webViewType` is not an updatable definition property, and a new view always gets a new
+ * id); dropped when the pane is forgotten, as its id may then come back as another view.
  */
 const declarationByWebViewId = new Map<WebViewId, ContentZoomDeclaration | undefined>();
 
@@ -1599,7 +1600,6 @@ export function initializeContentZoomService(
     // compared the levels would have to be right about every other way a pane's variables can go
     // stale to avoid suppressing a push the pane needed.
     deps.onDidUpdateWebView(({ webView }) => {
-      declarationByWebViewId.delete(webView.id);
       // The emitter behind this event is not isolated, so a throw here aborts its whole subscriber
       // loop and every later subscriber misses the update — the cost of this one reaches well past
       // zoom, which is why it is guarded even though the read only fails during teardown.
