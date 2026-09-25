@@ -537,9 +537,9 @@ export const ZoomOptionsOpen: Story = {
     });
     await step('Assert the three zoom items are visible', async () => {
       const menu = within(canvas.getByRole('menu'));
-      await expect(menu.getByRole('menuitem', { name: /^zoom in$/i })).toBeVisible();
-      await expect(menu.getByRole('menuitem', { name: /^zoom out$/i })).toBeVisible();
-      await expect(menu.getByRole('menuitem', { name: /^reset zoom$/i })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^zoom in/i })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^zoom out/i })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^reset zoom/i })).toBeVisible();
     });
   },
 };
@@ -569,11 +569,11 @@ export const AtMaxZoomMenuOpen: Story = {
     });
     await step('Assert Zoom in is disabled and Zoom out is enabled', async () => {
       const menu = within(canvas.getByRole('menu'));
-      await expect(menu.getByRole('menuitem', { name: /^zoom in$/i })).toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^zoom in/i })).toHaveAttribute(
         'aria-disabled',
         'true',
       );
-      await expect(menu.getByRole('menuitem', { name: /^zoom out$/i })).not.toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^zoom out/i })).not.toHaveAttribute(
         'aria-disabled',
         'true',
       );
@@ -606,7 +606,7 @@ export const AtMinZoomMenuOpen: Story = {
     });
     await step('Assert Zoom out is disabled', async () => {
       const menu = within(canvas.getByRole('menu'));
-      await expect(menu.getByRole('menuitem', { name: /^zoom out$/i })).toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^zoom out/i })).toHaveAttribute(
         'aria-disabled',
         'true',
       );
@@ -642,7 +642,7 @@ export const ResetDisabledWithoutOwnLevel: Story = {
     });
     await step('Assert Reset zoom is disabled', async () => {
       const menu = within(canvas.getByRole('menu'));
-      await expect(menu.getByRole('menuitem', { name: /^reset zoom$/i })).toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^reset zoom/i })).toHaveAttribute(
         'aria-disabled',
         'true',
       );

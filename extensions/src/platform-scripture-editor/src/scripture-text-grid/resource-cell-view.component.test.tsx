@@ -538,13 +538,13 @@ describe('ResourceCellView zoom menus', () => {
         />,
       );
       fireEvent.contextMenu(screen.getByText('verse'));
-      expect(menuEntries(screen.getByRole('menu'))).toEqual([
-        'Copy',
-        '—',
-        'Zoom in',
-        'Zoom out',
-        'Reset zoom',
-      ]);
+      const entries = menuEntries(screen.getByRole('menu'));
+      expect(entries).toHaveLength(5);
+      expect(entries[0]).toBe('Copy');
+      expect(entries[1]).toBe('—');
+      expect(entries[2]).toMatch(/^Zoom in/);
+      expect(entries[3]).toMatch(/^Zoom out/);
+      expect(entries[4]).toMatch(/^Reset zoom/);
     },
   );
 
@@ -565,15 +565,15 @@ describe('ResourceCellView zoom menus', () => {
     );
     fireEvent.contextMenu(screen.getByText('verse'));
     let menu = screen.getByRole('menu');
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom in' })).toHaveAttribute(
+    expect(within(menu).getByRole('menuitem', { name: /^Zoom in/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom out' })).not.toHaveAttribute(
+    expect(within(menu).getByRole('menuitem', { name: /^Zoom out/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(within(menu).getByRole('menuitem', { name: 'Reset zoom' })).toHaveAttribute(
+    expect(within(menu).getByRole('menuitem', { name: /^Reset zoom/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
@@ -597,15 +597,15 @@ describe('ResourceCellView zoom menus', () => {
     );
     fireEvent.contextMenu(screen.getByText('verse'));
     menu = screen.getByRole('menu');
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom in' })).not.toHaveAttribute(
+    expect(within(menu).getByRole('menuitem', { name: /^Zoom in/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom out' })).toHaveAttribute(
+    expect(within(menu).getByRole('menuitem', { name: /^Zoom out/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(within(menu).getByRole('menuitem', { name: 'Reset zoom' })).not.toHaveAttribute(
+    expect(within(menu).getByRole('menuitem', { name: /^Reset zoom/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
@@ -631,11 +631,11 @@ describe('ResourceCellView zoom menus', () => {
       />,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom in' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom in/ }));
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom out' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom out/ }));
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: 'Reset zoom' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Reset zoom/ }));
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onZoomOut).toHaveBeenCalledTimes(1);
     expect(onResetZoom).toHaveBeenCalledTimes(1);
@@ -664,7 +664,7 @@ describe('ResourceCellView zoom menus', () => {
       </div>,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom in' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom in/ }));
     // Positive control: the item was really chosen, so the silence below is about the bubbling.
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onRowClick).not.toHaveBeenCalled();
@@ -695,10 +695,10 @@ describe('ResourceCellView zoom menus', () => {
       </div>,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    screen.getByRole('menuitem', { name: 'Zoom in' }).focus();
+    screen.getByRole('menuitem', { name: /^Zoom in/ }).focus();
     await user.keyboard('{Enter}');
     fireEvent.contextMenu(screen.getByText('verse'));
-    screen.getByRole('menuitem', { name: 'Zoom out' }).focus();
+    screen.getByRole('menuitem', { name: /^Zoom out/ }).focus();
     await user.keyboard(' ');
     // Positive controls: both items were really chosen by key, so the silence below is about the
     // bubbling.
@@ -728,8 +728,12 @@ describe('ResourceCellView zoom menus', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Zoom options for WEB' }));
     const menu = screen.getByRole('menu');
-    expect(menuEntries(menu)).toEqual(['Zoom in', 'Zoom out', 'Reset zoom']);
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom in' })).toHaveAttribute(
+    const entries = menuEntries(menu);
+    expect(entries).toHaveLength(3);
+    expect(entries[0]).toMatch(/^Zoom in/);
+    expect(entries[1]).toMatch(/^Zoom out/);
+    expect(entries[2]).toMatch(/^Reset zoom/);
+    expect(within(menu).getByRole('menuitem', { name: /^Zoom in/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
@@ -780,7 +784,7 @@ describe('ResourceCellView zoom menus', () => {
     );
     // Positive control: the zoom labels are live, so the right-click menu carries zoom items.
     fireEvent.contextMenu(screen.getByText('verse'));
-    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /^Zoom in/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /zoom options/i })).not.toBeInTheDocument();
   });
 

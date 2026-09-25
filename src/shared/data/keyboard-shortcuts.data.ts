@@ -242,6 +242,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
+    command: 'platform.webViewContentZoomIn',
   },
   {
     id: 'content-zoom-out',
@@ -259,6 +260,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
+    command: 'platform.webViewContentZoomOut',
   },
   {
     id: 'content-zoom-reset',
@@ -279,6 +281,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
+    command: 'platform.webViewContentZoomReset',
   },
   {
     id: 'content-zoom-wheel',

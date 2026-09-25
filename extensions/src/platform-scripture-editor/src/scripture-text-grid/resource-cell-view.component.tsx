@@ -3,9 +3,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
   Button,
   ContentZoomRoot,
+  isMacOs,
+  ShortcutKeys,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -125,16 +128,35 @@ function ZoomItemsShared({
   onZoomOut?: () => void;
   onResetZoom?: () => void;
 }) {
+  // These items run the platform's own platform.webViewContentZoomIn/Out/Reset commands (see
+  // use-resource-content-zoom.hook.ts), so the hints below mirror that command's catalog entry in
+  // src/shared/data/keyboard-shortcuts.data.ts (core, which extension code cannot import — see
+  // CONTENT_ZOOM_LEVELS_STATE_KEY in use-resource-content-zoom.hook.ts for the same restatement).
+  // Windows and Linux share one spelling, so only macOS needs its own branch.
+  const isMac = isMacOs();
+  const zoomInHint = isMac ? '⌘=' : 'Ctrl++';
+  const zoomOutHint = isMac ? '⌘-' : 'Ctrl+-';
+  const resetHint = isMac ? '⌘0' : 'Ctrl+0';
+
   return (
     <>
       <DropdownMenuItem disabled={!canZoomIn} onSelect={onZoomIn}>
         {labels.zoomIn}
+        <DropdownMenuShortcut className="tw:tracking-normal">
+          <ShortcutKeys hint={zoomInHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canZoomOut} onSelect={onZoomOut}>
         {labels.zoomOut}
+        <DropdownMenuShortcut className="tw:tracking-normal">
+          <ShortcutKeys hint={zoomOutHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canReset} onSelect={onResetZoom}>
         {labels.reset}
+        <DropdownMenuShortcut className="tw:tracking-normal">
+          <ShortcutKeys hint={resetHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
     </>
   );
