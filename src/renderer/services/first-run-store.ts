@@ -127,15 +127,24 @@ async function markFirstRunComplete(): Promise<void> {
  * overrides a language the user has already chosen. Skips the write when the OS match already
  * equals the current primary language (e.g. an English OS), to avoid a redundant set + re-render.
  */
+/**
+ * Whether `value` is what `platform.interfaceLanguage` holds before anyone has chosen a language:
+ * unset, empty, or the default `['en']`. Anything else was set on purpose and must not be
+ * replaced.
+ */
+function isDefaultInterfaceLanguage(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value)) return false;
+  return value.length === 0 || (value.length === 1 && value[0] === 'en');
+}
+
 async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
   try {
+    const current = await settingsService.get('platform.interfaceLanguage');
+    if (!isDefaultInterfaceLanguage(current)) return;
     const qualifying = await localizationService.getSetupDialogLanguages();
     const best = pickBestSetupLanguage(getCurrentLocale(), Object.keys(qualifying));
-    if (!best) return;
-    const current = await settingsService.get('platform.interfaceLanguage');
-    const currentPrimary =
-      !isPlatformError(current) && Array.isArray(current) && current.length > 0 ? current[0] : 'en';
-    if (best === currentPrimary) return;
+    if (!best || best === 'en') return;
     await settingsService.set('platform.interfaceLanguage', [best]);
   } catch (e) {
     logger.warn(`Could not default interface language to the OS locale: ${getErrorMessage(e)}`);
