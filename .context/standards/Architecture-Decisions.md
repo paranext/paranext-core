@@ -3907,7 +3907,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Picking a language writes one value in all three pickers (`switchInterfaceLanguage`): the
     chosen language first, then the other current languages that are offered. A hidden language is
     dropped when the user switches away from it, since no picker can remove a fallback.
-  - The first-run OS-locale default writes only while the setting is still unset or `['en']`.
+  - The first-run OS-locale default writes only while the setting is still unset, empty or `['en']`.
   - Some UI keeps the old language until restart (the main menu bar, PT-4503; the Settings labels),
     so Settings and the popover offer a restart after a change of primary language. The first-run
     step does not.
@@ -3917,8 +3917,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (the only existing one measures the setup dialog, which is what caused the bad auto-pick).
   Resetting a hidden language to English on startup (overrides deliberate testers and translators
   every launch). Keeping hidden languages as fallbacks after a switch (they could not be removed
-  again in any picker).
-- **Consequences:** Offering a language is a one-line change; `src/node/data/offered-interface-languages.test.ts`
+  again in any picker). Keeping `getAvailableInterfaceLanguages` unchanged and adding a separate
+  offered-languages data type or an `isOffered` flag (additive for extensions, but every core picker
+  would move to the new type, and nothing outside core was found using the getter).
+- **Consequences:** Offering a language is a one-line code change (plus the tests that pin the list); `src/node/data/offered-interface-languages.test.ts`
   fails if an offered tag has no locale file or misses the setup-dialog threshold. The public
   `getAvailableInterfaceLanguages` now means "offered", not "every locale file"; PAPI has no way to
   list hidden languages. PT-4457 (offer languages by translation coverage) is expected to supersede
