@@ -3314,8 +3314,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   menu its own tab. (2) **Explicit allowlist.** The chord-clash check in
   `keyboard-shortcuts.data.test.ts` (`findMainProcessChordClashes`) still rejects a chord shared with
   a different main-process entry, and now also rejects any main-process location of an entry's own
-  unless `SAME_COMMAND_MAIN_PROCESS_LOCATIONS` lists it for that entry id — so a focus-blind chord
-  such as `reference-history-back` still cannot gain a `command` silently. (3) **Hand-built menus
+  unless `SAME_COMMAND_MAIN_PROCESS_LOCATIONS` lists it for that entry id and its current `command`
+  — so a focus-blind chord such as `reference-history-back` still cannot gain a `command` silently,
+  and an allowlisted entry loses its allowance if its `command` changes. (3) **Hand-built menus
   share the chord.** A menu built in extension code, outside the menu data service, can now show a
   hint: the chord lives in `platform-bible-utils` (`CONTENT_ZOOM_IN/OUT/RESET_SHORTCUT` in
   `content-zoom.util.ts`), and both the catalog entry's `keys` and the menu read it from there, so

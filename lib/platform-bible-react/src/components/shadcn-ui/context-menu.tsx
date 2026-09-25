@@ -110,8 +110,9 @@ function ContextMenuItem({
         // CUSTOM: Added tw:not-data-[variant=destructive]:focus:**:text-accent-foreground, which
         // recolors every descendant of a highlighted non-destructive item to the accent foreground.
         // A descendant that sets its own color, such as the muted Kbd keycaps in a
-        // ContextMenuShortcut, otherwise stays grey on the accent background while the text around
-        // it turns dark. DropdownMenuItem and MenubarItem carry the same rule.
+        // ContextMenuShortcut, otherwise keeps its muted color on the accent background while the
+        // text around it turns accent-foreground. DropdownMenuItem and MenubarItem carry the same
+        // rule.
         'tw:not-data-[variant=destructive]:focus:**:text-accent-foreground',
         className,
       )}

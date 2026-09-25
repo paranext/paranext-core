@@ -4043,7 +4043,8 @@ export declare function isParagraphMarker(marker: string): boolean;
  * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
  * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both
  * scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these from here rather
- * than keeping their own copy.
+ * than keeping their own copy. Also the keyboard chords that zoom a pane's content, as menus show
+ * them.
  */
 /**
  * Smallest allowed zoom factor.
@@ -4070,11 +4071,23 @@ export declare const ZOOM_STEP = 0.1;
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export type ContentZoomShortcut = Readonly<{
-	/** MacOS spelling, e.g. `⌘=` */
+	/**
+	 * MacOS spelling, e.g. `⌘=`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
 	macOS: string;
-	/** Windows spelling, e.g. `Ctrl++` */
+	/**
+	 * Windows spelling, e.g. `Ctrl++`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
 	windows: string;
-	/** Linux spelling, e.g. `Ctrl++` */
+	/**
+	 * Linux spelling, e.g. `Ctrl++`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
 	linux: string;
 }>;
 /**
