@@ -196,6 +196,30 @@ export function restoreSelectionIfLost(
 }
 
 /**
+ * Puts keyboard focus back in the editor, restoring a lost caret first.
+ *
+ * Lexical's `focus()` falls back to selecting the document END when the editor-state selection is
+ * null, and it cannot tell a genuinely-lost selection from one that was never there — so the
+ * restore has to happen BEFORE `focus()` runs, never after. Calling `focus()` alone after a
+ * selection has been nulled (e.g. a popover blur) would silently move the caret to the chapter
+ * end.
+ *
+ * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
+ * @param lastFocusOutSelection The selection captured when focus last left the editor, passed
+ *   straight through to {@link restoreSelectionIfLost}
+ */
+export function returnFocusToEditor(
+  editor: Pick<
+    EditorRef,
+    'getSelection' | 'setSelection' | 'getSelectedParaMarker' | 'focus'
+  > | null,
+  lastFocusOutSelection: SelectionRange | undefined,
+): void {
+  restoreSelectionIfLost(editor, lastFocusOutSelection);
+  editor?.focus();
+}
+
+/**
  * How long, in milliseconds, a footnote-popover editing session may sit without any interaction
  * (opening it, editing in it, or saving from it) before the PDP-sync deferral treats it as STALE —
  * abandoned bookkeeping rather than a live session — and stops letting it hold incoming updates at
