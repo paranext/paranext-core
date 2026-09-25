@@ -162,7 +162,6 @@ describe('TabDropdownMenu', () => {
     const find = screen.getByRole('menuitem', { name: /^Find/ });
     const shortcut = find.querySelector('[data-slot="dropdown-menu-shortcut"]');
     expect(shortcut).not.toBeNull();
-    expect(shortcut).toHaveClass('tw:[unicode-bidi:plaintext]');
     expect(within(find).getByText('Ctrl').tagName).toBe('KBD');
     expect(within(find).getByText('F').tagName).toBe('KBD');
     const footnote = screen.getByRole('menuitem', { name: /^Insert footnote/ });

@@ -1735,9 +1735,8 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	iconPathBefore?: string;
 	/**
 	 * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
-	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
-	 * it as a key binding. Renderers split it into one keycap per key rather than showing it as one
-	 * string.
+	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: renderers
+	 * split it into one keycap per key, but never treat it as a key binding.
 	 *
 	 * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
 	 * the unlocalized main menu never has it. Key names are not localized, and only the first
@@ -4094,8 +4093,8 @@ export declare const CONTENT_ZOOM_IN_SHORTCUT: ContentZoomShortcut;
  */
 export declare const CONTENT_ZOOM_OUT_SHORTCUT: ContentZoomShortcut;
 /**
- * The chord that returns a pane's content to its default zoom, as a menu shows it on each
- * operating system. See {@link CONTENT_ZOOM_IN_SHORTCUT}.
+ * The chord that returns a pane's content to its default zoom, as a menu shows it on each operating
+ * system. See {@link CONTENT_ZOOM_IN_SHORTCUT}.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */

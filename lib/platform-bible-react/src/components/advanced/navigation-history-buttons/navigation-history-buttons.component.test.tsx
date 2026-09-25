@@ -157,9 +157,7 @@ describe('NavigationHistoryButtons', () => {
     // key. jsdom's userAgent is non-Mac, so the Windows/Linux hints apply.
     await user.hover(backButton);
     // Radix Tooltip can render the content text more than once (a visually-hidden copy for screen
-    // readers), so assert on "at least one" rather than exactly one. The chord now renders as
-    // separate Alt/→ keycaps joined by a plus-separator span rather than one Kbd holding the whole
-    // string.
+    // readers), so assert on "at least one" rather than exactly one.
     await screen.findByRole('tooltip');
     const altKeycaps = screen.getAllByText('Alt');
     expect(altKeycaps.length).toBeGreaterThan(0);
@@ -167,6 +165,9 @@ describe('NavigationHistoryButtons', () => {
     const rightArrowKeycaps = screen.getAllByText('→');
     expect(rightArrowKeycaps.length).toBeGreaterThan(0);
     rightArrowKeycaps.forEach((keycap) => expect(keycap.tagName).toBe('KBD'));
+    altKeycaps.forEach((keycap) =>
+      expect(keycap.closest('[data-slot="kbd-group"]')?.textContent).toBe('Alt+→'),
+    );
     expect(screen.queryByText('←')).toBeNull();
   });
 
@@ -181,6 +182,9 @@ describe('NavigationHistoryButtons', () => {
     const leftArrowKeycaps = screen.getAllByText('←');
     expect(leftArrowKeycaps.length).toBeGreaterThan(0);
     leftArrowKeycaps.forEach((keycap) => expect(keycap.tagName).toBe('KBD'));
+    altKeycaps.forEach((keycap) =>
+      expect(keycap.closest('[data-slot="kbd-group"]')?.textContent).toBe('Alt+←'),
+    );
     expect(screen.queryByText('→')).toBeNull();
   });
 
