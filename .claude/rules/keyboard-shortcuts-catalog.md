@@ -37,9 +37,9 @@ renderers (`ShortcutKeys` from `platform-bible-react/experimental`) render it as
 - `src/shared/data/keyboard-shortcuts.data.test.ts` pins each `command`'s hint text and the menus
   that show it, so adding or reusing one needs a deliberate update. It rejects a chord shared with
   a different main-process entry, and any main-process location of the entry's own except those
-  listed for that entry in `SAME_COMMAND_MAIN_PROCESS_LOCATIONS` — a handler that runs the same
-  command the menu item does. Adding an entry there is a deliberate decision, not a way to silence
-  the check.
+  `SAME_COMMAND_MAIN_PROCESS_LOCATIONS` lists for that entry id and its current `command` — a
+  handler that runs the same command the menu item does. Adding an entry there is a deliberate
+  decision, not a way to silence the check.
 - A menu built in extension code rather than served by the menu data service gets no hint and
   cannot import this core-only catalog. Put the chord in `platform-bible-utils` next to the related
   constants, and have both the catalog entry's `keys` and the menu read it from there, so the two
