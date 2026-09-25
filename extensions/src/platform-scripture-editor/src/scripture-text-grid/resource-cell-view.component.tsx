@@ -9,7 +9,6 @@ import {
   ContentZoomRoot,
   isMacOs,
   isWindows,
-  ShortcutKeys,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -17,6 +16,7 @@ import {
   TooltipTrigger,
   useTruncationTooltip,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
 import {
   CONTENT_ZOOM_IN_SHORTCUT,

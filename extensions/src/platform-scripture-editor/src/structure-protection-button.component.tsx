@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   isMacOs,
-  ShortcutKeys,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import { Lock, LockOpen } from 'lucide-react';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 
