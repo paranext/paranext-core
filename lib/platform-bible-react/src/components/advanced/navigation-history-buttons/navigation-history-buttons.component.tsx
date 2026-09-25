@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { Kbd } from '@/components/shadcn-ui/kbd';
+import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   Tooltip,
   TooltipContent,
@@ -211,7 +211,7 @@ export function NavigationHistoryButtons({
               {showKeyboardShortcuts && (
                 <>
                   {' '}
-                  <Kbd>{shortcut}</Kbd>
+                  <ShortcutKeys hint={shortcut} />
                 </>
               )}
             </p>
