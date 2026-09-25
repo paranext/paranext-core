@@ -116,6 +116,43 @@ describe('notification service shard', () => {
         expect.objectContaining({ duration: 10000 }),
       );
     });
+
+    it('gives a notification that never times out a close button, so the keyboard can close it', async () => {
+      await capturedService.send({ message: 'test', severity: 'info', duration: 0 });
+
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ duration: Infinity, closeButton: true }),
+      );
+    });
+
+    it('gives a notification that times out no close button', async () => {
+      await capturedService.send({ message: 'test', severity: 'info', duration: 5000 });
+      await capturedService.send({ message: 'other', severity: 'info' });
+
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ closeButton: false }),
+      );
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'other',
+        expect.objectContaining({ closeButton: false }),
+      );
+    });
+
+    it('gives a never-closing notification the caller made non-dismissible no close button', async () => {
+      await capturedService.send({
+        message: 'test',
+        severity: 'info',
+        duration: 0,
+        dismissible: false,
+      });
+
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ closeButton: false, dismissible: false }),
+      );
+    });
   });
 
   describe('dismiss', () => {

@@ -168,6 +168,10 @@ async function send(notification: PlatformNotification): Promise<string | number
     // Per-toast placement override; undefined leaves the Toaster's default placement in effect.
     position,
     dismissible: effectiveDismissible,
+    // A notification that never times out would otherwise stay until the user swipes it away, which
+    // a keyboard cannot do. The close button fires `onDismiss` like a swipe. A caller who made the
+    // notification non-dismissible gets none, since it must stay until answered.
+    closeButton: duration === Infinity && effectiveDismissible !== false,
     // Fires when the USER dismisses the toast (swipe/drag past Sonner's threshold, or a close button
     // if one is ever enabled). Also forgets the notification so its map entries don't leak.
     onDismiss: runRemovalCommand(dismissClickCommand, 'dismiss'),
