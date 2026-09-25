@@ -667,10 +667,14 @@ export function EnhancedResourceWebView({
               </EnhancedResourceFootnotesPane>
             </ResizablePanel>
             <ResizableHandle withHandle />
+            {/* The zoom scope ties the whole lower panel to the `entries` area: only the entry text
+                inside is marked, so a Ctrl/⌘+wheel, click or focus over the tab bar, a card's
+                padding or the gap between entries would otherwise go to the area used last. */}
             <ResizablePanel
               defaultSize={100 - splitterPercentage}
               minSize={20}
               className="tw:flex tw:flex-col"
+              data-platform-content-zoom-scope="entries"
             >
               {/* Theme 8 — tab/filter/scope row sits at the top of the lower split panel. */}
               <EnhancedResourceTabBar
