@@ -1518,9 +1518,8 @@ export type ShortcutKeysProps = {
  * plain text between the keycaps rather than as part of one; macOS symbols sit adjacent with
  * nothing between them.
  *
- * `dir="ltr"` is set on the `KbdGroup` itself, not an enclosing element, so the keycap order
- * survives a right-to-left layout: `KbdGroup` is `inline-flex`, and flex item order follows the
- * `direction` property.
+ * It does not detect the operating system: it follows the spelling of the hint it is given, so the
+ * caller picks the spelling for the user's OS (e.g. `isMacOs() ? '⌘Z' : 'Ctrl+Z'`).
  *
  * @experimental This component is unstable and may change or disappear without notice
  */
