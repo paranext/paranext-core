@@ -153,19 +153,19 @@ function ZoomItemsShared({
     <>
       <DropdownMenuItem disabled={!canZoomIn} onSelect={onZoomIn}>
         {labels.zoomIn}
-        <DropdownMenuShortcut className="tw:tracking-normal">
+        <DropdownMenuShortcut>
           <ShortcutKeys hint={zoomInHint} />
         </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canZoomOut} onSelect={onZoomOut}>
         {labels.zoomOut}
-        <DropdownMenuShortcut className="tw:tracking-normal">
+        <DropdownMenuShortcut>
           <ShortcutKeys hint={zoomOutHint} />
         </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canReset} onSelect={onResetZoom}>
         {labels.reset}
-        <DropdownMenuShortcut className="tw:tracking-normal">
+        <DropdownMenuShortcut>
           <ShortcutKeys hint={resetHint} />
         </DropdownMenuShortcut>
       </DropdownMenuItem>

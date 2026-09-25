@@ -51,6 +51,14 @@ describe('ShortcutKeys', () => {
     expect(document.querySelectorAll('kbd[data-slot="kbd"]')).toHaveLength(3);
   });
 
+  it.each(['F7', 'Ctrl+Shift+N'])(
+    'resets letter spacing on %s so a menu shortcut slot cannot spread the keycap letters apart',
+    (hint) => {
+      const { container } = render(<ShortcutKeys hint={hint} />);
+      expect(container.firstElementChild).toHaveClass('tw:tracking-normal');
+    },
+  );
+
   it('gives the group ltr direction so keycap order survives a right-to-left layout', () => {
     render(<ShortcutKeys hint="Ctrl+Shift+N" />);
     const group = screen.getByText('Ctrl').closest('[data-slot="kbd-group"]');
