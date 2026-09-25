@@ -1,6 +1,7 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 import { Kbd, KbdGroup } from '@/components/shadcn-ui/kbd';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
+import { isMacOs } from '@/utils/platform.util';
 import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
 
 <Meta title="Guidelines/Keyboard shortcuts" />
@@ -55,12 +56,13 @@ These rules describe the **plain-text string** form of a combination — what yo
 
 ## Detecting the platform
 
-For shortcuts rendered at runtime, use the `ShortcutKeys` component rather than branching on the user's OS and building a `KbdGroup` by hand:
+For shortcuts rendered at runtime, pick the hint for the user's OS, then render it with the `ShortcutKeys` component rather than building a `KbdGroup` by hand. `ShortcutKeys` does not detect the OS: it renders the spelling it is given, so the caller chooses it, typically with `isMacOs()` (Windows and Linux usually share a spelling; `isWindows()` tells them apart where they don't):
 
 ```tsx
+import { isMacOs } from 'platform-bible-react';
 import { ShortcutKeys } from 'platform-bible-react/experimental';
 
-<ShortcutKeys hint="Ctrl+Z" />
+<ShortcutKeys hint={isMacOs() ? '⌘Z' : 'Ctrl+Z'} />
 ```
 
 Pass it the same plain-text hint described above (`⌘Z`, `Ctrl+Shift+T`, …) and it renders **one `Kbd` per key inside a `KbdGroup`** — never a single `Kbd` wrapping the whole combination — matching [Keyboard shortcuts in tooltips](?path=/docs/guidelines-tooltips--docs#keyboard-shortcuts-in-tooltips). See [Basics/ShortcutKeys](?path=/docs/basics-shortcutkeys--docs) for the full set of examples (single key, Windows/Linux multi-key, macOS adjacent symbols, `Ctrl++`).
@@ -75,9 +77,10 @@ The per-OS separator carries over from the string conventions above: **macOS** p
     with the separator baked into the text. Individual keys can't be spaced or styled as keycaps.
   </ExampleBlock>
 
-  <ExampleBlock variant="prefer" preview={<ShortcutKeys hint="Ctrl+Z" />} code={'<ShortcutKeys hint="Ctrl+Z" />'}>
-    Render the hint through <code>ShortcutKeys</code> instead of hand-building the group — it
-    picks the per-OS keycaps and separator for you.
+  <ExampleBlock variant="prefer" preview={<ShortcutKeys hint={isMacOs() ? '⌘Z' : 'Ctrl+Z'} />} code={"<ShortcutKeys hint={isMacOs() ? '⌘Z' : 'Ctrl+Z'} />"}>
+    Pick the spelling for the user's OS, then render it through <code>ShortcutKeys</code> instead
+    of hand-building the group. It splits the hint into one keycap per key and keeps the
+    separator the spelling uses.
   </ExampleBlock>
 </ExampleBlockGroup>
 

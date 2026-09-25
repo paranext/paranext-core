@@ -9,7 +9,7 @@ const meta: Meta<typeof ShortcutKeys> = {
     docs: {
       description: {
         component: `
-Renders one already-resolved keyboard shortcut hint as keycaps: a single key is a lone \`Kbd\`, while a combination puts each key in its own \`Kbd\` inside a \`KbdGroup\`. Prefer this over building the \`KbdGroup\` by hand — it already applies the per-OS conventions from [Guidelines/Keyboard shortcuts](?path=/docs/guidelines-keyboard-shortcuts--docs): macOS symbols sit adjacent with no separator, while Windows/Linux keys get a literal \`+\` between keycaps.
+Renders one already-resolved keyboard shortcut hint as keycaps: a single key is a lone \`Kbd\`, while a combination puts each key in its own \`Kbd\` inside a \`KbdGroup\`. Prefer this over building the \`KbdGroup\` by hand. It follows the hint's own spelling (see [Guidelines/Keyboard shortcuts](?path=/docs/guidelines-keyboard-shortcuts--docs)): macOS symbols sit adjacent with no separator, while Windows/Linux keys get a literal \`+\` between keycaps. Choosing the spelling for the user's OS is up to the caller.
 
 \`hint\` takes a single key combination — such as a menu item's \`shortcut\` string — not a raw keyboard shortcuts catalog \`keys\` string with \`/\`-separated alternatives.
         `,
