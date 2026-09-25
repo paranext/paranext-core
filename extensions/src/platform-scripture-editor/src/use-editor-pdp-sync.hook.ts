@@ -111,6 +111,7 @@ export function useEditorPdpSync({
   flushPendingDebouncedSave,
   isEditingSessionActive,
   lastLocalEditTimestamp,
+  editorDocumentSelector,
 }: {
   usjFromPdp: Usj | undefined;
   /**
@@ -163,6 +164,15 @@ export function useEditorPdpSync({
    * the window, no longer defers incoming updates.
    */
   lastLocalEditTimestamp: MutableRefObject<number | undefined>;
+  /**
+   * Where this hook records which chapter document the editor is holding, for a caller that has to
+   * know. That is not always `documentSelector`: after navigation the selector names the new
+   * chapter at once, while the editor goes on holding the old one, still editable, until the new
+   * chapter's content is delivered and applied. `undefined` until a delivery is applied, and again
+   * once the editor unmounts. Written only by this hook. The hook keeps its own record when this is
+   * omitted.
+   */
+  editorDocumentSelector?: MutableRefObject<EditorDocumentSelector | undefined>;
 }): void {
   // Counts consecutive incoming updates deferred to the actively-edited chapter without the
   // round-trip converging (the editor's content matching the echo). Reset whenever an update is
@@ -208,8 +218,10 @@ export function useEditorPdpSync({
   // is already showing that document, and that branch can be the only one a chapter ever runs).
   // Local edits never change which document the editor shows, so nothing else moves it. Compared
   // against the current documentSelector to tell a same-document echo (defer while actively
-  // editing) from a different document arriving (navigation: always replace).
-  const lastAppliedDocumentSelector = useRef<EditorDocumentSelector | undefined>(undefined);
+  // editing) from a different document arriving (navigation: always replace). Kept in the caller's
+  // ref when it passes one (`editorDocumentSelector`), so the caller can read it too.
+  const ownAppliedDocumentSelector = useRef<EditorDocumentSelector | undefined>(undefined);
+  const lastAppliedDocumentSelector = editorDocumentSelector ?? ownAppliedDocumentSelector;
   // The `usjFromPdp` reference this effect has already acted on. Every decision below reads the
   // (usjFromPdp, documentSelector) PAIR, but the two do not move together: `documentSelector`
   // changes during the navigation render while `usjFromPdp` still holds the OLD chapter's data
@@ -429,7 +441,6 @@ export function useEditorPdpSync({
       lastEditorUsjPushedWhileDeferring.current = undefined;
       lastIncomingUsjDeferred.current = undefined;
       warnedLossyDifferences.current = [];
-      lastAppliedDocumentSelector.current = documentSelector;
       // Recent typing wins: before this external update replaces the editor, flush any pending
       // debounced keystroke save so the final keystrokes are WRITTEN rather than silently
       // discarded. (The mirror case — focus still in the editor — pushes them via the deferral
@@ -442,7 +453,7 @@ export function useEditorPdpSync({
       //     returned promise settles when the invocation completes, not when the PDP write does,
       //     so awaiting it would only defer the replace to a microtask; the replace proceeds
       //     synchronously instead, closing any interleaving window.
-      //   - Any pending save here belongs to the CURRENT chapter: a cross-chapter pending save is
+      //   - Any pending save here was scheduled for the CURRENT chapter: a cross-chapter pending save is
       //     flushed by the web view's chapter-switch effect cleanup before a new chapter's first
       //     delivery can reach this effect.
       //   - After the flush, this incoming update is STALE relative to the flushed content. It is
@@ -452,7 +463,13 @@ export function useEditorPdpSync({
       //     echo here: the flushed write records its own newer content as last-sent, which would
       //     make the echo look identical-to-sent and take the push-back branch below — re-pushing
       //     this stale update's content over the just-flushed keystrokes.
+      //   - The editor's document identity moves only AFTER the flush, together with the replace:
+      //     until then the editor still holds the previous document, and the flushed save must see
+      //     that. After navigation, a save pending here was scheduled for the NEW chapter while the
+      //     editor was still showing the old one, and the web view drops it rather than write one
+      //     chapter's content into another.
       if (flushPendingDebouncedSave?.() !== undefined) usjSentToPdp.current = usjFromPdp;
+      lastAppliedDocumentSelector.current = documentSelector;
       setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
@@ -485,6 +502,7 @@ export function useEditorPdpSync({
     editorRef,
     flushPendingDebouncedSave,
     isEditingSessionActive,
+    lastAppliedDocumentSelector,
     lastLocalEditTimestamp,
     nonConvergingDeferralCount,
     saveUsjToPdpIfUpdated,

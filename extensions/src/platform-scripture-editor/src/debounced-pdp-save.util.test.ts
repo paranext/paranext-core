@@ -1,6 +1,10 @@
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { describe, expect, it, vi } from 'vitest';
-import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
+import {
+  isEditorContentForChapter,
+  performDebouncedPdpSave,
+  resolveUsjToSaveToPdp,
+} from './debounced-pdp-save.util';
 
 const usjWith = (text: string): Usj => ({
   type: 'USJ',
@@ -287,5 +291,21 @@ describe('an undone document reaches the PDP the same way a typed one does', () 
 
     expect(fromUndo.mock.calls).toEqual(fromTyping.mock.calls);
     expect(resolveUsjToSaveToPdp(fromUndo.mock.calls[0][0], renamed)).toEqual(undone);
+  });
+});
+
+describe('isEditorContentForChapter', () => {
+  it('allows a save to the chapter the editor is holding', () => {
+    expect(isEditorContentForChapter('JON|2|', 'JON|2|')).toBe(true);
+  });
+
+  // The window after navigation: the editor still holds the chapter being left, and the save is
+  // bound to the chapter being loaded. Writing it would put one chapter's text over another.
+  it('refuses a save to a chapter the editor is not holding', () => {
+    expect(isEditorContentForChapter('JON|1|', 'JON|2|')).toBe(false);
+  });
+
+  it('allows the save when nothing has been applied to the editor yet', () => {
+    expect(isEditorContentForChapter(undefined, 'JON|2|')).toBe(true);
   });
 });
