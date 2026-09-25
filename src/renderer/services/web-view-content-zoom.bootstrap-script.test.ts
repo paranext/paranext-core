@@ -1342,8 +1342,7 @@ describe('content-zoom bootstrap script', () => {
     const markerScanCount = () =>
       spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
         .length;
-    // A show scans once, in the frame it places the badge at its area's corner in; the count is
-    // taken after that frame so it already includes that scan, and the delta below isolates only
+    // The count is taken after the frame that places the badge, and the delta below isolates only
     // what the observer's callback does once the write's mutation record reaches it.
     api.showIndicator('main', '120 %');
     await nextFrame();
@@ -2319,6 +2318,57 @@ describe('content-zoom bootstrap script', () => {
       if (!api) throw new Error('indicator api missing');
       api.showIndicator(areaId, text);
     }
+
+    function spyOnMarkerScans(): { count: () => number; restore: () => void } {
+      const spy = vi.spyOn(document, 'querySelectorAll');
+      return {
+        count: () =>
+          spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
+            .length,
+        restore: () => spy.mockRestore(),
+      };
+    }
+
+    it('names and places the badge on a zoom step without scanning the document for markers', async () => {
+      install('wv-label-no-scan', LABELLED_AREAS);
+      await nextFrame();
+      const scans = spyOnMarkerScans();
+      try {
+        // A wheel gesture: many steps, each naming its area and asking for a placement.
+        showIndicator('resource-a', '110 %');
+        showIndicator('resource-a', '120 %');
+        showIndicator('footnotes', '130 %');
+        await nextFrame();
+        expect(scans.count()).toBe(0);
+        // Positive control: the steps did read the label and place the badge.
+        const badge = byId('platform-content-zoom-indicator');
+        expect(badge.dataset.area).toBe('footnotes');
+        showIndicator('resource-a', '140 %');
+        expect(badge.textContent).toBe('HSV · 140 %');
+        expect(scans.count()).toBe(0);
+      } finally {
+        scans.restore();
+      }
+    });
+
+    it('reads a renamed label from the next step, rescanning once for the rename', async () => {
+      install('wv-label-rename', LABELLED_AREAS);
+      await nextFrame();
+      const scans = spyOnMarkerScans();
+      try {
+        byId('text-a').setAttribute('data-platform-content-zoom-label', 'NIV');
+        await nextFrame();
+        expect(scans.count()).toBe(1);
+        showIndicator('resource-a', '120 %');
+        expect(byId('platform-content-zoom-indicator').textContent).toBe('NIV · 120 %');
+        byId('text-a').removeAttribute('data-platform-content-zoom-label');
+        await nextFrame();
+        showIndicator('resource-a', '130 %');
+        expect(byId('platform-content-zoom-indicator').textContent).toBe('130 %');
+      } finally {
+        scans.restore();
+      }
+    });
 
     it('shows a labelled area as "<label> · <level>", in the badge and, once settled, the live region', () => {
       install('wv-label', LABELLED_AREAS);
