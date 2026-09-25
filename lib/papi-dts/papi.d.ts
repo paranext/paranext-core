@@ -14116,29 +14116,9 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    */
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
   /**
-   * Reads the CSS `zoom` on a WebView's host `<iframe>` element, if any.
-   *
-   * A zoomed iframe's own `getBoundingClientRect()` is unchanged — only its inner viewport shrinks or
-   * grows — and the inner document measures itself in unscaled inner pixels, so an inner point at `x`
-   * renders `zoom * x` from the iframe's left edge.
-   *
-   * The platform is the only writer of this property, so the inline value is authoritative (and,
-   * unlike computed style, is defined for this non-standard property in every environment the
-   * renderer runs in).
-   *
-   * The platform currently sets no whole-iframe `zoom` — content zoom is applied to marked areas
-   * inside the iframe, never to the frame as a whole — so this returns `1`. The function is kept so
-   * that a whole-frame scale, should one ever be applied, still maps positions and anchor sizes
-   * correctly.
-   *
-   * @param webViewId The webViewId of the iframe
-   * @returns The scale factor the iframe's contents are rendered at
-   * @experimental This function is unstable and may change or disappear without notice
-   */
-  export function getWebViewIframeZoom(webViewId: string): number;
-  /**
    * Translates iframe-relative coordinates to document-relative coordinates using
-   * getBoundingClientRect of the WebView iframe and the CSS `zoom` applied to it.
+   * getBoundingClientRect of the WebView iframe. The platform never scales the iframe element itself
+   * (content zoom scales marked areas inside it), so an inner pixel is an outer pixel.
    *
    * @param webViewId The webViewId of the iframe
    * @param position The iframe-relative position

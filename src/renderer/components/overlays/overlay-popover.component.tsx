@@ -47,16 +47,6 @@ export type OverlayPopoverPresentationalProps = {
   maxHeight?: number;
   /** Whether to display an arrow pointing toward the anchor. Defaults to true. */
   showArrow?: boolean;
-  /**
-   * The scale factor for mapping the requesting pane's iframe-relative anchor geometry to window
-   * pixels. The anchor's size arrives in the pane's own pixels while its position has already been
-   * translated by this factor, so the size needs the same multiplication to describe the trigger as
-   * it is painted. The platform currently applies no whole-frame scale, so this is always `1`; the
-   * prop exists to keep that mapping correct if a frame scale is ever applied.
-   *
-   * @experimental This field is unstable and may change or disappear without notice
-   */
-  frameScale?: number;
   /** Called when the user clicks an action button (card content) */
   onAction?: (actionId: string) => void;
   /** Called when the popover is dismissed */
@@ -169,7 +159,6 @@ export function OverlayPopoverPresentational({
   maxWidth,
   maxHeight,
   showArrow = true,
-  frameScale = 1,
   onAction,
   onDismiss,
 }: OverlayPopoverPresentationalProps) {
@@ -210,8 +199,8 @@ export function OverlayPopoverPresentational({
             position: 'fixed',
             left: position.x,
             top: position.y,
-            width: (anchor?.width ?? 0) * frameScale,
-            height: (anchor?.height ?? 0) * frameScale,
+            width: anchor?.width ?? 0,
+            height: anchor?.height ?? 0,
             pointerEvents: 'none',
           }}
         />
@@ -332,14 +321,6 @@ function localizePopoverContent(
 
 type OverlayPopoverProps = {
   overlay: Extract<OverlayEntry, { type: 'popover' }>;
-  /**
-   * The requesting pane's frame scale, read and supplied by `OverlayHost` — see
-   * {@link OverlayPopoverPresentationalProps.frameScale}. Undefined draws at interface scale,
-   * matching the presentational component's own default.
-   *
-   * @experimental This field is unstable and may change or disappear without notice
-   */
-  frameScale?: number;
 };
 
 /**
@@ -351,7 +332,7 @@ type OverlayPopoverProps = {
  * use {@link OverlayPopoverPresentational} instead, which accepts plain props without requiring an
  * `OverlayEntry`.
  */
-export function OverlayPopover({ overlay, frameScale }: OverlayPopoverProps) {
+export function OverlayPopover({ overlay }: OverlayPopoverProps) {
   const hasResolved = useRef(false);
 
   const localizeKeys = useMemo(() => collectPopoverKeys(overlay.content), [overlay.content]);
@@ -389,7 +370,6 @@ export function OverlayPopover({ overlay, frameScale }: OverlayPopoverProps) {
       maxWidth={overlay.request.maxWidth}
       maxHeight={overlay.request.maxHeight}
       showArrow={overlay.request.showArrow}
-      frameScale={frameScale}
       onAction={handleAction}
       onDismiss={handleDismiss}
     />

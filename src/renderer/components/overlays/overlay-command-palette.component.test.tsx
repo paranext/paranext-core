@@ -1103,13 +1103,12 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(inner?.contains(otherChildren[0])).toBe(false);
     });
 
-    it('scales the anchor the pane measured in its own pixels by the frame zoom', () => {
+    it('sizes the anchor to the trigger as the pane measured it', () => {
       render(
         <OverlayCommandPalettePresentational
           items={sampleItems}
           position={{ x: 100, y: 200 }}
           anchor={{ width: 40, height: 20 }}
-          frameScale={1.5}
           onSelect={vi.fn()}
           onDismiss={vi.fn()}
         />,
@@ -1120,8 +1119,8 @@ describe('OverlayCommandPalettePresentational', () => {
       // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const { style } = anchor as HTMLElement;
-      expect(style.width).toBe('60px');
-      expect(style.height).toBe('30px');
+      expect(style.width).toBe('40px');
+      expect(style.height).toBe('20px');
     });
   });
 });
@@ -1169,9 +1168,9 @@ describe('OverlayCommandPalette (store-connected)', () => {
     clearAllOverlays();
   });
 
-  it('forwards frameScale to the presentational component it renders', () => {
-    // A `position` plus a sized `request.anchor` puts the palette in its anchored branch, the one
-    // that reads frameScale (the centered branch has no anchor).
+  it('hands the request’s anchor size to the presentational component it renders', () => {
+    // A `position` plus a sized `request.anchor` puts the palette in its anchored branch (the
+    // centered branch has no anchor).
     const entry = createPaletteEntry({
       position: { x: 10, y: 20 },
       request: {
@@ -1181,16 +1180,16 @@ describe('OverlayCommandPalette (store-connected)', () => {
       },
     });
     addOverlay(entry);
-    render(<OverlayCommandPalette overlay={entry} frameScale={1.25} />);
+    render(<OverlayCommandPalette overlay={entry} />);
 
     const anchor = document.querySelector('[data-overlay-command-palette-anchor]');
     expect(anchor).toBeInTheDocument();
     // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const { style: anchorStyle } = anchor as HTMLElement;
-    // request.anchor is 40x20; frameScale 1.25 multiplies it to 50x25.
-    expect(anchorStyle.width).toBe('50px');
-    expect(anchorStyle.height).toBe('25px');
+    // request.anchor is 40x20, drawn at that size.
+    expect(anchorStyle.width).toBe('40px');
+    expect(anchorStyle.height).toBe('20px');
   });
 
   it('mirrors typed filter text into the store so a forwarded commit resolves against the displayed list', () => {

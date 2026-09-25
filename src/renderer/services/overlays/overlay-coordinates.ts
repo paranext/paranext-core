@@ -18,44 +18,9 @@ export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
 }
 
 /**
- * Parses the CSS `zoom` inline on an iframe element. Anything that is not a positive finite number
- * — including the empty string written to clear the zoom, or no iframe at all — means unscaled.
- *
- * Shared by {@link getWebViewIframeZoom} and {@link translateCoordinates} so the two read the zoom
- * the same way.
- */
-function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): number {
-  const zoom = Number(iframe?.style.zoom);
-  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-}
-
-/**
- * Reads the CSS `zoom` on a WebView's host `<iframe>` element, if any.
- *
- * A zoomed iframe's own `getBoundingClientRect()` is unchanged — only its inner viewport shrinks or
- * grows — and the inner document measures itself in unscaled inner pixels, so an inner point at `x`
- * renders `zoom * x` from the iframe's left edge.
- *
- * The platform is the only writer of this property, so the inline value is authoritative (and,
- * unlike computed style, is defined for this non-standard property in every environment the
- * renderer runs in).
- *
- * The platform currently sets no whole-iframe `zoom` — content zoom is applied to marked areas
- * inside the iframe, never to the frame as a whole — so this returns `1`. The function is kept so
- * that a whole-frame scale, should one ever be applied, still maps positions and anchor sizes
- * correctly.
- *
- * @param webViewId The webViewId of the iframe
- * @returns The scale factor the iframe's contents are rendered at
- * @experimental This function is unstable and may change or disappear without notice
- */
-export function getWebViewIframeZoom(webViewId: string): number {
-  return parseIframeZoom(getWebViewIframe(webViewId));
-}
-
-/**
  * Translates iframe-relative coordinates to document-relative coordinates using
- * getBoundingClientRect of the WebView iframe and the CSS `zoom` applied to it.
+ * getBoundingClientRect of the WebView iframe. The platform never scales the iframe element itself
+ * (content zoom scales marked areas inside it), so an inner pixel is an outer pixel.
  *
  * @param webViewId The webViewId of the iframe
  * @param position The iframe-relative position
@@ -69,12 +34,7 @@ export function translateCoordinates(
   if (!iframe) return position;
 
   const rect = iframe.getBoundingClientRect();
-  // Parsed from the iframe already in hand rather than looked up again by id.
-  const zoom = parseIframeZoom(iframe);
-  return {
-    x: rect.left + position.x * zoom,
-    y: rect.top + position.y * zoom,
-  };
+  return { x: rect.left + position.x, y: rect.top + position.y };
 }
 
 /**

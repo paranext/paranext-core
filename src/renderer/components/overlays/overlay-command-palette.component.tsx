@@ -72,16 +72,6 @@ export type OverlayCommandPalettePresentationalProps = {
   /** Maximum height in pixels. Defaults to 400. */
   maxHeight?: number;
   /**
-   * The scale factor for mapping the requesting pane's iframe-relative anchor geometry to window
-   * pixels. The anchor's size arrives in the pane's own pixels while its position has already been
-   * translated by this factor, so the size needs the same multiplication to describe the trigger as
-   * it is painted. The platform currently applies no whole-frame scale, so this is always `1`; the
-   * prop exists to keep that mapping correct if a frame scale is ever applied.
-   *
-   * @experimental This field is unstable and may change or disappear without notice
-   */
-  frameScale?: number;
-  /**
    * When true, renders without stealing focus on mount, and its search input is a read-only DISPLAY
    * of the externally-driven `filterText` rather than an editable field. Items are filtered via
    * {@link filterPaletteItems} using that same `filterText`, and highlighted via the
@@ -353,7 +343,6 @@ export function OverlayCommandPalettePresentational({
   listAriaLabel = 'Command palette results',
   maxWidth,
   maxHeight,
-  frameScale = 1,
   passive = false,
   filterText,
   selectedIndex = 0,
@@ -661,8 +650,8 @@ export function OverlayCommandPalettePresentational({
             position: 'fixed',
             left: position.x,
             top: position.y,
-            width: (anchor?.width ?? 0) * frameScale,
-            height: (anchor?.height ?? 0) * frameScale,
+            width: anchor?.width ?? 0,
+            height: anchor?.height ?? 0,
             pointerEvents: 'none',
           }}
         />
@@ -766,14 +755,6 @@ function localizeCommandPaletteItems(
 
 type OverlayCommandPaletteProps = {
   overlay: Extract<OverlayEntry, { type: 'commandPalette' }>;
-  /**
-   * The requesting pane's frame scale, read and supplied by `OverlayHost` — see
-   * {@link OverlayCommandPalettePresentationalProps.frameScale}. Undefined draws at interface scale,
-   * matching the presentational component's own default.
-   *
-   * @experimental This field is unstable and may change or disappear without notice
-   */
-  frameScale?: number;
 };
 
 /**
@@ -785,7 +766,7 @@ type OverlayCommandPaletteProps = {
  * use {@link OverlayCommandPalettePresentational} instead, which accepts plain props without
  * requiring an `OverlayEntry`.
  */
-export function OverlayCommandPalette({ overlay, frameScale }: OverlayCommandPaletteProps) {
+export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
   const hasResolved = useRef(false);
 
   const localizeKeys = useMemo(
@@ -890,7 +871,6 @@ export function OverlayCommandPalette({ overlay, frameScale }: OverlayCommandPal
       listAriaLabel={localizedListAriaLabel}
       maxWidth={overlay.request.maxWidth}
       maxHeight={overlay.request.maxHeight}
-      frameScale={frameScale}
       passive={overlay.request.passive}
       filterText={overlay.filterText}
       selectedIndex={overlay.selectedIndex}

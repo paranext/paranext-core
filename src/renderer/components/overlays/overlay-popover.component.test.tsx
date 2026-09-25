@@ -272,13 +272,12 @@ describe('OverlayPopoverPresentational', () => {
       expect(inner?.contains(otherChildren[0])).toBe(false);
     });
 
-    it('scales the anchor the pane measured in its own pixels by the frame zoom', () => {
+    it('sizes the anchor to the trigger as the pane measured it', () => {
       render(
         <OverlayPopoverPresentational
           content={{ type: 'text', body: 'Just a body' }}
           position={position}
           anchor={{ width: 40, height: 20 }}
-          frameScale={1.5}
           onDismiss={vi.fn()}
         />,
       );
@@ -288,15 +287,15 @@ describe('OverlayPopoverPresentational', () => {
       // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const { style } = anchor as HTMLElement;
-      expect(style.width).toBe('60px');
-      expect(style.height).toBe('30px');
+      expect(style.width).toBe('40px');
+      expect(style.height).toBe('20px');
     });
   });
 });
 
 describe('OverlayPopover (store-connected)', () => {
-  // The connector forwards `frameScale` straight through to the presentational component without
-  // reading any service of its own, so this test needs no service mocks.
+  // The connector hands the request's anchor to the presentational component without reading any
+  // service of its own, so this test needs no service mocks.
   type PopoverEntry = Extract<OverlayEntry, { type: 'popover' }>;
 
   function createPopoverEntry(overrides?: Partial<PopoverEntry>): PopoverEntry {
@@ -316,17 +315,17 @@ describe('OverlayPopover (store-connected)', () => {
     };
   }
 
-  it('forwards frameScale to the presentational component it renders', () => {
+  it('hands the request’s anchor size to the presentational component it renders', () => {
     const entry = createPopoverEntry();
-    render(<OverlayPopover overlay={entry} frameScale={1.25} />);
+    render(<OverlayPopover overlay={entry} />);
 
     const anchor = document.querySelector('[data-overlay-popover-anchor]');
     expect(anchor).toBeInTheDocument();
     // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const { style: anchorStyle } = anchor as HTMLElement;
-    // request.anchor is 40x20; frameScale 1.25 multiplies it to 50x25.
-    expect(anchorStyle.width).toBe('50px');
-    expect(anchorStyle.height).toBe('25px');
+    // request.anchor is 40x20, drawn at that size.
+    expect(anchorStyle.width).toBe('40px');
+    expect(anchorStyle.height).toBe('20px');
   });
 });

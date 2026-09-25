@@ -9,26 +9,18 @@ import {
 import { OverlayHost } from './overlay-host.component';
 
 // The four overlay bodies are irrelevant here — this suite is about whether the host renders them
-// at all, and which scale props it hands them — and the real ones reach the PAPI hooks and the
-// network service on import. The stubs echo the scale props they receive into data attributes, so
-// the cases below read the host's decision rather than the stub's.
+// at all — and the real ones reach the PAPI hooks and the network service on import.
 vi.mock('@renderer/components/overlays/overlay-command-palette.component', () => ({
-  OverlayCommandPalette: ({ frameScale }: { frameScale?: number }) => (
-    <div data-testid="overlay-body" data-frame-scale={frameScale} />
-  ),
+  OverlayCommandPalette: () => <div data-testid="overlay-body" />,
 }));
 vi.mock('@renderer/components/overlays/overlay-context-menu.component', () => ({
   OverlayContextMenu: () => <div data-testid="overlay-body" />,
 }));
 vi.mock('@renderer/components/overlays/overlay-modal-dialog.component', () => ({
-  OverlayModalDialog: ({ frameScale }: { frameScale?: number }) => (
-    <div data-testid="overlay-body" data-frame-scale={frameScale} />
-  ),
+  OverlayModalDialog: () => <div data-testid="overlay-body" />,
 }));
 vi.mock('@renderer/components/overlays/overlay-popover.component', () => ({
-  OverlayPopover: ({ frameScale }: { frameScale?: number }) => (
-    <div data-testid="overlay-body" data-frame-scale={frameScale} />
-  ),
+  OverlayPopover: () => <div data-testid="overlay-body" />,
 }));
 
 const mockGetOverlays = vi.fn<() => OverlayEntry[]>(() => []);
@@ -42,12 +34,6 @@ vi.mock('@renderer/services/overlays/overlay-store', () => ({
       notifyOverlaysChanged = undefined;
     };
   },
-}));
-
-// The frame scale source, spy-controllable so a case can set a distinct value.
-const mockGetWebViewIframeZoom = vi.fn<() => number>(() => 1);
-vi.mock('@renderer/services/overlays/overlay-coordinates', () => ({
-  getWebViewIframeZoom: () => mockGetWebViewIframeZoom(),
 }));
 
 function modalDialogEntry(): OverlayEntry {
@@ -91,7 +77,6 @@ function commandPaletteEntry(): OverlayEntry {
 afterEach(() => {
   vi.clearAllMocks();
   mockGetOverlays.mockReturnValue([]);
-  mockGetWebViewIframeZoom.mockReturnValue(1);
   // The connection-lost store is a module-level singleton that never clears itself, so a test that
   // latches it would leave every later test permanently stood down.
   resetConnectionLost();
@@ -102,6 +87,12 @@ describe('OverlayHost', () => {
     mockGetOverlays.mockReturnValue([modalDialogEntry()]);
     render(<OverlayHost />);
     expect(screen.getByTestId('overlay-body')).toBeInTheDocument();
+  });
+
+  it('renders a popover and a command palette overlay', () => {
+    mockGetOverlays.mockReturnValue([popoverEntry(), commandPaletteEntry()]);
+    render(<OverlayHost />);
+    expect(screen.getAllByTestId('overlay-body')).toHaveLength(2);
   });
 
   // Radix arbitrates the focus trap between two open modal dialogs by mount order, not z-index, so
@@ -139,34 +130,5 @@ describe('OverlayHost', () => {
     });
 
     expect(screen.queryByTestId('overlay-body')).not.toBeInTheDocument();
-  });
-
-  describe('scale props', () => {
-    it("passes the requesting pane's frame scale to a popover overlay", () => {
-      mockGetWebViewIframeZoom.mockReturnValue(1.25);
-      mockGetOverlays.mockReturnValue([popoverEntry()]);
-
-      render(<OverlayHost />);
-
-      expect(screen.getByTestId('overlay-body').dataset.frameScale).toBe('1.25');
-    });
-
-    it("passes the requesting pane's frame scale to a command palette overlay", () => {
-      mockGetWebViewIframeZoom.mockReturnValue(1.25);
-      mockGetOverlays.mockReturnValue([commandPaletteEntry()]);
-
-      render(<OverlayHost />);
-
-      expect(screen.getByTestId('overlay-body').dataset.frameScale).toBe('1.25');
-    });
-
-    it('gives a modal dialog no frame scale', () => {
-      mockGetWebViewIframeZoom.mockReturnValue(1.25);
-      mockGetOverlays.mockReturnValue([modalDialogEntry()]);
-
-      render(<OverlayHost />);
-
-      expect(screen.getByTestId('overlay-body').dataset.frameScale).toBeUndefined();
-    });
   });
 });

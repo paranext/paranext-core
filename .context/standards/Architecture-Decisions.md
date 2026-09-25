@@ -4828,15 +4828,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Library popovers, dropdown menus, tooltips, platform overlays, the editor's right-click menu and
     the inline footnote and comment editors always render at interface scale.
   - They stay anchored to live positions in the zoomed content (`useLivePopoverAnchor`, the
-    editor's anchor sources, the overlay `frameScale` anchor size). CSS `zoom` reports geometry in
-    viewport pixels, so an unscaled pop-up placed from a zoomed anchor lands correctly.
+    editor's anchor sources, the overlay anchor a pane measures). CSS `zoom` reports geometry in
+    viewport pixels, so an unscaled pop-up placed from a zoomed anchor lands correctly. The iframe
+    element itself is never scaled, so a pane-measured position or size maps to window pixels
+    one-to-one.
   - No pop-up carries a zoom marker, and no library component reads a zoom area for sizing.
 - **Alternatives:**
   - **Pop-ups follow their area.** The rule this entry replaces; rejected by UX.
   - **Follow only for the inline editors.** Rejected: UX named them explicitly.
 - **Consequences:**
   - The following are removed: the area context and pop-up attribute, the overlay `contentScale`
-    prop, and the editor's `contextMenuContainer` wiring.
+    and `frameScale` props, `getWebViewIframeZoom` and the zoom factor in the overlay service's
+    `translateCoordinates`, and the editor's `contextMenuContainer` wiring.
   - `paranext/scripture-editors#17` (the `contextMenuContainer` option) is no longer needed; it was
     closed unmerged on 2026-09-23.
   - Live anchoring stays, because anchors captured once go stale on scroll even at 100 %.
