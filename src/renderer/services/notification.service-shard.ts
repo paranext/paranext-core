@@ -172,8 +172,8 @@ async function send(notification: PlatformNotification): Promise<string | number
     // a keyboard cannot do. The close button fires `onDismiss` like a swipe. A caller who made the
     // notification non-dismissible gets none, since it must stay until answered.
     closeButton: duration === Infinity && effectiveDismissible !== false,
-    // Fires when the USER dismisses the toast (swipe/drag past Sonner's threshold, or a close button
-    // if one is ever enabled). Also forgets the notification so its map entries don't leak.
+    // Fires when the USER dismisses the toast (swipe/drag past Sonner's threshold, or the close
+    // button of a notification with no time limit). Also forgets the notification so its map entries don't leak.
     onDismiss: runRemovalCommand(dismissClickCommand, 'dismiss'),
     // Fires when the toast auto-closes because `duration` elapsed. Runs the same dismiss command as a
     // user dismissal (a timeout counts as an implicit dismissal, so a must-answer toast can't vanish
