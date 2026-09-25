@@ -694,6 +694,7 @@ export const ReadyWithCopyrightNotice: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="NIV11"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -710,6 +711,7 @@ export const VerseWithCopyrightNotice: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="NIV11"
         textDirection="ltr"
         localizedStrings={localizedStrings}
