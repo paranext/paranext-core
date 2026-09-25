@@ -112,8 +112,9 @@ export interface FootnoteEditorProps {
    * - Popover Cancel: nothing is applied.
    * - A book or chapter change: saved as Save saves (popover), or flushed (inline).
    * - Escape in the inline editor (from its text or its own controls): whatever is still inside the
-   *   live-apply debounce is applied first. An open marker-palette session, or the editor's own
-   *   right-click menu, takes Escape for itself instead.
+   *   live-apply debounce is applied first. An Escape that a layer inside the editor claims to
+   *   close itself (the marker palette, the editor's right-click menu, a tooltip) does not end the
+   *   session.
    */
   onClose: () => void;
   /** The scripture reference for the parent editor */
@@ -299,12 +300,6 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
 
 /** Debounce interval for inline-mode live application of note edits to the parent editor. */
 export const INLINE_APPLY_DEBOUNCE_MS = 300;
-
-/**
- * The editor's right-click menu. The editor portals it to `document.body`, outside this component,
- * and names it with this class alone.
- */
-const EDITOR_CONTEXT_MENU_SELECTOR = '.typeahead-popover';
 
 /** The custom caller offered for a note that does not have one of its own yet. */
 const DEFAULT_CUSTOM_CALLER = '*';
@@ -1255,18 +1250,6 @@ export default function FootnoteEditor({
     const getEditorInput = () =>
       editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
 
-    // The inline surface renders no Cancel/Close control - its edits apply live - so Escape is its
-    // explicit dismissal, and the only one that does not require a pointer. It ends the session
-    // KEEPING what was typed (`closeAndSave`'s inline branch just flushes the pending apply).
-    // Anywhere in the editor counts, its own controls included: Tab from the row above lands on the
-    // note-type dropdown first. The editor's right-click menu leaves focus in the note text and
-    // closes on Escape itself, so while it is open the key is the menu's.
-    const isInlineCloseEscape = (event: KeyboardEvent) =>
-      inline &&
-      event.key === 'Escape' &&
-      !!containerRef.current?.contains(document.activeElement) &&
-      !document.querySelector(EDITOR_CONTEXT_MENU_SELECTOR);
-
     if (options.view?.markerMode === 'editable') {
       // In editable marker mode (e.g. Standard view) a typed backslash IS content — the editor's
       // marker-editing engine resolves typed markers itself. Without a host-supplied
@@ -1289,13 +1272,6 @@ export default function FootnoteEditor({
         // this outer guard covers only this handler's own trigger paths.)
         if (isImeCompositionKeyEvent(event)) return;
         const session = paletteSession.current;
-        // A palette session takes Escape instead, to cancel the palette rather than the session.
-        if (!session && isInlineCloseEscape(event)) {
-          event.preventDefault();
-          event.stopPropagation();
-          closeAndSaveRef.current();
-          return;
-        }
         const editorInput = getEditorInput();
         if (!editorInput || document.activeElement !== editorInput) return;
 
@@ -1387,11 +1363,6 @@ export default function FootnoteEditor({
       } else if (showMarkersMenu && event.key === 'Escape') {
         event.preventDefault();
         setShowMarkersMenu(false);
-      } else if (isInlineCloseEscape(event)) {
-        // Same explicit dismissal as the editable-mode branch above; the markers menu claims
-        // Escape first when it is open.
-        event.preventDefault();
-        closeAndSaveRef.current();
       }
     };
 
@@ -1401,7 +1372,6 @@ export default function FootnoteEditor({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [
-    inline,
     showMarkersMenu,
     showInlineMarkersMenu,
     defaultMarkerMenuTrigger,
@@ -1411,6 +1381,30 @@ export default function FootnoteEditor({
     openMarkerPaletteAtCaret,
     isDomCaretInsideNote,
   ]);
+
+  // The inline surface renders no Cancel/Close control - its edits apply live - so Escape is its
+  // explicit dismissal, and the only one that does not require a pointer. It ends the session
+  // KEEPING what was typed (`closeAndSave`'s inline branch just flushes the pending apply).
+  // Anywhere in the editor counts, its own controls included: Tab from the row above lands on the
+  // note-type dropdown first.
+  //
+  // Listens in the BUBBLE phase on the editor's own element, so every layer inside it has had its
+  // turn first, and ends the session only on an Escape none of them claimed: the marker palette,
+  // the editor's right-click menu, and a toolbar tooltip each spend the key on closing themselves.
+  // Portalled dropdowns hold focus outside this element, so their Escape never arrives here.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!inline || !container) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || isImeCompositionKeyEvent(event))
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeAndSaveRef.current();
+    };
+    container.addEventListener('keydown', handleKeyDown);
+    return () => container.removeEventListener('keydown', handleKeyDown);
+  }, [inline]);
 
   // Snaps the DOM caret back into the note whenever a selection lands in the popover's wrapper-para
   // "dead space" (the wrapper paragraph's own text/margins, outside `span.note`). The open-time

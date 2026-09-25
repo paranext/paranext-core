@@ -99,11 +99,18 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** Renders the popover exactly as the web view does: FootnoteEditor inside an open Radix popover. */
-function PopoverHost({ noteOps = [sentinelNoteOp] }: { noteOps?: DeltaOpInsertNoteEmbed[] }) {
+function PopoverHost({
+  noteOps = [sentinelNoteOp],
+  contentClassName = 'tw:w-max tw:min-w-[500px]',
+}: {
+  noteOps?: DeltaOpInsertNoteEmbed[];
+  /** Sizes the pop-up; the default is as wide as its content, and never narrower than 500px. */
+  contentClassName?: string;
+}) {
   return (
     <Popover open>
       <PopoverAnchor className="tw:absolute" style={{ top: 120, left: 120 }} />
-      <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
+      <PopoverContent className={`${contentClassName} tw:p-[10px]`}>
         <FootnoteEditor
           noteOps={noteOps}
           onClose={() => {}}
@@ -228,8 +235,8 @@ export const PopoverToolbarKeepsUndoRedoAtTheEnd: Story = {
     await waitForNoteEditor();
     const { scope, noteType, caller, undo, row } = measureToolbar();
 
-    // Both dropdowns on one line: the popover's full-width Cancel/Save group would squeeze a
-    // wrapping cluster onto two.
+    // Both dropdowns on one line (at a width where wrapping would split them, see
+    // `NarrowPopoverKeepsTheDropdownsTogether`).
     expect(Math.abs(caller.top - noteType.top)).toBeLessThan(1);
     // Clearly separated from the caller dropdown, not clustered with it.
     expect(undo.left - caller.right).toBeGreaterThan(40);
@@ -237,6 +244,21 @@ export const PopoverToolbarKeepsUndoRedoAtTheEnd: Story = {
     const save = scope.getByRole('button', { name: 'Save footnote' }).getBoundingClientRect();
     expect(save.right).toBeGreaterThan(undo.right);
     expect(row.right - save.right).toBeLessThan(4);
+  },
+};
+
+/**
+ * The popover's minimum width gives way to a narrow pane or a zoomed pop-up, so the toolbar row can
+ * be far narrower than the default story's. There the note-type and caller dropdowns must still
+ * share a line: only the inline editor's cluster wraps.
+ */
+export const NarrowPopoverKeepsTheDropdownsTogether: Story = {
+  render: () => <PopoverHost contentClassName="tw:w-[270px]" />,
+  play: async () => {
+    await waitForNoteEditor();
+    const { caller, noteType } = measureToolbar();
+
+    expect(Math.abs(caller.top - noteType.top)).toBeLessThan(1);
   },
 };
 

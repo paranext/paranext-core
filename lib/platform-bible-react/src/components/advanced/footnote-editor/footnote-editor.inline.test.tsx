@@ -1,5 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
@@ -264,7 +273,7 @@ describe('FootnoteEditor inline mode', () => {
   // need a non-zero width to be actually exercised (rather than passing vacuously regardless of the
   // guard's presence).
   describe('width-lock behavior (with a non-zero computed width)', () => {
-    let getComputedStyleSpy: ReturnType<typeof vi.spyOn>;
+    let getComputedStyleSpy: MockInstance<typeof window.getComputedStyle>;
 
     beforeEach(() => {
       const originalGetComputedStyle = window.getComputedStyle.bind(window);
@@ -620,7 +629,6 @@ describe('FootnoteEditor inline live-apply', () => {
     it('applies a pending edit on demand, before the debounce would have', async () => {
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
-      // The ref needs to start out with null for it to work as a component ref
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
@@ -655,7 +663,6 @@ describe('FootnoteEditor inline live-apply', () => {
     it('is a no-op when the note is unchanged, so ending a session never rewrites it', async () => {
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
-      // The ref needs to start out with null for it to work as a component ref
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
@@ -677,7 +684,6 @@ describe('FootnoteEditor inline live-apply', () => {
       // keeps a rename from serializing as the stale pre-rename marker has to happen here too.
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
-      // The ref needs to start out with null for it to work as a component ref
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
@@ -712,7 +718,6 @@ describe('FootnoteEditor inline live-apply', () => {
       // the rename to the parent.
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
-      // The ref needs to start out with null for it to work as a component ref
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
@@ -769,7 +774,6 @@ describe('FootnoteEditor inline live-apply', () => {
       // update listener, where the note has usually already gone.
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
-      // The ref needs to start out with null for it to work as a component ref
       const handleRef = createRef<FootnoteEditorHandle>();
       renderEditor({
         inline: true,
@@ -968,22 +972,47 @@ describe('FootnoteEditor inline Escape dismissal', () => {
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
-  // The right-click menu leaves focus in the note text and closes itself on Escape.
+  // A layer inside the editor that closes on Escape claims the key, as the editor's right-click
+  // menu does from its document capture listener. The session ends only on an Escape none of them
+  // claimed.
   it.each([
     { name: 'in editable marker mode (Standard view)', editorOptions: { view: editableView } },
     { name: 'in the default marker mode', editorOptions: {} },
-  ])("leaves Escape to the editor's open right-click menu $name", async ({ editorOptions }) => {
+  ])('leaves an Escape that an inner layer claimed alone $name', async ({ editorOptions }) => {
     vi.useFakeTimers();
     const { container, props } = renderEditor({ inline: true, editorOptions });
     await vi.runAllTimersAsync();
-    const contextMenu = document.body.appendChild(document.createElement('div'));
-    contextMenu.className = 'typeahead-popover';
+    const claimEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') event.preventDefault();
+    };
+    document.addEventListener('keydown', claimEscape, true);
 
     try {
       pressEscapeInEditor(container);
     } finally {
-      contextMenu.remove();
+      document.removeEventListener('keydown', claimEscape, true);
     }
+
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  // A claim registered AFTER the editor mounted still counts: the editor's own layers open (and
+  // register their listeners) while a session is already running.
+  it('leaves an Escape claimed by a layer that opened after the editor alone', async () => {
+    vi.useFakeTimers();
+    const { container, props } = renderEditor({
+      inline: true,
+      editorOptions: { view: editableView },
+    });
+    await vi.runAllTimersAsync();
+    const editorInput = container.querySelector<HTMLElement>('.editor-input');
+    if (!editorInput) throw new Error('no editor input rendered');
+    const claimEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') event.preventDefault();
+    };
+    editorInput.addEventListener('keydown', claimEscape);
+
+    pressEscapeInEditor(container);
 
     expect(props.onClose).not.toHaveBeenCalled();
   });
