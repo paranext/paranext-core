@@ -1195,9 +1195,12 @@ export type FootnoteLayout = "horizontal" | "vertical";
  *   APIs (`caretPositionFromPoint`), which only produce positions at valid caret boundaries, so
  *   surrogate pairs and combining sequences are never split by construction. An offset past the
  *   available text resolves to `'end'`.
+ * - `{ utf16Offset, field: 'category' }`: an offset into the note's `\cat` category value instead,
+ *   which is outside the content origin above but still text the user can edit.
  */
 export type FootnoteCaretPosition = "end" | {
 	utf16Offset: number;
+	field?: "category";
 };
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
@@ -1304,6 +1307,14 @@ export interface FootnoteListProps {
 	 */
 	onFootnoteEditRequested?: (footnote: MarkerObject, index: number, listId: string | number, caretPosition: FootnoteCaretPosition) => void;
 	/**
+	 * Fires when keyboard or pointer focus lands on a row (with its index) and when it leaves one
+	 * (with `undefined`). Focus on a row is not a selection - only a click, Enter, or Space selects -
+	 * but a consumer can still follow it, e.g. to mark the focused note in the text as the user Tabs
+	 * or arrows through the list. Focus moving from one row to the next reports `undefined` and then
+	 * the new index.
+	 */
+	onFocusedFootnoteChange?: (index: number | undefined) => void;
+	/**
 	 * Index of the footnote currently being edited in place, if any. When set (and
 	 * `renderEditingFootnote` is provided), that row renders the editor slot instead of its read-only
 	 * display and is highlighted as the active editing row.
@@ -1328,7 +1339,8 @@ export interface FootnoteListProps {
  *   `.textual-note-body` descendant - the note's text, in character runs and written directly in
  *   the note alike, excluding the caller (rendered in the row's header cell), the rendered USFM
  *   markers, the `\cat` category run and the empty-note placeholder (see `isDisplayText`).
- * @returns A flat UTF-16 offset into the note body text, or `'end'` when the click cannot be mapped
+ * @returns A flat UTF-16 offset into the note body text, an offset into the `\cat` category value
+ *   (`field: 'category'`) for a click on the category, or `'end'` when the click cannot be mapped
  *   (no browser support, click outside the body text, empty note).
  */
 export declare function getCaretPositionFromClick(clientX: number, clientY: number, rowElement: HTMLElement): FootnoteCaretPosition;
@@ -1542,7 +1554,7 @@ export declare function FootnoteItem({ footnote, layout, formatCaller, showMarke
  * `renderEditingFootnote` (see those props), which swaps that row's display for a rendered editor
  * (e.g. an inline `FootnoteEditor`) while every other row stays read-only.
  */
-export declare function FootnoteList({ ariaLabel, className, classNameForItems, footnotes, layout, listId, selectedFootnote, selectionRequest, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, onFootnoteEditRequested, editingFootnoteIndex, renderEditingFootnote, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteList({ ariaLabel, className, classNameForItems, footnotes, layout, listId, selectedFootnote, selectionRequest, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, onFootnoteEditRequested, onFocusedFootnoteChange, editingFootnoteIndex, renderEditingFootnote, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 /** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
 export type ScopeWithRange = Scope | "range";
