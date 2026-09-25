@@ -8057,6 +8057,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   PRD folder. Not a repo path; named here so a later reader knows the entry is real and where to
   ask for it, not so they can open it from a clone.
 
+## adr-web-view-load-focus-skips-hidden-tabs: A web view focuses its tab on load only when the tab is shown
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Every web view calls `windowService.setFocus({ focusType: 'tab', id })` when its
+  iframe loads, and that focus makes the tab the active one in its group. A reload with
+  `bringToFront: false` keeps the tab where it is, but the reload remounts the iframe, so the tab
+  came to the front anyway once its content loaded. In Simple mode a project switch reloads the
+  Find and Checks tabs in Column 3 this way, and whichever loaded last took the column from the tab
+  the user was on.
+- **Decision:** `web-view.component.tsx` skips the on-load focus when the iframe has no client
+  rects. rc-dock keeps an inactive tab's pane mounted with `display: none`, so a hidden tab's iframe
+  has none. A tab that was asked to come to the front is already active by the time its content
+  loads, so its focus is unchanged.
+- **Alternatives:** A dock method answering whether a tab is its group's active tab — rejected: it
+  widens `PapiDockLayout`, which is in `papi.d.ts`, for one renderer caller. Carrying the reload's
+  `bringToFront` to the component — rejected: the component remounts from the tab definition and
+  has no record of why it loaded. Stopping the Checks re-point from reloading — rejected: it fixes
+  Checks only, and Find has the same problem.
+- **Consequences:** A web view that loads while hidden takes no focus, including one restored with
+  the layout at startup into an inactive tab. It is focused when the user brings the tab forward.
+  The mount-time focus in `platform-panel.component.tsx` is unchanged, since a reload does not
+  remount the panel.
+- **Source:** PT-4534 (review of #2847), found checking the Checks tab in the running app.
+
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 
 - **Date:** 2026-08-31

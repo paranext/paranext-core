@@ -1,6 +1,7 @@
 import type { SavedWebViewDefinition } from '@papi/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CHECKS_SIDE_PANEL_ICON_URL,
   ChecksSidePanelWebViewOptions,
   ChecksSidePanelWebViewProvider,
   checksSidePanelWebViewType,
@@ -45,5 +46,27 @@ describe('ChecksSidePanelWebViewProvider', () => {
     const result = await new ChecksSidePanelWebViewProvider().getWebView(savedWebView, options);
 
     expect(result?.isClosable).toBe(true);
+  });
+
+  it('shows the Checks icon in Simple mode, where Column 3 collapses its tabs to icons', async () => {
+    mocks.getSetting.mockResolvedValue('simple');
+
+    const result = await new ChecksSidePanelWebViewProvider().getWebView(savedWebView, options);
+
+    expect(result?.iconUrl).toBe(CHECKS_SIDE_PANEL_ICON_URL);
+    expect(CHECKS_SIDE_PANEL_ICON_URL).toBe(
+      'papi-extension://platformScripture/assets/icons/clipboard-check.svg',
+    );
+  });
+
+  it('keeps the saved icon in Power mode, where tabs are labeled with text', async () => {
+    mocks.getSetting.mockResolvedValue('power');
+
+    const result = await new ChecksSidePanelWebViewProvider().getWebView(
+      { ...savedWebView, iconUrl: 'saved-icon.svg' },
+      options,
+    );
+
+    expect(result?.iconUrl).toBe('saved-icon.svg');
   });
 });
