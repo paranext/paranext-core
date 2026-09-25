@@ -232,6 +232,56 @@ describe('papiPortBroker', () => {
     expect(mockAcceptLocalClient).toHaveBeenCalledTimes(2);
   });
 
+  test('a grant the frame cannot deliver closes the socket with 1011 and leaves the next request served', () => {
+    const fake = makeFakeWebContents();
+    registerWindow(fake.webContents, 'w1');
+    fake.mainFrame.postMessage.mockImplementationOnce(() => {
+      throw new Error('Render frame was disposed before WebFrameMain could be accessed');
+    });
+
+    expect(() => fake.requestPort()).not.toThrow();
+
+    expect(ports[0].postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 1011,
+        reason: 'Render frame was disposed before WebFrameMain could be accessed',
+      }),
+    );
+    expect(ports[0].close).toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('window w1'));
+    // The undelivered grant does not use up the page's one request
+    fake.requestPort();
+    expect(mockAcceptLocalClient).toHaveBeenCalledTimes(2);
+    expect(fake.mainFrame.postMessage).toHaveBeenLastCalledWith(
+      PAPI_PORT_CHANNEL,
+      { windowId: 'w1' },
+      [{ fake: 'port2', index: 1 }],
+    );
+    // The failed socket is no longer the window's, so closing the window reaches only the new one
+    closeWindowPort('w1', 1001, 'window closing');
+    expect(ports[0].postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ code: 1001 }));
+    expect(ports[1].postMessage).toHaveBeenCalledWith(expect.objectContaining({ code: 1001 }));
+  });
+
+  test('a port error the frame cannot deliver is logged, not thrown', () => {
+    const fake = makeFakeWebContents();
+    registerWindow(fake.webContents, 'w1');
+    fake.requestPort();
+    fake.mainFrame.postMessage.mockImplementation(() => {
+      throw new Error('frame gone');
+    });
+
+    // The refusal of a second request, and the refusal when the network service is not ready
+    expect(() => fake.requestPort()).not.toThrow();
+    fake.navigate({ isMainFrame: true, isSameDocument: false });
+    mockAcceptLocalClient.mockImplementation(() => {
+      throw new Error('The PAPI network service is not initialized');
+    });
+    expect(() => fake.requestPort()).not.toThrow();
+
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('frame gone'));
+  });
+
   test('closeWindowPort closes that window’s port with the given code and is a no-op for an unknown window', () => {
     const fake = makeFakeWebContents();
     registerWindow(fake.webContents, 'w1');

@@ -80,6 +80,21 @@ function closePort(state: WindowPortState, code: number, reason: string): void {
   state.socket = undefined;
 }
 
+/**
+ * Tell the page it gets no port. The frame may already be gone, and a refusal nobody receives needs
+ * no handling beyond the log line.
+ */
+function postPortError(windowId: string, frame: BrokerFrame, reason: string): void {
+  const message: PapiPortError = { reason };
+  try {
+    frame.postMessage(PAPI_PORT_ERROR_CHANNEL, message);
+  } catch (error) {
+    logger.warn(
+      `Could not tell window ${windowId} it gets no PAPI port (${reason}): ${getErrorMessage(error)}`,
+    );
+  }
+}
+
 function grantPort(windowId: string, state: WindowPortState, frame: BrokerFrame): void {
   const { port1, port2 } = createMessageChannel();
   const socket = new MessagePortServerSocket(port1);
@@ -89,8 +104,7 @@ function grantPort(windowId: string, state: WindowPortState, frame: BrokerFrame)
     const reason = getErrorMessage(error);
     logger.warn(`Could not serve a PAPI port to window ${windowId}: ${reason}`);
     socket.close(1011, reason);
-    const message: PapiPortError = { reason };
-    frame.postMessage(PAPI_PORT_ERROR_CHANNEL, message);
+    postPortError(windowId, frame, reason);
     return;
   }
   state.socket = socket;
@@ -100,7 +114,15 @@ function grantPort(windowId: string, state: WindowPortState, frame: BrokerFrame)
     if (state.socket === socket) state.socket = undefined;
   });
   const grant: PapiPortGrant = { windowId };
-  frame.postMessage(PAPI_PORT_CHANNEL, grant, [port2]);
+  try {
+    frame.postMessage(PAPI_PORT_CHANNEL, grant, [port2]);
+  } catch (error) {
+    // The page never received the port, so it has not used up its one request
+    const reason = getErrorMessage(error);
+    logger.warn(`Could not deliver a PAPI port to window ${windowId}: ${reason}`);
+    closePort(state, 1011, reason);
+    state.hasGrantedPortForCurrentLoad = false;
+  }
 }
 
 /**
@@ -131,8 +153,7 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
       );
       // Answered rather than ignored so a second socket in the page fails at once instead of
       // waiting out its connect timeout
-      const message: PapiPortError = { reason: ALREADY_GRANTED_REASON };
-      frame.postMessage(PAPI_PORT_ERROR_CHANNEL, message);
+      postPortError(windowId, frame, ALREADY_GRANTED_REASON);
       return;
     }
     grantPort(windowId, state, frame);
