@@ -4,7 +4,8 @@ import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'pl
 import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import { X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { ResourceCell, GridResource } from './resource-cell.component';
+import type { GridResource } from './grid-resources.utils';
+import { ResourceCell } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import {
   resourceZoomAreaOf,

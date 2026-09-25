@@ -135,6 +135,24 @@ public sealed class AlertCapture : Alert
         string.IsNullOrEmpty(value) ? string.Empty : s_pathPattern.Replace(value, "<path>");
 
     /// <summary>
+    /// Writes captured alerts to the console, redacted the same way as the no-scope fallback. For a
+    /// caller that captured alerts (so they never reached the console on their own) and still wants
+    /// them logged.
+    /// </summary>
+    /// <param name="entries">The alerts to log, e.g. an <see cref="AlertScope.Entries"/> list.</param>
+    internal static void WriteCapturedToConsole(IEnumerable<AlertEntry> entries)
+    {
+        // AlertEntry does not record Show vs ShowLater, so this uses one neutral label rather than
+        // picking between the fallback's "[Alert.Show]" / "[Alert.ShowLater]" prefixes.
+        foreach (var entry in entries)
+        {
+            Console.WriteLine(
+                $"[Alert] {RedactPathsForLog(entry.Caption)}: {RedactPathsForLog(entry.Text)}"
+            );
+        }
+    }
+
+    /// <summary>
     /// Splits <paramref name="captured"/> into warnings (Information,
     /// Warning, Question) and errors (Error) using a single pass. Shared by
     /// every orchestrator that wraps ParatextData in an <see cref="AlertScope"/>

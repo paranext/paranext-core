@@ -219,6 +219,11 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   if (listReadiness === 'empty') {
     if (arePickerResourcesLoading) readiness = 'loading';
     else if (filteredResources.length > 0) readiness = 'configured';
+  } else if (listReadiness === 'catalogError') {
+    // A failed catalog must not hide rows that resolved without it — the downloaded extras above
+    // are read straight off disk, so they can be correct even while the catalog fetch is down.
+    if (arePickerResourcesLoading) readiness = 'loading';
+    else if (filteredResources.length > 0) readiness = 'configured';
   }
 
   // #endregion
@@ -305,7 +310,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     resourceProjectId ? [resourceProjectId] : [],
     canPublishResourcePanelProjectIds(
       effectiveResourcesState,
-      isCatalogReady,
+      // Rows resolved locally despite a failed catalog (the readiness override above) are an
+      // answer; a failed catalog alone is not, and publishing then would wipe the saved list.
+      isCatalogReady || readiness === 'configured',
       pickerResources !== undefined,
     ),
     // These panels are re-pointed by reloading them, which reuses the web view id, so the

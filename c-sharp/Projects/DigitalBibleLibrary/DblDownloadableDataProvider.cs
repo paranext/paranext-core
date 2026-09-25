@@ -14,7 +14,8 @@ namespace Paranext.DataProvider.Projects.DigitalBibleLibrary;
 /// </summary>
 internal class DblResourcesDataProvider(
     PapiClient papiClient,
-    LocalParatextProjects paratextProjects
+    LocalParatextProjects paratextProjects,
+    Func<List<InstallableResource>>? fetchCatalog = null
 ) : NetworkObjects.DataProvider("platformGetResources.dblResourcesProvider", papiClient)
 {
     // These UIDs determine which DBL catalog entries are classified as CommentaryResource.
@@ -44,7 +45,7 @@ internal class DblResourcesDataProvider(
 
     #region Internal classes
 
-    private class DblResourceData(
+    internal class DblResourceData(
         string DblEntryUid,
         string DisplayName,
         string FullName,
@@ -91,6 +92,13 @@ internal class DblResourcesDataProvider(
     // in util.ts). Changing it requires a matching change in that TypeScript.
     private const string INVALID_USER_REGISTRATION_MESSAGE =
         "User registration is not valid. Cannot retrieve resources from DBL.";
+
+    private const string DBL_UNREACHABLE_MESSAGE =
+        "Could not retrieve the resource list from the DBL.";
+
+    // Replaceable so tests can drive the provider's fetch-failure handling without a live DBL.
+    private readonly Func<List<InstallableResource>> _fetchCatalog =
+        fetchCatalog ?? FetchAvailableDBLResources;
 
     private List<InstallableResource> _resources = [];
 
@@ -177,54 +185,94 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
-    /// Fetch list DBL resources
+    /// Fetch the full DBL catalog, before the compatibility whitelist is applied. Throws when the
+    /// registered user's credentials are invalid.
     /// </summary>
-    /// <returns>
-    /// A list of all available resources on the DBL, along with information about their
-    /// installation status on the local machine
-    /// </returns>
-    private void FetchAvailableDBLResources()
+    private static List<InstallableResource> FetchAvailableDBLResources()
     {
-        var allResources = InstallableDBLResource.GetInstallableDBLResources(
+        if (!RegistrationInfo.DefaultUser.IsValid)
+            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
+
+        return InstallableDBLResource.GetInstallableDBLResources(
             RegistrationInfo.DefaultUser,
             new DBLRESTClientFactory(),
             new DblProjectDeleter(),
             new DblMigrationOperations(),
             new DblResourcePasswordProvider()
         );
-        _resources = allResources.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
-        var excludedResources = allResources.Except(_resources).Select(r => r.Name).ToList();
-        excludedResources.Sort();
-        Console.WriteLine(
-            $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
+    }
+
+    /// <summary>
+    /// Decides whether a catalog fetch produced a catalog, and throws when it did not.
+    /// </summary>
+    /// <remarks>
+    /// ParatextData reports every failure to reach the DBL — offline, server error, bad
+    /// registration — by raising an alert and returning an empty list, never by throwing. The DBL
+    /// always lists resources for a registered user, so an empty list is a failure. Accepting it
+    /// would replace the catalog already loaded with nothing, and mark the catalog as fetched,
+    /// which stops install status from answering from disk.
+    /// </remarks>
+    /// <param name="fetched">What ParatextData returned, before the whitelist is applied.</param>
+    /// <param name="wasUnauthorized">Whether the fetch logged a 401.</param>
+    /// <param name="alerts">Alerts ParatextData raised during the fetch, for the error text.</param>
+    /// <returns><paramref name="fetched"/>, when it is a catalog.</returns>
+    internal static List<InstallableResource> RequireFetchedCatalog(
+        List<InstallableResource> fetched,
+        bool wasUnauthorized,
+        IReadOnlyList<AlertEntry> alerts
+    )
+    {
+        if (wasUnauthorized)
+            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
+        if (fetched.Count > 0)
+            return fetched;
+
+        var detail = string.Join(" ", alerts.Select(alert => alert.Text));
+        throw new Exception(
+            detail.Length == 0
+                ? DBL_UNREACHABLE_MESSAGE
+                : $"{DBL_UNREACHABLE_MESSAGE} {AlertCapture.RedactPathsForLog(detail)}"
         );
     }
 
     /// <summary>
-    /// Loads the DBL catalog into <see cref="_resources"/>, surfacing Paratext's trace-only 401 as
-    /// <see cref="INVALID_USER_REGISTRATION_MESSAGE"/>. Call only while holding
+    /// Loads the DBL catalog into <see cref="_resources"/>, surfacing Paratext's trace-only 401 and
+    /// an unreachable DBL as an exception, and leaving <see cref="_resources"/> and
+    /// <see cref="_hasFetchedResources"/> untouched when it does. Call only while holding
     /// <see cref="_providerGate"/> (it touches the global Trace.Listeners bracket) and from a
     /// background thread (the network call blocks and has no timeout).
     /// </summary>
     private void FetchResourcesCore()
     {
-        if (!RegistrationInfo.DefaultUser.IsValid)
-            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
-
         TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
+        // Captured rather than logged so the reason the DBL could not be reached travels with the
+        // exception to the front end's log. Capturing suppresses AlertCapture's own console
+        // fallback, so the `finally` below logs every captured alert itself, on every exit path.
+        using var alertScope = AlertCapture.StartCapture();
         Trace.Listeners.Add(traceListener);
         try
         {
-            FetchAvailableDBLResources();
+            List<InstallableResource> allResources = _fetchCatalog();
+
+            // Throws before any state below is written.
+            var fetched = RequireFetchedCatalog(
+                allResources,
+                traceListener.FoundText,
+                alertScope.Entries
+            );
+            _resources = fetched.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
+            var excludedResources = fetched.Except(_resources).Select(r => r.Name).ToList();
+            excludedResources.Sort();
+            Console.WriteLine(
+                $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
+            );
+            _hasFetchedResources = true;
         }
         finally
         {
             Trace.Listeners.Remove(traceListener);
+            AlertCapture.WriteCapturedToConsole(alertScope.Entries);
         }
-        if (traceListener.FoundText)
-            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
-
-        _hasFetchedResources = true;
     }
 
     /// <summary>
@@ -247,7 +295,7 @@ internal class DblResourcesDataProvider(
     /// presenting the resources and their installation status on the front-end
     /// </returns>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
-    private Task<List<DblResourceData>> GetDblResources(JsonElement _ignore) =>
+    internal Task<List<DblResourceData>> GetDblResources(JsonElement _ignore) =>
         // Offload the DBL catalog fetch to a background thread. This is a blocking, unbounded
         // (NetworkTimeout = 0) network call, and on a cold cache (first run) it downloads the
         // full catalog, which can take a long time. StreamJsonRpc invokes synchronous handlers

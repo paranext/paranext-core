@@ -1636,7 +1636,67 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   disk is out of date". Both `refreshResourceFlags` and the `recomputeDblResourcesUpdateStatus`
   method it calls through are now marked `@experimental` / `'x-experimental': true`, because this
   recompute contract remains untested beyond its one caller.
+- **Amended 2026-09-25 (`adr-dbl-empty-catalog-is-a-failed-fetch`):** `recomputeDblResourcesInstallStatus`
+  now has a second, unsynchronized caller — the grid's `use-dbl-install-lookup.hook.ts`, calling it
+  directly rather than through `ensureInstalledFlagsSynced`. It reads an empty map the same way this
+  entry's sync does: no answer, not "nothing installed".
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
+
+## adr-dbl-empty-catalog-is-a-failed-fetch: An empty DBL catalog is a failed fetch, and installed DBL resources resolve from disk when the catalog cannot
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** ParatextData's `GetInstallableDBLResources` reports every failure to reach the DBL —
+  offline, a server error, a 401 — by raising an alert and returning an empty list, never by
+  throwing. PT10's `AlertCapture` only logs that alert, so the provider accepted `[]` as the
+  catalog and marked it fetched, and `platform-get-resources` persisted it over the catalog an
+  earlier online session had saved — at every offline startup and on the 12-hour refresh. The Text
+  Collection resolves a DBL reference to a project only through a catalog row, so every such cell
+  read "Resource not installed" while offline; the Bible texts panel kept working only because it
+  also lists read-only projects straight from local metadata.
+- **Decision:** Three layers. (1) The C# provider throws when a fetch returns no resources and
+  writes `_resources`/`_hasFetchedResources` only after that check (`RequireFetchedCatalog`), so
+  install status keeps answering from disk. (2) `resolveDblCatalog` rejects an empty catalog;
+  `parsePersistedCatalog` discards an empty persisted one; the startup retry loop stops on an
+  attempt that threw (it exists for `notReady`); concurrent on-demand reads share one fetch; and
+  `getLocalNonDblResources` lists local resources even when the catalog fails. (3) The grid
+  (`scripture-text-grid/use-dbl-install-lookup.hook.ts`) asks `recomputeDblResourcesInstallStatus`
+  for DBL references the catalog cannot resolve, including while the catalog is still loading. An
+  empty install map is never read as an answer — it means "no answer", not "nothing installed" —
+  and while the disk can't answer, a catalog row still decides ("not installed"). "Couldn't check"
+  shows only when the catalog failed and a reference has no row either, and it always comes with a
+  retry banner above the grid, inside a persistent `role="status"` region. Only the current ask's
+  answer is used. The Bible texts panel (`resource-text-panel.web-view.tsx`) lets rows that
+  resolved without the catalog — local downloads, project references — win over the catalog-error
+  view, and publishes navigable ids once the catalog has loaded or such a row is shown; a failed
+  catalog alone publishes nothing, so the saved list survives it.
+- **Alternatives:** *Accept empty only if nothing is cached* — rejected: an empty catalog is never
+  a true answer for a configured user, and C#'s own `_resources` would still be wiped. *Detect
+  offline from the captured alert text* — rejected: it ties behavior to localized PT9 strings;
+  alerts are captured for diagnostics only. *Resolve DBL references by project-id prefix* —
+  rejected: resource project ids are unrelated to DBL uids for many resources
+  (`adr-dbl-install-status-from-backend`). *Keep retrying thrown failures, but lock per attempt* —
+  rejected: with no cache, a reader could slip in between attempts during online startup and get
+  `notReady` instead of waiting for the catalog. *Remember a failed fetch for a window* — rejected:
+  an explicit Retry inside the window would fail without trying.
+- **Consequences:**
+  - Offline startup keeps the saved catalog; a profile whose saved catalog was already emptied
+    resolves installed resources from disk instead.
+  - After a thrown startup attempt, the catalog is not refetched until a reader needs one (none, if
+    a cache is serving), the 12-hour refresh, or the next launch — a single transient failure with a
+    cache in hand leaves "update available" badges stale for that period (installed flags are still
+    reconciled), and a newly-published DBL resource stays invisible for it too.
+  - Offline with no usable cache at all, Get Resources, Home, the resource picker, and the panels
+    all show their own retry state instead of an empty catalog.
+  - The grid is a second caller of the non-waiting `recomputeDblResourcesInstallStatus`; a grid call
+    can make a concurrent flag sync get an empty map and skip one reconcile, which the sync already
+    treats as "no answer". Once the C# catalog has loaded, that call names only catalogued uids, so
+    an installed resource withdrawn from the DBL reads "not installed" — the catalog path's existing
+    limitation.
+  - The Model Text panel still resolves DBL references through the catalog alone — a known sibling
+    gap not addressed here.
+  - **Revisit** if ParatextData ever throws on an unreachable DBL.
+- **Source:** PT-4686.
 
 ## adr-dbl-install-is-idempotent: Installing an already-installed DBL resource succeeds, and `installed` is a hint
 
@@ -1742,6 +1802,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `recomputeDblResourcesInstallStatus` is now marked `@experimental` / `'x-experimental': true` for
   the same reason as its sibling in `adr-dbl-cache-recompute-on-read` — the contract remains
   untested beyond its one caller.
+- **Amended 2026-09-25 (`adr-dbl-empty-catalog-is-a-failed-fetch`):** no longer one caller — the
+  Text Collection grid calls `recomputeDblResourcesInstallStatus` directly too
+  (`use-dbl-install-lookup.hook.ts`), reading an empty map as "no answer" per the contract above.
 - **Source:** PT-4484; builds directly on `adr-dbl-cache-recompute-on-read`.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended

@@ -22,6 +22,7 @@ import {
   COPY_KEY,
   EMPTY_KEY,
   FAILED_KEY,
+  INSTALL_UNVERIFIED_KEY,
   LOADING_KEY,
   NOT_INSTALLED_KEY,
   UNAVAILABLE_KEY,
@@ -35,6 +36,7 @@ export {
   NOT_INSTALLED_KEY,
   LOADING_KEY,
   FAILED_KEY,
+  INSTALL_UNVERIFIED_KEY,
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
   ZOOM_IN_KEY,
@@ -187,8 +189,8 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
 /**
  * Presentational ResourceCell: renders the resource name (inline label or header band), per-cell
  * text direction, and either the editor (`ready`) or the unavailable placeholder
- * (`downloading`/`failed`/`unavailable`). Data-free so Storybook can drive every state;
- * `ResourceCell` wraps it with the PAPI fetch/direction/availability wiring.
+ * (`downloading`/`failed`/`unavailable`/`unverified`). Data-free so Storybook can drive every
+ * state; `ResourceCell` wraps it with the PAPI fetch/direction/availability wiring.
  *
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
  * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
@@ -240,6 +242,17 @@ export function ResourceCellView({
     unavailableContent = (
       <span className="tw:font-medium">{localizedStrings[NOT_INSTALLED_KEY]}</span>
     );
+  } else if (state === 'unverified') {
+    // Not "not installed": nothing could check. Claiming the resource is missing is what sends a
+    // user to reinstall something already on disk.
+    unavailableContent = (
+      <>
+        <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
+        <span className="tw:text-sm tw:text-muted-foreground">
+          {localizedStrings[INSTALL_UNVERIFIED_KEY]}
+        </span>
+      </>
+    );
   } else if (state === 'bookNotAvailable') {
     // No "Resource unavailable" heading and no retry wording: the resource is present and working,
     // it simply has no such book.
@@ -277,9 +290,9 @@ export function ResourceCellView({
   );
   const [selectedText, setSelectedText] = useState('');
 
-  // A resource that is not installed shows only a placeholder, so there is nothing to copy and the
-  // browser's own menu is left alone there.
-  const hasRightClickMenu = state !== 'unavailable';
+  // A resource that is not installed, or whose install could not be checked, shows only a
+  // placeholder, so there is nothing to copy and the browser's own menu is left alone there.
+  const hasRightClickMenu = state !== 'unavailable' && state !== 'unverified';
 
   const handleCellContextMenu = useCallback((event: MouseEvent) => {
     // The editor owns `contextmenu` over its content, and its built-in menu clips and cannot flip

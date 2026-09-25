@@ -12,6 +12,7 @@ export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
 export const NOT_INSTALLED_KEY = '%webView_scriptureTextGrid_cell_not_installed%';
 export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
 export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
+export const INSTALL_UNVERIFIED_KEY = '%webView_scriptureTextGrid_cell_status_installUnverified%';
 export const BOOK_NOT_AVAILABLE_KEY = '%webView_scriptureTextGrid_cell_status_bookNotAvailable%';
 export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
 export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
@@ -25,6 +26,7 @@ export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   NOT_INSTALLED_KEY,
   LOADING_KEY,
   FAILED_KEY,
+  INSTALL_UNVERIFIED_KEY,
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
   ZOOM_IN_KEY,

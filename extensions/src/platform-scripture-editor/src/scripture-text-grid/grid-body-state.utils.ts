@@ -1,3 +1,5 @@
+import type { GridResource } from './grid-resources.utils';
+
 /**
  * Which of the grid body's three faces to render.
  *
@@ -44,6 +46,21 @@ export function getGridBodyState({
   if (hasRows || isLoading) return 'grid';
   if (hasCatalogError) return 'catalogError';
   return hasSources ? 'empty' : 'grid';
+}
+
+/**
+ * Whether to show the catalog retry banner above the grid: only when the catalog failed AND a cell
+ * is showing "couldn't check". A failed catalog whose references all resolved from disk leaves a
+ * working grid with nothing to retry; a build with no DBL credentials is not a failure at all.
+ */
+export function shouldShowCatalogRetryBanner({
+  hasCatalogError,
+  resources,
+}: {
+  hasCatalogError: boolean;
+  resources: GridResource[];
+}): boolean {
+  return hasCatalogError && resources.some((r) => r.unresolvedReason === 'unverified');
 }
 
 export default getGridBodyState;
