@@ -1,5 +1,6 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
 import {
   getOfferedLanguageDefaults,
   switchInterfaceLanguage,
@@ -327,6 +328,12 @@ export function Setting({
           await setSetting(newValue);
           // Only a completed write earns a clear screen.
           setErrorMessage(undefined);
+          if (
+            settingKey === 'platform.interfaceLanguage' &&
+            Array.isArray(setting) &&
+            Array.isArray(newValue)
+          )
+            await offerRestartAfterInterfaceLanguageChange(setting, newValue);
         } else {
           setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
         }

@@ -228,6 +228,8 @@
   "%history_recentSearches_ariaLabel%": "Mostrar búsquedas recientes",
   "%home_dialog_title%": "Inicio",
   "%insertNote%": "Insertar Nota",
+  "%interfaceLanguage_restartPrompt_message%": "Reinicie para terminar de cambiar el idioma de la interfaz.",
+  "%interfaceLanguage_restartPrompt_restartNow%": "Reiniciar ahora",
   "%mainMenu_about%": "Acerca de Platform.Bible",
   "%mainMenu_downloadInstallResources%": "Descargar/instalar recursos",
   "%mainMenu_edit%": "Editar",

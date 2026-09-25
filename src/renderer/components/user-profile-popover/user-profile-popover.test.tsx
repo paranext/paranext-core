@@ -9,7 +9,12 @@ import {
   refreshRegistrationValidity,
   resetRegistrationValidityStore,
 } from '@renderer/services/registration-validity-store';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
 import { UserProfilePopover } from './user-profile-popover.component';
+
+vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
+  offerRestartAfterInterfaceLanguageChange: vi.fn(async () => {}),
+}));
 
 // Radix Popover/Tooltip use ResizeObserver internally; jsdom doesn't provide it, so we stub a
 // no-op implementation. The methods intentionally don't use `this` since they're empty stubs.
@@ -176,6 +181,7 @@ beforeEach(() => {
   setMockSetting('setShouldMatchSystem', mockSetter());
   vi.mocked(sendCommand).mockClear();
   vi.mocked(logger.warn).mockClear();
+  vi.mocked(offerRestartAfterInterfaceLanguageChange).mockClear();
   resetRegistrationValidityStore();
   vi.mocked(refreshRegistrationValidity).mockClear();
 });
@@ -324,6 +330,37 @@ describe('UserProfilePopover language picker', () => {
     // 'en' is selectable but already primary - select 'es' instead
     fireEvent.click(await screen.findByTestId('user-profile-language-es'));
     expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
+  });
+
+  test('offers a restart once the new language has been written', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    await waitFor(() =>
+      expect(offerRestartAfterInterfaceLanguageChange).toHaveBeenCalledWith(
+        ['en', 'es'],
+        ['es', 'en'],
+      ),
+    );
+  });
+
+  test('does not offer a restart when writing the new language fails', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    setMockSetting(
+      'setInterfaceLanguage',
+      vi.fn(async () => {
+        throw new Error('write rejected');
+      }),
+    );
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    // Positive control: the failed write was reported.
+    await waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('write rejected')),
+    );
+    expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
   });
 
   test('clicking a language while the setting setter is dropped warns instead of doing nothing', async () => {

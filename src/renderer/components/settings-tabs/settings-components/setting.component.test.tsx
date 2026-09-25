@@ -5,7 +5,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
 import { Setting } from './setting.component';
+
+vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
+  offerRestartAfterInterfaceLanguageChange: vi.fn(async () => {}),
+}));
 
 type LanguagesStub = Record<string, { autonym: string }>;
 type UiLanguageSelectorStubProps = {
@@ -646,6 +651,24 @@ describe('interface language selector', () => {
     renderLanguageSetting(['fr', 'zh-hans', 'es'], setSetting);
     await choosePrimary('en', ['zh-hans', 'es']);
     expect(setSetting).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  it('offers a restart once the new language has been written', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    renderLanguageSetting(['en'], setSetting);
+    await choosePrimary('es', []);
+    expect(offerRestartAfterInterfaceLanguageChange).toHaveBeenCalledWith(['en'], ['es', 'en']);
+  });
+
+  it('does not offer a restart when writing the new language fails', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockRejectedValue(new Error('write rejected'));
+    renderLanguageSetting(['en'], setSetting);
+    await choosePrimary('es', []);
+    // Positive control: the write was attempted.
+    expect(setSetting).toHaveBeenCalled();
+    expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
   });
 
   it('offers exactly English and Español when the offered languages cannot be read', () => {

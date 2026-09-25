@@ -49,6 +49,10 @@ vi.mock('@shared/services/localization.service', () => ({
 }));
 vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn() } }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+const offerRestart = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
+  offerRestartAfterInterfaceLanguageChange: offerRestart,
+}));
 
 // jsdom doesn't ship ResizeObserver; cmdk (used inside InterfaceLanguagePicker) instantiates one
 // on mount. A no-op stub is sufficient since the tests don't assert layout behavior. scrollIntoView
@@ -100,6 +104,14 @@ describe('LanguageStep', () => {
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
     await userEvent.click(screen.getByText('Español'));
     expect(mockSetInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
+  });
+
+  test('does not offer a restart, since setup handles the switch itself', async () => {
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    await userEvent.click(screen.getByText('Español'));
+    // Positive control: the language was written.
+    expect(mockSetInterfaceLanguage).toHaveBeenCalled();
+    expect(offerRestart).not.toHaveBeenCalled();
   });
 
   test('switching away from a language that is not offered drops it', async () => {
