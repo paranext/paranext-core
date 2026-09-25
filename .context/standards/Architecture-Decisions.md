@@ -8163,7 +8163,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     which the hosting view opts into.
   - Ambiguous elements are not marked unless they are project-language text. The comment composer
     and USFM marker tokens are marked; the editor's comment pop-up is a pop-up and is not.
+  - A marker sits inside the box that scrolls its text, never on that box or above it. Scroll code
+    that adds a `getBoundingClientRect()` distance (zoomed pixels) to `scrollTop` (the box's own,
+    unzoomed pixels) overshoots by the zoom factor when the box or an ancestor is scaled. The
+    Scripture editor, the Bible Texts / Commentaries and Model Text panels
+    (`resource-text-panel.component.tsx`, `model-text-panel.component.tsx`) and the Text
+    Collection's cells mark the editor inside its scroll box; the two panels' component tests and
+    the cell's tests pin that.
 - **Alternatives:**
+  - **Dividing the scroll distance by the zoom factor** in each scroll routine instead of placing
+    the marker. Rejected: every routine that measures and scrolls would need it, and a new one
+    would silently overshoot; placement fixes all of them at once.
   - **A font-size multiplier.** Rejected: rem sizes and specificity ties, and it contradicts
     `adr-zoom-composition` (a).
   - **Region markers with controls moved out.** Impossible for cards, where controls and text

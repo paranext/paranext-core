@@ -4,6 +4,7 @@ import * as React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
@@ -740,5 +741,27 @@ describe('ModelTextPanel', () => {
     const container = screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID);
     await waitFor(() => expect(container).not.toHaveClass('tw:hidden'));
     expect(container).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('marks the text inside the scroll box, so scrolling to a verse measures unzoomed pixels', async () => {
+    // `scrollToVerse` adds a `getBoundingClientRect()` distance to the scroll box's `scrollTop`. A
+    // rect read under a zoomed ancestor is in zoomed pixels while `scrollTop` is not, so a marker on
+    // the scroll box or above it makes every scroll overshoot by the zoom factor.
+    renderPanel({
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', id: 'proj-local', name: 'LocalRes', source: 'admin' }],
+      }),
+      dblResources: [LOCAL_NON_DBL_RESOURCE],
+      getResourceChapter: vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' })),
+    });
+    const scrollBox = screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID);
+    await waitFor(() => expect(scrollBox).toHaveClass('tw:overflow-auto'));
+
+    const marker = screen.getByTestId('editorial').closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`);
+    expect(marker).not.toBeNull();
+    expect(marker).not.toBe(scrollBox);
+    expect(scrollBox.contains(marker)).toBe(true);
+    expect(scrollBox.closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toBeNull();
   });
 });
