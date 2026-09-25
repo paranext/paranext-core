@@ -67,7 +67,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 ];
 
 /** Shown while the offered languages load, or if they cannot be read: exactly the offered languages. */
-const DEFAULT_AVAILABLE_LANGUAGES = getOfferedLanguageDefaults();
+const OFFERED_LANGUAGE_DEFAULTS = getOfferedLanguageDefaults();
 
 /**
  * Placeholder passed as the default value for the `CurrentTheme` data hook so it has something
@@ -200,11 +200,11 @@ export function UserProfilePopover() {
 
   const [availableLanguagesPossiblyError] = useData(
     localizationService.dataProviderName,
-  ).AvailableInterfaceLanguages(undefined, DEFAULT_AVAILABLE_LANGUAGES);
+  ).AvailableInterfaceLanguages(undefined, OFFERED_LANGUAGE_DEFAULTS);
   const availableLanguages: Record<string, LanguageInfo> = isPlatformError(
     availableLanguagesPossiblyError,
   )
-    ? DEFAULT_AVAILABLE_LANGUAGES
+    ? OFFERED_LANGUAGE_DEFAULTS
     : availableLanguagesPossiblyError;
   // Show the current primary language even when not offered, so it appears pressed.
   const sortedLanguageEntries = sortLanguageEntries(

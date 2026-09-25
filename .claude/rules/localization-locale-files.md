@@ -24,8 +24,7 @@ locale file at all, so their presence is not a signal that a new key belongs in 
 So "this key is missing from four locale files" is the expected state, not a gap to close.
 
 Having a locale file does not make a language selectable. Users are offered only the languages in
-`OFFERED_INTERFACE_LANGUAGES` (`src/shared/data/interface-languages.data.ts`), English and Spanish
-as of 2026-09-25. Offering a newly translated language is an edit to that list; see
+`OFFERED_INTERFACE_LANGUAGES` (`src/shared/data/interface-languages.data.ts`). Offering a newly translated language is an edit to that list; see
 `adr-offered-interface-languages-allowlist`.
 
 Place new keys in alphabetical order among their neighbours, and keep the file valid JSON — a
