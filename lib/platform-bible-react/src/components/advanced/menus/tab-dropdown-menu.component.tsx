@@ -36,6 +36,7 @@ import {
   showFocusRing,
 } from '@/utils/focus.util';
 import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
+import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   getMenuSectionsWithItems,
   getSubMenuGroupKeyForMenuItemId,
@@ -80,7 +81,11 @@ const getGroupContent = (
                   {item.iconPathAfter && (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
-                  {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
+                  {item.shortcut && (
+                    <DropdownMenuShortcut className="tw:tracking-normal">
+                      <ShortcutKeys hint={item.shortcut} />
+                    </DropdownMenuShortcut>
+                  )}
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>

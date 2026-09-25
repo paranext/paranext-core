@@ -1,7 +1,6 @@
 import { Fragment, useMemo } from 'react';
 import {
-  Kbd,
-  KbdGroup,
+  ShortcutKeys,
   Table,
   TableBody,
   TableCell,
@@ -85,25 +84,12 @@ function buildOsRows(keys: KeyboardShortcutKeys): OsKeyRow[] {
 }
 
 /**
- * Renders one key combination: a single key is a lone keycap, while a combination puts every key in
- * its own keycap inside a group. The Windows/Linux `+` is plain text between the keycaps rather
- * than part of one, and macOS symbols sit adjacent with nothing between them.
+ * Renders one key combination through the shared {@link ShortcutKeys} renderer — rejoining the
+ * keycaps this file already split back into the raw hint it expects, with the same separator the
+ * split reported, which reverses the split losslessly.
  */
 function KeycapCombination({ group }: { group: KeycapGroup }) {
-  const { keycaps, separator } = group;
-  if (keycaps.length === 1) return <Kbd>{keycaps[0]}</Kbd>;
-  return (
-    <KbdGroup>
-      {keycaps.map((keycap, index) => (
-        <Fragment key={keycap}>
-          {index > 0 && separator && (
-            <span className="tw:text-xs tw:text-muted-foreground">{separator}</span>
-          )}
-          <Kbd>{keycap}</Kbd>
-        </Fragment>
-      ))}
-    </KbdGroup>
-  );
+  return <ShortcutKeys hint={group.keycaps.join(group.separator)} />;
 }
 
 /** Renders one OS's key string: its alternatives as keycaps, or its no-equivalent marker as text. */
