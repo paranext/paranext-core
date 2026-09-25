@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
 import {
@@ -36,7 +37,7 @@ type MockState = {
   interfaceLanguage: string[];
   setInterfaceLanguage: ReturnType<typeof vi.fn> | undefined;
   /** Undefined means "still loading": the hook hands back the component's own default list. */
-  availableLanguages: Record<string, { autonym: string }> | undefined;
+  availableLanguages: Record<string, { autonym: string }> | PlatformError | undefined;
   themeType: 'light' | 'dark';
   setTheme: ReturnType<typeof vi.fn> | undefined;
   shouldMatchSystem: boolean;
@@ -389,7 +390,7 @@ describe('UserProfilePopover language picker', () => {
     expect(screen.getByTestId('user-profile-language-es')).toHaveAttribute('data-state', 'off');
   });
 
-  test('switching away from a hidden language puts the offered one first and keeps the rest', async () => {
+  test('switching away from a hidden language drops it and keeps the other offered languages', async () => {
     setMockSetting('availableLanguages', {
       en: { autonym: 'English' },
       es: { autonym: 'Español' },
@@ -397,8 +398,19 @@ describe('UserProfilePopover language picker', () => {
     setMockSetting('interfaceLanguage', ['fr', 'es']);
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
-    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
-    expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['es', 'fr']);
+    fireEvent.click(await screen.findByTestId('user-profile-language-en'));
+    expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  test('offers exactly English and Español when the offered languages cannot be read', async () => {
+    setMockSetting('availableLanguages', newPlatformError('Localization service unavailable'));
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-language-en');
+    const pills = Array.from(
+      document.querySelectorAll('[data-testid^="user-profile-language-"]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    expect(pills).toEqual(['user-profile-language-en', 'user-profile-language-es']);
   });
 });
 

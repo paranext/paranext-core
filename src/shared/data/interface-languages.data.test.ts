@@ -6,6 +6,7 @@ import {
   getOfferedLanguageDefaults,
   isOfferedInterfaceLanguage,
   OFFERED_INTERFACE_LANGUAGES,
+  switchInterfaceLanguage,
 } from './interface-languages.data';
 
 const LOADED: Record<string, LanguageInfo> = {
@@ -51,6 +52,27 @@ describe('getOfferedLanguageDefaults', () => {
     const defaults = getOfferedLanguageDefaults();
     expect(Object.keys(defaults)).toEqual([...OFFERED_INTERFACE_LANGUAGES]);
     expect(defaults.es).toEqual(languageDetails.es);
+  });
+});
+
+describe('switchInterfaceLanguage', () => {
+  it('puts the chosen language first and keeps the other offered languages', () => {
+    expect(switchInterfaceLanguage(['es', 'en'], 'en')).toEqual(['en', 'es']);
+  });
+
+  it('drops languages that are not offered', () => {
+    expect(switchInterfaceLanguage(['fr'], 'en')).toEqual(['en']);
+    expect(switchInterfaceLanguage(['fr', 'es'], 'en')).toEqual(['en', 'es']);
+  });
+
+  it('keeps the chosen language even when it is not offered', () => {
+    expect(switchInterfaceLanguage(['en', 'es'], 'fr')).toEqual(['fr', 'en', 'es']);
+  });
+
+  it('does not mutate its input', () => {
+    const current = ['es', 'fr'];
+    switchInterfaceLanguage(current, 'en');
+    expect(current).toEqual(['es', 'fr']);
   });
 });
 

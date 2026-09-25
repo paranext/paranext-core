@@ -33,6 +33,20 @@ export function filterToOffered(
 }
 
 /**
+ * The new `platform.interfaceLanguage` value when the user picks `chosen` in a language picker:
+ * `chosen` first, then the rest of `current` that is offered, in its existing order. Languages that
+ * are not offered are dropped from the rest, so switching away from one cannot leave it behind as a
+ * fallback that the user has no way to remove.
+ *
+ * @param current The user's current interface languages (primary first)
+ * @param chosen The language the user picked
+ * @returns A new array; `current` is not modified
+ */
+export function switchInterfaceLanguage(current: readonly string[], chosen: string): string[] {
+  return [chosen, ...current.filter((tag) => tag !== chosen && isOfferedInterfaceLanguage(tag))];
+}
+
+/**
  * Display info for the offered languages, for a picker to show while the offered list loads or when
  * it fails to load.
  */
