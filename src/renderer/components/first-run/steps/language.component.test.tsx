@@ -14,7 +14,7 @@ const GOOD_SETUP_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
   es: { autonym: 'Español', uiNames: { en: 'Spanish' } },
 };
-// Must stay unused: the step labels the current language from the shared language details.
+// Spy asserted never to be called: the step labels the current language from `languageDetails`.
 const availableInterfaceLanguagesHook = vi.hoisted(() => vi.fn(() => [{}, () => {}, false]));
 const hookState: {
   interfaceLanguage: string[];
@@ -131,7 +131,7 @@ describe('LanguageStep', () => {
     expect(screen.queryByText('fr')).not.toBeInTheDocument();
   });
 
-  test('labels the current language without subscribing to all interface languages', () => {
+  test('labels a hidden current language from the shared language details', () => {
     hookState.interfaceLanguage = ['km'];
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
     expect(screen.getByRole('option', { name: /ខ្មែរ/ })).toHaveAttribute('aria-current', 'true');
@@ -139,7 +139,7 @@ describe('LanguageStep', () => {
   });
 
   test('falls back to the raw tag when the current language has no known details', () => {
-    hookState.interfaceLanguage = ['xyz']; // no locale details for this tag
+    hookState.interfaceLanguage = ['xyz']; // no language details for this tag
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
     expect(screen.getByRole('option', { name: /xyz/ })).toHaveAttribute('aria-current', 'true');
   });

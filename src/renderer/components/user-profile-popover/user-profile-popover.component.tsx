@@ -206,8 +206,7 @@ export function UserProfilePopover() {
   )
     ? DEFAULT_AVAILABLE_LANGUAGES
     : availableLanguagesPossiblyError;
-  // The current primary language is always shown, even when it is not offered, so it appears
-  // pressed and the user can see what they have before switching away.
+  // Show the current primary language even when not offered, so it appears pressed.
   const sortedLanguageEntries = sortLanguageEntries(
     Object.entries(includeCurrentLanguages(availableLanguages, [primaryLanguage])),
   );

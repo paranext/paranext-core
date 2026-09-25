@@ -21,9 +21,10 @@ const KEYS: LocalizeKey[] = [
 const ENGLISH_FALLBACK_LANGUAGES: Record<string, LanguageInfo> = { en: { autonym: 'English' } };
 
 /**
- * First-run wizard step: choose the interface language. Offers the languages that have setup-dialog
- * localizations (plus the current selection, always), applies the choice immediately (which
- * re-renders the wizard in that language), and lets the shell's Next button advance.
+ * First-run wizard step: choose the interface language. Offers the offered interface languages
+ * whose setup-dialog strings are translated (plus the current selection, always), applies the
+ * choice immediately (which re-renders the wizard in that language), and lets the shell's Next
+ * button advance.
  */
 export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
   const [strings] = useLocalizedStrings(KEYS);
