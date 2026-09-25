@@ -152,7 +152,8 @@ export interface PlatformNotification {
   notificationId?: string | number;
   /**
    * Optional duration in milliseconds for how long the notification is displayed. To make the
-   * notification show indefinitely, specify a `duration` of `0` or less.
+   * notification show indefinitely, specify a `duration` of `0` or less. Such a notification gets a
+   * close button, so it can be closed without a mouse, unless {@link dismissible} is `false`.
    *
    * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
    * seconds).
