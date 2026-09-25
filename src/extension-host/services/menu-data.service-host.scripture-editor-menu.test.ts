@@ -128,9 +128,6 @@ describe("The scripture editor's Project menu, per mode", () => {
           'platformScriptureEditor.toggleFootnotes',
           'platformScriptureEditor.changeFootnotesPaneLocation',
           'platformScriptureEditor.toggleFootnotesAutoShow',
-          'platform.webViewContentZoomIn',
-          'platform.webViewContentZoomOut',
-          'platform.webViewContentZoomReset',
         ],
       ],
       [
@@ -166,7 +163,7 @@ describe("The scripture editor's Project menu, per mode", () => {
         ],
       ],
       [
-        'platformScriptureEditor.options',
+        'platformScriptureEditor.zoomSection',
         [
           'platform.webViewContentZoomIn',
           'platform.webViewContentZoomOut',

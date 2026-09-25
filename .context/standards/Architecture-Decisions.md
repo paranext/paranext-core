@@ -3305,14 +3305,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     Checking assistant the v0 design names is left out of Simple until PT-4734 integrates the
     assistant itself. The four Inventories and Markers Checklist stay Power-only, so Simple still
     has no menu route to them.
-  - **Per-pane zoom (`platform.webViewContentZoomIn`/`Out`/`Reset`) is Power-only** for a
-    structural reason rather than a product one: every other item in the Options column is
-    Power-only, and a column is served whenever ANY of its items is visible, so a single ungated item
-    there puts the whole Options column — heading and all — back into Simple. Simple still zooms the
-    editor with Ctrl/⌘+wheel and Ctrl/⌘+`+`/`-`/`0` in every mode; the tab menu's zoom items reach
-    the editor only from the keyboard in Simple, where its tab title is hidden. Anything added to a
-    Power-only column needs `hiddenInterfaceModes` even when the command itself is harmless in
-    Simple.
+  - **Per-pane zoom (`platform.webViewContentZoomIn`/`Out`/`Reset`) is Simple-only, in a Zoom
+    section of its own** (`platformScriptureEditor.zoomSection`), which lands between Edit and View.
+    The editor's tab title is hidden in Simple, so this menu is its only mouse route to zoom; Power
+    reaches zoom from the tab menu instead (`adr-simple-mode-tab-menu-offers-zoom-only`). The zoom
+    items stay out of the Options column: every other item there is Power-only, and a column is
+    served whenever ANY of its items is visible, so a single ungated item there would put the whole
+    Options column — heading and all — back into Simple. Anything added to a Power-only column
+    needs `hiddenInterfaceModes` even when the command itself is harmless in Simple.
 - **Source:** PT-4534 (parent PT-4530); decisions recorded on the ticket 2026-09-18 and 2026-09-23.
 
 ## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
