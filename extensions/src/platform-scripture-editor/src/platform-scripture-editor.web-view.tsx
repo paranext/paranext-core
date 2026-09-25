@@ -3058,27 +3058,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in.
       //
-      // Schedule the SETTLED, transient-excluded snapshot (`EditorRef.getUsj()`), not the raw
-      // `usj` this callback was invoked with: `onUsjChange`'s payload is the unsettled document as
-      // typed, and `setTransientInput`'s exclusion applies only to `getUsj()`. A pending trailing
-      // save can fire via the cross-chapter flush (`performDebouncedPdpSave`'s `capturedSave`
-      // branch) or via the editor-unavailable fallback in its same-chapter branch — neither of
-      // those can re-read the editor safely at fire time (the chapter has moved on, or the editor
-      // is gone), so the snapshot captured HERE, at schedule time, is what they replay. Reading it
-      // settled and transient-excluded now means both replay paths carry canonical bytes instead
-      // of a stray palette trigger literal. Falls back to the raw `usj` only if the editor is
-      // unavailable at this exact keystroke (should not happen in practice — `onUsjChange` only
-      // fires from a mounted editor).
-      //
-      // LOAD-BEARING: reverting `editorRef.current?.getUsj() ?? usj` back to the plain `usj`
-      // argument compiles and passes every existing test — this web view has no component-level
-      // test harness for its save-scheduling path — but silently reopens a live corruption class:
-      // a save that fires mid-keystroke (the debounce timer, a window-blur flush, or the
-      // cross-chapter flush) would then schedule the UNSETTLED bytes directly, bypassing
-      // `setTransientInput`'s exclusion entirely, so an in-progress command-surface literal (e.g. a
-      // marker-palette trigger) could reach disk as a phantom marker even when the exclusion itself
-      // is working correctly. Only a live check (type a trigger literal, force a save before the
-      // surface consumes it, inspect the saved bytes) catches a regression on this line.
+      // Schedule the settled, transient-excluded snapshot (`EditorRef.getUsj()`): `onUsjChange`'s
+      // `usj` payload is itself this same settled, transient-excluded document, so this call
+      // returns an equal value — `readSettledUsj` is memoized, so re-deriving it here is free. A
+      // pending trailing save can fire via the cross-chapter flush (`performDebouncedPdpSave`'s
+      // `capturedSave` branch) or via the editor-unavailable fallback in its same-chapter branch —
+      // neither of those can re-read the editor safely at fire time (the chapter has moved on, or
+      // the editor is gone), so the snapshot captured HERE, at schedule time, is what they replay.
+      // Falls back to the raw `usj` argument only if the editor is unavailable at this exact
+      // keystroke (should not happen in practice — `onUsjChange` only fires from a mounted editor).
       saveUsjToPdpDebounced.schedule(
         editorRef.current?.getUsj() ?? usj,
         saveUsjToPdpIfUpdatedRef.current,

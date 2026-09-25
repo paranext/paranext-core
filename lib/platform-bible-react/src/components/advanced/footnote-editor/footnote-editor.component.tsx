@@ -608,6 +608,12 @@ export default function FootnoteEditor({
       const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
       if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
         // Prevents adding additional note nodes or other nodes after the main footnote node
+        // `usj` is the settled document, so a pending block-marker literal typed into the wrapper
+        // paragraph OUTSIDE the note (dead space the caret guards below keep the caret out of) can
+        // settle into a second root paragraph the live tree does not have yet; the live op below then
+        // trims scaffolding bytes only — the note op, the only thing saved, is untouched. Inside the
+        // note nothing can add a root block: a note settles only its own content and refuses a
+        // fragment that tokenizes to more than one paragraph.
         if (usj.content.length > 1) {
           setTimeout(() => {
             // Retains the first two nodes which are the added paragraph node (for now) and the
