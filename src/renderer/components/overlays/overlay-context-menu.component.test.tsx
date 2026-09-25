@@ -1,19 +1,11 @@
 import { vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import {
-  OverlayContextMenu,
   OverlayContextMenuPresentational,
   OverlayContextMenuItem,
   OverlayContextMenuResult,
 } from './overlay-context-menu.component';
-
-// The store-connected component resolves LocalizeKeys via useLocalizedStrings; an empty map makes
-// every value fall back to its raw text, so tests assert against the literal item labels.
-vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useLocalizedStrings: vi.fn(() => [{}, false]),
-}));
 
 // Radix DropdownMenu uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
 // implementation. The methods intentionally don't use `this` since they're empty stubs.
@@ -187,74 +179,23 @@ describe('OverlayContextMenuPresentational', () => {
     });
   });
 
-  describe('content zoom', () => {
+  describe('scale', () => {
     const items: OverlayContextMenuItem[] = [{ type: 'item', id: 'copy', label: 'Copy' }];
 
-    it('renders exactly as before when the requesting pane is not zoomed', () => {
+    it('draws at interface scale', () => {
       render(
         <OverlayContextMenuPresentational
           items={items}
           position={position}
-          contentScale={1}
           onSelect={vi.fn()}
           onDismiss={vi.fn()}
         />,
       );
 
       const menu = screen.getByRole('menu');
-      // jsdom leaves an inline style property that was never assigned as `undefined` rather than the
-      // empty string a real browser reports for an unset CSS property, so a scale of 1 (which never
-      // assigns `zoom` at all) is checked against both.
+      // jsdom leaves an unassigned inline style property `undefined` rather than '', so check both.
       expect(menu.style.zoom || '').toBe('');
+      expect(menu.style.maxWidth).toBe('');
     });
-
-    it('draws at the pane’s scale and caps its size by the space Radix reports, divided', () => {
-      render(
-        <OverlayContextMenuPresentational
-          items={items}
-          position={position}
-          contentScale={1.5}
-          onSelect={vi.fn()}
-          onDismiss={vi.fn()}
-        />,
-      );
-
-      const menu = screen.getByRole('menu');
-      expect(menu.style.zoom).toBe('1.5');
-      expect(menu.style.maxWidth).toBe(
-        'calc(var(--radix-dropdown-menu-content-available-width) / 1.5)',
-      );
-      expect(menu.style.maxHeight).toBe(
-        'calc(var(--radix-dropdown-menu-content-available-height) / 1.5)',
-      );
-    });
-  });
-});
-
-describe('OverlayContextMenu (store-connected)', () => {
-  // The connector forwards `contentScale` straight through to the presentational component without
-  // reading any service of its own, so this test needs no service mocks: it supplies the prop
-  // explicitly and drives the real connector end to end.
-  type ContextMenuEntry = Extract<OverlayEntry, { type: 'contextMenu' }>;
-
-  function createContextMenuEntry(overrides?: Partial<ContextMenuEntry>): ContextMenuEntry {
-    return {
-      type: 'contextMenu',
-      id: 'menu-1',
-      webViewId: 'webview-1',
-      items: [{ type: 'item', id: 'copy', label: 'Copy' }],
-      position: { x: 100, y: 200 },
-      resolve: vi.fn(),
-      reject: vi.fn(),
-      ...overrides,
-    };
-  }
-
-  it('forwards contentScale to the presentational component it renders', () => {
-    const entry = createContextMenuEntry();
-    render(<OverlayContextMenu overlay={entry} contentScale={1.5} />);
-
-    const menu = screen.getByRole('menu');
-    expect(menu.style.zoom).toBe('1.5');
   });
 });

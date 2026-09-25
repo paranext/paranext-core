@@ -87,4 +87,28 @@ describe('FootnotesLayout content zoom marker', () => {
       screen.getByTestId('editor-child').closest('[data-platform-content-zoom-root]'),
     ).toBeNull();
   });
+
+  it('names the footnotes area for the zoom indicator, and names nothing without a label', () => {
+    const { container, rerender } = render(
+      <FootnotesLayout
+        usj={EMPTY_USJ}
+        showMarkers
+        useWebViewState={bottomStub}
+        zoomAreaLabel="Footnotes"
+      >
+        <div />
+      </FootnotesLayout>,
+    );
+    const marked = container.querySelector('[data-platform-content-zoom-root="footnotes"]');
+    expect(marked).toHaveAttribute('data-platform-content-zoom-label', 'Footnotes');
+
+    rerender(
+      <FootnotesLayout usj={EMPTY_USJ} showMarkers useWebViewState={bottomStub}>
+        <div />
+      </FootnotesLayout>,
+    );
+    const unlabelled = container.querySelector('[data-platform-content-zoom-root="footnotes"]');
+    expect(unlabelled).not.toBeNull();
+    expect(unlabelled).not.toHaveAttribute('data-platform-content-zoom-label');
+  });
 });

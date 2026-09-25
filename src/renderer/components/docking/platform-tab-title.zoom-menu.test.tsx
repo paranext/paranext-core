@@ -3,7 +3,6 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
-import { resolveContentZoomArea } from '@renderer/services/web-view-content-zoom.service';
 import { sendCommand } from '@shared/services/command.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { logger } from '@shared/services/logger.service';
@@ -85,10 +84,22 @@ vi.mock('@shared/services/command.service', () => ({
   sendCommand: vi.fn(),
 }));
 
-// The real module pulls settings/localization services in behind it; only the one synchronous
-// resolver this component reads is needed here.
+const { zoomableByWebViewId, zoomableListeners } = vi.hoisted(() => ({
+  zoomableByWebViewId: new Map<string, boolean>(),
+  zoomableListeners: new Set<(event: { webViewId: string; isContentZoomable: boolean }) => void>(),
+}));
+
+// The real `useIsContentZoomable` runs against this stand-in for the service's predicate and change
+// event, so a test can flip one pane's zoomability and watch the tab follow it. Every pane is
+// zoomable unless a test says otherwise.
 vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
-  resolveContentZoomArea: vi.fn(),
+  isContentZoomable: (webViewId: string) => zoomableByWebViewId.get(webViewId) ?? true,
+  onDidChangeContentZoomable: (
+    listener: (event: { webViewId: string; isContentZoomable: boolean }) => void,
+  ) => {
+    zoomableListeners.add(listener);
+    return () => zoomableListeners.delete(listener);
+  },
 }));
 
 vi.mock('@shared/services/menu-data.service', () => ({
@@ -117,6 +128,9 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       <div data-testid="context-menu">
         <button type="button" data-testid="open-menu" onClick={() => onOpenChange?.(true)}>
           open
+        </button>
+        <button type="button" data-testid="close-menu" onClick={() => onOpenChange?.(false)}>
+          close
         </button>
         {children}
       </div>
@@ -237,13 +251,21 @@ const flushMenuRead = async () => {
   await act(async () => {});
 };
 
-/** The rendered menu's item labels, in DOM order, excluding the stub's own `open` button */
+/** Flips one pane's zoomability and announces it, as the service does when an area report flips it */
+function setZoomable(webViewId: string, isContentZoomable: boolean): void {
+  zoomableByWebViewId.set(webViewId, isContentZoomable);
+  act(() => {
+    zoomableListeners.forEach((listener) => listener({ webViewId, isContentZoomable }));
+  });
+}
+
+/** The rendered menu's item labels, in DOM order, excluding the stub's own open and close buttons */
 function renderedItemLabels(): string[] {
   const menu = screen.getByTestId('context-menu');
   return within(menu)
     .getAllByRole('button')
     .map((button) => button.textContent ?? '')
-    .filter((text) => text !== 'open');
+    .filter((text) => text !== 'open' && text !== 'close');
 }
 
 describe('PlatformTabTitle zoom group in the tab menu', () => {
@@ -253,7 +275,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     vi.mocked(menuDataService.getWebViewMenu).mockReset();
     vi.mocked(logger.warn).mockClear();
     vi.mocked(sendCommand).mockReset();
-    vi.mocked(resolveContentZoomArea).mockReset();
+    zoomableByWebViewId.clear();
     __resetTabMenuCacheForTesting();
   });
 
@@ -359,56 +381,65 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     expect(screen.queryByText('Zoom in')).not.toBeInTheDocument();
   });
 
-  it('power mode: greys out the zoom items on a pane with no zoom area, and a click on one sends nothing', async () => {
-    vi.mocked(resolveContentZoomArea).mockReturnValue(undefined);
-    vi.mocked(sendCommand).mockResolvedValue([]);
+  it('power mode: a pane that is not zoomable has no zoom items, and still offers Float Tab', async () => {
+    zoomableByWebViewId.set('web-view-1', false);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
     await flushMenuRead();
 
-    fireEvent.click(screen.getByTestId('open-menu'));
-    await waitFor(() =>
-      expect(resolveContentZoomArea).toHaveBeenCalledWith('web-view-1', undefined),
-    );
-
-    expect(screen.getByText('Zoom in').closest('button')).toHaveAttribute('data-disabled', 'true');
-
-    fireEvent.click(screen.getByText('Zoom in'));
-    await flushMenuRead();
-    expect(sendCommand).not.toHaveBeenCalledWith('platform.webViewContentZoomIn', 'tab-1');
+    // Positive control first: the menu rendered, so the absence below is the zoom rule at work.
+    expect(screen.getByText('Float Tab')).toBeInTheDocument();
+    expect(screen.queryByText('Zoom in')).not.toBeInTheDocument();
+    expect(screen.queryByText('Zoom out')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reset zoom to default')).not.toBeInTheDocument();
   });
 
-  it('power mode: leaves the zoom items enabled on a pane with a zoom area — the positive control for the case above', async () => {
-    vi.mocked(resolveContentZoomArea).mockReturnValue('main');
-    vi.mocked(sendCommand).mockResolvedValue([]);
+  it('power mode: a zoomable pane offers the zoom items, enabled, and a click sends the command', async () => {
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
     await flushMenuRead();
 
-    fireEvent.click(screen.getByTestId('open-menu'));
-    await waitFor(() =>
-      expect(resolveContentZoomArea).toHaveBeenCalledWith('web-view-1', undefined),
-    );
-
     expect(screen.getByText('Zoom in').closest('button')).not.toHaveAttribute('data-disabled');
-
     fireEvent.click(screen.getByText('Zoom in'));
     await waitFor(() =>
       expect(sendCommand).toHaveBeenCalledWith('platform.webViewContentZoomIn', 'tab-1'),
     );
   });
 
-  it('simple mode reads the zoom area too, even though the window-target lists stay unread', async () => {
+  it('simple mode: a tab whose pane is not zoomable has no menu at all', async () => {
     vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
-    vi.mocked(resolveContentZoomArea).mockReturnValue(undefined);
-    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    zoomableByWebViewId.set('web-view-1', false);
+    const { container } = render(
+      <PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />,
+    );
     await flushMenuRead();
 
-    fireEvent.click(screen.getByTestId('open-menu'));
-    await waitFor(() =>
-      expect(resolveContentZoomArea).toHaveBeenCalledWith('web-view-1', undefined),
-    );
+    // Control: the title rendered, so the missing menu is not a missing tab.
+    expect(container.querySelector('.platform-tab-title')).not.toBeNull();
+    expect(screen.queryByTestId('context-menu')).toBeNull();
+  });
 
-    expect(screen.getByText('Zoom in').closest('button')).toHaveAttribute('data-disabled', 'true');
-    expect(sendCommand).not.toHaveBeenCalledWith('platform.getWindows');
+  it('simple mode: a pane that reports its first area after mount gains the menu', async () => {
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
+    zoomableByWebViewId.set('web-view-1', false);
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+    expect(screen.queryByTestId('context-menu')).toBeNull();
+
+    setZoomable('web-view-1', true);
+
+    expect(renderedItemLabels()).toEqual(['Zoom in', 'Zoom out', 'Reset zoom to default']);
+  });
+
+  it('keeps the zoom items for the rest of an open menu when the pane stops being zoomable, and drops them on close', async () => {
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+    fireEvent.click(screen.getByTestId('open-menu'));
+
+    setZoomable('web-view-1', false);
+    expect(renderedItemLabels()).toEqual(['Zoom in', 'Zoom out', 'Reset zoom to default']);
+
+    fireEvent.click(screen.getByTestId('close-menu'));
+    expect(screen.queryByTestId('context-menu')).toBeNull();
   });
 
   it('simple mode: drag-ignore is preserved on the tab title and carried onto the menu trigger', async () => {

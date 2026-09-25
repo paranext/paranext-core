@@ -2,7 +2,7 @@ import { localization } from '@extension-host/services/papi-backend.service';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
-import { isValidZoomFactor } from '@shared/utils/content-zoom.util';
+import { formatZoomPercent, isValidZoomFactor } from '@shared/utils/content-zoom.util';
 import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
@@ -18,21 +18,16 @@ export const platformSettings: SettingsContribution = [
       },
       'platform.zoomFactor': {
         label: '%settings_platform_zoomFactor_label_2%',
-        description: '%settings_platform_zoomFactor_description%',
+        description: '%settings_platform_zoomFactor_description_2%',
         default: DEFAULT_ZOOM_FACTOR,
       },
       'platform.webViewContentZoom': {
         label: '%settings_platform_webViewContentZoom_label%',
-        description: '%settings_platform_webViewContentZoom_description%',
+        description: '%settings_platform_webViewContentZoom_description_2%',
         default: DEFAULT_ZOOM_FACTOR,
       },
       'platform.webViewContentZoomMemory': {
         label: '%settings_platform_webViewContentZoomMemory_label%',
-        default: {},
-        isHidden: true,
-      },
-      'platform.webViewContentZoomTypesWithAreas': {
-        label: '%settings_platform_webViewContentZoomTypesWithAreas_label%',
         default: {},
         isHidden: true,
       },
@@ -133,9 +128,10 @@ const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
     await localization.getLocalizedString({
       localizeKey: '%settings_platform_zoomFactor_errorMessage%',
     }),
+    // Settings shows every zoom as a percentage, so the range in the message is one too.
     {
-      lowerLimit: MIN_ZOOM_FACTOR,
-      upperLimit: MAX_ZOOM_FACTOR,
+      lowerLimit: formatZoomPercent(MIN_ZOOM_FACTOR),
+      upperLimit: formatZoomPercent(MAX_ZOOM_FACTOR),
     },
   );
 
@@ -156,7 +152,10 @@ const webViewContentZoomValidator: SettingValidator<'platform.webViewContentZoom
         await localization.getLocalizedString({
           localizeKey: '%settings_platform_zoomFactor_errorMessage%',
         }),
-        { lowerLimit: MIN_ZOOM_FACTOR, upperLimit: MAX_ZOOM_FACTOR },
+        {
+          lowerLimit: formatZoomPercent(MIN_ZOOM_FACTOR),
+          upperLimit: formatZoomPercent(MAX_ZOOM_FACTOR),
+        },
       ),
     );
   }
@@ -168,13 +167,6 @@ const webViewContentZoomMemoryValidator: SettingValidator<
 > = async (newValue): Promise<boolean> => {
   if (typeof newValue !== 'object' || !newValue || Array.isArray(newValue)) return false;
   return Object.values(newValue).every((value) => isValidZoomFactor(value));
-};
-
-const webViewContentZoomTypesWithAreasValidator: SettingValidator<
-  'platform.webViewContentZoomTypesWithAreas'
-> = async (newValue): Promise<boolean> => {
-  if (typeof newValue !== 'object' || !newValue || Array.isArray(newValue)) return false;
-  return Object.values(newValue).every((value) => typeof value === 'boolean');
 };
 
 const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async (
@@ -193,7 +185,6 @@ const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.webViewContentZoom': webViewContentZoomValidator,
   'platform.webViewContentZoomMemory': webViewContentZoomMemoryValidator,
-  'platform.webViewContentZoomTypesWithAreas': webViewContentZoomTypesWithAreasValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,

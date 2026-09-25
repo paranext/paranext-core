@@ -1,3 +1,5 @@
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP } from 'platform-bible-utils';
+
 /**
  * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
  * Platform.Bible core
@@ -182,10 +184,14 @@ export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string = '';
  */
 export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string = '';
 
-/** Constants related to zoom factor of entire application */
+/** Zoom factor where 1 = the application's default, unscaled size. */
 export const DEFAULT_ZOOM_FACTOR = 1.0;
-export const MIN_ZOOM_FACTOR = 0.5;
-export const MAX_ZOOM_FACTOR = 3.0;
+/**
+ * Range and step for the application's zoom factor, defined once in `platform-bible-utils`;
+ * re-exported here alongside {@link DEFAULT_ZOOM_FACTOR} so app code has one place to reach all four
+ * zoom constants.
+ */
+export { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP };
 
 /**
  * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
