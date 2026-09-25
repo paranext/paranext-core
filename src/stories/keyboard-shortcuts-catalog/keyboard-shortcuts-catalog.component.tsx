@@ -12,7 +12,7 @@ import type {
   KeyboardShortcutEntry,
   KeyboardShortcutKeys,
 } from '@shared/data/keyboard-shortcuts.model';
-import { type KeycapGroup, parseShortcutKeycaps } from './keyboard-shortcut-keycaps.util';
+import { parseShortcutKeycaps } from './keyboard-shortcut-keycaps.util';
 
 /** Localizable string keys for {@link KeyboardShortcutsCatalog} column headers. */
 export const KEYBOARD_SHORTCUTS_CATALOG_STRING_KEYS = Object.freeze([
@@ -84,18 +84,16 @@ function buildOsRows(keys: KeyboardShortcutKeys): OsKeyRow[] {
 }
 
 /**
- * Renders one key combination through the shared {@link ShortcutKeys} renderer — rejoining the
- * keycaps this file already split back into the raw hint it expects, with the same separator the
- * split reported, which reverses the split losslessly.
+ * Renders one key combination through the shared {@link ShortcutKeys} renderer.
  *
  * The wrapping span's muted, small text only reaches `ShortcutKeys`' unstyled `+` separator: each
  * `Kbd` sets its own color and size explicitly, so this is the catalog page's own styling choice
  * rather than something `ShortcutKeys` should hard-code for every consumer.
  */
-function KeycapCombination({ group }: { group: KeycapGroup }) {
+function KeycapCombination({ hint }: { hint: string }) {
   return (
     <span className="tw:text-xs tw:text-muted-foreground">
-      <ShortcutKeys hint={group.keycaps.join(group.separator)} />
+      <ShortcutKeys hint={hint} />
     </span>
   );
 }
@@ -107,10 +105,10 @@ function OsKeys({ keys }: { keys: string }) {
     return <span className="tw:text-xs tw:text-muted-foreground">{parsed.text}</span>;
   return (
     <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-1">
-      {parsed.groups.map((group, index) => (
-        <Fragment key={group.keycaps.join(group.separator)}>
+      {parsed.alternatives.map((alternative, index) => (
+        <Fragment key={alternative}>
           {index > 0 && <span className="tw:text-xs tw:text-muted-foreground">/</span>}
-          <KeycapCombination group={group} />
+          <KeycapCombination hint={alternative} />
         </Fragment>
       ))}
     </span>

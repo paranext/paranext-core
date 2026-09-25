@@ -25,6 +25,44 @@ describe('getShortcutKeycaps', () => {
   it('keeps a single key as one keycap', () => {
     expect(getShortcutKeycaps('F7')).toEqual({ keycaps: ['F7'], separator: '+' });
   });
+
+  it.each([
+    // macOS: leading symbols, then one final key however many characters it is spelled with
+    ['⌘F8', ['⌘', 'F8']],
+    ['⌘F9', ['⌘', 'F9']],
+    ['⌃Space', ['⌃', 'Space']],
+    ['⌥⇧⌘L', ['⌥', '⇧', '⌘', 'L']],
+    ['⌘⌥↑', ['⌘', '⌥', '↑']],
+    ['⌃⇧T', ['⌃', '⇧', 'T']],
+    ['⇧⌘Z', ['⇧', '⌘', 'Z']],
+    ['⌘]', ['⌘', ']']],
+    ['⌘[', ['⌘', '[']],
+    ['⌘+', ['⌘', '+']],
+    ['⌘-', ['⌘', '-']],
+    ['⌘0', ['⌘', '0']],
+    ['⌘=', ['⌘', '=']],
+    ['⌥', ['⌥']],
+    ['⌫', ['⌫']],
+    ['⎋', ['⎋']],
+    ['⇧⇥', ['⇧', '⇥']],
+  ])('splits the macOS hint %s into %j, with no separator', (hint, keycaps) => {
+    expect(getShortcutKeycaps(hint)).toEqual({ keycaps, separator: '' });
+  });
+
+  it.each([
+    ['Ctrl+PageDown', ['Ctrl', 'PageDown']],
+    ['Alt+←', ['Alt', '←']],
+    ['Ctrl+-', ['Ctrl', '-']],
+    ['Ctrl+Shift++', ['Ctrl', 'Shift', '+']],
+    ['Shift+F10', ['Shift', 'F10']],
+    ['F12', ['F12']],
+    ['\\', ['\\']],
+    ['*', ['*']],
+    ['Backspace', ['Backspace']],
+    ['', []],
+  ])('splits the plus-joined hint %j into %j', (hint, keycaps) => {
+    expect(getShortcutKeycaps(hint)).toEqual({ keycaps, separator: '+' });
+  });
 });
 
 describe('ShortcutKeys', () => {
