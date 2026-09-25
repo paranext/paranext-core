@@ -15,6 +15,7 @@ import {
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  returnFocusToEditor,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
   type FootnotesPaneAutoVisibilityInput,
@@ -328,6 +329,7 @@ describe('restoreSelectionIfLost', () => {
       getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
       setSelection: vi.fn(),
       getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
+      focus: vi.fn(),
     };
   }
 
@@ -374,6 +376,49 @@ describe('restoreSelectionIfLost', () => {
     // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
     // eslint-disable-next-line no-null/no-null
     expect(() => restoreSelectionIfLost(null, snapshot)).not.toThrow();
+  });
+});
+
+describe('returnFocusToEditor', () => {
+  const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
+
+  /** Editor stub exposing only the methods the helper consults. */
+  function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
+    return {
+      getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
+      setSelection: vi.fn(),
+      getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
+      focus: vi.fn(),
+    };
+  }
+
+  it('restores the snapshot before focusing, when the live selection is gone', () => {
+    // `focus()` falls back to selecting the document end when the editor-state selection is null, so
+    // the snapshot has to land first or the fallback wins.
+    const editor = makeEditor(undefined);
+
+    returnFocusToEditor(editor, snapshot);
+
+    expect(editor.setSelection).toHaveBeenCalledWith(snapshot);
+    expect(editor.focus).toHaveBeenCalledTimes(1);
+    const setSelectionOrder = editor.setSelection.mock.invocationCallOrder[0];
+    const focusOrder = editor.focus.mock.invocationCallOrder[0];
+    expect(setSelectionOrder).toBeLessThan(focusOrder);
+  });
+
+  it('focuses without restoring when a paragraph marker is selected', () => {
+    const editor = makeEditor(undefined, 'li2');
+
+    returnFocusToEditor(editor, snapshot);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+    expect(editor.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it('tolerates a null editor handle (ref not mounted)', () => {
+    // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
+    // eslint-disable-next-line no-null/no-null
+    expect(() => returnFocusToEditor(null, snapshot)).not.toThrow();
   });
 });
 

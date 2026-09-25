@@ -192,6 +192,7 @@ import {
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  returnFocusToEditor,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
@@ -1404,8 +1405,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   });
 
   // The editor keeps a selected paragraph marker while focus is in the paragraph menu; focusing it
-  // again makes that selection live for the next key.
-  const focusEditor = useCallback(() => editorRef.current?.focus(), []);
+  // again makes that selection live for the next key. Opening the popover can also null a caret
+  // selection the same way the paragraph switcher does above, so the restore has to run before the
+  // focus, not just a plain `editorRef.current?.focus()`.
+  const focusEditor = useCallback(
+    () => returnFocusToEditor(editorRef.current, lastFocusOutSelectionRef.current),
+    [],
+  );
 
   const insertCommentAtCurrentSelection = useCallback(() => {
     const selection = currentSelectionRef.current;
