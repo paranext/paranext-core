@@ -1575,8 +1575,38 @@ declare module 'shared/data/rpc.model' {
    *   than throwing.
    */
   export function describeWebSocketErrorEvent(ev: unknown): string;
+  /**
+   * The subset of a socket the main-process RPC layer touches. Both `ws`'s server-side sockets and
+   * the DOM `WebSocket` type satisfy it structurally, and so does a MessagePort wrapped to look like
+   * one. `RpcServer` and `RpcWebSocketListener` are written against this rather than against
+   * `WebSocket` so that main can serve a client over something other than a TCP socket.
+   *
+   * @experimental
+   */
+  export interface ServerSocketLike {
+    /**
+     * 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED, as on `WebSocket.readyState`
+     *
+     * @experimental
+     */
+    readonly readyState: number;
+    /** @experimental */
+    send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
+    /** @experimental */
+    close(code?: number, reason?: string): void;
+    /** @experimental */
+    addEventListener<K extends 'close' | 'error' | 'message'>(
+      type: K,
+      listener: (ev: WebSocketEventMap[K]) => void,
+    ): void;
+    /** @experimental */
+    removeEventListener<K extends 'close' | 'error' | 'message'>(
+      type: K,
+      listener: (ev: WebSocketEventMap[K]) => void,
+    ): void;
+  }
   /** Serialize a payload, if needed, and send it over the provided WebSocket */
-  export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void;
+  export function sendPayloadToWebSocket(ws: ServerSocketLike | undefined, payload: unknown): void;
   /**
    * Deserialize a payload from the network and return it as a JSONRPC message or array of messages.
    * Note that all `null` values from the payload will be converted into `undefined` values except for
@@ -2212,6 +2242,7 @@ declare module 'shared/models/rpc.interface' {
     EventHandler,
     InternalRequestHandler,
     RequestParams,
+    ServerSocketLike,
   } from 'shared/data/rpc.model';
   import {
     SingleMethodDocumentation,
@@ -2395,6 +2426,190 @@ declare module 'shared/models/rpc.interface' {
     /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
     unregisterAll(handler: unknown): void;
   }
+  /**
+   * An RPC handler that can serve a client whose socket was created by the caller rather than
+   * accepted from the websocket server. Only the process that owns the server (main) implements this;
+   * it is how a renderer's MessagePort-backed connection joins the same registry as the websocket
+   * clients.
+   *
+   * @experimental
+   */
+  export interface IRpcLocalClientAcceptor {
+    /**
+     * Start serving `socket` as a client of this process's RPC server.
+     *
+     * @param socket The server end of the client's connection
+     * @param name Label for this client in log lines, in place of the incrementing websocket number
+     * @throws If this handler is not currently accepting clients
+     * @experimental
+     */
+    acceptLocalClient(socket: ServerSocketLike, name: string): void;
+  }
+}
+declare module 'shared/data/papi-port.model' {
+  /**
+   * Wire shapes of the renderer's PAPI MessagePort transport: the IPC channels the preload uses to
+   * obtain the port from main, the message the preload forwards into the page's main world, and the
+   * close frame both adapters send before closing a port. Nothing here is a JSON-RPC message; the RPC
+   * layer never sees these shapes.
+   *
+   * Kept free of imports so the preload bundle can use it without pulling in the logger or
+   * `electron`.
+   */
+  /**
+   * The PAPI part of the bridge the preload exposes on `window.electronAPI.papi`. The preload
+   * declares its object against this type and the page reads the bridge through it, so both sides
+   * fail to compile if either renames or reshapes a member.
+   *
+   * @experimental
+   */
+  export type PapiPortBridge = {
+    /**
+     * Ask main for this window's PAPI MessagePort. The reply arrives as a `window` `message` event (a
+     * {@link PapiPortMainWorldMessage}), not as a return value, because a port can only travel over
+     * `postMessage`.
+     *
+     * @experimental
+     */
+    requestPort(): void;
+  };
+  /**
+   * IPC channel the preload sends on to ask main for this window's PAPI MessagePort
+   *
+   * @experimental
+   */
+  export const PAPI_PORT_REQUEST_CHANNEL = 'electronAPI:papi.requestPort';
+  /**
+   * IPC channel main replies on, carrying a {@link PapiPortGrant} and the port as its one transferred
+   * object. Also the `type` of the message the preload forwards into the main world.
+   *
+   * @experimental
+   */
+  export const PAPI_PORT_CHANNEL = 'electronAPI:papi.port';
+  /**
+   * IPC channel main replies on when it cannot hand out a port, carrying a {@link PapiPortError}. Also
+   * the `type` of the message the preload forwards into the main world.
+   *
+   * @experimental
+   */
+  export const PAPI_PORT_ERROR_CHANNEL = 'electronAPI:papi.portError';
+  /**
+   * What main says alongside the port it grants
+   *
+   * @experimental
+   */
+  export type PapiPortGrant = {
+    /**
+     * Platform id of the window the port was granted to, for the renderer's log lines
+     *
+     * @experimental
+     */
+    windowId: string;
+  };
+  /**
+   * Why main declined to grant a port
+   *
+   * @experimental
+   */
+  export type PapiPortError = {
+    /** @experimental */
+    reason: string;
+  };
+  /**
+   * Message the preload posts into the page's main world: either the port (in the event's `ports`)
+   * with its grant, or the error
+   *
+   * @experimental
+   */
+  export type PapiPortMainWorldMessage =
+    | ({
+        type: typeof PAPI_PORT_CHANNEL;
+      } & PapiPortGrant)
+    | ({
+        type: typeof PAPI_PORT_ERROR_CHANNEL;
+      } & PapiPortError);
+  /**
+   * Whether `data` from a `window` `message` event is a {@link PapiPortMainWorldMessage}. Anything can
+   * land on `window.postMessage`, so a shape check is the only filter.
+   *
+   * @experimental
+   */
+  export function isPapiPortMainWorldMessage(data: unknown): data is PapiPortMainWorldMessage;
+  /**
+   * `type` of the in-band close frame. A MessagePort's own `close` event carries no code, so the side
+   * that closes on purpose posts this first; the other side then reports the close with the code and
+   * reason given here, and treats a port close that arrives with no frame as 1006 (the connection
+   * died).
+   *
+   * @experimental
+   */
+  export const PAPI_PORT_CLOSE_FRAME_TYPE = 'papi:close';
+  /**
+   * Reason a port adapter reports when its port closes with no close frame first, alongside code 1006
+   *
+   * @experimental
+   */
+  export const PORT_CLOSED_WITHOUT_FRAME_REASON = 'port closed without a close frame';
+  /**
+   * The in-band close frame. Distinguishable from every JSON-RPC payload, which is a string.
+   *
+   * @experimental
+   */
+  export type PapiPortCloseFrame = {
+    /** @experimental */
+    type: typeof PAPI_PORT_CLOSE_FRAME_TYPE;
+    /**
+     * A WebSocket close code, so both ends keep using `isCleanCloseCode` unchanged
+     *
+     * @experimental
+     */
+    code: number;
+    /** @experimental */
+    reason: string;
+  };
+  /**
+   * Build the close frame a port adapter posts before closing its port on purpose
+   *
+   * @experimental
+   */
+  export function createPapiPortCloseFrame(code: number, reason: string): PapiPortCloseFrame;
+  /**
+   * Whether a message received over a PAPI port is a {@link PapiPortCloseFrame}
+   *
+   * @experimental
+   */
+  export function isPapiPortCloseFrame(data: unknown): data is PapiPortCloseFrame;
+  /**
+   * The close event a port adapter hands to the RPC layer. Only the fields
+   * `describeWebSocketCloseEvent`, `isCleanCloseEvent` and `RpcWebSocketListener.onClientDisconnect`
+   * read; a real `CloseEvent` cannot be constructed in every environment the adapters run in, and the
+   * RPC layer reads these properties reflectively.
+   *
+   * @experimental
+   */
+  export type SyntheticCloseEvent = {
+    /** @experimental */
+    type: 'close';
+    /** @experimental */
+    target: unknown;
+    /** @experimental */
+    code: number;
+    /** @experimental */
+    reason: string;
+    /** @experimental */
+    wasClean: boolean;
+  };
+  /**
+   * Build the close event a port adapter dispatches to its `close` listeners
+   *
+   * @experimental
+   */
+  export function createSyntheticCloseEvent(
+    target: unknown,
+    code: number,
+    reason: string,
+    wasClean: boolean,
+  ): SyntheticCloseEvent;
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -2405,6 +2620,222 @@ declare module 'client/services/web-socket.interface' {
    * implementation. We can adjust as needed at that point.
    */
   export type IWebSocket = WebSocket;
+}
+declare module 'shared/data/papi-port-close-handshake' {
+  import { PapiPortCloseFrame, SyntheticCloseEvent } from 'shared/data/papi-port.model';
+  /**
+   * What an adapter hands the handshake: its own port primitives, and what to do once closed
+   *
+   * @experimental
+   */
+  export type PortCloseHandshakeHooks = {
+    /**
+     * Post a close frame on the port. May throw; the close still completes.
+     *
+     * @experimental
+     */
+    postFrame(frame: PapiPortCloseFrame): void;
+    /**
+     * Close the port
+     *
+     * @experimental
+     */
+    closePort(): void;
+    /**
+     * Called exactly once, when the connection is closed for whatever reason: detach from the port,
+     * record the closed state, and dispatch `event` to the adapter's close listeners
+     *
+     * @experimental
+     */
+    onClosed(event: SyntheticCloseEvent): void;
+  };
+  /**
+   * One connection's close handshake. Records the close exactly once, whichever side or event caused
+   * it.
+   *
+   * @experimental
+   */
+  export type PortCloseHandshake = {
+    /**
+     * Whether the connection has closed. Once true, nothing more is reported.
+     *
+     * @experimental
+     */
+    readonly isClosed: boolean;
+    /**
+     * Close on purpose: post a close frame, report the close, then close the port. A no-op once
+     * closed.
+     *
+     * @param code WebSocket close code. Defaults to 1000.
+     * @param reason Human-readable reason. Defaults to empty.
+     * @experimental
+     */
+    close(code?: number, reason?: string): void;
+    /**
+     * Offer a message that arrived on the port. A close frame is reported as the peer's close and the
+     * port is closed; anything arriving once closed is dropped.
+     *
+     * @param data The message's `data`
+     * @returns `true` when the message was consumed here, `false` when it is for the adapter to
+     *   deliver
+     * @experimental
+     */
+    handleIncoming(data: unknown): boolean;
+    /**
+     * The port's own `close` event arrived. Reported as 1006 unless the handshake already finished.
+     *
+     * @experimental
+     */
+    handlePortClosed(): void;
+  };
+  /**
+   * Create the close handshake for one connection
+   *
+   * @param target The adapter, reported as the close event's `target`
+   * @param hooks The adapter's port primitives and close handling
+   * @experimental
+   */
+  export function createPortCloseHandshake(
+    target: unknown,
+    hooks: PortCloseHandshakeHooks,
+  ): PortCloseHandshake;
+}
+declare module 'renderer/services/message-port-web-socket' {
+  /**
+   * The surface of a DOM `MessagePort` this adapter uses. Node's `worker_threads` `MessagePort`
+   * satisfies it too, which is what the in-process tests use.
+   *
+   * @experimental
+   */
+  export type MessagePortLike = {
+    /** @experimental */
+    addEventListener(type: 'message', listener: (ev: { data: unknown }) => void): void;
+    /** @experimental */
+    addEventListener(type: 'close', listener: () => void): void;
+    /** @experimental */
+    removeEventListener(type: 'message', listener: (ev: { data: unknown }) => void): void;
+    /** @experimental */
+    removeEventListener(type: 'close', listener: () => void): void;
+    /** @experimental */
+    postMessage(message: unknown): void;
+    /** @experimental */
+    start(): void;
+    /** @experimental */
+    close(): void;
+  };
+  /**
+   * How the adapter obtains its port. Calls exactly one of the handlers, once. The Electron
+   * implementation asks main through the preload; tests hand a port over directly.
+   *
+   * @experimental
+   */
+  export type PapiPortProvider = (handlers: {
+    onPort: (port: MessagePortLike, windowId: string) => void;
+    onError: (reason: string) => void;
+  }) => void;
+  type SocketEventName = keyof WebSocketEventMap;
+  /**
+   * A `WebSocket` whose wire is an Electron `MessagePort` to the main process instead of a TCP
+   * socket. Chromium closes every TCP client socket when the OS suspends; a MessagePort is a Mojo
+   * pipe, which observes no power events, so the connection survives sleep.
+   *
+   * Isomorphic with the DOM `WebSocket` for everything `RpcClient` uses: `readyState`, `url`, `send`,
+   * `close`, and the `open`/`message`/`error`/`close` events. A port has no close code, so intent
+   * travels in a close frame: `close(code, reason)` posts one before closing the port, a frame from
+   * main is reported as main's close, and a port that closes with no frame is 1006 with `wasClean:
+   * false`, the same shape a websocket that died produces. `pagehide` closes with 1001 so a reload or
+   * window close reads as clean on main.
+   *
+   * Keeps the first port it is handed and ignores any other: the bridge that hands ports out is
+   * reachable from same-origin web views, and a page has exactly one connection.
+   *
+   * @experimental
+   */
+  export class MessagePortWebSocket implements WebSocket {
+    /** @experimental */
+    readonly CONNECTING: 0;
+    /** @experimental */
+    readonly OPEN: 1;
+    /** @experimental */
+    readonly CLOSING: 2;
+    /** @experimental */
+    readonly CLOSED: 3;
+    /** @experimental */
+    readyState: number;
+    /** @experimental */
+    url: string;
+    /** @experimental */
+    readonly bufferedAmount = 0;
+    /** @experimental */
+    readonly extensions = '';
+    /** @experimental */
+    readonly protocol = '';
+    /** @experimental */
+    binaryType: BinaryType;
+    /** @experimental */
+    onopen: ((this: WebSocket, ev: Event) => unknown) | null;
+    /** @experimental */
+    onmessage: ((this: WebSocket, ev: MessageEvent) => unknown) | null;
+    /** @experimental */
+    onerror: ((this: WebSocket, ev: Event) => unknown) | null;
+    /** @experimental */
+    onclose: ((this: WebSocket, ev: CloseEvent) => unknown) | null;
+    private port;
+    private readonly handshake;
+    private readonly listeners;
+    /**
+     * @param provider How to obtain the port
+     * @param options `addPageHideListener` defaults to true; tests that share one jsdom window pass
+     *   false so sockets do not pile listeners onto it
+     * @experimental
+     */
+    constructor(
+      provider: PapiPortProvider,
+      options?: {
+        addPageHideListener?: boolean;
+      },
+    );
+    /** @experimental */
+    send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
+    /** @experimental */
+    close(code?: number, reason?: string): void;
+    /** @experimental */
+    addEventListener<K extends SocketEventName>(
+      type: K,
+      listener: (this: WebSocket, ev: WebSocketEventMap[K]) => unknown,
+    ): void;
+    /** @experimental */
+    removeEventListener<K extends SocketEventName>(
+      type: K,
+      listener: (this: WebSocket, ev: WebSocketEventMap[K]) => unknown,
+    ): void;
+    /** @experimental */
+    dispatchEvent(event: Event): boolean;
+    private acceptPort;
+    private failToOpen;
+    private onPortMessage;
+    private onPortClose;
+    /** Detach from the port and tell close listeners; the handshake calls this exactly once */
+    private onClosed;
+    private emit;
+  }
+  export default MessagePortWebSocket;
+}
+declare module 'renderer/services/electron-papi-port-provider' {
+  import type { PapiPortProvider } from 'renderer/services/message-port-web-socket';
+  /**
+   * Obtains this page's PAPI MessagePort from main through the preload's bridge.
+   *
+   * Installs its `message` listener BEFORE sending the request, so the reply cannot land before
+   * anyone is listening; that ordering is what lets this skip the `onload` handshake Electron's
+   * documented pattern needs. Accepts only a message posted by this window itself (the preload posts
+   * from the top window; a web view is a different `source`) that carries a port, reports the first
+   * outcome, and then stops listening, so nothing that arrives later can be mistaken for the port.
+   *
+   * @param win The window whose bridge to use. Defaults to the global `window`.
+   * @experimental
+   */
+  export function createElectronPapiPortProvider(win?: Window): PapiPortProvider;
 }
 declare module 'renderer/services/renderer-web-socket.service' {
   /** Once our network is running, run this to stop extensions from connecting to it directly */
@@ -2607,7 +3038,7 @@ declare module 'main/services/rpc-server' {
     IRpcHandler,
     RegisteredRpcMethodDetails,
   } from 'shared/models/rpc.interface';
-  import { ConnectionStatus, RequestParams } from 'shared/data/rpc.model';
+  import { ConnectionStatus, RequestParams, ServerSocketLike } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
   import {
     SingleMethodDocumentation,
@@ -2667,7 +3098,7 @@ declare module 'main/services/rpc-server' {
     private readonly announceClientDisconnectMethod;
     constructor(
       name: string,
-      webSocket: WebSocket,
+      webSocket: ServerSocketLike,
       propagateEventMethod: PropagateEventMethod,
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
       rpcEventDetailsByEventName: IRpcEventRegistry,
@@ -2789,8 +3220,13 @@ declare module 'main/services/rpc-websocket-listener' {
     EventHandler,
     InternalRequestHandler,
     RequestParams,
+    ServerSocketLike,
   } from 'shared/data/rpc.model';
-  import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
+  import {
+    IRpcLocalClientAcceptor,
+    IRpcMethodRegistrar,
+    RpcClientDisconnectEvent,
+  } from 'shared/models/rpc.interface';
   import {
     OpenRpc,
     SingleMethodDocumentation,
@@ -2812,7 +3248,7 @@ declare module 'main/services/rpc-websocket-listener' {
    *
    * Created by the main process on start up when the network service initializes
    */
-  export class RpcWebSocketListener implements IRpcMethodRegistrar {
+  export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClientAcceptor {
     private readonly port;
     connectionStatus: ConnectionStatus;
     /**
@@ -2877,6 +3313,13 @@ declare module 'main/services/rpc-websocket-listener' {
       documentation?: SingleNotificationDocumentation,
     ): Promise<boolean>;
     unregisterEvent(eventName: string): Promise<boolean>;
+    /**
+     * Start serving a caller-created socket as a client of main's RPC server. See
+     * {@link IRpcLocalClientAcceptor.acceptLocalClient}.
+     *
+     * @experimental
+     */
+    acceptLocalClient(socket: ServerSocketLike, name: string): void;
     generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
@@ -2898,6 +3341,8 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private warnIfInvalidEventAnnouncement;
     private onClientConnect;
+    /** Attach an `RpcServer` to a socket and track it until the socket closes */
+    private serveClient;
     private announceClientDisconnect;
     private onClientDisconnect;
   }
@@ -2924,7 +3369,7 @@ declare module 'shared/services/network.service' {
    * expose this whole service on papi, but there are a few things that are exposed via
    * papiNetworkService
    */
-  import { InternalRequestHandler } from 'shared/data/rpc.model';
+  import { InternalRequestHandler, ServerSocketLike } from 'shared/data/rpc.model';
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
   import { StoreChangeEvent } from 'shared/services/shared-store.service';
   import { SerializedRequestType } from 'shared/utils/util';
@@ -2982,6 +3427,19 @@ declare module 'shared/services/network.service' {
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
+  /**
+   * Serve `socket` as a client of this process's RPC server, under `name`. Main-process only: it is
+   * how a renderer's MessagePort-backed connection joins the same method and event registries as the
+   * websocket clients on port 8876. Throws rather than returning `false` so the caller can put the
+   * reason in front of the client immediately instead of letting its connect attempt time out.
+   *
+   * @param socket The server end of the client's connection
+   * @param name Label for this client in log lines
+   * @throws If this is not the main process, the network service is not initialized, or its handler
+   *   cannot accept local clients
+   * @experimental
+   */
+  export function acceptLocalClient(socket: ServerSocketLike, name: string): void;
   /** Set the number of seconds that network requests in this process should wait before timing out */
   export function setRequestTimeout(timeoutSeconds: number): void;
   /**

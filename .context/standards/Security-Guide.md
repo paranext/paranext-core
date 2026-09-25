@@ -106,6 +106,18 @@ Extensions run in isolated contexts:
 2. **WebView Isolation** — frontend code runs in sandboxed iframes with restricted capabilities.
 3. **PAPI as Bridge** — all cross-process communication goes through the Platform API.
 
+### The renderer's PAPI port
+
+Each window obtains its connection to main as an Electron `MessagePort`: the preload exposes
+`electronAPI.papi.requestPort()` and forwards main's reply into the page with `window.postMessage`.
+React and HTML web views are same-origin `srcdoc` iframes, so extension code in them can reach that
+bridge on `window.top`. This is defence in depth rather than a boundary: main refuses requests that
+do not come from the window's page frame, but a web view can drive that frame's bridge, so what
+stops a second channel is that main serves one open port per window and the page keeps the first
+port it is handed; an intercepted port gives an extension no capability it does not already hold
+through `window.papi`. The renderer itself opens no WebSocket to port 8876;
+`blockWebSocketsToPapiNetwork` still stops extension code from doing so.
+
 ---
 
 ## Security Best Practices
