@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ShrinkStepOverride } from 'platform-bible-react';
-import { EnhancedResourceTabBar, RESEARCH_TAB_LABEL_KEYS } from './toolbar.component';
+import { EnhancedResourceTabBar } from './toolbar.component';
 
 // jsdom ships no ResizeObserver. Radix's Popper (behind the scope Select) builds one on mount, and
 // the bar itself hands one to `useShrinkStep`. Tests drive the step through `ShrinkStepOverride`
@@ -93,16 +93,5 @@ describe('EnhancedResourceTabBar', () => {
 
     expect(wideClassName).toMatch(/(?:^|\s)tw:w-44(?:\s|$)/);
     expect(screen.getByRole('combobox').className).toMatch(/(?:^|\s)tw:w-32(?:\s|$)/);
-  });
-});
-
-describe('RESEARCH_TAB_LABEL_KEYS', () => {
-  it('names every research tab with the tab bar’s own string', () => {
-    expect(RESEARCH_TAB_LABEL_KEYS).toEqual({
-      dictionary: '%enhancedResources_toolbar_tab_dictionary%',
-      encyclopedia: '%enhancedResources_toolbar_tab_encyclopedia%',
-      media: '%enhancedResources_toolbar_tab_media%',
-      maps: '%enhancedResources_toolbar_tab_maps%',
-    });
   });
 });

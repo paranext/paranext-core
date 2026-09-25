@@ -82,8 +82,8 @@ type ToolbarLocalizedStrings = {
 export type ResearchTab = 'dictionary' | 'encyclopedia' | 'media' | 'maps';
 
 /**
- * The string key naming each research tab, as the tab bar shows it. The view also names the entries
- * zoom area after the tab on screen with these, so the zoom indicator reads `Dictionary · 120 %`.
+ * The string key naming each research tab: the tab bar's captions, and the name the view gives the
+ * entries zoom area after the tab on screen, so the zoom indicator reads `Dictionary · 120 %`.
  */
 export const RESEARCH_TAB_LABEL_KEYS: Readonly<Record<ResearchTab, ToolbarLocalizedStringKey>> =
   Object.freeze({
@@ -530,10 +530,10 @@ export function EnhancedResourceTabBar({
   const scopeSenseLabel = String(
     getLocalizedString('%enhancedResources_toolbar_scope_currentSense%'),
   );
-  const tabDictLabel = String(getLocalizedString('%enhancedResources_toolbar_tab_dictionary%'));
-  const tabEncycLabel = String(getLocalizedString('%enhancedResources_toolbar_tab_encyclopedia%'));
-  const tabMediaLabel = String(getLocalizedString('%enhancedResources_toolbar_tab_media%'));
-  const tabMapsLabel = String(getLocalizedString('%enhancedResources_toolbar_tab_maps%'));
+  const tabDictLabel = String(getLocalizedString(RESEARCH_TAB_LABEL_KEYS.dictionary));
+  const tabEncycLabel = String(getLocalizedString(RESEARCH_TAB_LABEL_KEYS.encyclopedia));
+  const tabMediaLabel = String(getLocalizedString(RESEARCH_TAB_LABEL_KEYS.media));
+  const tabMapsLabel = String(getLocalizedString(RESEARCH_TAB_LABEL_KEYS.maps));
 
   const handleTabChange = (value: string) => {
     if (
