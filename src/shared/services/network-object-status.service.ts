@@ -8,8 +8,12 @@ import {
   networkObjectService,
   onDidCreateNetworkObject,
 } from '@shared/services/network-object.service';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
-import { AsyncVariable, getErrorMessage, isSubset } from 'platform-bible-utils';
+import {
+  AsyncVariable,
+  createCachedInitializer,
+  getErrorMessage,
+  isSubset,
+} from 'platform-bible-utils';
 import type { Unsubscriber } from 'platform-bible-utils';
 
 let networkObject: NetworkObjectStatusRemoteServiceType;
