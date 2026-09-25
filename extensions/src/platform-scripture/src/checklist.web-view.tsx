@@ -74,11 +74,10 @@ const DEFAULT_WEBVIEW_MENU = {
 const MARKERS_CHECKLIST_WEB_VIEW_TYPE = 'platformScripture.markersChecklist';
 
 /**
- * Defaults for the array-valued `useWebViewState` slots. They must keep one identity across
- * renders: `useWebViewState` hands a slot whose key is not stored the default from the caller's
- * latest render every time anything writes the web view's state (a content zoom step does, on every
- * step), and a fresh `[]` there would read as a changed comparative-texts selection and reload the
- * checklist.
+ * Defaults for the array-valued `useWebViewState` slots, kept at one identity across renders
+ * because the values sit in effect dependency lists, as `useWebViewState`'s documentation in
+ * `web-view.model.ts` advises: a fresh `[]` reaching one of those lists would read as a changed
+ * comparative-texts selection and reload the checklist.
  */
 const NO_COMPARATIVE_TEXTS: ChecklistComparativeTextRef[] = [];
 const NO_SELECTED_BOOK_IDS: string[] = [];
