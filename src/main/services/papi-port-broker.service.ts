@@ -139,8 +139,8 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
 
   webContents.ipc.on(PAPI_PORT_REQUEST_CHANNEL, (event) => {
     const frame = event.senderFrame;
-    // Only the page itself may ask. Web views are same-origin iframes and could reach the bridge,
-    // but they are not the main frame.
+    // Refuses other frames, but a same-origin web view can drive the page frame's bridge, so what
+    // stops a second channel is the one-open-port-per-window rule below
     if (!frame || frame !== webContents.mainFrame) {
       logger.warn(
         `Ignored a PAPI port request for window ${windowId} from a frame that is not its page`,

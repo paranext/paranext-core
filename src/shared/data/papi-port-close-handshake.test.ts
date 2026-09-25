@@ -1,10 +1,19 @@
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { createPortCloseHandshake } from '@shared/data/papi-port-close-handshake';
 import {
   createPapiPortCloseFrame,
   PAPI_PORT_CLOSE_FRAME_TYPE,
   PORT_CLOSED_WITHOUT_FRAME_REASON,
 } from '@shared/data/papi-port.model';
+
+const { mockLoggerWarn } = vi.hoisted(() => ({ mockLoggerWarn: vi.fn() }));
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { warn: mockLoggerWarn, info: vi.fn(), debug: vi.fn(), error: vi.fn() },
+}));
+
+beforeEach(() => {
+  mockLoggerWarn.mockClear();
+});
 
 function setUp() {
   const target = { name: 'socket' };
@@ -75,6 +84,8 @@ describe('createPortCloseHandshake', () => {
       expect.objectContaining({ code: 1006, reason: 'renderer process gone' }),
     );
     expect(hooks.closePort).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('port is gone'));
   });
 
   test('close is a no-op once closed', () => {
