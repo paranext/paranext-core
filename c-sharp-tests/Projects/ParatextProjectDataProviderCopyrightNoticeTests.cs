@@ -22,7 +22,6 @@ namespace TestParanextDataProvider.Projects
 
         /// <summary>An installed resource, as Biblica's texts are</summary>
         private ScrText _resource = null!;
-        private DummyParatextProjectDataProvider _resourceProvider = null!;
 
         [SetUp]
         public override async Task TestSetupAsync()
@@ -33,7 +32,6 @@ namespace TestParanextDataProvider.Projects
             _projectProvider = await RegisterProviderAsync("copyrightNoticeProject", _project);
 
             _resource = new ResourceDummyScrText();
-            _resourceProvider = await RegisterProviderAsync("copyrightNoticeResource", _resource);
         }
 
         private async Task<DummyParatextProjectDataProvider> RegisterProviderAsync(
@@ -61,7 +59,10 @@ namespace TestParanextDataProvider.Projects
 
         private CopyrightNotice GetProjectNotice() => GetNotice(_projectProvider);
 
-        private CopyrightNotice GetResourceNotice() => GetNotice(_resourceProvider);
+        // The provider refuses to open a resource unless the machine has a valid Paratext
+        // registration, which test machines need not have, so resources ask CopyrightNotice
+        // directly. The project tests cover the provider routing the setting to it.
+        private CopyrightNotice GetResourceNotice() => CopyrightNotice.FromScrText(_resource);
 
         [Test]
         public void GetProjectSetting_NoCopyright_ReturnsNone()
