@@ -321,13 +321,15 @@ test.describe('Scripture Text Grid — per-resource content zoom', () => {
 
     await test.step('Zoom in from B’s right-click menu raises B only', async () => {
       const menu = await openCellContextMenu(stg.frame, cellB);
+      // Each item's text is its label plus its content-zoom chord as a hint (e.g. "Ctrl++"), not
+      // the bare label — match the label as a prefix.
       await expect(menu.getByRole('menuitem')).toHaveText([
         /^Copy$/,
-        /^Zoom in$/,
-        /^Zoom out$/,
-        /^Reset zoom$/,
+        /^Zoom in/,
+        /^Zoom out/,
+        /^Reset zoom/,
       ]);
-      await menu.getByRole('menuitem', { name: 'Zoom in', exact: true }).click();
+      await menu.getByRole('menuitem', { name: /^Zoom in/ }).click();
       await expect
         .poll(() => readFactor(frame, areaB))
         .toBeCloseTo(roundLevel(settingsDefault + 0.1), 5);
@@ -337,13 +339,14 @@ test.describe('Scripture Text Grid — per-resource content zoom', () => {
     await test.step('at 300 % the menu’s Zoom in is disabled, Reset zoom is not', async () => {
       await stepAreaUpTo(mainPage, frame, webViewId, areaB, 3);
       const menu = await openCellContextMenu(stg.frame, cellB);
-      await expect(menu.getByRole('menuitem', { name: 'Zoom in', exact: true })).toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^Zoom in/ })).toHaveAttribute(
         'aria-disabled',
         'true',
       );
-      await expect(
-        menu.getByRole('menuitem', { name: 'Reset zoom', exact: true }),
-      ).not.toHaveAttribute('aria-disabled', 'true');
+      await expect(menu.getByRole('menuitem', { name: /^Reset zoom/ })).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
       await mainPage.keyboard.press('Escape');
     });
 
@@ -352,12 +355,8 @@ test.describe('Scripture Text Grid — per-resource content zoom', () => {
       const columnB = stg.cellDraggable.nth(1);
       expect(await readResourceZoomArea(columnB)).toBe(areaB);
       const menu = await openChapterViewZoomOptions(stg.frame, columnB, labelB);
-      await expect(menu.getByRole('menuitem')).toHaveText([
-        /^Zoom in$/,
-        /^Zoom out$/,
-        /^Reset zoom$/,
-      ]);
-      await menu.getByRole('menuitem', { name: 'Reset zoom', exact: true }).click();
+      await expect(menu.getByRole('menuitem')).toHaveText([/^Zoom in/, /^Zoom out/, /^Reset zoom/]);
+      await menu.getByRole('menuitem', { name: /^Reset zoom/ }).click();
       await expect.poll(() => readFactor(frame, areaB)).toBe(settingsDefault);
     });
   });

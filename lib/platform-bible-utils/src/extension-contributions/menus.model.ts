@@ -98,7 +98,8 @@ export type MenuItemContainingCommand = MenuItemBase & {
   /**
    * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
    * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
-   * it as a key binding.
+   * it as a key binding. Renderers split it into one keycap per key rather than showing it as one
+   * string.
    *
    * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
    * the unlocalized main menu never has it. Key names are not localized, and only the first

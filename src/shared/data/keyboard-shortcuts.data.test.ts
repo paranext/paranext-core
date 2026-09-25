@@ -29,6 +29,27 @@ const EXPECTED_MENU_HINTS: Record<
     hints: { darwin: '⌥⌘M', win32: 'Ctrl+Shift+N', linux: 'Ctrl+Shift+N' },
     menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
   },
+  'platform.webViewContentZoomIn': {
+    hints: { darwin: '⌘=', win32: 'Ctrl++', linux: 'Ctrl++' },
+    menus: [
+      'platform: defaultWebViewTabMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
+  },
+  'platform.webViewContentZoomOut': {
+    hints: { darwin: '⌘-', win32: 'Ctrl+-', linux: 'Ctrl+-' },
+    menus: [
+      'platform: defaultWebViewTabMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
+  },
+  'platform.webViewContentZoomReset': {
+    hints: { darwin: '⌘0', win32: 'Ctrl+0', linux: 'Ctrl+0' },
+    menus: [
+      'platform: defaultWebViewTabMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
+  },
 };
 
 const entriesWithCommand = rootKeyboardShortcuts.filter((entry) => entry.command);
@@ -108,17 +129,24 @@ describe('keyboard shortcuts catalog', () => {
     );
   });
 
-  it('no command shares a chord with a main-process entry', () => {
+  it('no command shares a chord with a DIFFERENT main-process entry', () => {
     // TODO(PT-4143): revisit once main-process chords stop claiming keys regardless of focus.
     // Misses different spellings of the same keys (`Ctrl+Down` for `Ctrl+↓`) and main-process
     // handlers that match more loosely than their entry (e.g. F12 with any modifier).
-    const mainProcessChords = new Set(
-      rootKeyboardShortcuts.filter(isHandledInMainProcess).flatMap(getOsTaggedChords),
-    );
-    expect(mainProcessChords.size).toBeGreaterThan(0);
-    entriesWithCommand.forEach((entry) =>
-      getOsTaggedChords(entry).forEach((chord) => expect(mainProcessChords).not.toContain(chord)),
-    );
+    const mainProcessEntries = rootKeyboardShortcuts.filter(isHandledInMainProcess);
+    expect(mainProcessEntries.length).toBeGreaterThan(0);
+    entriesWithCommand.forEach((entry) => {
+      // A main-process handler that runs THIS entry's own command cannot make its hint lie — the
+      // menu and the handler agree by construction (e.g. the macOS View menu's content-zoom
+      // accelerators) — so an entry's own main-process location is excluded from the set it is
+      // checked against; only a chord shared with a DIFFERENT main-process entry is a collision.
+      const otherMainProcessChords = new Set(
+        mainProcessEntries.filter((other) => other !== entry).flatMap(getOsTaggedChords),
+      );
+      getOsTaggedChords(entry).forEach((chord) =>
+        expect(otherMainProcessChords).not.toContain(chord),
+      );
+    });
   });
 });
 
