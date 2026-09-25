@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import type React from 'react';
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   BOOK_NOT_AVAILABLE_KEY,
@@ -723,7 +723,7 @@ describe('ResourceCellView reorder grip', () => {
     expect(grip).toHaveAttribute('data-reorder-handle-id', 'gen');
     // A real focusable control (button), not an aria-hidden decoration.
     expect(grip).not.toHaveAttribute('aria-hidden');
-    grip.focus();
+    act(() => grip.focus());
     expect(grip).toHaveFocus();
 
     fireEvent.keyDown(grip, { key: 'ArrowRight' });

@@ -321,6 +321,27 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   of the implementing branch, which surfaced and fixed a startup-path regression (analytics
   initialization briefly gated extension-host activation) before merge.
 
+## adr-analytics-posthog-transport: Where common properties and vendor keys live in the analytics seam
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** PT-4729 (epic PT-1797) stood up a minimal PostHog pipeline for Sprint 91 on top of
+  the vendor choice made in PT-4340 and the account set up in PT-4356; see those tickets for the
+  scope negotiation and rationale.
+- **Decision:** Common properties are added by `analytics.service.ts` before routing, not inside
+  `PostHogAnalyticsProvider`, so they survive a future vendor swap — see the doc comment on
+  `getCommonProperties()` for what's included and why.
+- **Alternatives:** `posthog-js` in the renderer for autocaptured properties — rejected: autocapture
+  is usage tracking the ticket forbids, the browser SDK reports Chromium's version not the app's,
+  and it would bypass the abstraction. Properties at the `app_launch` call site — rejected: every
+  future event would have to repeat them. Properties inside the provider — rejected: lost on a
+  vendor swap. Persisted installation id — deferred to PT-4367 by product decision.
+- **Consequences:** Hard-coding the Test key in `analytics.config.ts` is an accepted, temporary
+  exception to the no-secrets rule (write-only client key; the Production key must never be
+  committed) — see the comment there for the rationale rather than restating it here.
+- **Source:** PT-4729 (epic PT-1797); design
+  `PRDs/analytics/2026-09-23-pt-4729-posthog-provider-design.md`.
+
 ## adr-app-global-shortcuts-in-main: App-global keyboard shortcuts go through the main-process `before-input-event` handler
 
 - **Formerly:** ADR-0002
@@ -806,7 +827,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-column-3-panels-are-told-their-project: A Column 3 panel is told its project by the switch; it never infers one from the scroll group
 
 - **Date:** 2026-08-27
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-18 — the Text Collection's follow gate is now decided by
+  project kind (`platform.isPublished`), not editability, and the editor's gate on Find's re-point
+  is removed, so Find follows every editor-column switch.
 - **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
   Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
   project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
@@ -831,7 +854,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `finalizeProjectSwitch`. The mode switch needs its own call because `buildSimpleLayoutForProject`
   stamps `projectId` only onto the static layout's tabs, while the Text Collection is merged in
   afterwards from the default-layout supplement, which carries none — so it is the one panel that
-  arrives unbound from a mode switch. Its *shape* — `getAllOpenWebViewDefinitions()` → `.find(webViewType)` →
+  arrives unbound from a mode switch. *(Amended 2026-09-18: no longer so. `runProjectBoundSimpleSwitch`
+  in `web-view.service-shard.ts` re-bakes `projectId` into the merged supplement tabs with
+  `applyProjectIdToTabs` before `finalizeProjectSwitch` runs, so the Text Collection arrives bound
+  and the finalize re-point returns at its skip guard. The call is kept as a safety net for a caller
+  that skips the bake. The one path by which a published resource can still reach the Text
+  Collection is an unbound grid seeding itself from `ActiveEditorProjectId` in
+  `resolveTextCollectionProjectId`, which does not classify the project.)* Its *shape* — `getAllOpenWebViewDefinitions()` → `.find(webViewType)` →
   `reloadWebView` — is the one `openResourceText` already uses (`main.ts`), not something novel. What
   it takes from **Find** is the *policy*: never open a panel that is not already there, skip the
   reload when the panel already shows the project, and never bring the tab to front. Find's own
@@ -863,7 +892,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   caller.
 - **Consequences:** The scroll group's source project is now documented at its call site as *not* an
   active-editor signal, which is the trap that produced this bug; any future panel that reaches for
-  it should be re-pointed explicitly instead. `adr-find-follows-editor-to-read-only` records Find as "the only
+  it should be re-pointed explicitly instead. *(Amended 2026-09-18: that call site is gone — PT-4238
+  (#2736) replaced the grid's scroll-group fallback — so no Column 3 panel reads the scroll group's
+  source project for its identity. The field tags which project's versification frame a reference
+  is in; a panel that needs a project should be told it explicitly.)*
+  `adr-find-follows-editor-to-read-only` records Find as "the only
   Column 3 panel that command re-points without also being able to open it"; that stays true, since
   the Text Collection is re-pointed by a direct call rather than a command. What changed is the
   narrower fact that Find is no longer the only panel re-pointed *without being openable*. Reloading the grid drops its in-memory React state (for example an
@@ -884,7 +917,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   needs no separate treatment. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
   rather than giving it a signal to infer from. Five limits of this decision are recorded
-  deliberately rather than left to be re-derived:
+  deliberately rather than left to be re-derived *(amended 2026-09-18: two of the five are
+  superseded and two bullets are added, each marked below)*:
   - **Read-only resources are not followed.** `openOrUpdateRelatedPanels` takes
     `isProjectEditable` and skips the Text Collection re-point when it is false, so a published
     resource opened in the editor column does not re-point the grid at itself — a project with no
@@ -892,6 +926,46 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     Comments in Column 3, plus Model Text in Column 1) follows the editor either way. This upholds
     `adr-find-follows-editor-to-read-only`'s Context rather than changing it; the gate lives one
     level in from the call site that entry describes, which is the only detail that has shifted.
+    *(Superseded by the 2026-09-18 amendment: the gate now reads `platform.isPublished`, not
+    `isEditable`, so a read-only but unpublished project is followed. See the next bullet.)*
+  - **Added 2026-09-18 — published resources are not followed; read-only projects are.**
+    `updateRelatedTextCollectionPanel` reads `platform.isPublished` for the incoming project and
+    skips the re-point only when it is `true`: a published resource has no collection of its own, so
+    following it would cost a reload, and the in-memory state it drops, for an empty panel. The rule
+    lives in that function rather than in a caller, so both switch paths apply it. A translation
+    project with editing switched off is followed like any other. `platform.isEditable` is the wrong discriminator
+    for this: it is the project-wide `Editable` flag (`GetIsEditable` in
+    `c-sharp/Projects/ScrTextExtensions.cs`, forced false for resources), not a per-user permission
+    — that is `canUserEditScripture` — so gating on it stranded the Text Collection and Find on the
+    outgoing project whenever an `Editable=F` translation project was opened. A failed `isPublished`
+    read counts as not published — the setting's default, and what `resolveProjectIsPublished` in
+    `web-view.service-shard.ts` does — so the grid follows. The class newly followed is a plain
+    folder project carrying `<Editable>F</Editable>`, such as the bundled WEB sample; locally
+    installed `.p8z` resources load as resource projects (`GetAllResourceScrTexts` in
+    `LocalParatextProjects.cs` filters on `IsResourceProject`, which is exactly what
+    `platform.isPublished` reports), so they are published and stay skipped. Find follows every
+    editor-column switch, resources included, and withholds Replace itself per
+    `adr-find-follows-editor-to-read-only`. Everything else
+    `openOrUpdateRelatedPanels` drives (Bible Texts, Commentaries and Comments in Column 3, plus
+    Model Text in Column 1) follows the editor either way. A published resource cannot normally
+    reach the Power→Simple path at all, because `getMostRecentUsableProjectId` walks past published
+    candidates and `cacheLastOpenedSimpleProject` declines to cache them. The outgoing Send/Receive
+    on an editor-column switch follows the same rule: `syncOnProjectSwitch` skips it only for a
+    published resource, since an `Editable=F` project can still hold new comments. The window-close
+    and shutdown syncs do not draw that line yet: `getWritableEditorProjectIds` drops every editor
+    whose saved `isReadOnly` is set, and an editor opened with a project ID (Home, New Tab, the
+    title-bar picker) takes that flag from `platform.isEditable`, so an `Editable=F` project syncs
+    on a switch but not on a window close or a quit. PT-4786 tracks moving those syncs to the
+    published-resource rule. Following costs a reload the old gate avoided: a round
+    trip through a resource reloads Find twice, clearing its results, and an `Editable=F` project now
+    reloads the grid. How an unbound grid gets its first project, and what following costs
+    in Power mode, is recorded in `adr-active-editor-project-is-a-window-data-type`.
+  - **Added 2026-09-18 — what a followed `Editable=F` project's grid offers is unchecked.** Whether
+    the Text Collection exposes controls that write to such a project is an open question, tracked on
+    PT-4724, which should first settle where to run that check: `default-layout-supplement.json` lists
+    the Scripture Text Grid behind `platformScriptureEditor.enableScriptureTextGrid` (contributed
+    default `true`), while `default-layout-supplement.model.ts` and `filterEnabledSupplementEntries`
+    describe the supplement as empty in vanilla builds.
   - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
     window, so `.find()` returns whichever Text Collection comes first, not the one in the window
     that switched. If that panel already shows the target project the skip guard returns early and a
@@ -901,7 +975,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **A failed re-point no longer self-corrects.** `projectId` is not in
     `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any re-point succeeds the panel's saved
     definition carries a project and `explicitProjectId` wins from then on — the scroll-group
-    fallback that used to fix a stale panel on the next navigation stops running. Because of that,
+    fallback that used to fix a stale panel on the next navigation stops running. *(Amended
+    2026-09-18: PT-4238 (#2736) has since removed that fallback altogether, so nothing but another
+    re-point moves the panel.)* Because of that,
     `updateRelatedTextCollectionPanel` checks `reloadWebView`'s return (it resolves `undefined`
     rather than throwing when the definition has gone or the provider declines) and logs failures at
     **error**, naming the project left on screen. It still does not recover; it just stops failing
@@ -916,13 +992,26 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     web views there — in Simple mode it calls `applyForProject` → `focusSharedLayoutDefaultTab`,
     which issues an `existingId: '?'` probe — so this adds a second enumeration and a reload to a
     path that had one probe. If both run for one switch the case-normalized skip guard makes the
-    second a no-op.
+    second a no-op. *(Amended 2026-09-18: the `finalizeProjectSwitch` path normally adds only the
+    enumeration. The Text Collection now arrives already bound from the mode switch (see the
+    Decision), so the re-point returns at its skip guard without a reload, and it reads
+    `platform.isPublished` only when a reload is still in question.)*
   - **The stale-held-setting path is narrowed, not closed.** Whenever the grid is still unbound it
     continues to change `projectId` in place through its latch effect, which is exactly the usage
     `useBufferedLayoutSetting` warns about: `shouldApply` is already `false` after the first apply,
     so the held admin list can stay on the outgoing project while the per-user list and overlay
-    resubscribe to the incoming one.
-- **Source:** PT-4423, which fixes PT-4238.
+    resubscribe to the incoming one. *(Superseded 2026-09-18: the path is now closed for the grid;
+    see the note after this list.)*
+
+  **Amended 2026-09-18 — the stale-held-setting path is closed for the grid.** The grid never
+  changes `projectId` in place, in either interface mode: an unbound grid is seeded once and keeps
+  its project, and only the switch's reload moves it. The Power-mode consequence — a grid there
+  cannot be re-pointed — and the alternatives rejected for it are recorded in
+  `adr-active-editor-project-is-a-window-data-type`.
+- **Source:** PT-4423, which fixes PT-4238. *(Corrected 2026-09-18: PT-4423 hardens the Simple-mode
+  re-point; PT-4238 (PR #2736) replaced the unbound grid's scroll-group fallback — see
+  `adr-active-editor-project-is-a-window-data-type`.)* Amended by PT-4716: the `isPublished` follow
+  rule.
 
 ## adr-comment-drafts-follow-filters: An uncommitted comment draft is filtered like any other thread, unlike Paratext 9
 
@@ -2065,7 +2154,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0020
 - **Date:** 2026-08-17
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-18 — the `isEditable` gate this entry's Context describes was
+  removed wholesale by #2425 and reintroduced by PT-4059 as a Text-Collection-only parameter, which
+  PT-4716 replaced with a `platform.isPublished` check while dropping the editor's gate on Find's
+  re-point; Find now follows every editor-column switch, via `updateRelatedFindPanel` in `open()`
+  rather than from `openOrUpdateRelatedPanels`. Code assuming all Column 3 panels share one project
+  must still account for Find — Ctrl+F inside Bible Texts, Commentaries, Model Text or the Text
+  Collection rebinds it to the project that panel shows, or, in the Text Collection, the resource
+  under the caret (`useOpenFindShortcut`, `resolveFindInvocation`) — and now also for the Text
+  Collection, which stays put for a published resource. The Decision itself stands.
 - **Context:** Simple mode's Column 3 panels follow the *active translation project*: the editor gates
   `openOrUpdateRelatedPanels` on `projectForWebView.isEditable` precisely so that opening a published
   resource in the editor column does not switch the related panels over to the resource. Making Find a
@@ -2109,7 +2206,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Formerly:** ADR-0025
 - **Date:** 2026-08-24
 - **Status:** Accepted, amended 2026-09-14 — the deferral of the scope gate recorded in the Decision
-  below no longer holds, and PT-4415 is closed. Read the Decision together with the amendment.
+  below no longer holds, and PT-4415 is closed. Amended again 2026-09-18 — the narrowed selection is
+  no longer written back to the saved one. Read the Decision together with both amendments.
 - **Context:** Find reports a result's location by walking the `\c` and `\v` markers of the book it
   matched in. Extra material (GLO, FRT, INT, XXA, … — `Canon.nonCanonicalIds`) is organized by
   paragraph markers rather than verses, so every match in one resolves to the same useless reference
@@ -2143,7 +2241,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `availableBookIds: undefined` while the setting is unread OR its read errored, and only a genuine
   empty list prunes the user's persisted selection. Treating a delivered `PlatformError` as an
   answer would have wiped that selection permanently — `useProjectSetting` reports an error as
-  loaded, so the error branch has to be recognized on its own.
+  loaded, so the error branch has to be recognized on its own. *(Superseded in part by the
+  2026-09-18 amendment: nothing prunes the persisted selection any more. The unknown-vs-empty
+  distinction still decides what the narrowed list shows and searches.)*
 - **Source:** PT-3299, review of #2708.
 - **Amended 2026-09-14 (PT-3299 reopened; review of #2792):** The deferred gate landed, and covers
   every scope Find offers rather than only the reference-derived two.
@@ -2167,7 +2267,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   "filter `findScope`" alternative was adopted. A selection persisted with `useWebViewState`
   outlives the picker that produced it and is pruned against the project's book list only once that
   list resolves, so a restored tab can still name a glossary when the restore-path auto-search
-  fires. The gate therefore asks whether the selection still contains a searchable book (it does not
+  fires. *(Since the 2026-09-18 amendment the selection is narrowed, not pruned; the window is the
+  same.)* The gate therefore asks whether the selection still contains a searchable book (it does not
   modify the selection), and `findScope` drops extra material from the books it actually searches.
   Neither waits on `availableBookIds`, which is what closes the window. Two filters in two layers is
   exactly what the alternative was rejected for; it is accepted here because the two answer
@@ -2194,6 +2295,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   [Component-Builder-Patterns.md](Component-Builder-Patterns.md#explaining-why-a-control-is-disabled).
 
   PT-4414 still covers removing every half of the exclusion together.
+- **Amended 2026-09-18 (PT-4716):** The saved book selection is narrowed for display and search
+  only, never written back. `useFindBookScope`
+  (`extensions/src/platform-scripture/src/find/use-find-book-scope.hook.ts`) returns the saved
+  selection narrowed to the books the current project has; the picker shows that list and the
+  search runs over it, but the saved selection keeps every book the user picked. Persisting the
+  prune was the original decision. It was replaced because Find now follows the Simple-mode editor
+  across projects (`adr-find-follows-editor-to-read-only`), so a visit to a project lacking the
+  saved books, such as a New Testament resource, would otherwise empty the saved scope for good.
+  One deliberate exception: a picker edit made while books are hidden this way commits the visible
+  set and drops the hidden books, so that Select all and Clear all act on the whole scope.
 
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 
@@ -6221,6 +6332,105 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   and a caveat about what a snapshot omits has to be pinned to that snapshot, not recomputed from
   data the snapshot is no longer following.
 - **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13); PT-4557 review round 4 (A-1 to A-4).
+
+## adr-shared-components-take-localized-strings: Shared components take localized strings; they never compose them
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `MultiSelectComboBox` built its dropdown search placeholder in code as
+  `` `Search ${placeholder.toLowerCase()}...` ``. That is English sentence-building — it assumes the
+  noun can be lowercased, that the verb precedes it, and that a placeholder is a noun at all — and
+  `toLowerCase()` is wrong in any locale with different casing rules. Its empty-list message was an
+  optional prop that several callers never passed, so those dropdowns showed the component's
+  English default.
+- **Decision:** A component in `platform-bible-react` never composes user-facing text from other
+  user-facing text. Each string is a separate prop the caller supplies already localized
+  (`searchPlaceholder`, `commandEmptyMessage`), which makes the localization contract part of the
+  component's API: adding one is a breaking-ish change every call site must answer, and the answer
+  is a key in that surface's own localized-strings file.
+- **Alternatives:** Keep composing but localize the template — rejected: a single template cannot
+  hold for every language, and the component cannot know the grammatical role of the caller's noun.
+  Have the component resolve keys itself — rejected: components in this library take strings, not
+  keys, so extensions and the host stay in charge of their own localization and fallback chains.
+- **Consequences:** Adding a user-facing string to a shared component means touching every caller,
+  including the ones in extensions; the compiler does not enforce it for optional props, so the
+  review question "did every call site get a real string?" is the check. This is what pulled two
+  extensions into PT-4430's diff, and it is the intended cost. The existing English defaults on
+  `MultiSelectComboBox` (`commandEmptyMessage`, `selectAllText`, `clearAllText`) were kept on
+  purpose: they are fallbacks, not composed text, and removing them would break callers outside the
+  repo. A caller should still never rely on one.
+- **Source:** PT-4430 (from bug PT-4135); PR #2746 review.
+
+## adr-shared-list-scope-predicate: One predicate decides which resources are "in play" for a filtered list
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** The resource picker and Get Resources both render a language filter over a resource
+  catalogue and both narrow the catalogue by resource type first. Each had its own notion of the
+  narrowed set: the picker filtered rows inline while the language options were built from the whole
+  catalogue, and Get Resources built its options from the unscoped list while its grid filtered by
+  the type multi-select. Either way the dropdown offered a language whose only entries were of a
+  type the grid was hiding, and selecting it landed on "No results" — the dead end PT-4135 reports.
+- **Decision:** The scope is one exported predicate (`matchesResourceType`, exported from
+  `platform-bible-react/experimental`), and each surface derives its rows, its filter options and its
+  result count from a single type-scoped list built with it. An empty array means "nothing is
+  filtering", so a multi-select with no selection reads naturally. A selected language that the
+  options no longer offer is held (the type filter is a deliberate exception; see Consequences): it
+  is hidden from the filter and ignored by the rows, so narrowing
+  the type filter cannot strand a persisted language selection on an empty grid, but it stays in
+  the saved selection — every change is written back as held values plus the new visible ones — and
+  applies again once the options offer it. `partitionFilterSelection` (same export) is the one
+  definition of that split.
+- **Alternatives:** Leave each surface to scope its own list — rejected: that is the bug, and the
+  two definitions drifted apart within one component. Reset the language selection when the type
+  filter changes — rejected: in Get Resources that selection is persisted web view state seeded from
+  installed resources, so a reset destroys a user's choice on a transient type change. Drop a
+  hidden value the next time the selection changes — rejected: it is the same loss by a different
+  route, and it makes the result depend on the path the user took: widening the type filter first
+  brings the language back, while toggling any other language first loses it. Pass the raw
+  `string[]` selection into the predicate — rejected: it would widen the signature to `string`, and
+  narrowing the persisted state against the canonical type list also drops values retired from it.
+- **Consequences:** A new surface with a resource list gets the scoping by using the predicate and
+  deriving from one list; the invariant is stated in the predicate's own TSDoc and testable at the
+  helper. Any future filter dimension on these lists must join the same scoped list rather than
+  filtering the raw catalogue, or the dead end returns by another route. Holding hidden values
+  means a user who widens the type filter can see the grid narrow to a language they picked earlier
+  and cannot currently see in the filter; that is the intended trade, since it was their choice. The
+  explicit "Clear filters" action in the resource picker clears held values too. The type filter
+  does not hold, and that asymmetry is deliberate rather than an inconsistency between the two
+  filters: a hidden language comes back the moment the type filter widens, but a type retired from
+  the build can never be offered again, so it is invalid rather than hidden. Get Resources narrows
+  the persisted types against its canonical type list, and an unrecognized type is gone from the
+  saved state after the next toggle.
+
+## adr-shared-option-list-affordances-opt-in: New visual affordances on shared option-list components ship opt-in
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** The resource picker's language dropdown clipped ~130 languages flush at a row
+  boundary, so a full list looked complete. The scrollbar alone was measured as too weak a signal —
+  with a few hundred options the thumb is ~7% of the track, and `command.tsx` already carries a
+  `// CUSTOM` note recording that `tw:no-scrollbar` was removed so the scrollbar is visible for
+  exactly this case. The fade cue that fixes it lives in `MultiSelectComboBox`, which every `Filter`
+  renders and which the Checks side panel reaches for directly — so a fix aimed at one dropdown
+  changed the look of every dropdown, with no entry in the design guidelines to point at.
+- **Decision:** A shared option-list component may host a new visual affordance, but it ships behind
+  an opt-in prop that defaults to off (`showScrollCue` on `MultiSelectComboBox`/`Filter`,
+  `lib/platform-bible-react/src/components/advanced/multi-select-combo-box.component.tsx`). Only the
+  surfaces whose ticket motivated it turn it on — here the two language filters PT-4135 names, not
+  the five-entry type filter beside one of them. Flipping the default to on is a separate change
+  that needs design sign-off.
+- **Alternatives:** Ship it app-wide by default — rejected: it makes an unreviewed visual change to
+  every dropdown, and the cue's gradient is painted in the popover's own background colour
+  (`tw:from-popover`), so a differently-themed popover would show it as a mismatched band. An
+  opt-out prop with the affordance on by default — rejected for the same reason; it still makes the
+  app-wide change the default. Keeping the cue out of the shared component and drawing it in the
+  dialog — rejected: the effect must run when Radix mounts the popover content, which only a
+  component inside the portal sees.
+- **Consequences:** Long lists elsewhere keep the weak scrollbar signal until someone opts in, which
+  is the intended trade: the blast radius of a component-library visual change stays with the team
+  that asked for it. Revisit when design rules on the fade as a general affordance; the change then
+  is a default flip, not a rewrite.
 
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 

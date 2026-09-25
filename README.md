@@ -390,6 +390,34 @@ PT_ANALYTICS_TEST_OVERRIDE=true npm start
 
 The value must be exactly `true`; any other value (including other truthy-looking strings) is ignored and normal resolution applies.
 
+### Analytics transport (PostHog)
+
+Analytics events are transmitted to PostHog (EU region) only in a **packaged production build**. Development builds and automated E2E runs log events to the console instead, so they make no calls to PostHog. To watch your own events reach PostHog while developing, opt in explicitly:
+
+```bash
+PT_ANALYTICS_POSTHOG=true npm start
+```
+
+The value must be exactly `true`. Test and Production are meant to be separate PostHog projects, but until the Production project has its own key both analytics environments send to the **Test** project, told apart by the `analytics_environment` property; the project keys live only in `src/extension-host/services/analytics.config.ts`. Every event carries `app_version`, `os_platform`, `os_release`, `os_arch` and `analytics_environment`, is flagged anonymous (no person profile), and has GeoIP disabled. No usage or behavioural data is sent. If you have opted in, you can [confirm that analytics events are reaching PostHog](https://eu.posthog.com/shared/K19Q0gTOWN11W_2wJPQJ-OzrCCqTag).
+
+A failed send (offline, blocked by a proxy, or an HTTP error from PostHog) is logged once at warn level, naming the event but none of its properties, and the event is dropped. `posthog-node` reports these failures through an `'error'` event rather than a rejected promise, and retries a request itself before giving up, so the warn line can appear up to about 50 seconds after launch. The debug-level `sent 'app_launch' to PostHog` line only means the SDK reported no error; the PostHog dashboard is the only proof that an event was delivered.
+
+#### Extending analytics
+
+The pipeline is built so later work plugs into one named place each, all under `src/extension-host/services/`:
+
+| To add or change                                                                | Edit                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A property on **every** event (session length, screen size, other machine info) | `getCommonProperties` in `analytics-enrichment.ts`. Vendor-neutral; a caller-supplied property of the same name wins. Never add anything that can identify a person, machine, project, language or location.                     |
+| A new **event**                                                                 | Call `trackEvent(name, properties)` from `analytics.service.ts`. Synchronous, never throws, safe before `initialize()` resolves. Only the extension host can call it today; main and renderer need a cross-process facade first. |
+| The identity behind `distinctId`                                                | `getDistinctId` in `analytics-identity.ts` (persisted installation id or consented user id). Keep `$process_person_profile: false` unless a consent decision says otherwise.                                                     |
+| Project keys or the enabled rule                                                | `analytics.config.ts` only. The Production key must never be committed; it arrives through a build-time injection.                                                                                                               |
+| A consent gate                                                                  | The top of `initialize()` in `analytics.service.ts`, before environment resolution.                                                                                                                                              |
+| Retry or an offline queue                                                       | `flushQueue` in `analytics.service.ts`: a provider rejection is the seam, and the three-bucket queue shape is meant to be persisted as is.                                                                                       |
+| Another vendor                                                                  | A new class implementing `AnalyticsProvider` (`src/shared/models/analytics.model.ts`) beside `analytics-providers/posthog-analytics.provider.ts`; swap it in from `analytics.service.ts`. Common properties survive the swap.    |
+
+Design rationale and the alternatives that were rejected are in `.context/standards/Architecture-Decisions.md` under `adr-analytics-in-extension-host` and `adr-analytics-posthog-transport`.
+
 ## GitHub Pages
 
 **[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**

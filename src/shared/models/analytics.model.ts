@@ -38,7 +38,17 @@ export interface AnalyticsProvider {
    * @throws Implementations may reject. Callers are expected to catch both a rejection and a
    *   synchronous throw and log-and-drop the event on failure — see `flushQueue` in
    *   `src/extension-host/services/analytics.service.ts` — so an implementation does not need to
-   *   guarantee it never throws.
+   *   guarantee it never throws. The caller logs a rejection only at debug level, so an
+   *   implementation that wants a failure seen logs its own warning before rejecting.
    */
   send(event: AnalyticsEvent): Promise<void>;
+  /**
+   * Flushes anything not yet transmitted and releases resources. Optional: a provider with nothing
+   * to flush (e.g. console) omits it.
+   *
+   * @param timeoutMs What is left of the analytics service's shutdown budget. The provider must
+   *   settle within it, abandoning its flush if necessary: the service awaits this call without a
+   *   timeout of its own, and extension deactivation still has to run after it.
+   */
+  shutdown?(timeoutMs: number): Promise<void>;
 }
