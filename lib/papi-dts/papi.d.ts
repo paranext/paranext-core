@@ -2419,16 +2419,6 @@ declare module 'shared/models/rpc.interface' {
     acceptLocalClient(socket: ServerSocketLike, name: string): void;
   }
 }
-declare module 'client/services/web-socket.interface' {
-  /**
-   * Interface that defines the webSocket functionality the extension host and the renderer must
-   * implement. Used by WebSocketFactory to supply the right kind of WebSocket to
-   * ClientNetworkConnector. For now, we are just using the browser WebSocket type. We may need
-   * specific functionality that don't line up between the ws library's implementation and the browser
-   * implementation. We can adjust as needed at that point.
-   */
-  export type IWebSocket = WebSocket;
-}
 declare module 'shared/data/papi-port.model' {
   /**
    * Wire shapes of the renderer's PAPI MessagePort transport: the IPC channels the preload uses to
@@ -2439,6 +2429,23 @@ declare module 'shared/data/papi-port.model' {
    * Kept free of imports so the preload bundle can use it without pulling in the logger or
    * `electron`.
    */
+  /**
+   * The PAPI part of the bridge the preload exposes on `window.electronAPI.papi`. The preload
+   * declares its object against this type and the page reads the bridge through it, so both sides
+   * fail to compile if either renames or reshapes a member.
+   *
+   * @experimental
+   */
+  export type PapiPortBridge = {
+    /**
+     * Ask main for this window's PAPI MessagePort. The reply arrives as a `window` `message` event (a
+     * {@link PapiPortMainWorldMessage}), not as a return value, because a port can only travel over
+     * `postMessage`.
+     *
+     * @experimental
+     */
+    requestPort(): void;
+  };
   /**
    * IPC channel the preload sends on to ask main for this window's PAPI MessagePort
    *
@@ -2570,6 +2577,16 @@ declare module 'shared/data/papi-port.model' {
     reason: string,
     wasClean: boolean,
   ): SyntheticCloseEvent;
+}
+declare module 'client/services/web-socket.interface' {
+  /**
+   * Interface that defines the webSocket functionality the extension host and the renderer must
+   * implement. Used by WebSocketFactory to supply the right kind of WebSocket to
+   * ClientNetworkConnector. For now, we are just using the browser WebSocket type. We may need
+   * specific functionality that don't line up between the ws library's implementation and the browser
+   * implementation. We can adjust as needed at that point.
+   */
+  export type IWebSocket = WebSocket;
 }
 declare module 'renderer/services/message-port-web-socket' {
   /**

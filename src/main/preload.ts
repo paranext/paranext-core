@@ -5,6 +5,7 @@ import {
   PAPI_PORT_REQUEST_CHANNEL,
   PapiPortMainWorldMessage,
 } from '@shared/data/papi-port.model';
+import type { PapiPortBridge } from '@shared/data/papi-port.model';
 
 const electronAPIHandler = {
   env: {
@@ -19,7 +20,7 @@ const electronAPIHandler = {
      * return value.
      */
     requestPort: () => ipcRenderer.send(PAPI_PORT_REQUEST_CHANNEL),
-  },
+  } satisfies PapiPortBridge,
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPIHandler);

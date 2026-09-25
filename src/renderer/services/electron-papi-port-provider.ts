@@ -1,9 +1,10 @@
 import { isPapiPortMainWorldMessage, PAPI_PORT_CHANNEL } from '@shared/data/papi-port.model';
+import type { PapiPortBridge } from '@shared/data/papi-port.model';
 import type { MessagePortLike, PapiPortProvider } from '@renderer/services/message-port-web-socket';
 
-/** The part of the preload's bridge this provider needs, read off the window at call time */
+/** Where the preload puts its bridge, read off the window at call time; absent outside Electron */
 type WindowWithPapiBridge = Window & {
-  electronAPI?: { papi?: { requestPort?: () => void } };
+  electronAPI?: { papi?: PapiPortBridge };
 };
 
 /**
@@ -21,7 +22,8 @@ type WindowWithPapiBridge = Window & {
 export function createElectronPapiPortProvider(win: Window = window): PapiPortProvider {
   return ({ onPort, onError }) => {
     const bridgedWindow: WindowWithPapiBridge = win;
-    const requestPort = bridgedWindow.electronAPI?.papi?.requestPort;
+    const bridge: PapiPortBridge | undefined = bridgedWindow.electronAPI?.papi;
+    const requestPort = bridge?.requestPort;
     if (typeof requestPort !== 'function') {
       onError(
         'This page has no electronAPI.papi.requestPort bridge, so it cannot obtain a PAPI port',

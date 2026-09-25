@@ -9,6 +9,24 @@
  */
 
 /**
+ * The PAPI part of the bridge the preload exposes on `window.electronAPI.papi`. The preload
+ * declares its object against this type and the page reads the bridge through it, so both sides
+ * fail to compile if either renames or reshapes a member.
+ *
+ * @experimental
+ */
+export type PapiPortBridge = {
+  /**
+   * Ask main for this window's PAPI MessagePort. The reply arrives as a `window` `message` event (a
+   * {@link PapiPortMainWorldMessage}), not as a return value, because a port can only travel over
+   * `postMessage`.
+   *
+   * @experimental
+   */
+  requestPort(): void;
+};
+
+/**
  * IPC channel the preload sends on to ask main for this window's PAPI MessagePort
  *
  * @experimental
