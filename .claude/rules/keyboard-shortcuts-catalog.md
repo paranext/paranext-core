@@ -27,7 +27,7 @@ words joined with `+`).
 
 An entry's optional `command` is the PAPI command its chord runs. Menu items that run that command
 show the chord as keycaps: the menu data service sets the hint string on the item, and the menu
-renderers (`ShortcutKeys` from `platform-bible-react`) render it as one `Kbd` per key.
+renderers (`ShortcutKeys` from `platform-bible-react/experimental`) render it as one `Kbd` per key.
 
 - Menus show only the first ` / ` alternative, so list first the one a menu should teach.
 - Set `command` only if the chord works everywhere those items appear. Leave it unset for a chord
