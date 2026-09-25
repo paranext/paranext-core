@@ -128,9 +128,12 @@ describe('content zoom markers (Bible Texts / Commentaries panel)', () => {
     expect(panel).toMatch(/resourceType === 'ScriptureResource' \? 'bible-texts' : 'commentaries'/);
   });
 
-  it('marks the content below the selector, keeping the selector itself fixed', () => {
+  it('marks the editor inside its scroll box, keeping the selector and the messages unmarked', () => {
     expect(panel).toMatch(
-      /<ResourceSelectorDropdown[\s\S]*?\/> <ContentZoomRoot area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> {renderContent\(\)} <\/ContentZoomRoot>/,
+      /data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID} ?> <ContentZoomRoot area={contentZoomArea}> <Editorial/,
+    );
+    expect(panel).toMatch(
+      /<ResourceSelectorDropdown[\s\S]*?\/> <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent\(\)}<\/div>/,
     );
   });
 
@@ -145,9 +148,9 @@ describe('content zoom markers (Bible Texts / Commentaries panel)', () => {
 describe('content zoom markers (Model Text panel)', () => {
   const panel = source('model-text-panel.component.tsx');
 
-  it('marks the content below the label row, keeping the 42 px header fixed', () => {
+  it('marks the editor inside its scroll box, keeping the messages unmarked', () => {
     expect(panel).toMatch(
-      /<ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> {renderContent\(\)} <\/ContentZoomRoot>/,
+      /dir={options.textDirection} ?> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot area="model-text"> <Editorial/,
     );
   });
 
@@ -161,11 +164,12 @@ describe('content zoom markers (Model Text panel)', () => {
   it('leaves the label row outside the marked area', () => {
     // The row's height is pinned to 42 px to line its bottom edge up with the editor's toolbar and
     // Column 3's tab bar; scaling it with the content would break that alignment at every level
-    // but 100 %.
+    // but 100 %. The only marker lives in `renderContent`, which renders after the row.
     const labelIndex = panel.indexOf('tw:h-[42px]');
-    const areaIndex = panel.indexOf('<ContentZoomRoot');
+    const contentIndex = panel.indexOf('{renderContent()}');
     expect(labelIndex).toBeGreaterThan(-1);
-    expect(areaIndex).toBeGreaterThan(labelIndex);
+    expect(contentIndex).toBeGreaterThan(labelIndex);
+    expect(panel.slice(labelIndex, contentIndex)).not.toContain('<ContentZoomRoot');
   });
 });
 
