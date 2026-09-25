@@ -90,3 +90,22 @@ describe('ContextMenuContent', () => {
     expect(Number(subContent?.style.zIndex)).toBeGreaterThanOrEqual(Z_INDEX_ABOVE_DOCK);
   });
 });
+
+describe('ContextMenuItem', () => {
+  it('recolors its descendants on highlight, as DropdownMenuItem and MenubarItem do', () => {
+    render(
+      <ContextMenu>
+        <ContextMenuTrigger>Tab header</ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem>Zoom in</ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>,
+    );
+
+    fireEvent.contextMenu(screen.getByText('Tab header'));
+
+    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toHaveClass(
+      'tw:not-data-[variant=destructive]:focus:**:text-accent-foreground',
+    );
+  });
+});
