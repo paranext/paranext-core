@@ -86,6 +86,8 @@ export type ShortcutKeysProps = {
    * such as a menu item's `shortcut` string. Not a raw keyboard shortcuts catalog `keys` string:
    * that may hold several `/`-separated alternatives or a no-equivalent marker, neither of which
    * this component parses.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
    */
   hint: string;
 };

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type React from 'react';
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -350,11 +350,38 @@ const zoomMenuLabels = {
   options: 'Zoom options for {resourceName}',
 };
 
-/** The open menu's items and separators in document order, a separator shown as `—`. */
+/**
+ * An element's own direct text, ignoring text inside any nested element (e.g. a shortcut hint
+ * rendered as a sibling `Kbd`/`KbdGroup`) — the same "direct text-node children only" rule Testing
+ * Library's `getByText` uses, so a hint cannot change what this reports.
+ */
+function ownText(element: Element): string {
+  return Array.from(element.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent ?? '')
+    .join('');
+}
+
+/**
+ * The open menu's items and separators in document order, a separator shown as `—`. Each menuitem's
+ * own label only (see `ownText`), so a shortcut hint rendered beside it is invisible here; assert
+ * hint content separately.
+ */
 function menuEntries(menu: HTMLElement): string[] {
   return Array.from(menu.querySelectorAll('[role="menuitem"], [role="separator"]')).map((entry) =>
-    entry.getAttribute('role') === 'separator' ? '—' : (entry.textContent ?? ''),
+    entry.getAttribute('role') === 'separator' ? '—' : ownText(entry),
   );
+}
+
+/**
+ * The rendered menuitem whose own label text is exactly `label`, regardless of a shortcut hint
+ * rendered beside it as a sibling element: `getByText` matches only an element's own direct
+ * text-node children, so the hint's separate nested text does not affect this lookup.
+ */
+function zoomMenuItem(label: string): HTMLElement {
+  const item = screen.getByText(label).closest('[role="menuitem"]');
+  if (!(item instanceof HTMLElement)) throw new Error(`No menuitem rendered for "${label}"`);
+  return item;
 }
 
 /** Every element from `element` up to and including `root`, innermost first. */
@@ -538,13 +565,13 @@ describe('ResourceCellView zoom menus', () => {
         />,
       );
       fireEvent.contextMenu(screen.getByText('verse'));
-      const entries = menuEntries(screen.getByRole('menu'));
-      expect(entries).toHaveLength(5);
-      expect(entries[0]).toBe('Copy');
-      expect(entries[1]).toBe('—');
-      expect(entries[2]).toMatch(/^Zoom in/);
-      expect(entries[3]).toMatch(/^Zoom out/);
-      expect(entries[4]).toMatch(/^Reset zoom/);
+      expect(menuEntries(screen.getByRole('menu'))).toEqual([
+        'Copy',
+        '—',
+        'Zoom in',
+        'Zoom out',
+        'Reset zoom',
+      ]);
     },
   );
 
@@ -564,19 +591,10 @@ describe('ResourceCellView zoom menus', () => {
       />,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    let menu = screen.getByRole('menu');
-    expect(within(menu).getByRole('menuitem', { name: /^Zoom in/ })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(within(menu).getByRole('menuitem', { name: /^Zoom out/ })).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(within(menu).getByRole('menuitem', { name: /^Reset zoom/ })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    const menu = screen.getByRole('menu');
+    expect(zoomMenuItem('Zoom in')).toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom out')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Reset zoom')).toHaveAttribute('aria-disabled', 'true');
     fireEvent.keyDown(menu, { key: 'Escape' });
 
     rerender(
@@ -596,19 +614,11 @@ describe('ResourceCellView zoom menus', () => {
       </div>,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    menu = screen.getByRole('menu');
-    expect(within(menu).getByRole('menuitem', { name: /^Zoom in/ })).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(within(menu).getByRole('menuitem', { name: /^Zoom out/ })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(within(menu).getByRole('menuitem', { name: /^Reset zoom/ })).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    // Positive control: a menu re-opened after the rerender.
+    screen.getByRole('menu');
+    expect(zoomMenuItem('Zoom in')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom out')).toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Reset zoom')).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   it('choosing each zoom item calls its callback', async () => {
@@ -631,11 +641,11 @@ describe('ResourceCellView zoom menus', () => {
       />,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: /^Zoom in/ }));
+    await user.click(zoomMenuItem('Zoom in'));
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: /^Zoom out/ }));
+    await user.click(zoomMenuItem('Zoom out'));
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: /^Reset zoom/ }));
+    await user.click(zoomMenuItem('Reset zoom'));
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onZoomOut).toHaveBeenCalledTimes(1);
     expect(onResetZoom).toHaveBeenCalledTimes(1);
@@ -664,7 +674,7 @@ describe('ResourceCellView zoom menus', () => {
       </div>,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: /^Zoom in/ }));
+    await user.click(zoomMenuItem('Zoom in'));
     // Positive control: the item was really chosen, so the silence below is about the bubbling.
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onRowClick).not.toHaveBeenCalled();
@@ -695,10 +705,10 @@ describe('ResourceCellView zoom menus', () => {
       </div>,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    screen.getByRole('menuitem', { name: /^Zoom in/ }).focus();
+    zoomMenuItem('Zoom in').focus();
     await user.keyboard('{Enter}');
     fireEvent.contextMenu(screen.getByText('verse'));
-    screen.getByRole('menuitem', { name: /^Zoom out/ }).focus();
+    zoomMenuItem('Zoom out').focus();
     await user.keyboard(' ');
     // Positive controls: both items were really chosen by key, so the silence below is about the
     // bubbling.
@@ -728,15 +738,8 @@ describe('ResourceCellView zoom menus', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Zoom options for WEB' }));
     const menu = screen.getByRole('menu');
-    const entries = menuEntries(menu);
-    expect(entries).toHaveLength(3);
-    expect(entries[0]).toMatch(/^Zoom in/);
-    expect(entries[1]).toMatch(/^Zoom out/);
-    expect(entries[2]).toMatch(/^Reset zoom/);
-    expect(within(menu).getByRole('menuitem', { name: /^Zoom in/ })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    expect(menuEntries(menu)).toEqual(['Zoom in', 'Zoom out', 'Reset zoom']);
+    expect(zoomMenuItem('Zoom in')).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('header layout: the "⋮" button sits after the name and shows only on hover or focus, except on touch screens', () => {
@@ -784,7 +787,7 @@ describe('ResourceCellView zoom menus', () => {
     );
     // Positive control: the zoom labels are live, so the right-click menu carries zoom items.
     fireEvent.contextMenu(screen.getByText('verse'));
-    expect(screen.getByRole('menuitem', { name: /^Zoom in/ })).toBeInTheDocument();
+    expect(zoomMenuItem('Zoom in')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /zoom options/i })).not.toBeInTheDocument();
   });
 
@@ -810,6 +813,80 @@ describe('ResourceCellView zoom menus', () => {
     await user.click(screen.getByRole('button', { name: 'Zoom options for WEB' }));
     expect(screen.getByRole('menu')).toBeInTheDocument();
     expect(onParentClick).not.toHaveBeenCalled();
+  });
+});
+
+describe('ResourceCellView zoom menu shortcut hints', () => {
+  const originalUserAgent = navigator.userAgent;
+
+  afterEach(() => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: originalUserAgent,
+      configurable: true,
+    });
+  });
+
+  it('shows each zoom item’s Windows/Linux chord as separate keycaps, matching the content-zoom catalog entries', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('verse'));
+
+    // content-zoom-in: Ctrl++ -> keycaps ['Ctrl', '+'], so one "+" is the separator (a SPAN) and
+    // the other is the second keycap's own Kbd.
+    const zoomIn = zoomMenuItem('Zoom in');
+    expect(within(zoomIn).getByText('Ctrl').tagName).toBe('KBD');
+    expect(
+      within(zoomIn)
+        .getAllByText('+')
+        .map((element) => element.tagName)
+        .sort(),
+    ).toEqual(['KBD', 'SPAN']);
+
+    // content-zoom-out: Ctrl+-
+    const zoomOut = zoomMenuItem('Zoom out');
+    expect(within(zoomOut).getByText('Ctrl').tagName).toBe('KBD');
+    expect(within(zoomOut).getByText('-').tagName).toBe('KBD');
+    expect(within(zoomOut).getByText('+').tagName).toBe('SPAN');
+
+    // content-zoom-reset: Ctrl+0
+    const reset = zoomMenuItem('Reset zoom');
+    expect(within(reset).getByText('Ctrl').tagName).toBe('KBD');
+    expect(within(reset).getByText('0').tagName).toBe('KBD');
+    expect(within(reset).getByText('+').tagName).toBe('SPAN');
+  });
+
+  it('shows the macOS chord as adjacent keycaps with no separator', () => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      configurable: true,
+    });
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('verse'));
+
+    // content-zoom-in on macOS: ⌘=
+    const zoomIn = zoomMenuItem('Zoom in');
+    expect(within(zoomIn).getByText('⌘').tagName).toBe('KBD');
+    expect(within(zoomIn).getByText('=').tagName).toBe('KBD');
+    expect(within(zoomIn).queryByText('+')).not.toBeInTheDocument();
   });
 });
 

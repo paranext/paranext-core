@@ -48,6 +48,7 @@ describe('ShortcutKeys', () => {
       expect(screen.getByText(keycap).tagName).toBe('KBD'),
     );
     expect(screen.getAllByText('+')[0].tagName).toBe('SPAN');
+    expect(document.querySelectorAll('kbd[data-slot="kbd"]')).toHaveLength(3);
   });
 
   it('gives the group ltr direction so keycap order survives a right-to-left layout', () => {
@@ -59,7 +60,9 @@ describe('ShortcutKeys', () => {
   it('renders a Ctrl++ hint as two keycaps rather than three', () => {
     render(<ShortcutKeys hint="Ctrl++" />);
     expect(screen.getByText('Ctrl').tagName).toBe('KBD');
-    // One "+" is the separator span, the other is the second keycap itself.
-    expect(screen.getAllByText('+')).toHaveLength(2);
+    expect(document.querySelectorAll('kbd[data-slot="kbd"]')).toHaveLength(2);
+    // One "+" is the separator span, the other is the second keycap's own Kbd.
+    const plusElements = screen.getAllByText('+');
+    expect(plusElements.map((element) => element.tagName).sort()).toEqual(['KBD', 'SPAN']);
   });
 });
