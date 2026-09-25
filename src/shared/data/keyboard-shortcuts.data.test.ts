@@ -143,6 +143,10 @@ describe('keyboard shortcuts catalog', () => {
       const otherMainProcessChords = new Set(
         mainProcessEntries.filter((other) => other !== entry).flatMap(getOsTaggedChords),
       );
+      // Guards the carve-out itself: if excluding this entry ever left nothing to check against
+      // (e.g. every main-process entry turned out to be this one), the assertions below would
+      // pass vacuously.
+      expect(otherMainProcessChords.size).toBeGreaterThan(0);
       getOsTaggedChords(entry).forEach((chord) =>
         expect(otherMainProcessChords).not.toContain(chord),
       );
@@ -191,4 +195,22 @@ describe('keyboard-shortcuts.data Zoom category', () => {
   it.each(zoomEntryLocationPairs())('%s location "%s" resolves to a real file', (_id, location) => {
     expect(existsSync(path.join(process.cwd(), location))).toBe(true);
   });
+
+  // The Text Collection's hand-built zoom menu items restate each content-zoom entry's chord
+  // locally (`ZoomItemsShared` in resource-cell-view.component.tsx — extension code cannot import
+  // this core catalog), so nothing else ties the restated strings to this file if either side
+  // changes. Windows and Linux share one spelling, so checking Windows covers Linux too.
+  const RESOURCE_CELL_VIEW_FILE =
+    'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx';
+
+  it.each(['content-zoom-in', 'content-zoom-out', 'content-zoom-reset'])(
+    'the Text Collection zoom menu restates %s’s macOS and Windows chord',
+    (id) => {
+      const entry = zoomEntries().find((zoomEntry) => zoomEntry.id === id);
+      if (!entry) throw new Error(`No Zoom-category entry with id "${id}"`);
+      const source = readFileSync(path.join(process.cwd(), RESOURCE_CELL_VIEW_FILE), 'utf8');
+      expect(source).toContain(entry.keys.macOS);
+      expect(source).toContain(entry.keys.windows);
+    },
+  );
 });

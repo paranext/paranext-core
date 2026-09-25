@@ -87,9 +87,17 @@ function buildOsRows(keys: KeyboardShortcutKeys): OsKeyRow[] {
  * Renders one key combination through the shared {@link ShortcutKeys} renderer — rejoining the
  * keycaps this file already split back into the raw hint it expects, with the same separator the
  * split reported, which reverses the split losslessly.
+ *
+ * The wrapping span's muted, small text only reaches `ShortcutKeys`' unstyled `+` separator: each
+ * `Kbd` sets its own color and size explicitly, so this is the catalog page's own styling choice
+ * rather than something `ShortcutKeys` should hard-code for every consumer.
  */
 function KeycapCombination({ group }: { group: KeycapGroup }) {
-  return <ShortcutKeys hint={group.keycaps.join(group.separator)} />;
+  return (
+    <span className="tw:text-xs tw:text-muted-foreground">
+      <ShortcutKeys hint={group.keycaps.join(group.separator)} />
+    </span>
+  );
 }
 
 /** Renders one OS's key string: its alternatives as keycaps, or its no-equivalent marker as text. */
