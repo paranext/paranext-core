@@ -3,6 +3,7 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
+import { INSERT_CONTEXT_MENU_STRING_KEYS } from './platform-scripture-editor.web-view.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
@@ -383,3 +384,23 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
     });
   },
 );
+
+// The editor context menu's insert items, driven off createInsertContextMenuItems's own exported
+// key list so a title it can produce is always covered here, in both directions: a key the builder
+// asks for and this file drops would render a blank row with the parity test in
+// platform-scripture-editor.web-view.utils.test.ts still green (it only ever sees the STUB strings
+// it builds its own titles from), and a Spanish value left equal to English would pass every other
+// check silently.
+describe.each([...INSERT_CONTEXT_MENU_STRING_KEYS])('insert context-menu label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});

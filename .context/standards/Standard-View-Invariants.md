@@ -85,6 +85,49 @@ frames). Enter and Escape are claimed there so they cannot reach the document: a
 Lexical performs the unmarked plain split the palette exists to prevent, and leaves the palette open
 with nothing committed.
 
+**What the palette OFFERS is the editor's to decide, not the host's.** Both Standard-view palettes
+are built from the engine: `EditorRef.getMarkerMenuContext()` describes the caret, and
+`getMarkerMenuItems` / `getEnterMenuItems` turn that into the list
+(`platform-scripture-editor.web-view.tsx`). The host renders the list and forwards the pick to
+`applyMarkerMenuSelection` / `splitParagraphWithMarker` — it must not filter the list or assemble
+its own for a region, because the engine is what knows which markers the caret's block can take. Two
+consequences worth knowing here:
+
+- **`generateInlineMarkerMenuListItems` is a different menu.** It builds from the `usfmMarkers` map
+  in `platform-bible-utils` and serves the OTHER view types. Its result is computed in EVERY view
+  (the `inlineMarkerMenuItems` memo in `platform-scripture-editor.web-view.tsx` carries no
+  `viewType` guard) but only ever OPENED outside Standard view (`viewType !== 'standard'`). A
+  Standard-view palette question is never answered by that function.
+- **Everything offered must be insertable, and the `\` only commits to the document through a
+  palette that opened.** With nothing to offer, the `\` is an ordinary character and lands. The
+  editor half owns the rule that no offered entry is a silent no-op — see "A menu offers nothing it
+  cannot insert" in `docs/standard-view-invariants.md` (`scripture-editors`), which also covers the
+  `\id` line, where `\` offers the inline list and the Enter palette's paragraph pick splits the
+  line instead of retagging it.
+
+**The editor's right-click menu outranks both palettes, and the hand-off rests on listener order
+across the two repos.** While `ContextMenuPlugin`'s menu is open it is the only keyboard mode on
+screen: the `\` trigger is claimed and does nothing, the Enter trigger stands down so the menu gets
+the press, and the insert shortcuts are swallowed. `isEditorContextMenuOpen` in
+`platform-scripture-editor.web-view.utils.ts` is the gate, and it depends on two facts owned by the
+editor package:
+
+- **The menu claims its keys from a capture-phase listener on the iframe's `document`, and this web
+  view claims its own from one on `window`.** Capture runs window → document, so the web view always
+  sees a key first, and handing Enter down means returning *without* `stopPropagation` — a
+  `stopPropagation` there ends the press before the menu's listener runs. Were the menu's listener
+  ever moved onto `window` too, the two would run in registration order, and neither side could
+  count on seeing a key first.
+- **The menu is found by the FOCUSED editor's `aria-controls="editor-context-menu"` attribute**,
+  which the editor package sets on that editor's own root for exactly as long as its menu stays
+  open (`isEditorContextMenuOpenFor` in `editor-context-menu.util.ts` reads it). Only
+  scripture-editors#14 sets it — an earlier `platform-editor` build never marks the root, so every
+  gate keyed on `isEditorContextMenuOpen` silently evaluates "menu closed" against it, all at once:
+  the `\` trigger, the Enter hand-down, and the insert-shortcut swallow all fall through together,
+  with no local signal that anything broke. `footnote-editor.context-menu-gate.test.tsx` and
+  `editor-context-menu-merge-order-contract.test.tsx` both mount the real editor rather than a mock,
+  so they exercise the actual attribute instead of assuming its shape.
+
 Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.
 

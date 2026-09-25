@@ -327,12 +327,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-markers-menu',
-    purpose: 'Open the inline markers menu',
+    purpose:
+      'Open the inline markers menu. Does nothing while the editor’s right-click menu is open, in every view',
     category: 'Editing',
     context: 'Scripture editor web view',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
       'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
   },
@@ -440,7 +442,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-insert-comment',
-    purpose: 'Insert a comment at the selection',
+    purpose:
+      'Insert a comment at the selection. Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // Ctrl+Shift+N first (not code order) so the menu hint shows it
@@ -451,12 +454,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
   {
     id: 'scripture-insert-footnote',
-    purpose: 'Insert a footnote at the selection (Standard view, editable)',
+    purpose:
+      'Insert a footnote at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
@@ -465,11 +470,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   {
     id: 'scripture-insert-cross-reference',
-    purpose: 'Insert a cross-reference at the selection (Standard view, editable)',
+    purpose:
+      'Insert a cross-reference at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
@@ -478,6 +485,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   {
@@ -516,17 +524,48 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'scripture-editor-context-menu',
+    purpose:
+      'Open the editor’s own right-click menu (Cut/Copy/Paste and the Insert footnote/cross-reference/comment/endnote items). While open, the menu holds the keyboard: it is the only keyboard mode on screen, and every other key does nothing until the menu is dismissed or its highlighted item runs',
+    category: 'Menus',
+    // Not a shortcut this repo registers: the browser raises `contextmenu` inside the editor,
+    // which the editor package's `ContextMenuPlugin` (`@eten-tech-foundation/platform-editor`)
+    // turns into the menu — no in-repo handler exists for the open gesture itself. `locations`
+    // names where this repo supplies the menu's own items and reads its open state instead.
+    //
+    // Right-click only, on every platform: Shift+F10 and the Menu key also raise `contextmenu`,
+    // but a keyboard-invoked one always targets the content-editable ROOT (there is no click point
+    // to aim at a descendant), and `ContextMenuPlugin` ignores a `contextmenu` event whose target
+    // IS the editor root — the same check that keeps a right-click on empty editor space from
+    // opening the menu. Opening it by keyboard would need the editor package to special-case a
+    // keyboard-invoked `contextmenu` event.
+    context: 'Scripture editor web view (main text and the footnote editor popover)',
+    keys: {
+      macOS: '— (no equivalent)',
+      windows: '— (no equivalent)',
+      linux: '— (no equivalent)',
+    },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
+  {
     id: 'scripture-paragraph-markers-menu',
     purpose:
-      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style.',
+      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style. While the editor’s right-click menu is open, that menu owns Enter instead: it invokes the highlighted item, or does nothing.',
     category: 'Editing',
     context: 'Scripture editor web view',
     // Enter is claimed in EVERY modifier state, matching PT9's KeyPressEditHandler (no modifier
     // check): any modifier chord with Enter — including Shift+Enter, which would otherwise insert
     // a soft line break with no USFM representation — opens the same menu.
+    // Not claimed while the editor's right-click context menu is open: that menu owns Enter for as
+    // long as it is up (see `isEditorContextMenuOpen`).
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   // The editor's arrow-key caret movement (verse hops, note boundaries, the two caret stops
@@ -622,13 +661,15 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'footnote-markers-menu',
-    purpose: 'Open the inline markers menu in the footnote editor',
+    purpose:
+      'Open the inline markers menu in the footnote editor. Does nothing while the popover’s own right-click menu is open',
     category: 'Editing',
     context: 'Footnote editor',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
       'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
+      'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
     ],
   },
   {

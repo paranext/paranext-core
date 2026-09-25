@@ -69,9 +69,12 @@ declare module 'platform-scripture-editor' {
     method: 'changeFootnotesPaneLocation';
   };
 
-  /** Tell the editor to insert a textual note (footnote or cross-reference) */
+  /** Tell the editor to insert a textual note (footnote, endnote, or cross-reference) */
   export type EditorMessageInsertTextualNoteAtSelection = {
-    method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
+    method:
+      | 'insertFootnoteAtSelection'
+      | 'insertCrossReferenceAtSelection'
+      | 'insertEndnoteAtSelection';
   };
 
   /** Tell the editor to open the comment editor for inserting a new comment at the current verse */
@@ -406,6 +409,8 @@ declare module 'platform-scripture-editor' {
     insertFootnoteAtSelection(): Promise<void>;
     /** Function to insert a cross-reference in the editor at the current selection */
     insertCrossReferenceAtSelection(): Promise<void>;
+    /** Function to insert an endnote in the editor at the current selection */
+    insertEndnoteAtSelection(): Promise<void>;
     /**
      * Function to open the comment editor for inserting a new project comment at the current verse.
      * Checks permissions and fetches assignable users before opening the editor.
@@ -860,6 +865,12 @@ declare module 'papi-shared-types' {
     /**
      * Command to insert a footnote into a given editor web view.
      *
+     * `editorWebViewId` is optional in the type but required in practice: with no id, or an id that
+     * no longer names an open Scripture editor, the command no-ops silently rather than inserting
+     * anywhere. A resolved promise means the request was DELIVERED to the web view, not that a note
+     * was inserted — the web view can still refuse the insert (e.g. read-only, no selection), and a
+     * refusal is not reported to the caller.
+     *
      * @param editorWebViewId The ID of the web view to insert the footnote for
      */
     'platformScriptureEditor.insertFootnoteAtSelection': (
@@ -867,17 +878,35 @@ declare module 'papi-shared-types' {
     ) => Promise<void>;
 
     /**
-     * Command to insert a cross-reference into a given editor web view.
+     * Command to insert a cross-reference into a given editor web view. See the
+     * `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
+     * `editorWebViewId` and resolution caveats, which apply identically here.
      *
-     * @param editorWebViewId The ID of the web view to insert the footnote for
+     * @param editorWebViewId The ID of the web view to insert the cross-reference for
      */
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
 
     /**
+     * Command to insert an endnote into a given editor web view. See the
+     * `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
+     * `editorWebViewId` and resolution caveats, which apply identically here.
+     *
+     * @param editorWebViewId The ID of the web view to insert the endnote for
+     */
+    'platformScriptureEditor.insertEndnoteAtSelection': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<void>;
+
+    /**
      * Command to insert a project comment at the current verse in a given editor web view. Opens a
      * comment editor popover for drafting the comment content and optionally assigning to a user.
+     * See the `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
+     * `editorWebViewId` caveat, which applies here too — but resolution does NOT behave
+     * identically: this command's controller rethrows when the user lacks permission to create
+     * comments, so the returned promise CAN reject, and a sync-blocked comment shows the user a
+     * notice rather than failing silently.
      *
      * @param editorWebViewId The ID of the web view to insert the comment for
      */

@@ -15,21 +15,28 @@
  * graph from `main.ts` and enforces this.
  */
 
+import { logger } from '@papi/frontend';
 import {
   isBlockMarker,
   isLocalizeKey,
   LanguageStrings,
+  LocalizeKey,
   usfmMarkers,
   type PaletteItem,
 } from 'platform-bible-utils';
+import type { EditorMessageInsertTextualNoteAtSelection } from 'platform-scripture-editor';
 import type { MutableRefObject } from 'react';
 import type {
+  ContextMenuOptionConfig,
   EditorRef,
   MarkerMenuItem as EditorMarkerMenuItem,
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
 import { markerMenuItemToPaletteItem, type MarkerMenuItem } from 'platform-bible-react';
-import { stripMarkerNestingPrefix } from 'platform-bible-react/experimental';
+import {
+  isEditorContextMenuOpenFor,
+  stripMarkerNestingPrefix,
+} from 'platform-bible-react/experimental';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
@@ -345,4 +352,245 @@ export function shouldSpaceCommitNoteMarker(
 export function parseCallerSequenceSetting(value: string): string[] | undefined {
   const callers = value.split(/\s+/).filter((caller) => caller.length > 0);
   return callers.length > 0 ? callers : undefined;
+}
+
+/** What one textual-note kind needs to insert itself and record why. */
+export interface NoteInsertConfig {
+  /** The USFM marker `EditorRef.insertMarker` takes for this kind. */
+  marker: string;
+  /** Version-history commit message shown for this kind's insert. */
+  commitMessageKey: LocalizeKey;
+  /** Names the edit in log lines, e.g. `'inserting footnote'`. */
+  editDescription: string;
+}
+
+/**
+ * ONE table for every textual-note kind, keyed by the same method union the editor message and the
+ * command handlers use — the marker, the version-history commit message, and the log description
+ * all move together for a given kind instead of being repeated at each of the four call sites that
+ * need it (the context-menu wrappers, the top-menu message listener, the Ctrl+T/Ctrl+Shift+T
+ * shortcut, and each hook's dependency array).
+ */
+export const NOTE_INSERT_CONFIG: Record<
+  EditorMessageInsertTextualNoteAtSelection['method'],
+  NoteInsertConfig
+> = {
+  insertFootnoteAtSelection: {
+    marker: 'f',
+    commitMessageKey: '%versionHistoryCommit_beforeInsertFootnote%',
+    editDescription: 'inserting footnote',
+  },
+  insertCrossReferenceAtSelection: {
+    marker: 'x',
+    commitMessageKey: '%versionHistoryCommit_beforeInsertCrossReference%',
+    editDescription: 'inserting cross-reference',
+  },
+  insertEndnoteAtSelection: {
+    marker: 'fe',
+    commitMessageKey: '%versionHistoryCommit_beforeInsertEndnote%',
+    editDescription: 'inserting endnote',
+  },
+};
+
+/**
+ * Whether a note-insert callback should skip the version-history snapshot and the marker insert
+ * entirely, checked BEFORE either runs: with no mounted editor, or a read-only one (which already
+ * folds in a sync freeze), an insert can never land, and skipping ahead of the snapshot is what
+ * stops a read-only top-menu click from writing a forced, empty version-history commit. The refusal
+ * is silent to the user.
+ */
+export function shouldSkipNoteInsert(hasEditor: boolean, isReadOnlyEffective: boolean): boolean {
+  return !hasEditor || isReadOnlyEffective;
+}
+
+/**
+ * Inserts a textual note (footnote, cross-reference, or endnote) at the current selection, per
+ * {@link NOTE_INSERT_CONFIG}. The body of the web view's `insertNoteAtCurrentSelection` hook,
+ * extracted so the ORDER of its two side effects — a version-history snapshot, then the marker
+ * insert — is directly unit-testable against injected fakes rather than only observable end to
+ * end.
+ *
+ * Checks read-only BEFORE calling `commitSnapshot`: a read-only top-menu click (which reaches this
+ * with no prior gate — the menu item itself has no enablement) must not write a forced, empty
+ * version-history commit. The refusal is logged, not shown to the user.
+ *
+ * @param kind Which textual note to insert.
+ * @param hasEditor Whether the editor is currently mounted.
+ * @param isReadOnlyEffective The editor's effective read-only state (already folds in a sync
+ *   freeze).
+ * @param insertMarker Inserts the kind's marker at the current selection, e.g. `(marker) =>
+ *   editorRef.current?.insertMarker(marker)`.
+ * @param commitSnapshot Commits a version-history snapshot before the insert, e.g.
+ *   `commitVersionHistorySnapshot` bound to the current project id.
+ * @param localizedStrings Resolves the kind's commit-message key.
+ */
+export async function insertNoteAtCurrentSelectionCore(
+  kind: EditorMessageInsertTextualNoteAtSelection['method'],
+  hasEditor: boolean,
+  isReadOnlyEffective: boolean,
+  insertMarker: (marker: string) => void,
+  commitSnapshot: (message: string, editDescription: string) => Promise<void>,
+  localizedStrings: LanguageStrings,
+): Promise<void> {
+  const { marker, commitMessageKey, editDescription } = NOTE_INSERT_CONFIG[kind];
+  if (shouldSkipNoteInsert(hasEditor, isReadOnlyEffective)) {
+    logger.debug(`Not ${editDescription}: no mounted editor or read-only`);
+    return;
+  }
+
+  await commitSnapshot(localizedStrings[commitMessageKey], editDescription);
+  insertMarker(marker);
+}
+
+/**
+ * Which {@link NOTE_INSERT_CONFIG} kind each editor context-menu insert action inserts. One mapping
+ * shared by the menu-item wiring and its tests, so a swap (e.g. the footnote action pointed at the
+ * endnote kind) fails a test instead of only showing up as a user picking one menu item and getting
+ * another note type.
+ */
+export const CONTEXT_MENU_ACTION_TO_NOTE_KIND: Record<
+  keyof Pick<InsertContextMenuActions, 'insertFootnote' | 'insertCrossReference' | 'insertEndnote'>,
+  EditorMessageInsertTextualNoteAtSelection['method']
+> = {
+  insertFootnote: 'insertFootnoteAtSelection',
+  insertCrossReference: 'insertCrossReferenceAtSelection',
+  insertEndnote: 'insertEndnoteAtSelection',
+};
+
+/**
+ * Which {@link NOTE_INSERT_CONFIG} kind the Ctrl+T / Ctrl+Shift+T keyboard shortcut inserts: Ctrl+T
+ * inserts a footnote, Ctrl+Shift+T inserts a cross-reference. One mapping shared by the shortcut
+ * handler and its test, so swapping the two chords' kinds fails a test rather than only showing up
+ * as Ctrl+T inserting the wrong note type.
+ *
+ * @param shiftKey Whether Shift was held (`KeyboardEvent.shiftKey`).
+ */
+export function noteKindForCtrlTChord(
+  shiftKey: boolean,
+): Extract<
+  EditorMessageInsertTextualNoteAtSelection['method'],
+  'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection'
+> {
+  return shiftKey ? 'insertCrossReferenceAtSelection' : 'insertFootnoteAtSelection';
+}
+
+const INSERT_FOOTNOTE_TITLE_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_insertFootnoteAtSelection%';
+const INSERT_CROSS_REFERENCE_TITLE_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%';
+const INSERT_ENDNOTE_TITLE_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_insertEndnoteAtSelection%';
+const INSERT_COMMENT_TITLE_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_insertCommentAtSelection%';
+
+/**
+ * Localize keys used by {@link createInsertContextMenuItems}. Spread these into the editor web
+ * view's localized-strings list so the values are loaded and passed into `localizedStrings` —
+ * mirrors the established `CHARACTER_MARKER_MENU_STRING_KEYS` pattern
+ * (`character-marker-menu.utils.ts`), which ties a menu builder to its own keys the same way
+ * instead of letting the builder and the web view's key list repeat the same literals
+ * independently.
+ */
+export const INSERT_CONTEXT_MENU_STRING_KEYS = Object.freeze([
+  INSERT_FOOTNOTE_TITLE_KEY,
+  INSERT_CROSS_REFERENCE_TITLE_KEY,
+  INSERT_ENDNOTE_TITLE_KEY,
+  INSERT_COMMENT_TITLE_KEY,
+] as const);
+
+/** Callbacks the editor context menu's insert items dispatch to. */
+export interface InsertContextMenuActions {
+  insertFootnote: () => void;
+  insertCrossReference: () => void;
+  insertEndnote: () => void;
+  insertComment: () => void;
+}
+
+/**
+ * Editor state that decides which insert items are selectable. `isReadOnly` is the editor's
+ * effective read-only state, which already folds in a sync freeze; `isSyncBlocked` is passed
+ * separately because comment insertion does not go through the editor and so is not covered by it.
+ */
+export interface InsertContextMenuState {
+  isReadOnly: boolean;
+  canUserCreateComments: boolean;
+  isSyncBlocked: boolean;
+}
+
+/**
+ * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu's
+ * `platformScriptureEditor.insert` column (`contributions/menus.json`, every group in that column)
+ * — same items, same order; pinned by the parity test in
+ * `platform-scripture-editor.web-view.utils.test.ts`.
+ */
+export function createInsertContextMenuItems(
+  localizedStrings: LanguageStrings,
+  actions: InsertContextMenuActions,
+  state: InsertContextMenuState,
+): ContextMenuOptionConfig[] {
+  const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
+  return [
+    {
+      title: localizedStrings[INSERT_FOOTNOTE_TITLE_KEY],
+      onSelect: actions.insertFootnote,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings[INSERT_CROSS_REFERENCE_TITLE_KEY],
+      onSelect: actions.insertCrossReference,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings[INSERT_ENDNOTE_TITLE_KEY],
+      onSelect: actions.insertEndnote,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
+      onSelect: actions.insertComment,
+      // Disabled while sync-blocked too, so the menu reflects the frozen state.
+      isDisabled: !canUserCreateComments || isSyncBlocked,
+    },
+  ];
+}
+
+/**
+ * Whether the given editor's own right-click context menu is open at all.
+ *
+ * Gates every key this web view acts on in the editor. While the menu is up it is the only keyboard
+ * mode on screen, and nothing else opens underneath it or over it:
+ *
+ * - Both standard-view triggers: neither the `\\` marker palette nor the Enter paragraph palette may
+ *   open, and neither key may reach the document behind the menu.
+ * - The other views' `\\` inline markers menu, and the footnote, cross-reference and comment insert
+ *   shortcuts. Each is swallowed rather than acted on: every one of them would open a popup (the
+ *   markers menu, the footnote editor, the comment editor) over a menu that stays open.
+ *
+ * The menu has no idea the palettes exist and stays open across one. A palette session's own Escape
+ * claims the key with `stopPropagation` on `window` — one capture step above the menu's `document`
+ * listener — so THAT ESCAPE DISMISSES THE PALETTE, not the menu: the menu, never reached, survives
+ * with its highlighted item still armed for the next Enter.
+ *
+ * Keyed on the menu being OPEN rather than on a highlighted item, because a menu holding nothing to
+ * invoke still holds the keyboard. The two standard-view triggers then stand down differently,
+ * because the menu wants one of the keys and not the other:
+ *
+ * - `\\` is CLAIMED by the caller. The editor keeps DOM focus while the menu is up, so an unclaimed
+ *   `\\` falls through to Lexical and types a backslash into the document behind the menu. The menu
+ *   has no use for the key either, so nothing acts on it at all.
+ * - Enter is HANDED DOWN to the menu, which owns it outright while it is open — invoking its
+ *   highlighted item when it has an enabled one and swallowing the press otherwise.
+ *   `ContextMenuPlugin` claims Enter from a CAPTURE-phase listener on `document` while this web
+ *   view's is on `window`; capture descends window → document, so a `stopPropagation()` here would
+ *   end the press before the menu's listener ran at all.
+ *
+ * Scoped to ONE editor: `ContextMenuPlugin` mounts once per Lexical editor instance (the main
+ * Standard-view editor and the footnote-editor popover each have their own), and every instance's
+ * portal shares the same classes, so a document-wide check cannot tell whose menu is open. See
+ * {@link isEditorContextMenuOpenFor} for the per-editor signal this reads.
+ *
+ * @param editorContainer The main editor's own container (or its `.editor-input` root).
+ */
+export function isEditorContextMenuOpen(editorContainer: Element | null | undefined): boolean {
+  return isEditorContextMenuOpenFor(editorContainer);
 }

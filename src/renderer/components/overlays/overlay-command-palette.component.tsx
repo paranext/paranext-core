@@ -378,6 +378,15 @@ export function OverlayCommandPalettePresentational({
   // typing went to the document (replacing the selection), arrows never reached cmdk, and the
   // palette's Escape handler never fired. Retry across animation frames until the focus sticks
   // (bounded, and cancelled if the palette unmounts first).
+  //
+  // The input may not exist yet on the first attempts: an anchored palette renders it inside a
+  // Radix Popover portal, which mounts its content on a render AFTER this effect has run. Only a
+  // palette without `keyForwarding` waits for that input (the anchored Enter palette needs it). An
+  // anchored `keyForwarding` palette wraps a text selection in the requesting editor, which keeps
+  // focus and forwards keys; since its input is never mounted on the first attempt, it never takes
+  // focus. Keyed on whether forwarding is set, not on the object, so a new `keyForwarding` identity
+  // cannot re-run this effect after the portal mounts and steal focus after all.
+  const forwardsKeys = !!keyForwarding;
   useEffect(() => {
     if (passive) return () => {};
     let rafId: number | undefined;
@@ -385,7 +394,12 @@ export function OverlayCommandPalettePresentational({
     const MAX_FOCUS_ATTEMPTS = 20;
     const tryFocus = () => {
       const input = inputRef.current;
-      if (!input) return;
+      if (!input) {
+        if (forwardsKeys || attempts >= MAX_FOCUS_ATTEMPTS) return;
+        attempts += 1;
+        rafId = requestAnimationFrame(tryFocus);
+        return;
+      }
       input.focus();
       if (document.activeElement === input || attempts >= MAX_FOCUS_ATTEMPTS) return;
       attempts += 1;
@@ -395,7 +409,7 @@ export function OverlayCommandPalettePresentational({
     return () => {
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     };
-  }, [passive]);
+  }, [passive, forwardsKeys]);
 
   // Active-mode search text: locally typed AND externally driven. When the cross-frame focus
   // fight loses (the editor iframe re-grabs focus on every Lexical commit), the extension

@@ -341,6 +341,48 @@ describe('OverlayCommandPalettePresentational', () => {
       await vi.waitFor(() => expect(input).toHaveFocus());
     });
 
+    it('should focus the search input of an ANCHORED palette, whose input mounts after the palette', async () => {
+      // Anchored mode renders the input inside a Radix Popover portal, which mounts its content on
+      // a render AFTER the palette's own mount effects have run — so at the first attempt there is
+      // no input to focus yet. The Enter paragraph palette is anchored and never forwards keys, so
+      // an unfocused one leaves every typed filter character landing in the document instead.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 10, y: 10 }}
+          anchor={{ width: 1, height: 16 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = await screen.findByRole('combobox');
+      await vi.waitFor(() => expect(input).toHaveFocus());
+    });
+
+    it('should NOT focus an anchored palette that declares keyForwarding, even once its input mounts', async () => {
+      // A selection-wrap marker palette anchors like the Enter palette above, but forwards its
+      // keys to the editor session — it must leave DOM focus in the requesting editor for the
+      // whole time it is open, or the forwarded keys never arrive and the editor selection is lost.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 10, y: 10 }}
+          anchor={{ width: 1, height: 16 }}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = await screen.findByRole('combobox');
+      // Give the retry loop, if it were still running, several animation frames to steal focus.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(input).not.toHaveFocus();
+    });
+
     it('should not throw when the palette unmounts before focus ever sticks', async () => {
       const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
 
