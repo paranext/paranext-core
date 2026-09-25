@@ -7365,18 +7365,18 @@ declare module 'shared/models/notification.service-model' {
     secondaryClickCommand?: keyof CommandHandlers;
     /**
      * Optional command to run if the user dismisses the notification themselves - by swiping/dragging
-     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
-     * other than the notification id, like {@link clickCommand}:
+     * it away, or by clicking the close button that a notification with no time limit shows. Sent no
+     * arguments other than the notification id, like {@link clickCommand}:
      *
      * - NotificationId: The ID of the notification that was dismissed
      *
      * The command handler should have the type signature {@link NotificationClickCommandHandler}.
      *
      * IMPORTANT: this fires when the user dismisses the notification themselves (swiping/dragging it
-     * away, or clicking a close button if the host ever enables one) AND when the notification
-     * auto-closes because its `duration` elapsed - a timeout is treated as an implicit dismissal, so
-     * a must-answer toast that times out still runs this command instead of vanishing silently. It
-     * does NOT fire when the notification is dismissed programmatically via
+     * away, or clicking the close button of a notification with no time limit) AND when the
+     * notification auto-closes because its `duration` elapsed - a timeout is treated as an implicit
+     * dismissal, so a must-answer toast that times out still runs this command instead of vanishing
+     * silently. It does NOT fire when the notification is dismissed programmatically via
      * {@link INotificationService.dismiss}, nor when the user clicks {@link clickCommand} /
      * {@link secondaryClickCommand}. Use this to treat a swipe-away (or timeout) as an explicit
      * decision - e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
@@ -7436,7 +7436,8 @@ declare module 'shared/models/notification.service-model' {
     /**
      * Optional duration in milliseconds for how long the notification is displayed. To make the
      * notification show indefinitely, specify a `duration` of `0` or less. Such a notification gets a
-     * close button, so it can be closed without a mouse, unless {@link dismissible} is `false`.
+     * close button, so it can be closed without a mouse, unless it is not user-dismissible (see
+     * {@link dismissible}, which also says when `false` is ignored).
      *
      * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
      * seconds).

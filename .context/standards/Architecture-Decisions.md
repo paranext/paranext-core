@@ -3924,12 +3924,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** Offering a language is a one-line code change (plus the tests that pin the
   list); `src/node/data/offered-interface-languages.test.ts` fails if an offered tag has no locale
   file or misses the setup-dialog threshold. A value stored before this change keeps its
-  not-offered fallbacks until the user next picks a language (e.g. `["es","fr"]` still falls back
-  to French). The public
-  `getAvailableInterfaceLanguages` now means "offered", not "every locale file"; PAPI has no way to
-  list hidden languages. PT-4457 (offer languages by translation coverage) is expected to supersede
-  the list; its rule must measure app-wide coverage, not only `%firstRun_`. Revisit when French is
-  ready.
+  not-offered fallbacks until the user next picks a different language (e.g. `["es","fr"]` still
+  falls back to French). The public `getAvailableInterfaceLanguages` now means "offered", not "every
+  locale file"; PAPI has no way to list hidden languages. PT-4457 (offer languages by translation
+  coverage) is expected to supersede the list; its rule must measure app-wide coverage, not only
+  `%firstRun_`. Revisit when French is ready.
 
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
