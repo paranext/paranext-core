@@ -86,7 +86,7 @@ const getMenubarContent = (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
                   {item.shortcut && (
-                    <MenubarShortcut className="tw:tracking-normal">
+                    <MenubarShortcut>
                       <ShortcutKeys hint={item.shortcut} />
                     </MenubarShortcut>
                   )}

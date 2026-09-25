@@ -106,9 +106,11 @@ export type ShortcutKeysProps = {
  */
 export function ShortcutKeys({ hint }: ShortcutKeysProps) {
   const { keycaps, separator } = getShortcutKeycaps(hint);
-  if (keycaps.length === 1) return <Kbd>{keycaps[0]}</Kbd>;
+  // Menu shortcut slots set wide letter spacing for a plain-text hint; keycaps inherit it, which
+  // spreads a keycap's letters apart ("C t r l"), so reset it here for every caller.
+  if (keycaps.length === 1) return <Kbd className="tw:tracking-normal">{keycaps[0]}</Kbd>;
   return (
-    <KbdGroup dir="ltr">
+    <KbdGroup dir="ltr" className="tw:tracking-normal">
       {keycaps.map((keycap, index) => (
         // A combo can repeat a glyph (`Ctrl++` has two keycaps but only one distinct value), so the
         // keycap text is not a safe key; position is stable because the keycaps never reorder.
