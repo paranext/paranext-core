@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { SHRINK_STEP, ShrinkStepOverride } from 'platform-bible-react';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { SHRINK_STEP, ShrinkStepOverride, type MarkerMenuItem } from 'platform-bible-react';
+import { useState } from 'react';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { ParagraphStyleTrigger } from './paragraph-style-trigger.component';
 
 // jsdom doesn't ship ResizeObserver. Radix's Popper positioning, used by the popover and by the
@@ -28,6 +29,8 @@ beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
   }
+  // cmdk scrolls the highlighted row into view when the menu opens; jsdom does not implement it.
+  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 });
 
 function renderTrigger(shrinkStep?: number) {
@@ -38,6 +41,9 @@ function renderTrigger(shrinkStep?: number) {
       isStructureProtected={false}
       markerMenuItems={[]}
       localizedStrings={{}}
+      isMenuOpen={false}
+      onMenuOpenChange={() => {}}
+      onReturnFocusToEditor={() => {}}
     />
   );
   return render(
@@ -135,10 +141,155 @@ describe('ParagraphStyleTrigger', () => {
           isStructureProtected={false}
           markerMenuItems={[]}
           localizedStrings={{}}
+          isMenuOpen={false}
+          onMenuOpenChange={() => {}}
+          onReturnFocusToEditor={() => {}}
         />,
       );
 
       expect(container).toBeEmptyDOMElement();
     });
+  });
+});
+
+const PARAGRAPH_ITEM_ACTION = vi.fn();
+const MENU_ITEMS: MarkerMenuItem[] = [
+  { marker: 'p', title: 'Paragraph', action: () => PARAGRAPH_ITEM_ACTION() },
+  { marker: 'q1', title: 'Poetic Line Level 1', action: () => {} },
+];
+
+/**
+ * Plays the web view's part: holds whether the menu is open, and offers a stand-in for the editor's
+ * `onParaMarkerMenuRequest` so a test can open the menu the way Enter on a selected marker does.
+ */
+function MenuHarness({
+  onReturnFocusToEditor,
+  isStructureProtected = false,
+}: {
+  onReturnFocusToEditor: () => void;
+  isStructureProtected?: boolean;
+}) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setIsMenuOpen(true)}>
+        Editor asks for the menu
+      </button>
+      <button type="button">Somewhere else</button>
+      <ParagraphStyleTrigger
+        blockMarker="p"
+        styleName="Paragraph"
+        isStructureProtected={isStructureProtected}
+        markerMenuItems={MENU_ITEMS}
+        localizedStrings={{}}
+        isMenuOpen={isMenuOpen}
+        onMenuOpenChange={setIsMenuOpen}
+        onReturnFocusToEditor={onReturnFocusToEditor}
+      />
+    </>
+  );
+}
+
+const TRIGGER_NAME = '%webView_platformScriptureEditor_paragraphSelection_ariaLabel%';
+const queryMenu = () => screen.queryByRole('dialog');
+const pressEscape = () =>
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+/** Radix arms its outside-pointer listener, and runs its unmount auto-focus, on zero-delay timers. */
+const flushZeroDelayTimers = () =>
+  act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+
+describe('ParagraphStyleTrigger menu', () => {
+  it('opens when the editor asks for it', () => {
+    render(<MenuHarness onReturnFocusToEditor={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editor asks for the menu' }));
+
+    expect(queryMenu()).toBeInTheDocument();
+  });
+
+  it('stays closed when the editor asks while the structure is protected', () => {
+    render(<MenuHarness onReturnFocusToEditor={vi.fn()} isStructureProtected />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editor asks for the menu' }));
+
+    expect(queryMenu()).not.toBeInTheDocument();
+  });
+
+  it('closes and returns focus to the editor when an item is picked', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    PARAGRAPH_ITEM_ACTION.mockClear();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editor asks for the menu' }));
+
+    fireEvent.click(screen.getByRole('option', { name: /Paragraph/ }));
+
+    expect(PARAGRAPH_ITEM_ACTION).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: TRIGGER_NAME })).not.toHaveFocus();
+  });
+
+  it('closes on a pick from a menu the toolbar button opened, too', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    fireEvent.click(screen.getByRole('button', { name: TRIGGER_NAME }));
+    expect(queryMenu()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('option', { name: /Poetic Line Level 1/ }));
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+  });
+
+  it('returns focus to the editor, not the button, when Escape dismisses the menu', async () => {
+    // Same as the character-marker control beside it: the toolbar control is a way to act on the
+    // text, so dismissing it puts the user back in the text.
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    const trigger = screen.getByRole('button', { name: TRIGGER_NAME });
+    fireEvent.click(trigger);
+
+    pressEscape();
+
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+    expect(queryMenu()).not.toBeInTheDocument();
+    expect(trigger).not.toHaveFocus();
+  });
+
+  it('leaves focus where the user put it when the menu closes because they interacted outside it', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editor asks for the menu' }));
+    expect(queryMenu()).toBeInTheDocument();
+    await flushZeroDelayTimers();
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Somewhere else' }));
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await flushZeroDelayTimers();
+    expect(onReturnFocusToEditor).not.toHaveBeenCalled();
+  });
+
+  it('refocuses the editor again on the next close after an outside interaction', async () => {
+    // The outside-interaction flag belongs to one opening; a stale flag would strand focus on the
+    // next Escape.
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    const askButton = screen.getByRole('button', { name: 'Editor asks for the menu' });
+    fireEvent.click(askButton);
+    await flushZeroDelayTimers();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Somewhere else' }));
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await flushZeroDelayTimers();
+
+    fireEvent.click(askButton);
+    expect(queryMenu()).toBeInTheDocument();
+    pressEscape();
+
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
   });
 });

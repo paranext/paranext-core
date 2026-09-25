@@ -5,7 +5,7 @@ import {
   ShrinkStepOverride,
   type MarkerMenuItem,
 } from 'platform-bible-react';
-import type { ComponentProps, ReactNode } from 'react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import {
   ParagraphStyleTrigger,
@@ -83,6 +83,8 @@ type TriggerArgs = ComponentProps<typeof ParagraphStyleTrigger>;
 
 /** Renders the trigger with the story's args, the shared menu items, and the shared strings. */
 function Trigger({ blockMarker, isStructureProtected = false, styleName }: Partial<TriggerArgs>) {
+  // The web view owns this state in the app; each story instance keeps its own so clicking opens it.
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   return (
     <ParagraphStyleTrigger
       blockMarker={blockMarker}
@@ -90,6 +92,9 @@ function Trigger({ blockMarker, isStructureProtected = false, styleName }: Parti
       localizedStrings={localizedStrings}
       markerMenuItems={markerMenuItems}
       styleName={styleName}
+      isMenuOpen={isMenuOpen}
+      onMenuOpenChange={setIsMenuOpen}
+      onReturnFocusToEditor={() => {}}
     />
   );
 }
