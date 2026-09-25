@@ -97,8 +97,8 @@ export type ZoomStepperProps = {
  * than a platform constant.
  *
  * The field takes any whole percentage in range, committed on Enter or when it loses focus; Escape
- * abandons the edit. The buttons always land on the 10 % grid, so from a typed 137 % `+` goes to
- * 150 % and `−` to 130 %.
+ * abandons the edit. The buttons always land on the next 10 % mark in the direction pressed, so
+ * from a typed 137 % `+` goes to 140 % and `−` to 130 %.
  *
  * The two button groups — `[−, +]` and `[percentage, reset]` — sit side by side and wrap onto two
  * rows when their container is too narrow for both.

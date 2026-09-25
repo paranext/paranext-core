@@ -349,9 +349,9 @@ test.describe('Settings layout and zoom steppers', () => {
       await contentZoomField.press('Escape');
       await expect(contentZoomField).toHaveValue(/^137\s%$/u);
       // Stepping afterwards proves 250 was never committed: + steps from 137 % to the next 10 %
-      // mark, 150 %, where a committed 250 % would have stepped to 260 %.
+      // mark, 140 %, where a committed 250 % would have stepped to 260 %.
       await contentZoom.getByRole('button', { name: 'Increase default zoom', exact: true }).click();
-      await expect.poll(() => readSetting(mainPage, CONTENT_ZOOM_SETTING)).toBe(1.5);
+      await expect.poll(() => readSetting(mainPage, CONTENT_ZOOM_SETTING)).toBe(1.4);
     });
 
     await test.step('Interface scaling shows 100 % and + writes 1.1', async () => {

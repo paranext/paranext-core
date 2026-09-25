@@ -4068,7 +4068,9 @@ export declare function clampZoom(factor: number): number;
  */
 export declare function roundZoom(factor: number): number;
 /**
- * Steps a factor by `deltaSteps * ZOOM_STEP`, then clamps and rounds.
+ * Steps a factor by `deltaSteps * ZOOM_STEP`, then clamps and rounds. An off-grid factor (a typed
+ * percentage) first moves to the grid mark it has passed in the direction of travel, so one step
+ * never skips the nearest mark: from 1.37, `+1` gives 1.4 and `-1` gives 1.3.
  *
  * @param factor The current zoom factor
  * @param deltaSteps Number of steps to apply (+1 = zoom in, −1 = zoom out)

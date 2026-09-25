@@ -38,12 +38,33 @@ describe('content-zoom.util', () => {
     expect(adjustZoomFactor(0.5, -1)).toBe(0.5);
   });
 
-  it('snaps an off-grid factor to the nearest tenth as it steps', () => {
-    // An off-grid factor lands back on the tenth grid, so a step is not always 10 points: from a
-    // stored 1.25, `+1` moves 15 points and `-1` moves 5, because `Math.round` breaks the .5 tie
-    // upward in both directions.
-    expect(adjustZoomFactor(1.25, 1)).toBe(1.4);
+  it('steps an off-grid factor to the next tenth in the direction of travel', () => {
+    // An off-grid factor first drops to the grid mark it has passed in the direction of travel, so
+    // one step never skips the nearest mark: 1.37 goes to 1.4 on `+1` and to 1.3 on `-1`.
+    expect(adjustZoomFactor(1.37, 1)).toBe(1.4);
+    expect(adjustZoomFactor(1.37, -1)).toBe(1.3);
+    expect(adjustZoomFactor(1.25, 1)).toBe(1.3);
     expect(adjustZoomFactor(1.25, -1)).toBe(1.2);
+    expect(adjustZoomFactor(1.34, -1)).toBe(1.3);
+    expect(adjustZoomFactor(1.15, -1)).toBe(1.1);
+    // Several steps count from that mark.
+    expect(adjustZoomFactor(1.37, 2)).toBe(1.5);
+    expect(adjustZoomFactor(1.37, -2)).toBe(1.2);
+    // Near the bounds the step still clamps.
+    expect(adjustZoomFactor(2.95, 1)).toBe(3);
+    expect(adjustZoomFactor(0.55, -1)).toBe(0.5);
+  });
+
+  it('keeps an on-grid factor on the grid despite float noise in its tenths', () => {
+    // 1.1 * 10, 2.3 * 10 and 0.7 * 10 are not whole numbers in binary floating point; a factor on
+    // the grid must still move by exactly one mark.
+    expect(adjustZoomFactor(1.1, 1)).toBe(1.2);
+    expect(adjustZoomFactor(1.1, -1)).toBe(1);
+    expect(adjustZoomFactor(2.3, 1)).toBe(2.4);
+    expect(adjustZoomFactor(2.3, -1)).toBe(2.2);
+    expect(adjustZoomFactor(0.7, 1)).toBe(0.8);
+    expect(adjustZoomFactor(0.7, -1)).toBe(0.6);
+    expect(adjustZoomFactor(2.9000000000000004, -1)).toBe(2.8);
   });
 
   it('avoids accumulated float drift across many repeated steps', () => {

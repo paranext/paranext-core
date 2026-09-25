@@ -264,9 +264,9 @@ describe('ZoomStepper', () => {
   });
 
   it('steps by the platform rule from an off-tenth factor', () => {
-    // The shared helper subtracts a whole step and then rounds the result to the nearest tenth, so
-    // 0.95 goes to 0.9. A rule that truncated the result to a tenth instead would land on 0.8,
-    // which is two steps away from where the user pressed once.
+    // The shared helper steps to the next tenth in the direction pressed, so 0.95 goes to 0.9. A
+    // rule that truncated the stepped result to a tenth instead would land on 0.8, two marks away
+    // from where the user pressed once.
     const onChange = vi.fn();
     render(<ZoomStepper {...baseProps} value={0.95} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
@@ -483,12 +483,12 @@ describe('ZoomStepper percentage field', () => {
     expect(percentField()).toHaveDisplayValue(showsPercent(300));
   });
 
-  it('steps the buttons on the 10 % grid from a typed off-grid value', () => {
+  it('steps the buttons to the next 10 % mark from a typed off-grid value', () => {
     const up = vi.fn();
     const { unmount } = render(<ZoomStepper {...baseProps} value={1} onChange={up} />);
     typeAndEnter('137');
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
-    expect(up.mock.calls).toEqual([[1.37], [1.5]]);
+    expect(up.mock.calls).toEqual([[1.37], [1.4]]);
     unmount();
 
     const down = vi.fn();
@@ -505,7 +505,7 @@ describe('ZoomStepper percentage field', () => {
     // A pointer press on a button blurs the field first; jsdom does not do that on its own.
     fireEvent.blur(percentField());
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
-    expect(onChange.mock.calls).toEqual([[1.37], [1.5]]);
+    expect(onChange.mock.calls).toEqual([[1.37], [1.4]]);
   });
 
   it('keeps a typed commit through the confirmation of an earlier press', () => {

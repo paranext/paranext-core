@@ -53,7 +53,15 @@ export function roundZoom(factor: number): number {
 }
 
 /**
- * Steps a factor by `deltaSteps * ZOOM_STEP`, then clamps and rounds.
+ * Tolerance for reading a factor's tenths: `1.1 * 10` is `11.000000000000002` in binary floating
+ * point, and a factor on the grid must still count as on it.
+ */
+const GRID_TOLERANCE = 1e-9;
+
+/**
+ * Steps a factor by `deltaSteps * ZOOM_STEP`, then clamps and rounds. An off-grid factor (a typed
+ * percentage) first moves to the grid mark it has passed in the direction of travel, so one step
+ * never skips the nearest mark: from 1.37, `+1` gives 1.4 and `-1` gives 1.3.
  *
  * @param factor The current zoom factor
  * @param deltaSteps Number of steps to apply (+1 = zoom in, −1 = zoom out)
@@ -61,5 +69,8 @@ export function roundZoom(factor: number): number {
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export function adjustZoomFactor(factor: number, deltaSteps: number): number {
-  return roundZoom(clampZoom(factor + deltaSteps * ZOOM_STEP));
+  let gridFactor = factor;
+  if (deltaSteps > 0) gridFactor = Math.floor(factor * 10 + GRID_TOLERANCE) / 10;
+  else if (deltaSteps < 0) gridFactor = Math.ceil(factor * 10 - GRID_TOLERANCE) / 10;
+  return roundZoom(clampZoom(gridFactor + deltaSteps * ZOOM_STEP));
 }
