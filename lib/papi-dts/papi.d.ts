@@ -10457,9 +10457,9 @@ declare module 'shared/services/localization.service-model' {
      */
     getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
     /**
-     * Get the user-interface languages offered to users. This is a curated subset of the languages
-     * that have a locale file. A language outside it can still be set in `platform.interfaceLanguage`
-     * and is still rendered; it is only not offered.
+     * Get the interface languages to list in language pickers: a curated subset of the languages that
+     * have a locale file. Any loaded language can still be set in `platform.interfaceLanguage` and
+     * renders; it just isn't listed here.
      *
      * @returns The offered user-interface languages, keyed by raw locale tag
      */
