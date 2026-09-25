@@ -4,6 +4,7 @@ import {
   createSyntheticCloseEvent,
   isPapiPortCloseFrame,
 } from '@shared/data/papi-port.model';
+import { bindClassMethods } from '@shared/utils/util';
 
 /**
  * The surface of Electron's `MessagePortMain` this adapter uses, typed structurally so tests can
@@ -48,8 +49,7 @@ export class MessagePortServerSocket implements ServerSocketLike {
   private hasClosed = false;
 
   constructor(private readonly port: MessagePortMainLike) {
-    this.onPortMessage = this.onPortMessage.bind(this);
-    this.onPortClose = this.onPortClose.bind(this);
+    bindClassMethods.call(this);
     port.on('message', this.onPortMessage);
     port.on('close', this.onPortClose);
     // Nothing is delivered on a MessagePortMain — not a message, not even `close` — until it is
