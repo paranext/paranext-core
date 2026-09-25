@@ -154,7 +154,6 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
     'platform.showOnboardingTour',
     ...PRODUCT_FEEDBACK_ITEMS,
     'platform.visitFAQsPage',
-    'platform.visitFeatureRoadmapPage',
     'platform.visitGettingStartedPage',
     'platformEnhancedResources.openEnhancedResource',
     'platformGetResources.openHome',
