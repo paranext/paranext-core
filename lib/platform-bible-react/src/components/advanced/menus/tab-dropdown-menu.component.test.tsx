@@ -156,11 +156,14 @@ describe('TabDropdownMenu', () => {
     expect(screen.getAllByRole('separator')).toHaveLength(2);
   });
 
-  it('shows the shortcut beside an item that has one, and nothing beside one without', async () => {
+  it('shows the shortcut as keycaps beside an item that has one, and nothing beside one without', async () => {
     await openMenu(EDITOR_MENU);
 
     const find = screen.getByRole('menuitem', { name: /^Find/ });
-    expect(within(find).getByText('Ctrl+F')).toHaveAttribute('data-slot', 'dropdown-menu-shortcut');
+    const shortcut = find.querySelector('[data-slot="dropdown-menu-shortcut"]');
+    expect(shortcut).not.toBeNull();
+    expect(within(find).getByText('Ctrl').tagName).toBe('KBD');
+    expect(within(find).getByText('F').tagName).toBe('KBD');
     const footnote = screen.getByRole('menuitem', { name: /^Insert footnote/ });
     expect(footnote.querySelector('[data-slot="dropdown-menu-shortcut"]')).toBeNull();
   });
@@ -169,8 +172,8 @@ describe('TabDropdownMenu', () => {
     await openMenu(EDITOR_MENU);
 
     const find = screen.getByRole('menuitem', { name: /^Find/ });
-    // jsdom computes no bidi, so the class that isolates the hint is the checkable part
-    expect(within(find).getByText('Ctrl+F')).toHaveClass('tw:[unicode-bidi:plaintext]');
+    const group = within(find).getByText('Ctrl').closest('[data-slot="kbd-group"]');
+    expect(group).toHaveAttribute('dir', 'ltr');
   });
 });
 

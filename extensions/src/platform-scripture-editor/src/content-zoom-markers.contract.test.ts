@@ -110,4 +110,16 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
     // plain div; its class list is styling, not part of the zoom contract this test guards.
     expect(source).toMatch(/<div ref={editorContainerRef}/);
   });
+
+  it('names the footnotes area on the zoom badge with a string the view loads', () => {
+    // Without the label the badge shows a bare level that reads as the Scripture text's own; a key
+    // missing from the loaded list leaves the prop undefined, with the same result.
+    // `(?:=>|[^>])*` spans the opening tag, stepping over arrow-function `=>`.
+    expect(source).toMatch(
+      /<FootnotesLayout\b(?:=>|[^>])*\bzoomAreaLabel=\{localizedStrings\[FOOTNOTES_ZOOM_AREA_LABEL_KEY\]\}/,
+    );
+    expect(source).toMatch(
+      /const EDITOR_LOCALIZED_STRINGS: LocalizeKey\[\] = \[[^\]]*\bFOOTNOTES_ZOOM_AREA_LABEL_KEY,/,
+    );
+  });
 });

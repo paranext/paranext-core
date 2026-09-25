@@ -1735,8 +1735,8 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	iconPathBefore?: string;
 	/**
 	 * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
-	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
-	 * it as a key binding.
+	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: renderers
+	 * split it into one keycap per key, but never treat it as a key binding.
 	 *
 	 * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
 	 * the unlocalized main menu never has it. Key names are not localized, and only the first
@@ -4043,7 +4043,8 @@ export declare function isParagraphMarker(marker: string): boolean;
  * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
  * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both
  * scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these from here rather
- * than keeping their own copy.
+ * than keeping their own copy. Also the keyboard chords that zoom a pane's content, as menus show
+ * them.
  */
 /**
  * Smallest allowed zoom factor.
@@ -4063,6 +4064,54 @@ export declare const MAX_ZOOM_FACTOR = 3;
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare const ZOOM_STEP = 0.1;
+/**
+ * How each operating system spells a content-zoom keyboard chord for display: macOS symbols with no
+ * separator, Windows and Linux key names joined with `+`.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomShortcut = Readonly<{
+	/**
+	 * MacOS spelling, e.g. `⌘=`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	macOS: string;
+	/**
+	 * Windows spelling, e.g. `Ctrl++`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	windows: string;
+	/**
+	 * Linux spelling, e.g. `Ctrl++`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	linux: string;
+}>;
+/**
+ * The chord that zooms a pane's content in, as a menu shows it on each operating system. Core's
+ * keyboard-shortcuts catalog and every menu that shows this hint read it from here, so a menu built
+ * outside the menu data service cannot drift from the catalog.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_IN_SHORTCUT: ContentZoomShortcut;
+/**
+ * The chord that zooms a pane's content out, as a menu shows it on each operating system. See
+ * {@link CONTENT_ZOOM_IN_SHORTCUT}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_OUT_SHORTCUT: ContentZoomShortcut;
+/**
+ * The chord that returns a pane's content to its default zoom, as a menu shows it on each operating
+ * system. See {@link CONTENT_ZOOM_IN_SHORTCUT}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_RESET_SHORTCUT: ContentZoomShortcut;
 /**
  * Clamps a zoom factor into `[MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR]`.
  *

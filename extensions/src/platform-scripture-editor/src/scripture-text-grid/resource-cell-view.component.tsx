@@ -3,9 +3,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
   Button,
   ContentZoomRoot,
+  isMacOs,
+  isWindows,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -13,8 +16,15 @@ import {
   TooltipTrigger,
   useTruncationTooltip,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
-import { formatReplacementString } from 'platform-bible-utils';
+import {
+  CONTENT_ZOOM_IN_SHORTCUT,
+  CONTENT_ZOOM_OUT_SHORTCUT,
+  CONTENT_ZOOM_RESET_SHORTCUT,
+  formatReplacementString,
+  type ContentZoomShortcut,
+} from 'platform-bible-utils';
 import { ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 import {
@@ -108,6 +118,13 @@ export type ResourceCellViewProps = {
   onReorderKeyDown?: (event: KeyboardEvent) => void;
 };
 
+/** The spelling of `shortcut` for the operating system the app is running on. */
+function getShortcutForThisOs(shortcut: ContentZoomShortcut): string {
+  if (isMacOs()) return shortcut.macOS;
+  if (isWindows()) return shortcut.windows;
+  return shortcut.linux;
+}
+
 function ZoomItemsShared({
   labels,
   canZoomIn,
@@ -125,16 +142,32 @@ function ZoomItemsShared({
   onZoomOut?: () => void;
   onResetZoom?: () => void;
 }) {
+  // These items run the platform's own platform.webViewContentZoomIn/Out/Reset commands (see
+  // use-resource-content-zoom.hook.ts), so they show the chords core's keyboard-shortcuts catalog
+  // lists for those commands; both read them from platform-bible-utils.
+  const zoomInHint = getShortcutForThisOs(CONTENT_ZOOM_IN_SHORTCUT);
+  const zoomOutHint = getShortcutForThisOs(CONTENT_ZOOM_OUT_SHORTCUT);
+  const resetHint = getShortcutForThisOs(CONTENT_ZOOM_RESET_SHORTCUT);
+
   return (
     <>
       <DropdownMenuItem disabled={!canZoomIn} onSelect={onZoomIn}>
         {labels.zoomIn}
+        <DropdownMenuShortcut>
+          <ShortcutKeys hint={zoomInHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canZoomOut} onSelect={onZoomOut}>
         {labels.zoomOut}
+        <DropdownMenuShortcut>
+          <ShortcutKeys hint={zoomOutHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canReset} onSelect={onResetZoom}>
         {labels.reset}
+        <DropdownMenuShortcut>
+          <ShortcutKeys hint={resetHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
     </>
   );

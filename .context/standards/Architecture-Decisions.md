@@ -3272,7 +3272,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-menu-shortcut-hints-joined-from-catalog: Menu shortcut hints are joined from the keyboard shortcuts catalog by the menu data service
 
 - **Date:** 2026-09-11
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-25 (see the note at the end)
 - **Context:** Menus should show the keyboard shortcut for a command. Shortcuts are handled in three
   unrelated places (main-process `before-input-event`, `useHotkeys`, per-web-view handlers), and the
   only per-OS display strings live in the hand-maintained catalog. The menu that most needs hints —
@@ -3305,6 +3305,26 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `getLocalizeKeyForPhysicalKey`, and routing them there is follow-up work (PT-4629).
 - **Source:** PT-4532 (parent PT-4530); sourcing hints in the menu data service was agreed during
   implementation, 2026-09-11.
+- **Amended 2026-09-25 (PT-4585, PR #2865 review):** three parts of the decision above changed.
+  (1) **Same-command exception.** A chord the main process handles regardless of focus may still
+  carry a `command` when that main-process handler runs the same command the menu item does — the
+  macOS View menu's content-zoom accelerators run `platform.webViewContentZoomIn`/`Out`/`Reset`, the
+  commands of the `content-zoom-*` entries. The hint then names the command the chord runs, though
+  not necessarily in the same tab: the View menu zooms the focused window's last focused tab, the tab
+  menu its own tab. (2) **Explicit allowlist.** The chord-clash check in
+  `keyboard-shortcuts.data.test.ts` (`findMainProcessChordClashes`) still rejects a chord shared with
+  a different main-process entry, and now also rejects any main-process location of an entry's own
+  unless `SAME_COMMAND_MAIN_PROCESS_LOCATIONS` lists it for that entry id and its current `command`
+  — so a focus-blind chord such as `reference-history-back` still cannot gain a `command` silently,
+  and an allowlisted entry loses its allowance if its `command` changes. (3) **Hand-built menus
+  share the chord.** A menu built in extension code, outside the menu data service, can now show a
+  hint: the chord lives in `platform-bible-utils` (`CONTENT_ZOOM_IN/OUT/RESET_SHORTCUT` in
+  `content-zoom.util.ts`), and both the catalog entry's `keys` and the menu read it from there, so
+  they cannot drift (as of 2026-09-25, the Text Collection's zoom items are the one such menu).
+  Rejected for (3): restating the chord as a literal in the extension and pinning it with a core
+  test that reads the extension's source file — it caught a changed string but not a hint on the
+  wrong item, and made restating look like the pattern to follow. Consequence: a chord shared this
+  way is a `platform-bible-utils` export, so changing it rebuilds that package's `dist`.
 
 ## adr-menus-always-available-gate-at-submission: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
 

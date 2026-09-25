@@ -120,3 +120,4 @@ export {
   DEVELOPER_SECTION_STRING_KEYS,
 } from './components/advanced/developer-section/developer-section.component';
 export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
+export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';

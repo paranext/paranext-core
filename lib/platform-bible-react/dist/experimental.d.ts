@@ -1482,6 +1482,34 @@ export type DeveloperSectionProps = {
 };
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare function DeveloperSection({ localizedStrings, selectedServer, onServerChange, disabled, }: DeveloperSectionProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Props for {@link ShortcutKeys}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShortcutKeysProps = {
+	/**
+	 * One already-resolved keyboard shortcut hint to render as keycaps — a single key combination,
+	 * such as a menu item's `shortcut` string. Not a raw keyboard shortcuts catalog `keys` string:
+	 * that may hold several `/`-separated alternatives or a no-equivalent marker, neither of which
+	 * this component parses.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	hint: string;
+};
+/**
+ * Renders a keyboard shortcut hint as keycaps: a single key is a lone {@link Kbd}, while a
+ * combination puts every key in its own `Kbd` inside a `KbdGroup`. The Windows/Linux `+` renders as
+ * plain text between the keycaps rather than as part of one; macOS symbols sit adjacent with
+ * nothing between them.
+ *
+ * It does not detect the operating system: it follows the spelling of the hint it is given, so the
+ * caller picks the spelling for the user's OS (e.g. `isMacOs() ? '⌘Z' : 'Ctrl+Z'`).
+ *
+ * @experimental This component is unstable and may change or disappear without notice
+ */
+export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
 
 export {
 	ALL_BOOK_IDS,

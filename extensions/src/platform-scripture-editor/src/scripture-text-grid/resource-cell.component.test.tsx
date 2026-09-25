@@ -556,11 +556,11 @@ describe('ResourceCell zoom menu', () => {
       <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
     );
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom in' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom in/ }));
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom out' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom out/ }));
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    await user.click(screen.getByRole('menuitem', { name: 'Reset zoom' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Reset zoom/ }));
     expect(zoom.adjustZoom).toHaveBeenNthCalledWith(1, 'r1', 1);
     expect(zoom.adjustZoom).toHaveBeenNthCalledWith(2, 'r1', -1);
     expect(zoom.resetZoom).toHaveBeenCalledWith('r1');
@@ -574,15 +574,15 @@ describe('ResourceCell zoom menu', () => {
       <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
     );
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom in/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).not.toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom out/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Reset zoom/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
@@ -595,11 +595,11 @@ describe('ResourceCell zoom menu', () => {
       <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
     );
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom out/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).not.toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Reset zoom/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
