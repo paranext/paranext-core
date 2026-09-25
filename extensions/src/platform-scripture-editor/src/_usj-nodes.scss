@@ -2590,35 +2590,6 @@
   }
 }
 
-/* Paragraph-marker selection (paragraph-structure view). The editor puts `psc-para-marker-selected`
-   (and aria-selected) on the paragraph whose gutter marker is the selection. Selection gets a
-   channel of its own, per adr-list-selection-on-a-dedicated-visual-channel: a surface fill plus a
-   4px leading bar, never the active-text focus box (which owns this element's ::after), and no
-   pseudo-element. The gutter lies outside the paragraph's box — the glyph is absolutely positioned
-   into .editor-input's padding — so the fill and bar are outer box-shadows offset toward
-   inline-start by the gutter width plus the paragraph's own indent compensation; the fill layer
-   stops 4px short, which is the bar. `--foreground` is the bar token by measured contrast (>= 3:1
-   against --background and --accent in every built-in theme), pinned by
-   paragraph-marker-selection-contrast.test.ts. */
-.psc-gutter-markers .psc-para-marker-selected {
-  --psc-para-marker-selection-reach: calc(var(--psc-gutter-width) + var(--para-indent, 0px));
-  background-color: var(--accent);
-  box-shadow:
-    calc(4px - var(--psc-para-marker-selection-reach)) 0 0 0 var(--accent),
-    calc(-1 * var(--psc-para-marker-selection-reach)) 0 0 0 var(--foreground);
-}
-
-.psc-gutter-markers[dir='rtl'] .psc-para-marker-selected {
-  box-shadow:
-    calc(var(--psc-para-marker-selection-reach) - 4px) 0 0 0 var(--accent),
-    var(--psc-para-marker-selection-reach) 0 0 0 var(--foreground);
-}
-
-.psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child {
-  color: var(--foreground);
-  font-weight: 700;
-}
-
 span.unread img {
   background-color: #ffff99;
   position: relative;
@@ -3041,6 +3012,35 @@ span.read img {
 .psc-gutter-markers[dir='rtl'] .book > .marker:first-child {
   left: auto;
   right: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
+}
+
+/* Paragraph-marker selection (paragraph-structure view). The editor puts `psc-para-marker-selected`
+   (and aria-selected) on the paragraph whose gutter marker is the selection. Selection gets a
+   channel of its own, per adr-list-selection-on-a-dedicated-visual-channel: a surface fill plus a
+   4px leading bar, never the active-text focus box (which owns this element's ::after), and no
+   pseudo-element. The gutter lies outside the paragraph's box — the glyph is absolutely positioned
+   into .editor-input's padding — so the fill and bar are outer box-shadows offset toward
+   inline-start by the gutter width plus the paragraph's own indent compensation; the fill layer
+   stops 4px short, which is the bar. `--foreground` is the bar token by measured contrast (>= 3:1
+   against --background and --accent in every built-in theme), pinned by
+   paragraph-marker-selection-contrast.test.ts. */
+.psc-gutter-markers .psc-para-marker-selected {
+  --psc-para-marker-selection-reach: calc(var(--psc-gutter-width) + var(--para-indent, 0px));
+  background-color: var(--accent);
+  box-shadow:
+    calc(4px - var(--psc-para-marker-selection-reach)) 0 0 0 var(--accent),
+    calc(-1 * var(--psc-para-marker-selection-reach)) 0 0 0 var(--foreground);
+}
+
+.psc-gutter-markers[dir='rtl'] .psc-para-marker-selected {
+  box-shadow:
+    calc(var(--psc-para-marker-selection-reach) - 4px) 0 0 0 var(--accent),
+    var(--psc-para-marker-selection-reach) 0 0 0 var(--foreground);
+}
+
+.psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child {
+  color: var(--foreground);
+  font-weight: 700;
 }
 
 /* ── Active text focus box ────────────────────────────────────────────────────
