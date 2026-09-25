@@ -314,14 +314,15 @@ export function repairChapterMarkers(
   // marker takes the caret to just past its number, as deleting the errant text by hand would have.
   // A restored marker has no number the user typed, so the caret goes back to the end of the text
   // they were typing ({@link CARET_AT_DOCUMENT_END}). Only when the repair left every surviving
-  // number alone does the caret go to the place a removed marker used to occupy — and a marker
-  // removed from the very end of the document has no such place, so the surviving marker takes the
-  // caret instead.
+  // number alone does the caret go to the place a removed marker used to occupy: the first item
+  // after it that the repair keeps. A marker with nothing but removed markers after it ended the
+  // document and has no such place, so the surviving marker takes the caret instead.
   const removedTopLevelEntry = chapterEntries.find((entry) => entry.index !== anchor?.index);
-  const followingItemIndex =
-    removedTopLevelEntry && removedTopLevelEntry.index + 1 < strippedContent.length
-      ? removedTopLevelEntry.index + 1
-      : undefined;
+  const followingItemIndex = removedTopLevelEntry
+    ? strippedContent.findIndex(
+        (item, index) => index > removedTopLevelEntry.index && !isChapterObject(item),
+      )
+    : -1;
   const caretAtChapterNumber = caretAfterChapterNumber(
     [insertIndex],
     repairedChapterObject.marker ?? CHAPTER_MARKER,
@@ -332,7 +333,7 @@ export function repairChapterMarkers(
     caretTarget = CARET_AT_DOCUMENT_END;
   } else if (anchor.chapterObject.number !== expected) {
     caretTarget = caretAtChapterNumber;
-  } else if (followingItemIndex !== undefined) {
+  } else if (followingItemIndex >= 0) {
     caretTarget = caretAtRemovalBoundary([mapTopLevelIndex(followingItemIndex)], 0);
   } else {
     caretTarget = nestedRemovalCaretTarget(mapTopLevelIndex) ?? caretAtChapterNumber;

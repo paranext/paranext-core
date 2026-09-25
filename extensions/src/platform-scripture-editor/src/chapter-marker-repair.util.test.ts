@@ -511,6 +511,26 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
     expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
   });
 
+  // The item after the first removed marker is another removed marker, so it is no place to put the
+  // caret: nothing is left after the paragraph once both are gone.
+  it('falls back to the surviving marker when several removed markers ended the document', () => {
+    const { usj, caretTarget } = repairChapterMarkers(
+      usjOf(chapter('2'), para('p', 'one'), chapter('5'), chapter('6')),
+      2,
+    );
+    expect(usj.content).toEqual([chapter('2'), para('p', 'one')]);
+    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+  });
+
+  it('puts the caret where several adjacent markers typed mid-chapter were removed', () => {
+    const { usj, caretTarget } = repairChapterMarkers(
+      usjOf(chapter('2'), para('p', 'one'), chapter('5'), chapter('6'), para('p', 'two')),
+      2,
+    );
+    expect(usj.content).toEqual([chapter('2'), para('p', 'one'), para('p', 'two')]);
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[2]', offset: 0 } });
+  });
+
   it('prefers the corrected number over a removal site when the repair did both', () => {
     const { caretTarget } = repairChapterMarkers(
       usjOf(chapter('9'), para('p', 'one'), chapter('9'), para('p', 'two')),
