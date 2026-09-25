@@ -1,4 +1,4 @@
-import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages';
+import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages.service';
 import { localization } from '@extension-host/services/papi-backend.service';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';

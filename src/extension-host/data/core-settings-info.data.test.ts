@@ -3,14 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 // touches the mocked services, so it can be imported normally rather than after the mocks.
 import { platformProjectSettings } from './core-project-settings-info.data';
 // Resolves to the mock below: vitest hoists `vi.mock` above every import.
-import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages';
+import { getAllLoadedInterfaceLanguages } from '@extension-host/services/interface-languages.service';
 
 vi.mock('@extension-host/services/papi-backend.service', () => ({
   localization: {
     getLocalizedString: vi.fn(async () => 'Allowed range is {lowerLimit} to {upperLimit}.'),
   },
 }));
-vi.mock('@extension-host/services/interface-languages', () => ({
+vi.mock('@extension-host/services/interface-languages.service', () => ({
   getAllLoadedInterfaceLanguages: vi.fn(async () => ({
     en: { autonym: 'English' },
     es: { autonym: 'Español' },
