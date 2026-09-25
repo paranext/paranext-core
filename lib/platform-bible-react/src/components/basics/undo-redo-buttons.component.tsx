@@ -125,7 +125,7 @@ export function UndoRedoButtons({
                 {showKeyboardShortcuts && (
                   <>
                     {' '}
-                    <ShortcutKeys hint={isMac ? '⌘⇧Z' : 'Ctrl+Y'} />
+                    <ShortcutKeys hint={isMac ? '⇧⌘Z' : 'Ctrl+Y'} />
                   </>
                 )}
               </p>
