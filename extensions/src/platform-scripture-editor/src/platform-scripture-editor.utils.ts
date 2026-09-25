@@ -157,8 +157,9 @@ export type NoteEditingSurface = 'pane' | 'popover' | 'none';
 /**
  * Decides the note-editing surface for a click on a note caller. Standard view edits notes in the
  * footnotes pane, in place, matching PT9's model; every other view keeps the popover. A read-only
- * text has no editing surface at all — a caller click still navigates (see
- * {@link decideNoteCallerClickAction}) but never opens an editor.
+ * text has no editing surface at all — a caller click in Standard view still navigates (see
+ * {@link decideNoteCallerClickAction}) but never opens an editor; outside Standard view the caller
+ * is inert.
  *
  * @param viewType The scripture editor's current view type
  * @param isReadOnly Whether the text is read-only (editing is disabled)
@@ -438,7 +439,7 @@ export function decideNoteSessionUpdate(state: NoteSessionUpdateState): NoteSess
  * shows and `EditorRef.getNoteIndex` indexes.
  *
  * The editor stamps its documents with a USJ version the markers map is not declared for, and
- * `UsjReaderWriter` logs the WHOLE document on that mismatch; this corrects the version first (see
+ * `UsjReaderWriter` warns on every read when that happens; this corrects the version first (see
  * {@link correctEditorUsjVersion}) so reading the notes on every keystroke logs nothing.
  *
  * @param editorUsj A document from the editor (`EditorRef.getUsj`) or the PDP

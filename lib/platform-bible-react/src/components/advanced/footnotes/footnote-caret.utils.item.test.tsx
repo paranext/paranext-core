@@ -111,4 +111,23 @@ describe('getCaretPositionFromClick against a real FootnoteItem', () => {
     // 'direct '.length (7) + 2 into 'alpha'.
     expect(getCaretPositionFromClick(10, 10, row)).toEqual({ utf16Offset: 9 });
   });
+
+  it('counts a plain string that sits directly in the note content AFTER a char run (e.g. the period after \\xt ...\\xt*)', () => {
+    const footnote: MarkerObject = {
+      type: 'note',
+      marker: 'f',
+      caller: '+',
+      content: [{ type: 'char', marker: 'xt', content: ['See'] }, '.'],
+    };
+    const row = renderItem(footnote);
+    // The bare string is rendered as its own text span, keyed off the note's own marker - same as a
+    // direct string that comes before a run counts toward the origin.
+    const directTextNode = row.querySelector('.usfm_f')?.firstChild; // '.'
+    caretApiDocument().caretPositionFromPoint = vi
+      .fn()
+      .mockReturnValue({ offsetNode: directTextNode, offset: 1 }); // past the period
+
+    // 'See'.length (3) + 1 into '.'.
+    expect(getCaretPositionFromClick(10, 10, row)).toEqual({ utf16Offset: 4 });
+  });
 });

@@ -4065,7 +4065,7 @@ describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
   });
 
   // The editor stamps its documents 3.1 and the markers map is declared for 3.0; left uncorrected,
-  // the reader logs the whole chapter on every pick.
+  // the reader warns on every pick.
   it("reads the editor's own document version without logging it", () => {
     expect(chapterWithNotesInTwoVerses.version).toBe('3.1');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

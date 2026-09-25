@@ -58,9 +58,9 @@ repo's half for the facts each side holds alone.
 ## 3. Marker palette key semantics
 
 `lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts` is the single
-forwarding table for all three consumers: the scripture editor web view, the footnote editor's
-popover (every view but Standard), and the footnotes pane's inline row editor (Standard view — see
-`resolveNoteEditingSurface` in
+forwarding table for all three consumers: the scripture editor web view, the footnote editor
+component (any host that runs it in editable marker mode), and the footnotes pane's inline row
+editor (Standard view — see `resolveNoteEditingSurface` in
 `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). The
 per-consumer copies drifted once already; there is one table now.
 

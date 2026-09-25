@@ -2427,12 +2427,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `platform-yalc` branch (or a published editor version) before its typecheck passes. The inline
   footnote editor in the pane has no Save/Cancel — edits apply live (debounced), and ending the
   session flushes whatever is still pending, matching PT9's own pane editing, so an inserted note is
-  never discarded when an editing session ends. The popover keeps its Save/Cancel: it applies only
-  on Save (`closeAndSave`). Gating the typing-path publish on the pane being rendered means the cost
-  of keeping the pane in sync is paid only while the pane is showing, in whatever view. The
-  "Auto-show footnote pane" toggle and its persisted setting are removed: PT9 has no auto-hide, so
-  the pane hides only when the user hides it (its close control, or the Show footnotes menu
-  command), and a caller click reveals a hidden pane only in Power mode.
+  never discarded when an editing session ends. The popover keeps its Save/Cancel: it applies on
+  Save or when the book or chapter changes, both through `closeAndSave`. Gating the typing-path
+  publish on the pane being rendered means the cost of keeping the pane in sync is paid only while
+  the pane is showing, in whatever view. The "Auto-show footnote pane" toggle and its persisted
+  setting are removed: PT9 has no auto-hide, so the pane hides only when the user hides it (its
+  close control, or the Show footnotes menu command), and a caller click reveals a hidden pane only
+  in Power mode.
   The pane's chrome is a close (X) button in its top-right corner and no title header — the earlier
   title header was removed by team decision, and PT9's own pane likewise closes via a corner button
   rather than a toggle in a title bar.

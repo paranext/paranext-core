@@ -57,9 +57,9 @@ function firstTextNodeWithin(node: Node): Text | undefined {
  * @param clientX Viewport X of the click (from the mouse event).
  * @param clientY Viewport Y of the click.
  * @param rowElement The row's root element; the offset is computed over the text of its
- *   `.textual-note-body` descendant - the note's character runs, excluding the caller (rendered in
- *   the row's header cell), the rendered USFM markers, the `\cat` category run and the empty-note
- *   placeholder (see `isDisplayText`).
+ *   `.textual-note-body` descendant - the note's text, in character runs and written directly in
+ *   the note alike, excluding the caller (rendered in the row's header cell), the rendered USFM
+ *   markers, the `\cat` category run and the empty-note placeholder (see `isDisplayText`).
  * @returns A flat UTF-16 offset into the note body text, or `'end'` when the click cannot be mapped
  *   (no browser support, click outside the body text, empty note).
  */
