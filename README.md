@@ -559,7 +559,8 @@ npm run test:e2e:smoke
 
 All `test:e2e:*` scripts are there for running variations of the playwright end-to-end tests.
 
-- `test:e2e:smoke` runs a single instance of the application, and all tests share that instance
+- `test:e2e:smoke` runs a single instance of the application, and all tests share that instance,
+  except the bare-Electron checks (e.g. `window-zoom.spec.ts`), which launch their own
 - `test:e2e:smoke-wsl` runs the same smoke tests using a "hidden UI" on Linux instead of a visible
   UI. Its script also takes `--wrap <command>` to run any other e2e command the same way, e.g.
   `e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated multi-window`

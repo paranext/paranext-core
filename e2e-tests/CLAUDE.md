@@ -7,6 +7,7 @@ Running the isolated suite natively on Windows: see `tests/isolated/README.md#ru
 | What you're testing | Where it goes | How to run |
 |---|---|---|
 | Core happy path (app launch, basic nav) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
+| Bare-Electron check of an Electron behavior the dev app can't show (e.g. `window-zoom.spec.ts`) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
 | Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>`, or `all` for every subset (the bare form lists the subsets and exits 1) |
 | Tests needing real Marble resources | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` |
 
@@ -45,8 +46,8 @@ meant to be run routinely.
 
 ## What NOT to do
 
-- Do not put feature tests in `smoke/` — smoke tests are for the core happy path and must stay
-  fast and CI-green.
+- Do not put feature tests in `smoke/` — smoke tests are for the core happy path (plus the
+  bare-Electron checks in the table above) and must stay fast and CI-green.
 - Do not use `manage-books/` or `markers-checklist/` as models — those are legacy AI-porting
   experiments not wired into any standard test run. See the README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding

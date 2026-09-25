@@ -11,7 +11,10 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
-import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
+import {
+  useWindowControlsOverlay,
+  type WindowControlsOverlayInsets,
+} from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
 import { resetSyncActivity, setSyncActivity } from '@renderer/services/sync-activity-store';
@@ -105,7 +108,7 @@ vi.mock('@renderer/hooks/use-open-project-book-ids.hook', () => ({
 }));
 
 vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
-  useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
+  useWindowControlsOverlay: vi.fn((): WindowControlsOverlayInsets | undefined => undefined),
 }));
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({
@@ -1240,9 +1243,7 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   });
 
   it('reserves the live-measured overlay width plus breathing room on Windows, and does not also apply the static class', async () => {
-    vi.mocked(useWindowControlsOverlay).mockReturnValue(
-      new DOMRect(0, 0, window.innerWidth - 150, 32),
-    );
+    vi.mocked(useWindowControlsOverlay).mockReturnValue({ left: 0, right: 150 });
     mockSendCommandForOS('win32');
 
     render(<PlatformBibleToolbar />);
@@ -1271,10 +1272,7 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   });
 
   it('reserves space on the left when the live-measured gap is on the left (e.g., RTL locales)', async () => {
-    // left = 150, right = window.innerWidth: the gap sits on the left instead of the right.
-    vi.mocked(useWindowControlsOverlay).mockReturnValue(
-      new DOMRect(150, 0, window.innerWidth - 150, 32),
-    );
+    vi.mocked(useWindowControlsOverlay).mockReturnValue({ left: 150, right: 0 });
     mockSendCommandForOS('win32');
 
     render(<PlatformBibleToolbar />);
@@ -1304,9 +1302,7 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   it('reserves the live-measured overlay width on Linux, the same as Windows', async () => {
     // Linux takes the frameless path with its own caption buttons, so the toolbar has to leave room
     // for them. Without the reservation the account icon draws on top of the maximize glyph.
-    vi.mocked(useWindowControlsOverlay).mockReturnValue(
-      new DOMRect(0, 0, window.innerWidth - 150, 32),
-    );
+    vi.mocked(useWindowControlsOverlay).mockReturnValue({ left: 0, right: 150 });
     mockSendCommandForOS('linux');
 
     render(<PlatformBibleToolbar />);
@@ -1321,7 +1317,7 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
   });
 
   it('does not reserve space on macOS regardless of overlay geometry, keeping the static traffic-lights class', async () => {
-    vi.mocked(useWindowControlsOverlay).mockReturnValue(new DOMRect(0, 0, 700, 32));
+    vi.mocked(useWindowControlsOverlay).mockReturnValue({ left: 0, right: 150 });
     mockSendCommandForOS('darwin');
 
     render(<PlatformBibleToolbar />);
