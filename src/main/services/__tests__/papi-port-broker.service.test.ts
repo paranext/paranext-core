@@ -268,4 +268,20 @@ describe('papiPortBroker', () => {
     expect(() => closeWindowPort('w1', 1001, 'window closing')).not.toThrow();
     expect(ports[0].postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ code: 1001 }));
   });
+
+  test('a late destroyed signal from an old window leaves a newer window under the same id registered', () => {
+    const oldWindow = makeFakeWebContents();
+    const newWindow = makeFakeWebContents();
+    registerWindow(oldWindow.webContents, 'w1');
+    registerWindow(newWindow.webContents, 'w1');
+    newWindow.requestPort();
+
+    oldWindow.destroy();
+    closeWindowPort('w1', 1001, 'window closing');
+
+    expect(ports[0].postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 1001, reason: 'window closing' }),
+    );
+    expect(ports[0].close).toHaveBeenCalled();
+  });
 });
