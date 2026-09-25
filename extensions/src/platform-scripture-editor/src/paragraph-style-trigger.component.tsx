@@ -11,6 +11,7 @@ import {
   SHRINK_STEP,
   useShrinkStepValue,
 } from 'platform-bible-react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ParagraphStyleLabel } from './paragraph-style-label.component';
 
 const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_paragraphSelection_ariaLabel%';
@@ -59,11 +60,31 @@ export type ParagraphStyleTriggerProps = {
   localizedStrings: MarkerMenuLocalizedStrings & {
     [key in ParagraphStyleTriggerStringKey]?: string;
   };
+  /**
+   * Whether the menu is open. Controlled by the caller so the editor can open it from the keyboard
+   * (Enter or Alt+Down on a selected paragraph marker).
+   */
+  isMenuOpen: boolean;
+  /**
+   * Called with `true` when this button opens the menu, and with `false` when the menu closes —
+   * including right after an item is picked, since this is a single-select control.
+   */
+  onMenuOpenChange: (isOpen: boolean) => void;
+  /**
+   * Puts keyboard focus back in the editor. Called as the menu closes, in place of Radix's return
+   * to this button, so the user is back in the text — and a selected paragraph marker, which the
+   * editor keeps while focus is in the menu, is live again for the next key. Not called when the
+   * menu closed because the user clicked or focused something else: focus belongs where they put
+   * it.
+   */
+  onReturnFocusToEditor: () => void;
 };
 
 /**
  * The toolbar's paragraph-style control: a button showing the marker and style name of the block
- * the cursor is in, which opens the paragraph marker menu.
+ * the cursor is in — or of the paragraph whose marker is selected — which opens the paragraph
+ * marker menu. The menu is controlled by the caller so the editor can open it from the keyboard;
+ * picking an item closes it, and closing returns focus to the editor.
  *
  * A component rather than inline JSX in the web view because it reads `ShrinkStepContext`, which
  * `TabToolbarContainer` publishes. `PlatformScriptureEditor` _renders_ the `TabToolbar`, so a hook
@@ -76,6 +97,9 @@ export function ParagraphStyleTrigger({
   isStructureProtected,
   markerMenuItems,
   localizedStrings,
+  isMenuOpen,
+  onMenuOpenChange,
+  onReturnFocusToEditor,
 }: ParagraphStyleTriggerProps) {
   const shrinkStep = useShrinkStepValue();
   // Once the style name has been dropped the marker is the whole label, and a marker is a code with
@@ -99,6 +123,35 @@ export function ParagraphStyleTrigger({
   const isFloored = shrinkStep >= SHRINK_STEP.MINIMUM;
   const widthFloor = isFloored ? 'tw:min-w-min' : 'tw:min-w-0';
 
+  // Set by an outside interaction and read as the menu closes; each opening starts clear.
+  const wasClosedByOutsideInteractionRef = useRef(false);
+  useEffect(() => {
+    if (isMenuOpen) wasClosedByOutsideInteractionRef.current = false;
+  }, [isMenuOpen]);
+
+  // This is a single-select control, so picking a marker must close the menu. `MarkerMenu` wires
+  // `onSelect` straight to `item.action` and knows nothing about its host's open state, so each
+  // action is wrapped here, as `CharacterMarkerControl` does.
+  const closingMarkerMenuItems = useMemo(
+    () =>
+      markerMenuItems.map(
+        (item): MarkerMenuItem => ({
+          ...item,
+          action: () => {
+            item.action();
+            onMenuOpenChange(false);
+          },
+        }),
+      ),
+    [markerMenuItems, onMenuOpenChange],
+  );
+
+  const handleCloseAutoFocus = (event: Event) => {
+    if (wasClosedByOutsideInteractionRef.current) return;
+    event.preventDefault();
+    onReturnFocusToEditor();
+  };
+
   // Truthy, not just defined: an empty marker has nothing to put in the label, so the trigger would
   // render an empty box followed by a dangling " - " and the generic fallback description. No marker
   // and no block are the same state to a user, so they read the same way.
@@ -114,7 +167,12 @@ export function ParagraphStyleTrigger({
       // narrows.
       className={widthFloor}
     >
-      <Popover>
+      <Popover
+        // Structure protection disables the button, so it must also keep an editor request from
+        // opening the menu around it.
+        open={isMenuOpen && !isStructureProtected}
+        onOpenChange={onMenuOpenChange}
+      >
         <PopoverTrigger asChild>
           <Button
             // `tw:max-w-full` is what keeps the label ellipsising instead of the button being cut
@@ -151,10 +209,16 @@ export function ParagraphStyleTrigger({
             it, including the ellipsis each row had correctly truncated to. The rows were degrading
             properly into space nobody could see. Radix measures the room actually available and
             publishes it, so cap against that and let the menu narrow instead. */}
-        <PopoverContent className="tw:w-96 tw:max-w-(--radix-popover-content-available-width) tw:p-0">
+        <PopoverContent
+          className="tw:w-96 tw:max-w-(--radix-popover-content-available-width) tw:p-0"
+          onInteractOutside={() => {
+            wasClosedByOutsideInteractionRef.current = true;
+          }}
+          onCloseAutoFocus={handleCloseAutoFocus}
+        >
           <MarkerMenu
             localizedStrings={localizedStrings}
-            markerMenuItems={markerMenuItems}
+            markerMenuItems={closingMarkerMenuItems}
             searchPlaceholder={localizedStrings[SEARCH_PLACEHOLDER_KEY]}
           />
         </PopoverContent>
