@@ -1,43 +1,11 @@
 import {
   CONTENT_ZOOM_AREA_ID_PATTERN,
+  CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE,
   ContentZoomKind,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
   RESERVED_CONTENT_ZOOM_AREA_ID,
-  ZOOM_STEP,
 } from '@shared/models/content-zoom.model';
-
-/*
- * `clampZoom`, `roundZoom` and `adjustZoomFactor` below are mirrored, with the same bounds and the
- * same step, in `extensions/src/platform-scripture-editor/src/scripture-text-grid/
- * resource-zoom.utils.ts`, which the Scripture text grid's own per-resource zoom uses. Core cannot
- * import extension source and an extension cannot import `@shared`, so the two copies can only be
- * shared by promoting them into `platform-bible-utils`.
- *
- * TODO(PT-4725): promote these three helpers into `platform-bible-utils` and update both call
- * sites onto the shared copy. Until then, change both copies together.
- */
-
-/** Clamps a zoom factor into `[MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR]`. */
-export function clampZoom(factor: number): number {
-  if (factor < MIN_ZOOM_FACTOR) return MIN_ZOOM_FACTOR;
-  if (factor > MAX_ZOOM_FACTOR) return MAX_ZOOM_FACTOR;
-  return factor;
-}
-
-/**
- * Rounds a zoom factor to one decimal place. Repeated `+ ZOOM_STEP` additions accumulate
- * binary-float error (1.1 + 0.1 = 1.2000000000000002); rounding keeps stored and compared factors
- * stable.
- */
-export function roundZoom(factor: number): number {
-  return Math.round(factor * 10) / 10;
-}
-
-/** Steps a factor by `deltaSteps * ZOOM_STEP`, then clamps and rounds. */
-export function adjustZoomFactor(factor: number, deltaSteps: number): number {
-  return roundZoom(clampZoom(factor + deltaSteps * ZOOM_STEP));
-}
 
 /** Narrow no-break space, placed between the number and `%` so the pair never wraps onto two lines. */
 const NARROW_NO_BREAK_SPACE = '\u202f';
@@ -70,8 +38,16 @@ export function isValidContentZoomAreaId(value: unknown): value is string {
   );
 }
 
+/**
+ * Every kind some declared web view type uses, read from the declaration map so the set of kinds a
+ * memory key may carry cannot drift from the map.
+ */
+const DECLARED_CONTENT_ZOOM_KINDS: ReadonlySet<string> = new Set(
+  [...CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.values()].map((declaration) => declaration.kind),
+);
+
 function isContentZoomKind(value: string): value is ContentZoomKind {
-  return value === 'editor' || value === 'resource' || value === 'notes';
+  return DECLARED_CONTENT_ZOOM_KINDS.has(value);
 }
 
 /**

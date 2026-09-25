@@ -63,7 +63,12 @@ import {
   CurrentCommentListView,
   resolveSetFiltersMessage,
 } from './comment-list-web-view-message.util';
-import type { CommentListScrollTarget } from './comment-list-scroll.utils';
+import {
+  type CommentListScrollTarget,
+  type NavigationRecord,
+  shouldArmSyncScroll,
+  toNavigationRecord,
+} from './comment-list-scroll.utils';
 import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { useCommentDrafts } from './use-comment-drafts.hook';
 import { useFrozenPresetThreadIds } from './use-frozen-preset-thread-ids.hook';
@@ -165,6 +170,9 @@ async function withPdp<PDP, T>(
  * editing-paused notice appears, and the filter toolbar it also contains wraps as the viewport
  * narrows — so every caller must invoke this immediately before its own `scrollIntoView`, rather
  * than relying on a padding value set by an earlier scroll.
+ *
+ * Nothing clears the padding on unmount, and nothing needs to: this view is the root of its own
+ * iframe document and unmounts only when that document is discarded with it.
  */
 function applyStickyHeaderScrollPadding(): void {
   const stickyHeader = document.getElementById(COMMENT_LIST_STICKY_HEADER_ELEMENT_ID);
@@ -680,23 +688,37 @@ global.webViewComponent = function CommentListWebView({
     scrollToTarget,
   });
 
-  // Clears the scroll-padding this view applies before a scroll (see
-  // applyStickyHeaderScrollPadding) so a stale value never outlives this component.
-  useEffect(() => {
-    return () => {
-      document.documentElement.style.scrollPaddingTop = '';
-    };
-  }, []);
-
   /**
    * Target for the deferred scroll `trySelectThread` performs — read by
    * `scrollSelectedThreadIntoView` at run time rather than closed over, so a request made while the
    * view is hidden still resolves against the thread (and behavior) it was made for once the
-   * catch-up runs.
+   * catch-up runs. `threadVerse` is the selected thread's own reference, which the scroll-group
+   * effect below compares incoming references against.
    */
-  const pendingThreadScrollRef = useRef<{ threadId: string; behavior: ScrollBehavior } | undefined>(
-    undefined,
-  );
+  const pendingThreadScrollRef = useRef<
+    | { threadId: string; behavior: ScrollBehavior; threadVerse: NavigationRecord | undefined }
+    | undefined
+  >(undefined);
+
+  // Hidden case: a thread selected while the tab is hidden (the editor's insert-comment path selects
+  // the new thread in the hidden panel) waits for the tab to be shown, and so does the BCV sync
+  // scroll above. If the scroll group moves to a different verse while the thread scroll waits, that
+  // later move is the more recent intent, so it supersedes the thread scroll and the list opens on
+  // the current verse. A move to the selected thread's own verse is the editor following that same
+  // selection ("go to comment" moves the caret, and that change can arrive after the selection), so
+  // it keeps the thread scroll. The reverse order needs nothing here: a selection after a verse
+  // move cancels the pending sync scroll in the selectThread handler below.
+  useEffect(() => {
+    const pending = pendingThreadScrollRef.current;
+    if (!pending) return;
+    const incomingVerse = {
+      book: scrRef.book,
+      chapterNum: scrRef.chapterNum,
+      verseNum: scrRef.verseNum,
+    };
+    if (shouldArmSyncScroll(pending.threadVerse, incomingVerse))
+      pendingThreadScrollRef.current = undefined;
+  }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
   const scrollSelectedThreadIntoView = useCallback((isRetry = false) => {
     const pending = pendingThreadScrollRef.current;
@@ -746,6 +768,7 @@ global.webViewComponent = function CommentListWebView({
       const threadElement = document.getElementById(getCommentThreadElementId(threadId));
       if (threadElement) {
         setSelectedThreadId(threadId);
+        const selectedThread = commentThreadsRef.current.find((thread) => thread.id === threadId);
         // See requestThreadScroll's own comment for the hidden-view rationale: 'smooth' while the
         // view is already visible, 'instant' recorded up front for the hidden case so the eventual
         // catch-up doesn't animate. Reads isViewVisibleRef rather than closing over isViewVisible —
@@ -753,6 +776,7 @@ global.webViewComponent = function CommentListWebView({
         pendingThreadScrollRef.current = {
           threadId,
           behavior: isViewVisibleRef.current ? 'smooth' : 'instant',
+          threadVerse: toNavigationRecord(selectedThread?.verseRef),
         };
         requestThreadScroll();
         setPendingThreadIdToSelect(undefined);
@@ -761,7 +785,6 @@ global.webViewComponent = function CommentListWebView({
         // away from the selection. Recording here (not in the message handler) covers the deferred
         // path too: when the message arrived before thread data loaded, the data is loaded by the
         // time this success branch runs, so the lookup cannot miss.
-        const selectedThread = commentThreadsRef.current.find((thread) => thread.id === threadId);
         recordSelfInitiatedNavigation(selectedThread?.verseRef);
         return true;
       }

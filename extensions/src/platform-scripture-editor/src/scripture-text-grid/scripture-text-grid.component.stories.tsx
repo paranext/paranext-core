@@ -1,8 +1,8 @@
 import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
+import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
   RESET_ZOOM_KEY,
   RESOURCE_CELL_STRING_KEYS,
@@ -10,7 +10,7 @@ import {
   ZOOM_OPTIONS_KEY,
   ZOOM_OUT_KEY,
 } from './resource-cell-view.component';
-import type { ResourceZoomController } from './use-resource-zoom.hook';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 
 /**
  * The Scripture Text Grid row: one cell per shown resource, all synced to the active scrRef, laid
@@ -118,32 +118,28 @@ export const ChapterContextOpen: Story = {
 
 const localizedStrings = getLocalizedStrings([...RESOURCE_CELL_STRING_KEYS]);
 const zoomMenuLabels = {
-  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom In',
-  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom Out',
-  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset Zoom',
+  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom in',
+  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom out',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset zoom',
   options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options for {resourceName}',
 };
 
 /**
- * A no-op stub `ResourceZoomController` that returns the default factor (1) for every resource.
- * Passed to `ScriptureTextGrid` so each `ResourceCell` renders with zoom wiring active and the
- * kebab button visible — without needing a real `useWebViewState` persistence layer. Because the
- * connected `ResourceCell` renders "Downloading…" in Storybook (PAPI stubs never resolve), the
- * focus here is the kebab affordance and the `data-resource-id` attribute wiring, not the text.
+ * A stub `ResourceZoomController`: every resource follows a 100 % default with no level of its own.
+ * Storybook runs no content zoom, so this story documents the menus' presence and the zoom scope on
+ * each column (`data-platform-content-zoom-scope`), not zoomed text.
  */
 const stubZoomController: ResourceZoomController = {
   getZoom: () => 1,
-  setZoomForResource: noop,
+  hasOwnLevel: () => false,
   adjustZoom: noop,
   resetZoom: noop,
-  pruneToResourceIds: noop,
 };
 
 /**
- * Grid with zoom wiring active: each cell receives a stub zoom controller that returns the default
- * factor (1), so the kebab button is rendered and the `data-resource-id` attribute is visible on
- * each column wrapper. In Storybook the cells remain in their "Downloading…" state (PAPI stubs);
- * this story documents the grid-level zoom plumbing rather than zoomed text content.
+ * Chapter view with zoom wiring active: each column's header carries the "⋮" button (revealed on
+ * hover), and each column's right-click menu carries the zoom items. In Storybook the cells remain
+ * in their "Downloading…" state (PAPI stubs).
  */
 export const RowWithZoomEnabled: Story = {
   render: () => (
@@ -153,7 +149,7 @@ export const RowWithZoomEnabled: Story = {
         scrRef={scrRef}
         setScrRef={noop}
         ariaLabel="Text Collection"
-        onChapterContextChange={noop}
+        viewMode="chapter"
         zoom={stubZoomController}
         zoomMenuLabels={zoomMenuLabels}
       />

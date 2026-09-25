@@ -4026,6 +4026,59 @@ export declare function isBlockMarker(marker: string): boolean;
  */
 export declare function isCharacterMarker(marker: string): boolean;
 /**
+ * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
+ * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both
+ * scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these from here rather
+ * than keeping their own copy.
+ */
+/**
+ * Smallest allowed zoom factor.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const MIN_ZOOM_FACTOR = 0.5;
+/**
+ * Largest allowed zoom factor.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const MAX_ZOOM_FACTOR = 3;
+/**
+ * Amount one zoom-in / zoom-out step changes a zoom factor.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const ZOOM_STEP = 0.1;
+/**
+ * Clamps a zoom factor into `[MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR]`.
+ *
+ * @param factor The zoom factor to clamp
+ * @returns The factor bounded to the allowed range
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function clampZoom(factor: number): number;
+/**
+ * Rounds a zoom factor to one decimal place. CSS `zoom` and repeated `+ ZOOM_STEP` additions
+ * accumulate binary-float error (e.g. 1.1 + 0.1 = 1.2000000000000002); rounding keeps stored and
+ * compared factors stable.
+ *
+ * @param factor The zoom factor to round
+ * @returns The factor rounded to one decimal place
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function roundZoom(factor: number): number;
+/**
+ * Steps a factor by `deltaSteps * ZOOM_STEP`, then clamps and rounds. An off-grid factor (a typed
+ * percentage) first moves to the grid mark it has passed in the direction of travel, so one step
+ * never skips the nearest mark: from 1.37, `+1` gives 1.4 and `-1` gives 1.3.
+ *
+ * @param factor The current zoom factor
+ * @param deltaSteps Number of steps to apply (+1 = zoom in, −1 = zoom out)
+ * @returns The new clamped, rounded zoom factor
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function adjustZoomFactor(factor: number, deltaSteps: number): number;
+/**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
  * @param html - The HTML string to sanitize
@@ -4811,7 +4864,10 @@ export declare function normalizeFullName(fullName: unknown): string | undefined
  *     { id: 'lexicon.entryService' },
  *     10_000,
  *   );
- *   return papi.networkObjects.get<LexiconEntryService>('lexicon.entryService');
+ *   const service = await papi.networkObjects.get<LexiconEntryService>('lexicon.entryService');
+ *   // Throw rather than return `undefined`: a resolved value is cached, a rejection is retried
+ *   if (!service) throw new Error('lexicon.entryService is not available');
+ *   return service;
  * });
  *
  * // One wait and one fetch, however many callers arrive while it is still in flight
@@ -4898,72 +4954,6 @@ export type EffectiveStructureProtectionInputs = {
  * the user's own preference governs (defaulting to on when never set).
  */
 export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
-/**
- * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
- * a trackpad pinch. Both the platform's per-pane zoom and the Text Collection grid's per-resource
- * zoom read a wheel this way; the platform's copy is inlined in its injected bootstrap script,
- * which imports nothing, and a parity test keeps the two in step.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export type ContentZoomWheelReader = {
-	/**
-	 * How many zoom steps `event` means: positive zooms IN, negative zooms OUT, 0 means the event's
-	 * travel has not yet crossed a step boundary. `scopeId` is whatever opaque string the caller uses
-	 * to key its own zoomable region — a pane's zoom area for the platform, a resource id for the
-	 * Text Collection grid — and the reader resets its accumulated travel whenever it changes.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	read(event: WheelEvent, scopeId: string): number;
-	/**
-	 * Removes every listener the reader installed to track physically-held modifier keys. A reader
-	 * with no window to listen on (see {@link ContentZoomWheelReaderOptions.window}) has nothing to
-	 * remove.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	dispose(): void;
-};
-/**
- * Options for {@link createContentZoomWheelReader}.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export type ContentZoomWheelReaderOptions = {
-	/**
-	 * Largest number of steps one event may ask for. Default: the platform's 0.5–3.0 zoom range
-	 * expressed in units of the effective {@link ContentZoomWheelReaderOptions.zoomStep} (25 at the
-	 * default step of 0.1) — so overriding `zoomStep` scales this default with it.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	maxSteps?: number;
-	/**
-	 * Zoom step the pinch calibration is derived from. Default 0.1. Must be a positive, finite
-	 * number; the reader does not validate it, and a zero or negative step yields a meaningless
-	 * calibration.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	zoomStep?: number;
-	/**
-	 * Window the modifier listeners attach to. Default `globalThis.window`; tests pass jsdom's. When
-	 * neither exists (a reader created outside a DOM, such as under Node) the reader still reads
-	 * notch and pinch counts from the events it is handed — it just cannot tell a synthesized pinch
-	 * from a real one held down by a physically-pressed Ctrl or Cmd key.
-	 *
-	 * @experimental This property is unstable and may change shape or disappear without notice
-	 */
-	window?: Window;
-};
-/**
- * Reads a `WheelEvent` and answers how many content-zoom steps it means, telling a mouse notch from
- * a trackpad pinch — see {@link ContentZoomWheelReader} for the full contract.
- *
- * @experimental This export is unstable and may change shape or disappear without notice
- */
-export declare function createContentZoomWheelReader(options?: ContentZoomWheelReaderOptions): ContentZoomWheelReader;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**

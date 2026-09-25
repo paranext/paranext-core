@@ -197,6 +197,11 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
     reason: 'sample-data generator — composes no label',
   },
   {
+    file: 'lib/platform-bible-react/src/components/advanced/resource-picker-dialog/resource-picker-dialog.data.ts',
+    contains: 'language} Resource',
+    reason: 'many-language sample-data generator — composes no label',
+  },
+  {
     file: 'extensions/src/platform-get-resources/src/get-resources.stories.tsx',
     contains: 'language} Scripture',
     reason: 'story fixture — generates sample data, composes no label',

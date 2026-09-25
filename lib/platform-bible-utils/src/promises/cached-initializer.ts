@@ -17,7 +17,10 @@
  *     { id: 'lexicon.entryService' },
  *     10_000,
  *   );
- *   return papi.networkObjects.get<LexiconEntryService>('lexicon.entryService');
+ *   const service = await papi.networkObjects.get<LexiconEntryService>('lexicon.entryService');
+ *   // Throw rather than return `undefined`: a resolved value is cached, a rejection is retried
+ *   if (!service) throw new Error('lexicon.entryService is not available');
+ *   return service;
  * });
  *
  * // One wait and one fetch, however many callers arrive while it is still in flight

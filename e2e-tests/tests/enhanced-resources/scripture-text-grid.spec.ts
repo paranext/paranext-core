@@ -153,7 +153,7 @@ test.describe('Scripture Text Grid renderer', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.locator('[role="list"]')).toBeVisible({ timeout: 15_000 });
     await expect(stg.frame.locator('[role="listitem"]').first()).toBeVisible({ timeout: 15_000 });
     await expect(stg.frame.locator('[role="toolbar"]')).toHaveCount(0);
@@ -175,7 +175,7 @@ test.describe('Scripture Text Grid renderer', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
@@ -207,7 +207,7 @@ test.describe('Scripture Text Grid renderer', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await stg.frame.locator('[role="listitem"]').first().click();
     await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
       timeout: 15_000,
@@ -230,7 +230,7 @@ test.describe('Scripture Text Grid renderer', () => {
       { type: 'project', name: 'KJV', id: 'rtl002', isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.locator('[role="list"]')).toBeVisible({ timeout: 15_000 });
 
     const directions = await stg.frame.locator('[role="list"]').evaluate((list) => {
@@ -274,7 +274,7 @@ test.describe('Scripture Text Grid renderer', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(validIds.length + 1, {
       timeout: 15_000,
     });
@@ -305,7 +305,7 @@ test.describe('Scripture Text Grid renderer', () => {
       })),
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(2, { timeout: 15_000 });
 
     await mainPage.evaluate(async () => {
@@ -355,7 +355,7 @@ test.describe('Scripture Text Grid renderer', () => {
       })),
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
       const start = performance.now();
       await new Promise<void>((resolve) => {
@@ -387,7 +387,7 @@ test.describe('Scripture Text Grid renderer', () => {
       { type: 'project', name: 'KJV', id: 'chap002', isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await stg.switchToChapterView();
 
     // The chapter group lays out as a horizontal row of columns and shows no chapter-context split.
@@ -424,7 +424,7 @@ test.describe('Scripture Text Grid renderer', () => {
       })),
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await stg.switchToChapterView();
 
     await expect(stg.frame.locator('[role="region"]')).toHaveCount(2, { timeout: 15_000 });
@@ -460,7 +460,7 @@ test.describe('Scripture Text Grid renderer', () => {
       })),
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await stg.switchToChapterView();
 
     const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
@@ -500,7 +500,7 @@ test.describe('Scripture Text Grid renderer', () => {
       { type: 'project', name: 'KJV', id: 'chaprtl2', isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await stg.switchToChapterView();
 
     const grid = stg.frame.locator('[role="group"]');
@@ -541,7 +541,7 @@ test.describe('Scripture Text Grid empty state', () => {
     // Flag nothing → the effective list is empty → the grid renders the empty state, not cells.
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, []);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.getByTestId('scripture-text-grid-empty-state')).toBeVisible({
       timeout: 15_000,
     });
@@ -584,7 +584,7 @@ test.describe('Scripture Text Grid accessibility', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // Accessible name is "<label>, <BOOK C:V>" — anchored so a stray substring can't match.
@@ -604,7 +604,7 @@ test.describe('Scripture Text Grid accessibility', () => {
       { type: 'project', name: 'Tab B', id: ACC_RESOURCE_B_ID, isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
 
@@ -636,7 +636,7 @@ test.describe('Scripture Text Grid accessibility', () => {
       { type: 'project', name: 'Ring B', id: ACC_RESOURCE_B_ID, isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // The ring is `focus-visible`-gated, which Chromium applies only for keyboard-originated focus —
@@ -666,7 +666,7 @@ test.describe('Scripture Text Grid accessibility', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const status = stg.frame.locator('[role="status"]').first();
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });

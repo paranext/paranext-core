@@ -3,7 +3,6 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
-  ContentZoomRoot,
   EmptyState,
   Popover,
   PopoverContent,
@@ -67,7 +66,7 @@ import { toGridResources } from './scripture-text-grid/grid-resources.utils';
 import { getGridBodyState } from './scripture-text-grid/grid-body-state.utils';
 import { isNonDblResource } from './resource-reference.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
-import { useResourceZoom } from './scripture-text-grid/use-resource-zoom.hook';
+import { useResourceContentZoom } from './scripture-text-grid/use-resource-content-zoom.hook';
 import {
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
@@ -154,7 +153,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 }: WebViewProps) {
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
-  const zoom = useResourceZoom(useWebViewState);
+  // Each resource is its own content zoom area; the menus read the platform's levels for this tab
+  // and send the platform's zoom commands with this tab's id and the resource's area.
+  const zoom = useResourceContentZoom(webViewId, useWebViewState);
   const zoomMenuLabels = useMemo<ZoomMenuLabels>(
     () => ({
       zoomIn: localizedStrings[ZOOM_IN_KEY],
@@ -603,11 +604,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           empty (a DBL ref resolves to a cell only once the cached list loads). The
           `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
 
-          Named as its own zoom area ("text-collection") so its remembered level is kept apart from
-          this project's other resource panes, which resolve to the same kind/identity pair and
-          would otherwise all read one remembered level. The View Options row above stays outside so
-          it keeps its size while the grid scales. */}
-      <ContentZoomRoot area="text-collection" className="tw:flex-1 tw:overflow-hidden">
+          The body itself is not a zoom area: each cell marks only its resource's text, with that
+          resource's own area (`resource-<id>`, see `resource-zoom-area.utils.ts`), so the cells'
+          name labels, reorder grips and zoom options buttons, the chapter-context chrome and the
+          empty and error states keep interface scale. Naming each resource's area keeps its
+          remembered level apart from the other resources' and from this project's other resource
+          panes, which resolve to the same kind/identity pair. */}
+      <div className="tw:flex-1 tw:overflow-hidden">
         {gridBodyState === 'catalogError' && (
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
             <RetryableErrorView
@@ -651,7 +654,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             getReorderAnnouncement={getReorderAnnouncement}
           />
         )}
-      </ContentZoomRoot>
+      </div>
     </div>
   );
 };

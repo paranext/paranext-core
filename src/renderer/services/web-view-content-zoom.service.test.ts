@@ -1,3 +1,4 @@
+import { adjustZoomFactor } from 'platform-bible-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -5,13 +6,7 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 vi.mock('@shared/services/settings.service', () => ({ settingsService: {} }));
 vi.mock('@shared/services/localization.service', () => ({ localizationService: {} }));
-// The real parseIframeZoom is kept, since the service under test calls it directly (not through the
-// mocked getWebViewIframe) for its whole-iframe fallback.
-vi.mock('@renderer/services/overlays/overlay-coordinates', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@renderer/services/overlays/overlay-coordinates')>();
-  return { getWebViewIframe: vi.fn(), parseIframeZoom: actual.parseIframeZoom };
-});
+vi.mock('@renderer/services/overlays/overlay-coordinates', () => ({ getWebViewIframe: vi.fn() }));
 
 // Import types and the service under test after the mocks above are established.
 // eslint-disable-next-line import/first
@@ -19,10 +14,10 @@ import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 // The mocked logger, so a test can assert on a warning it produced.
 // eslint-disable-next-line import/first
 import { logger } from '@shared/services/logger.service';
-// The percent formatter and zoom-step arithmetic, so an assertion spells the number exactly as the
-// code does rather than hard-coding a rounding of its own.
+// The percent formatter, so an assertion spells the number exactly as the code does rather than
+// hard-coding a rounding of its own.
 // eslint-disable-next-line import/first
-import { adjustZoomFactor, formatZoomPercent } from '@shared/utils/content-zoom.util';
+import { formatZoomPercent } from '@shared/utils/content-zoom.util';
 // The service itself, for the same reason as the type import above.
 // eslint-disable-next-line import/first
 import {
@@ -32,9 +27,10 @@ import {
   applyContentZoomForWebView,
   canContentZoomActOnActiveTarget,
   forgetContentZoom,
-  getContentZoomScaleForWebView,
   getInitialContentZoomForWebView,
   initializeContentZoomService,
+  isContentZoomable,
+  onDidChangeContentZoomable,
   pushContentZoom,
   resetContentZoom,
   resolveContentZoomArea,
@@ -46,7 +42,6 @@ import {
 const LEVELS = 'platform.contentZoomLevels';
 const IDENTITY = 'platform.contentZoomIdentity';
 const MEMORY = 'platform.webViewContentZoomMemory';
-const TYPES = 'platform.webViewContentZoomTypesWithAreas';
 
 /**
  * The state a pane holds when its own levels are `levels`: the levels themselves plus the stamp
@@ -76,6 +71,15 @@ function cssVar(iframe: HTMLIFrameElement, name: string): string {
   return iframe.contentDocument?.documentElement.style.getPropertyValue(name) ?? '';
 }
 
+/**
+ * The CSS `zoom` on the iframe element itself, `''` when none is set. jsdom does not implement
+ * `zoom`, so the property reads `undefined` until something assigns it, where a browser reads
+ * `''`.
+ */
+function frameZoom(iframe: HTMLIFrameElement): string {
+  return Reflect.get(iframe.style, 'zoom') ?? '';
+}
+
 describe('web-view-content-zoom.service', () => {
   const definitions = new Map<string, SavedWebViewDefinition>();
   /** Reads a definition set up earlier in the same test, failing loudly if the setup is missing. */
@@ -87,7 +91,6 @@ describe('web-view-content-zoom.service', () => {
   const settings: Record<string, unknown> = { 'platform.webViewContentZoom': 1, [MEMORY]: {} };
   const memoryCallbacks: Array<(value: unknown) => void> = [];
   const defaultCallbacks: Array<(value: unknown) => void> = [];
-  const typesCallbacks: Array<(value: unknown) => void> = [];
   let onDidUpdateWebViewCallback:
     | ((event: { webView: SavedWebViewDefinition }) => void)
     | undefined;
@@ -118,14 +121,21 @@ describe('web-view-content-zoom.service', () => {
     return created;
   }
 
+  /**
+   * Opens a pane of a web view type core's declaration map does not list, so it is zoomable only
+   * while it reports an area, and returns its iframe.
+   */
+  function openUndeclaredPane(id: string): HTMLIFrameElement {
+    definitions.set(id, { id, webViewType: 'thirdParty.view', projectId: 'proj-A', state: {} });
+    return iframeFor(id);
+  }
+
   beforeEach(async () => {
     definitions.clear();
     settings['platform.webViewContentZoom'] = 1;
     settings[MEMORY] = {};
-    settings[TYPES] = {};
     memoryCallbacks.length = 0;
     defaultCallbacks.length = 0;
-    typesCallbacks.length = 0;
     onDidUpdateWebViewCallback = undefined;
     settingsSet.mockClear();
     updateDefinition.mockClear();
@@ -160,7 +170,6 @@ describe('web-view-content-zoom.service', () => {
         subscribe: async (key: string, callback: (value: unknown) => void) => {
           if (key === MEMORY) memoryCallbacks.push(callback);
           else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
-          else if (key === TYPES) typesCallbacks.push(callback);
           // Mirrors the production subscription's immediate delivery of the current value
           // (`retrieveDataImmediately` defaults to true), which is what primes the module's caches
           // on initialization rather than leaving them to wait for the first live change.
@@ -190,23 +199,30 @@ describe('web-view-content-zoom.service', () => {
     expect(resolveContentZoomTarget(undefined)).toBeUndefined();
   });
 
-  it('resolves the area: explicit and known → itself; unknown → nothing; none given → active, else first', () => {
+  it('resolves the area: explicit and known → itself; unknown → nothing; none given → active, else first; a declared pane with none reported → its declared area', () => {
     expect(resolveContentZoomArea('editor-1', 'footnotes')).toBe('footnotes');
     expect(resolveContentZoomArea('editor-1', 'sidebar')).toBeUndefined();
     expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
     setContentZoomActiveArea('editor-1', 'footnotes');
     expect(resolveContentZoomArea('editor-1', undefined)).toBe('footnotes');
     setContentZoomAreas('editor-1', []);
-    expect(resolveContentZoomArea('editor-1', undefined)).toBeUndefined();
+    expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
+    openUndeclaredPane('ext-1');
+    expect(resolveContentZoomArea('ext-1', undefined)).toBeUndefined();
   });
 
-  it('answers whether a request carrying no ids has both a pane and an area to act on', () => {
+  it('answers whether a request carrying no ids has a zoomable pane to act on', () => {
     expect(canContentZoomActOnActiveTarget()).toBe(false);
     lastFocused = 'editor-1';
     expect(canContentZoomActOnActiveTarget()).toBe(true);
     setContentZoomAreas('editor-1', []);
+    // Declared: the window-chrome chord still acts, on the declared area.
+    expect(canContentZoomActOnActiveTarget()).toBe(true);
+    openUndeclaredPane('ext-1');
+    lastFocused = 'ext-1';
     expect(canContentZoomActOnActiveTarget()).toBe(false);
-    setContentZoomAreas('editor-1', ['main']);
+    setContentZoomAreas('ext-1', ['main']);
+    expect(canContentZoomActOnActiveTarget()).toBe(true);
     windowInputBlocked = true;
     expect(canContentZoomActOnActiveTarget()).toBe(false);
   });
@@ -566,7 +582,7 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-1')?.state).toEqual({});
   });
 
-  it('does not let a stamp-mismatch redirect that turns out to be a no-op advance the record a later delta is computed against', async () => {
+  it('does not let a stamp-mismatch redirect that turns out to be a no-op count as the pane having taken the delta', async () => {
     settings[MEMORY] = { 'notes:AAA:main': 1.5 };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
@@ -578,42 +594,40 @@ describe('web-view-content-zoom.service', () => {
     });
     // Registers the pane's areas (this first report also seeds it, which the next line overrides).
     setContentZoomAreas('notes-s4', ['main', 'footnotes']);
-    // Already holds its own "main" from an earlier sync; the stamp names a project it no longer
-    // shows, so its own re-seed for "notes:AAA" is owed.
+    // Its stamp names a project it no longer shows, so its own re-seed for "notes:AAA" is owed.
     definitions.set('notes-s4', {
       ...requireDefinition('notes-s4'),
       state: zoomState({ main: 1.5 }, 'notes:ZZZ'),
     });
 
-    // An edit to a DIFFERENT area is chosen for the pane's CURRENT identity and stays pending (its
-    // commit fails), so the redirect below finds a pending write it must not overwrite.
+    // An edit to "main" is chosen for the pane's CURRENT identity and stays pending (its commit
+    // fails) while its memory write lands, so the redirect below finds a pending write it must not
+    // overwrite.
     updateDefinition.mockImplementation(() => false);
-    await adjustContentZoom('notes-s4', 1, 'footnotes');
-    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    await adjustContentZoom('notes-s4', 1, 'main');
+    const mainLevel = adjustZoomFactor(1, 1); // the default (1), stepped once
+    await __flushContentZoomWritesForTesting();
+    expect(settings[MEMORY]).toEqual({ 'notes:AAA:main': mainLevel });
     expect(definitions.get('notes-s4')?.state).toEqual(zoomState({ main: 1.5 }, 'notes:ZZZ'));
 
     // A sibling's reset removes "main" from memory. The stamp mismatch redirects this pane to its
-    // own re-seed, which is a no-op: the pending "footnotes" edit, already chosen for the pane's
-    // current identity, outranks memory rather than being overwritten by it -- so "main" is never
-    // revisited by this delta.
+    // own re-seed, which is a no-op: the pending edit, already chosen for the pane's current
+    // identity, outranks memory rather than being overwritten by it -- so the deletion never
+    // reaches this pane through this delta.
     memoryCallbacks.forEach((cb) => cb({}));
     expect(definitions.get('notes-s4')?.state).toEqual(zoomState({ main: 1.5 }, 'notes:ZZZ'));
 
-    // The pending edit commits on its own, stamping the pane under its real identity -- but it
-    // still carries the stale "main" the deletion above was never able to reach.
+    // The pending edit commits, stamping the pane under its real identity -- with the "main" the
+    // deletion above was never able to reach.
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
     await __flushContentZoomWritesForTesting();
-    const footnotesLevel = adjustZoomFactor(1, 1); // the default (1), stepped once
-    expect(definitions.get('notes-s4')?.state).toEqual(
-      zoomState({ main: 1.5, footnotes: footnotesLevel }, 'notes:AAA'),
-    );
+    expect(definitions.get('notes-s4')?.state).toEqual(zoomState({ main: mainLevel }, 'notes:AAA'));
 
     // The same (still empty) memory record reaches this window again. With the pane now correctly
     // stamped, this is its first real chance to learn "main" was removed -- unless the earlier
     // no-op was wrongly counted as having taken that deletion already.
     memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('notes-s4')?.state).toEqual(
-      zoomState({ footnotes: footnotesLevel }, 'notes:AAA'),
-    );
+    expect(definitions.get('notes-s4')?.state).toEqual({});
   });
 
   it("keeps walking the siblings when reading one pane's definition throws", async () => {
@@ -649,9 +663,65 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-3')?.state).toEqual({}); // after it: still reached
     expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } });
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-2'));
-    // The record did not advance, so the same delta reaches the pane that missed it.
+    // The delta stays owed to the pane that missed it, so the next change still reaches it.
     throwingPane = undefined;
     memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-2')?.state).toEqual({});
+  });
+
+  it('does not replay a removal a pane still owes onto a sibling opened after it, when an unrelated key changes', () => {
+    requireDefinition('editor-1').state = zoomState({ main: 1.5 });
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.5 }));
+    // editor-1 cannot take the reset of "main", so that removal stays owed to it.
+    updateDefinition.mockImplementation(
+      (id: string, update: { state?: Record<string, unknown> }) => {
+        if (id === 'editor-1') throw new Error('local storage quota exceeded');
+        return applyDefinitionUpdate(id, update);
+      },
+    );
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.5 }));
+
+    // A sibling of the same project reopens holding a level of its own that memory has never held
+    // since it opened: the removal above happened before it existed and is no news to it.
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: zoomState({ main: 1.2 }),
+    });
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-B:main': 1.3 }));
+
+    expect(definitions.get('editor-2')?.state).toEqual(zoomState({ main: 1.2 }));
+    // The pane that owed the removal still receives it.
+    expect(definitions.get('editor-1')?.state).toEqual({});
+  });
+
+  it('delivers a level added and then reset again while another pane left the walk unconfirmed', async () => {
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    // editor-2 cannot take any update, so no walk from here on is confirmed by every pane.
+    updateDefinition.mockImplementation(
+      (id: string, update: { state?: Record<string, unknown> }) => {
+        if (id === 'editor-2') throw new Error('local storage quota exceeded');
+        return applyDefinitionUpdate(id, update);
+      },
+    );
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.5 }));
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.5 }));
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.5');
+
+    // A reset elsewhere removes "main" again.
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('editor-1')?.state).toEqual({});
     expect(definitions.get('editor-2')?.state).toEqual({});
   });
 
@@ -864,6 +934,21 @@ describe('web-view-content-zoom.service', () => {
     ).resolves.toEqual({ defaultZoom: 1, levels: { main: 2 } });
   });
 
+  it('bakes the own levels of a stamped pane whose project is gone', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.4 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    // No projectId and no state.resourceId: the pane resolves no identity, so nothing says its
+    // levels belong to anything other than what it shows.
+    await expect(
+      getInitialContentZoomForWebView({
+        id: 'w',
+        webViewType: 'legacyCommentManager.commentListPanel',
+        state: zoomState({ main: 1.2 }, 'notes:AAA'),
+      }),
+    ).resolves.toEqual({ defaultZoom: 1, levels: { main: 1.2 } });
+  });
+
   it("seeds a newly opened pane's state from memory on its first area report", async () => {
     settings[MEMORY] = {
       'editor:PROJ-A:main': 1.3,
@@ -909,7 +994,56 @@ describe('web-view-content-zoom.service', () => {
     expect(cssVar(iframeFor('editor-4'), '--platform-content-zoom-footnotes')).toBe('0.9');
   });
 
-  it('seeds on the first non-empty report even when an earlier report for the same pane was empty', async () => {
+  it('fills the remembered areas a pane stamped for its current identity lacks, on its first area report', async () => {
+    settings[MEMORY] = {
+      'editor:PROJ-A:main': 1.5,
+      'editor:PROJ-A:footnotes': 0.7,
+    };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    // Restored with a level of its own for the footnotes only, stamped for the project it shows.
+    definitions.set('editor-4s', {
+      id: 'editor-4s',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: zoomState({ footnotes: 0.9 }),
+    });
+    setContentZoomAreas('editor-4s', ['main', 'footnotes']);
+    expect(cssVar(iframeFor('editor-4s'), '--platform-content-zoom-main')).toBe('1.5');
+    // Control: the pane's own level still outranks what memory remembers for that area.
+    expect(cssVar(iframeFor('editor-4s'), '--platform-content-zoom-footnotes')).toBe('0.9');
+    expect(definitions.get('editor-4s')?.state).toEqual(zoomState({ main: 1.5, footnotes: 0.9 }));
+  });
+
+  it("does not merge back a level a sibling has just reset into an unstamped pane's own levels", async () => {
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('editor-sib', {
+      id: 'editor-sib',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: zoomState({ main: 1.3, footnotes: 0.9 }),
+    });
+    setContentZoomAreas('editor-sib', ['main', 'footnotes']);
+    // The sibling's reset deletes the shared "main" key; the delete is still in the memory debounce
+    // window, so the cached record still remembers the level just given up.
+    await resetContentZoom('editor-sib', 'main');
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 });
+
+    // Restored with a level of its own for another area, and no stamp.
+    definitions.set('editor-own', {
+      id: 'editor-own',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: { [LEVELS]: { footnotes: 0.7 } },
+    });
+    setContentZoomAreas('editor-own', ['main', 'footnotes']);
+    expect(definitions.get('editor-own')?.state).toEqual(zoomState({ footnotes: 0.7 }));
+    expect(cssVar(iframeFor('editor-own'), '--platform-content-zoom-main')).toBe('1');
+  });
+
+  it('seeds a declared pane on an empty first report, and its first non-empty report keeps that seed without rewriting it', async () => {
     settings[MEMORY] = { 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
@@ -919,13 +1053,16 @@ describe('web-view-content-zoom.service', () => {
       projectId: 'proj-A',
       state: {},
     });
-    // The bootstrap's first scan reports no areas yet (e.g. a spinner while the pane loads).
+    // The bootstrap's first scan reports no areas yet (e.g. a spinner while the pane loads). The
+    // pane already acts on its declared area, so it is seeded now.
     setContentZoomAreas('editor-6', []);
-    expect(definitions.get('editor-6')?.state).toEqual({});
+    expect(definitions.get('editor-6')?.state).toEqual(zoomState({ main: 1.3, footnotes: 0.9 }));
     showIndicator.mockClear();
     settingsSet.mockClear();
+    updateDefinition.mockClear();
     setContentZoomAreas('editor-6', ['main', 'footnotes']);
     await __flushContentZoomWritesForTesting();
+    expect(updateDefinition).not.toHaveBeenCalled();
     expect(definitions.get('editor-6')?.state).toEqual(zoomState({ main: 1.3, footnotes: 0.9 }));
     const pane = iframeFor('editor-6');
     expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.3');
@@ -1244,6 +1381,45 @@ describe('web-view-content-zoom.service', () => {
     expect(updateDefinition).not.toHaveBeenCalled();
   });
 
+  it("neither shows nor saves a re-pointed pane's previous project's levels while memory cannot be read", async () => {
+    // Both the read and the subscription for memory fail, so `memoryLoaded` never becomes true.
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          if (key === MEMORY) throw new Error('network blip');
+          return settings[key];
+        },
+        set: settingsSet,
+        subscribe: async (key: string) => {
+          if (key === MEMORY) throw new Error('subscription unavailable');
+          return async () => {};
+        },
+      },
+    });
+    await initializeContentZoomService();
+    definitions.set('notes-m', {
+      id: 'notes-m',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: zoomState({ main: 1.5, footnotes: 0.8 }, 'notes:AAA'),
+    });
+    setContentZoomAreas('notes-m', ['main', 'footnotes']);
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-main')).toBe('1.5');
+
+    definitions.set('notes-m', { ...requireDefinition('notes-m'), projectId: 'bbb' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-m') });
+    // Project A's levels are not shown for project B.
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-main')).toBe('1');
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-footnotes')).toBe('1');
+
+    // A zoom step starts from project B's level, and saves none of project A's other areas under B.
+    await adjustContentZoom('notes-m', 1, 'main');
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-m')?.state).toEqual(zoomState({ main: 1.1 }, 'notes:BBB'));
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-main')).toBe('1.1');
+    expect(cssVar(iframeFor('notes-m'), '--platform-content-zoom-footnotes')).toBe('1');
+  });
+
   it("re-seeds, rather than merges, a re-pointed pane's missed update once a memory change for its NEW identity reaches it first", async () => {
     // The memory read fails, so `memoryLoaded` stays false through the re-point below — but the
     // subscription itself is registered (unlike the test above), so its callback is in hand for the
@@ -1483,6 +1659,34 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-10')?.state).toEqual(zoomState({ main: 0.8 }, 'editor:PROJ-X'));
   });
 
+  it('does not carry a level committed before the pane had an identity onto the first project it is pointed at', async () => {
+    settings[MEMORY] = { 'notes:XXX:main': 0.8 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    // An empty panel, before any project is opened: no projectId and no state.resourceId.
+    definitions.set('notes-empty', {
+      id: 'notes-empty',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      state: {},
+    });
+    setContentZoomAreas('notes-empty', ['main']);
+    await adjustContentZoom('notes-empty', 1, 'main');
+    await __flushContentZoomWritesForTesting();
+    // The step lands while the pane has no identity, and the pane keeps showing it meanwhile.
+    expect(definitions.get('notes-empty')?.state?.[LEVELS]).toEqual({ main: 1.1 });
+    expect(cssVar(iframeFor('notes-empty'), '--platform-content-zoom-main')).toBe('1.1');
+
+    // Pointed at project XXX, spreading its saved state onto the new definition, then re-reported
+    // the way a reload's bootstrap reports.
+    definitions.set('notes-empty', { ...requireDefinition('notes-empty'), projectId: 'xxx' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-empty') });
+    setContentZoomAreas('notes-empty', []);
+    setContentZoomAreas('notes-empty', ['main']);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-empty')?.state).toEqual(zoomState({ main: 0.8 }, 'notes:XXX'));
+    expect(cssVar(iframeFor('notes-empty'), '--platform-content-zoom-main')).toBe('0.8');
+  });
+
   it('does not commit a write chosen under a resolvable identity once the pane becomes unresolvable', async () => {
     settings[MEMORY] = { 'editor:PROJ-A:main': 1.2 };
     __setContentZoomDepsForTesting({});
@@ -1621,19 +1825,50 @@ describe('web-view-content-zoom.service', () => {
 
     // The user zooms before any re-seed for the re-point has run, and that write's own commit fails.
     updateDefinition.mockImplementation(() => false);
-    await adjustContentZoom('notes-14', 1, 'main'); // chosen under project B's identity: 1.3, pending
+    // Chosen under project B's identity, stepping from B's level rather than project A's stale 1.2:
+    // 1.1, pending.
+    await adjustContentZoom('notes-14', 1, 'main');
     expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
 
     // The re-point's own definition update arrives -- the platform's first chance to notice it.
     updateDefinition.mockImplementation(applyDefinitionUpdate);
     onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-14') });
-    // The user's still-pending 1.3 must survive: it was already chosen for the identity this
+    // The user's still-pending 1.1 must survive: it was already chosen for the identity this
     // re-seed is stamping, so it must not be replaced by project B's remembered 0.8.
     expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
 
     // A later retry lands the user's own edit, not memory's remembered level.
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.3 }, 'notes:BBB'));
+    expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.1 }, 'notes:BBB'));
+  });
+
+  it('does not stamp a pane whose saved levels are all invalid, so a later reopen still picks up what memory remembers', async () => {
+    definitions.set('editor-bad', {
+      id: 'editor-bad',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-P',
+      // Out of range: nothing here is a level the pane can keep.
+      state: { [LEVELS]: { main: 3.5 } },
+    });
+    setContentZoomAreas('editor-bad', ['main']);
+    expect(definitions.get('editor-bad')?.state).toEqual({});
+
+    // The pane closes; a sibling records a level for the same project and area meanwhile.
+    const closedState = definitions.get('editor-bad')?.state;
+    forgetContentZoom('editor-bad');
+    definitions.delete('editor-bad');
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-P:main': 1.3 }));
+
+    // Reopened with exactly the state it closed with.
+    definitions.set('editor-bad', {
+      id: 'editor-bad',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-P',
+      state: closedState,
+    });
+    setContentZoomAreas('editor-bad', ['main']);
+    expect(definitions.get('editor-bad')?.state).toEqual(zoomState({ main: 1.3 }, 'editor:PROJ-P'));
+    expect(cssVar(iframeFor('editor-bad'), '--platform-content-zoom-main')).toBe('1.3');
   });
 
   it('treats a non-string identity stamp as no stamp at all', async () => {
@@ -1663,7 +1898,7 @@ describe('web-view-content-zoom.service', () => {
     expect(updateDefinition).not.toHaveBeenCalled();
   });
 
-  it("drops a stale identity stamp when a level-holding pane's own-level write finds no resolvable identity", async () => {
+  it("replaces a stale identity stamp with the kind alone when a level-holding pane's own-level write finds no resolvable identity", async () => {
     definitions.set('editor-1', {
       id: 'editor-1',
       webViewType: 'platformScriptureEditor.react',
@@ -1674,8 +1909,10 @@ describe('web-view-content-zoom.service', () => {
     });
     await adjustContentZoom('editor-1', 1, 'main');
     // The new level commits, but with no resolvable identity to stamp it with, the stale stamp is
-    // dropped rather than left to name a project the new level was never chosen for.
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.6 } });
+    // replaced by the kind alone rather than left to name a project the new level was never chosen
+    // for — and that stamp still marks the level as belonging to no project, so a later project
+    // does not adopt it.
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.6 }, 'editor:'));
   });
 
   it('does nothing for an unknown web view', async () => {
@@ -2155,8 +2392,8 @@ describe('web-view-content-zoom.service', () => {
       releaseReads();
       await initializing;
       // ...and once they do come back, the default one of them carries is in hand.
-      expect(order).toHaveLength(4);
-      expect(order[3]).toBe('initialized');
+      expect(order).toHaveLength(3);
+      expect(order[2]).toBe('initialized');
       setContentZoomAreas('editor-1', ['main']);
       expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
     } finally {
@@ -2164,199 +2401,290 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
-  it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
-    setContentZoomAreas('editor-1', []);
-    await adjustContentZoom('editor-1', 1);
-    await resetContentZoom('editor-1');
+  it('never scales an area-less pane of an undeclared type, at its load or after the grace', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    const pane = openUndeclaredPane('ext-1');
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('ext-1');
+      expect(frameZoom(pane)).toBe('');
+      vi.advanceTimersByTime(1000);
+      expect(frameZoom(pane)).toBe('');
+      // Positive control: the push did reach this pane, because it carries the Settings default.
+      expect(cssVar(pane, '--platform-content-zoom-default')).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reads a pane definition for its declaration once, keeping it across updates until the pane is forgotten', async () => {
+    const getDefinition = vi.fn((id: string) => definitions.get(id));
+    __setContentZoomDepsForTesting({ getDefinition });
+    await initializeContentZoomService();
+    const editor: SavedWebViewDefinition = {
+      id: 'editor-9',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    };
+    definitions.set('editor-9', editor);
+    getDefinition.mockClear();
+    expect(isContentZoomable('editor-9')).toBe(true);
+    expect(isContentZoomable('editor-9')).toBe(true);
+    expect(getDefinition).toHaveBeenCalledTimes(1);
+
+    // A pane's type cannot change while it is open (`webViewType` is not an updatable property),
+    // so an update — a zoom step's state write, a re-pointed project — keeps the declaration. The
+    // definition read back here reports another type, which no live pane can, so an answer that
+    // followed it would show the declaration was read again.
+    definitions.set('editor-9', {
+      ...editor,
+      webViewType: 'thirdParty.view',
+      projectId: 'proj-B',
+      state: { other: 1 },
+    });
+    if (!onDidUpdateWebViewCallback) throw new Error('test setup: no web-view update subscriber');
+    onDidUpdateWebViewCallback({ webView: requireDefinition('editor-9') });
+    expect(isContentZoomable('editor-9')).toBe(true);
+
+    // A forgotten pane's id may come back as another view, so its declaration is read afresh.
+    forgetContentZoom('editor-9');
+    definitions.set('editor-9', editor);
+    expect(isContentZoomable('editor-9')).toBe(true);
+  });
+
+  it('does nothing for an undeclared pane that reported no areas (menu and macOS paths)', async () => {
+    openUndeclaredPane('ext-1');
+    setContentZoomAreas('ext-1', []);
+    await adjustContentZoom('ext-1', 1);
+    await resetContentZoom('ext-1');
     expect(updateDefinition).not.toHaveBeenCalled();
     expect(settingsSet).not.toHaveBeenCalled();
   });
 
-  it('does not throw out of the fallback grace timer when the pane is being torn down', async () => {
-    // A pane detached while the grace is running: reading `contentDocument` on its iframe throws,
-    // and the timer's push is the one call site with no caller to catch it.
-    const detached = document.createElement('iframe');
-    Object.defineProperty(detached, 'contentDocument', {
-      get() {
-        throw new Error('the iframe is detached');
-      },
-    });
-    let paneIsDetached = false;
-    __setContentZoomDepsForTesting({
-      getIframe: (id: string) => (paneIsDetached ? detached : iframeFor(id)),
-    });
-    await initializeContentZoomService();
-    vi.useFakeTimers();
-    try {
-      setContentZoomAreas('editor-1', []); // arms the grace
-      paneIsDetached = true;
-      expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('fallback'));
-    } finally {
-      vi.useRealTimers();
-    }
+  it('tells a zoomable pane from one that is not: declared, or reporting an area', () => {
+    openUndeclaredPane('ext-1');
+    setContentZoomAreas('editor-1', []);
+    expect(isContentZoomable('editor-1')).toBe(true); // declared, nothing reported
+    expect(isContentZoomable('ext-1')).toBe(false); // undeclared, nothing reported
+    setContentZoomAreas('ext-1', ['main']);
+    expect(isContentZoomable('ext-1')).toBe(true); // undeclared, reporting
+    expect(isContentZoomable('no-such-pane')).toBe(false);
   });
 
-  it('scales a pane without areas whole at the default at once, and switches to per-area variables once areas are reported', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
+  it('zooms and resets a declared pane with no area rendered on its declared area, showing the indicator', async () => {
     setContentZoomAreas('editor-1', []);
-    pushContentZoom('editor-1');
-    expect(iframe.style.zoom).toBe('1.3');
-    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
-    setContentZoomAreas('editor-1', ['main']);
-    expect(iframe.style.zoom).toBe('');
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-  });
-
-  it('re-arms the fallback grace after a later report clears an earlier one, applying the fallback at once once the pane is forgotten and reopens unresolved', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', []);
-    expect(iframe.style.zoom).toBe('1.3'); // unresolved, so the fallback applies at once
-    setContentZoomAreas('editor-1', ['main']);
-    expect(iframe.style.zoom).toBe(''); // an area exists now, so the fallback is cleared
-
-    // A pane the platform now expects to mark an area — this one, having just reported one — is
-    // left alone on a later empty report rather than falling back instantly, and its grace's expiry
-    // does not fall back or record the type either, since the bootstrap is still alive: only
-    // forgetting the pane (a genuine unmount, not a mere re-render) drops that expectation.
-    vi.useFakeTimers();
-    try {
-      setContentZoomAreas('editor-1', []);
-      expect(iframe.style.zoom).toBe('');
-      vi.advanceTimersByTime(1000);
-      expect(iframe.style.zoom).toBe('');
-    } finally {
-      vi.useRealTimers();
-    }
+    showIndicator.mockClear();
+    await adjustContentZoom('editor-1', 1);
     await __flushContentZoomWritesForTesting();
-    expect(settings[TYPES]).toEqual({});
-
-    forgetContentZoom('editor-1');
-    setContentZoomAreas('editor-1', []);
-    expect(iframe.style.zoom).toBe('1.3'); // unresolved again, so this applies at once too
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
+    expect(showIndicator).toHaveBeenLastCalledWith('main', formatZoomPercent(1.1));
+    await resetContentZoom('editor-1');
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+    expect(showIndicator).toHaveBeenLastCalledWith('main', `Default · ${formatZoomPercent(1)}`);
   });
 
-  it('still arms the fallback grace when the definition read fails at the iframe load hook', async () => {
-    // The pane this matters for — an HTML view opened with `allowScripts: false` — never runs the
-    // bootstrap, so this hook is the only thing that ever arms a grace for it: a read that threw
-    // before the arming would leave it unscaled for as long as it lives.
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({
-      getDefinition: () => {
-        throw new Error('dock layout is not registered');
-      },
+  describe('a declared pane with no area rendered, while memory remembers a level for its identity', () => {
+    let pane: HTMLIFrameElement;
+
+    beforeEach(async () => {
+      settings[MEMORY] = { 'editor:PROJ-A:main': 1.5 };
+      __setContentZoomDepsForTesting({});
+      await initializeContentZoomService();
+      pane = iframeFor('editor-2');
+      definitions.set('editor-2', {
+        id: 'editor-2',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj-A',
+        state: {},
+      });
+      showIndicator.mockClear();
     });
-    await initializeContentZoomService();
-    vi.useFakeTimers();
+
+    it('steps from the remembered level, not the default, and does not lower the memory', async () => {
+      await adjustContentZoom('editor-2', 1);
+      await __flushContentZoomWritesForTesting();
+      expect(definitions.get('editor-2')?.state?.[LEVELS]).toEqual({ main: 1.6 });
+      expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.6 });
+      expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.6');
+      expect(showIndicator).toHaveBeenLastCalledWith('main', formatZoomPercent(1.6));
+    });
+
+    it('resets from the remembered level: the shared level goes too, as for a pane holding it', async () => {
+      await resetContentZoom('editor-2');
+      await __flushContentZoomWritesForTesting();
+      expect(settings[MEMORY]).toEqual({});
+      expect(definitions.get('editor-2')?.state).toEqual({});
+      expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1');
+    });
+
+    it('writes the remembered level on load and on an empty report, not the default', () => {
+      applyContentZoomForWebView('editor-2');
+      expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.5');
+      setContentZoomAreas('editor-2', []);
+      expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.5');
+    });
+  });
+
+  describe('a declared pane with no default area (the Text Collection grid)', () => {
+    let pane: HTMLIFrameElement;
+
+    beforeEach(async () => {
+      // A level remembered under the fallback area, which a grid showing no resource must not apply.
+      settings[MEMORY] = { 'resource:PROJ-A:text-collection': 1.4 };
+      __setContentZoomDepsForTesting({});
+      await initializeContentZoomService();
+      pane = iframeFor('grid-1');
+      definitions.set('grid-1', {
+        id: 'grid-1',
+        webViewType: 'platformScriptureEditor.scriptureTextGrid',
+        projectId: 'proj-A',
+        state: {},
+      });
+      updateDefinition.mockClear();
+      showIndicator.mockClear();
+    });
+
+    it('has nothing to zoom while it shows no resource: no area, no level, no indicator', async () => {
+      setContentZoomAreas('grid-1', []);
+      applyContentZoomForWebView('grid-1');
+      expect(isContentZoomable('grid-1')).toBe(false);
+      expect(resolveContentZoomArea('grid-1', undefined)).toBeUndefined();
+      await adjustContentZoom('grid-1', 1);
+      await resetContentZoom('grid-1');
+      await __flushContentZoomWritesForTesting();
+      expect(updateDefinition).not.toHaveBeenCalled();
+      expect(showIndicator).not.toHaveBeenCalled();
+      expect(cssVar(pane, '--platform-content-zoom-text-collection')).toBe('');
+      // Positive control: the push reached this pane.
+      expect(cssVar(pane, '--platform-content-zoom-default')).not.toBe('');
+    });
+
+    it('becomes zoomable when a resource reports its area, and says so', () => {
+      const events: Array<{ webViewId: string; isContentZoomable: boolean }> = [];
+      const unsubscribe = onDidChangeContentZoomable((event) => events.push(event));
+      try {
+        setContentZoomAreas('grid-1', []);
+        setContentZoomAreas('grid-1', ['resource-hsv']);
+        expect(isContentZoomable('grid-1')).toBe(true);
+        expect(resolveContentZoomArea('grid-1', undefined)).toBe('resource-hsv');
+        setContentZoomAreas('grid-1', []);
+        expect(events).toEqual([
+          { webViewId: 'grid-1', isContentZoomable: true },
+          { webViewId: 'grid-1', isContentZoomable: false },
+        ]);
+      } finally {
+        unsubscribe();
+      }
+    });
+  });
+
+  it('an explicit area on a declared empty pane is accepted only when it is the declared area', async () => {
+    setContentZoomAreas('editor-1', []);
+    vi.mocked(logger.debug).mockClear();
+    expect(resolveContentZoomArea('editor-1', 'main')).toBe('main');
+    expect(resolveContentZoomArea('editor-1', 'footnotes')).toBeUndefined();
+    expect(resolveContentZoomArea('editor-1', 'footnotes')).toBeUndefined();
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledTimes(1);
+    await adjustContentZoom('editor-1', 1, 'footnotes');
+    expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
+  it('announces zoomability only when it flips: 0→n and n→0 for an undeclared pane, never for a declared one', () => {
+    openUndeclaredPane('ext-1');
+    const events: Array<{ webViewId: string; isContentZoomable: boolean }> = [];
+    const unsubscribe = onDidChangeContentZoomable((event) => events.push(event));
     try {
-      applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe('');
-      vi.advanceTimersByTime(1000);
-      expect(iframe.style.zoom).toBe('1.3');
+      setContentZoomAreas('ext-1', ['main']);
+      setContentZoomAreas('ext-1', ['main', 'footnotes']); // still zoomable: no event
+      setContentZoomAreas('ext-1', []);
+      setContentZoomAreas('ext-1', ['main']);
+      forgetContentZoom('ext-1');
+      setContentZoomAreas('editor-1', []); // declared: stays zoomable
+      setContentZoomAreas('editor-1', ['main']);
+      forgetContentZoom('editor-1');
+      expect(events).toEqual([
+        { webViewId: 'ext-1', isContentZoomable: true },
+        { webViewId: 'ext-1', isContentZoomable: false },
+        { webViewId: 'ext-1', isContentZoomable: true },
+        { webViewId: 'ext-1', isContentZoomable: false },
+      ]);
     } finally {
-      vi.useRealTimers();
+      unsubscribe();
     }
   });
 
-  it('arms the fallback grace from the iframe load hook too, so a pane nothing expects to mark gets the whole-view fallback at once', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    forgetContentZoom('editor-1'); // no area report at all, as for a bootstrap that never runs
-    applyContentZoomForWebView('editor-1');
-    expect(iframe.style.zoom).toBe('1.3');
+  it('isolates a throwing zoomability subscriber from the CSS push and from later subscribers', () => {
+    const pane = openUndeclaredPane('ext-1');
+    const laterEvents: Array<{ webViewId: string; isContentZoomable: boolean }> = [];
+    const unsubscribeThrowing = onDidChangeContentZoomable(() => {
+      throw new Error('a subscriber that misbehaves');
+    });
+    const unsubscribeLater = onDidChangeContentZoomable((event) => laterEvents.push(event));
+    try {
+      setContentZoomAreas('ext-1', ['main']);
+      // The later subscriber still hears the change...
+      expect(laterEvents).toEqual([{ webViewId: 'ext-1', isContentZoomable: true }]);
+      // ...and the CSS push that follows the emit in setContentZoomAreas still ran.
+      expect(cssVar(pane, '--platform-content-zoom-main')).not.toBe('');
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribeThrowing();
+      unsubscribeLater();
+    }
   });
 
-  it('reports the content scale a pane draws at: its resolved area level, else its frame zoom', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
+  it('answers from the reported areas alone when the definition read throws, rather than throwing', async () => {
+    let definitionReadThrows = false;
+    __setContentZoomDepsForTesting({
+      getDefinition: (id: string) => {
+        if (definitionReadThrows) throw new Error('the dock layout is gone');
+        return definitions.get(id);
+      },
+    });
     await initializeContentZoomService();
-    setContentZoomAreas('editor-1', ['main', 'footnotes']);
-    await adjustContentZoom('editor-1', 1, 'footnotes');
-    // No area asked for, so the pane's active area answers - the first area until one is set.
-    expect(getContentZoomScaleForWebView('editor-1')).toBe(1.3);
-    setContentZoomActiveArea('editor-1', 'footnotes');
-    expect(getContentZoomScaleForWebView('editor-1')).toBeCloseTo(adjustZoomFactor(1.3, 1), 5);
+    openUndeclaredPane('ext-1');
+    setContentZoomAreas('ext-1', ['main']);
+    // A declared pane whose type has not been read yet: the throwing read is its first.
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    definitionReadThrows = true;
+    expect(isContentZoomable('ext-1')).toBe(true);
+    expect(isContentZoomable('editor-2')).toBe(false); // declared, but its type cannot be read now
   });
 
-  it('reports the frame zoom for a pane that marks no area, and 1 for an iframe with no zoom applied (the harness fabricates one for any id, known or not)', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    forgetContentZoom('editor-1');
-    applyContentZoomForWebView('editor-1');
-    expect(iframe.style.zoom).toBe('1.3');
-    expect(getContentZoomScaleForWebView('editor-1')).toBe(1.3);
-    expect(getContentZoomScaleForWebView('no-such-pane')).toBe(1);
-  });
-
-  it('cancels the grace armed by the iframe load hook once the pane reports an area within it', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    forgetContentZoom('editor-1');
-    applyContentZoomForWebView('editor-1');
-    expect(iframe.style.zoom).toBe('1.3'); // the load hook's own immediate whole-iframe fallback
-    setContentZoomAreas('editor-1', ['main']);
-    expect(iframe.style.zoom).toBe(''); // the report clears it
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-  });
-
-  it('clears a stale whole-iframe zoom left by the old content at reload, then immediately re-applies it, so the new content is never left unscaled', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', []);
-    expect(iframe.style.zoom).toBe('1.3'); // the fallback applied for the old content
-    iframe.style.zoom = '2'; // dirtied to a different value, so the re-application is observable
-
-    // The reload's new content hasn't rendered anything yet, and an in-place reload does not itself
-    // touch the iframe element's own style — the stale zoom stays on it until the load hook clears
-    // it and, since the new content is expected to mark none either, re-applies it at once.
-    applyContentZoomForWebView('editor-1');
-    expect(iframe.style.zoom).toBe('1.3');
-  });
-
-  it('resolves a whole-iframe zoom for a pane whose definition cannot be found, rather than leaving a stale value on it', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', []);
-    expect(iframe.style.zoom).toBe('1.3');
-    definitions.delete('editor-1');
-    iframe.style.zoom = '2'; // dirtied, so the resolve below is observable rather than assumed
-    applyContentZoomForWebView('editor-1'); // does not throw despite the missing definition
-    expect(iframe.style.zoom).toBe('1.3');
-  });
-
-  it("a content replacement whose bootstrap never runs loses the previous content's areas", async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', ['main', 'footnotes']);
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('1.3');
+  it('drops the areas of content whose bootstrap never runs again, once the wait after its load runs out', async () => {
+    const pane = openUndeclaredPane('ext-1');
+    setContentZoomAreas('ext-1', ['main']);
     vi.useFakeTimers();
     try {
       // Simulates a document whose bootstrap never ran (or tore itself down): the string-keyed form
       // avoids both a type assertion and the member-access underscore the bootstrap contract owns.
-      Reflect.deleteProperty(iframe.contentWindow ?? {}, '__platformContentZoom');
-      applyContentZoomForWebView('editor-1');
+      Reflect.deleteProperty(pane.contentWindow ?? {}, '__platformContentZoom');
+      applyContentZoomForWebView('ext-1');
+      // Positive control: until the wait runs out, the areas stand.
+      expect(resolveContentZoomArea('ext-1', undefined)).toBe('main');
       vi.advanceTimersByTime(1000);
-      expect(resolveContentZoomArea('editor-1', undefined)).toBeUndefined();
-      expect(iframe.style.zoom).toBe('1.3');
-      updateDefinition.mockClear();
-      settingsSet.mockClear();
-      await adjustContentZoom('editor-1', 1); // content-root gate: no area, so this is a no-op
-      expect(updateDefinition).not.toHaveBeenCalled();
-      expect(settingsSet).not.toHaveBeenCalled();
+      expect(resolveContentZoomArea('ext-1', undefined)).toBeUndefined();
+      expect(frameZoom(pane)).toBe('');
     } finally {
       vi.useRealTimers();
     }
+    updateDefinition.mockClear();
+    settingsSet.mockClear();
+    await adjustContentZoom('ext-1', 1); // an undeclared pane with no area has nothing to act on
+    expect(updateDefinition).not.toHaveBeenCalled();
+    expect(settingsSet).not.toHaveBeenCalled();
   });
 
   it("a reload whose bootstrap runs keeps the pane's areas", async () => {
@@ -2369,7 +2697,6 @@ describe('web-view-content-zoom.service', () => {
       applyContentZoomForWebView('editor-1'); // __platformContentZoom stays in place, as for a real reload
       vi.advanceTimersByTime(1000);
       expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
-      expect(iframe.style.zoom).toBe('');
       expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
     } finally {
       vi.useRealTimers();
@@ -2377,210 +2704,26 @@ describe('web-view-content-zoom.service', () => {
   });
 
   it('a report inside the grace still cancels it', async () => {
-    settings['platform.webViewContentZoom'] = 1.3;
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    // Undeclared: a declared pane's resolution falls back to its declared default area even after
+    // its areas are dropped, which would make this assertion pass whether or not the cancel ran.
+    const pane = openUndeclaredPane('ext-1');
+    setContentZoomAreas('ext-1', ['main', 'footnotes']);
     vi.useFakeTimers();
     try {
-      applyContentZoomForWebView('editor-1');
+      applyContentZoomForWebView('ext-1');
       vi.advanceTimersByTime(500);
-      setContentZoomAreas('editor-1', ['main']); // the reloaded content's own report, mid-grace
+      setContentZoomAreas('ext-1', ['main']); // the reloaded content's own report, mid-grace
+      // Simulates that content going dead right after its report: without the cancel, the wait due
+      // at 1000ms would find no bootstrap and drop the areas.
+      Reflect.deleteProperty(pane.contentWindow ?? {}, '__platformContentZoom');
       vi.advanceTimersByTime(600);
-      expect(iframe.style.zoom).toBe('');
-      expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
+      expect(resolveContentZoomArea('ext-1', undefined)).toBe('main');
     } finally {
       vi.useRealTimers();
     }
   });
 
-  describe('the per-type zoom-area expectation', () => {
-    it('scales a pane of an unrecorded type at once instead of showing it unscaled first', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe('1.3');
-    });
-
-    it('never scales a pane of a type recorded as marking areas, however slowly it mounts', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      settings[TYPES] = { 'platformScriptureEditor.react': true };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      vi.useFakeTimers();
-      try {
-        applyContentZoomForWebView('editor-1');
-        expect(iframe.style.zoom).toBe('');
-        setContentZoomAreas('editor-1', []); // the bootstrap's first scan, before the view mounts
-        vi.advanceTimersByTime(5_000); // slower to mount than the grace
-        expect(iframe.style.zoom).toBe('');
-        // Checked here, before the pane's own report below could overwrite a wrong write with a
-        // right one and hide it: the grace's expiry must not have let the type record be touched
-        // either, or a narrower bug could leave the pane correctly unscaled while still wrongly
-        // recording its type as marking none.
-        await __flushContentZoomWritesForTesting();
-        expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-        setContentZoomAreas('editor-1', ['main']);
-        expect(iframe.style.zoom).toBe('');
-        expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it('scales a pane of a type recorded as marking none at once', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      settings[TYPES] = { 'platformScriptureEditor.react': false };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe('1.3');
-    });
-
-    it('records a type as marking areas the first time one of its panes reports one', async () => {
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      setContentZoomAreas('editor-1', ['main']);
-      await __flushContentZoomWritesForTesting();
-      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-    });
-
-    it('does not write a "marks none" record when a pane of it has reported no area', async () => {
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      vi.useFakeTimers();
-      try {
-        applyContentZoomForWebView('editor-1');
-        setContentZoomAreas('editor-1', []);
-        vi.advanceTimersByTime(1000);
-      } finally {
-        vi.useRealTimers();
-      }
-      await __flushContentZoomWritesForTesting();
-      // Nothing reads a stored `false` any differently from an absent key (both resolve the next
-      // pane's expectation to "marks none"), so the write is pure risk: a sibling pane of the same
-      // type that already recorded `true` while this grace was pending would be clobbered by it.
-      expect(settings[TYPES]).toEqual({});
-    });
-
-    it('does not let an expiring grace clobber a type another pane already recorded as marking areas', async () => {
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      definitions.set('editor-2', {
-        id: 'editor-2',
-        webViewType: 'platformScriptureEditor.react',
-        projectId: 'proj-A',
-        state: {},
-      });
-      // Pane B opens first, while the type is still unrecorded, and resolves its own expectation to
-      // `false`. Pane A opens too, so its own report below is evidence the service accepts.
-      await getInitialContentZoomForWebView(requireDefinition('editor-2'));
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      vi.useFakeTimers();
-      try {
-        setContentZoomAreas('editor-2', []); // B starts its grace holding that resolved `false`
-        // Pane A of the same type reports an area and records the type `true` before B's grace
-        // expires.
-        setContentZoomAreas('editor-1', ['main']);
-        await __flushContentZoomWritesForTesting();
-        expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-        vi.advanceTimersByTime(1000); // B's grace expires; B's own expectation is still `false`
-      } finally {
-        vi.useRealTimers();
-      }
-      await __flushContentZoomWritesForTesting();
-      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-    });
-
-    it('corrects a record that says a marking type marks none', async () => {
-      settings[TYPES] = { 'platformScriptureEditor.react': false };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      setContentZoomAreas('editor-1', ['main']);
-      await __flushContentZoomWritesForTesting();
-      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-    });
-
-    it('writes no record for a pane the platform never resolved an expectation for', async () => {
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      settingsSet.mockClear();
-      setContentZoomAreas('editor-1', ['main']);
-      await __flushContentZoomWritesForTesting();
-      expect(settingsSet).not.toHaveBeenCalledWith(TYPES, expect.anything());
-      // Checked against the setting's own final value, not just this test's own call history: a
-      // guard that only looks unbroken because an earlier, differently-guarded write already landed
-      // the same value must still be caught.
-      expect(settings[TYPES]).toEqual({});
-    });
-
-    it('falls back for a pane of a marking type whose bootstrap is gone and can never report', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      settings[TYPES] = { 'platformScriptureEditor.react': true };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      vi.useFakeTimers();
-      try {
-        // The string-keyed form avoids both a type assertion and the member-access underscore the
-        // bootstrap contract owns.
-        Reflect.deleteProperty(iframe.contentWindow ?? {}, '__platformContentZoom');
-        applyContentZoomForWebView('editor-1');
-        expect(iframe.style.zoom).toBe('');
-        vi.advanceTimersByTime(1000);
-        expect(iframe.style.zoom).toBe('1.3');
-      } finally {
-        vi.useRealTimers();
-      }
-      await __flushContentZoomWritesForTesting();
-      // A broken pane is evidence about that pane, not about its type.
-      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
-    });
-
-    it('drops the pane expectation on unmount', async () => {
-      settings['platform.webViewContentZoom'] = 1.3;
-      settings[TYPES] = { 'platformScriptureEditor.react': true };
-      __setContentZoomDepsForTesting({});
-      await initializeContentZoomService();
-      forgetContentZoom('editor-1');
-      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
-      forgetContentZoom('editor-1');
-      applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe('1.3');
-    });
-
-    it('resolves a freshly opened pane from a type record pushed by another window', async () => {
-      definitions.set('editor-mv', {
-        id: 'editor-mv',
-        webViewType: 'x.y',
-        state: {},
-      });
-      const pane = iframeFor('editor-mv');
-      typesCallbacks.forEach((cb) => cb({ 'x.y': true }));
-      await getInitialContentZoomForWebView(requireDefinition('editor-mv'));
-      applyContentZoomForWebView('editor-mv');
-      // Type x.y is now known to mark areas, so the fresh pane must not receive the whole-iframe
-      // fallback while it waits for its own report.
-      expect(pane.style.zoom).toBe('');
-    });
-  });
-
-  it('scales a URL web view whole straight away, since it never runs the bootstrap and never reports areas', () => {
+  it('leaves a URL web view unscaled; it carries only the default variable', () => {
     definitions.set('url-1', {
       id: 'url-1',
       webViewType: 'someExtension.urlView',
@@ -2588,31 +2731,8 @@ describe('web-view-content-zoom.service', () => {
     });
     applyContentZoomForWebView('url-1');
     const pane = iframeFor('url-1');
-    expect(pane.style.zoom).toBe('1');
+    expect(frameZoom(pane)).toBe('');
     expect(cssVar(pane, '--platform-content-zoom-default')).toBe('1');
-  });
-
-  it('replaces a dirtied whole-iframe zoom at the iframe load hook at once, for a pane that has not reported yet', () => {
-    definitions.set('editor-7', {
-      id: 'editor-7',
-      webViewType: 'platformScriptureEditor.react',
-      projectId: 'proj-A',
-      state: {},
-    });
-    const pane = iframeFor('editor-7');
-    // A call for a known non-URL pane arms a fallback grace timer (for its other job, dropping stale
-    // areas), so fake timers keep that timer from leaking into later tests as a real pending
-    // setTimeout.
-    vi.useFakeTimers();
-    try {
-      pane.style.zoom = '2'; // dirtied, so the replacement is observable rather than assumed
-      applyContentZoomForWebView('editor-7');
-      expect(pane.style.zoom).toBe('1'); // the default, applied at once -- not left at the stale value
-      expect(cssVar(pane, '--platform-content-zoom-default')).toBe('1');
-      expect(cssVar(pane, '--platform-content-zoom-main')).toBe(''); // nothing reported, no area
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it('keeps a pane zoomable after the iframe load hook when it reported its areas before it', async () => {
@@ -2622,7 +2742,6 @@ describe('web-view-content-zoom.service', () => {
       applyContentZoomForWebView('editor-1');
       expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
       vi.advanceTimersByTime(2000);
-      expect(iframe.style.zoom).toBe(''); // not whole-scaled by the grace either
     } finally {
       vi.useRealTimers();
     }
@@ -2680,7 +2799,7 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).toHaveBeenLastCalledWith('main', `Default · ${formatZoomPercent(1)}`);
   });
 
-  it('repushes every open pane, including one whole-scaled by the fallback, when the default setting changes', () => {
+  it('re-pushes every open pane when the default changes, scaling none of them whole', () => {
     definitions.set('url-1', {
       id: 'url-1',
       webViewType: 'someExtension.urlView',
@@ -2690,8 +2809,9 @@ describe('web-view-content-zoom.service', () => {
     expect(defaultCallbacks).toHaveLength(1);
     defaultCallbacks[0](1.5); // no re-init: this is the live subscription callback, fired directly
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.5');
-    expect(iframe.style.zoom).toBe('');
-    expect(urlPane.style.zoom).toBe('1.5');
+    expect(frameZoom(iframe)).toBe('');
+    expect(cssVar(urlPane, '--platform-content-zoom-default')).toBe('1.5');
+    expect(frameZoom(urlPane)).toBe('');
     expect(cssVar(urlPane, '--platform-content-zoom-main')).toBe('');
   });
 
@@ -2702,15 +2822,21 @@ describe('web-view-content-zoom.service', () => {
       projectId: 'proj-B',
       state: {},
     });
+    let editor1Detached = false;
     __setContentZoomDepsForTesting({
       getDefinition: (id: string) => {
-        if (id === 'editor-1') throw new Error('detached from the dock layout');
+        if (id === 'editor-1' && editor1Detached) throw new Error('detached from the dock layout');
         return definitions.get(id);
       },
     });
     defaultCallbacks.length = 0;
     await initializeContentZoomService();
+    // editor-1 reports its areas while its definition still reads, so its re-push below reaches the
+    // definition read (an area-less pane reads one too, to resolve its declared default) and throws
+    // there.
+    setContentZoomAreas('editor-1', ['main']);
     setContentZoomAreas('editor-2', ['main']);
+    editor1Detached = true;
     const editor2Iframe = iframeFor('editor-2');
     vi.mocked(logger.warn).mockClear();
     expect(defaultCallbacks).toHaveLength(1);
