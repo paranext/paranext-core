@@ -149,16 +149,21 @@ export type ContentZoomDeclaration = {
    * The area the chords, the wheel and the tab menu act on while the view renders no marked
    * element, for example before a search, while loading, or when the list is empty. A view that
    * marks its text with no `area` of its own uses this area.
+   *
+   * Omitted for a view whose areas exist only while it shows content, such as the Text Collection
+   * grid, where each resource is its own area. Such a view is zoomable only while it reports at
+   * least one area: with nothing shown there is nothing to zoom, no level to keep and no
+   * indicator.
    */
-  readonly defaultArea: ContentZoomAreaId;
+  readonly defaultArea?: ContentZoomAreaId;
 };
 
 /**
  * The first-party web view types that take content zoom, with their memory kind and default area. A
- * pane is _zoomable_ when its type is listed here OR when it currently reports at least one zoom
- * area (`isContentZoomable` in `web-view-content-zoom.service.ts`). The declaration is what keeps a
- * first-party view's zoom items, chords and wheel available from its first frame, including while
- * it renders no marker. A pane that is not zoomable is never scaled.
+ * pane is _zoomable_ when its type is listed here with a default area OR when it currently reports
+ * at least one zoom area (`isContentZoomable` in `web-view-content-zoom.service.ts`). A default
+ * area is what keeps a first-party view's zoom items, chords and wheel available from its first
+ * frame, including while it renders no marker. A pane that is not zoomable is never scaled.
  *
  * Core lists extension web view types by string here because core code cannot import extension
  * source. This follows the same pattern as `SCRIPTURE_EDITOR_WEBVIEW_TYPE` and
@@ -180,10 +185,9 @@ export const CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE: ReadonlyMap<
     'platformEnhancedResources.enhancedResource',
     { kind: 'resource', defaultArea: MAIN_CONTENT_ZOOM_AREA },
   ],
-  [
-    'platformScriptureEditor.scriptureTextGrid',
-    { kind: 'resource', defaultArea: 'text-collection' },
-  ],
+  // No default area: each resource the grid shows is its own area (`resource-<id>`, or
+  // `text-collection` for an id that yields no area characters), and the grid has none of its own.
+  ['platformScriptureEditor.scriptureTextGrid', { kind: 'resource' }],
   ['platformScriptureEditor.modelText', { kind: 'resource', defaultArea: 'model-text' }],
   ['platformScriptureEditor.bibleTexts', { kind: 'resource', defaultArea: 'bible-texts' }],
   ['platformScriptureEditor.commentaries', { kind: 'resource', defaultArea: 'commentaries' }],

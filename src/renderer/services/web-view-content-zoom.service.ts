@@ -414,18 +414,19 @@ function getDeclarationForWebView(webViewId: WebViewId): ContentZoomDeclaration 
 
 /**
  * Whether a pane takes content zoom: it currently reports at least one zoom area, or core declares
- * its web view type zoomable (`CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE`). A pane that is not
- * zoomable is never scaled, offers no zoom items in its tab menu, and ignores the chords and the
- * wheel. A declared pane is zoomable even while it renders no marker, and it then acts on its
- * declared default area. Never throws: a definition that cannot be read is answered from the
- * reported areas alone.
+ * its web view type zoomable with a default area (`CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE`). A
+ * pane that is not zoomable is never scaled, offers no zoom items in its tab menu, and ignores the
+ * chords and the wheel. A pane declared with a default area is zoomable even while it renders no
+ * marker, and it then acts on that area; one declared without a default area is zoomable only while
+ * it reports an area. Never throws: a definition that cannot be read is answered from the reported
+ * areas alone.
  *
  * @experimental This function is unstable and may change or disappear without notice
  */
 export function isContentZoomable(webViewId: WebViewId): boolean {
   if ((areasByWebViewId.get(webViewId) ?? []).length > 0) return true;
   try {
-    return getDeclarationForWebView(webViewId) !== undefined;
+    return getDeclarationForWebView(webViewId)?.defaultArea !== undefined;
   } catch {
     return false;
   }
@@ -440,7 +441,8 @@ export type ContentZoomableChangeEvent = { webViewId: WebViewId; isContentZoomab
 
 /**
  * Renderer-local: fires only when {@link isContentZoomable} flips for a pane, which happens when an
- * undeclared pane reports its first area or loses its last one. A declared pane never flips.
+ * undeclared pane, or one declared without a default area, reports its first area or loses its last
+ * one. A pane declared with a default area never flips.
  *
  * Hidden case: nothing to catch up. Area reports come from the bootstrap's MutationObserver, which
  * needs no layout, so an inactive tab's zoomability is current while it is hidden, and the
@@ -780,17 +782,17 @@ function reseedIfIdentityChanged(definition: SavedWebViewDefinition): void {
 }
 
 /**
- * Seeds ({@link seedFromMemory}) a pane core declares zoomable while it renders no area. Such a pane
- * already acts on its declared area, so it has to act from the level memory remembers for it: its
- * head bake shows that level, and stepping or writing from the Settings default instead would both
- * contradict what it shows and overwrite the shared memory every sibling pane follows. Idempotent:
- * a pane already stamped for its identity, or one memory remembers nothing for, is not written.
- * Called on an empty area report, on load, and before an adjust or reset, so the level is in place
- * whichever of them comes first.
+ * Seeds ({@link seedFromMemory}) a pane core declares zoomable with a default area while it renders
+ * no area. Such a pane already acts on its declared area, so it has to act from the level memory
+ * remembers for it: its head bake shows that level, and stepping or writing from the Settings
+ * default instead would both contradict what it shows and overwrite the shared memory every sibling
+ * pane follows. Idempotent: a pane already stamped for its identity, or one memory remembers
+ * nothing for, is not written. Called on an empty area report, on load, and before an adjust or
+ * reset, so the level is in place whichever of them comes first.
  */
 function seedDeclaredPaneWithoutAreas(webViewId: WebViewId): void {
   if ((areasByWebViewId.get(webViewId) ?? []).length > 0) return;
-  if (getDeclarationForWebView(webViewId) === undefined) return;
+  if (getDeclarationForWebView(webViewId)?.defaultArea === undefined) return;
   seedFromMemory(webViewId);
 }
 

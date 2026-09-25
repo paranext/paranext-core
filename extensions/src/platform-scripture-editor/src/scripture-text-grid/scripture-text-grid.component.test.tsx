@@ -724,7 +724,7 @@ describe('ScriptureTextGrid — zoom areas', () => {
     expect(screen.getByTestId('cell-p-solo')).toHaveAttribute('data-zoom-area', 'resource-r-solo');
   });
 
-  it('falls back to the pane-wide text-collection area for an id with nothing to keep, warning once', () => {
+  it('falls back to the shared text-collection area for an id with nothing to keep, warning once', () => {
     // The grid remembers which ids it has warned about for the whole session, so no other test in
     // this file may use this id.
     const gridResources = [{ resourceId: '日本語', projectId: 'jp', label: 'JP' }, resources[0]];

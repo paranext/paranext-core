@@ -44,7 +44,7 @@ describe('toResourceZoomAreaId', () => {
     });
   });
 
-  it('names the pane-wide fallback the Text Collection’s declared default area', () => {
+  it('names the shared fallback area `text-collection`', () => {
     expect(TEXT_COLLECTION_ZOOM_AREA).toBe('text-collection');
     expect(TEXT_COLLECTION_ZOOM_AREA).toMatch(AREA_ID_PATTERN);
   });
@@ -55,7 +55,7 @@ describe('resourceZoomAreaOf', () => {
     expect(resourceZoomAreaOf('ABC-1')).toBe('resource-abc-1');
   });
 
-  it('is the pane-wide area when its id yields none', () => {
+  it('is the shared fallback area when its id yields none', () => {
     expect(resourceZoomAreaOf('日本語')).toBe(TEXT_COLLECTION_ZOOM_AREA);
   });
 });

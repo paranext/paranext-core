@@ -5887,8 +5887,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   PT-4583 (Enhanced Resources viewer).
 - **Amended 2026-09-24 (`adr-text-collection-resources-are-zoom-areas`):** the area names and the
   zoom menus have moved since the Decision above. Each cell marks its own resource's text with that
-  resource's area `resource-<sanitized id>` instead of the shared `text-collection`, which stays the
-  grid's declared default area and the fallback for a resource id that yields no area characters.
+  resource's area `resource-<sanitized id>` instead of the shared `text-collection`, which remains
+  only as the fallback area for a resource id that yields no area characters; core declares no
+  default area for the grid, so a grid showing no resource has nothing to zoom.
   Its right-click zoom items and the chapter-view "⋮" run the platform's
   `platform.webViewContentZoomIn`/`Out`/`Reset` commands against the resource's area, rather than a
   zoom of its own: the grid has no inline zoom and registers no wheel listener of its own
@@ -7187,8 +7188,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Each resource's text is its own zoom area `resource-<id>`: the resource id lower-cased, every
     character outside `[a-z0-9-]` replaced by `-` (`toResourceZoomAreaId`,
     `extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-zoom-area.utils.ts`).
-    An id with no `[a-z0-9]` character left falls back to the pane-wide `text-collection` area, with
-    one warning per id. A resource's verse row and its chapter view (chapter column or chapter panel)
+    An id with no `[a-z0-9]` character left falls back to the shared `text-collection` area, with
+    one warning per id. The grid has no area of its own: its core declaration
+    (`CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE`) names its memory kind and no default area, so a
+    grid showing no resource is not zoomable — no zoom items, chords, wheel, level or indicator —
+    and it becomes zoomable when its first resource renders. A resource's verse row and its chapter view (chapter column or chapter panel)
     carry the same id, so they always show one level. The markers, the scopes and the menus'
     commands all resolve a resource's area through one function, `resourceZoomAreaOf` in the same
     file, so they cannot disagree.
@@ -7241,6 +7245,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Levels stored by the removed per-column zoom (`scriptureTextGrid.zoomByResourceId`) are not
     migrated: they are per tab and the new ones per project, and writing
     `platform.contentZoomLevels` from the view would race the platform's seeding. Users re-zoom once.
+  - A grid-wide level remembered for `resource:<project id>:text-collection` before each resource
+    became its own area is not carried over to the resources either: no resource's text reads it
+    (only a resource whose id yields no area does), so those users also re-zoom once. Carrying it
+    over as a starting level for every resource was rejected as a second source of a resource's
+    level next to its own.
   - PR #2781 (verse-aligned Grid view) can mark each `.verse-block` with its
     resource's area and leave its subgrid box unmarked, but only if the cell does not also mark its
     text: `ResourceCellView` wraps the whole editor in one `ContentZoomRoot`, a marker nested inside

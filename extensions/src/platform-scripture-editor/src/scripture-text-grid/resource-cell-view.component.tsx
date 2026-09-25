@@ -58,7 +58,7 @@ export type ResourceCellViewProps = {
   /** Resource label shown in the header band or inline label. */
   label: string;
   /**
-   * Content zoom area this resource's text belongs to — `resource-<id>`, or the pane-wide
+   * Content zoom area this resource's text belongs to — `resource-<id>`, or the shared fallback
    * `text-collection` for an id that yields none. Both layouts mark their text with it, labelled
    * with `label` for the zoom indicator; a resource's verse row and chapter view share it.
    */

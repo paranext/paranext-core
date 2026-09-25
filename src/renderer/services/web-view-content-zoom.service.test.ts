@@ -2524,6 +2524,59 @@ describe('web-view-content-zoom.service', () => {
     });
   });
 
+  describe('a declared pane with no default area (the Text Collection grid)', () => {
+    let pane: HTMLIFrameElement;
+
+    beforeEach(async () => {
+      // A grid-wide level remembered from a build where the grid had one area of its own.
+      settings[MEMORY] = { 'resource:PROJ-A:text-collection': 1.4 };
+      __setContentZoomDepsForTesting({});
+      await initializeContentZoomService();
+      pane = iframeFor('grid-1');
+      definitions.set('grid-1', {
+        id: 'grid-1',
+        webViewType: 'platformScriptureEditor.scriptureTextGrid',
+        projectId: 'proj-A',
+        state: {},
+      });
+      updateDefinition.mockClear();
+      showIndicator.mockClear();
+    });
+
+    it('has nothing to zoom while it shows no resource: no area, no level, no indicator', async () => {
+      setContentZoomAreas('grid-1', []);
+      applyContentZoomForWebView('grid-1');
+      expect(isContentZoomable('grid-1')).toBe(false);
+      expect(resolveContentZoomArea('grid-1', undefined)).toBeUndefined();
+      await adjustContentZoom('grid-1', 1);
+      await resetContentZoom('grid-1');
+      await __flushContentZoomWritesForTesting();
+      expect(updateDefinition).not.toHaveBeenCalled();
+      expect(showIndicator).not.toHaveBeenCalled();
+      expect(cssVar(pane, '--platform-content-zoom-text-collection')).toBe('');
+      // Positive control: the push reached this pane.
+      expect(cssVar(pane, '--platform-content-zoom-default')).not.toBe('');
+    });
+
+    it('becomes zoomable when a resource reports its area, and says so', () => {
+      const events: Array<{ webViewId: string; isContentZoomable: boolean }> = [];
+      const unsubscribe = onDidChangeContentZoomable((event) => events.push(event));
+      try {
+        setContentZoomAreas('grid-1', []);
+        setContentZoomAreas('grid-1', ['resource-hsv']);
+        expect(isContentZoomable('grid-1')).toBe(true);
+        expect(resolveContentZoomArea('grid-1', undefined)).toBe('resource-hsv');
+        setContentZoomAreas('grid-1', []);
+        expect(events).toEqual([
+          { webViewId: 'grid-1', isContentZoomable: true },
+          { webViewId: 'grid-1', isContentZoomable: false },
+        ]);
+      } finally {
+        unsubscribe();
+      }
+    });
+  });
+
   it('an explicit area on a declared empty pane is accepted only when it is the declared area', async () => {
     setContentZoomAreas('editor-1', []);
     vi.mocked(logger.debug).mockClear();

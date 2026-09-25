@@ -31,10 +31,9 @@ describe('content-zoom.model', () => {
     expect(declared).toEqual({
       [SCRIPTURE_EDITOR_WEBVIEW_TYPE]: { kind: 'editor', defaultArea: 'main' },
       'platformEnhancedResources.enhancedResource': { kind: 'resource', defaultArea: 'main' },
-      'platformScriptureEditor.scriptureTextGrid': {
-        kind: 'resource',
-        defaultArea: 'text-collection',
-      },
+      // Each resource in the grid is its own area and the grid itself has none, so a grid showing
+      // no resource has nothing to zoom.
+      'platformScriptureEditor.scriptureTextGrid': { kind: 'resource' },
       'platformScriptureEditor.modelText': { kind: 'resource', defaultArea: 'model-text' },
       'platformScriptureEditor.bibleTexts': { kind: 'resource', defaultArea: 'bible-texts' },
       'platformScriptureEditor.commentaries': { kind: 'resource', defaultArea: 'commentaries' },
@@ -69,8 +68,13 @@ describe('content-zoom.model', () => {
     expect(getContentZoomDeclaration('paratextBibleSendReceive.compareVersions')).toBeUndefined();
   });
 
-  it('gives every declaration a default area the platform accepts', () => {
-    CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.forEach(({ defaultArea }) => {
+  it('gives every declared default area an id the platform accepts', () => {
+    const defaultAreas = Array.from(CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.values()).flatMap(
+      ({ defaultArea }) => (defaultArea === undefined ? [] : [defaultArea]),
+    );
+    // Positive control: all but the Text Collection grid declare one.
+    expect(defaultAreas).toHaveLength(CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.size - 1);
+    defaultAreas.forEach((defaultArea) => {
       expect(isValidContentZoomAreaId(defaultArea)).toBe(true);
     });
   });
