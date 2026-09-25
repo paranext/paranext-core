@@ -192,14 +192,14 @@ export function ScriptureTextGrid({
   }, [chapterContext]);
 
   // A resource whose id yields no area id still zooms, with every other such resource, in the
-  // pane-wide area; say so once per id rather than let it look like a resource that ignores zoom.
+  // shared fallback area; say so once per id rather than let it look like a resource that ignores zoom.
   useEffect(() => {
     resources.forEach(({ resourceId }) => {
       if (toResourceZoomAreaId(resourceId) !== undefined) return;
       if (resourceIdsWarnedWithoutZoomArea.has(resourceId)) return;
       resourceIdsWarnedWithoutZoomArea.add(resourceId);
       logger.warn(
-        `ScriptureTextGrid: resource id "${resourceId}" yields no zoom area id, so it zooms with the pane-wide "${TEXT_COLLECTION_ZOOM_AREA}" area`,
+        `ScriptureTextGrid: resource id "${resourceId}" yields no zoom area id, so it zooms with the shared fallback "${TEXT_COLLECTION_ZOOM_AREA}" area`,
       );
     });
   }, [resources]);

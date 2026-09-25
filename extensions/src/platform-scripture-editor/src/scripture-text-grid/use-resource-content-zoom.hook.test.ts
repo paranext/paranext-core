@@ -139,7 +139,7 @@ describe('useResourceContentZoom', () => {
     ]);
   });
 
-  it('uses the pane-wide area for a resource whose id yields no area id', () => {
+  it('uses the shared fallback area for a resource whose id yields no area id', () => {
     const { result } = renderController({ 'text-collection': 1.5 });
     expect(result.current.getZoom('日本語')).toBe(1.5);
     act(() => result.current.adjustZoom('日本語', 1));

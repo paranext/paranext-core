@@ -87,7 +87,7 @@ describe('content zoom markers (Text Collection grid)', () => {
       '<div className="tw:min-w-0 tw:flex-1 tw:overflow-auto"> <ContentZoomRoot area={zoomArea}',
     );
     expect(cell).toContain('<div className="tw:p-2"> <ContentZoomRoot area={zoomArea}');
-    // The pane-wide area is only the grid's fallback, never a literal in the cell.
+    // The shared `text-collection` area is only the grid's fallback, never a literal in the cell.
     expect(cell).not.toContain('area="text-collection"');
   });
 

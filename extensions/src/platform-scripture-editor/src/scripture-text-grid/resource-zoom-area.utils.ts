@@ -2,8 +2,9 @@
 export const RESOURCE_ZOOM_AREA_PREFIX = 'resource-';
 
 /**
- * The Text Collection's pane-wide zoom area: core's declared default area for this web view type,
- * used for a resource whose id yields no usable area id.
+ * The Text Collection's fallback zoom area, shared by every resource whose id yields no usable area
+ * id. The grid itself has no area of its own: core declares no default area for it, so a grid
+ * showing no resource has nothing to zoom.
  */
 export const TEXT_COLLECTION_ZOOM_AREA = 'text-collection';
 
@@ -26,9 +27,9 @@ export function toResourceZoomAreaId(resourceId: string): string | undefined {
 
 /**
  * The content zoom area a resource's text is marked with and its zoom commands target: its own
- * `resource-<id>` area, else the pane-wide {@link TEXT_COLLECTION_ZOOM_AREA}. The grid's markers and
- * zoom scopes and the zoom menus' commands all resolve a resource's area through this one function,
- * so they can never disagree about it.
+ * `resource-<id>` area, else the shared fallback {@link TEXT_COLLECTION_ZOOM_AREA}. The grid's
+ * markers and zoom scopes and the zoom menus' commands all resolve a resource's area through this
+ * one function, so they can never disagree about it.
  */
 export function resourceZoomAreaOf(resourceId: string): string {
   return toResourceZoomAreaId(resourceId) ?? TEXT_COLLECTION_ZOOM_AREA;
