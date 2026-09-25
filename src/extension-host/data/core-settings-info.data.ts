@@ -100,7 +100,7 @@ const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'>
     typeof newValue === 'object' &&
     Array.isArray(newValue) &&
     newValue.length > 0 &&
-    newValue.every((v) => typeof v === 'string' && v in validLanguages)
+    newValue.every((v) => typeof v === 'string' && Object.hasOwn(validLanguages, v))
   );
 };
 
