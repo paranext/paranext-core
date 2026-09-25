@@ -661,6 +661,26 @@ describe('interface language selector', () => {
     expect(offerRestartAfterInterfaceLanguageChange).toHaveBeenCalledWith(['en'], ['es', 'en']);
   });
 
+  it('does not offer a restart when another list setting is written', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platformGetResources.excludePdpFactoryIdsInHome"
+        setting={[]}
+        label="Excluded factories"
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '["x"]' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    // Positive control: the list was written.
+    expect(setSetting).toHaveBeenCalledWith(['x']);
+    expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
+  });
+
   it('does not offer a restart when writing the new language fails', async () => {
     vi.useFakeTimers();
     const setSetting = vi.fn().mockRejectedValue(new Error('write rejected'));
