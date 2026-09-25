@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   isMacOs,
-  Kbd,
+  ShortcutKeys,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -225,7 +225,7 @@ export function LockToggleButtonView({
           <span className="tw:flex tw:items-center tw:gap-2">
             <span>{localize(localizedStrings, tooltipKey)}</span>
             {/* Hidden when disabled: the shortcut is a no-op while the button is disabled. */}
-            {!isDisabled && <Kbd>{shortcut.hint}</Kbd>}
+            {!isDisabled && <ShortcutKeys hint={shortcut.hint} />}
           </span>
         </TooltipContent>
       </Tooltip>
