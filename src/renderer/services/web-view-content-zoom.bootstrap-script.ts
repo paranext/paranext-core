@@ -233,14 +233,27 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       sheet.insertRule(NAMED_AREA_RULE_TEMPLATE.split(AREA_ID_PLACEHOLDER).join(areaId), sheet.cssRules.length);
       ruled.add(areaId);
     };
+    // Per area, its first accepted marker (which decides its text direction) and its first
+    // non-empty label, in document order. Rebuilt by every scan, so the badge reads them on each
+    // zoom step without a scan of its own: a label change is an attribute the observer watches, and
+    // a marker added or removed is a mutation it already rescans for.
+    let firstMarkerByArea = new Map();
+    let labelByArea = new Map();
     const collectAreas = () => {
       const found = [];
+      const firstMarkers = new Map();
+      const labels = new Map();
       document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
         const areaId = idOf(element);
         if (!isAreaId(areaId)) { warnOnce('ignoring zoom area with invalid id "' + areaId + '"'); return; }
         if (element.parentElement && element.parentElement.closest('[' + ATTR + ']')) { warnOnce('ignoring nested zoom area "' + areaId + '"'); return; }
         if (found.indexOf(areaId) === -1) found.push(areaId);
+        if (!firstMarkers.has(areaId)) firstMarkers.set(areaId, element);
+        const label = element.getAttribute(LABEL_ATTR);
+        if (label && !labels.has(areaId)) labels.set(areaId, label);
       });
+      firstMarkerByArea = firstMarkers;
+      labelByArea = labels;
       return found;
     };
     const setActive = (areaId) => {
@@ -309,7 +322,7 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       observer = new MutationObserver((records) => {
         if (records.some(isAreaRecord)) refresh();
       });
-      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR] });
+      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR, LABEL_ATTR] });
       refresh();
     };
 
@@ -799,11 +812,7 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     const INDICATOR_INSET_TOP = 12;
     const INDICATOR_INSET_INLINE = 16;
     const isRtlArea = (areaId) => {
-      let anchor;
-      const markers = document.querySelectorAll('[' + ATTR + ']');
-      for (let i = 0; i < markers.length && !anchor; i += 1) {
-        if (idOf(markers[i]) === areaId) anchor = markers[i];
-      }
+      const anchor = firstMarkerByArea.get(areaId);
       const style = window.getComputedStyle
         ? window.getComputedStyle(anchor || document.documentElement)
         : undefined;
@@ -882,20 +891,10 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
       placementFrame = window.requestAnimationFrame(placeBadge);
     };
     // A view names an area for the user by putting a label on one of its markers; the first
-    // non-empty label among the area's marked elements, in document order, is the name. This scans
-    // the marker set on every call - up to 50-120 times a second during a fast wheel gesture - which
-    // is accepted deliberately: the scan reads no style and forces no layout, while a label cached
-    // per area would go stale the moment a resource is renamed or reordered.
-    const labelOf = (areaId) => {
-      const markers = document.querySelectorAll('[' + ATTR + ']');
-      for (let i = 0; i < markers.length; i += 1) {
-        if (idOf(markers[i]) === areaId) {
-          const label = markers[i].getAttribute(LABEL_ATTR);
-          if (label) return label;
-        }
-      }
-      return undefined;
-    };
+    // non-empty label among the area's marked elements, in document order, is the name. Read from
+    // the last scan's record rather than the document: a zoom gesture calls this 50-120 times a
+    // second, and a book-length view carries thousands of markers.
+    const labelOf = (areaId) => labelByArea.get(areaId);
     const LABEL_SEPARATOR = ' · ';
     // The name's own box: a <bdi>, so a right-to-left name cannot reorder the level beside it, and
     // capped, so a long name is cut with an ellipsis while the level text after it is never cut.
