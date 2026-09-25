@@ -89,25 +89,41 @@ export function findCharSpanText(
 }
 
 /**
+ * Where a verse's own opening text sits in a USJ document: its JSONPath, its text, and the full
+ * `content` index chain to it (so a caller can derive a SIBLING'S path by index arithmetic — e.g.
+ * the text that lands after a marker inserted mid-string, which takes this text's own index plus 2,
+ * once the array holds text-before/marker/text-after in place of the one original string).
+ */
+export interface VerseTextLocation extends CharSpanTextLocation {
+  /** The index chain to the text node itself, i.e. the indexes segment `jsonPath` encodes. */
+  indexes: readonly number[];
+}
+
+/**
  * Depth-first search for the `type: 'verse'` marker whose `number` is `verseNumber`, returning the
  * plain text string immediately following it in the same content array — the verse's own opening
- * text — together with its JSONPath. A location computed from this text against a chapter USJ read
- * BEFORE some other, unrelated edit stays valid through that edit as long as the edit lands in a
- * DIFFERENT paragraph: paragraphs are sibling entries in the chapter's own `content` array, so
- * splitting a string inside one paragraph never renumbers another paragraph's own children.
+ * text — together with its JSONPath and index chain. A location computed from this text against a
+ * chapter USJ read BEFORE some other, unrelated edit stays valid through that edit as long as the
+ * edit lands in a DIFFERENT paragraph: paragraphs are sibling entries in the chapter's own
+ * `content` array, so splitting a string inside one paragraph never renumbers another paragraph's
+ * own children. An edit that splits THIS SAME text (a marker typed mid-verse) is still computable
+ * from this one read: it replaces this text's single array slot with up to three new slots (text
+ * before, the new marker, text after) in the same position, so a caller can derive the split
+ * siblings' own paths from `indexes` without a second read.
  */
 export function findVerseText(
   content: readonly (string | UsjMarkerObject)[],
   verseNumber: string,
   indexes: readonly number[] = [],
-): CharSpanTextLocation | undefined {
-  return content.reduce<CharSpanTextLocation | undefined>((found, node, index) => {
+): VerseTextLocation | undefined {
+  return content.reduce<VerseTextLocation | undefined>((found, node, index) => {
     if (found || typeof node === 'string') return found;
     const nodeIndexes = [...indexes, index];
     if (node.type === 'verse' && node.number === verseNumber) {
+      const textIndexes = [...indexes, index + 1];
       const next = content[index + 1];
       return typeof next === 'string'
-        ? { jsonPath: contentJsonPath([...indexes, index + 1]), text: next }
+        ? { jsonPath: contentJsonPath(textIndexes), text: next, indexes: textIndexes }
         : undefined;
     }
     return findVerseText(node.content ?? [], verseNumber, nodeIndexes);

@@ -25,10 +25,12 @@
  *   browser's own selection and the editor's own `getSelection()` report.
  * - `setAnnotation` over those same settled offsets marks exactly those two characters — not the
  *   separator, not the two before them.
- * - A pending, un-departed attribute edit inside a freshly typed `\w grace\w*` span does not disturb
- *   `setAnnotation`'s resolution of an unrelated word in a different paragraph: the highlight lands
- *   on exactly that word while the edit is still mid-flight, because a location outside a pending
- *   scope resolves through the identity fast path regardless of what is pending elsewhere.
+ * - A pending, un-departed attribute edit inside a `\w grace\w*` span typed MID-SENTENCE does not
+ *   shift `setAnnotation`'s resolution of a word LATER IN THE SAME SENTENCE: the live tree carries
+ *   the raw, un-collapsed `|lemma="grace"` text the settled document does not count at all, so the
+ *   highlight must still land on exactly that word despite the byte-count mismatch between them —
+ *   the harder case a word in a different, untouched paragraph would pass even if this were
+ *   broken.
  *
  * The last two talk to the editor through the scripture editor's web view controller network object
  * (`object:webViewController<webViewId>.…`), the same surface extensions use.
@@ -47,6 +49,7 @@ import { FrameLocator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   chapterLocation,
+  contentJsonPath,
   findCharSpanText,
   findVerseText,
   getChapterUsj,
@@ -100,13 +103,19 @@ const WORD_MARKER = 'w';
  */
 const SPAN_WORD = 'grace';
 /**
- * John 2:5 ("His mother said to the servants, ...") is a plain, char-span-free sentence this spec
- * types a `\w grace\w*` span into. John 2:6 opens its own `\p`, so it is a sibling paragraph at the
- * chapter's top level: splitting verse 5's text around the new span never renumbers verse 6's own
- * content, and its first word makes a stable target for a location computed once, up front.
+ * John 2:5 ("His mother said to the servants, "Whatever he says to you, do it."") is a plain,
+ * char-span-free sentence this spec types a `\w grace\w*` span into, MID-SENTENCE — right in front
+ * of "servants" — so real text from the SAME verse still follows the span. The verse's pre-edit
+ * text (read once, up front) is enough to compute the settled location of a word further into that
+ * same text: inserting the span there replaces the text's own single array slot with three slots
+ * (text before, the new marker, text after) in place, so the trailing text's own new index is
+ * knowable without a second read. See `findVerseText`.
  */
-const WORD_AFTER_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 6 };
-const WORD_AFTER_TARGET = 'Now';
+const SPAN_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 5 };
+/** Where the new span goes: right in front of this word, still inside verse 5's own text. */
+const SPAN_INSERTION_ANCHOR = 'servants';
+/** The word after the span, in the SAME sentence, that `setAnnotation` addresses while pending. */
+const WORD_AFTER_TARGET = 'Whatever';
 
 test.use({
   interfaceMode: 'power',
@@ -272,44 +281,76 @@ test.describe('scripture editor settled positions', () => {
       await expect(editorInput).toContainText(charText);
     });
 
-    await test.step('setAnnotation on a word after a span with a pending attribute edit marks exactly that word', async () => {
-      // Computed against the chapter USJ read before any typing in this spec, so it stays correct
-      // regardless of how verse 5's own paragraph reshapes below (see WORD_AFTER_VERSE_REF).
-      const verseSixText = findVerseText(chapterUsj.content ?? [], '6');
-      if (!verseSixText)
-        throw new Error(`No plain text found for John 2:6 in ${TARGET_REFERENCE}'s chapter USJ`);
-      const wordOffset = verseSixText.text.indexOf(WORD_AFTER_TARGET);
-      if (wordOffset === -1)
+    await test.step('setAnnotation on a later word in the same sentence as a pending mid-sentence attribute edit marks exactly that word', async () => {
+      // Computed against the chapter USJ read before any typing in this spec. Inserting the new
+      // span mid-string replaces this text's own array slot with three slots (text before, the
+      // marker, text after) in place, so the trailing text's path is this same text's index chain
+      // with its own last index moved forward by 2 — derivable from this one read, with no second
+      // (PDP-staleness-prone) read after the edit.
+      const verseFiveText = findVerseText(chapterUsj.content ?? [], '5');
+      if (!verseFiveText) throw new Error("No plain text found for John 2:5 in the chapter's USJ");
+      const insertionOffset = verseFiveText.text.indexOf(SPAN_INSERTION_ANCHOR);
+      if (insertionOffset === -1)
         throw new Error(
-          `Expected "${WORD_AFTER_TARGET}" in John 2:6's text, got: ${verseSixText.text}`,
+          `Expected "${SPAN_INSERTION_ANCHOR}" in John 2:5's text, got: ${verseFiveText.text}`,
         );
+      const textAfterSplit = verseFiveText.text.slice(insertionOffset);
+      const wordOffsetAfterSplit = textAfterSplit.indexOf(WORD_AFTER_TARGET);
+      if (wordOffsetAfterSplit === -1)
+        throw new Error(
+          `Expected "${WORD_AFTER_TARGET}" after "${SPAN_INSERTION_ANCHOR}" in John 2:5's text, got: ${textAfterSplit}`,
+        );
+      const textIndex = verseFiveText.indexes.at(-1);
+      if (textIndex === undefined) throw new Error('findVerseText returned an empty index chain');
+      const textAfterSplitPath = contentJsonPath([
+        ...verseFiveText.indexes.slice(0, -1),
+        textIndex + 2,
+      ]);
+
+      // Place the caret by position (the collapsed-placement path the first scenario above already
+      // verifies) rather than by a click-then-keyboard gesture: verse 5 is mid-sentence content, so
+      // a click near the insertion point followed by End would land at the end of whatever VISUAL
+      // line the caret happens to be on, not at this exact character — a distinction a click near
+      // the true end of a short verse (used elsewhere in this file) does not have to make.
+      const insertionCaret = chapterLocation(
+        SPAN_VERSE_REF,
+        verseFiveText.jsonPath,
+        insertionOffset,
+      );
+      await sendToEditorController(editorId, 'selectRange', [
+        { start: insertionCaret, end: insertionCaret },
+      ]);
+      await expect
+        .poll(async () => (await readSelection())?.start?.documentLocation, { timeout: 30_000 })
+        .toEqual({ jsonPath: verseFiveText.jsonPath, offset: insertionOffset });
 
       // The bundled sample WEB project ships no `\w` markers, so this step creates one by typing
-      // literal USFM marker syntax — the same technique attribute-display-settle.spec.ts uses.
-      // Appended directly after verse 5's own closing punctuation, at the true end of its single
-      // visual line (a plain, char-span-free sentence), so the new span is the LAST thing in
-      // verse 5's paragraph and touches nothing before it.
-      await editorInput.getByText('servants', { exact: false }).first().click();
-      await editorInput.press('End');
+      // literal USFM marker syntax — the same technique attribute-display-settle.spec.ts uses —
+      // directly in front of "servants", leaving that word and the rest of the sentence as real
+      // trailing text in the SAME paragraph.
       await editorInput.pressSequentially(`\\${WORD_MARKER} ${SPAN_WORD}\\${WORD_MARKER}*`, {
         delay: 30,
       });
       await expect(editorInput).toContainText(SPAN_WORD, { timeout: 15_000 });
+      await expect(editorInput).toContainText(WORD_AFTER_TARGET, { timeout: 15_000 });
       const wCloser = editorInput.locator(`span.closing[data-marker="${WORD_MARKER}"]`).last();
       await expect(wCloser).toBeAttached({ timeout: 15_000 });
 
       // Click just inside the left edge of the new span's own closer — the same boundary the
-      // first scenario above clicks to reach a span's text end. This appends after the span's own
-      // text and never touches the opening glyph's leading NBSP separator, which sits at the other
-      // end of the span entirely.
+      // first scenario above clicks to reach a span's text end. This is a click on a specific
+      // ELEMENT's own edge, not a keyboard gesture relative to visual line layout, so it is
+      // unaffected by the wrapping concern above. It appends after the span's own text and never
+      // touches the opening glyph's leading NBSP separator, which sits at the other end of the span
+      // entirely.
       const closerBox = await wCloser.boundingBox();
       if (!closerBox) throw new Error('The new \\w span closing glyph has no bounding box');
       await wCloser.click({ position: { x: 1, y: closerBox.height / 2 } });
 
       // Type the attribute and stop — no caret departure, so the edit stays PENDING (the tokenizer
       // only re-derives attributes on caret departure for an already-closed span; see
-      // attribute-display-settle.spec.ts). `setAnnotation` below addresses a different paragraph
-      // while this edit is still mid-flight.
+      // attribute-display-settle.spec.ts). `setAnnotation` below addresses a word later in the SAME
+      // sentence while this edit is still mid-flight, with the raw, un-collapsed attribute text
+      // sitting between the two.
       await editorInput.pressSequentially(`|lemma="${SPAN_WORD}"`, { delay: 30 });
       await expect(editorInput).toContainText(`${SPAN_WORD}|lemma="${SPAN_WORD}"`, {
         timeout: 15_000,
@@ -317,11 +358,11 @@ test.describe('scripture editor settled positions', () => {
 
       await sendToEditorController(editorId, 'setAnnotation', [
         {
-          start: chapterLocation(WORD_AFTER_VERSE_REF, verseSixText.jsonPath, wordOffset),
+          start: chapterLocation(SPAN_VERSE_REF, textAfterSplitPath, wordOffsetAfterSplit),
           end: chapterLocation(
-            WORD_AFTER_VERSE_REF,
-            verseSixText.jsonPath,
-            wordOffset + WORD_AFTER_TARGET.length,
+            SPAN_VERSE_REF,
+            textAfterSplitPath,
+            wordOffsetAfterSplit + WORD_AFTER_TARGET.length,
           ),
         },
         ANNOTATION_TYPE,
@@ -333,8 +374,8 @@ test.describe('scripture editor settled positions', () => {
       await expect(annotatedMark).toHaveClass(
         new RegExp(`(^|\\s)editor-typed-mark-external-${ANNOTATION_TYPE}(\\s|$)`),
       );
-      // Exact, not `toContainText`: the pending edit sits in a different paragraph, so any offset
-      // this location resolves wrong would mark a neighboring word instead of "Now" itself.
+      // Exact, not `toContainText`: the pending edit sits earlier in the SAME sentence, so any
+      // offset this location resolves wrong marks a neighboring word instead of the one addressed.
       expect(await annotatedMark.textContent()).toBe(WORD_AFTER_TARGET);
     });
   });
