@@ -463,3 +463,31 @@ describe('ResourceTextPanel pick in flight', () => {
     expect(screen.queryByRole('button', { name: PICK_BIBLE_TEXTS })).not.toBeInTheDocument();
   });
 });
+
+/** Whether `later` comes after `earlier` in document order */
+function comesAfter(earlier: Node, later: Node) {
+  // compareDocumentPosition reports its answer as bit flags
+  // eslint-disable-next-line no-bitwise
+  return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+describe('ResourceTextPanel copyright notice', () => {
+  const NOTICE = <div data-testid="copyright-notice">Notice</div>;
+
+  it('shows the notice between the resource selector and the text', () => {
+    renderPanel({ copyrightNotice: NOTICE });
+
+    const notice = screen.getByTestId('copyright-notice');
+    const selector = screen.getByRole('button', { name: /WEB/ });
+    const editor = screen.getByTestId(RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID);
+    expect(comesAfter(selector, notice)).toBe(true);
+    expect(comesAfter(notice, editor)).toBe(true);
+  });
+
+  it('keeps the notice on screen when the resource lacks the book', () => {
+    renderPanel({ copyrightNotice: NOTICE, usjPossiblyError: missingBookError('MAT') });
+
+    expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
+    expect(screen.getByTestId('copyright-notice')).toBeInTheDocument();
+  });
+});

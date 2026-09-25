@@ -2956,6 +2956,27 @@ declare module 'platform-scripture' {
   }
 
   // #endregion Markers Checklist Types
+
+  /**
+   * The copyright notice to show when a project is opened: the value of the
+   * `platformScripture.copyrightNotice` project setting. Treat a `kind` not listed here as `none`,
+   * since a newer backend may add kinds.
+   *
+   * - `none`: no notice.
+   * - `notification`: any project whose copyright starts with "Notification:", as the ESV's does.
+   *   `bannerText` is the rest of that first paragraph and `details` the rest of the copyright.
+   * - `restrictedLicense`: a resource that is a traditionally licensed Biblica text, for reference
+   *   only and not to be used as the basis of a new translation. Only resources get it.
+   *   `copyrightYears` is the years in its copyright statement (e.g. "1973, 1978, 1984, 2011"), or
+   *   "" when it names none.
+   *
+   * `name` is the project's short name and `fullName` its full name, which is the short name when
+   * it has none. `details` is plain text with one paragraph per line (`\n`), never HTML.
+   */
+  export type CopyrightNotice =
+    | { kind: 'none' }
+    | { kind: 'notification'; name: string; fullName: string; bannerText: string; details: string }
+    | { kind: 'restrictedLicense'; name: string; fullName: string; copyrightYears: string };
 }
 
 declare module 'papi-shared-types' {
@@ -2992,6 +3013,7 @@ declare module 'papi-shared-types' {
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
     IFindHistoryDataProvider,
+    CopyrightNotice,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -3432,6 +3454,14 @@ declare module 'papi-shared-types' {
      * `†` (ViewUsfmXhtmlConverter.cs:73-74).
      */
     'platformScripture.crossRefCallers': string;
+
+    /**
+     * The copyright notice to show when this project is opened: `restrictedLicense` only for
+     * resources; `notification` for any project whose copyright starts with "Notification:";
+     * otherwise `none`. Computed from its copyright, names and DBL id; read-only through the
+     * settings surface.
+     */
+    'platformScripture.copyrightNotice': CopyrightNotice;
   }
 
   export interface NetworkEvents {

@@ -1,4 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi, beforeAll, afterAll } from 'vitest';
 import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
@@ -717,5 +718,83 @@ describe('ResourcePickerDialog', () => {
       // index also fails if the row went missing, which `indexOf`'s -1 would otherwise satisfy.
       expect(reopened.indexOf(targetLabel)).toBe(MANY_LANGUAGE_INSTALLED_LANGUAGES.length);
     });
+  });
+});
+
+describe('ResourcePickerDialog disabled rows', () => {
+  const REASON = 'Licensing terms prohibit using this text as a model.';
+  const disableEsvAndNlt = (resource: { displayName: string }) =>
+    resource.displayName === 'ESV' || resource.displayName === 'NLT' ? REASON : undefined;
+
+  function rowOf(name: string) {
+    const row = screen.getByText(name).closest('tr');
+    if (!row) throw new Error(`${name} row not found`);
+    return row;
+  }
+
+  it('shows the reason in a tooltip when a disabled row is hovered', async () => {
+    const user = userEvent.setup();
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    await user.hover(rowOf('ESV'));
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(REASON);
+  });
+
+  it('shows the reason in a tooltip when a disabled row receives focus', async () => {
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    // The table's arrow-key navigation moves focus between rows with `focus()`; jsdom has no
+    // layout, so the navigation itself cannot run here and the focus it produces is applied directly.
+    act(() => rowOf('NLT').focus());
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(REASON);
+  });
+
+  it('names a disabled row by its display name and describes it with the reason', () => {
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    const esvRow = screen.getByRole('button', { name: 'ESV' });
+    expect(esvRow).toHaveAttribute('aria-disabled', 'true');
+    expect(esvRow).toHaveAccessibleDescription(REASON);
+  });
+
+  it('does not select a disabled row on click, Enter, or Space', () => {
+    const { onSelect } = renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    fireEvent.click(rowOf('ESV'));
+    fireEvent.keyDown(rowOf('ESV'), { key: 'Enter' });
+    fireEvent.keyDown(rowOf('NLT'), { key: ' ' });
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('keeps Space on a disabled row from scrolling the list', () => {
+    renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    const wasNotPrevented = fireEvent.keyDown(rowOf('NLT'), { key: ' ' });
+
+    expect(wasNotPrevented).toBe(false);
+  });
+
+  it('still selects rows without a disabled reason, by click and by Enter', () => {
+    const { onSelect } = renderDialog({ getDisabledReason: disableEsvAndNlt });
+
+    fireEvent.click(rowOf('KJV'));
+    fireEvent.keyDown(rowOf('UBS-SLR'), { key: 'Enter' });
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'KJV' }));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'UBS-SLR' }));
+  });
+
+  it('lets an already-selected row be deselected even when it has a disabled reason', () => {
+    const { onSelect } = renderDialog({
+      allowDeselect: true,
+      getDisabledReason: (resource) => (resource.displayName === 'NIV' ? REASON : undefined),
+    });
+
+    fireEvent.click(rowOf('NIV'));
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'NIV' }));
   });
 });

@@ -457,6 +457,7 @@
   "%resourcePicker_showing_count%": "Showing {filtered} of {total} resources",
   "%resourcePicker_title%": "Resource picker",
   "%resources_deprecated_any%": "Any",
+  "%restrictedModelOrBaseText_disabledReason%": "This text is disabled from being selected because of licensing terms which prohibit its use as a model or base for a new translation.",
   "%scripture_section_dc_long%": "Deuterocanon",
   "%scripture_section_dc_short%": "DC",
   "%scripture_section_extra_long%": "Extra material",

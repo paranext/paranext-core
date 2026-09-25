@@ -45,6 +45,13 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_status_bookNotAvailable%': 'Book not in this text',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
+      '%platformScripture_copyrightNotice_restrictedLicense_banner%':
+        '{label}: may not be used as a base text.',
+      '%platformScripture_copyrightNotice_restrictedLicense_details%':
+        '{fullName} copyright © {years}. {permissionsLink}',
+      '%platformScripture_copyrightNotice_details_title%': 'Copyright for {name}',
+      '%platformScripture_copyrightNotice_details_close%': 'Close',
+      '%platformScripture_copyrightNotice_indicator_label%': 'Copyright notice for {name}',
     },
     false,
   ],
@@ -630,5 +637,27 @@ describe('ResourceCell book not in this text', () => {
     // Lexical's placeholder. Assert the re-feed, matching the twin in
     // `resource-text-panel.component.test.tsx`.
     expect(setUsjSpy).toHaveBeenLastCalledWith(chapter);
+  });
+});
+
+describe('ResourceCell copyright notice', () => {
+  it("offers the notice of the cell's own text beside its name", () => {
+    setUsjResult(undefined, true);
+    mockUseProjectSetting.mockImplementation((projectId: unknown, key: unknown) => {
+      if (key === 'platformScripture.copyrightNotice')
+        return [
+          projectId === props.resourceRef.projectId
+            ? { kind: 'restrictedLicense', name: 'NIV11', fullName: 'NIV', copyrightYears: '2011' }
+            : { kind: 'none' },
+          vi.fn(),
+          vi.fn(),
+          false,
+        ];
+      return ['ltr', vi.fn(), vi.fn(), false];
+    });
+
+    render(<ResourceCell {...props} />);
+
+    expect(screen.getByRole('button', { name: 'Copyright notice for NIV11' })).toBeInTheDocument();
   });
 });

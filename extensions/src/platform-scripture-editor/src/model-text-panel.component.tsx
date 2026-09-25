@@ -24,13 +24,21 @@ import type {
   ProjectReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ComponentProps,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import {
   getRefLabel,
   isDblResourceReference,
-  isNonDblResource,
   isProjectReference,
+  resolveModelTextProjectId,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
@@ -147,6 +155,11 @@ export type ModelTextPanelProps = {
   ) => Promise<{ usj: Usj | undefined; textDirection: string }>;
   /** Logger forwarded to the editor (the webview supplies the PAPI logger; stories may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
+  /**
+   * The model text's copyright notice, shown below the header. The web view supplies it because
+   * reading the notice needs PAPI.
+   */
+  copyrightNotice?: ReactNode;
 };
 
 /**
@@ -171,6 +184,7 @@ export function ModelTextPanel({
   showResourcePicker,
   getResourceChapter,
   logger,
+  copyrightNotice,
 }: ModelTextPanelProps) {
   // --- Resolve the configured model text against the DBL resource list ---
 
@@ -181,14 +195,9 @@ export function ModelTextPanel({
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
   if (isDblResourceReference(effectiveModelText)) dblRef = effectiveModelText;
   const match = dblRef ? findCachedDblResource(dblRef, dblResources) : undefined;
-  // ProjectReferences are locally-installed non-DBL resources. Only treat the reference as
-  // resolvable if the project is confirmed present in dblResources — an admin-shared reference
-  // pointing at a project the user hasn't installed must fall through to the not-found guard.
-  const localProjectId = isProjectReference(effectiveModelText)
-    ? dblResources.find((r) => isNonDblResource(r) && r.projectId === effectiveModelText.id)
-        ?.projectId
-    : undefined;
-  const resourceProjectId = match?.installed ? match.projectId : localProjectId;
+  // An admin-shared project reference to a project the user hasn't installed resolves to nothing and
+  // falls through to the not-found guard.
+  const resourceProjectId = resolveModelTextProjectId(effectiveModelText, dblResources);
   const modelTextLabel = effectiveModelText
     ? getRefLabel(effectiveModelText, dblResources)
     : undefined;
@@ -731,6 +740,9 @@ export function ModelTextPanel({
           </Tooltip>
         </TooltipProvider>
       )}
+      {/* Below the header, so the header keeps the fixed 42px height that lines it up with
+          Column 3's tab bar */}
+      {copyrightNotice}
       {/* Named as its own zoom area ("model-text") so its remembered level is kept apart from this
           project's other resource panes, which resolve to the same kind/identity pair and would
           otherwise all read one remembered level. The label row above stays outside so its pinned

@@ -557,6 +557,63 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   [`adr-bcv-item-value-contract`](#adr-bcv-item-value-contract-bookchaptercontrol-owns-the-cmdk-item-value-contract-activation-reads-component-state-not-cmdks-dom-internals),
   which governs how the highlight is spelled; this one governs who owns the keyboard.
 
+## adr-biblica-license-notice-computed-setting: Biblica licensing restrictions are detected in C# and surfaced as a read-only computed project setting plus a restriction list for pickers
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** Biblica asked that its traditionally licensed (non-Open) texts show a notice that
+  they are for reference only and may not be used as the basis of a new translation, with a "More
+  info" window of Biblica's terms for use outside Paratext, and (nice-to-have) that they cannot be
+  picked as a model or base text. Paratext 9 has no Biblica-specific logic; it only shows a banner
+  for copyrights starting with "Notification:" (`ScrText.RequiresCopyrightBanner`, used by ESVUK and
+  ESVUS16). The DBL catalog carries no copyright or rights-holder data, so a resource that is not
+  installed can only be identified by its DBL id. Biblica's list (DBL entries whose rights holder
+  is Biblica and which are not open access) names 56 texts. A survey that installed all 1,819 DBL
+  resources in Platform.Bible's resource list found that one copyright rule identifies exactly the
+  55 of those in that list (the 56th, VCB, is not in it).
+- **Decision:** `BiblicaLicensing.IsRestricted(scrText)`
+  (`c-sharp/Projects/DigitalBibleLibrary/BiblicaLicensing.cs`) is the one check. It applies only to
+  resources, so a Biblica team's own editable project is never flagged. A resource is restricted
+  when its DBL id is on Biblica's list, or when its plain-text copyright names "Biblica, Inc." or
+  "Biblica®" without "Biblica® Open" (OBTT is exempted by id); the rule covers Biblica texts
+  added to the DBL after the list was made.
+  - Panes: the read-only computed project setting `platformScripture.copyrightNotice`
+    (`CopyrightNotice.FromScrText`) returns `none | notification | restrictedLicense` with the
+    names to show. The PT9 "Notification:" text applies to any project, as in Paratext 9, takes
+    priority and shows its own copyright. A
+    restricted text carries the years of its copyright statement, which Biblica's terms quote; the
+    front end supplies and localizes the wording.
+  - Pickers: `listModelTextRestrictions` on the DBL resources provider returns Biblica's DBL ids
+    and the ids of installed resources that `IsRestricted`. platform-get-resources stamps
+    `isRestrictedAsModelText` on every catalog and local row it serves from that list, so an old
+    cached catalog and offline sessions are covered. Manage Books' `ProjectSummary.IsRestrictedAsBase`
+    uses `IsRestricted` directly.
+  - The restriction is enforced in the pickers only (Column 1, Team layout, Manage Books "Create
+    based on"); settings writes are not rejected, and a restricted model text chosen earlier stays
+    set, with its banner.
+  - A dismissal is kept per pane for the text on screen and cleared when the pane shows another
+    text, as Paratext 9 clears its per-window flag.
+  - Enhanced Resources is not covered: an Enhanced Resource is identified by a Marble resource id,
+    not a ScrText project, so the setting cannot reach it.
+- **Alternatives:**
+  - Reading the raw `Copyright` setting and deciding in TypeScript: rejected, because it duplicates
+    Paratext 9 logic and throws on resources with no copyright.
+  - A general per-provider licensing framework: rejected for now; Biblica is the only publisher
+    asking, and one could later replace `BiblicaLicensing` behind the same setting.
+  - The id list alone: rejected, because the rule also catches Biblica texts added to the DBL later,
+    and it agrees with the list on every surveyed text.
+  - Stamping the picker flag on the C# catalog rows: rejected, because the catalog is cached across
+    sessions and local rows never pass through it, so pickers failed open offline.
+  - Showing the text's own copyright in "More info": rejected, because Biblica asked for its terms
+    for use outside Paratext instead.
+  - A dismissal remembered for each text in a pane: rejected, because Paratext 9 shows the notice
+    again when a window changes text, and Biblica wants the notice seen.
+- **Consequences:** The id list does not pick up new Biblica texts by itself; a comment on the list
+  says how to refresh it. The legal wording of the notice and the terms is localized into every
+  language platform-scripture ships, so a change of meaning needs new keys and new translations. A
+  later general licensing framework could replace `BiblicaLicensing` behind the same setting.
+- **Source:** PT-4731.
+
 ## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
 - **Date:** 2026-08-25

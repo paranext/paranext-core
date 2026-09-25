@@ -570,6 +570,7 @@
   "%resourcePicker_section_installed%": "Instalado",
   "%resourcePicker_showing_count%": "Mostrando {filtered} de {total} recursos",
   "%resourcePicker_title%": "Selector de recursos",
+  "%restrictedModelOrBaseText_disabledReason%": "Este texto no se puede seleccionar porque sus condiciones de licencia prohíben usarlo como modelo o base para una nueva traducción.",
   "%scripture_section_dc_long%": "Deuterocanon",
   "%scripture_section_dc_short%": "DC",
   "%scripture_section_extra_long%": "Material extra",

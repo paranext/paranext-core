@@ -12,6 +12,10 @@ import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import {
+  getRestrictedModelTextReason,
+  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
+} from '@renderer/components/dialogs/restricted-model-text.utils';
+import {
   DialogDefinition,
   ShareLayoutDialogOptions,
   SHARE_LAYOUT_DIALOG_TYPE,
@@ -73,7 +77,10 @@ const NO_RESOURCES: DblResourceData[] = [];
 // spreading a frozen array into a new array literal on every render breaks that contract and
 // causes an infinite update loop. Hoist to module scope so the array identity never changes.
 const TEAM_LAYOUT_STRING_KEYS = [...TEAM_LAYOUT_DIALOG_STRING_KEYS];
-const RESOURCE_PICKER_STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
+const RESOURCE_PICKER_STRING_KEYS = [
+  ...RESOURCE_PICKER_DIALOG_STRING_KEYS,
+  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
+];
 
 /**
  * `projectId` is required on `ShareLayoutDialogOptions`, but `DialogDefinitionBase['Component']`'s
@@ -95,6 +102,11 @@ function TeamLayoutDialogWrapper({
   }) {
   const [localizedStrings, areStringsLoading] = useLocalizedStrings(TEAM_LAYOUT_STRING_KEYS);
   const [resourcePickerLocalizedStrings] = useLocalizedStrings(RESOURCE_PICKER_STRING_KEYS);
+  const getModelTextDisabledReason = useCallback(
+    (resource: DblResourceData) =>
+      getRestrictedModelTextReason(resource, resourcePickerLocalizedStrings),
+    [resourcePickerLocalizedStrings],
+  );
 
   const {
     data: catalog,
@@ -586,6 +598,7 @@ function TeamLayoutDialogWrapper({
       hiddenResourceCount={seed.hiddenResourceCount}
       hiddenInTextCollectionCount={seed.hiddenInTextCollectionCount}
       resourcePickerLocalizedStrings={resourcePickerLocalizedStrings}
+      getModelTextDisabledReason={getModelTextDisabledReason}
       localizedStrings={localizedStrings}
       onConfirm={handleConfirm}
       onCancel={cancelDialog}

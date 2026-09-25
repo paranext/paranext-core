@@ -12,7 +12,7 @@ import type {
   EffectiveResourceReference,
   EffectiveResourceReferenceList,
 } from 'platform-scripture';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 // The editor's USJ node styling. The real app loads these globally; Storybook doesn't, so without
 // them the editor's context menu is unstyled and its read-only marker toolbar renders as a stray
@@ -27,6 +27,8 @@ import '../../../../lib/platform-bible-react/src/components/demo/scripture-edito
 /* eslint-enable import/no-relative-packages */
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
+import { CopyrightNoticeBanner } from './copyright-notice/copyright-notice-banner.component';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 
 /**
  * Icon-free subset of the editor's wrapper styles (from the platform scripture-editor
@@ -120,6 +122,8 @@ type DecoratorConfig = {
   isCatalogReady?: boolean;
   /** Fail the DBL catalog fetch so the recoverable catalog-error state is observable. */
   hasCatalogError?: boolean;
+  /** The model text's copyright notice, which the web view supplies in the app. */
+  copyrightNotice?: ReactNode;
 };
 
 /** Maps the story's flags to the discriminated list state the panel consumes. */
@@ -218,6 +222,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         }}
         showResourcePicker={showResourcePicker}
         getResourceChapter={async () => ({ usj: sampleUsj, textDirection: 'ltr' })}
+        copyrightNotice={config.copyrightNotice}
       />
       <Dialog
         open={pickerOpen}
@@ -334,5 +339,33 @@ export const ResolvingCatalog: Story = {
 export const CatalogError: Story = {
   decorators: [
     createDecorator({ initialAdmin: [dblRef(seedResources[0])], hasCatalogError: true }),
+  ],
+};
+
+/**
+ * A model text that carries a copyright notice: the banner sits below the header, so the header
+ * keeps the height that lines it up with Column 3's tab bar.
+ */
+export const WithCopyrightNotice: Story = {
+  decorators: [
+    createDecorator({
+      initialAdmin: [dblRef(seedResources[0])],
+      copyrightNotice: (
+        <CopyrightNoticeBanner
+          notice={{
+            kind: 'restrictedLicense',
+            name: 'WEB',
+            fullName: 'World English Bible',
+            copyrightYears: '2011',
+          }}
+          localizedStrings={getLocalizedStrings([...COPYRIGHT_NOTICE_STRING_KEYS])}
+          onDismiss={() => {
+            // Dismissal is kept by the web view in the app; logged here
+            // eslint-disable-next-line no-console
+            console.log('onDismiss');
+          }}
+        />
+      ),
+    }),
   ],
 };

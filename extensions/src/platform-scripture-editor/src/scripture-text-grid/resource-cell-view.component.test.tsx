@@ -4,6 +4,7 @@ import type React from 'react';
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createPortal } from 'react-dom';
 import {
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
@@ -765,5 +766,85 @@ describe('ResourceCellView reorder grip', () => {
     // The grip still renders (no aria-label supplied); the label text is still shown in the header.
     expect(screen.getByText('Genesis')).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+});
+
+describe('ResourceCellView copyright indicator', () => {
+  const INDICATOR = <span data-testid="copyright-indicator" />;
+
+  it('puts the indicator in the header next to the name', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    expect(screen.getByText('NIV').parentElement).toContainElement(
+      screen.getByTestId('copyright-indicator'),
+    );
+  });
+
+  it('puts the indicator beside the hanging name in inline mode, outside the verse text', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        copyrightIndicator={INDICATOR}
+      />,
+    );
+
+    const indicator = screen.getByTestId('copyright-indicator');
+    expect(screen.getByText('NIV').parentElement).toContainElement(indicator);
+    expect(screen.getByText('In the beginning').parentElement).not.toContainElement(indicator);
+  });
+});
+
+describe('ResourceCellView right-click inside something opened from the cell', () => {
+  it('leaves the zoom menu closed for a right-click in a window portalled out of the cell', async () => {
+    // The copyright details window renders into document.body, but React still delivers its
+    // events to the cell it was opened from
+    const portalledWindow = createPortal(
+      <div role="dialog" aria-label="Copyright for NIV">
+        Copyright text
+      </div>,
+      document.body,
+    );
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={{
+          zoomIn: 'Zoom In',
+          zoomOut: 'Zoom Out',
+          reset: 'Reset Zoom',
+          options: 'Zoom options',
+        }}
+        copyrightIndicator={portalledWindow}
+      />,
+    );
+
+    const isNotCancelled = fireEvent.contextMenu(screen.getByText('Copyright text'));
+
+    expect(isNotCancelled).toBe(true);
+    expect(screen.queryByRole('menuitem', { name: 'Zoom In' })).not.toBeInTheDocument();
+
+    // The same right-click on the verse text does open it
+    fireEvent.contextMenu(screen.getByText('verse'));
+    expect(await screen.findByRole('menuitem', { name: 'Zoom In' })).toBeInTheDocument();
   });
 });

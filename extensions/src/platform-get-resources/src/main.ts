@@ -11,6 +11,7 @@ import type {
   DblResourceCatalog,
   DblResourceInstallStatus,
   DblResourceUpdateStatus,
+  ModelTextRestrictions,
 } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
@@ -24,6 +25,12 @@ import {
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
+import {
+  applyModelTextRestrictionsToCatalogWithin,
+  applyModelTextRestrictionsWithin,
+  createModelTextRestrictionsCache,
+  syncModelTextRestrictionsAfterFlagSync,
+} from './model-text-restrictions.utils';
 import { reconcileCachedResources } from './resources-cache.util';
 import tailwindStyles from './tailwind.css?inline';
 
@@ -36,6 +43,12 @@ const HOME_WEB_VIEW_SIZE = { width: 1000, height: 650 };
 
 const RESOURCES_CACHE_KEY = 'cachedDblResources';
 const RESOURCES_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
+/**
+ * How long a catalog read waits for the first model-text restrictions fetch. Bounded so a stalled
+ * backend cannot hold a picker open, and long enough for a local, network-free answer to arrive so
+ * a picker opened at startup does not offer restricted texts.
+ */
+const MODEL_TEXT_RESTRICTIONS_WAIT_MS = 2000;
 
 let executionToken: ExecutionToken | undefined;
 let cachedResources: DblResourceData[] | undefined;
@@ -179,6 +192,27 @@ async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> 
 }
 
 /**
+ * Asks the backend which texts may not be used as a model or base text, or `undefined` if it could
+ * not say. Never rejects, so a failure leaves the cache to try again on the next sync.
+ */
+async function readModelTextRestrictions(): Promise<ModelTextRestrictions | undefined> {
+  try {
+    const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+    return await provider?.listModelTextRestrictions();
+  } catch (error: unknown) {
+    logger.warn(`Could not list model text restrictions: ${getErrorMessage(error)}`);
+    return undefined;
+  }
+}
+
+/**
+ * The restrictions stamped onto every row this extension serves as `isRestrictedAsModelText`. They
+ * are applied on the way out rather than persisted with the catalog, so a catalog cached by an
+ * older build, or a local non-DBL row, is covered as soon as the backend answers.
+ */
+const modelTextRestrictions = createModelTextRestrictionsCache(readModelTextRestrictions);
+
+/**
  * Syncs the derived flags on `cachedResources` against current local state, updating the cache and
  * writing to storage when any of them change.
  *
@@ -187,15 +221,17 @@ async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> 
  * that flag: every other consumer of the catalog would otherwise wait on a value it discards.
  *
  * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`
+ * @returns Whether any flag changed
  */
-async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
+async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<boolean> {
   // Nothing cached to reconcile yet — the startup fetch window, or a fresh profile. A caller that
   // awaited a refresh gets a resolved promise and re-reads the flags it already had, so say so
   // here: this is the one silent no-op that is reachable without any contention.
   if (cachedResources === undefined) {
     logger.debug('Skipped a resource flag sync: no cached catalog to reconcile yet');
-    return;
+    return false;
   }
+  let isAnyFlagChanged = false;
   try {
     // Sample the backend inside fetchMutex, not before it. Two things depend on that: a concurrent
     // fetchAndCacheResources cannot overwrite cachedResources between the read and the assignment,
@@ -231,6 +267,7 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
       );
 
       if (isChanged) {
+        isAnyFlagChanged = true;
         cachedResources = newCachedResources;
         if (executionToken)
           await papi.storage.writeUserData(
@@ -243,6 +280,7 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
   } catch (error: unknown) {
     logger.warn(`Error syncing installed flags: ${getErrorMessage(error)}`);
   }
+  return isAnyFlagChanged;
 }
 
 /**
@@ -250,13 +288,24 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
  * only need the catalog let it run in the background; callers whose answer depends on the flags
  * being current await it and re-read `cachedResources` afterwards.
  *
- * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable`. A
- *   caller that needs it joins an in-flight sync that does not refresh it, so ask for it through
- *   {@link refreshResourceFlags}, which starts a sync of its own rather than joining.
+ * The sync also brings the model-text restrictions up to date: it fetches them if none are known
+ * (so a failed fetch is retried here), and fetches them afresh after local state changed, since a
+ * newly installed restricted text is only reported once it is on disk.
+ *
+ * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable` and the
+ *   model-text restrictions. A caller that needs it joins an in-flight sync that does not refresh
+ *   them, so ask for it through {@link refreshResourceFlags}, which starts a sync of its own rather
+ *   than joining.
  */
 function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promise<void> {
   if (!syncInFlight) {
-    syncInFlight = syncFlags(shouldRecomputeUpdateStatus)
+    syncInFlight = (async () => {
+      const isAnyFlagChanged = await syncFlags(shouldRecomputeUpdateStatus);
+      await syncModelTextRestrictionsAfterFlagSync(modelTextRestrictions, {
+        isRefreshRequested: shouldRecomputeUpdateStatus,
+        isAnyFlagChanged,
+      });
+    })()
       .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
       .finally(() => {
         syncInFlight = undefined;
@@ -285,7 +334,8 @@ async function refreshResourceFlags(): Promise<void> {
   await ensureInstalledFlagsSynced(true);
 }
 
-async function getCachedResources(): Promise<DblResourceCatalog> {
+/** The catalog as held in memory, fetching it first if there is none. See {@link getCachedResources}. */
+async function readCatalog(): Promise<DblResourceCatalog> {
   if (cachedResources !== undefined) {
     // Run the installed-flag sync in the background so the dialog open is never blocked by
     // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
@@ -313,6 +363,16 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
   });
 }
 
+async function getCachedResources(): Promise<DblResourceCatalog> {
+  // Waits, boundedly, for the first restrictions fetch so a picker opened early is not fail-open;
+  // after that the restrictions are in memory and this adds nothing.
+  return applyModelTextRestrictionsToCatalogWithin(
+    readCatalog(),
+    modelTextRestrictions,
+    MODEL_TEXT_RESTRICTIONS_WAIT_MS,
+  );
+}
+
 /**
  * Returns locally-installed, read-only resources that are NOT in the DBL catalog — e.g. VULGP83,
  * TNN, TND, HBK. Useful for populating the Resource Picker's INSTALLED section with resources that
@@ -337,7 +397,11 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     const dblCatalog = cachedResources ?? [];
 
     const allMetadata = await getLocalProjectMetadata();
-    return buildLocalNonDblResources(allMetadata, dblCatalog);
+    return await applyModelTextRestrictionsWithin(
+      buildLocalNonDblResources(allMetadata, dblCatalog),
+      modelTextRestrictions,
+      MODEL_TEXT_RESTRICTIONS_WAIT_MS,
+    );
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
     return [];

@@ -47,6 +47,8 @@ import { selectTextConnection } from './select-dbl-resource';
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -54,7 +56,10 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
 // must keep a stable identity across renders — a fresh array every render re-runs its lookup — and
 // `RESOURCE_PANEL_STRING_KEYS` is a frozen readonly tuple, so it is spread into a mutable
 // `LocalizeKey[]` exactly once here.
-const ALL_STRING_KEYS: LocalizeKey[] = [...RESOURCE_PANEL_STRING_KEYS];
+const ALL_STRING_KEYS: LocalizeKey[] = [
+  ...RESOURCE_PANEL_STRING_KEYS,
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
+];
 
 const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
   lightDefault: 'papi-extension://platformScriptureEditor/assets/book-open.svg',
@@ -489,6 +494,13 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       isOnline={isOnline}
       onShowResourcePicker={showResourcePicker}
       logger={logger}
+      copyrightNotice={
+        <ProjectCopyrightNotice
+          projectId={resourceProjectId}
+          localizedStrings={localizedStrings}
+          useWebViewState={useWebViewState}
+        />
+      }
     />
   );
 };

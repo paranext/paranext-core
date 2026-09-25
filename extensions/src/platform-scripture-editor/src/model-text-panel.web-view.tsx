@@ -17,12 +17,14 @@ import type {
 import { useCallback, useEffect, useMemo } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
-import { isDblResourceReference } from './resource-reference.utils';
+import { isDblResourceReference, resolveModelTextProjectId } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.utils';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -38,6 +40,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...MODEL_TEXT_PANEL_STRING_KEYS,
   '%webView_modelTextPanel_title%',
   '%webView_modelTextPanel_title_withResource%',
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
 ];
 
 /**
@@ -133,6 +136,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     projectId,
   );
 
+  // The project on screen, whichever kind of reference chose it, for its copyright notice
+  const displayedProjectId = resolveModelTextProjectId(effectiveModelText, dblResources);
+
   // --- Operation callbacks ---
 
   // Re-resolve the cached resource list once an install completes so the resource flips to
@@ -163,6 +169,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
         selectedResourceIds,
         isModal: true,
         resourceType: 'ScriptureResource',
+        disableRestrictedModelTexts: true,
       }),
     [],
   );
@@ -212,6 +219,13 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       showResourcePicker={showResourcePicker}
       getResourceChapter={getResourceChapter}
       logger={logger}
+      copyrightNotice={
+        <ProjectCopyrightNotice
+          projectId={displayedProjectId}
+          localizedStrings={localizedStrings}
+          useWebViewState={useWebViewState}
+        />
+      }
     />
   );
 };

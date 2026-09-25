@@ -651,6 +651,24 @@ describe('TeamLayoutDialogContent', () => {
     expect(result.isStructureProtectedForTeam).toBe(false);
   });
 
+  it('does not let a text whose license restricts it be picked as the model text', () => {
+    const { onConfirm } = renderContent({
+      initialModelText: undefined,
+      getModelTextDisabledReason: (resource) =>
+        resource.dblEntryUid === 'esv-uid' ? 'Licensing prohibits this.' : undefined,
+    });
+
+    fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
+    const esvRow = screen.getByText('English Standard Version').closest('tr');
+    if (!esvRow) throw new Error('ESV row not found');
+    fireEvent.click(esvRow);
+
+    expect(esvRow).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(screen.getByText(SAVE_LABEL));
+    const [result] = onConfirm.mock.calls[0];
+    expect(result.modelText).toBeUndefined();
+  });
+
   // The model-text picker deliberately closes on select, where the Manage picker deliberately stays
   // open (pinned separately above) — so a refactor that unified the two would break exactly one of
   // them silently. Both halves are asserted here: the pick reaches `onConfirm`, and the picker goes.

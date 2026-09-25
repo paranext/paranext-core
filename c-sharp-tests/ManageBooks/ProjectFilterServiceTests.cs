@@ -230,6 +230,77 @@ namespace TestParanextDataProvider.ManageBooks
             });
         }
 
+        private const string NivCopyright =
+            "The Holy Bible, New International Version® NIV® Copyright © 2011 by Biblica, Inc.®";
+
+        [Test]
+        public void FromScrText_MarksATraditionallyLicensedBiblicaResourceAsRestrictedAsABase()
+        {
+            using ResourceDummyScrText scrText = CreateResourceScrText(
+                "NIV11",
+                ProjectType.Standard,
+                editable: false
+            );
+            scrText.Settings.Copyright = NivCopyright;
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.True);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictABiblicaOpenTextKnownOnlyByItsDblId()
+        {
+            using ResourceDummyScrText scrText = CreateResourceScrText(
+                "OBTT",
+                ProjectType.Standard,
+                editable: false
+            );
+            scrText.Settings.Copyright = "Copyright © 2023 by Biblica, Inc., The Translation Trust";
+            scrText.Settings.DBLId = HexId.FromStr("f6a5ef6e2e75a8b4");
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictOtherTexts()
+        {
+            using ResourceDummyScrText scrText = CreateResourceScrText(
+                "WEB",
+                ProjectType.Standard,
+                editable: false
+            );
+            scrText.Settings.Copyright = "Public domain";
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictAnEditableProjectWithABiblicaCopyright()
+        {
+            // A Biblica translation team's own project carries Biblica's copyright
+            using DummyScrText scrText = CreateScrText(
+                "NIVTeam",
+                ProjectType.Standard,
+                editable: true
+            );
+            scrText.Settings.Copyright = NivCopyright;
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictAnEditableProjectWithAListedDblId()
+        {
+            // Biblica's master project has the DBL id of the resource published from it (NIV11)
+            using DummyScrText scrText = CreateScrText(
+                "NIVMaster",
+                ProjectType.Standard,
+                editable: true
+            );
+            scrText.Settings.DBLId = HexId.FromStr("71c6eab17ae5b667");
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
         [Test]
         [Category("Contract")]
         [Property("CapabilityId", "CAP-011")]

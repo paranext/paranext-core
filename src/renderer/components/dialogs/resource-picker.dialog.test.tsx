@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Dialog } from 'platform-bible-react';
@@ -53,19 +53,22 @@ function mockCommands(
   );
 }
 
-function renderWrapper() {
+function renderWrapper(options: { disableRestrictedModelTexts?: boolean } = {}) {
+  const submitDialog = vi.fn();
   render(
     <Dialog open>
       <ResourcePickerDialogWrapper
         isDialog
         resourceType="ScriptureResource"
         selectedResourceIds={[]}
-        submitDialog={vi.fn()}
+        submitDialog={submitDialog}
         cancelDialog={vi.fn()}
         rejectDialog={vi.fn()}
+        {...options}
       />
     </Dialog>,
   );
+  return { submitDialog };
 }
 
 describe('ResourcePickerDialogWrapper', () => {
@@ -179,6 +182,48 @@ describe('ResourcePickerDialogWrapper', () => {
       expect(screen.getByText('%resourcePicker_no_results%')).toBeInTheDocument(),
     );
     expect(screen.queryByText('%resourcePicker_load_error%')).not.toBeInTheDocument();
+  });
+
+  describe('restricted model texts', () => {
+    const restrictedText = {
+      dblEntryUid: '71c6eab17ae5b667',
+      displayName: 'NIV11',
+      fullName: 'New International Version 2011',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource',
+      size: 1,
+      installed: false,
+      updateAvailable: false,
+      projectId: '',
+      isRestrictedAsModelText: true,
+    };
+
+    async function findRow(name: string) {
+      const row = (await screen.findByText(name)).closest('tr');
+      if (!row) throw new Error(`${name} row not found`);
+      return row;
+    }
+
+    it('greys out a restricted text when picking a model text', async () => {
+      mockCommands(async () => ({ status: 'available', resources: [restrictedText] }));
+      const { submitDialog } = renderWrapper({ disableRestrictedModelTexts: true });
+
+      const row = await findRow('NIV11');
+      fireEvent.click(row);
+
+      expect(row).toHaveAttribute('aria-disabled', 'true');
+      expect(row).toHaveTextContent('%restrictedModelOrBaseText_disabledReason%');
+      expect(submitDialog).not.toHaveBeenCalled();
+    });
+
+    it('offers a restricted text normally when picking a reference text', async () => {
+      mockCommands(async () => ({ status: 'available', resources: [restrictedText] }));
+      const { submitDialog } = renderWrapper();
+
+      fireEvent.click(await findRow('NIV11'));
+
+      expect(submitDialog).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'NIV11' }));
+    });
   });
 });
 

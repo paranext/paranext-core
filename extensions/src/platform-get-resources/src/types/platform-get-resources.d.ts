@@ -29,6 +29,23 @@ declare module 'platform-get-resources' {
    */
   export type DblResourceInstallStatus = { [dblEntryUid: string]: string | undefined };
 
+  /**
+   * Which texts licensing terms prohibit using as a model or base for a new translation.
+   *
+   * Both halves are needed: a catalog row is matched by its DBL id, but an installed text that is
+   * restricted by its copyright statement rather than by being on the rights holder's list has no
+   * DBL id to match on, only a local project id.
+   */
+  export type ModelTextRestrictions = {
+    /** Lowercase DBL entry ids of the restricted texts on the rights holder's list. */
+    dblIds: string[];
+    /**
+     * Uppercase local project ids (the same format as `DblResourceData.projectId`) of the installed
+     * resources that are restricted, whether or not their DBL id is on the list.
+     */
+    projectIds: string[];
+  };
+
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
     /**
      * Recomputes whether a newer version of each known resource is available from the DBL,
@@ -69,6 +86,21 @@ declare module 'platform-get-resources' {
      * @experimental
      */
     recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
+    /**
+     * Lists the texts that licensing terms prohibit using as a model or base for a new translation.
+     *
+     * Never contacts the DBL: the id list ships with the backend, and the installed resources are
+     * read from disk, so it answers offline and before the catalog has been fetched. Call it again
+     * after installing a resource, since a newly installed restricted text is only reported in
+     * `projectIds` once it is on disk.
+     *
+     * This is the only source of `DblResourceData.isRestrictedAsModelText`: the catalog rows the
+     * provider returns do not carry it, and `platformGetResources` stamps it on every row it
+     * serves.
+     *
+     * @returns The restricted DBL ids and installed project ids.
+     */
+    listModelTextRestrictions: () => Promise<ModelTextRestrictions>;
     /**
      * Installs or updates a DBL resource to the local filesystem
      *
@@ -167,6 +199,10 @@ declare module 'papi-shared-types' {
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
      * existing cached data.
      *
+     * Each row's `isRestrictedAsModelText` is set from the backend's model-text restrictions. A
+     * read waits up to two seconds for the first answer; if none has arrived by then the rows are
+     * returned without the flag, and a later read carries it.
+     *
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
      * @throws When the fetch itself fails. Callers that render an error state with a retry should
      *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
@@ -194,7 +230,8 @@ declare module 'papi-shared-types' {
      *
      * Convention: each returned entry has `dblEntryUid === projectId`, marking it as non-DBL.
      * Callers (e.g. `selectTextConnection`) detect this and create a `ProjectReference` instead of
-     * a `DblResourceReference` so the resource is loadable without a catalog entry.
+     * a `DblResourceReference` so the resource is loadable without a catalog entry. Each entry's
+     * `isRestrictedAsModelText` is set the same way as in `getCachedResources`.
      *
      * @returns Synthetic resource entries for locally-installed non-DBL resources. Also returns
      *   `[]` when the C# data provider has not registered its projects yet or the lookup threw —
