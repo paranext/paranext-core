@@ -53,6 +53,7 @@ export function FootnoteList({
   formatCaller,
   onFootnoteSelected,
   onFootnoteEditRequested,
+  onFocusedFootnoteChange,
   editingFootnoteIndex,
   renderEditingFootnote,
 }: FootnoteListProps) {
@@ -178,6 +179,27 @@ export function FootnoteList({
       return backward !== prev ? backward : -1;
     });
   }, [editingRowIndex, focusedIndex, lastIndex]);
+
+  /** The row last reported through `onFocusedFootnoteChange`, so each change is reported once. */
+  const reportedFocusedRowRef = useRef<number | undefined>(undefined);
+  const reportFocusedRow = (index: number | undefined) => {
+    if (reportedFocusedRowRef.current === index) return;
+    reportedFocusedRowRef.current = index;
+    onFocusedFootnoteChange?.(index);
+  };
+
+  // A focused row that unmounts - swapped for the editing row, or dropped when the list is rebuilt
+  // for another chapter - takes focus with it without firing `blur`, so the consumer would go on
+  // following a row that no longer holds focus. Checked after every render, which is when rows go.
+  useEffect(() => {
+    const reported = reportedFocusedRowRef.current;
+    if (reported === undefined) return;
+    const row = rowRefs.current[reported];
+    if (!row || row.ownerDocument.activeElement !== row) {
+      reportedFocusedRowRef.current = undefined;
+      onFocusedFootnoteChange?.(undefined);
+    }
+  });
 
   const selectedIndex = selectedFootnote
     ? footnotes.findIndex((footnote) => footnote === selectedFootnote)
@@ -313,7 +335,11 @@ export function FootnoteList({
                    often as by the arrow keys. Following it keeps the next arrow press relative to
                    the note the user is actually on - without this, arrowing after a Tab restarts
                    from whichever row the list last moved to itself. */
-                onFocus={() => setFocusedIndex(idx)}
+                onFocus={() => {
+                  setFocusedIndex(idx);
+                  reportFocusedRow(idx);
+                }}
+                onBlur={() => reportFocusedRow(undefined)}
                 onKeyDown={(e) => handleFootnoteKeyDown(e, footnote, idx)}
               >
                 <FootnoteItem

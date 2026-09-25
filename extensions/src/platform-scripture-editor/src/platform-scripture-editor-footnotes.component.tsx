@@ -105,6 +105,12 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   /** Fires whenever the selected row changes (row click, focus request, or cleared). */
   onSelectedFootnoteChange?: (index: number | undefined) => void;
   /**
+   * Fires when DOM focus lands on a row (its index) or leaves one (`undefined`) - Tab or the arrow
+   * keys moving through the list. Focusing a row does not select it; see `FootnoteList`'s
+   * `onFocusedFootnoteChange`.
+   */
+  onFocusedFootnoteChange?: (index: number | undefined) => void;
+  /**
    * Whether an applied `focusRequest` should put DOM focus on the selected row. Set where the pane
    * is the request's destination and opens no row editor of its own — a read-only Standard view,
    * where PT9 still moves the caret into the note, and the caller highlight follows the focused
@@ -162,6 +168,7 @@ export function FootnotesLayout({
   renderEditingFootnote,
   onFootnoteEditRequested,
   onSelectedFootnoteChange,
+  onFocusedFootnoteChange,
   focusRowOnFocusRequest,
   onPaneFocusChange,
   onPaneFocusLeft,
@@ -705,6 +712,7 @@ export function FootnotesLayout({
                 // footnote object and index are unchanged.
                 selectionRequest={selectedFootnote?.request}
                 onFootnoteSelected={handleFootnoteSelected}
+                onFocusedFootnoteChange={onFocusedFootnoteChange}
                 onFootnoteEditRequested={
                   onFootnoteEditRequested ? handleFootnoteEditRequested : undefined
                 }

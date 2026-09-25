@@ -183,13 +183,15 @@ export function FootnoteItem({
     // visible either way; the `\cat` glyphs are marker display and follow the same switch every
     // other marker in this component does.
     //
-    // The class is also what keeps the whole run out of the caret origin (`isDisplayText` in
-    // `footnote-caret.utils.ts`): the category is a FIELD on the note, not part of its `content`,
-    // and the editor builds its own category display as `attribute`-typed text, which
-    // `EditorRef.selectNoteTextOffset` skips.
+    // The class is also what keeps the whole run out of the content caret origin (`isDisplayText`
+    // in `footnote-caret.utils.ts`): the category is a FIELD on the note, not part of its
+    // `content`, and the editor builds its own category display as `attribute`-typed text, which
+    // `EditorRef.selectNoteTextOffset` skips. A click in the value maps to the category instead.
     <span className="note-category">
       {showMarkers && <span className="marker">{`\\cat${MARKER_SEPARATOR}`}</span>}
-      {footnote.category}
+      {/* Its own span so a click can tell the value, which the row editor can put a caret in,
+          from the glyphs and separator around it (see `getCaretPositionFromClick`). */}
+      <span className="note-category-value">{footnote.category}</span>
       {showMarkers && <span className="marker">\cat*</span>}
       {/* With the closing glyph hidden nothing separates the value from the run that follows it
           (the file has no space after `\cat*`), so the row supplies the space itself. */}

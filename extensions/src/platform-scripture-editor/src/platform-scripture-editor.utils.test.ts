@@ -49,7 +49,9 @@ import {
   resolveCallerHighlight,
   resolveNoteEditingSurface,
   shouldEndPaneNoteEditOnRowSelect,
+  shouldHandCaretInNoteToPane,
   shouldPublishPaneDocument,
+  TEXT_GESTURE_WINDOW_MS,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -3295,6 +3297,49 @@ describe('resolveCallerHighlight', () => {
     ).toBeUndefined();
   });
 
+  it('highlights the row keyboard focus is on, ahead of the selected row', () => {
+    // Tab and the arrow keys move focus through the rows without selecting any of them; the
+    // focused row is where the pane's caret is, so its note is the one marked.
+    expect(
+      resolveCallerHighlight({
+        isStandardView: true,
+        paneHasFocus: true,
+        focusedRowIndex: 3,
+        selectedIndex: 1,
+      }),
+    ).toBe(3);
+    expect(
+      resolveCallerHighlight({
+        isStandardView: true,
+        paneHasFocus: true,
+        focusedRowIndex: 3,
+        selectedIndex: undefined,
+      }),
+    ).toBe(3);
+  });
+
+  it('falls back to the selected row when no row holds focus', () => {
+    expect(
+      resolveCallerHighlight({
+        isStandardView: true,
+        paneHasFocus: true,
+        focusedRowIndex: undefined,
+        selectedIndex: 1,
+      }),
+    ).toBe(1);
+  });
+
+  it('marks no focused row while focus is outside the pane', () => {
+    expect(
+      resolveCallerHighlight({
+        isStandardView: true,
+        paneHasFocus: false,
+        focusedRowIndex: 3,
+        selectedIndex: 1,
+      }),
+    ).toBeUndefined();
+  });
+
   it('restores the highlight when Standard view comes back with the pane untouched', () => {
     // A view round trip leaves the pane mounted, its row selected, and DOM focus where it was, so
     // re-deriving on the way back has to give the index again rather than staying cleared.
@@ -3302,6 +3347,43 @@ describe('resolveCallerHighlight', () => {
     expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
     expect(resolveCallerHighlight({ isStandardView: false, ...paneState })).toBeUndefined();
     expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
+  });
+});
+
+describe('shouldHandCaretInNoteToPane', () => {
+  const handOff = {
+    isStandardView: true,
+    isReadOnly: false,
+    isTextFocused: true,
+    isChapterLoaded: true,
+    isPaletteOpen: false,
+    msSinceTextGesture: 10,
+    noteCaretNoteKey: 'note-1',
+    editingNoteKey: undefined,
+  };
+
+  it('moves a caret the user just put inside a note in Standard view to the row editor', () => {
+    expect(shouldHandCaretInNoteToPane(handOff)).toBe(true);
+  });
+
+  it('moves it when a session is open on a different note', () => {
+    expect(shouldHandCaretInNoteToPane({ ...handOff, editingNoteKey: 'note-2' })).toBe(true);
+  });
+
+  it.each([
+    ['the caret is in no note', { noteCaretNoteKey: undefined }],
+    ['the row editor is already open on that note', { editingNoteKey: 'note-1' }],
+    ['another view edits notes in a popover', { isStandardView: false }],
+    ['the text is read-only', { isReadOnly: true }],
+    ['the text does not hold focus', { isTextFocused: false }],
+    ['a new chapter is still loading', { isChapterLoaded: false }],
+    ['a marker palette is open in the text', { isPaletteOpen: true }],
+    [
+      'the editor parked the caret with no click or keystroke behind it',
+      { msSinceTextGesture: TEXT_GESTURE_WINDOW_MS + 1 },
+    ],
+  ])('leaves the caret alone when %s', (_label, override) => {
+    expect(shouldHandCaretInNoteToPane({ ...handOff, ...override })).toBe(false);
   });
 });
 

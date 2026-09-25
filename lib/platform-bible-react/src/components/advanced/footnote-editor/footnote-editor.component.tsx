@@ -389,7 +389,7 @@ export default function FootnoteEditor({
   const placeInitialCaret = useCallback(() => {
     const caretPosition = initialCaretPositionRef.current;
     if (caretPosition !== undefined && caretPosition !== 'end')
-      editorRef.current?.selectNoteTextOffset(0, caretPosition.utf16Offset);
+      editorRef.current?.selectNoteTextOffset(0, caretPosition.utf16Offset, caretPosition.field);
     else editorRef.current?.selectNote(0);
   }, []);
 

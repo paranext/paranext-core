@@ -27,8 +27,10 @@ export type FootnoteLayout = 'horizontal' | 'vertical';
  *   APIs (`caretPositionFromPoint`), which only produce positions at valid caret boundaries, so
  *   surrogate pairs and combining sequences are never split by construction. An offset past the
  *   available text resolves to `'end'`.
+ * - `{ utf16Offset, field: 'category' }`: an offset into the note's `\cat` category value instead,
+ *   which is outside the content origin above but still text the user can edit.
  */
-export type FootnoteCaretPosition = 'end' | { utf16Offset: number };
+export type FootnoteCaretPosition = 'end' | { utf16Offset: number; field?: 'category' };
 
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
@@ -140,6 +142,14 @@ export interface FootnoteListProps {
     listId: string | number,
     caretPosition: FootnoteCaretPosition,
   ) => void;
+  /**
+   * Fires when keyboard or pointer focus lands on a row (with its index) and when it leaves one
+   * (with `undefined`). Focus on a row is not a selection - only a click, Enter, or Space selects -
+   * but a consumer can still follow it, e.g. to mark the focused note in the text as the user Tabs
+   * or arrows through the list. Focus moving from one row to the next reports `undefined` and then
+   * the new index.
+   */
+  onFocusedFootnoteChange?: (index: number | undefined) => void;
   /**
    * Index of the footnote currently being edited in place, if any. When set (and
    * `renderEditingFootnote` is provided), that row renders the editor slot instead of its read-only

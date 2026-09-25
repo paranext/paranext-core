@@ -200,6 +200,61 @@ test('tabs through every row in order, entering the editing row in its place', a
   expect(rows[1]).toHaveFocus();
 });
 
+describe('FootnoteList focused row reporting', () => {
+  it('reports each row Tab reaches, and undefined when focus leaves the rows', async () => {
+    const user = userEvent.setup();
+    const onFocusedChange = vi.fn();
+    render(
+      <>
+        <button type="button">before the list</button>
+        <FootnoteList
+          footnotes={footnotes}
+          listId="t"
+          onFocusedFootnoteChange={onFocusedChange}
+          onFootnoteSelected={vi.fn()}
+        />
+        <button type="button">after the list</button>
+      </>,
+    );
+    screen.getByText('before the list').focus();
+
+    await user.tab();
+    expect(onFocusedChange).toHaveBeenLastCalledWith(0);
+    await user.tab();
+    expect(onFocusedChange).toHaveBeenLastCalledWith(1);
+    await user.tab();
+    expect(screen.getByText('after the list')).toHaveFocus();
+    expect(onFocusedChange).toHaveBeenLastCalledWith(undefined);
+    expect(onFocusedChange.mock.calls).toEqual([[0], [undefined], [1], [undefined]]);
+  });
+
+  it('reports undefined when the focused row is swapped for the editing row', () => {
+    const onFocusedChange = vi.fn();
+    const { rerender } = render(
+      <FootnoteList
+        footnotes={footnotes}
+        listId="t"
+        onFocusedFootnoteChange={onFocusedChange}
+        renderEditingFootnote={() => <span>editor</span>}
+      />,
+    );
+    screen.getAllByRole('option')[1].focus();
+    expect(onFocusedChange).toHaveBeenLastCalledWith(1);
+
+    // An unmounting element fires no blur, so the list has to notice the row is gone itself.
+    rerender(
+      <FootnoteList
+        footnotes={footnotes}
+        listId="t"
+        onFocusedFootnoteChange={onFocusedChange}
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <span>editor</span>}
+      />,
+    );
+    expect(onFocusedChange).toHaveBeenLastCalledWith(undefined);
+  });
+});
+
 describe('FootnoteList edit requests', () => {
   it('calls onFootnoteEditRequested (not onFootnoteSelected) on click when provided', async () => {
     const user = userEvent.setup();

@@ -179,14 +179,19 @@ export function resolveNoteEditingSurface({
 /**
  * Decides which note's caller carries the highlight border, mirroring PT9's
  * `CallerHighlightSynchronizer`: the border marks where the focused pane's caret is, so it shows
- * only while the footnotes pane both holds a selected row AND owns DOM focus. Clicking back into
- * the Scripture text leaves the row selected but takes the border off the caller; clicking the row
- * (or its editor) again puts it back. Standard view is the only view that highlights callers at
- * all.
+ * only while the footnotes pane owns DOM focus. Clicking back into the Scripture text leaves the
+ * row selected but takes the border off the caller; clicking the row (or its editor) again puts it
+ * back. Standard view is the only view that highlights callers at all.
+ *
+ * PT9's pane has one caret, so the note it is in is the one marked. Here keyboard focus on a row
+ * (Tab or the arrow keys) is that caret whenever a row has it, and the selected row otherwise (the
+ * row editor, or the pane's chrome, holds focus).
  *
  * @param options.isStandardView Whether the editor is showing Standard view
  * @param options.paneHasFocus Whether DOM focus is inside the footnotes pane (its row list or its
  *   inline row editor)
+ * @param options.focusedRowIndex The footnotes pane row holding DOM focus, or `undefined` when no
+ *   row does
  * @param options.selectedIndex The footnotes pane's selected row, or `undefined` when nothing is
  *   selected
  * @returns The note index to highlight, or `undefined` to clear the highlight
@@ -194,14 +199,16 @@ export function resolveNoteEditingSurface({
 export function resolveCallerHighlight({
   isStandardView,
   paneHasFocus,
+  focusedRowIndex,
   selectedIndex,
 }: {
   isStandardView: boolean;
   paneHasFocus: boolean;
+  focusedRowIndex?: number;
   selectedIndex: number | undefined;
 }): number | undefined {
   if (!isStandardView || !paneHasFocus) return undefined;
-  return selectedIndex;
+  return focusedRowIndex ?? selectedIndex;
 }
 
 /**
@@ -226,6 +233,60 @@ export function shouldEndPaneNoteEditOnRowSelect({
   selectedIndex: number;
 }): boolean {
   return paneEditingIndex !== undefined && paneEditingIndex !== selectedIndex;
+}
+
+/**
+ * How recently the user must have clicked or typed in the Scripture text for a caret that lands
+ * inside a note to count as theirs (see {@link shouldHandCaretInNoteToPane}).
+ */
+export const TEXT_GESTURE_WINDOW_MS = 1000;
+
+/**
+ * Decides whether a caret that has come to rest inside a note in the Scripture text moves into the
+ * footnotes pane's row editor, at the same place in the note. Standard view shows a note's content
+ * in the text only while the note is unclosed (PT9's `opennote`); everywhere else it edits notes in
+ * the pane, and the row editor is what keeps the note's marker and caller out of reach of a stray
+ * keystroke, so the caret goes there instead of staying in the text. This departs from PT9, which
+ * edits an unclosed note inline.
+ *
+ * Only a caret the user put there moves: one that follows a click or a keystroke in the text. The
+ * editor also parks its caret by itself - returning focus from the pane, landing past a note whose
+ * end is its paragraph's end - and moving that one would send the user straight back into the note
+ * they just left.
+ *
+ * @param options.isStandardView Whether the editor is showing Standard view
+ * @param options.isReadOnly Whether the text is read-only, which edits notes nowhere
+ * @param options.isTextFocused Whether the Scripture text holds DOM focus
+ * @param options.isChapterLoaded Whether the text shows the chapter the reference names
+ * @param options.isPaletteOpen Whether a marker palette session is open in the text
+ * @param options.msSinceTextGesture Time since the last click or keystroke in the text
+ * @param options.noteCaretNoteKey The note the caret is in, or `undefined` when it is in none
+ * @param options.editingNoteKey The note a note-editing session is open on, if any
+ * @returns Whether to open the row editor on the caret's note at the caret's position
+ */
+export function shouldHandCaretInNoteToPane({
+  isStandardView,
+  isReadOnly,
+  isTextFocused,
+  isChapterLoaded,
+  isPaletteOpen,
+  msSinceTextGesture,
+  noteCaretNoteKey,
+  editingNoteKey,
+}: {
+  isStandardView: boolean;
+  isReadOnly: boolean;
+  isTextFocused: boolean;
+  isChapterLoaded: boolean;
+  isPaletteOpen: boolean;
+  msSinceTextGesture: number;
+  noteCaretNoteKey: string | undefined;
+  editingNoteKey: string | undefined;
+}): boolean {
+  if (!isStandardView || isReadOnly || !isTextFocused || !isChapterLoaded || isPaletteOpen)
+    return false;
+  if (msSinceTextGesture > TEXT_GESTURE_WINDOW_MS) return false;
+  return noteCaretNoteKey !== undefined && noteCaretNoteKey !== editingNoteKey;
 }
 
 /** Snapshot of the state a collapsed-note caller click decides against. */

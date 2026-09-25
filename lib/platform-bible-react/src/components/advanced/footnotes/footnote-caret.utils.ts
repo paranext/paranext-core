@@ -12,7 +12,8 @@ const DISPLAY_ONLY_CLASSES = ['marker', 'note-category', 'note-placeholder'];
  *   not content.
  * - `.note-category`: the whole `\cat …\cat*` run, glyphs AND value. The category is a FIELD on the
  *   note rather than part of its `content`, so it is outside the offset origin even though the
- *   value is the note's own data; the row also supplies a separating space of its own there when
+ *   value is the note's own data (a click on the value maps to the category instead - see
+ *   `getCaretPositionFromClick`); the row also supplies a separating space of its own there when
  *   markers are hidden, which no file byte backs.
  * - `.note-placeholder`: the U+FEFF `FootnoteItem` renders for a note with no content at all, so the
  *   row keeps its height and stays clickable. No file byte backs it either, so counting it would
@@ -60,7 +61,8 @@ function firstTextNodeWithin(node: Node): Text | undefined {
  *   `.textual-note-body` descendant - the note's text, in character runs and written directly in
  *   the note alike, excluding the caller (rendered in the row's header cell), the rendered USFM
  *   markers, the `\cat` category run and the empty-note placeholder (see `isDisplayText`).
- * @returns A flat UTF-16 offset into the note body text, or `'end'` when the click cannot be mapped
+ * @returns A flat UTF-16 offset into the note body text, an offset into the `\cat` category value
+ *   (`field: 'category'`) for a click on the category, or `'end'` when the click cannot be mapped
  *   (no browser support, click outside the body text, empty note).
  */
 export function getCaretPositionFromClick(
@@ -102,6 +104,19 @@ export function getCaretPositionFromClick(
     offset = 0;
   }
   if (offsetNode.nodeType !== Node.TEXT_NODE) return 'end';
+
+  // The `\cat` category is outside the content origin, but its value is text the row editor can
+  // put a caret in: a click on the value lands there, and one on the `\cat` opener lands at the
+  // value's start, the nearest place to its right the user can type. The closer and the separator
+  // space after it fall through to the content that follows.
+  const category = offsetNode.parentElement?.closest('.note-category');
+  if (category && body.contains(category)) {
+    const value = category.querySelector('.note-category-value');
+    if (value?.contains(offsetNode)) return { utf16Offset: offset, field: 'category' };
+    const glyph = offsetNode.parentElement?.closest('.marker');
+    if (value && glyph && glyph === category.firstElementChild)
+      return { utf16Offset: 0, field: 'category' };
+  }
 
   // Flat offset = lengths of all body text nodes before the clicked one, plus the in-node offset.
   // Display text is skipped so this origin matches the editor's (see `isDisplayText`).

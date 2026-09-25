@@ -122,12 +122,13 @@ describe('getCaretPositionFromClick', () => {
     {
       name: 'with markers shown',
       category:
-        `<span class="note-category"><span class="marker">\\cat${NBSP}</span>People` +
-        `<span class="marker">\\cat*</span></span>`,
+        `<span class="note-category"><span class="marker">\\cat${NBSP}</span>` +
+        `<span class="note-category-value">People</span><span class="marker">\\cat*</span></span>`,
     },
     {
       name: 'with markers hidden',
-      category: '<span class="note-category">People </span>',
+      category:
+        '<span class="note-category"><span class="note-category-value">People</span> </span>',
     },
   ])('excludes the note category from the offset $name', ({ category }) => {
     const row = makeRow(`<p class="notetext">${category}<span class="usfm_ft">abc</span></p>`);
@@ -140,6 +141,47 @@ describe('getCaretPositionFromClick', () => {
     // 1 into 'abc'. Neither 'People', nor its `\cat` glyphs, nor the markers-hidden separator
     // space may count.
     expect(getCaretPositionFromClick(10, 10, row)).toEqual({ utf16Offset: 1 });
+  });
+
+  describe('a click on the \\cat category', () => {
+    const categoryRow = () =>
+      makeRow(
+        `<p class="notetext"><span class="note-category"><span class="marker">\\cat${NBSP}</span>` +
+          `<span class="note-category-value">People</span><span class="marker">\\cat*</span>` +
+          `</span><span class="usfm_ft">abc</span></p>`,
+      );
+
+    function clickOn(node: Node | null | undefined, offset: number) {
+      // jsdom has no layout: stub the browser caret API to a known position
+      caretApiDocument().caretPositionFromPoint = vi
+        .fn()
+        .mockReturnValue({ offsetNode: node, offset });
+    }
+
+    it('maps a click in the value to that offset in the category', () => {
+      const row = categoryRow();
+      clickOn(row.querySelector('.note-category-value')?.firstChild, 3);
+      expect(getCaretPositionFromClick(10, 10, row)).toEqual({
+        utf16Offset: 3,
+        field: 'category',
+      });
+    });
+
+    it("maps a click on the \\cat opener to the start of the category's value", () => {
+      const row = categoryRow();
+      clickOn(row.querySelector('.note-category .marker')?.firstChild, 2);
+      expect(getCaretPositionFromClick(10, 10, row)).toEqual({
+        utf16Offset: 0,
+        field: 'category',
+      });
+    });
+
+    it('maps a click on the \\cat* closer to the start of the content after it', () => {
+      const row = categoryRow();
+      const closer = row.querySelectorAll('.note-category .marker')[1];
+      clickOn(closer?.firstChild, 1);
+      expect(getCaretPositionFromClick(10, 10, row)).toEqual({ utf16Offset: 0 });
+    });
   });
 
   // Safari and older WebKit ship `caretRangeFromPoint` instead of the standard API, so the row's
