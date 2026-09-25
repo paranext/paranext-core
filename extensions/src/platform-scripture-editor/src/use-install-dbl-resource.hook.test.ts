@@ -36,37 +36,19 @@ describe('useInstallDblResource', () => {
     expect(onInstalled).toHaveBeenCalledTimes(1);
   });
 
-  it('refreshes the catalog installed flags before marking resources stale', async () => {
-    const callOrder: string[] = [];
-    mockSendCommand.mockImplementation(async () => {
-      callOrder.push('refresh');
-      return undefined;
-    });
-    const provider = { installDblResource: vi.fn(async () => {}) };
-    const onInstalled = vi.fn(() => callOrder.push('onInstalled'));
-    const { result } = renderHook(() =>
-      useInstallDblResource(provider, 'model text panel', onInstalled),
-    );
-
-    await result.current('uid-a');
-
-    expect(mockSendCommand).toHaveBeenCalledWith('platformGetResources.refreshResourceFlags');
-    // Order matters: re-resolving first reads the catalog as it was before this install, so the
-    // panel would report the resource it just installed as missing.
-    expect(callOrder).toEqual(['refresh', 'onInstalled']);
-  });
-
-  it('still marks resources stale when the flag refresh fails', async () => {
-    mockSendCommand.mockRejectedValue(new Error('refresh boom'));
+  it('leaves the flag refresh to the read that follows, rather than running its own', async () => {
     const provider = { installDblResource: vi.fn(async () => {}) };
     const onInstalled = vi.fn();
     const { result } = renderHook(() =>
       useInstallDblResource(provider, 'model text panel', onInstalled),
     );
 
-    // The install succeeded, so a failed refresh must not surface as an install failure — the
-    // flags just catch up on a later read.
-    await expect(result.current('uid-a')).resolves.toBeUndefined();
+    await result.current('uid-a');
+
+    // Every caller re-resolves its catalog through a read that refreshes the flags first, so a
+    // refresh here would be a second full sync run back to back with that one — serially, because
+    // a refresh starts after any sync already running rather than joining it.
+    expect(mockSendCommand).not.toHaveBeenCalled();
     expect(onInstalled).toHaveBeenCalledTimes(1);
   });
 

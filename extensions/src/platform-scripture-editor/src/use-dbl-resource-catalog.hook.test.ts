@@ -66,6 +66,30 @@ describe('useDblResourceCatalog', () => {
     expect(result.current.hasCatalogError).toBe(false);
   });
 
+  it('refreshes the installed flags before reading the catalog, not after', async () => {
+    // A panel acts on `installed` — it downloads whatever a row reports as missing — and
+    // `getCachedResources` answers one refresh behind. Reading first and refreshing after would
+    // hand the panel the very snapshot that sends it to install a resource already on disk.
+    renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() =>
+      expect(mockSendCommand).toHaveBeenCalledWith('platformGetResources.getCachedResources'),
+    );
+    // ...and asks it to skip the update-status round trip: no panel renders `updateAvailable`, so
+    // waiting on a second backend call for it would be paying for a value this hook discards.
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformGetResources.refreshResourceFlags',
+      false,
+    );
+    const commandOrder = mockSendCommand.mock.calls.map(([command]) => command);
+    expect(
+      commandOrder.indexOf('platformGetResources.refreshResourceFlags'),
+    ).toBeGreaterThanOrEqual(0);
+    expect(commandOrder.indexOf('platformGetResources.refreshResourceFlags')).toBeLessThan(
+      commandOrder.indexOf('platformGetResources.getCachedResources'),
+    );
+  });
+
   it('appends the locally-installed non-DBL resources to the catalog', async () => {
     fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [RESOURCE] });
     fetchLocalNonDbl = () => Promise.resolve([LOCAL_RESOURCE]);

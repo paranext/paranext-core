@@ -7,7 +7,9 @@ import type { DblResourceData } from 'platform-bible-utils';
 import { FAILED_PRECONDITION, isPlatformError } from 'platform-bible-utils';
 import {
   GetResources,
+  newResourceActionDidNotTakeEffectError,
   newResourceActionProviderNotReadyError,
+  RESOURCE_ACTION_DID_NOT_TAKE_EFFECT,
   RESOURCE_ACTION_PROVIDER_NOT_READY,
 } from './get-resources.component';
 
@@ -41,6 +43,7 @@ const STRINGS = {
   '%resources_noResultsError%': 'Unable to search for resources',
   '%resources_retry%': 'Try again',
   '%resources_providerNotReady%': 'Resources are not ready yet, translated',
+  '%resources_actionDidNotTakeEffect%': 'That change could not be confirmed, translated',
   '%resources_get%': 'Get',
 };
 
@@ -208,6 +211,83 @@ describe('GetResources', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Get' }));
 
     expect(await screen.findByText('Resources are not ready yet, translated')).toBeInTheDocument();
+    expect(screen.queryByText(/JSON-RPC/)).not.toBeInTheDocument();
+  });
+
+  // The web view reports "the list never agreed with the action" with a sentinel for the same
+  // reason as the one above: it holds no localized strings of its own.
+  it('shows its own localized message for the did-not-take-effect sentinel, not the raw sentinel', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() => Promise.reject(newResourceActionDidNotTakeEffectError())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+    expect(
+      await screen.findByText('That change could not be confirmed, translated'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(RESOURCE_ACTION_DID_NOT_TAKE_EFFECT)).not.toBeInTheDocument();
+  });
+
+  it('classifies the did-not-take-effect rejection as a failed precondition', () => {
+    const error = newResourceActionDidNotTakeEffectError();
+
+    // The action itself was valid and was carried out; what failed is the state of the system.
+    expect(isPlatformError(error)).toBe(true);
+    expect(error.code).toBe(FAILED_PRECONDITION);
+    expect(error.message).toContain(RESOURCE_ACTION_DID_NOT_TAKE_EFFECT);
+  });
+
+  it('recognises the did-not-take-effect sentinel through a cross-process rejection prefix', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() =>
+          Promise.reject(
+            new Error(`JSON-RPC Request error (-32000): ${RESOURCE_ACTION_DID_NOT_TAKE_EFFECT}`),
+          )
+        }
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+    expect(
+      await screen.findByText('That change could not be confirmed, translated'),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/JSON-RPC/)).not.toBeInTheDocument();
   });
 

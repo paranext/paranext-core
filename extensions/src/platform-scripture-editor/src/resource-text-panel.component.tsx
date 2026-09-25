@@ -52,6 +52,9 @@ import type {
   ResourcePanelLocalizedStringKey,
   ResourcePanelLocalizedStrings,
 } from './resource-text-panel.const';
+import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
+import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 /**
  * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
@@ -202,7 +205,9 @@ export type ResourceTextPanelProps = {
   isInstalling: boolean;
   /** Whether the last install attempt for the selected resource failed. */
   installFailed: boolean;
-  /** Clears the failed-install state and re-attempts the same resource. */
+  /** Why the install failed, when it did. Decides whether the connection hint applies. */
+  installFailureReason: DblResourceInstallFailureReason | undefined;
+  /** Re-reads the catalog and re-attempts the same resource. */
   retryInstall: () => void;
   /** Whether the machine is online. Only adds a "check your connection" hint to install failures. */
   isOnline: boolean;
@@ -255,6 +260,7 @@ export function ResourceTextPanel({
   isSelecting,
   isInstalling,
   installFailed,
+  installFailureReason,
   retryInstall,
   isOnline,
   onShowResourcePicker,
@@ -591,9 +597,11 @@ export function ResourceTextPanel({
       <PanelRetryableErrorView
         message={localize(
           localizedStrings,
-          isOnline
-            ? '%webView_resourcePanel_installFailed%'
-            : '%webView_resourcePanel_installFailedOffline%',
+          getInstallFailureMessageKey(
+            installFailureReason,
+            isOnline,
+            RESOURCE_PANEL_INSTALL_FAILURE_KEYS,
+          ),
         )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onRetry={retryInstall}

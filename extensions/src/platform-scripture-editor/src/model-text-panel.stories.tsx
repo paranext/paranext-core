@@ -112,6 +112,12 @@ type DecoratorConfig = {
   disableInstall?: boolean;
   /** Make install reject so the recoverable install-failed state is observable. */
   failInstall?: boolean;
+  /**
+   * Let install succeed while the list keeps reporting the resource uninstalled, so the
+   * installed-but-unavailable state is observable. Distinct from `failInstall`: the install worked,
+   * so the panel must not blame the network.
+   */
+  installNeverConverges?: boolean;
   /** Hold the configured list in its loading state so the resolving spinner is observable. */
   isListLoading?: boolean;
   /** Make the configured-list read fail so the settings-error state is observable. */
@@ -203,6 +209,18 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         onScrRefChange={setScrRef}
         installResource={async (uid) => {
           if (config.failInstall) throw new Error('Simulated install failure');
+          if (config.installNeverConverges) {
+            // Install resolves without the resource ever appearing installed. Blanking the list and
+            // restoring it is how the panel's own catalog refetch presents itself, and it is what
+            // lets the panel re-evaluate a uid it has already attempted; the timeout is needed so
+            // the two updates land in separate commits rather than batching into no change at all.
+            setResources([]);
+            await new Promise((resolve) => {
+              setTimeout(resolve, 0);
+            });
+            setResources(config.resources ?? seedResources);
+            return;
+          }
           if (config.disableInstall) return;
           setResources((rs) =>
             rs.map((r) => (r.dblEntryUid === uid ? { ...r, installed: true } : r)),
@@ -281,6 +299,17 @@ export const Selecting: Story = {
  */
 export const InstallFailed: Story = {
   decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], failInstall: true })],
+};
+
+/**
+ * The install succeeded, but the list still reports the resource as not installed — the catalog and
+ * the disk disagree. The panel says the model text is installed and could not be opened, rather
+ * than blaming the install or the network, and offers a retry that re-reads the list.
+ */
+export const InstalledButUnavailable: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[1])], installNeverConverges: true }),
+  ],
 };
 
 /** The configured model text id isn't present in the DBL list. */

@@ -240,7 +240,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     refetch: refetchCatalog,
   } = useRetryablePromise(
     useCallback(
-      () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      async () => {
+        // This grid acts on `installed` (it decides whether a pick needs a download), so it needs
+        // the reconciled flags rather than the snapshot `getCachedResources` answers with, which is
+        // one refresh behind. A failed refresh still leaves a usable catalog to read.
+        try {
+          await papi.commands.sendCommand('platformGetResources.refreshResourceFlags', false);
+        } catch (error) {
+          logger.warn(`Could not refresh DBL resource flags: ${getErrorMessage(error)}`);
+        }
+        return papi.commands.sendCommand('platformGetResources.getCachedResources');
+      },
       // refreshCounter is a refresh-trigger counter: the factory doesn't use its value, but each
       // bump creates a new function reference so the fetch re-runs and re-validates installed
       // flags — necessary after any installation completes.

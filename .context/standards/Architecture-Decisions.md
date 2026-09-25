@@ -1638,6 +1638,56 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   recompute contract remains untested beyond its one caller.
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
 
+## adr-dbl-install-is-idempotent: Installing an already-installed DBL resource succeeds, and `installed` is a hint
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** The Model Text panel auto-installs a configured resource its cached catalog reports as
+  not installed. `InstallDblResourceCore` threw "Resource is already installed and up to date" in
+  that case, so a stale flag produced an install-failed view whose **Try again** re-ran the same
+  call forever — PT-4588 recorded 14 identical failures in four minutes against a resource that was
+  on disk and readable in the same session. The flag can be stale whatever its source: it is
+  computed when the catalog is fetched, and `adr-dbl-install-status-from-backend` reconciles it only
+  when something asks.
+- **Decision:** Four rules.
+  1. **Install is idempotent.** An already-installed, up-to-date resource is a no-op success. The
+     question is asked twice, either side of `ScrTextCollection.RefreshScrTexts()`:
+     `InstallableResource.Installed` resolves `ExistingScrText` against the live collection on every
+     read, so the first answer describes the collection as it stands — possibly from before another
+     process removed the project — and only the second describes the disk now. Refreshing
+     unconditionally would put a full rescan in front of every ordinary install, so the cheap answer
+     gates the expensive one. The no-op sends the same notifications a real install does, because
+     the caller's view is the thing that was wrong.
+  2. **`installed` is a hint, so a caller that acts on it refreshes first — unless acting on a
+     stale one is cheap.** The resource panels and the text grid await
+     `platformGetResources.refreshResourceFlags` and then read the catalog, rather than acting on a
+     snapshot that is one refresh behind. The resource and team-layout pickers deliberately do not:
+     awaiting the refresh would hold the dialog's first paint on a backend call, and a stale flag
+     there costs only a redundant install that rule 1 turns into a no-op that corrects it. A listing
+     does not bother either: showing the previous snapshot costs nothing it cannot correct on the
+     next read.
+  3. **A resolved install is not re-fired for the same uid.** An idempotent install plus a catalog
+     that never converges would otherwise loop. The panel offers a retry instead, and says the
+     resource is installed but could not be opened — not that the install failed, which would send
+     the user to check a network connection that is not the problem.
+  4. **An action the list never reflects ends as an error, not a spinner.** The Get Resources row's
+     progress indicator stops only when the list agrees with the action, so the dialog holds each
+     action until a list fetched after it settles the question, then reports a failure the user can
+     see and retry. Rule 1 removes the error that used to end this case; without a replacement the
+     row simply spun.
+- **Alternatives:** *Treat the "already installed" message as success in TypeScript* — rejected: a
+  cross-process string match that breaks on localization. *Keep throwing and have callers recover* —
+  rejected: every caller would need the same recovery, and the one that mattered could not recover
+  at all, because re-reading the catalog returned the same stale flag. *Have the dialog clear its
+  own progress indicator without an error* — rejected: an action that silently does nothing is
+  indistinguishable from one that worked.
+- **Consequences:** A stale catalog corrects itself without a remount. Callers cannot tell "installed
+  now" from "already there", and none needs to. The retired error string
+  `%getResources_errorInstallResource_resourceAlreadyInstalled%` has a `deprecationInfo` entry with
+  no replacement, since the case no longer produces an error. **Revisit** if a caller ever needs to
+  know which of the two happened.
+- **Source:** PT-4588.
+
 ## adr-dbl-install-status-from-backend: The backend is the authority on which DBL resources are installed, and on which project id
 
 - **Date:** 2026-09-14
