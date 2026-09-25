@@ -114,9 +114,9 @@ function escapeClosingTags(jsSourceLiteral: string): string {
  *
  * @param webViewId The web view this script runs in
  * @param declaredArea The default area core declares for the view's web view type
- *   (`getContentZoomDeclaration(...).defaultArea`), or `undefined` for an undeclared type. While
- *   the view reports no area, the chords and the wheel act on this area. A malformed id is
- *   ignored.
+ *   (`getContentZoomDeclaration(...).defaultArea`), or `undefined` both for an undeclared type and
+ *   for a type declared with no default area (e.g. the Text Collection grid). While the view
+ *   reports no area, the chords and the wheel act on this area. A malformed id is ignored.
  */
 export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: string): string {
   const id = escapeClosingTags(JSON.stringify(webViewId));
