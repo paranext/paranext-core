@@ -4,8 +4,8 @@ import { languageDetails } from '@shared/data/language-details.data';
 /**
  * Interface languages listed in the language pickers and used for the first-run OS-locale default,
  * in the order they are listed. Other locale files still ship and render when
- * `platform.interfaceLanguage` names them. Offering another language is a change to this list
- * only.
+ * `platform.interfaceLanguage` names them. Offering another language is an edit to this list (plus
+ * the tests that pin it).
  *
  * PT-4457 is expected to replace this with a rule based on app-wide translation coverage; the
  * `%firstRun_` keys alone are not enough, since a locale can have all of them and little else.

@@ -3887,7 +3887,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 ## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
 
-- **Date:** 2026-09-24 (amended 2026-09-25)
+- **Date:** 2026-09-25
 - **Status:** Accepted
 - **Context:** Locale files ship for languages at very different stages. As of 2026-09-24, `es`
   covered ~97% of the core strings (~75% app-wide, counting bundled extensions), `fr`/`zh-*` ~6%,
@@ -3921,8 +3921,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   again in any picker). Keeping `getAvailableInterfaceLanguages` unchanged and adding a separate
   offered-languages data type or an `isOffered` flag (additive for extensions, but every core picker
   would move to the new type, and nothing outside core was found using the getter).
-- **Consequences:** Offering a language is a one-line code change (plus the tests that pin the list); `src/node/data/offered-interface-languages.test.ts`
-  fails if an offered tag has no locale file or misses the setup-dialog threshold. The public
+- **Consequences:** Offering a language is a one-line code change (plus the tests that pin the
+  list); `src/node/data/offered-interface-languages.test.ts` fails if an offered tag has no locale
+  file or misses the setup-dialog threshold. A value stored before this change keeps its
+  not-offered fallbacks until the user next picks a language (e.g. `["es","fr"]` still falls back
+  to French). The public
   `getAvailableInterfaceLanguages` now means "offered", not "every locale file"; PAPI has no way to
   list hidden languages. PT-4457 (offer languages by translation coverage) is expected to supersede
   the list; its rule must measure app-wide coverage, not only `%firstRun_`. Revisit when French is
