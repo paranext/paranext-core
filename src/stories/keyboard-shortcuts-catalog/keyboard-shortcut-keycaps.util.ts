@@ -1,5 +1,5 @@
 import { startsWith } from 'platform-bible-utils';
-import { getShortcutKeycaps } from 'platform-bible-react';
+import { getShortcutKeycaps } from 'platform-bible-react/experimental';
 import {
   NO_EQUIVALENT_PREFIX,
   splitShortcutAlternatives,
