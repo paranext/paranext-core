@@ -283,6 +283,11 @@ describe('platform.interfaceLanguage validator', () => {
     await expect(validate?.(['xx'], ['en'], {})).resolves.toBe(false);
   });
 
+  it('rejects names inherited from Object.prototype', async () => {
+    await expect(validate?.(['constructor'], ['en'], {})).resolves.toBe(false);
+    await expect(validate?.(['toString'], ['en'], {})).resolves.toBe(false);
+  });
+
   it('rejects an empty list', async () => {
     await expect(validate?.([], ['en'], {})).resolves.toBe(false);
   });
