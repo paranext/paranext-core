@@ -271,7 +271,7 @@ function renderTabMenuItems(
       >
         {item.label}
         {item.shortcut && (
-          <ContextMenuShortcut className="tw:tracking-normal">
+          <ContextMenuShortcut>
             <ShortcutKeys hint={item.shortcut} />
           </ContextMenuShortcut>
         )}

@@ -87,7 +87,7 @@ const getGroupContent = (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
                   {item.shortcut && (
-                    <DropdownMenuShortcut className="tw:tracking-normal">
+                    <DropdownMenuShortcut>
                       <ShortcutKeys hint={item.shortcut} />
                     </DropdownMenuShortcut>
                   )}
