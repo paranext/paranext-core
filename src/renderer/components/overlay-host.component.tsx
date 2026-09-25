@@ -8,7 +8,6 @@ import { OverlayContextMenu } from '@renderer/components/overlays/overlay-contex
 import { OverlayModalDialog } from '@renderer/components/overlays/overlay-modal-dialog.component';
 import { OverlayPopover } from '@renderer/components/overlays/overlay-popover.component';
 import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
-import { getWebViewIframeZoom } from '@renderer/services/overlays/overlay-coordinates';
 import { getOverlays, subscribe } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import { useCallback, useEffect, useState } from 'react';
@@ -49,22 +48,10 @@ export function OverlayHost() {
           return <OverlayModalDialog key={overlay.id} overlay={overlay} />;
         }
         if (overlay.type === 'popover') {
-          return (
-            <OverlayPopover
-              key={overlay.id}
-              overlay={overlay}
-              frameScale={getWebViewIframeZoom(overlay.webViewId)}
-            />
-          );
+          return <OverlayPopover key={overlay.id} overlay={overlay} />;
         }
         if (overlay.type === 'commandPalette') {
-          return (
-            <OverlayCommandPalette
-              key={overlay.id}
-              overlay={overlay}
-              frameScale={getWebViewIframeZoom(overlay.webViewId)}
-            />
-          );
+          return <OverlayCommandPalette key={overlay.id} overlay={overlay} />;
         }
         return undefined;
       })}
