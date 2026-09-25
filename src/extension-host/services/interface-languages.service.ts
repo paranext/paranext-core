@@ -2,20 +2,10 @@ import type { LanguageInfo } from 'platform-bible-react';
 import { AsyncVariable } from 'platform-bible-utils';
 
 /**
- * The interface languages offered to users: in the interface-language pickers (Settings, the
- * profile popover, the first-run wizard) and to the first-run default taken from the OS locale.
- * Every other locale file still ships and still renders when `platform.interfaceLanguage` names it
- * explicitly; it is only not offered. Offering another language is a one-line change here.
- *
- * PT-4457 is expected to replace this list with a rule based on translation coverage. That rule
- * must measure coverage across the whole app, not only the setup dialog's `%firstRun_` keys: a
- * locale can have the whole setup dialog translated and almost nothing else.
- */
-export const OFFERED_INTERFACE_LANGUAGES: readonly string[] = ['en', 'es'];
-
-/**
  * Display info for every interface language that has a locale file, keyed by the raw locale-file
- * tag (e.g. `zh-hans`). Filled by the localization service while it reads the locale files.
+ * tag (e.g. `zh-hans`). Filled by the localization service while it reads the locale files. Which
+ * of these are offered to users is decided by `OFFERED_INTERFACE_LANGUAGES` in
+ * `@shared/data/interface-languages.data`.
  */
 export const loadedLocales: Record<string, LanguageInfo> = {};
 
@@ -33,15 +23,6 @@ export function markLoadedLocalesReady(): void {
 /** Signals that the locale files could not be loaded, so waiting callers fail instead of hanging. */
 export function markLoadedLocalesFailed(reason: string): void {
   loadedLocalesReady.rejectWithReason(reason);
-}
-
-/** Returns a new record holding only the entries of `locales` that are offered to users. */
-export function filterToOffered(
-  locales: Record<string, LanguageInfo>,
-): Record<string, LanguageInfo> {
-  return Object.fromEntries(
-    Object.entries(locales).filter(([tag]) => OFFERED_INTERFACE_LANGUAGES.includes(tag)),
-  );
 }
 
 /**

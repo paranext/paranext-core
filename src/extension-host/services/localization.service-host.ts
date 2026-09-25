@@ -33,11 +33,11 @@ import { Canon } from '@sillsdev/scripture';
 import { languageDetails } from '@shared/data/language-details.data';
 import { computeSetupDialogLanguages } from '@extension-host/services/setup-dialog-languages.util';
 import {
-  filterToOffered,
   loadedLocales,
   markLoadedLocalesFailed,
   markLoadedLocalesReady,
-} from '@extension-host/services/interface-languages';
+} from '@extension-host/services/interface-languages.service';
+import { filterToOffered } from '@shared/data/interface-languages.data';
 
 /**
  * The base language to get localized strings for if they are not present in other languages

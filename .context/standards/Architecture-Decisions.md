@@ -3894,7 +3894,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`setup-dialog-languages.util.ts` `computeSetupDialogLanguages`) only measures the `%firstRun_`
   namespace, so a French or Chinese OS was auto-switched into a mostly-English UI. Product decided
   to offer only English and Spanish for the Nov 2026 release (PT-4751).
-- **Decision:** `OFFERED_INTERFACE_LANGUAGES` in `src/extension-host/services/interface-languages.ts`
+- **Decision:** `OFFERED_INTERFACE_LANGUAGES` in `src/shared/data/interface-languages.data.ts`
   filters the loaded locales inside the localization service's `getAvailableInterfaceLanguages`
   and `getSetupDialogLanguages`, so every picker and the OS-locale default see only offered
   languages. Locale files, string resolution and the setup-dialog threshold are unchanged. The
