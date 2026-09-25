@@ -122,6 +122,7 @@ import {
   PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
 } from './paragraph-style-trigger.component';
 import { useMarkerSettleDelay } from './use-marker-settle-delay.hook';
+import { useParagraphMenuOpenState } from './use-paragraph-menu-open-state.hook';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
 import {
@@ -1390,6 +1391,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       ),
     [localizedStrings, isStructureProtected, notifyStructureProtected, restoreEditorSelection],
   );
+
+  const {
+    isMenuOpen: isParagraphMenuOpen,
+    setIsMenuOpen: setIsParagraphMenuOpen,
+    requestMenuFromEditor: handleParagraphMarkerMenuRequest,
+  } = useParagraphMenuOpenState({
+    isReadOnly: isReadOnlyEffective,
+    isStructureProtected,
+    hasBlockMarker: !!blockMarker,
+    notifyStructureProtected,
+  });
+
+  // The editor keeps a selected paragraph marker while focus is in the paragraph menu; focusing it
+  // again makes that selection live for the next key.
+  const focusEditor = useCallback(() => editorRef.current?.focus(), []);
 
   const insertCommentAtCurrentSelection = useCallback(() => {
     const selection = currentSelectionRef.current;
@@ -3716,6 +3732,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             logger={logger}
             onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
             onSelectionChange={handleSelectionChange}
+            onParaMarkerMenuRequest={handleParagraphMarkerMenuRequest}
             onStateChange={(state) => {
               setCanUndo(state.canUndo);
               setCanRedo(state.canRedo);
@@ -3884,6 +3901,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   isStructureProtected={isStructureProtected}
                   markerMenuItems={paragraphSwitcherMenuItems}
                   localizedStrings={localizedStrings}
+                  isMenuOpen={isParagraphMenuOpen}
+                  onMenuOpenChange={setIsParagraphMenuOpen}
+                  onReturnFocusToEditor={focusEditor}
                 />
               </>
             )}
