@@ -11,7 +11,7 @@ import {
   SHRINK_STEP,
   useShrinkStepValue,
 } from 'platform-bible-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type ElementRef } from 'react';
 import { ParagraphStyleLabel } from './paragraph-style-label.component';
 
 const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_paragraphSelection_ariaLabel%';
@@ -129,6 +129,13 @@ export function ParagraphStyleTrigger({
     if (isMenuOpen) wasClosedByOutsideInteractionRef.current = false;
   }, [isMenuOpen]);
 
+  // Radix reports a pointer-down on the trigger itself as an outside interaction, since it lands
+  // outside the popover content. Read against this ref so closing that way still counts as a normal
+  // close and returns focus to the editor, rather than stranding it on the button.
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const triggerRef = useRef<ElementRef<typeof Button>>(null);
+
   // This is a single-select control, so picking a marker must close the menu. `MarkerMenu` wires
   // `onSelect` straight to `item.action` and knows nothing about its host's open state, so each
   // action is wrapped here, as `CharacterMarkerControl` does.
@@ -175,6 +182,7 @@ export function ParagraphStyleTrigger({
       >
         <PopoverTrigger asChild>
           <Button
+            ref={triggerRef}
             // `tw:max-w-full` is what keeps the label ellipsising instead of the button being cut
             // off mid-border. The wrapper around this is a block box, so the button is not a flex
             // item of it and the `shrink-0` in shadcn's button base cannot be shrunk past — the
@@ -211,7 +219,11 @@ export function ParagraphStyleTrigger({
             publishes it, so cap against that and let the menu narrow instead. */}
         <PopoverContent
           className="tw:w-96 tw:max-w-(--radix-popover-content-available-width) tw:p-0"
-          onInteractOutside={() => {
+          onInteractOutside={(event) => {
+            // Clicking the trigger again to close is a normal close, not an outside interaction:
+            // Radix only calls this because the pointer-down lands outside the popover CONTENT, and
+            // the trigger is outside it too.
+            if (event.target instanceof Node && triggerRef.current?.contains(event.target)) return;
             wasClosedByOutsideInteractionRef.current = true;
           }}
           onCloseAutoFocus={handleCloseAutoFocus}
