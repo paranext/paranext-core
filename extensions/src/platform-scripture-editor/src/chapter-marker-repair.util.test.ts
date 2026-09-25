@@ -392,25 +392,28 @@ describe('applyChapterSavePreparation', () => {
     expect(result.usjToSave).toBe(TO_SAVE);
   });
 
-  // A write can still be refused after this runs — its chapter may no longer be the one selected —
-  // so the notice waits for the write, on screen or not.
+  // The screen is corrected whatever becomes of the write — and a write dropped because another is
+  // still running never reports back — so a repair that reached the screen is announced at once,
+  // and the write is not asked to announce it a second time.
   it.each([
-    ['on screen', {}],
+    ['with something to write', {}],
+    ['with nothing to write', { usjToSave: undefined }],
+  ])('announces straight away a repair put on screen (%s)', (_label, args) => {
+    const { result, applyRepairToEditor, notifyRepair } = apply(args);
+    expect(applyRepairToEditor).toHaveBeenCalledTimes(1);
+    expect(notifyRepair).toHaveBeenCalledTimes(1);
+    expect(result.shouldAnnounceRepairOnWrite).toBe(false);
+  });
+
+  // Off screen, the write is the first place the repair takes effect, and it can still be refused —
+  // its chapter may no longer be the one selected — so the notice waits for it.
+  it.each([
     ['for a chapter the user has left', { currentChapterKey: 'GEN 4' }],
     ['under a user still typing', { isUserEditing: true }],
-  ])('announces a repair with something to write only once it is written (%s)', (_label, args) => {
+  ])('announces a repair kept off screen only once it is written (%s)', (_label, args) => {
     const { result, notifyRepair } = apply(args);
     expect(notifyRepair).not.toHaveBeenCalled();
     expect(result.shouldAnnounceRepairOnWrite).toBe(true);
-  });
-
-  // The repair put the chapter back to what the PDP already holds, so the change on screen is the
-  // only one there is, and it is the user's to be told about.
-  it('announces straight away a repair that only corrected the screen', () => {
-    const { result, applyRepairToEditor, notifyRepair } = apply({ usjToSave: undefined });
-    expect(applyRepairToEditor).toHaveBeenCalledTimes(1);
-    expect(notifyRepair).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ usjToSave: undefined, shouldAnnounceRepairOnWrite: false });
   });
 
   it('announces nothing for a repair that was neither written nor shown', () => {
