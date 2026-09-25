@@ -205,7 +205,7 @@ declare module 'papi-shared-types' {
      * Returns DBL resources from memory cache.
      *
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
-     * existing cached data.
+     * existing cached data. Concurrent calls share one fetch.
      *
      * Each row's `isRestrictedAsModelText` is set from the backend's model-text restrictions. Until
      * the backend first answers, the rows are returned without the flag, and a later read carries
@@ -216,7 +216,8 @@ declare module 'papi-shared-types' {
      *   reads `isRestrictedAsModelText`, such as a model or base text picker; every other caller
      *   would wait on a flag it ignores.
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
-     * @throws When the fetch itself fails. Callers that render an error state with a retry should
+     * @throws When the fetch itself fails — including when the DBL cannot be reached, for example
+     *   offline — and no catalog is cached. Callers that render an error state with a retry should
      *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
      *   change the answer.
      */
