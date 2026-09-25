@@ -2502,6 +2502,40 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   rather than a toggle in a title bar.
 - **Source:** PT-4189, PT-4478.
 
+## adr-footnote-unclosed-note-caret-moves-to-pane: In Standard view a caret the user puts inside an unclosed note moves into the footnotes pane's row editor
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Standard view shows a note's content in the Scripture text only while the note is
+  unclosed (`\f + \ft a` with no `\f*`), which PT9 renders as `span.opennote` and edits inline as
+  plain text. Everywhere else Standard view edits notes in the footnotes pane
+  (`adr-footnote-editing-surface-per-view`). Editing the unclosed note inline left the caller and
+  the `\f` marker freely deletable, while the pane's row editor protects both; and the first
+  keystroke inside such a note was reported by the editor as a note insertion, so the host opened a
+  row editor on it with the caret at the END of the note, pulling the user away from where they
+  were typing.
+- **Decision:** A caret the user puts inside a note in the text - a click or a keystroke in the text
+  within `TEXT_GESTURE_WINDOW_MS` before it lands - moves into the pane's row editor at the same
+  place in the note (`shouldHandCaretInNoteToPane`), revealing the pane if it is hidden. The
+  editor reports the position through `EditorRef.getNoteCaret` (the inverse of
+  `selectNoteTextOffset`); a caret in the note's marker or caller reports the next position the
+  user can type at. A caret the editor parks by itself - returning focus from the pane, landing
+  past a note that ends its paragraph - does not move. Separately, the editor now reports
+  `insertedNodeKey` only for a node the previous editor state did not have, so an edit inside an
+  existing note is no longer taken for a new one in any view.
+- **Alternatives:**
+  - **Edit the unclosed note inline, as PT9 does.** Rejected after hand QA: the note's
+    marker and caller stay unprotected in the text, and the pane is where every other note is
+    edited.
+  - **Only stop opening the row editor at the end of the note.** Rejected: it fixes the jump but
+    leaves the inline editing, and its unprotected shell, in place.
+- **Consequences:** An intentional departure from PT9 for unclosed notes. Arrow keys into an unclosed
+  note hand off too, so the keyboard cannot step through such a note in the text; the user leaves
+  the row editor with Escape (back to its row) or by clicking elsewhere in the text. A note the
+  user types or pastes into the text opens its row editor at the caret when the caret ends up
+  inside it, rather than at the note's end.
+- **Source:** PT-4189.
+
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Formerly:** ADR-0008

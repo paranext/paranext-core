@@ -110,7 +110,9 @@ Every keyboard handler change here must also update `src/shared/data/keyboard-sh
   passes `isNoteShellEditable: false`, which renders `\f + ` in Lexical's `token` mode — necessary,
   but on its own that still lets a caret land among those characters, where a keystroke replaces the
   whole node: a lost caller, or a destroyed note. The editor's `NoteShellCaretGuardPlugin` is what
-  keeps the caret out; the `scripture-editors` invariants carry the full rule. A `\cat` category run
+  keeps the caret out, and it narrows a selection that reaches into the shell (a double-click on
+  the caller, select-all) to the note's content, so typing over it cannot remove the shell either;
+  the `scripture-editors` invariants carry the full rule. A `\cat` category run
   typed just after the caller belongs to the note's CONTENT, which is where the guard puts the caret.
 - **The caller is ONE choice, applied in one call.** The applied caller is a function of both the
   type and the custom character (a type of `custom` means nothing without one), and the dropdown's
@@ -146,7 +148,10 @@ Every keyboard handler change here must also update `src/shared/data/keyboard-sh
   popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
   live-apply re-keys the note in the parent editor, so the host must re-sync its session key from
   `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new `noteOps` identity
-  for its own live-apply — that reloads the editor mid-typing.
+  for its own live-apply — that reloads the editor mid-typing. A caret the user puts inside an
+  unclosed note in the text (the one kind the text shows the content of) moves into the row editor
+  at the same place, read with `EditorRef.getNoteCaret`; see
+  `adr-footnote-unclosed-note-caret-moves-to-pane`.
 - **The caller and note-type changes rebuild the note from `getNoteOps`, which reads the live tree
   unsettled.** Both must settle pending marker edits (`commitPendingMarkerEdits`, skipped while a
   marker-palette session is open) before reading — the same rule `closeAndSave` and
