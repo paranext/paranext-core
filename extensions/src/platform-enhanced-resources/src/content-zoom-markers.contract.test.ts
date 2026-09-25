@@ -68,7 +68,7 @@ describe('content zoom markers (Enhanced Resources)', () => {
 
   it('opts the entries panel into text marking without marking the panel itself, keeping the tab bar outside', () => {
     expect(webView).toMatch(
-      /<EnhancedResourceTabBar[\s\S]*?\/> (?:\{\/\*.*?\*\/\} )?<ContentZoomTextProvider area="entries"> <div className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0"> <Tabs value={activeTab}/,
+      /<EnhancedResourceTabBar[\s\S]*?\/> (?:\{\/\*.*?\*\/\} )?<ContentZoomTextProvider area="entries" label={String\(stringsBag\[RESEARCH_TAB_LABEL_KEYS\[activeTab\]\] \?\? ''\)} ?> <div className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0"> <Tabs value={activeTab}/,
     );
     expect(webView).not.toContain('<ContentZoomRoot area="entries"');
   });
@@ -105,7 +105,7 @@ describe('content zoom markers (Enhanced Resources)', () => {
 
   it('marks the footnotes list as its own area', () => {
     expect(footnotesPane).toMatch(
-      /<ContentZoomRoot area="footnotes" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"> <FootnoteList/,
+      /<ContentZoomRoot area="footnotes" label={zoomAreaLabel} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0" ?> <FootnoteList/,
     );
   });
 

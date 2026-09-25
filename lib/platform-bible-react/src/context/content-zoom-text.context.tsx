@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext } from 'react';
+import { createContext, ReactNode, useContext, useMemo } from 'react';
 
 /**
  * Attribute a content-zoom-eligible element carries to mark it as one zoom area. Its value is the
@@ -36,8 +36,16 @@ export const CONTENT_ZOOM_SCOPE_ATTRIBUTE = 'data-platform-content-zoom-scope';
  */
 export const CONTENT_ZOOM_LABEL_ATTRIBUTE = 'data-platform-content-zoom-label';
 
-/** The area id project text inside a provider marks itself with; `undefined` outside every one. */
-const ContentZoomTextContext = createContext<string | undefined>(undefined);
+/**
+ * The attributes project text inside a provider marks itself with — its area id and, when the
+ * provider names the area, that name; `undefined` outside every provider.
+ */
+type ContentZoomTextMarking = {
+  [CONTENT_ZOOM_ROOT_ATTRIBUTE]: string;
+  [CONTENT_ZOOM_LABEL_ATTRIBUTE]?: string;
+};
+
+const ContentZoomTextContext = createContext<ContentZoomTextMarking | undefined>(undefined);
 
 /**
  * Props for {@link ContentZoomTextProvider}.
@@ -52,6 +60,14 @@ export type ContentZoomTextProviderProps = {
    * @experimental This property is unstable and may change shape or disappear without notice
    */
   area?: string;
+  /**
+   * Name of the zoom area as the zoom indicator shows it (`<label> · 120 %`), written on every text
+   * element the provider marks, the way `ContentZoomRootProps.label` is on its marker. Plain text.
+   * Omit it, or pass an empty string, and the indicator shows the level alone.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  label?: string;
   /**
    * The subtree whose library components mark the project text they render.
    *
@@ -71,23 +87,34 @@ export type ContentZoomTextProviderProps = {
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export function ContentZoomTextProvider({ area, children }: ContentZoomTextProviderProps) {
+export function ContentZoomTextProvider({ area, label, children }: ContentZoomTextProviderProps) {
+  const marking = useMemo<ContentZoomTextMarking>(
+    () => ({
+      [CONTENT_ZOOM_ROOT_ATTRIBUTE]: area ?? '',
+      // An empty label names nothing, so it writes no attribute, as on `ContentZoomRoot`.
+      ...(label ? { [CONTENT_ZOOM_LABEL_ATTRIBUTE]: label } : {}),
+    }),
+    [area, label],
+  );
   return (
-    <ContentZoomTextContext.Provider value={area ?? ''}>{children}</ContentZoomTextContext.Provider>
+    <ContentZoomTextContext.Provider value={marking}>{children}</ContentZoomTextContext.Provider>
   );
 }
 
 /**
  * The props a component spreads onto the existing element that renders project text inline. Inside
  * a {@link ContentZoomTextProvider} the props carry `data-platform-content-zoom-root` set to the
- * provider's area (`''` for the main area); outside one they are empty. Spread them onto the text
- * element itself rather than adding a wrapper, and never onto pop-up content or an element that
- * contains another marked element.
+ * provider's area (`''` for the main area), plus `data-platform-content-zoom-label` when the
+ * provider names the area; outside one they are empty. Spread them onto the text element itself
+ * rather than adding a wrapper, and never onto pop-up content or an element that contains another
+ * marked element.
  *
- * @returns The marker attribute inside a provider; an empty object outside one
+ * @returns The marker (and label) attributes inside a provider; an empty object outside one
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export function useContentZoomTextProps(): { [CONTENT_ZOOM_ROOT_ATTRIBUTE]?: string } {
-  const area = useContext(ContentZoomTextContext);
-  return area === undefined ? {} : { [CONTENT_ZOOM_ROOT_ATTRIBUTE]: area };
+export function useContentZoomTextProps(): {
+  [CONTENT_ZOOM_ROOT_ATTRIBUTE]?: string;
+  [CONTENT_ZOOM_LABEL_ATTRIBUTE]?: string;
+} {
+  return useContext(ContentZoomTextContext) ?? {};
 }

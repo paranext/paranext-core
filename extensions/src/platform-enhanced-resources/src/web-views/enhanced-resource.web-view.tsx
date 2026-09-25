@@ -47,6 +47,7 @@ import { EnhancedResourceFootnotesPane } from '../components/footnotes-pane/foot
 import {
   EnhancedResourceTabBar,
   EnhancedResourceTopToolbar,
+  RESEARCH_TAB_LABEL_KEYS,
   TOOLBAR_STRING_KEYS,
   type HighlightMode,
   type MarbleScope,
@@ -128,6 +129,7 @@ export const ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object.freeze([
   '%enhancedResources_shell_title%',
   '%enhancedResources_shell_emptyTitle%',
   '%enhancedResources_shell_emptyDescription%',
+  '%enhancedResources_footnotesPane_zoomAreaLabel%',
 ] as const);
 
 /**
@@ -646,6 +648,7 @@ export function EnhancedResourceWebView({
                 useWebViewState={useWebViewStateProp ?? NOOP_USE_WEB_VIEW_STATE}
                 selectedFootnote={selectedFootnote}
                 onFootnoteSelected={onFootnoteSelected}
+                zoomAreaLabel={String(getString('%enhancedResources_footnotesPane_zoomAreaLabel%'))}
               >
                 <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
                   <EnhancedScripturePane
@@ -690,8 +693,12 @@ export function EnhancedResourceWebView({
               />
               {/* The `entries` zoom area is the lemma, gloss, definition and article text the tabs
                   render, marked by each component inside this provider; the tab buttons, switches,
-                  copy, find and feedback controls and the media thumbnails keep interface scale. */}
-              <ContentZoomTextProvider area="entries">
+                  copy, find and feedback controls and the media thumbnails keep interface scale.
+                  The zoom indicator names the area after the tab on screen. */}
+              <ContentZoomTextProvider
+                area="entries"
+                label={String(stringsBag[RESEARCH_TAB_LABEL_KEYS[activeTab]] ?? '')}
+              >
                 <div className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
                   <Tabs value={activeTab} className="tw:flex tw:flex-1 tw:flex-col tw:min-h-0">
                     <TabsContent

@@ -233,6 +233,8 @@ const EDITOR_LOAD_DELAY_TIME = 200;
  */
 const PDP_SAVE_DEBOUNCE_MS = 700;
 
+const FOOTNOTES_ZOOM_AREA_LABEL_KEY: LocalizeKey = '%webView_footnoteList_header%';
+
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
@@ -257,6 +259,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // recent-searches labels, and the show-more-books/not-in-project strings that appear once a
   // book outside this project is reachable.
   ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
+  // The footnotes pane's name on the zoom indicator.
+  FOOTNOTES_ZOOM_AREA_LABEL_KEY,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -3976,6 +3980,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   useWebViewState={useWebViewState}
                   showMarkers={options.view?.markerMode !== 'hidden'}
                   focusRequest={footnotePaneFocusRequest}
+                  zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
                 >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                   <OutPortal node={editorPortalNode} />
