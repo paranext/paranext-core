@@ -21,9 +21,9 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  ShortcutKeys,
   Z_INDEX_OVERLAY,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import {
   type CSSProperties,
   type ReactNode,

@@ -1,6 +1,5 @@
 import { Fragment, useMemo } from 'react';
 import {
-  ShortcutKeys,
   Table,
   TableBody,
   TableCell,
@@ -8,6 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import type {
   KeyboardShortcutEntry,
   KeyboardShortcutKeys,
