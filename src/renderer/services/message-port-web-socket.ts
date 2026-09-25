@@ -4,6 +4,7 @@ import {
   createSyntheticCloseEvent,
   isPapiPortCloseFrame,
 } from '@shared/data/papi-port.model';
+import { bindClassMethods } from '@shared/utils/util';
 
 /**
  * The surface of a DOM `MessagePort` this adapter uses. Node's `worker_threads` `MessagePort`
@@ -113,8 +114,7 @@ export class MessagePortWebSocket implements WebSocket {
    * @experimental
    */
   constructor(provider: PapiPortProvider, options: { addPageHideListener?: boolean } = {}) {
-    this.onPortMessage = this.onPortMessage.bind(this);
-    this.onPortClose = this.onPortClose.bind(this);
+    bindClassMethods.call(this);
     if (options.addPageHideListener !== false && typeof window !== 'undefined')
       window.addEventListener('pagehide', () => this.close(1001, PAGE_UNLOADING_REASON));
     provider({
