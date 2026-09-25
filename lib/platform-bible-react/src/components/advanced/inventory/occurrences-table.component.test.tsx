@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   ContentZoomTextProvider,
 } from '@/context/content-zoom-text.context';
@@ -36,6 +37,22 @@ describe('OccurrencesTable content zoom', () => {
     expect(referenceCell).not.toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE);
     // Headers are controls: exactly one marker in the whole table.
     expect(container.querySelectorAll(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toHaveLength(1);
+  });
+
+  it('names the text cell with the provider’s label', () => {
+    const { container } = render(
+      <ContentZoomTextProvider area="entries" label="Occurrences">
+        <OccurrencesTable
+          occurrenceData={OCCURRENCES}
+          setScriptureReference={vi.fn()}
+          localizedStrings={STRINGS}
+          classNameForText="scripture-font"
+        />
+      </ContentZoomTextProvider>,
+    );
+    const textCell = container.querySelectorAll('tbody td')[1];
+    expect(textCell).toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE, 'entries');
+    expect(textCell).toHaveAttribute(CONTENT_ZOOM_LABEL_ATTRIBUTE, 'Occurrences');
   });
 
   it('marks nothing outside a provider', () => {

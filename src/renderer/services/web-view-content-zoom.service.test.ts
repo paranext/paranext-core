@@ -2536,7 +2536,7 @@ describe('web-view-content-zoom.service', () => {
     let pane: HTMLIFrameElement;
 
     beforeEach(async () => {
-      // A grid-wide level remembered from a build where the grid had one area of its own.
+      // A level remembered under the fallback area, which a grid showing no resource must not apply.
       settings[MEMORY] = { 'resource:PROJ-A:text-collection': 1.4 };
       __setContentZoomDepsForTesting({});
       await initializeContentZoomService();

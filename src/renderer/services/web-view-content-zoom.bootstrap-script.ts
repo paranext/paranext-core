@@ -295,14 +295,15 @@ export function getContentZoomBootstrapScript(webViewId: string, declaredArea?: 
     const carriesMarker = (node) =>
       node.nodeType === 1 && (node.matches('[' + ATTR + ']') || !!node.querySelector('[' + ATTR + ']'));
     const someCarriesMarker = (nodes) => Array.prototype.some.call(nodes, carriesMarker);
-    // Only a record that carries a marker can change the area list: an added or removed node that is
-    // one or contains one, or a change to the marker attribute itself, which is the only attribute
-    // this observer is given. Typing in a view moves text nodes and unmarked elements, so without
-    // this the editor would pay for a whole-document scan per keystroke. A removed node's subtree is
-    // intact and queryable while the record holds it, so a marker removed inside a larger subtree is
-    // seen too; nesting needs no case of its own, because any change to a marker's marked ancestry is
-    // itself the addition, removal or retitling of a marker. A marker inside a shadow root is
-    // invisible here, since the observer does not traverse shadow trees.
+    // Only a record that carries a marker can change the area list or the labels recorded with it:
+    // an added or removed node that is one or contains one, or a change to the marker or label
+    // attribute, the only two attributes this observer is given. Typing in a view moves text nodes
+    // and unmarked elements, so without this the editor would pay for a whole-document scan per
+    // keystroke. A removed node's subtree is intact and queryable while the record holds it, so a
+    // marker removed inside a larger subtree is seen too; nesting needs no case of its own, because
+    // any change to a marker's marked ancestry is itself the addition, removal or retitling of a
+    // marker. A marker inside a shadow root is invisible here, since the observer does not traverse
+    // shadow trees.
     const isAreaRecord = (record) => {
       if (isIndicatorRecord(record)) return false;
       // Until the parent has taken a report, every mutation is worth another try: that retry is the

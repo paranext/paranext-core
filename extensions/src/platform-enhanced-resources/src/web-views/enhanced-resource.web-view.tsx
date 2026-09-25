@@ -648,7 +648,9 @@ export function EnhancedResourceWebView({
                 useWebViewState={useWebViewStateProp ?? NOOP_USE_WEB_VIEW_STATE}
                 selectedFootnote={selectedFootnote}
                 onFootnoteSelected={onFootnoteSelected}
-                zoomAreaLabel={String(getString('%enhancedResources_footnotesPane_zoomAreaLabel%'))}
+                zoomAreaLabel={String(
+                  stringsBag['%enhancedResources_footnotesPane_zoomAreaLabel%'] ?? '',
+                )}
               >
                 <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
                   <EnhancedScripturePane

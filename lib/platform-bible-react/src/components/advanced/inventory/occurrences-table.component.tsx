@@ -119,6 +119,7 @@ export function OccurrencesTable({
               <TableCell
                 className={classNameForText}
                 data-platform-content-zoom-root={zoomTextProps['data-platform-content-zoom-root']}
+                data-platform-content-zoom-label={zoomTextProps['data-platform-content-zoom-label']}
               >
                 {formatTextWithBold(occurrence.text)}
               </TableCell>
