@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { LanguageInfo } from 'platform-bible-react';
 import { LanguageStrings } from 'platform-bible-utils';
+import { filterToOffered } from '@shared/data/interface-languages.data';
 import { computeSetupDialogLanguages } from './setup-dialog-languages.util';
-import { filterToOffered } from './interface-languages';
 
 const loadedLocales: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
