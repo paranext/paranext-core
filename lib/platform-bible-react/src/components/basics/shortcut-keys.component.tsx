@@ -98,9 +98,8 @@ export type ShortcutKeysProps = {
  * plain text between the keycaps rather than as part of one; macOS symbols sit adjacent with
  * nothing between them.
  *
- * `dir="ltr"` is set on the `KbdGroup` itself, not an enclosing element, so the keycap order
- * survives a right-to-left layout: `KbdGroup` is `inline-flex`, and flex item order follows the
- * `direction` property.
+ * It does not detect the operating system: it follows the spelling of the hint it is given, so the
+ * caller picks the spelling for the user's OS (e.g. `isMacOs() ? '⌘Z' : 'Ctrl+Z'`).
  *
  * @experimental This component is unstable and may change or disappear without notice
  */
@@ -110,6 +109,8 @@ export function ShortcutKeys({ hint }: ShortcutKeysProps) {
   // spreads a keycap's letters apart ("C t r l"), so reset it here for every caller.
   if (keycaps.length === 1) return <Kbd className="tw:tracking-normal">{keycaps[0]}</Kbd>;
   return (
+    // `dir="ltr"` on the group itself, not an enclosing element: `KbdGroup` is `inline-flex`, and
+    // flex item order follows `direction`, so this keeps the keycap order in a right-to-left layout.
     <KbdGroup dir="ltr" className="tw:tracking-normal">
       {keycaps.map((keycap, index) => (
         // A combo can repeat a glyph (`Ctrl++` has two keycaps but only one distinct value), so the
