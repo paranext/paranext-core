@@ -238,8 +238,7 @@ export function Setting({
     localizationService.dataProviderName,
   ).AvailableInterfaceLanguages(undefined, OFFERED_LANGUAGE_DEFAULTS);
 
-  // The user's current languages are always listed, even when not offered, so the selector never
-  // shows a blank selection and the user can see what they have and switch away from it.
+  // List the user's current languages even when not offered, so the selection is never blank.
   const knownUiLanguages = useMemo(
     () =>
       includeCurrentLanguages(

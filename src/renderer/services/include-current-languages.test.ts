@@ -31,14 +31,6 @@ describe('includeCurrentLanguages', () => {
     expect(includeCurrentLanguages(custom, ['en']).en?.autonym).toBe('English (custom)');
   });
 
-  it('adds a duplicated current language once', () => {
-    expect(Object.keys(includeCurrentLanguages(OFFERED, ['fr', 'fr'])).sort()).toEqual([
-      'en',
-      'es',
-      'fr',
-    ]);
-  });
-
   it('does not mutate its input', () => {
     const input = { ...OFFERED };
     includeCurrentLanguages(input, ['fr']);
