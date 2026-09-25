@@ -989,9 +989,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * a given index names.
    *
    * Published only while the pane is RENDERED — once when it becomes rendered, and on every editor
-   * change thereafter — plus on each external load. Index agreement matters only to a pane the user
-   * can see, and publishing on every change regardless would put a whole-chapter `getUsj()` and a
-   * web-view re-render on the typing hot path of every view, pane or not.
+   * change and every external load thereafter. Index agreement matters only to a pane the user can
+   * see, and publishing on every change regardless would put a whole-chapter `getUsj()` and a
+   * web-view re-render on the typing hot path of every view, pane or not. A pane that is not
+   * rendered holds no document at all; it fetches the editor's current one when it is shown.
    */
   const [liveEditorUsj, setLiveEditorUsj] = useState<Usj | undefined>(undefined);
 
@@ -1020,6 +1021,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (!shouldPublishPaneDocument(notes, publishedPaneNotesRef.current)) return;
     publishedPaneNotesRef.current = notes;
     setLiveEditorUsj(usj);
+  }, []);
+
+  /**
+   * Replaces the pane's document outright, or drops it with `undefined` (the pane then falls back
+   * to `usjFromPdp`). The notes remembered as published are reset with it: they describe the
+   * document being replaced, and kept they could match a later edit that removes notes the new
+   * document added, leaving the pane listing notes the text no longer has.
+   */
+  const replacePaneDocument = useCallback((editorUsj: Usj | undefined) => {
+    publishedPaneNotesRef.current = undefined;
+    setLiveEditorUsj(editorUsj && correctEditorUsjVersion(editorUsj));
   }, []);
 
   /**
@@ -1119,9 +1131,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // would be resolved against both belong to the document being left.
   useEffect(() => {
     setFootnotePaneFocusRequest(undefined);
-    publishedPaneNotesRef.current = undefined;
-    setLiveEditorUsj(undefined);
-  }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
+    replacePaneDocument(undefined);
+  }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr, replacePaneDocument]);
 
   // #endregion Footnotes Pane State
 
@@ -1349,10 +1360,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // document it is handed; seed it now rather than a render later (the reveal effect), or
           // the request resolves against a list that is missing notes added since the last load.
           const editorUsj = editorRef.current?.getUsj();
-          if (editorUsj) {
-            publishedPaneNotesRef.current = undefined;
-            setLiveEditorUsj(correctEditorUsjVersion(editorUsj));
-          }
+          if (editorUsj) replacePaneDocument(editorUsj);
         }
         const index =
           decision.sendPaneFocusRequest || decision.action === 'open-pane-editor'
@@ -1406,6 +1414,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       chapterVerseSeparator,
       verseRangeSeparator,
       defaultFootnoteCaller,
+      replacePaneDocument,
       defaultCrossRefCaller,
       footnoteCallers,
       crossRefCallers,
@@ -1550,8 +1559,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * Function to run to set the editor's USJ content. Also clears annotation info because setting
-   * the editor's USJ silently removes all annotations, and republishes the editor's live document
-   * (see `liveEditorUsj`) so the footnotes pane lists the content that just loaded.
+   * the editor's USJ silently removes all annotations, and, while the footnotes pane is rendered,
+   * republishes the editor's live document (see `liveEditorUsj`) so it lists the content that just
+   * loaded.
    *
    * @param usj The USJ to set in the editor
    */
@@ -1565,11 +1575,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // rest of the chapter.
     if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
     editorRef.current?.setUsj(usj);
-    // The pane now shows this document's notes, so the notes remembered as published no longer
-    // describe it. Kept, they could match a later edit that removes the notes this load added, and
-    // the pane would go on listing notes the text no longer has.
-    publishedPaneNotesRef.current = undefined;
-    setLiveEditorUsj(usj);
+    // A hidden pane is left without a document; showing it fetches the editor's, which is this one
+    // from here on (`getUsj()` returns what `setUsj` was just handed).
+    if (footnotesPaneRenderedRef.current) replacePaneDocument(usj);
     clearAnnotationInfo.current();
     editorChapterKeyRef.current = renderedChapterKeyRef.current;
     setEditorChapterKey(renderedChapterKeyRef.current);
@@ -2925,13 +2933,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // The pane and the text share this web view's iframe, so tab visibility takes both away together:
   // this catch-up is about the pane's own render gate, not about tab activation.
   useEffect(() => {
-    // Unconditional in both directions, and it resets the comparison baseline with it: the notes
-    // remembered from the last time the pane was open say nothing about what it should open onto
-    // now.
-    publishedPaneNotesRef.current = undefined;
-    const editorUsj = footnotesPaneRendered ? editorRef.current?.getUsj() : undefined;
-    setLiveEditorUsj(editorUsj && correctEditorUsjVersion(editorUsj));
-  }, [footnotesPaneRendered]);
+    // Unconditional in both directions: the notes remembered from the last time the pane was open
+    // say nothing about what it should open onto now.
+    replacePaneDocument(footnotesPaneRendered ? editorRef.current?.getUsj() : undefined);
+  }, [footnotesPaneRendered, replacePaneDocument]);
   // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
   // entire layout phase of each render. If a useLayoutEffect fires during a chapter-change render
   // (e.g. footnote-editor closing), this ref still holds the OLD chapter's setter — preventing

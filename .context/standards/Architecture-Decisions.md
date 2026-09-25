@@ -2405,11 +2405,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   rather than only the last-saved USJ, so the pane and `getNoteIndex` always index the same
   document. The typing-path publish (`publishLiveEditorUsjIfNotesChanged`, from
   `handleEditorialUsjChange`) is gated on the pane being rendered and on the notes having changed,
-  so a view with no pane showing keeps the typing hot path free of it; a chapter load
-  (`setEditorUsj`) and the pane becoming shown (including a caller click that reveals it) publish
-  unconditionally, so a hidden pane is at most one load behind and catches up as it is shown. The pane's `listId` changes only when the note count changes, so a content edit keeps the
-  same row's inline editor mounted across re-renders; reordering with an unchanged count is a
-  known, accepted gap in that identity.
+  and a chapter load (`setEditorUsj`) on the pane being rendered, so a view with no pane showing
+  pays for neither; a hidden pane holds no document, and the pane becoming shown (including a
+  caller click that reveals it) fetches the editor's current one. The pane's `listId` changes only
+  when the note count changes, so a content edit keeps the same row's inline editor mounted across
+  re-renders; reordering with an unchanged count is a known, accepted gap in that identity.
 - **Alternatives:**
   - **Host-side DOM class toggling**, re-applying the caller highlight after every `onUsjChange`.
     Rejected: fragile against the editor's own DOM re-creation (collapse toggle, embed re-keying),
@@ -2428,8 +2428,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   footnote editor in the pane has no Save/Cancel — edits apply live (debounced), and ending the
   session flushes whatever is still pending, matching PT9's own pane editing, so an inserted note is
   never discarded when an editing session ends. The popover keeps its Save/Cancel: it applies on
-  Save or when the book or chapter changes, both through `closeAndSave`. Gating the typing-path
-  publish on the pane being rendered means the cost of keeping the pane in sync is paid only while
+  Save or when the book or chapter changes, both through `closeAndSave`. Gating the typing and
+  load publishes on the pane being rendered means the cost of keeping the pane in sync is paid only while
   the pane is showing, in whatever view. The "Auto-show footnote pane" toggle and its persisted
   setting are removed: PT9 has no auto-hide, so the pane hides only when the user hides it (its
   close control, or the Show footnotes menu command), and a caller click reveals a hidden pane only
