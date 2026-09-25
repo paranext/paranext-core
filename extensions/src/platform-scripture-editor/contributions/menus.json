@@ -113,12 +113,6 @@
             "command": "platformScriptureEditor.changeFootnotesPaneLocation"
           },
           {
-            "label": "%webView_platformScriptureEditor_toggleFootnotesAutoShow%",
-            "group": "platformScriptureEditor.footnotesPane",
-            "order": 3,
-            "command": "platformScriptureEditor.toggleFootnotesAutoShow"
-          },
-          {
             "label": "%webView_platformScriptureEditor_zoomIn%",
             "hiddenInterfaceModes": ["power"],
             "localizeNotes": "Scripture editor top menu (Simple mode only) > Zoom > Zoom in. Enlarges the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected. Hidden in Power mode, where the tab's own context menu offers the same item.",

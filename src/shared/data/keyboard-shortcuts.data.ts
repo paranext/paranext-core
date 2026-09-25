@@ -341,7 +341,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the marker typed in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // Space commits what was TYPED, not the highlighted entry: at a collapsed caret it materializes
     // the typed marker; over a selection it wraps only on an exact (case-insensitive) match and
     // otherwise closes without touching the selection. (The Enter-triggered paragraph menu is a
@@ -355,7 +355,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the highlighted entry in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // Enter and Tab are one commit gesture, matching the editor package's own menus. Over a
     // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open). Enter also
     // commits the Enter-triggered paragraph menu — normally through the overlay's own input, and
@@ -369,7 +369,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Move the highlight and widen or narrow the typed filter in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
     // menu when nothing is typed. Marker characters (letters, digits, `+`, `-`) narrow it.
     keys: {
@@ -384,7 +384,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit a closing marker from the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
     // with no terminating space. Over a non-collapsed selection the selected content is replaced,
     // which is what typing a closing marker by hand has always done. Not offered in the
@@ -397,7 +397,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the typed marker and immediately open the markers menu again',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // Commits like Space but without the terminating space, then reopens for the backslash just
     // pressed, so a paired marker is one continuous flow. With nothing typed there is nothing to
     // commit and the backslash lands as an ordinary character.
@@ -650,6 +650,77 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-close-editor',
+    purpose: 'Stop editing the open note in the footnotes pane, keeping the edits',
+    category: 'Editing',
+    // The pane's row editor applies its edits live, so there is nothing to discard - Escape is its
+    // explicit dismissal, and it hands focus back to the note's row.
+    context:
+      "Footnotes pane, in the note row editor or on its own controls (not while the editor's right-click menu is open)",
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-move-between-notes',
+    purpose: 'Move to the previous/next note in the footnotes pane',
+    category: 'Navigation',
+    // Arrow navigation runs only for keystrokes that originate on the list or on a read-only row.
+    // The row being edited hosts a real editor that owns its own arrow keys, and so do that
+    // editor's overlays, which are portalled out of the pane but still bubble their React events
+    // through the list.
+    context: 'Footnotes pane, from the list or a note row',
+    keys: {
+      macOS: '↑ / ↓',
+      windows: '↑ / ↓',
+      linux: '↑ / ↓',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-move-between-rows',
+    purpose: 'Move to the previous/next note row in the footnotes pane',
+    category: 'Navigation',
+    // Every row is its own tab stop rather than the list being one, so Tab walks the notes.
+    context: 'Footnotes pane',
+    keys: {
+      macOS: '⇥ / ⇧⇥',
+      windows: 'Tab / Shift+Tab',
+      linux: 'Tab / Shift+Tab',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-open-note',
+    purpose: 'Open the focused note for editing, or select it where the pane does not edit',
+    category: 'Editing',
+    context: 'Footnotes pane, on a note row',
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-select-note',
+    purpose:
+      'Select the focused note in the footnotes pane without opening it, closing a note open for editing in another row',
+    category: 'Selection',
+    context: 'Footnotes pane, on a note row',
+    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {

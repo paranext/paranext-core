@@ -58,7 +58,10 @@ repo's half for the facts each side holds alone.
 ## 3. Marker palette key semantics
 
 `lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts` is the single
-forwarding table for BOTH the scripture editor web view and the footnote-editor popover. The
+forwarding table for all three consumers: the scripture editor web view, the footnote editor
+component (any host that runs it in editable marker mode), and the footnotes pane's inline row
+editor (Standard view — see `resolveNoteEditingSurface` in
+`extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). The
 per-consumer copies drifted once already; there is one table now.
 
 The palette is **ACTIVE**: the `\` trigger never lands in the document, in any selection shape, and
@@ -90,7 +93,7 @@ Every keyboard handler change here must also update `src/shared/data/keyboard-sh
 
 ---
 
-## 4. The footnote editor popover
+## 4. The footnote editor
 
 `lib/platform-bible-react/src/components/advanced/footnote-editor/`.
 
@@ -139,6 +142,16 @@ Every keyboard handler change here must also update `src/shared/data/keyboard-sh
   onto the note as an attribute, so anything rendering a footnote from `content` alone drops it
   silently. `footnote-item.component.tsx` reads the field and renders the run after the caller, in
   the file's own order.
+- **In Standard view, the same component runs `inline` inside the footnotes pane — there is no
+  popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
+  live-apply re-keys the note in the parent editor, so the host must re-sync its session key from
+  `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new `noteOps` identity
+  for its own live-apply — that reloads the editor mid-typing.
+- **The caller and note-type changes rebuild the note from `getNoteOps`, which reads the live tree
+  unsettled.** Both must settle pending marker edits (`commitPendingMarkerEdits`, skipped while a
+  marker-palette session is open) before reading — the same rule `closeAndSave` and
+  `flushPendingEdits` follow, for the same reason: a mid-rename marker still under the caret would
+  otherwise be read and saved as its stale pre-rename literal.
 
 ---
 

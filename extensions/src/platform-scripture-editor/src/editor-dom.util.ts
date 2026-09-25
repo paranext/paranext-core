@@ -409,6 +409,59 @@ export function clampToScrollRange(
 }
 
 /**
+ * Scrolls `element`'s scroll container so the element is in view, landing where
+ * {@link computeRangeScrollTop} says — except that an element already nearer the container's BOTTOM
+ * edge is aligned there instead, so it travels the shorter distance. Does nothing when the element
+ * is already fully visible or has no scrollable ancestor.
+ *
+ * Serves the two targets that are elements rather than ranges: an annotation and a note's caller.
+ *
+ * @param element The element to bring into view
+ */
+function scrollElementIntoScrollContainer(element: HTMLElement): void {
+  const scrollContainerElement = findScrollContainer(element);
+  if (!scrollContainerElement) return;
+
+  const viewport = {
+    scrollTop: scrollContainerElement.scrollTop,
+    clientHeight: scrollContainerElement.clientHeight,
+    scrollHeight: scrollContainerElement.scrollHeight,
+  };
+
+  // Read the element's rect once; both its top-within-container and its height derive from it.
+  const elementRect = element.getBoundingClientRect();
+  const elementTop = getTopWithinScrollContainer(elementRect, scrollContainerElement);
+  const elementBottom = elementTop + elementRect.height;
+
+  // The top-aligned landing spot, and — by answering `undefined` — whether the element is already
+  // fully visible and needs no scroll at all. Shared with `scrollToRange` so the two cannot drift on
+  // where a target lands or on what counts as "already in view". Aligning to the BOTTOM edge instead
+  // is the one part of the decision below that is this function's own.
+  const topAlignedScrollTop = computeRangeScrollTop({
+    rangeTop: elementTop,
+    rangeBottom: elementBottom,
+    ...viewport,
+  });
+  if (topAlignedScrollTop === undefined) return;
+
+  // Align to whichever edge the element is already closer to, so it travels the shorter distance.
+  const distanceToTop = Math.abs(elementTop - viewport.scrollTop);
+  const distanceToBottom = Math.abs(viewport.scrollTop + viewport.clientHeight - elementBottom);
+  const targetTop =
+    distanceToTop <= distanceToBottom
+      ? topAlignedScrollTop
+      : clampToScrollRange(
+          elementBottom - viewport.clientHeight + VERSE_NUMBER_SCROLL_OFFSET,
+          viewport,
+        );
+
+  scrollContainerElement.scrollTo({
+    behavior: resolveScrollBehavior('smooth'),
+    top: targetTop,
+  });
+}
+
+/**
  * The DOM range of the current selection, when that selection is inside the editor content.
  *
  * Lexical writes the DOM selection when the engine applies a selection whether or not the editor
@@ -802,56 +855,50 @@ export function createPendingCommentCenterAnchorSource(
 export function scrollToAnnotation(id: string): HTMLElement | undefined {
   const annotationElement = getAnnotationElement(id);
 
-  const scrollContainerElement = annotationElement
-    ? findScrollContainer(annotationElement)
-    : undefined;
-
-  // Scroll if we find the annotation
-  if (scrollContainerElement && annotationElement) {
-    const viewport = {
-      scrollTop: scrollContainerElement.scrollTop,
-      clientHeight: scrollContainerElement.clientHeight,
-      scrollHeight: scrollContainerElement.scrollHeight,
-    };
-
-    // Read the annotation's rect once; both its top-within-container and its height derive from it.
-    const annotationRect = annotationElement.getBoundingClientRect();
-    const annotationTop = getTopWithinScrollContainer(annotationRect, scrollContainerElement);
-    const annotationBottom = annotationTop + annotationRect.height;
-
-    // The top-aligned landing spot, and — by answering `undefined` — whether the annotation is
-    // already fully visible and needs no scroll at all. Shared with `scrollToRange` so the two
-    // cannot drift on where a target lands or on what counts as "already in view". An annotation is
-    // the only target that may instead be aligned to the BOTTOM edge, which is the one part of the
-    // decision below that is this function's own.
-    const topAlignedScrollTop = computeRangeScrollTop({
-      rangeTop: annotationTop,
-      rangeBottom: annotationBottom,
-      ...viewport,
-    });
-    if (topAlignedScrollTop === undefined) return annotationElement;
-
-    // Align to whichever edge the annotation is already closer to, so it travels the shorter
-    // distance.
-    const distanceToTop = Math.abs(annotationTop - viewport.scrollTop);
-    const distanceToBottom = Math.abs(
-      viewport.scrollTop + viewport.clientHeight - annotationBottom,
-    );
-    const targetTop =
-      distanceToTop <= distanceToBottom
-        ? topAlignedScrollTop
-        : clampToScrollRange(
-            annotationBottom - viewport.clientHeight + VERSE_NUMBER_SCROLL_OFFSET,
-            viewport,
-          );
-
-    scrollContainerElement.scrollTo({
-      behavior: resolveScrollBehavior('smooth'),
-      top: targetTop,
-    });
-  }
+  if (annotationElement) scrollElementIntoScrollContainer(annotationElement);
 
   return annotationElement;
+}
+
+/**
+ * Scrolls the text so a note's caller is visible.
+ *
+ * @param noteElement The note's element in the Scripture editor (`EditorRef.getElementByKey` of the
+ *   note's key) - resolved by key rather than by a document query, since every mounted editor (the
+ *   footnotes pane's row editor, the note popover's) renders note elements of its own
+ */
+export function scrollToNoteCaller(noteElement: HTMLElement): void {
+  scrollElementIntoScrollContainer(noteElement);
+}
+
+/**
+ * Attribute that marks the footnotes pane's own element, so a query for one of its rows cannot
+ * reach another list in the document (a portalled menu's options are `role="option"` too).
+ */
+export const FOOTNOTES_PANE_ATTRIBUTE = 'data-footnotes-pane';
+
+/**
+ * Puts DOM focus on the footnotes pane's selected row, which is where a row-editing session was
+ * opened from. Call it after ending a session from inside the row editor (Escape): the editor is
+ * unmounting, so without this focus falls to the document body and the next keystroke goes
+ * nowhere.
+ *
+ * Does nothing while this document does not hold focus. A session can also end because the chapter
+ * changed under it, driven from the toolbar or another view, and focusing a row then would pull
+ * focus out of wherever the user is working.
+ *
+ * @returns The selected row element, or `undefined` when the pane has no selected row or the
+ *   document does not hold focus
+ */
+export function focusPaneSelectedRow(): HTMLElement | undefined {
+  if (!document.hasFocus()) return undefined;
+  const row =
+    document.querySelector<HTMLElement>(
+      `[${FOOTNOTES_PANE_ATTRIBUTE}] [role="option"][aria-selected="true"]`,
+    ) ?? undefined;
+  row?.focus();
+
+  return row;
 }
 
 /**
