@@ -92,10 +92,20 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   };
 });
 
+/**
+ * Records every `setUsj` the panel pushes into the editor, across editor instances.
+ *
+ * Shared rather than created per instance because the panel unmounts `Editorial` for its message
+ * states and remounts it on the way back to content. With a per-instance spy nobody captures, "the
+ * editor is on screen" is the only observable fact, which a permanently blank editor also
+ * satisfies.
+ */
+const setUsjSpy = vi.fn();
+
 // @eten-tech-foundation/platform-editor — stub the editor so jsdom never needs to render it
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
   Editorial: React.forwardRef((_props: Record<string, unknown>, ref: React.Ref<unknown>) => {
-    React.useImperativeHandle(ref, () => ({ setUsj: vi.fn() }));
+    React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
     return <div data-testid="editorial" />;
   }),
 }));
@@ -251,6 +261,8 @@ function resetPanelHooks() {
   mockUseInstallDblResource.mockImplementation(() => vi.fn(async () => {}));
   mockUseProjectData.mockReturnValue({ ChapterUSJ: vi.fn(() => [undefined, false]) });
   mockFindCachedDblResource.mockReturnValue(undefined);
+  // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
+  setUsjSpy.mockClear();
 }
 
 beforeEach(resetPanelHooks);
@@ -423,7 +435,7 @@ describe('ResourceTextPanel — install against a stale catalog', () => {
     setCatalog([INSTALLED_WEB]);
     rerender(<ResourceTextPanel {...props} />);
 
-    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalledWith(CHAPTER_USJ));
     expect(mockUseProjectData).toHaveBeenLastCalledWith('platformScripture.USJ_Chapter', 'WEB1');
   });
 });
