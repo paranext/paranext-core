@@ -164,3 +164,29 @@ describe('keyboard-shortcuts.data Zoom category', () => {
     expect(existsSync(path.join(process.cwd(), location))).toBe(true);
   });
 });
+
+describe('paragraph marker menu chord', () => {
+  const entry = rootKeyboardShortcuts.find(
+    (shortcut) => shortcut.id === 'scripture-open-paragraph-menu-from-marker',
+  );
+
+  it('catalogs Enter first and Alt+Down as the alternative', () => {
+    expect(entry?.keys).toEqual({
+      macOS: '⏎ / ⌥↓',
+      windows: 'Enter / Alt+↓',
+      linux: 'Enter / Alt+↓',
+    });
+  });
+
+  it('shows no menu hint, since the chord works only on a selected paragraph marker', () => {
+    expect(entry).toBeDefined();
+    expect(entry?.command).toBeUndefined();
+  });
+
+  it('points only at files that exist', () => {
+    expect(entry?.locations.length).toBeGreaterThan(0);
+    entry?.locations.forEach((location) =>
+      expect(existsSync(path.join(process.cwd(), location))).toBe(true),
+    );
+  });
+});
