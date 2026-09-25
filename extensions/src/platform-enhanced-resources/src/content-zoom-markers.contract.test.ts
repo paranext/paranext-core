@@ -109,6 +109,17 @@ describe('content zoom markers (Enhanced Resources)', () => {
     );
   });
 
+  it('names the footnotes area on the zoom badge from the view’s string bag', () => {
+    // Without the label the badge shows a bare level that reads as the Bible text's own; a key
+    // missing from the bag leaves the label empty, with the same result.
+    expect(webView).toMatch(
+      /<EnhancedResourceFootnotesPane\b(?:=>|[^>])*\bzoomAreaLabel=\{String\( ?stringsBag\['%enhancedResources_footnotesPane_zoomAreaLabel%'\] \?\? '',? ?\)\}/,
+    );
+    expect(webView).toMatch(
+      /ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object\.freeze\(\[[^\]]*'%enhancedResources_footnotesPane_zoomAreaLabel%'/,
+    );
+  });
+
   it('uses exactly the main, entries and footnotes areas across the whole extension', () => {
     // Swept across every source file: a ContentZoomRoot added to any other component would nest
     // inside `main` or `footnotes`, and one around the entries provider would contain its text
