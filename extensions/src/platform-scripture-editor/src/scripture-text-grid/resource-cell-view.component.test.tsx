@@ -864,7 +864,7 @@ describe('ResourceCellView zoom menu shortcut hints', () => {
     expect(within(reset).getByText('+').tagName).toBe('SPAN');
   });
 
-  it('shows the macOS chord as adjacent keycaps with no separator', () => {
+  it('shows each zoom item’s macOS chord as adjacent keycaps with no separator', () => {
     Object.defineProperty(window.navigator, 'userAgent', {
       value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
       configurable: true,
@@ -887,6 +887,18 @@ describe('ResourceCellView zoom menu shortcut hints', () => {
     expect(within(zoomIn).getByText('⌘').tagName).toBe('KBD');
     expect(within(zoomIn).getByText('=').tagName).toBe('KBD');
     expect(within(zoomIn).queryByText('+')).not.toBeInTheDocument();
+
+    // content-zoom-out on macOS: ⌘-
+    const zoomOut = zoomMenuItem('Zoom out');
+    expect(within(zoomOut).getByText('⌘').tagName).toBe('KBD');
+    expect(within(zoomOut).getByText('-').tagName).toBe('KBD');
+    expect(within(zoomOut).queryByText('+')).not.toBeInTheDocument();
+
+    // content-zoom-reset on macOS: ⌘0
+    const reset = zoomMenuItem('Reset zoom');
+    expect(within(reset).getByText('⌘').tagName).toBe('KBD');
+    expect(within(reset).getByText('0').tagName).toBe('KBD');
+    expect(within(reset).queryByText('+')).not.toBeInTheDocument();
   });
 });
 

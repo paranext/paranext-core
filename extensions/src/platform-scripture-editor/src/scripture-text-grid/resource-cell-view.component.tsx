@@ -8,6 +8,7 @@ import {
   Button,
   ContentZoomRoot,
   isMacOs,
+  isWindows,
   ShortcutKeys,
   Spinner,
   Tooltip,
@@ -17,7 +18,13 @@ import {
   useTruncationTooltip,
 } from 'platform-bible-react';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
-import { formatReplacementString } from 'platform-bible-utils';
+import {
+  CONTENT_ZOOM_IN_SHORTCUT,
+  CONTENT_ZOOM_OUT_SHORTCUT,
+  CONTENT_ZOOM_RESET_SHORTCUT,
+  formatReplacementString,
+  type ContentZoomShortcut,
+} from 'platform-bible-utils';
 import { ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 import {
@@ -111,6 +118,13 @@ export type ResourceCellViewProps = {
   onReorderKeyDown?: (event: KeyboardEvent) => void;
 };
 
+/** The spelling of `shortcut` for the operating system the app is running on. */
+function getShortcutForThisOs(shortcut: ContentZoomShortcut): string {
+  if (isMacOs()) return shortcut.macOS;
+  if (isWindows()) return shortcut.windows;
+  return shortcut.linux;
+}
+
 function ZoomItemsShared({
   labels,
   canZoomIn,
@@ -129,14 +143,11 @@ function ZoomItemsShared({
   onResetZoom?: () => void;
 }) {
   // These items run the platform's own platform.webViewContentZoomIn/Out/Reset commands (see
-  // use-resource-content-zoom.hook.ts), so the hints below mirror that command's catalog entry in
-  // src/shared/data/keyboard-shortcuts.data.ts (core, which extension code cannot import — see
-  // CONTENT_ZOOM_LEVELS_STATE_KEY in use-resource-content-zoom.hook.ts for the same restatement).
-  // Windows and Linux share one spelling, so only macOS needs its own branch.
-  const isMac = isMacOs();
-  const zoomInHint = isMac ? '⌘=' : 'Ctrl++';
-  const zoomOutHint = isMac ? '⌘-' : 'Ctrl+-';
-  const resetHint = isMac ? '⌘0' : 'Ctrl+0';
+  // use-resource-content-zoom.hook.ts), so they show the chords core's keyboard-shortcuts catalog
+  // lists for those commands; both read them from platform-bible-utils.
+  const zoomInHint = getShortcutForThisOs(CONTENT_ZOOM_IN_SHORTCUT);
+  const zoomOutHint = getShortcutForThisOs(CONTENT_ZOOM_OUT_SHORTCUT);
+  const resetHint = getShortcutForThisOs(CONTENT_ZOOM_RESET_SHORTCUT);
 
   return (
     <>

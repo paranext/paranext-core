@@ -1,3 +1,8 @@
+import {
+  CONTENT_ZOOM_IN_SHORTCUT,
+  CONTENT_ZOOM_OUT_SHORTCUT,
+  CONTENT_ZOOM_RESET_SHORTCUT,
+} from 'platform-bible-utils';
 import type { KeyboardShortcutEntry } from '@shared/data/keyboard-shortcuts.model';
 
 /**
@@ -234,7 +239,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // The macOS View menu binds ⌘= (what it renders) and, through a hidden duplicate item, ⇧⌘= —
     // which is how a Mac reports ⌘+. The in-view and window-chrome handlers also accept `=`, the
     // numpad `+`, and any Shift state.
-    keys: { macOS: '⌘=', windows: 'Ctrl++', linux: 'Ctrl++' },
+    keys: CONTENT_ZOOM_IN_SHORTCUT,
     locations: [
       'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
@@ -252,7 +257,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a later focus move or any key other than a modifier pressed on its own or a zoom chord); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
     // The handler also accepts the numpad `-` key. Shift is accepted too, which is what puts this
     // chord within reach on AZERTY and Czech layouts, where the top-row key is shifted.
-    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
+    keys: CONTENT_ZOOM_OUT_SHORTCUT,
     locations: [
       'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
@@ -273,7 +278,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // reports itself as Insert and is left to Chromium's legacy Copy chord. Shift is accepted too,
     // which is what puts this chord within reach on AZERTY and Czech layouts, where the top-row key
     // is shifted.
-    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
+    keys: CONTENT_ZOOM_RESET_SHORTCUT,
     locations: [
       'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',

@@ -39,9 +39,8 @@ renderers (`ShortcutKeys` from `platform-bible-react`) render it as one `Kbd` pe
   that show it, so adding or reusing one needs a deliberate update. It also rejects a chord shared
   with a DIFFERENT main-process entry; an entry's own main-process location is excluded from that
   check, since a handler running the entry's own command cannot make its hint lie.
-- A menu built by hand rather than through the menu data service — one that runs a platform
-  command directly without going through `command`/`shortcut` — cannot read this catalog either
-  (core-only) and must restate its chord as a literal string instead. The Text Collection's zoom
-  menu (`ZoomItemsShared` in `extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx`)
-  is the one example today; `keyboard-shortcuts.data.test.ts` pins its restated strings against
-  the catalog's `content-zoom-in/out/reset` entries, so keep both in sync by hand.
+- A menu built in extension code rather than served by the menu data service gets no hint and
+  cannot import this core-only catalog. Put the chord in `platform-bible-utils` next to the related
+  constants, and have both the catalog entry's `keys` and the menu read it from there, so the two
+  cannot drift (as of 2026-09, the Text Collection's zoom items and the `content-zoom-*` entries
+  share `CONTENT_ZOOM_*_SHORTCUT` from `content-zoom.util.ts`).
