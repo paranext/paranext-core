@@ -686,17 +686,20 @@ describe('OS-language default on fresh first-run', () => {
     expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
   });
 
-  test('replaces the default English with the OS language', async () => {
-    stubSettings({ firstRunComplete: false, interfaceLanguage: ['en'] });
-    mockResolveReg.mockResolvedValue('invalid');
-    mockGetCurrentLocale.mockReturnValue('es-419');
-    mockGetSetupDialogLanguages.mockResolvedValue({
-      en: { autonym: 'English' },
-      es: { autonym: 'Español' },
-    });
-    await resolveFirstRunState();
-    expect(mockSet).toHaveBeenCalledWith('platform.interfaceLanguage', ['es']);
-  });
+  test.each([[['en']], [[]]])(
+    'replaces the default value (%j) with the OS language',
+    async (interfaceLanguage) => {
+      stubSettings({ firstRunComplete: false, interfaceLanguage });
+      mockResolveReg.mockResolvedValue('invalid');
+      mockGetCurrentLocale.mockReturnValue('es-419');
+      mockGetSetupDialogLanguages.mockResolvedValue({
+        en: { autonym: 'English' },
+        es: { autonym: 'Español' },
+      });
+      await resolveFirstRunState();
+      expect(mockSet).toHaveBeenCalledWith('platform.interfaceLanguage', ['es']);
+    },
+  );
 
   test.each([[['fr']], [['en', 'fr']], [['es', 'en']]])(
     'keeps an interface language that is already set (%j) instead of the OS language',
@@ -774,27 +777,16 @@ describe('OS-language default on fresh first-run', () => {
     expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
   });
 
-  test('skips the write when the OS match equals the current primary language (read as ["en"])', async () => {
-    stubSettings({ firstRunComplete: false });
+  test('skips the write when the best OS match is English, the default', async () => {
+    stubSettings({ firstRunComplete: false, interfaceLanguage: ['en'] });
     mockResolveReg.mockResolvedValue('invalid');
     mockGetCurrentLocale.mockReturnValue('en-US');
     mockGetSetupDialogLanguages.mockResolvedValue({
       en: { autonym: 'English' },
     });
-    // Override the stubSettings mock to return ['en'] for platform.interfaceLanguage.
-    // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable
-    // to the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
-    // setting this store reads has a case above (no member of SettingTypes admits undefined).
-    mockGet.mockImplementation(async (key: string) => {
-      if (key === 'platform.interfaceMode') return 'simple';
-      if (key === 'platform.firstRunComplete') return false;
-      if (key === 'platform.interfaceLanguage') return ['en'];
-      return undefined;
-    });
     await resolveFirstRunState();
-    // Prove the seed ran (lookup happened)
+    // Positive control: the seed ran (the lookup happened) but found nothing to change.
     expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
-    // but the skip fired because best 'en' === currentPrimary 'en' read from the real array
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
     expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
   });
