@@ -36,7 +36,8 @@ export type KeyboardShortcutEntry = {
   /**
    * The PAPI command the chord runs. Menu items that run it show the shortcut as a hint. Set it
    * only if the chord works everywhere those items appear — not for a chord the main process
-   * handles regardless of focus, or one that works only in some editor views.
+   * handles regardless of focus, or one that works only in some editor views — unless the
+   * main-process handler runs this SAME command, in which case the hint cannot lie.
    */
   command?: CommandNames;
 };
