@@ -1,9 +1,8 @@
-import { isCleanCloseCode } from '@shared/data/rpc.model';
 import {
-  createPapiPortCloseFrame,
-  createSyntheticCloseEvent,
-  isPapiPortCloseFrame,
-} from '@shared/data/papi-port.model';
+  createPortCloseHandshake,
+  PortCloseHandshake,
+} from '@shared/data/papi-port-close-handshake';
+import { SyntheticCloseEvent } from '@shared/data/papi-port.model';
 import { bindClassMethods } from '@shared/utils/util';
 
 /**
@@ -43,7 +42,6 @@ export type PapiPortProvider = (handlers: {
 type SocketEventName = keyof WebSocketEventMap;
 type SocketListener = (ev: unknown) => void;
 
-const PORT_CLOSED_WITHOUT_FRAME_REASON = 'port closed without a close frame';
 const PAGE_UNLOADING_REASON = 'page unloading';
 
 /**
@@ -99,7 +97,7 @@ export class MessagePortWebSocket implements WebSocket {
   /* eslint-enable no-null/no-null */
 
   private port: MessagePortLike | undefined;
-  private hasClosed = false;
+  private readonly handshake: PortCloseHandshake;
   private readonly listeners: Record<SocketEventName, Set<SocketListener>> = {
     open: new Set(),
     message: new Set(),
@@ -115,6 +113,12 @@ export class MessagePortWebSocket implements WebSocket {
    */
   constructor(provider: PapiPortProvider, options: { addPageHideListener?: boolean } = {}) {
     bindClassMethods.call(this);
+    // Before a port arrives there is nothing to post on or close, so a close then only reports
+    this.handshake = createPortCloseHandshake(this, {
+      postFrame: (frame) => this.port?.postMessage(frame),
+      closePort: () => this.port?.close(),
+      onClosed: this.onClosed,
+    });
     if (options.addPageHideListener !== false && typeof window !== 'undefined')
       window.addEventListener('pagehide', () => this.close(1001, PAGE_UNLOADING_REASON));
     provider({
@@ -134,15 +138,8 @@ export class MessagePortWebSocket implements WebSocket {
 
   /** @experimental */
   close(code: number = 1000, reason: string = ''): void {
-    if (this.hasClosed) return;
-    if (this.port) {
-      this.port.postMessage(createPapiPortCloseFrame(code, reason));
-      this.finish(code, reason, isCleanCloseCode(code));
-      this.port.close();
-      return;
-    }
-    // Closed before a port arrived: report it, and refuse the port if one turns up later
-    this.finish(code, reason, isCleanCloseCode(code));
+    // Closed before a port arrived, this only reports the close; `acceptPort` then refuses the port
+    this.handshake.close(code, reason);
   }
 
   /** @experimental */
@@ -174,7 +171,7 @@ export class MessagePortWebSocket implements WebSocket {
   }
 
   private acceptPort(port: MessagePortLike, windowId: string): void {
-    if (this.port || this.hasClosed) {
+    if (this.port || this.handshake.isClosed) {
       // Already have one, or already gave up: this port will never be used, so do not leak it
       port.close();
       return;
@@ -191,35 +188,29 @@ export class MessagePortWebSocket implements WebSocket {
   }
 
   private failToOpen(reason: string): void {
-    if (this.hasClosed) return;
+    if (this.handshake.isClosed) return;
     this.emit('error', { type: 'error', target: this, message: reason });
-    this.finish(1006, reason, false);
+    // No port yet, so this posts nothing and reports 1006, which is not a clean code
+    this.handshake.close(1006, reason);
   }
 
   private onPortMessage({ data }: { data: unknown }): void {
-    if (this.hasClosed) return;
-    if (isPapiPortCloseFrame(data)) {
-      this.finish(data.code, data.reason, isCleanCloseCode(data.code));
-      this.port?.close();
-      return;
-    }
+    if (this.handshake.handleIncoming(data)) return;
     this.emit('message', { type: 'message', target: this, data });
   }
 
   private onPortClose(): void {
-    if (this.hasClosed) return;
-    this.finish(1006, PORT_CLOSED_WITHOUT_FRAME_REASON, false);
+    this.handshake.handlePortClosed();
   }
 
-  /** Record the close, detach from the port, and tell close listeners exactly once */
-  private finish(code: number, reason: string, wasClean: boolean): void {
-    this.hasClosed = true;
+  /** Detach from the port and tell close listeners; the handshake calls this exactly once */
+  private onClosed(event: SyntheticCloseEvent): void {
     this.readyState = 3;
     if (this.port) {
       this.port.removeEventListener('message', this.onPortMessage);
       this.port.removeEventListener('close', this.onPortClose);
     }
-    this.emit('close', createSyntheticCloseEvent(this, code, reason, wasClean));
+    this.emit('close', event);
   }
 
   private emit(type: SocketEventName, event: unknown): void {
