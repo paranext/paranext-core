@@ -822,43 +822,53 @@ describe('ResourceCellView zoom menu shortcut hints', () => {
     });
   });
 
-  it('shows each zoom item’s Windows/Linux chord as separate keycaps, matching the content-zoom catalog entries', () => {
-    renderCells(
-      <ResourceCellView
-        state="ready"
-        zoomArea={ZOOM_AREA}
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={menuStrings}
-        editor={<span>verse</span>}
-        zoomMenuLabels={zoomMenuLabels}
-      />,
-    );
-    fireEvent.contextMenu(screen.getByText('verse'));
+  it.each([
+    ['Linux', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'],
+    ['Windows', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'],
+  ])(
+    'shows each zoom item’s %s chord as separate keycaps, matching the content-zoom catalog entries',
+    (_os, userAgent) => {
+      Object.defineProperty(window.navigator, 'userAgent', {
+        value: userAgent,
+        configurable: true,
+      });
+      renderCells(
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          editor={<span>verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />,
+      );
+      fireEvent.contextMenu(screen.getByText('verse'));
 
-    // content-zoom-in: Ctrl++ -> keycaps ['Ctrl', '+'], so one "+" is the separator (a SPAN) and
-    // the other is the second keycap's own Kbd.
-    const zoomIn = zoomMenuItem('Zoom in');
-    expect(within(zoomIn).getByText('Ctrl').tagName).toBe('KBD');
-    expect(
-      within(zoomIn)
-        .getAllByText('+')
-        .map((element) => element.tagName)
-        .sort(),
-    ).toEqual(['KBD', 'SPAN']);
+      // content-zoom-in: Ctrl++ -> keycaps ['Ctrl', '+'], so one "+" is the separator (a SPAN) and
+      // the other is the second keycap's own Kbd.
+      const zoomIn = zoomMenuItem('Zoom in');
+      expect(within(zoomIn).getByText('Ctrl').tagName).toBe('KBD');
+      expect(
+        within(zoomIn)
+          .getAllByText('+')
+          .map((element) => element.tagName)
+          .sort(),
+      ).toEqual(['KBD', 'SPAN']);
 
-    // content-zoom-out: Ctrl+-
-    const zoomOut = zoomMenuItem('Zoom out');
-    expect(within(zoomOut).getByText('Ctrl').tagName).toBe('KBD');
-    expect(within(zoomOut).getByText('-').tagName).toBe('KBD');
-    expect(within(zoomOut).getByText('+').tagName).toBe('SPAN');
+      // content-zoom-out: Ctrl+-
+      const zoomOut = zoomMenuItem('Zoom out');
+      expect(within(zoomOut).getByText('Ctrl').tagName).toBe('KBD');
+      expect(within(zoomOut).getByText('-').tagName).toBe('KBD');
+      expect(within(zoomOut).getByText('+').tagName).toBe('SPAN');
 
-    // content-zoom-reset: Ctrl+0
-    const reset = zoomMenuItem('Reset zoom');
-    expect(within(reset).getByText('Ctrl').tagName).toBe('KBD');
-    expect(within(reset).getByText('0').tagName).toBe('KBD');
-    expect(within(reset).getByText('+').tagName).toBe('SPAN');
-  });
+      // content-zoom-reset: Ctrl+0
+      const reset = zoomMenuItem('Reset zoom');
+      expect(within(reset).getByText('Ctrl').tagName).toBe('KBD');
+      expect(within(reset).getByText('0').tagName).toBe('KBD');
+      expect(within(reset).getByText('+').tagName).toBe('SPAN');
+    },
+  );
 
   it('shows each zoom item’s macOS chord as adjacent keycaps with no separator', () => {
     Object.defineProperty(window.navigator, 'userAgent', {
