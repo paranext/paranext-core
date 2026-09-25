@@ -177,16 +177,21 @@ export function resolveFootnotesPaneAutoVisibility({
  * A still-live selection is left completely alone, and with no snapshot there is nothing to restore
  * (`focus()` keeps its default behavior).
  *
+ * A selected paragraph marker counts as a live selection too. `getSelection()` reports `undefined`
+ * for it, because a USJ selection is a text range and cannot represent a selected node, so without
+ * asking `getSelectedParaMarker()` this would restore the last caret over it and the paragraph
+ * dropdown would retag whichever paragraph that caret was in.
+ *
  * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
  * @param lastFocusOutSelection The selection captured when focus last left the editor (a focusout
  *   listener reads it synchronously, ahead of the blur-path nulling), or `undefined` when none has
  *   been captured
  */
 export function restoreSelectionIfLost(
-  editor: Pick<EditorRef, 'getSelection' | 'setSelection'> | null,
+  editor: Pick<EditorRef, 'getSelection' | 'setSelection' | 'getSelectedParaMarker'> | null,
   lastFocusOutSelection: SelectionRange | undefined,
 ): void {
-  if (!editor || editor.getSelection()) return;
+  if (!editor || editor.getSelection() || editor.getSelectedParaMarker()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
 }
 
