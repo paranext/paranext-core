@@ -88,8 +88,9 @@ export const platformSettings: SettingsContribution = [
 const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'> = async (
   newValue: string[],
 ): Promise<boolean> => {
-  // Every language with a locale file is valid, offered or not, so tests, tooling and developers
-  // can still select a language that is not offered to users.
+  // Accept any language with a locale file, not only offered ones. Every write validates the whole
+  // list, so a user who already has a hidden language (primary or fallback) must still be able to
+  // save; and testers and translators set hidden languages on purpose.
   const validLanguages = await getAllLoadedInterfaceLanguages();
   return (
     typeof newValue === 'object' &&

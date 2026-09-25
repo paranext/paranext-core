@@ -3885,32 +3885,45 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
 
-## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit host-side allowlist, not a coverage rule
+## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
 
-- **Date:** 2026-09-24
+- **Date:** 2026-09-24 (amended 2026-09-25)
 - **Status:** Accepted
-- **Context:** Locale files ship for languages at very different stages (as of 2026-09-24: `es`
-  ~97% of the app's strings, `fr`/`zh-*` ~6%, `km` 0%). The first-run setup-dialog threshold
-  (`setup-dialog-languages.util.ts` `computeSetupDialogLanguages`) only measures the `%firstRun_`
-  namespace, so a French or Chinese OS was auto-switched into a mostly-English UI. Product decided
-  to offer only English and Spanish for the Nov 2026 release (PT-4751).
-- **Decision:** `OFFERED_INTERFACE_LANGUAGES` in `src/shared/data/interface-languages.data.ts`
-  filters the loaded locales inside the localization service's `getAvailableInterfaceLanguages`
-  and `getSetupDialogLanguages`, so every picker and the OS-locale default see only offered
-  languages. Locale files, string resolution and the setup-dialog threshold are unchanged. The
-  `platform.interfaceLanguage` validator accepts every language with a locale file
-  (`getAllLoadedInterfaceLanguages`), and each picker keeps the user's current language(s) visible
-  via `includeCurrentLanguages` (`src/renderer/services/include-current-languages.ts`), so a hidden
-  language that is already set is honored, never reset.
-- **Alternatives:** Filtering in each renderer surface (four places to keep in sync; PAPI consumers
-  would still see hidden languages). Excluding hidden locale files from the build (removes the only
-  way to test those translations; re-enabling means restoring assets). A coverage threshold (the
-  only existing one measures the setup dialog, which is what caused the bad auto-pick). Resetting a
-  hidden language to English on startup (overrides deliberate testers and translators every
-  launch).
-- **Consequences:** Offering a language is a one-line change. PT-4457 (offer languages by
-  translation coverage) is expected to supersede the list; its rule must measure app-wide coverage,
-  not only `%firstRun_`. Revisit when French is ready.
+- **Context:** Locale files ship for languages at very different stages. As of 2026-09-24, `es`
+  covered ~97% of the core strings (~75% app-wide, counting bundled extensions), `fr`/`zh-*` ~6%,
+  and `km` 0%. The first-run setup-dialog threshold (`setup-dialog-languages.util.ts`
+  `computeSetupDialogLanguages`) only measures the `%firstRun_` namespace, so a French or Chinese
+  OS was auto-switched into a mostly-English UI. Product decided to offer only English and Spanish
+  for the Nov 2026 release (PT-4751).
+- **Decision:** `OFFERED_INTERFACE_LANGUAGES` (`src/shared/data/interface-languages.data.ts`)
+  filters `getAvailableInterfaceLanguages` and `getSetupDialogLanguages`, so every picker and the
+  OS-locale default see only offered languages. Locale files, string resolution and the
+  setup-dialog threshold are unchanged. The `platform.interfaceLanguage` validator accepts any
+  loaded locale (`getAllLoadedInterfaceLanguages`), so a hidden language that is already set is
+  honored, never reset:
+  - Each picker keeps the current language listed (`includeCurrentLanguages`): Settings lists every
+    stored tag, since it shows the fallbacks too; the popover and the first-run step list only the
+    primary.
+  - Picking a language writes one value in all three pickers (`switchInterfaceLanguage`): the
+    chosen language first, then the other current languages that are offered. A hidden language is
+    dropped when the user switches away from it, since no picker can remove a fallback.
+  - The first-run OS-locale default writes only while the setting is still unset or `['en']`.
+  - Some UI keeps the old language until restart (the main menu bar, PT-4503; the Settings labels),
+    so Settings and the popover offer a restart after a change of primary language. The first-run
+    step does not.
+- **Alternatives:** Filtering in each renderer surface (several places to keep in sync; PAPI
+  consumers would still see hidden languages). Excluding hidden locale files from the build (removes
+  the only way to test those translations; re-enabling means restoring assets). A coverage threshold
+  (the only existing one measures the setup dialog, which is what caused the bad auto-pick).
+  Resetting a hidden language to English on startup (overrides deliberate testers and translators
+  every launch). Keeping hidden languages as fallbacks after a switch (they could not be removed
+  again in any picker).
+- **Consequences:** Offering a language is a one-line change; `src/node/data/offered-interface-languages.test.ts`
+  fails if an offered tag has no locale file or misses the setup-dialog threshold. The public
+  `getAvailableInterfaceLanguages` now means "offered", not "every locale file"; PAPI has no way to
+  list hidden languages. PT-4457 (offer languages by translation coverage) is expected to supersede
+  the list; its rule must measure app-wide coverage, not only `%firstRun_`. Revisit when French is
+  ready.
 
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
