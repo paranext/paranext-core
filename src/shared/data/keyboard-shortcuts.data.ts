@@ -529,6 +529,25 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
+  {
+    id: 'scripture-open-paragraph-menu-from-marker',
+    purpose: 'Open the paragraph style menu to change the selected paragraph marker',
+    category: 'Editing',
+    // Handled inside the editor library that ships as the `@eten-tech-foundation/platform-editor`
+    // package: its `ParaMarkerSelectionPlugin` claims Enter and Alt+Down from a `KEY_DOWN_COMMAND`
+    // handler only while a paragraph marker is selected (by clicking its gutter glyph in the
+    // paragraph-structure view), and asks the web view to open its toolbar paragraph menu through
+    // `onParaMarkerMenuRequest`. `locations` names the in-repo code that answers that request.
+    // No `command`: the chord does nothing unless a paragraph marker is selected.
+    context:
+      'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
+    keys: { macOS: '⏎ / ⌥↓', windows: 'Enter / Alt+↓', linux: 'Enter / Alt+↓' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/use-paragraph-menu-open-state.hook.ts',
+      'extensions/src/platform-scripture-editor/src/paragraph-style-trigger.component.tsx',
+    ],
+  },
   // The editor's arrow-key caret movement (verse hops, note boundaries, the two caret stops
   // around an \fp span's rendered line break — all in the scripture-editors repo's
   // ArrowNavigationPlugin) is deliberately NOT cataloged: arrow keys moving the caret in a
