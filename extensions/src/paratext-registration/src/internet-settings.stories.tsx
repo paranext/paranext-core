@@ -77,6 +77,29 @@ export const Default: Story = {
   decorators: [createDecorator({})],
 };
 
+/**
+ * The stored setting names an option this app does not implement yet. `InternetSettings.xml` is
+ * seeded once from a co-installed Paratext 9 on first launch, so this is what an inherited file can
+ * look like. The row stays selected — the panel never silently swaps it — and a banner says why
+ * nothing acts on it until the user picks an available option.
+ */
+export const UnsupportedStoredValue: Story = {
+  decorators: [
+    createDecorator({
+      initialSettings: {
+        permittedInternetUse: 'Disabled',
+        selectedServer: 'Production',
+        proxyPort: 0,
+      },
+      savedInternetSettings: {
+        permittedInternetUse: 'Disabled',
+        selectedServer: 'Production',
+        proxyPort: 0,
+      },
+    }),
+  ],
+};
+
 /** Initial load in flight — `savedInternetSettings` is undefined; both buttons are disabled. */
 export const Loading: Story = {
   decorators: [createDecorator({ savedInternetSettings: undefined, isFormDisabled: true })],

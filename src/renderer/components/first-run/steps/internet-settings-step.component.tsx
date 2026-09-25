@@ -5,6 +5,7 @@ import {
   DEVELOPER_SECTION_STRING_KEYS,
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+  isSupportedInternetUse,
 } from 'platform-bible-react/experimental';
 import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
@@ -18,16 +19,23 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { StepLoading } from '../step-loading.component';
+import { WizardStepHeading } from '../wizard-step-heading.component';
 
 const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
-// `internetSettings_*` keys come from the paratext-registration extension, `firstRun_*` from core
-// (assets/localization). Both merge in the combiner, so the extension keys need no en.json entry.
+// `firstRun_*` keys come from core (assets/localization), `internetSettings_*` and
+// `paratextRegistration_*` from the paratext-registration extension. Both merge in the combiner, so
+// the extension keys need no en.json entry.
 const STRING_KEYS: LocalizeKey[] = [
   '%internetSettings_button_retry%',
+  // The core wizard keys, not the extension's panel strings: these are translated in every language
+  // core ships (fr, zh-hans, zh-hant as well as en/es), and their English already reads "Internet &
+  // connectivity" — the same headline the standalone panel shows, so the two surfaces match.
+  '%firstRun_step_internetSettings_heading%',
+  // The panel's subtitle clipped to its first sentence: the wizard has a footer to keep in view, so
+  // it drops the app-scope/Paratext-9 caveats the roomier panel spells out.
   '%firstRun_step_internetSettings_body%',
   '%firstRun_step_internetSettings_connecting%',
-  '%firstRun_step_internetSettings_heading%',
   '%firstRun_step_internetSettings_loadError%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   ...DEVELOPER_SECTION_STRING_KEYS,
@@ -67,14 +75,17 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
     if (provider === undefined) setCanProceed?.(false);
   }, [provider, setCanProceed]);
 
-  // The heading sits outside the provider/loading branches so it is stable across every state of
-  // the step — the step's identity shouldn't appear only once the settings finish loading.
   return (
+    // The heading wraps every state so it holds its place instead of popping in once the provider
+    // resolves. This step keeps its own layout rather than using WizardStepForm because it relies on
+    // the shell's footer, not a primary button — so it renders the shared heading directly.
     <div className="tw:flex tw:flex-col tw:gap-3">
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        <h2 className="tw:text-base tw:font-medium">
+      {/* Heading and lead-in share one wrapper so the outer gap-3 doesn't split them apart —
+          same pairing the standalone dialog uses. */}
+      <div>
+        <WizardStepHeading>
           {localizedStrings['%firstRun_step_internetSettings_heading%']}
-        </h2>
+        </WizardStepHeading>
         <p className="tw:text-sm tw:text-muted-foreground">
           {localizedStrings['%firstRun_step_internetSettings_body%']}
         </p>
@@ -143,7 +154,9 @@ function InternetSettingsLoaded({
   // Sync the local mirror from the provider value. While loading (value is still the default) or
   // while a save is pending/failed, handleChange and the loading render own the state — defer. Once
   // a real value is in, enable Next; if the read is an error, keep Next disabled so the wizard can't
-  // advance past an unloaded step.
+  // advance past an unloaded step. A stored value the app cannot honor (see isSupportedInternetUse)
+  // also holds Next back: the list shows it selected under a banner, and the user has to replace it
+  // with something that will actually take effect before the wizard moves on.
   useEffect(() => {
     if (isLoading || isSaving || saveError) return;
     if (isPlatformError(value)) {
@@ -152,7 +165,7 @@ function InternetSettingsLoaded({
     }
     setSettings(value);
     lastGood.current = value;
-    setCanProceed?.(true);
+    setCanProceed?.(isSupportedInternetUse(value.permittedInternetUse));
   }, [value, isLoading, isSaving, saveError, setCanProceed]);
 
   const handleChange = useCallback(
@@ -173,7 +186,9 @@ function InternetSettingsLoaded({
         if (!isMounted.current) return;
         lastGood.current = next;
         setIsSaving(false);
-        setCanProceed?.(true);
+        // Changing the server while an unsupported internet-use value is still stored must not
+        // unlock Next, so re-derive it from what was actually saved.
+        setCanProceed?.(isSupportedInternetUse(next.permittedInternetUse));
       } catch (err: unknown) {
         if (!isMounted.current) return;
         setSettings(lastGood.current); // revert
@@ -219,15 +234,11 @@ function InternetSettingsLoaded({
           <AlertDescription>{saveError}</AlertDescription>
         </Alert>
       )}
-      {/* The step's heading and description already consume vertical space here, so drop the
-          list's footer note to keep the wizard's Next button above the fold. The per-row
-          "Coming soon" badges still mark the unavailable options. */}
       <InternetAccessOptionList
         localizedStrings={localizedStrings}
         value={settings.permittedInternetUse}
         onChange={(v) => handleChange({ ...settings, permittedInternetUse: v })}
         disabled={isSaving}
-        showFooter={false}
       />
       <DeveloperSection
         localizedStrings={localizedStrings}
