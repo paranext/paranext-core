@@ -2,7 +2,15 @@
 import '@testing-library/jest-dom';
 import type React from 'react';
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
-import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  createEvent,
+  fireEvent,
+  getNodeText,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   BOOK_NOT_AVAILABLE_KEY,
@@ -351,25 +359,13 @@ const zoomMenuLabels = {
 };
 
 /**
- * An element's own direct text, ignoring text inside any nested element (e.g. a shortcut hint
- * rendered as a sibling `Kbd`/`KbdGroup`) — the same "direct text-node children only" rule Testing
- * Library's `getByText` uses, so a hint cannot change what this reports.
- */
-function ownText(element: Element): string {
-  return Array.from(element.childNodes)
-    .filter((node) => node.nodeType === Node.TEXT_NODE)
-    .map((node) => node.textContent ?? '')
-    .join('');
-}
-
-/**
  * The open menu's items and separators in document order, a separator shown as `—`. Each menuitem's
- * own label only (see `ownText`), so a shortcut hint rendered beside it is invisible here; assert
- * hint content separately.
+ * own label only (its direct text nodes, per `getNodeText`), so a shortcut hint rendered beside it
+ * is invisible here; assert hint content separately.
  */
 function menuEntries(menu: HTMLElement): string[] {
   return Array.from(menu.querySelectorAll('[role="menuitem"], [role="separator"]')).map((entry) =>
-    entry.getAttribute('role') === 'separator' ? '—' : ownText(entry),
+    entry.getAttribute('role') === 'separator' ? '—' : getNodeText(entry),
   );
 }
 
@@ -615,7 +611,7 @@ describe('ResourceCellView zoom menus', () => {
     );
     fireEvent.contextMenu(screen.getByText('verse'));
     // Positive control: a menu re-opened after the rerender.
-    screen.getByRole('menu');
+    expect(screen.getByRole('menu')).toBeInTheDocument();
     expect(zoomMenuItem('Zoom in')).not.toHaveAttribute('aria-disabled', 'true');
     expect(zoomMenuItem('Zoom out')).toHaveAttribute('aria-disabled', 'true');
     expect(zoomMenuItem('Reset zoom')).not.toHaveAttribute('aria-disabled', 'true');

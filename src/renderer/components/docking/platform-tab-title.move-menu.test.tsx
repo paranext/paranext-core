@@ -1173,7 +1173,7 @@ describe('PlatformTabTitle tab-menu item shortcuts', () => {
     cleanup();
   });
 
-  it('shows the shortcut beside an item that has one, and nothing beside one without', async () => {
+  it('shows the shortcut as keycaps beside an item that has one, and nothing beside one without', async () => {
     vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue({
       includeDefaults: true,
       topMenu: undefined,
@@ -1207,7 +1207,11 @@ describe('PlatformTabTitle tab-menu item shortcuts', () => {
     if (!find) throw new Error('The Find tab-menu item did not render');
     const shortcut = find.querySelector('[data-slot="context-menu-shortcut"]');
     expect(shortcut).not.toBeNull();
-    expect(shortcut).toHaveClass('tw:[unicode-bidi:plaintext]');
+    // `dir="ltr"` on the keycap group keeps the keys in order in a right-to-left layout
+    expect(within(find).getByText('Ctrl').closest('[data-slot="kbd-group"]')).toHaveAttribute(
+      'dir',
+      'ltr',
+    );
     expect(within(find).getByText('Ctrl').tagName).toBe('KBD');
     expect(within(find).getByText('F').tagName).toBe('KBD');
 
