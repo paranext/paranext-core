@@ -1,5 +1,5 @@
 import { MarkerCategoryType, MarkerType } from './usfm-marker.model';
-import { isBlockMarker, isCharacterMarker, usfmMarkers } from './usfm-markers';
+import { isBlockMarker, isCharacterMarker, isParagraphMarker, usfmMarkers } from './usfm-markers';
 
 describe('isBlockMarker', () => {
   it('treats paragraph-type markers as block markers', () => {
@@ -111,5 +111,44 @@ describe('isCharacterMarker and isBlockMarker invariants', () => {
     );
 
     expect(divisionMarkCharacterMarkers.sort()).toEqual(['ca', 'v', 'va', 'vp']);
+  });
+});
+
+describe('isParagraphMarker', () => {
+  it('treats paragraph-type markers as paragraph markers regardless of category', () => {
+    expect(isParagraphMarker('p')).toBe(true); // discourse paragraphs
+    expect(isParagraphMarker('ipi')).toBe(true);
+    expect(isParagraphMarker('li2')).toBe(true); // list entry
+    expect(isParagraphMarker('mt')).toBe(true); // book titles
+    expect(isParagraphMarker('mt1')).toBe(true);
+    expect(isParagraphMarker('s')).toBe(true); // section headings
+    expect(isParagraphMarker('s1')).toBe(true);
+    expect(isParagraphMarker('q')).toBe(true); // poetry lines
+    expect(isParagraphMarker('q3')).toBe(true);
+    expect(isParagraphMarker('lh')).toBe(true); // list heading
+    expect(isParagraphMarker('b')).toBe(true); // line break
+    expect(isParagraphMarker('h')).toBe(true); // page header metadata
+    expect(isParagraphMarker('h1')).toBe(true); // Deprecated
+    expect(isParagraphMarker('cl')).toBe(true); // Publishing metadata
+    expect(isParagraphMarker('cp')).toBe(true); // Published chapter identifier
+    expect(isParagraphMarker('id')).toBe(true); // book identifier
+    expect(isParagraphMarker('c')).toBe(true); // chapter number
+    expect(isParagraphMarker('usfm')).toBe(true); // File metadata
+    expect(isParagraphMarker('ide')).toBe(true); // File metadata
+  });
+
+  it('does not treat character-style markers as paragraph markers', () => {
+    expect(isParagraphMarker('v')).toBe(false); // Character, special-cased by isBlockMarker only
+    expect(isParagraphMarker('vp')).toBe(false);
+    expect(isParagraphMarker('nd')).toBe(false);
+    expect(isParagraphMarker('qs')).toBe(false);
+    expect(isParagraphMarker('qac')).toBe(false);
+    expect(isParagraphMarker('f')).toBe(false);
+    expect(isParagraphMarker('ca')).toBe(false);
+  });
+
+  it('returns false for empty and unknown markers', () => {
+    expect(isParagraphMarker('')).toBe(false);
+    expect(isParagraphMarker('notamarker')).toBe(false);
   });
 });

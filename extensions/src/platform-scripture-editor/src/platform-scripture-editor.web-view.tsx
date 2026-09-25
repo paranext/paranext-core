@@ -156,7 +156,6 @@ import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
-  blockMarkerToBlockNames,
   buildChapterScaffoldOps,
   canAddChapterNumber,
   correctEditorUsjVersion,
@@ -165,15 +164,19 @@ import {
   formatEditorTitle,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  hasDisplayableParagraphMarkerTitle,
   isChapterBlank,
   isMissingBookError,
   isMissingBookInfoOnScreen,
   isOverrunProjectIdParse,
   openCommentListAndSelectThreadSafe,
+  paragraphMarkerNameKey,
   parseMissingBookError,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   resolveAddChapterNumberClick,
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
@@ -259,9 +262,13 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // recent-searches labels, and the show-more-books/not-in-project strings that appear once a
   // book outside this project is reachable.
   ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
+  // Keys for Paragraph style titles (as displayed in tooltips, Paragraph combo box trigger/switcher,
+  // etc.) Some titles may not be displayed in all possible contexts.
+  ...[...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS].map(
+    paragraphMarkerNameKey,
+  ),
   // The footnotes pane's name on the zoom indicator.
   FOOTNOTES_ZOOM_AREA_LABEL_KEY,
-  ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
     .filter((item) => !!item),
@@ -3833,13 +3840,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Localized name of the current paragraph style, or the generic fallback. Undefined until the
    * localized strings resolve — `ParagraphStyleLabel` renders the marker code alone until then.
    *
-   * `Object.hasOwn`, not a bare lookup: a marker named `constructor` or `toString` would otherwise
-   * find an inherited `Object.prototype` member and take the wrong branch.
+   * Uses `hasDisplayableParagraphMarkerTitle`, not `selectableParagraphMarkers.includes`, so `id`
+   * still reads "id - Book identifier" here even though it's excluded from the switcher menu
+   * itself.
+   *
+   * Deliberately not `getParagraphMarkerTitle(blockMarker, localizedStrings) ?? misc`: that would
+   * collapse "known marker, string still loading" (should render blank, per the above) into the
+   * same branch as "marker with no title at all" (should render the misc fallback), so the
+   * membership check stays inline here instead.
    */
-  const blockMarkerName =
-    blockMarker && Object.hasOwn(blockMarkerToBlockNames, blockMarker)
-      ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
-      : localizedStrings['%paragraphMenu_misc_markerDescription%'];
+  const blockMarkerNameKey: LocalizeKey | undefined =
+    blockMarker && hasDisplayableParagraphMarkerTitle(blockMarker)
+      ? paragraphMarkerNameKey(blockMarker)
+      : undefined;
+  const blockMarkerName = blockMarkerNameKey
+    ? localizedStrings[blockMarkerNameKey]
+    : localizedStrings['%paragraphMenu_misc_markerDescription%'];
 
   const scrollGroupSelector = isPowerMode ? (
     <ScrollGroupSelector

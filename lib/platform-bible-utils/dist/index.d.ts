@@ -4026,6 +4026,20 @@ export declare function isBlockMarker(marker: string): boolean;
  */
 export declare function isCharacterMarker(marker: string): boolean;
 /**
+ * True when a marker is a paragraph-style marker, including _true_ discourse paragraphs, others
+ * that begin a block of text (poetry lines, blank lines, list entries, etc.) and chapter-level or
+ * book-level identification, metadata, or other such structural markers.
+ *
+ * Paragraph markers are identified by their {@link MarkerType.Paragraph} type in {@link usfmMarkers}
+ * rather than a hand-maintained list.
+ *
+ * @param marker Marker code to check, without its leading backslash (e.g. `p`, not `\p`)
+ * @returns `true` when the marker is a known USFM marker of type {@link MarkerType.Paragraph}.
+ *   `false` for anything else: character markers, note markers (`f`/`fe`/`x`), numbering markers
+ *   (`v`/`va`/`vp`/`ca`), and for empty or unknown marker codes.
+ */
+export declare function isParagraphMarker(marker: string): boolean;
+/**
  * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
  * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both
  * scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these from here rather

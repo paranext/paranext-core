@@ -36,8 +36,12 @@ import {
   resolveAddChapterNumberClick,
   isMissingBookError,
   isMissingBookOnScreen,
+  hasDisplayableParagraphMarkerTitle,
+  getParagraphMarkerTitle,
   parseMissingBookError,
   resolveResourceContentState,
+  selectableParagraphMarkers,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2730,6 +2734,30 @@ describe('generateParagraphMenuListItems', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  // Equality, not spot checks: a partial-match assertion would miss both a marker silently dropped
+  // from the offered set and an extra one silently added.
+  it("offers exactly selectableParagraphMarkers' markers, matching neither more nor fewer", () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+
+    expect(items.map((item) => item.marker).sort()).toEqual([...selectableParagraphMarkers].sort());
+  });
+
+  it('offers li2, s1, bare q, lh, b, and cp, and excludes id and c', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+    const markers = items.map((item) => item.marker);
+
+    expect(markers).toContain('li2');
+    expect(markers).toContain('s1');
+    expect(markers).toContain('q'); // bare `q`, distinct from `q1`
+    expect(markers).toContain('lh');
+    expect(markers).toContain('b');
+    expect(markers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
+    expect(markers).not.toContain('id'); // programmatically-applied only
+    expect(markers).not.toContain('c'); // programmatically-applied only
+  });
+
   it('fills the detail column from the marker description, so the paragraph menu is not the one menu with an empty second column', () => {
     const { ref } = makeMockEditorRef();
     const items = generateParagraphMenuListItems(
@@ -2760,6 +2788,18 @@ describe('generateParagraphMenuListItems', () => {
     });
   });
 
+  it('falls back to the bare marker code for the title while its description string is still loading, never a raw localize key', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+
+    const paragraphItem = items.find((item) => item.marker === 'p');
+
+    expect(paragraphItem?.title).toBe('p');
+    items.forEach((item) => {
+      expect(item.title).not.toMatch(/^%.*%$/);
+    });
+  });
+
   it('restores the caret before formatting, so a pick made after the menu took focus still lands', () => {
     const { ref, formatPara } = makeMockEditorRef();
     const restoreSelection = vi.fn();
@@ -2786,6 +2826,77 @@ describe('generateParagraphMenuListItems', () => {
 
     expect(restoreSelection).not.toHaveBeenCalled();
     expect(formatPara).not.toHaveBeenCalled();
+  });
+});
+
+describe('selectableParagraphMarkers', () => {
+  it('includes every USFM paragraph-style marker that a user can validly apply directly', () => {
+    expect(selectableParagraphMarkers).toContain('li2');
+    expect(selectableParagraphMarkers).toContain('s1');
+    expect(selectableParagraphMarkers).toContain('q'); // bare `q`, distinct from `q1`
+    expect(selectableParagraphMarkers).toContain('q3');
+    expect(selectableParagraphMarkers).toContain('lh');
+    expect(selectableParagraphMarkers).toContain('b');
+    expect(selectableParagraphMarkers).toContain('h'); // Headers category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cl'); // DivisionMarks category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
+  });
+
+  // The confirmed, deliberate exclusions (see the comment on PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS):
+  it('excludes id and c even though isParagraphMarker is true for both', () => {
+    expect(selectableParagraphMarkers).not.toContain('id');
+    expect(selectableParagraphMarkers).not.toContain('c');
+  });
+
+  it('excludes markers that are not paragraph markers', () => {
+    expect(selectableParagraphMarkers).not.toContain('v'); // Character, special-cased by isBlockMarker only
+    expect(selectableParagraphMarkers).not.toContain('nd'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qs'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qac'); // Character
+  });
+
+  it('PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS contains id and c', () => {
+    expect(PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has('id')).toBe(true);
+    expect(PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has('c')).toBe(true);
+  });
+});
+
+describe('hasDisplayableParagraphMarkerTitle', () => {
+  it('is true for every marker offered by the switcher', () => {
+    expect(
+      selectableParagraphMarkers.every((marker) => hasDisplayableParagraphMarkerTitle(marker)),
+    ).toBe(true);
+  });
+
+  // `id` and `c` are applied through their own dedicated mechanisms and must never be a switcher
+  // choice, but the trigger label and gutter tooltip should still name one when the caret/selection
+  // is actually on it, rather than falling back to the generic "Miscellaneous Marker" text or a raw
+  // marker echo.
+  it('is true for id and c even though both are excluded from selectableParagraphMarkers', () => {
+    expect(selectableParagraphMarkers).not.toContain('id');
+    expect(selectableParagraphMarkers).not.toContain('c');
+    expect(hasDisplayableParagraphMarkerTitle('id')).toBe(true);
+    expect(hasDisplayableParagraphMarkerTitle('c')).toBe(true);
+  });
+
+  it('is false for a marker with no title at all', () => {
+    expect(hasDisplayableParagraphMarkerTitle('notamarker')).toBe(false);
+  });
+});
+
+describe('getParagraphMarkerTitle', () => {
+  it("resolves id's title once loaded, even though id is not offered by the switcher", () => {
+    expect(
+      getParagraphMarkerTitle('id', { '%paragraphMenu_id_markerDescription%': 'Book identifier' }),
+    ).toBe('Book identifier');
+  });
+
+  it("leaves id's title undefined while its string is still loading", () => {
+    expect(getParagraphMarkerTitle('id', {})).toBeUndefined();
+  });
+
+  it('returns undefined for a marker with no title available at all', () => {
+    expect(getParagraphMarkerTitle('notamarker', {})).toBeUndefined();
   });
 });
 

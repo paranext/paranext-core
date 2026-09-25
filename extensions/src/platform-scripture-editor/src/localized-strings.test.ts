@@ -13,6 +13,11 @@ import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
+import {
+  paragraphMarkerNameKey,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
+  selectableParagraphMarkers,
+} from './platform-scripture-editor.utils';
 
 type LocalizedStringsFile = {
   metadata?: Record<
@@ -380,6 +385,79 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
 
     it('Spanish label differs from English', () => {
       expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);
+
+// Markers whose Khmer label is a legitimate exception to the differs-from-English check: `h1`,
+// `h2`, `h3` are deprecated markers not worth translating (Crowdin itself leaves them in English);
+// `d`, `sp`, `sts`, `usfm` have no Khmer translation in Crowdin and no other corpus entry (marker
+// name, description, or paired-marker template) safe to derive one from, so they stay in English
+// too.
+const KM_MARKER_DESCRIPTION_EXCEPTIONS: readonly string[] = [
+  'd',
+  'h1',
+  'h2',
+  'h3',
+  'sp',
+  'sts',
+  'usfm',
+];
+
+// The paragraph-style switcher's per-marker descriptions: one for every marker the switcher offers,
+// plus the two display-only markers named in PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS. Driven off the same
+// derived marker list the switcher and gutter tooltip both use, so a marker added to `usfmMarkers`
+// is covered here without anyone editing this file. Checked in all six shipped locales, not just
+// en/es, since these keys live only in this extension's own contributions file.
+describe.each([...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS])(
+  'paragraph marker description %s',
+  (marker) => {
+    const key = paragraphMarkerNameKey(marker);
+
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+
+    it('has a French label', () => {
+      expect(localizedStrings.fr[key]).toBeTruthy();
+    });
+
+    it('French label differs from English', () => {
+      expect(localizedStrings.fr[key]).not.toBe(localizedStrings.en[key]);
+    });
+
+    it('has a Khmer label', () => {
+      expect(localizedStrings.km[key]).toBeTruthy();
+    });
+
+    if (!KM_MARKER_DESCRIPTION_EXCEPTIONS.includes(marker)) {
+      it('Khmer label differs from English', () => {
+        expect(localizedStrings.km[key]).not.toBe(localizedStrings.en[key]);
+      });
+    }
+
+    it('has a Simplified Chinese label', () => {
+      expect(localizedStrings['zh-hans'][key]).toBeTruthy();
+    });
+
+    it('Simplified Chinese label differs from English', () => {
+      expect(localizedStrings['zh-hans'][key]).not.toBe(localizedStrings.en[key]);
+    });
+
+    it('has a Traditional Chinese label', () => {
+      expect(localizedStrings['zh-hant'][key]).toBeTruthy();
+    });
+
+    it('Traditional Chinese label differs from English', () => {
+      expect(localizedStrings['zh-hant'][key]).not.toBe(localizedStrings.en[key]);
     });
   },
 );
