@@ -266,8 +266,9 @@ export const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalized
  * field with no further edit.
  */
 const PROJECT_SELECTOR_STRING_FIELDS =
-  // `Object.keys` erases the key type; the assertion restores what `PROJECT_SELECTOR_DEFAULT_STRINGS`'s `Required<…>`
-  // annotation already guarantees, and is what lets the resolve loop below index both bags.
+  // `Object.keys` erases the key type; the assertion restores what
+  // `PROJECT_SELECTOR_DEFAULT_STRINGS`'s `Required<…>` annotation already guarantees, and is what
+  // lets the resolve loop below index both bags.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   Object.keys(PROJECT_SELECTOR_DEFAULT_STRINGS) as (keyof ProjectSelectorLocalizedStrings)[];
 
@@ -277,13 +278,15 @@ function resolveStrings(
   const given = partial ?? {};
   // Resolved field by field rather than by spreading `partial` over the defaults, because a spread
   // cannot tell "the caller did not set this" from "the caller set it to something unusable":
-  // `buildProjectSelectorLocalizedStrings` emits a property for every shared field, and a present-but-
-  // `undefined` property overwrites the default just as a real value would. What counts as usable
+  // `buildProjectSelectorLocalizedStrings` emits a property for every shared field, and a
+  // present-but-`undefined` property overwrites the default just as a real value would. What counts
+  // as usable
   // is `resolveLocalizedString`'s to decide — see `isResolvedLocalizedValue` for the three states
   // it rejects.
   //
-  // The per-field guarantee lives on `PROJECT_SELECTOR_DEFAULT_STRINGS` (and the `Required<…>` return type) rather
-  // than on a written-out object literal here: every field the type declares must appear there, so
+  // The per-field guarantee lives on `PROJECT_SELECTOR_DEFAULT_STRINGS` (and the `Required<…>`
+  // return type) rather than on a written-out object literal here: every field the type declares
+  // must appear there, so
   // it is still a compile error to add a field to the type and leave it unhandled, and the loop
   // below then covers the new field automatically.
   const resolved = { ...PROJECT_SELECTOR_DEFAULT_STRINGS };

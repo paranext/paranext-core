@@ -1,4 +1,3 @@
-import { localizedStringOrUndefined } from 'platform-bible-utils';
 import { describe, expect, it } from 'vitest';
 import { PICKER_NO_PROJECT_NOTICE_KEY, resolvePickerNotice } from './view-options-notice.utils';
 
@@ -21,44 +20,21 @@ describe('resolvePickerNotice', () => {
     ).toBeUndefined();
   });
 
+  it('says nothing when the entry carries some other raw key', () => {
+    // A strings bag can hand back a different key's raw text, which is no more showable than this
+    // key's own. Pinned here rather than only on the shared reader, because a hand-rolled
+    // `value === key` check would pass the case above and fail this one.
+    expect(
+      resolvePickerNotice({ [PICKER_NO_PROJECT_NOTICE_KEY]: '%a_different_key%' }, false),
+    ).toBeUndefined();
+  });
+
+  it('says nothing when the entry is whitespace only', () => {
+    // Renders as an empty notice rather than no notice, which is worse than staying silent.
+    expect(resolvePickerNotice({ [PICKER_NO_PROJECT_NOTICE_KEY]: '   ' }, false)).toBeUndefined();
+  });
+
   it('says nothing when the key is missing entirely', () => {
     expect(resolvePickerNotice({}, false)).toBeUndefined();
-  });
-});
-
-describe('localizedStringOrUndefined', () => {
-  it('returns the localized text when it resolved', () => {
-    expect(localizedStringOrUndefined(STRINGS, PICKER_NO_PROJECT_NOTICE_KEY)).toBe(NOTICE);
-  });
-
-  it('returns undefined when the value is the key itself', () => {
-    expect(
-      localizedStringOrUndefined(
-        { [PICKER_NO_PROJECT_NOTICE_KEY]: PICKER_NO_PROJECT_NOTICE_KEY },
-        PICKER_NO_PROJECT_NOTICE_KEY,
-      ),
-    ).toBeUndefined();
-  });
-
-  it('returns undefined when the value is some other raw key', () => {
-    expect(
-      localizedStringOrUndefined(
-        { [PICKER_NO_PROJECT_NOTICE_KEY]: '%a_different_key%' },
-        PICKER_NO_PROJECT_NOTICE_KEY,
-      ),
-    ).toBeUndefined();
-  });
-
-  it('returns undefined when the value is whitespace only', () => {
-    expect(
-      localizedStringOrUndefined(
-        { [PICKER_NO_PROJECT_NOTICE_KEY]: '   ' },
-        PICKER_NO_PROJECT_NOTICE_KEY,
-      ),
-    ).toBeUndefined();
-  });
-
-  it('returns undefined when the key is absent', () => {
-    expect(localizedStringOrUndefined({}, PICKER_NO_PROJECT_NOTICE_KEY)).toBeUndefined();
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import type { LocalizeKey } from './extension-contributions/menus.model';
 import {
   isResolvedLocalizedValue,
   localizedStringOrUndefined,
@@ -94,9 +95,45 @@ describe('localizedStringOrUndefined', () => {
     expect(localizedStringOrUndefined({ '%a_key%': '   ' }, '%a_key%')).toBeUndefined();
   });
 
+  test('returns undefined for an absent map rather than throwing', () => {
+    // Reachable from untyped extension JS and from a contribution carrying an explicit `null`. A
+    // throw here would blank a view mid-render.
+    const untypedMaps: Record<LocalizeKey, unknown>[] = JSON.parse('[null]');
+    untypedMaps.forEach((strings) => {
+      expect(localizedStringOrUndefined(strings, '%a_key%')).toBeUndefined();
+    });
+  });
+
   test('returns undefined for a non-string entry rather than handing it to a caller typed for text', () => {
     // Callers reading a lookup whose values are `unknown` — a grouping-label map, say — rely on
     // this instead of each growing its own `typeof` guard.
     expect(localizedStringOrUndefined({ '%a_key%': 42 }, '%a_key%')).toBeUndefined();
   });
+});
+
+/**
+ * `eslint-plugin-paranext` cannot depend on this package, so its `LOCALIZATION_KEY_PATTERN` is a
+ * deliberate second copy of the one behind {@link isResolvedLocalizedValue}. This is the table both
+ * copies must classify alike, restated verbatim in
+ * `lib/eslint-plugin-paranext/src/rules/no-nullish-localized-fallback.test.ts`. Each copy is pinned
+ * in its own suite, so an unmirrored change to either one fails there.
+ */
+const sharedResolutionCases: { value: string | undefined; isResolved: boolean }[] = [
+  // A localization key is not resolved text.
+  { value: '%some_key%', isResolved: false },
+  // Real copy that happens to contain a percent sign is text, not a key.
+  { value: '%s of 50% total%', isResolved: true },
+  { value: '', isResolved: false },
+  { value: '   ', isResolved: false },
+  { value: 'Select Chapter', isResolved: true },
+  { value: undefined, isResolved: false },
+];
+
+describe('shared resolution table', () => {
+  test.each(sharedResolutionCases)(
+    'classifies $value the same way the lint plugin’s copy does',
+    ({ value, isResolved }) => {
+      expect(isResolvedLocalizedValue(value)).toBe(isResolved);
+    },
+  );
 });

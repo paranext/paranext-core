@@ -157,10 +157,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const zoom = useResourceZoom(useWebViewState);
   const zoomMenuLabels = useMemo<ZoomMenuLabels>(
     () => ({
-      zoomIn: localizedStrings[ZOOM_IN_KEY],
-      zoomOut: localizedStrings[ZOOM_OUT_KEY],
-      reset: localizedStrings[RESET_ZOOM_KEY],
-      options: localizedStrings[ZOOM_OPTIONS_KEY],
+      zoomIn: resolveLocalizedString(localizedStrings[ZOOM_IN_KEY], 'Zoom in'),
+      zoomOut: resolveLocalizedString(localizedStrings[ZOOM_OUT_KEY], 'Zoom out'),
+      reset: resolveLocalizedString(localizedStrings[RESET_ZOOM_KEY], 'Reset zoom'),
+      options: resolveLocalizedString(
+        localizedStrings[ZOOM_OPTIONS_KEY],
+        'Zoom options for {resourceName}',
+      ),
     }),
     [localizedStrings],
   );
@@ -624,8 +627,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       {/* Grid body: a message when nothing is renderable, otherwise the verse-cell rows.
           Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
-          empty (a DBL ref resolves to a cell only once the cached list loads). The
-          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
+          empty (a DBL ref resolves to a cell only once the cached list loads). The grid branch
+          renders while strings are still loading, so every string it passes down resolves to
+          English rather than relying on that guard.
 
           Named as its own zoom area ("text-collection") so its remembered level is kept apart from
           this project's other resource panes, which resolve to the same kind/identity pair and
@@ -652,15 +656,24 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             <EmptyState
               id="scripture-text-grid-empty-state"
               className="tw:text-center"
-              message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
-                viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
-              })}
+              message={formatReplacementString(
+                resolveLocalizedString(
+                  localizedStrings[EMPTY_STATE_KEY],
+                  'No texts to display. Open {viewOptionsLabel} to choose which texts to show.',
+                ),
+                {
+                  viewOptionsLabel: resolveLocalizedString(
+                    localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+                    'View Options',
+                  ),
+                },
+              )}
             />
           </div>
         )}
         {gridBodyState === 'grid' && (
           <ScriptureTextGrid
-            ariaLabel={localizedStrings[TITLE_KEY]}
+            ariaLabel={resolveLocalizedString(localizedStrings[TITLE_KEY], 'Text Collection')}
             resources={resources}
             scrRef={scrRef}
             setScrRef={setScrRef}
@@ -670,11 +683,20 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             chapterContext={chapterContext}
             onChapterContextChange={handleChapterContextChange}
             onChapterContextClose={handleCloseChapterContext}
-            closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-            cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
+            closeChapterContextLabel={resolveLocalizedString(
+              localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY],
+              'Close chapter view',
+            )}
+            cellAccessibleNameTemplate={resolveLocalizedString(
+              localizedStrings[CELL_ACCESSIBLE_NAME_KEY],
+              '{resourceName}, {reference}',
+            )}
             onReorder={handleReorder}
             getReorderHandleLabel={getReorderHandleLabel}
-            reorderHint={localizedStrings[REORDER_HINT_KEY]}
+            reorderHint={resolveLocalizedString(
+              localizedStrings[REORDER_HINT_KEY],
+              'Drag or press arrow keys to reorder',
+            )}
             getReorderAnnouncement={getReorderAnnouncement}
           />
         )}

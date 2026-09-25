@@ -3157,7 +3157,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the `.cjs` twins, and a type import in `dist/index.d.ts`), so rebuilding utils does not by itself
   require rebuilding react. **Revisit** if a consumer ever
   needs to distinguish "absent" from "seeded with its key", which this predicate deliberately merges.
-- **Source:** follow-up from PR #2829 review finding 16.
+- **Source:** PT-4673 / PR #2834, a follow-up from PR #2829 review finding 16.
 
 ## adr-log-file-writes-queued: Main's log file writes are queued and coalesced, trading tail durability for an event loop that never blocks on log disk I/O
 
@@ -7494,7 +7494,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4262 review (PR #2632), where the Help entry was found to ship Simple-only against
   an explicit request for both modes.
 
-## adr-type-aware-lint-rules: `paranext` ESLint rules may require type information, and a rule with repo-wide teeth is registered in both `.eslintrc.js` and `extensions/.eslintrc.cjs`
+## adr-type-aware-lint-rules: `paranext` ESLint rules may require type information, and one registration in `.eslintrc.js` reaches the whole repo
 
 - **Date:** 2026-09-17
 - **Status:** Accepted (current approach)
@@ -7508,24 +7508,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   could not type-check fixtures. Separately: `.eslintrc.js` (what CI's `npm run lint` runs) loads the
   `paranext` plugin but enabled only `require-disable-comment`; every other plugin rule lived in
   `.eslintrc.ai.js`, run by `lint:ai-strict`, which no workflow in `.github/` invokes. And
-  `extensions/.eslintrc.cjs` is its own root config for everything under `extensions/`, so a rule
-  registered only in the top-level `.eslintrc.js` never reached extension source at all — a rule
-  registered there alone reaches only 69 of the repo's 136 sites, excluding the 67 in `extensions`
-  and, with them, the most important known instance, the `t` lookup callback in
+  `extensions/.eslintrc.cjs` sets no `root: true`, so ESLint cascades it onto the top-level
+  `.eslintrc.js` rather than replacing it. One registration in `.eslintrc.js` therefore reaches all
+  136 sites, including the 67 in `extensions` and the most important known instance, the `t` lookup
+  callback in
   `extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.component.tsx`.
+  Confirm this by resolved config rather than by reading: `eslint --print-config` on an extension
+  file shows `paranext/require-disable-comment`, which only the root config enables.
 - **Decision:** The rule keys on the *type* of the indexed object (assignable to `LanguageStrings`,
   or indexed by `LocalizeKey`), making it the plugin's first type-aware rule. `src/test.utils.ts`
   gains a `typeAwareRuleTester` alongside the existing untyped one, backed by a fixture tsconfig in
-  `src/fixtures/`. The rule is registered at `warn` in `.eslintrc.js` (not in `.eslintrc.ai.js`), and
-  additionally in `extensions/.eslintrc.cjs`, scoped to this one rule. That file's
-  `#region shared with …paranext-extension-template` opens at line 1 and closes at the last line, so
-  every rule block inside it — including `#region Overrides to rules from paranext-core`, which is
-  nested within it and whose only prior occupant is a rule the template does have — is template-shared.
-  The registration is therefore placed in a `#region paranext-core only` block AFTER the shared region
-  closes, mutating the exported config (`module.exports.plugins.push('paranext')` plus the rule and its
-  two overrides). Keeping it out of the shared region, rather than duplicating the whole file's rule
-  set, is a human decision made to limit the friction at the next template merge, not one the agent
-  implementing the rule made on its own. A type-aware rule also throws when
+  `src/fixtures/`. The rule is registered at `warn` in `.eslintrc.js` alone (not in `.eslintrc.ai.js`), and
+  `extensions/.eslintrc.cjs` is left untouched. The cascade carries the rule and both its
+  story/test overrides onto extension source unchanged. A second registration there would be
+  redundant, and would have to live outside that file's
+  `#region shared with …paranext-extension-template` — which opens at line 1 and closes at the last
+  line, so every rule block inside it is template-shared — because
+  `paranext-extension-template` cannot resolve the plugin. Registering once in the root config
+  avoids that divergence entirely rather than managing it. A type-aware rule also throws when
   `ESLintUtils.getParserServices` is called on a file linted without type information, which ESLint
   turns into a rule-loading failure that aborts the entire run rather than skipping the file; this
   broke `npm run lint` once the rule was registered, because `lib/browserslist-config-detect-electron`
@@ -7537,23 +7537,25 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   names (`strings`), still misses aliases, and false-positives on the unrelated tail. (b) Register
   in `.eslintrc.ai.js` beside the sibling localization rules — rejected: no workflow runs
   `lint:ai-strict`, so the rule would have near-zero teeth. (c) Register at `error` immediately —
-  rejected: forces the full site sweep into the same change. (d) Leave `extensions/.eslintrc.cjs`
-  unregistered and accept partial coverage — rejected: it would miss the majority of known sites and
-  the single most important one, purely because extensions lint under their own root config; adding
-  the one rule to the existing override region costs little and is scoped narrowly enough not to
-  block a template merge outright.
+  rejected: forces the full site sweep into the same change. (d) Register the rule a second time in
+  `extensions/.eslintrc.cjs` as insurance against that file gaining `root: true` later — rejected:
+  it changes nothing today, and the only place it could live is outside the template-shared region,
+  where it buys a permanent divergence against a hypothetical. If that file ever does become a root
+  config, the same `--print-config` check that establishes the cascade will show it.
 - **Consequences:** type-aware rules are now an available pattern here, at the cost of type
   information during lint (already computed — `.eslintrc.js` sets
   `parserOptions.project: './tsconfig.lint.json'`) and of a mandatory stand-down path for any file
-  linted without a type-checked program. `extensions/.eslintrc.cjs` is marked at its own top of file
-  as shared with `paranext-extension-template`, which has no `eslint-plugin-paranext` —
-  the plugin is a root-only `file:./lib/eslint-plugin-paranext` dependency and is never published.
-  Enabling the rule needs BOTH a `plugins` entry and the rule registration, and an unresolvable
-  `plugins` entry is not a skipped rule: it is `Failed to load plugin 'paranext'`, a hard failure
-  that aborts the entire ESLint run for every file in that repo. That is why both edits are made
-  outside the shared region rather than inside it — a wholesale propagation of the shared region no
-  longer carries them, and the divergence is confined to a clearly-labelled block the template does
-  not copy. `npm run lint`'s aggregate count for this rule (203) is inflated by the root `workspaces`
+  linted without a type-checked program. `extensions/.eslintrc.cjs` is unchanged, so this rule
+  raises no template-propagation question at all. That matters because the file is marked at its own
+  top as shared with `paranext-extension-template`, which has no `eslint-plugin-paranext` — the
+  plugin is a root-only `file:./lib/eslint-plugin-paranext` dependency and is never published — and
+  an unresolvable `plugins` entry there is not a skipped rule but `Failed to load plugin 'paranext'`,
+  a hard failure that aborts the entire ESLint run for every file in that repo. Any future
+  `paranext` rule should likewise be registered in the root config only. Relatedly, a type-aware
+  rule's own tests must set `disallowAutomaticSingleRunInference` in the RuleTester's
+  `parserOptions`: with `CI` set, `typescript-estree` infers single-run mode and never type-checks
+  RuleTester's in-memory source, so type-dependent cases silently stop reporting and `valid` cases
+  stop being able to fail. `npm run lint`'s aggregate count for this rule (203) is inflated by the root `workspaces`
   array (`["lib/*","extensions","extensions/src/*"]`), which lints extension source twice — a
   distortion that affects every rule's aggregate, not just this one, and is worth remembering the
   next time a lint count is read as a site count. The rule's warning count is the follow-up sweep's
@@ -7562,7 +7564,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`adr-localized-string-resolution-helper`) disproves; it has been rewritten around the shared reader
   and widened to the repo. **Revisit** to escalate the rule to `error` once that count reaches zero,
   and to reconsider whether `lint:ai-strict` should run in CI at all given nothing invokes it.
-- **Source:** follow-up from PR #2829 review finding 16.
+- **Source:** PT-4673 / PR #2834, a follow-up from PR #2829 review finding 16.
 
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
 

@@ -484,15 +484,26 @@ global.webViewComponent = function ManageBooksWebView({
   // initial title (cold open) and update title (project switch) both produce
   // `${titleTemplate}` (no project) or `${titleTemplate} — {projectName}`.
   //
-  // `lastAppliedProjectIdRef` dedupes when this effect re-runs for non-projectId
-  // dep changes (e.g. `localizedStrings` arriving from the localization service).
+  // `lastAppliedTitleInputRef` dedupes when this effect re-runs without changing what the title
+  // would say. It keys on the template as well as the project because the template starts out as
+  // the English fallback and is replaced when the localization service delivers a translation —
+  // keying on `projectId` alone would strand the English title for the rest of the session.
   // It must be a ref (not state) so the dedupe survives React's render → cleanup →
   // re-run cycle without cancelling the in-flight async PDP fetch.
-  const lastAppliedProjectIdRef = useRef<string | undefined>(undefined);
+  const lastAppliedTitleInputRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!projectId) return undefined;
-    if (lastAppliedProjectIdRef.current === projectId) return undefined;
-    lastAppliedProjectIdRef.current = projectId;
+
+    // Resolved outside the async body so it can take part in the dedupe key; an unresolved lookup
+    // comes back as the raw key, which is a defined string, so a nullish check never fires on it.
+    const titleTemplate = resolveLocalizedString(
+      localizedStrings['%manageBooks_dialog_title%'],
+      'Manage books',
+    );
+    // `\u0000` cannot occur in a projectId or in localized copy, so it cannot forge a collision.
+    const titleInput = `${projectId}\u0000${titleTemplate}`;
+    if (lastAppliedTitleInputRef.current === titleInput) return undefined;
+    lastAppliedTitleInputRef.current = titleInput;
 
     let cancelled = false;
     (async () => {
@@ -508,13 +519,6 @@ global.webViewComponent = function ManageBooksWebView({
       }
       if (cancelled) return;
 
-      // Compose the title using the localized template, falling back to the English default while
-      // the string is unresolved. The fallback has to test the value: an unresolved lookup comes
-      // back as the raw key, which is a defined string, so a nullish check never fires on it.
-      const titleTemplate = resolveLocalizedString(
-        localizedStrings['%manageBooks_dialog_title%'],
-        'Manage books',
-      );
       const title = projectName
         ? formatReplacementString(`${titleTemplate} — {projectName}`, { projectName })
         : titleTemplate;

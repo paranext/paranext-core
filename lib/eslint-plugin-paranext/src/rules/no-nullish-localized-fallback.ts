@@ -8,8 +8,10 @@ const createRule = ESLintUtils.RuleCreator(() => '');
  *
  * A deliberate second copy of the canonical pattern behind `isResolvedLocalizedValue` in
  * `lib/platform-bible-utils/src/localization.util.ts`: this plugin does not depend on the
- * workspace, so the two must be kept in agreement by hand. `no-nullish-localized-fallback.test.ts`
- * pins that agreement against a shared table of values.
+ * workspace, so the two must be kept in agreement by hand. The same table of values is restated in
+ * each package's tests — `no-nullish-localized-fallback.test.ts` here and
+ * `localization.util.test.ts` there — so an unmirrored change to either copy fails in its own
+ * suite.
  */
 export const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
 
@@ -173,7 +175,7 @@ export default createRule({
       nullishLocalizedFallback:
         "This fallback never runs. An unresolved localized string comes back as the raw key ('%…%'), which is a defined string, so '{{operator}}' passes it straight through to the user. Use resolveLocalizedString(value, fallback) from platform-bible-utils.",
       deadKeyFallback:
-        "This fallback is dead code: its text is the key itself, so whenever '{{operator}}' fires it hands the user the raw key ('%…%') instead of readable text. Delete it, or use resolveLocalizedString(value, fallback) from platform-bible-utils if real fallback text is wanted.",
+        "This fallback cannot supply readable text: it is the key itself, so whenever '{{operator}}' fires it hands the user the raw key ('%…%'). Choose real fallback text and use resolveLocalizedString(value, fallback) from platform-bible-utils. Dropping the operator instead is not equivalent - the read can be undefined at runtime.",
       useResolveLocalizedString: 'Wrap in resolveLocalizedString(value, fallback)',
     },
   },
@@ -193,6 +195,18 @@ export default createRule({
 
     const checker = services.program.getTypeChecker();
 
+    // The same map type recurs across every lookup in a file, and the member walk in
+    // `isLocalizedStringsType` is the rule's most expensive step. Keyed on the `Type` object, which
+    // the checker interns for the duration of this program, so the cache cannot outlive it.
+    const localizedStringsTypeCache = new WeakMap<Type, boolean>();
+    function isLocalizedStringsTypeMemoized(type: Type): boolean {
+      const cached = localizedStringsTypeCache.get(type);
+      if (cached !== undefined) return cached;
+      const result = isLocalizedStringsType(type, checker);
+      localizedStringsTypeCache.set(type, result);
+      return result;
+    }
+
     /** Whether `node` is a `%…%` string literal or typed as `LocalizeKey`. */
     function isLocalizeKeyNode(node: TSESTree.Node): boolean {
       if (node.type === 'Literal' && typeof node.value === 'string') {
@@ -211,16 +225,18 @@ export default createRule({
 
       const objectTsNode = services.esTreeNodeToTSNodeMap.get(left.object);
       if (!objectTsNode) return;
-      const objectType = checker.getTypeAtLocation(objectTsNode);
 
       // The key test is a literal check or one `getTypeAtLocation`; the map test can walk every
       // property of the type. Order them cheap-first — this runs on every `x[y] ?? z` in the repo.
+      // The object's type is resolved inside the second operand so the common case (a key that is
+      // neither `%…%`-shaped nor `LocalizeKey`) costs no `getTypeAtLocation` at all.
       const looksLocalized =
-        isLocalizeKeyNode(left.property) || isLocalizedStringsType(objectType, checker);
+        isLocalizeKeyNode(left.property) ||
+        isLocalizedStringsTypeMemoized(checker.getTypeAtLocation(objectTsNode));
       if (!looksLocalized) return;
 
-      // A fallback that is the same key being read cannot differ from the unresolved value, so
-      // the operator is dead rather than user-visible.
+      // A fallback whose text is the key being read cannot differ from the unresolved value, so
+      // the operator can only ever hand over the raw key - no choice of operand makes it readable.
       const isDeadKeyFallback =
         sourceCode.getText(node.right) === sourceCode.getText(left.property);
 

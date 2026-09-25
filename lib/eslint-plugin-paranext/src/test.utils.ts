@@ -25,6 +25,12 @@ export const typeAwareRuleTester = new RuleTester({
     ecmaFeatures: { jsx: true },
     project: './src/fixtures/tsconfig.json',
     tsconfigRootDir: path.resolve(__dirname, '..'),
+    // When `CI` is set, `@typescript-eslint/typescript-estree` infers "single-run" mode and builds
+    // one Program from disk, so RuleTester's in-memory `case.ts` is never type-checked and every
+    // fixture import widens to `any`. Type-dependent cases then report nothing - and, worse, the
+    // `valid` cases stop being able to fail, hiding false-positive regressions. Opting out keeps
+    // the tests meaningful in CI; `@typescript-eslint/rule-tester` sets this for the same reason.
+    disallowAutomaticSingleRunInference: true,
   },
 });
 

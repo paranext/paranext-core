@@ -71,7 +71,10 @@ export function localizedStringOrUndefined(
   strings: { readonly [key: LocalizeKey]: unknown },
   key: LocalizeKey,
 ): string | undefined {
-  const value = strings[key];
+  // Optional chaining because the map itself can be absent where TypeScript guards nothing —
+  // untyped extension JS, or a contribution carrying an explicit `null` — and a throw here would
+  // blank a view mid-render. Same reasoning as the non-string guard below.
+  const value = strings?.[key];
   return typeof value === 'string' && isResolvedLocalizedValue(value) ? value : undefined;
 }
 

@@ -223,37 +223,3 @@ module.exports = {
 };
 
 // #endregion
-
-// #region paranext-core only - requires eslint-plugin-paranext
-
-// `eslint-plugin-paranext` is a root-only `file:./lib/eslint-plugin-paranext` dependency and is
-// never published, so `paranext-extension-template` cannot resolve it. An unresolvable `plugins`
-// entry is a hard ESLint load failure that aborts the run for every file - not a skipped rule -
-// so this registration is kept outside the shared region above, where a template merge will not
-// carry it over.
-module.exports.plugins.push('paranext');
-
-// Localized lookups must not fall back with `??`/`||`: an unresolved lookup returns the raw key, a
-// defined string, so the fallback never runs. Use `resolveLocalizedString` from
-// `platform-bible-utils`. See .context/standards/Localization-Guide.md.
-// Deliberately the only `paranext/*` rule enabled here - the plugin's `recommended`/`strict`
-// configs are not pulled in, so no other paranext rule runs on extension source.
-// `warn` while the existing call sites are swept; the sweep and the escalation to `error` are
-// TODO(PT-4103).
-module.exports.rules['paranext/no-nullish-localized-fallback'] = 'warn';
-
-// Later overrides win, so these turn the rule off for the two file kinds that stand in fake
-// localized strings. Scoped to the story and test files themselves; a shared helper such as
-// `*.test-utils.ts` mirrors production shape and keeps the rule on.
-module.exports.overrides.push(
-  {
-    files: ['*.stories.tsx'],
-    rules: { 'paranext/no-nullish-localized-fallback': 'off' },
-  },
-  {
-    files: ['*.test.ts', '*.test.tsx', '*.spec.ts', '*.spec.tsx'],
-    rules: { 'paranext/no-nullish-localized-fallback': 'off' },
-  },
-);
-
-// #endregion

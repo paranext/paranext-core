@@ -185,8 +185,8 @@ typelessRuleTester.run('no-nullish-localized-fallback (no type information)', ru
  * The plugin cannot depend on `platform-bible-utils`, so its `LOCALIZATION_KEY_PATTERN` is a
  * deliberate second copy of the one behind `isResolvedLocalizedValue` in
  * `lib/platform-bible-utils/src/localization.util.ts`. These cases are the table both copies must
- * classify alike, restated here in full so that a change to either copy that is not mirrored in the
- * other shows up as a failure.
+ * classify alike. It pins this copy only; the same table is restated in that package's
+ * `localization.util.test.ts`, so an unmirrored change to either copy fails in its own suite.
  */
 const sharedResolutionCases: { value: string | undefined; isResolved: boolean }[] = [
   // A localization key is not resolved text.

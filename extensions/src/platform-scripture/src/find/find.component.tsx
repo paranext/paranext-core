@@ -862,6 +862,9 @@ export function Find({
 
   // Only offered when the project actually has extra material. Telling a project with none that
   // Find "can't include" it explains an absence that isn't Find's doing.
+  // TODO(PT-4103): Raw read - renders the key while strings load, and permanently if localization
+  // fails. `no-nullish-localized-fallback` cannot see it (there is no `??`), so it will not turn up
+  // in that sweep's warning list.
   const extraMaterialNotSearchedExplanation = useMemo(
     () =>
       hasExcludedExtraMaterial
