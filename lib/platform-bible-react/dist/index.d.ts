@@ -1135,12 +1135,13 @@ export type FootnoteLayout = "horizontal" | "vertical";
 /**
  * Where the caret should land within a footnote's text.
  *
- * The offset origin is the note's CONTENT: every character run the note contains, including a
+ * The offset origin is the note's CONTENT: every character run the note contains (including a
  * leading `fr`/`xo` target reference, which PT9's notes pane and `FootnoteItem` alike render inline
- * at the head of the note text. It excludes everything that is display rather than content — the
- * caller (`FootnoteItem` renders it in a separate header div), the USFM markers themselves
- * (`.marker` spans) and the note's `\cat` category, which is a field on the note rather than part
- * of its content (see `isDisplayText` in `footnote-caret.utils.ts`).
+ * at the head of the note text), AND text written directly in the note, alongside its runs rather
+ * than inside one. It excludes everything that is display rather than content — the caller
+ * (`FootnoteItem` renders it in a separate header div), the USFM markers themselves (`.marker`
+ * spans) and the note's `\cat` category, which is a field on the note rather than part of its
+ * content (see `isDisplayText` in `footnote-caret.utils.ts`).
  *
  * That origin is the note's USJ text, NOT any one rendering of it, which is what lets a position
  * captured over a read-only row resolve inside a live editor: the editor adds its own display
@@ -1285,9 +1286,9 @@ export interface FootnoteListProps {
  * @param clientX Viewport X of the click (from the mouse event).
  * @param clientY Viewport Y of the click.
  * @param rowElement The row's root element; the offset is computed over the text of its
- *   `.textual-note-body` descendant - the note's character runs, excluding the caller (rendered in
- *   the row's header cell), the rendered USFM markers, the `\cat` category run and the empty-note
- *   placeholder (see `isDisplayText`).
+ *   `.textual-note-body` descendant - the note's text, in character runs and written directly in
+ *   the note alike, excluding the caller (rendered in the row's header cell), the rendered USFM
+ *   markers, the `\cat` category run and the empty-note placeholder (see `isDisplayText`).
  * @returns A flat UTF-16 offset into the note body text, or `'end'` when the click cannot be mapped
  *   (no browser support, click outside the body text, empty note).
  */
@@ -1366,8 +1367,9 @@ export interface FootnoteEditorProps {
 	 * - Popover Cancel: nothing is applied.
 	 * - A book or chapter change: saved as Save saves (popover), or flushed (inline).
 	 * - Escape in the inline editor (from its text or its own controls): whatever is still inside the
-	 *   live-apply debounce is applied first. An open marker-palette session, or the editor's own
-	 *   right-click menu, takes Escape for itself instead.
+	 *   live-apply debounce is applied first. An Escape that a layer inside the editor claims to
+	 *   close itself (the marker palette, the editor's right-click menu, a tooltip) does not end the
+	 *   session.
 	 */
 	onClose: () => void;
 	/** The scripture reference for the parent editor */
