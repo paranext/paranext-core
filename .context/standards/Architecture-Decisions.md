@@ -6696,7 +6696,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   way Find does, through `platformScripture.updateChecksSidePanelProject`, except that, like the
   Text Collection, it does not follow a published resource (`updateRelatedChecksSidePanel` reads
   `platform.isPublished`, not `isEditable`, so an `Editable=F` translation project is followed).
-  Power keeps the panel beside the editor. Reference: `open-checks-side-panel.utils.ts`.
+  Power keeps the panel beside the editor, and deliberately does not probe either, so each click
+  still opens another panel there: layout is free-form in Power, and extra panels are the user's to
+  close. Reference: `open-checks-side-panel.utils.ts`.
 - **Alternatives:** A static tab in `simple-layout.data.ts` or a `default-layout-supplement.json`
   entry — rejected: both change what every Simple user sees at startup for a tool few open. A
   `panel` layout targeting a third-column tab — rejected: it splits the third column instead. A
