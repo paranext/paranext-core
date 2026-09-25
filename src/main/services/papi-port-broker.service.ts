@@ -9,7 +9,6 @@ import {
   PapiPortGrant,
 } from '@shared/data/papi-port.model';
 import { getErrorMessage } from 'platform-bible-utils';
-import { doesNavigationReplaceRendererRegistrations } from '@main/services/window-state.service';
 import {
   MessagePortMainLike,
   MessagePortServerSocket,
@@ -37,8 +36,14 @@ export type BrokerWebContents = {
   };
   mainFrame: BrokerFrame | null;
   on(
-    event: 'did-start-navigation',
-    listener: (details: { isMainFrame: boolean; isSameDocument: boolean }) => void,
+    event: 'did-frame-navigate',
+    listener: (
+      event: unknown,
+      url: string,
+      httpResponseCode: number,
+      httpStatusText: string,
+      isMainFrame: boolean,
+    ) => void,
   ): unknown;
   on(event: 'render-process-gone', listener: () => void): unknown;
   on(event: 'destroyed', listener: () => void): unknown;
@@ -157,11 +162,18 @@ export function registerWindow(webContents: BrokerWebContents, windowId: string)
     grantPort(windowId, state, frame);
   });
 
-  webContents.on('did-start-navigation', (details) => {
-    if (!doesNavigationReplaceRendererRegistrations(details)) return;
-    // The page's own unload usually closed the port already; this covers a page that never got to
-    closePort(state, 1001, NAVIGATED_AWAY_REASON);
-  });
+  // Closed when a main-frame navigation commits, not when it starts: a navigation can start and
+  // then be abandoned (turned into a download, cancelled), leaving the page running, and closing
+  // its only link to main with a clean code would leave it cut off with no connection-lost notice.
+  // The page's own unload usually closed the port already, on reload and on window close; this
+  // covers a page that never got to. Same-document navigations do not fire `did-frame-navigate`.
+  webContents.on(
+    'did-frame-navigate',
+    (_event, _url, _httpResponseCode, _httpStatusText, isMainFrame) => {
+      if (!isMainFrame) return;
+      closePort(state, 1001, NAVIGATED_AWAY_REASON);
+    },
+  );
 
   webContents.on('render-process-gone', () => {
     // Closed here rather than left to the port's own close notification, which can arrive after

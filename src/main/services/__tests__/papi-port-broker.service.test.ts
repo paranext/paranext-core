@@ -61,22 +61,18 @@ function makeFakePortMain(): FakePortMain {
   return port as unknown as FakePortMain;
 }
 
-type NavigationDetails = { isMainFrame: boolean; isSameDocument: boolean };
-
 function makeFakeWebContents() {
   const ipcListeners = new Map<string, (event: BrokerIpcEvent, ...args: unknown[]) => void>();
-  const navigationListeners = new Set<(details: NavigationDetails) => void>();
-  // Called with no arguments; typed loosely so the one `on` implementation can store them
-  const crashListeners = new Set<(...args: never[]) => void>();
-  const destroyedListeners = new Set<(...args: never[]) => void>();
+  // Every `webContents` event the broker subscribes to, by name, so a test can fire any Electron
+  // event, including ones the broker is expected to ignore
+  const eventListeners = new Map<string, Set<(...args: never[]) => void>>();
+  const emit = (event: string, ...args: unknown[]) =>
+    eventListeners.get(event)?.forEach((l) => {
+      // The listeners are stored loosely typed; each test fires an event with Electron's arguments
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (l as (...eventArgs: unknown[]) => void)(...args);
+    });
   const mainFrame = { postMessage: vi.fn() };
-  function on(event: 'did-start-navigation', listener: (details: NavigationDetails) => void): void;
-  function on(event: 'render-process-gone' | 'destroyed', listener: () => void): void;
-  function on(event: string, listener: (details: NavigationDetails) => void): void {
-    if (event === 'did-start-navigation') navigationListeners.add(listener);
-    else if (event === 'render-process-gone') crashListeners.add(listener);
-    else if (event === 'destroyed') destroyedListeners.add(listener);
-  }
   const webContents: BrokerWebContents = {
     ipc: {
       on: (channel, listener) => {
@@ -84,7 +80,11 @@ function makeFakeWebContents() {
       },
     },
     mainFrame,
-    on,
+    on: (event: string, listener: (...args: never[]) => void) => {
+      const forEvent = eventListeners.get(event) ?? new Set();
+      forEvent.add(listener);
+      eventListeners.set(event, forEvent);
+    },
   };
   return {
     webContents,
@@ -92,9 +92,14 @@ function makeFakeWebContents() {
     /** Send the port request as if from `frame` (defaults to the main frame) */
     requestPort: (frame: BrokerFrame | null = mainFrame) =>
       ipcListeners.get(PAPI_PORT_REQUEST_CHANNEL)?.({ senderFrame: frame }),
-    navigate: (details: NavigationDetails) => navigationListeners.forEach((l) => l(details)),
-    crash: () => crashListeners.forEach((l) => l()),
-    destroy: () => destroyedListeners.forEach((l) => l()),
+    /** Fire Electron's `did-start-navigation` for a navigation to a new document */
+    navigateStart: (isMainFrame: boolean) =>
+      emit('did-start-navigation', { isMainFrame, isSameDocument: false }),
+    /** Fire Electron's `did-frame-navigate`, which marks a cross-document navigation committing */
+    navigateCommit: (isMainFrame: boolean) =>
+      emit('did-frame-navigate', {}, 'file:///index.html', -1, '', isMainFrame, 1, 1),
+    crash: () => emit('render-process-gone'),
+    destroy: () => emit('destroyed'),
   };
 }
 
@@ -157,12 +162,12 @@ describe('papiPortBroker', () => {
     expect(fake.mainFrame.postMessage).not.toHaveBeenCalled();
   });
 
-  test('a main-frame navigation to a new document closes the old port with 1001 and allows a new request', () => {
+  test('a main-frame navigation that commits closes the old port with 1001 and allows a new request', () => {
     const fake = makeFakeWebContents();
     registerWindow(fake.webContents, 'w1');
     fake.requestPort();
 
-    fake.navigate({ isMainFrame: true, isSameDocument: false });
+    fake.navigateCommit(true);
 
     expect(ports[0].postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ code: 1001, reason: 'page navigated away' }),
@@ -174,13 +179,30 @@ describe('papiPortBroker', () => {
     expect(mockAcceptLocalClient.mock.calls[1][1]).toBe('renderer:w1');
   });
 
-  test('a subframe or same-document navigation leaves the port alone', () => {
+  test('a main-frame navigation that starts but never commits leaves the port open', () => {
+    // A navigation can start and then be abandoned (turned into a download, cancelled), leaving
+    // the page running; its port is its only link to main
     const fake = makeFakeWebContents();
     registerWindow(fake.webContents, 'w1');
     fake.requestPort();
 
-    fake.navigate({ isMainFrame: false, isSameDocument: false });
-    fake.navigate({ isMainFrame: true, isSameDocument: true });
+    fake.navigateStart(true);
+
+    expect(ports[0].postMessage).not.toHaveBeenCalled();
+    expect(ports[0].close).not.toHaveBeenCalled();
+    fake.requestPort();
+    expect(mockAcceptLocalClient).toHaveBeenCalledTimes(1);
+    expect(fake.mainFrame.postMessage).toHaveBeenLastCalledWith(PAPI_PORT_ERROR_CHANNEL, {
+      reason: 'This window already has an open PAPI port; a window gets one at a time',
+    });
+  });
+
+  test('a subframe commit leaves the port alone', () => {
+    const fake = makeFakeWebContents();
+    registerWindow(fake.webContents, 'w1');
+    fake.requestPort();
+
+    fake.navigateCommit(false);
 
     expect(ports[0].close).not.toHaveBeenCalled();
     fake.requestPort();
@@ -223,7 +245,7 @@ describe('papiPortBroker', () => {
     // the navigation started; when it unloads, its port closes and the new page must be served
     const fake = makeFakeWebContents();
     registerWindow(fake.webContents, 'w1');
-    fake.navigate({ isMainFrame: true, isSameDocument: false });
+    fake.navigateStart(true);
     fake.requestPort();
 
     ports[0].emit('close');
@@ -297,7 +319,7 @@ describe('papiPortBroker', () => {
 
     // The refusal of a second request, and the refusal when the network service is not ready
     expect(() => fake.requestPort()).not.toThrow();
-    fake.navigate({ isMainFrame: true, isSameDocument: false });
+    fake.navigateCommit(true);
     mockAcceptLocalClient.mockImplementation(() => {
       throw new Error('The PAPI network service is not initialized');
     });
