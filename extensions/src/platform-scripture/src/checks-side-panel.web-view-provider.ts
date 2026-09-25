@@ -11,6 +11,13 @@ import tailwindStyles from './tailwind.css?inline';
 
 export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
+/**
+ * Lucide "ClipboardCheck" glyph for the tab icon, shown when Simple mode collapses tabs to icons
+ * only.
+ */
+export const CHECKS_SIDE_PANEL_ICON_URL =
+  'papi-extension://platformScripture/assets/icons/clipboard-check.svg';
+
 export interface ChecksSidePanelWebViewOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   editorScrollGroupId: ScrollGroupScrRef | undefined;
@@ -47,6 +54,10 @@ export class ChecksSidePanelWebViewProvider implements IWebViewProvider {
       // dragged into another column. Power mode docks it as an ordinary closable panel. Computed per
       // provider, like its Column 3 siblings, until PT-4405 moves this into the renderer.
       isClosable: interfaceMode !== 'simple',
+      // Icon only in Simple mode, like the Find tab beside it: Column 3 collapses its tabs to icons
+      // there, and a tab with no icon falls back to the generic app logo. Power mode tabs are labeled
+      // with text.
+      iconUrl: interfaceMode === 'simple' ? CHECKS_SIDE_PANEL_ICON_URL : savedWebView.iconUrl,
       content: checksSidePanelWebView,
       styles: tailwindStyles,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
