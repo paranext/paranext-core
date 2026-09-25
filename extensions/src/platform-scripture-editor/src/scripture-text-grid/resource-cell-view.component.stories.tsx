@@ -184,6 +184,27 @@ export const NotInstalled: Story = {
   ),
 };
 
+/**
+ * The resource could not be verified — the catalog failed to load AND the disk scan did not answer.
+ * Shows "Resource unavailable" with an explanation. Unlike `unavailable` (which claims "not
+ * installed"), this avoids directing a user to reinstall something already on disk.
+ */
+export const Unverified: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="unverified"
+        zoomArea={STORY_ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={undefined}
+      />
+    </CellBox>
+  ),
+};
+
 /** The chapter is ready — the editor slot renders (here a stand-in for the read-only `Editorial`). */
 export const Ready: Story = {
   render: () => (
@@ -357,6 +378,24 @@ export const VerseNotInstalled: Story = {
   ),
 };
 
+/** Verse mode, unverified — the inline name stays beside the "couldn't check" placeholder. */
+export const VerseUnverified: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="unverified"
+        zoomArea={STORY_ZOOM_AREA}
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        nameDisplay="inline"
+        editor={undefined}
+      />
+    </CellBox>
+  ),
+};
+
 /** Verse mode, downloading — the inline name stays beside the unavailable placeholder + spinner. */
 export const VerseDownloading: Story = {
   render: () => (
@@ -475,9 +514,10 @@ export const VerseLongNameNarrowPaneRightToLeft: Story = {
 };
 
 /**
- * Partial-failure row smoke: ready, failed, unavailable, and downloading cells side by side.
- * Neighbors stay independent — one non-ready cell does not blank its siblings. The `unavailable`
- * cell shows "Resource not installed" (not "Download failed") so the two failure modes are
+ * Partial-failure row smoke: ready, failed, unavailable, unverified, and downloading cells side by
+ * side. Neighbors stay independent — one non-ready cell does not blank its siblings. The
+ * `unavailable` cell shows "Resource not installed" (not "Download failed") and the `unverified`
+ * cell shows "Resource unavailable" with its own explanation, so the three failure-like states are
  * distinguishable at a glance.
  */
 export const PartialFailureRow: Story = {
@@ -510,6 +550,17 @@ export const PartialFailureRow: Story = {
           state="unavailable"
           zoomArea={STORY_ZOOM_AREA}
           label="NIV"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          copyLimit={undefined}
+          editor={undefined}
+        />
+      </div>
+      <div style={CELL_BOX_STYLE}>
+        <ResourceCellView
+          state="unverified"
+          zoomArea={STORY_ZOOM_AREA}
+          label="NLT"
           textDirection="ltr"
           localizedStrings={localizedStrings}
           copyLimit={undefined}

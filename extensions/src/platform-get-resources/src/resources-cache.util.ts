@@ -83,3 +83,25 @@ export function reconcileCachedResources(
 
   return { resources, isChanged };
 }
+
+/**
+ * Reads the catalog a previous session persisted, or `undefined` when there is none worth using.
+ *
+ * An empty array counts as none: the current fetch never persists one, so an empty persisted
+ * catalog can only be left over from an earlier build. Discarding it makes the next read fetch, or
+ * fall back to whatever else can resolve the reference.
+ *
+ * @param persisted What `papi.storage.readUserData` returned.
+ * @returns The persisted rows, or `undefined`.
+ */
+export function parsePersistedCatalog(persisted: unknown): DblResourceData[] | undefined {
+  if (typeof persisted !== 'string' || persisted.length === 0) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(persisted);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return undefined;
+  return parsed;
+}

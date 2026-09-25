@@ -23,9 +23,9 @@ export type DblCatalogSource = {
  *
  * @param provider The DBL resources data provider, or `undefined` if it has not registered yet.
  * @returns The catalog, or the reason there is none to show.
- * @throws When the provider is reachable and configured but produced no catalog — a failure, not an
- *   answer. Reporting that as an empty catalog would tell the user there is nothing to download
- *   when the truth is that we could not find out.
+ * @throws When the provider is reachable and configured but produced no catalog, or delivered an
+ *   empty one — a failure, not an answer. Reporting that as an empty catalog would tell the user
+ *   there is nothing to download when the truth is that we could not find out.
  */
 export async function resolveDblCatalog(
   provider: DblCatalogSource | undefined,
@@ -38,20 +38,28 @@ export async function resolveDblCatalog(
   const resources = await provider.getDblResources(undefined);
   if (!resources) throw new Error('The DBL resource catalog fetch produced no catalog');
 
+  // The backend already throws for an unreachable DBL, so an empty list here means the
+  // compatibility whitelist dropped every row. It is still no catalog: resolving it as `available`
+  // would overwrite the cached one, in memory and on disk, with nothing.
+  if (resources.length === 0)
+    throw new Error('The DBL resource catalog fetch returned no resources');
+
   return { status: 'available', resources };
 }
 
 /**
  * Whether the startup background fetch should stop retrying.
  *
- * Stops on a catalog, and equally on an installation with no DBL credentials — retrying that nine
- * more times cannot change the answer. Only `notReady` is worth another attempt, which is the whole
- * reason the retry loop exists.
+ * Only a provider that has not registered yet (`notReady`) is worth another attempt. A catalog and
+ * an installation with no DBL credentials are final answers, and so is a thrown attempt: retrying
+ * would hold the fetch lock, which uncached reads and the flag sync wait on, for attempts that
+ * mostly fail the same way. Readers with no cached catalog fetch on demand.
  *
- * @param catalog The answer from {@link resolveDblCatalog}.
- * @returns True when no further attempt could improve on this answer.
+ * @param catalog The answer from {@link resolveDblCatalog}, or `undefined` if the attempt threw.
+ * @returns True when no further attempt is worth making.
  */
-export function shouldStopBackgroundFetch(catalog: DblResourceCatalog): boolean {
+export function shouldStopBackgroundFetch(catalog: DblResourceCatalog | undefined): boolean {
+  if (!catalog) return true;
   return catalog.status === 'available' || catalog.reason === 'notConfigured';
 }
 
