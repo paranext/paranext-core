@@ -394,8 +394,13 @@ export function ResourceCellView({
     : undefined;
 
   const contentStyle = zoomTarget === 'blocks' ? buildAlignedZoomStyle(zoomArea) : undefined;
+  // A scroll port has scroll anchoring off: the reference scroll tells the reader's scrolling from
+  // its own by comparing `scrollTop`, and anchoring rewrites it as content arrives above the verse,
+  // which is the case the re-check exists for. See the aligned grid root's `overflow-anchor` rule.
   const contentOverflowClass =
-    contentOverflow === 'visible' ? 'tw:overflow-visible' : 'tw:overflow-auto';
+    contentOverflow === 'visible'
+      ? 'tw:overflow-visible'
+      : 'tw:overflow-auto tw:[overflow-anchor:none]';
 
   return (
     <div

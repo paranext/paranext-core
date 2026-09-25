@@ -33,16 +33,9 @@ const DOM_CONTRACT = {
     'the editor’s "start typing" prompt, hidden so a read-only grid never invites edits',
 };
 
-/**
- * DOM names `reference-scroll.utils.ts` selects to find a chapter cell's scroll target. Unlike
- * {@link DOM_CONTRACT} these never appear in the stylesheet — the inline layout is the editor's own,
- * and we only address it — so they are checked against the bundle alone.
- */
-const SELECTOR_CONTRACT = {
-  'data-marker': 'marks a verse number span (`v`), which `findVerseMarkerForVerse` selects',
-  'data-number':
-    'the verse a marker names, possibly a range (`"14-15"`), which the chapter finder reads',
-};
+// The chapter cells' scroll target (`span[data-marker="v"][data-number]`) is not checked here: those
+// names appear on nearly every editor node, so a bundle search could never fail. It is pinned by
+// `chapter-verse-marker.contract.test.tsx`, which renders the real editor instead.
 
 /** Exports `resource-cell.component.tsx` imports to ask for the block-verse layout. */
 const API_CONTRACT = {
@@ -83,12 +76,6 @@ describe('platform-editor DOM contract', () => {
       // Nothing forces the two to agree, so a name dropped from our stylesheet is just as broken as
       // one dropped upstream.
       expect(ALIGNED_GRID_STYLESHEET).toContain(name);
-    });
-  });
-
-  Object.entries(SELECTOR_CONTRACT).forEach(([name, why]) => {
-    it(`still renders ${name} — ${why}`, () => {
-      expect(bundle).toContain(name);
     });
   });
 

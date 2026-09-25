@@ -32,7 +32,9 @@ const mockResourceCell = vi.fn(
     zoomMenuLabels?: unknown;
     scrRef: { verseNum: number };
     setScrRef: (scrRef: unknown) => void;
+    isViewVisible?: boolean;
     viewMode?: string;
+    orderIndex?: number;
     showDragHandle?: boolean;
     reorderHandleLabel?: string;
     onReorderKeyDown?: (event: React.KeyboardEvent) => void;
@@ -109,7 +111,6 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...original,
-    useViewVisibility: () => mockVisibility.isVisible,
     // The aligned stylesheet is inert in jsdom, which lays nothing out, so injecting ~400 rules per
     // mount would only cost parse time. `aligned-grid.styles.test.ts` asserts its content instead.
     useStylesheet: () => {},
@@ -316,6 +317,68 @@ describe('ScriptureTextGrid', () => {
     );
     expect(chapterCells).toHaveLength(1);
     expect(chapterCells[0][0].resourceRef).toEqual(resources[1]);
+  });
+  it('hands every chapter surface the view visibility it was given, so a hidden tab defers', () => {
+    // A chapter cell scrolls itself, and while its dock tab is hidden it must defer that scroll and
+    // catch up on activation. That only works if the cell hears the real answer; a hard-coded
+    // `true` at any one call site would scroll a pane with no layout, which silently does nothing.
+    const surfaces = [
+      { name: 'single resource', extra: { resources: [resources[0]] } },
+      { name: 'chapter columns', extra: { viewMode: 'chapter' as const } },
+      {
+        name: 'chapter-context split',
+        extra: { chapterContext: resources[1], onChapterContextChange: vi.fn() },
+      },
+    ];
+    const results = surfaces.map(({ name, extra }) => {
+      mockResourceCell.mockClear();
+      const { unmount } = render(
+        <ScriptureTextGrid
+          isViewVisible={false}
+          resources={resources}
+          scrRef={scrRef}
+          setScrRef={setScrRef}
+          {...extra}
+        />,
+      );
+      const chapterCells = mockResourceCell.mock.calls.filter(
+        (call) => call[0].viewMode === 'chapter',
+      );
+      unmount();
+      return {
+        name,
+        rendersChapterCell: chapterCells.length > 0,
+        visibilities: [...new Set(chapterCells.map((call) => call[0].isViewVisible))],
+      };
+    });
+
+    expect(results).toEqual(
+      surfaces.map(({ name }) => ({ name, rendersChapterCell: true, visibilities: [false] })),
+    );
+  });
+  it('tells each chapter column its position, so a reorder re-arms its scroll', () => {
+    // A moved column's scroll container loses its scroll position; the cell uses its position to
+    // notice the move.
+    render(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+      />,
+    );
+
+    expect(
+      mockResourceCell.mock.calls.map((call) => [
+        call[0].resourceRef.resourceId,
+        call[0].orderIndex,
+      ]),
+    ).toEqual([
+      ['r-a', 0],
+      ['r-b', 1],
+      ['r-c', 2],
+    ]);
   });
   it('closes the split via the labeled close button', () => {
     const onChapterContextClose = vi.fn();

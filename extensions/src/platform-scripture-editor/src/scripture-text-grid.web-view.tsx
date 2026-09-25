@@ -4,6 +4,7 @@ import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/f
 import {
   Button,
   EmptyState,
+  pickTabIconUrl,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -13,7 +14,6 @@ import {
   TooltipTrigger,
   RetryableErrorView,
   useRetryablePromise,
-  useTabIconSelection,
   useViewVisibility,
   type TabIconUrls,
 } from 'platform-bible-react';
@@ -173,7 +173,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // Owned here for the same reason `scrRef` is: it is one fact about this web view, and the grid
   // renders a cell per resource. Subscribing per cell would build an `IntersectionObserver` each,
-  // all watching the same document for the same answer.
+  // all watching the same document for the same answer. The tab icon reads this answer too (via
+  // `pickTabIconUrl` rather than `useTabIconSelection`), so the web view holds exactly one.
   const isViewVisible = useViewVisibility();
 
   // The project whose text collection the grid shows. Opened from the default layout the tab carries
@@ -411,7 +412,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     };
   }, []);
 
-  const gridIconUrl = useTabIconSelection(isDarkTheme, TAB_ICON_URLS);
+  const gridIconUrl = pickTabIconUrl(isDarkTheme, isViewVisible, TAB_ICON_URLS);
   useEffect(() => {
     updateWebViewDefinition({ iconUrl: gridIconUrl });
   }, [gridIconUrl, updateWebViewDefinition]);

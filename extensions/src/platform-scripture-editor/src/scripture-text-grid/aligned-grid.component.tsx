@@ -17,10 +17,7 @@ export type AlignedGridProps = {
   children: ReactNode;
   /** The scroll-group reference this grid follows. */
   scrRef: SerializedVerseRef;
-  /**
-   * Whether the web view this grid lives in is showing. Taken as a prop rather than subscribed to
-   * here, so the web view holds one `IntersectionObserver` for the whole tree.
-   */
+  /** Whether this web view is showing; owned by the web view, which explains why. */
   isViewVisible: boolean;
   /** Accessible name for the grid region. */
   ariaLabel?: string;
