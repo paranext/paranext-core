@@ -23,6 +23,7 @@ import {
   onDidChangeCurrentTheme,
   startThemeService,
 } from '@renderer/services/theme.service';
+import { rememberLaunchInterfaceLanguage } from '@renderer/services/interface-language-restart-prompt';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
 import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
@@ -131,6 +132,11 @@ initConnectionLostService();
     await networkService.initialize();
     markStartup('papi-connected');
     await initializeSharedStoreService(networkService);
+
+    // Read as early as possible, before anything can switch the language, so the restart prompt
+    // knows which language the menu bar and Settings labels were built in. Not awaited: it never
+    // rejects, and nothing at startup needs it.
+    rememberLaunchInterfaceLanguage();
 
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();

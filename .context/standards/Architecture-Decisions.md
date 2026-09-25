@@ -3909,8 +3909,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     dropped when the user switches away from it, since no picker can remove a fallback.
   - The first-run OS-locale default writes only while the setting is still unset, empty or `['en']`.
   - Some UI keeps the old language until restart (the main menu bar, PT-4503; the Settings labels),
-    so Settings and the popover offer a restart after a change of primary language. The first-run
-    step does not.
+    so Settings and the popover offer a restart after a change of primary language, and withdraw
+    the offer when the user switches back to the language the window started with. The first-run
+    step does not offer one.
 - **Alternatives:** Filtering in each renderer surface (several places to keep in sync; PAPI
   consumers would still see hidden languages). Excluding hidden locale files from the build (removes
   the only way to test those translations; re-enabling means restoring assets). A coverage threshold
