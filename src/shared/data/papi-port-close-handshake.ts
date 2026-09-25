@@ -8,7 +8,9 @@
  * module needs `isCleanCloseCode` from the RPC model, which loads the logger.
  */
 
+import { getErrorMessage } from 'platform-bible-utils';
 import { isCleanCloseCode } from '@shared/data/rpc.model';
+import { logger } from '@shared/services/logger.service';
 import {
   createPapiPortCloseFrame,
   createSyntheticCloseEvent,
@@ -111,9 +113,12 @@ export function createPortCloseHandshake(
       if (isClosed) return;
       try {
         hooks.postFrame(createPapiPortCloseFrame(code, reason));
-      } catch {
+      } catch (error) {
         // A port that cannot carry the frame is already on its way down; the close is recorded and
         // the port closed regardless, and the peer reads the bare port close as 1006
+        logger.warn(
+          `Could not post the PAPI port close frame (code ${code}); closing the port anyway. ${getErrorMessage(error)}`,
+        );
       }
       finish(code, reason, isCleanCloseCode(code));
       hooks.closePort();
