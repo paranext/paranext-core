@@ -171,16 +171,23 @@ path that fails to resolve (or an offset past the node it lands on) is a bug or 
 expected state. Keep those host-side checks as fail-safes, log them, and do not write code that
 compensates for an expected divergence — there isn't one.
 
-**Every caret has a location, so `undefined` means "no selection".** `getSelection` and
-`onSelectionChange` answer `undefined` only when there is no selection (or the layout has no USJ
-locations at all), never because a position could not be translated. While an edit is pending, typed
-bytes the settled document carries as an attribute are reported as that attribute's location (a
-typed `\cat x\cat*` is the note's `category`; a typed figure's `|src="…"` is its `file`), and bytes
-with no settled counterpart at all snap LEFT to the nearest location at or before them — the same
-rule as a USFM byte with no USJ representation. A host should treat `undefined` as a cleared
-selection, not as an error. The other direction is strict: `setSelection`, `setAnnotation` and
-`insertNote` refuse a location that names nothing in the settled document (and one inside a scope
-the editor can pair only in part) and log the refusal, rather than approximate it. Rationale:
+**A position names the byte in front of which it sits, and snaps LEFT in BOTH directions.** It maps
+through whatever contains that byte on its own side; where one side has bytes the other lacks, the
+position in front of them snaps to the nearest byte both sides share, and the position just past
+them is exact. There is no separate outbound-snap/inbound-refuse split — one aligner serves both
+directions, each end of a range resolved on its own. Outbound: `getSelection` and `onSelectionChange`
+answer `undefined` only when there is no selection (or the layout has no USJ locations at all), never
+because a position could not be translated — every real caret has a location. While an edit is
+pending, typed bytes the settled document carries as an attribute are reported as that attribute's
+location (a typed `\cat x\cat*` is the note's `category`; a typed figure's `|src="…"` is its
+`file`). With `|lemma="grace"` pending (settles to `|grace`), the settled value start
+(`['lemma'] propertyOffset 0`) lands at the start of the VALUE — before `grace`, not just after `|`
+— because the position sits in front of `grace`, and `grace` is a byte both sides carry. A host
+should treat `undefined` as a cleared selection, not as an error. Inbound: `setSelection`,
+`setAnnotation` and `insertNote` refuse (and log the refusal) ONLY a location that names nothing in
+the settled document at all; a location inside a scope the editor can pair only in part is not a
+whole-scope refusal — it snaps LEFT the same as outbound. A position basis the live tree has moved
+on from is rebuilt, and the rebuild logged as an error, never refused. Rationale:
 `adr-editor-outbound-positions-snap-left` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
 
 That holds across Standard view's space-run collapse too. A run the user types stays on screen while
@@ -188,6 +195,29 @@ That holds across Standard view's space-run collapse too. A run the user types s
 position model drops the run's extra spaces exactly where serialization does, from one shared
 definition. The editor's position functions therefore take its view options; pass the view the
 editor is running, never a default.
+
+**`onUsjChange`'s `usj` payload is a SETTLED, synchronous snapshot.** It equals `getUsj()` at the
+moment of emission, fires synchronously within the commit's own listener pass, exactly once per
+content commit and in commit order — including once, not twice, after a `setUsj` reload. A
+selection-only commit emits nothing. `ops` stay a LIVE view of the same commit, so a host that needs
+both reads `usj` for content and `ops` for the tree-level change; neither substitutes for the other.
+
+**Notes are counted in the SETTLED document.** `selectNote(index)` counts and selects against
+`getUsj()`'s notes; a note still pending as a typed literal gets the caret placed at the literal's
+`\`, not at a note index that does not exist yet. `getNoteOps` stays LIVE for both key and index, so
+`getNoteOps(i)` and `selectNote(i)` can legitimately name different notes while a whole note literal
+is pending — a host that keys UI state off one must not assume the other agrees.
+
+**A typed table cell settles as `table:cell` under ParatextData parity.** The settle applies
+`UsfmParser.IsCell`'s own rule: a Character-typed or undeclared cell-named marker inside an open row
+is a cell; the same marker `+`-nested under another marker is never a cell; with no open row, it is
+an ordinary character marker. The position and note-counting rules above apply to a settled cell the
+same as to any other settled content.
+
+Recorded as-is, not position defects: `\c 2 made` settles to a chapter followed by a bare root
+string `"made"` — ParatextData produces the same USJ from that input. The settle keeps the space
+before a typed `\c`, `\tr`, `\esb` or `\esbe` that ParatextData trims on save; positions count only
+non-whitespace bytes, so the kept space never moves one.
 
 **A position has one spelling.** Every USFM position has exactly ONE `UsjDocumentLocation`, and
 the editor emits only that one; `UsjReaderWriter.usfmVerseLocationToUsjDocumentLocation` is the

@@ -25,6 +25,10 @@
  *   browser's own selection and the editor's own `getSelection()` report.
  * - `setAnnotation` over those same settled offsets marks exactly those two characters — not the
  *   separator, not the two before them.
+ * - A pending, un-departed attribute edit inside a freshly typed `\w grace\w*` span does not disturb
+ *   `setAnnotation`'s resolution of an unrelated word in a different paragraph: the highlight lands
+ *   on exactly that word while the edit is still mid-flight, because a location outside a pending
+ *   scope resolves through the identity fast path regardless of what is pending elsewhere.
  *
  * The last two talk to the editor through the scripture editor's web view controller network object
  * (`object:webViewController<webViewId>.…`), the same surface extensions use.
@@ -33,7 +37,7 @@
  * instance launched against the shared webpack renderer dev server has a documented failure mode
  * where new dock tabs never render (see isolated.fixture.ts). The scenarios run as test.step()s
  * sharing the one instance and one loaded chapter, in an order that leaves the tree-splitting
- * annotation until last.
+ * annotation and the typed-content scenario until last.
  *
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into the empty root): `npm run test:e2e:isolated
@@ -44,6 +48,7 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   chapterLocation,
   findCharSpanText,
+  findVerseText,
   getChapterUsj,
   readEditorSelection,
   sendToEditorController,
@@ -83,9 +88,25 @@ const EXPECTED_CHAR_TEXT =
  */
 const ANNOTATION_TYPE = 'spelling';
 const ANNOTATION_ID = 'settled-offset-probe';
+const PENDING_ANNOTATION_ID = 'pending-attribute-word-after';
 
 /** The display separator the editor places between an opening marker glyph and its content. */
 const NBSP = '\u00a0';
+
+const WORD_MARKER = 'w';
+/**
+ * The content this spec types into its own `\w` span, and (unrelatedly) the pending attribute's
+ * value — `lemma` is the marker's own default attribute, so the named form collapses to `|grace`.
+ */
+const SPAN_WORD = 'grace';
+/**
+ * John 2:5 ("His mother said to the servants, ...") is a plain, char-span-free sentence this spec
+ * types a `\w grace\w*` span into. John 2:6 opens its own `\p`, so it is a sibling paragraph at the
+ * chapter's top level: splitting verse 5's text around the new span never renumbers verse 6's own
+ * content, and its first word makes a stable target for a location computed once, up front.
+ */
+const WORD_AFTER_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 6 };
+const WORD_AFTER_TARGET = 'Now';
 
 test.use({
   interfaceMode: 'power',
@@ -249,6 +270,72 @@ test.describe('scripture editor settled positions', () => {
       // Marking a range must not move or consume the span's marker glyphs.
       await expect(annotatedMark.locator('span.opening, span.closing')).toHaveCount(0);
       await expect(editorInput).toContainText(charText);
+    });
+
+    await test.step('setAnnotation on a word after a span with a pending attribute edit marks exactly that word', async () => {
+      // Computed against the chapter USJ read before any typing in this spec, so it stays correct
+      // regardless of how verse 5's own paragraph reshapes below (see WORD_AFTER_VERSE_REF).
+      const verseSixText = findVerseText(chapterUsj.content ?? [], '6');
+      if (!verseSixText)
+        throw new Error(`No plain text found for John 2:6 in ${TARGET_REFERENCE}'s chapter USJ`);
+      const wordOffset = verseSixText.text.indexOf(WORD_AFTER_TARGET);
+      if (wordOffset === -1)
+        throw new Error(
+          `Expected "${WORD_AFTER_TARGET}" in John 2:6's text, got: ${verseSixText.text}`,
+        );
+
+      // The bundled sample WEB project ships no `\w` markers, so this step creates one by typing
+      // literal USFM marker syntax — the same technique attribute-display-settle.spec.ts uses.
+      // Appended directly after verse 5's own closing punctuation, at the true end of its single
+      // visual line (a plain, char-span-free sentence), so the new span is the LAST thing in
+      // verse 5's paragraph and touches nothing before it.
+      await editorInput.getByText('servants', { exact: false }).first().click();
+      await editorInput.press('End');
+      await editorInput.pressSequentially(`\\${WORD_MARKER} ${SPAN_WORD}\\${WORD_MARKER}*`, {
+        delay: 30,
+      });
+      await expect(editorInput).toContainText(SPAN_WORD, { timeout: 15_000 });
+      const wCloser = editorInput.locator(`span.closing[data-marker="${WORD_MARKER}"]`).last();
+      await expect(wCloser).toBeAttached({ timeout: 15_000 });
+
+      // Click just inside the left edge of the new span's own closer — the same boundary the
+      // first scenario above clicks to reach a span's text end. This appends after the span's own
+      // text and never touches the opening glyph's leading NBSP separator, which sits at the other
+      // end of the span entirely.
+      const closerBox = await wCloser.boundingBox();
+      if (!closerBox) throw new Error('The new \\w span closing glyph has no bounding box');
+      await wCloser.click({ position: { x: 1, y: closerBox.height / 2 } });
+
+      // Type the attribute and stop — no caret departure, so the edit stays PENDING (the tokenizer
+      // only re-derives attributes on caret departure for an already-closed span; see
+      // attribute-display-settle.spec.ts). `setAnnotation` below addresses a different paragraph
+      // while this edit is still mid-flight.
+      await editorInput.pressSequentially(`|lemma="${SPAN_WORD}"`, { delay: 30 });
+      await expect(editorInput).toContainText(`${SPAN_WORD}|lemma="${SPAN_WORD}"`, {
+        timeout: 15_000,
+      });
+
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterLocation(WORD_AFTER_VERSE_REF, verseSixText.jsonPath, wordOffset),
+          end: chapterLocation(
+            WORD_AFTER_VERSE_REF,
+            verseSixText.jsonPath,
+            wordOffset + WORD_AFTER_TARGET.length,
+          ),
+        },
+        ANNOTATION_TYPE,
+        PENDING_ANNOTATION_ID,
+      ]);
+
+      const annotatedMark = editorInput.locator(`mark.annotationId-${PENDING_ANNOTATION_ID}`);
+      await expect(annotatedMark).toHaveCount(1, { timeout: 30_000 });
+      await expect(annotatedMark).toHaveClass(
+        new RegExp(`(^|\\s)editor-typed-mark-external-${ANNOTATION_TYPE}(\\s|$)`),
+      );
+      // Exact, not `toContainText`: the pending edit sits in a different paragraph, so any offset
+      // this location resolves wrong would mark a neighboring word instead of "Now" itself.
+      expect(await annotatedMark.textContent()).toBe(WORD_AFTER_TARGET);
     });
   });
 });

@@ -29,6 +29,8 @@ export interface SerializedVerseRef {
 export interface UsjMarkerObject {
   type: string;
   marker?: string;
+  /** The verse or chapter number a `type: 'verse'` / `type: 'chapter'` node carries. */
+  number?: string;
   content?: (string | UsjMarkerObject)[];
 }
 
@@ -83,6 +85,32 @@ export function findCharSpanText(
         return { jsonPath: contentJsonPath([...nodeIndexes, textIndex]), text };
     }
     return findCharSpanText(children, marker, nodeIndexes);
+  }, undefined);
+}
+
+/**
+ * Depth-first search for the `type: 'verse'` marker whose `number` is `verseNumber`, returning the
+ * plain text string immediately following it in the same content array — the verse's own opening
+ * text — together with its JSONPath. A location computed from this text against a chapter USJ read
+ * BEFORE some other, unrelated edit stays valid through that edit as long as the edit lands in a
+ * DIFFERENT paragraph: paragraphs are sibling entries in the chapter's own `content` array, so
+ * splitting a string inside one paragraph never renumbers another paragraph's own children.
+ */
+export function findVerseText(
+  content: readonly (string | UsjMarkerObject)[],
+  verseNumber: string,
+  indexes: readonly number[] = [],
+): CharSpanTextLocation | undefined {
+  return content.reduce<CharSpanTextLocation | undefined>((found, node, index) => {
+    if (found || typeof node === 'string') return found;
+    const nodeIndexes = [...indexes, index];
+    if (node.type === 'verse' && node.number === verseNumber) {
+      const next = content[index + 1];
+      return typeof next === 'string'
+        ? { jsonPath: contentJsonPath([...indexes, index + 1]), text: next }
+        : undefined;
+    }
+    return findVerseText(node.content ?? [], verseNumber, nodeIndexes);
   }, undefined);
 }
 

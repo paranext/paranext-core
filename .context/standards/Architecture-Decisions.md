@@ -1437,31 +1437,38 @@ step, no automation. Just a record.
   `|src="…"` is its `file`/`size`/`ref` attributes); the rest are bytes the settle genuinely spells
   differently from how they were typed (a figure's typed `file="…"` settles to `src="…"`), and two
   such literals in one paragraph left the whole paragraph untranslatable.
-- **Decision:** Outbound positions never answer `undefined` for a real caret. Bytes the settled
-  document carries as attributes map exactly, to the location `UsjReaderWriter` gives the same USFM
-  byte. Anything else with no settled counterpart snaps LEFT to the nearest translatable position at
-  or before it — the rule this editor already applies to a USFM byte with no USJ representation —
-  each end of a range on its own, and the front of the scope when nothing in it translates. A
-  scope's run pairing holds for as much of the scope as it can, so a caret in front of an
-  unpairable literal still reports exactly. Inbound stays strict: a host location naming nothing in
-  the settled document, or inside a scope paired only in part, is refused and logged. A memoized
-  plan the live tree has moved on from stays an outbound refusal too; no read that prepares its own
-  plan reaches it.
+- **Decision:** No position ever answers `undefined` for a real caret, and no location is refused
+  outright unless it names nothing in the settled document at all — outbound reporting and inbound
+  writes (`setSelection`, `setAnnotation`, `insertNote`) share the one aligner, so neither direction
+  has its own private rule. Bytes the settled document carries as attributes map exactly, to the
+  location `UsjReaderWriter` gives the same USFM byte. Anything else with no settled counterpart
+  snaps LEFT to the nearest translatable position at or before it — the rule this editor already
+  applies to a USFM byte with no USJ representation — each end of a range on its own, and the front
+  of the scope when nothing in it translates. A scope's run pairing holds for as much of the scope
+  as it can, so a caret in front of an unpairable literal still reports exactly, and a scope paired
+  only in part is never refused as a whole inbound either — it snaps LEFT the same as outbound.
+  Inbound refuses (and logs) only a location that names nothing in the settled document at all. A
+  memoized plan the live tree has moved on from is rebuilt from the current tree — and the rebuild
+  logged as an error — never refused; no read against a stale plan reaches a host as a refusal.
 - **Alternatives:** **Keep refusing untranslatable carets** — rejected: `undefined` would keep two
   meanings, and a host would have to guess whether to clear its selection. **A separate refusal
   signal on the selection callback** — rejected: every host would need to handle a state no user
   action can resolve, while the nearest earlier location is always a sound answer. **Snap to the
   nearest position in either direction** — rejected: it would disagree with the snap-left rule USFM
-  bytes already follow, and a caret could report a position past bytes it has not reached.
-  **Snapping inbound as well** — rejected: a host location is data the host will act on (an
-  annotation, a note insertion); resolving it approximately would mark or insert at the wrong bytes
-  silently.
+  bytes already follow, and a caret could report a position past bytes it has not reached. **Refuse
+  inbound whenever a scope pairs only in part** — rejected: a pending scope commonly carries one
+  unpairable byte alongside many pairable ones, and refusing the whole scope over that one byte
+  blocks far more valid inbound writes than the snap costs in precision; inbound accepts the same
+  imprecision outbound already does.
 - **Consequences:** `undefined` from `getSelection` / `onSelectionChange` means "no selection", so a
   host (`handleSelectionChange` in `platform-scripture-editor.web-view.tsx`) can treat it as a
   cleared selection. A position read while such a literal is pending and set back lands on the
-  snapped representative, not on the byte — the same lossy round trip as any snapped-left byte. The
-  editor-side rule and its tests live in the editor repo (`docs/standard-view-invariants.md`, "A
-  position has one spelling").
+  snapped representative, not on the byte — the same lossy round trip as any snapped-left byte, in
+  either direction: an inbound `setSelection` / `setAnnotation` / `insertNote` location landing on an
+  unpairable byte writes at the snapped representative instead of being refused. A stale memoized
+  plan triggers a rebuild, logged as an error, rather than a refusal, so a host never has to retry a
+  write because the editor's own cache fell behind. The editor-side rule and its tests live in the
+  editor repo (`docs/standard-view-invariants.md`, "A position has one spelling").
 - **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11.
 
 ## adr-editor-positions-are-settled-coordinates: The platform editor's public position API is settled coordinates, translated once at the editor boundary
@@ -1485,7 +1492,10 @@ step, no automation. Just a record.
   or merge paragraphs. A USFM byte with no USJ representation (the `+` of a nested marker, the second
   `/` of `//`, an attribute's `|`, `=`, `"`, or the space between attributes) snaps LEFT to the
   nearest representable location, so a position anchored to one of those bytes round-trips lossily by
-  design. The identity fast path is only sound because the logical content model every position
+  design. The same mapping serves both directions — a `setSelection` / `setAnnotation` / `insertNote`
+  location resolves through the identical byte aligner, so inbound carries no rule of its own; see
+  `adr-editor-outbound-positions-snap-left` for the snap-left boundary rule this produces. The
+  identity fast path is only sound because the logical content model every position
   resolves through measures text exactly as serialization writes it — including Standard view's
   space-run collapse, whose dropped spaces the model excludes by the same shared definition the
   serializer collapses with. Collapse is view-dependent, so the whole position layer takes the
@@ -1517,7 +1527,8 @@ step, no automation. Just a record.
   the cross-repo assignment from core's types into the editor's typed API fails to type-check. The
   live/settled translation runs only while something is pending, scoped per pending settle scope and
   memoized on that scope's content, so the identity fast path keeps the common (nothing pending) case
-  free.
+  free. A memoized scope the live tree has since moved on from is rebuilt from the current tree, and
+  the rebuild is logged as an error rather than surfaced to a host as a refusal.
 - **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11. The guard this decision
   documents is `insertCommentAtCurrentSelection` in
   `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`.
