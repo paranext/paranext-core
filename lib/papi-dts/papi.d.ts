@@ -13232,9 +13232,9 @@ declare module 'shared/services/theme.service' {
 }
 declare module 'shared/services/project-settings.service' {
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
+  import { Localized } from 'platform-bible-utils';
   import { ProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
   import { ProjectDataProviderInterfaces } from 'papi-shared-types';
-  import { Localized } from 'platform-bible-utils';
   /**
    * Filters project settings contributions based on the provided project interfaces.
    *
