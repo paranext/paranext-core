@@ -1444,6 +1444,15 @@ async function main() {
      * would no longer give the same answer.
      */
     let isAppGoingDown = false;
+    /**
+     * Destroy the window, closing its PAPI port first: `destroy()` skips the page's unload and so
+     * the page's own clean close, and a port left to die with the page reads as an unclean 1006 on
+     * main.
+     */
+    const closePapiPortAndDestroy = () => {
+      closePapiPortForWindow(windowId, 1001, 'window closing');
+      newWindow.destroy();
+    };
     newWindow.on('close', async (event) => {
       // A second close click while the first close is still working falls through to Electron's
       // default close on purpose: with the sync's request timeout disabled by the extension, the
@@ -1647,8 +1656,7 @@ async function main() {
         } else if (isAppGoingDown) {
           // `event.preventDefault()` above suppresses Electron's default close; destroy() here
           // triggers the 'closed' event and allows the app to quit.
-          closePapiPortForWindow(windowId, 1001, 'window closing');
-          newWindow.destroy();
+          closePapiPortAndDestroy();
         } else {
           // Closed rather than destroyed, because the app is staying up and the page still has
           // teardown of its own to run — `destroy()` skips `beforeunload`, which is what prunes
@@ -1665,8 +1673,7 @@ async function main() {
             logger.warn(
               `Window ${windowId} did not finish closing within ${WINDOW_CLOSE_TIME_OUT_MS} ms; destroying it`,
             );
-            closePapiPortForWindow(windowId, 1001, 'window closing');
-            newWindow.destroy();
+            closePapiPortAndDestroy();
           }, WINDOW_CLOSE_TIME_OUT_MS);
           newWindow.once('closed', () => clearTimeout(forceCloseTimeout));
         }
