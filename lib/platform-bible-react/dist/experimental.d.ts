@@ -1483,20 +1483,6 @@ export type DeveloperSectionProps = {
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare function DeveloperSection({ localizedStrings, selectedServer, onServerChange, disabled, }: DeveloperSectionProps): import("react/jsx-runtime").JSX.Element;
 /**
- * Splits one already-resolved keyboard shortcut hint — a single key combination, with no `/`
- * alternatives and no catalog no-equivalent marker — into the keys {@link ShortcutKeys} renders as
- * separate keycaps.
- *
- * @param hint One key combination, e.g. `⌥⇧⌘L`, `Ctrl+Shift+N`, or `F12`
- * @returns The keys in press order, and what to show between their keycaps: `'+'` for the
- *   Windows/Linux spelling, `''` for the macOS spelling, where the symbols sit adjacent
- * @experimental This function is unstable and may change or disappear without notice
- */
-export declare function getShortcutKeycaps(hint: string): {
-	keycaps: string[];
-	separator: "+" | "";
-};
-/**
  * Props for {@link ShortcutKeys}.
  *
  * @experimental This type is unstable and may change or disappear without notice
