@@ -99,6 +99,7 @@ function renderPane(overrides: Partial<ComponentProps<typeof FootnotesLayout>> =
   const { children = <div data-testid="editor" />, ...rest } = overrides;
   return render(
     <FootnotesLayout
+      copyLimit={undefined}
       usj={usjWithTwoNotes}
       showMarkers
       useWebViewState={useWebViewStateMock}
@@ -143,6 +144,7 @@ describe('FootnotesLayout Scripture text across pane visibility', () => {
   function renderLayout(isPaneVisible: boolean, children = <div data-testid="editor" />) {
     return (
       <FootnotesLayout
+        copyLimit={undefined}
         usj={usjWithTwoNotes}
         showMarkers
         useWebViewState={useWebViewStateMock}
@@ -415,6 +417,7 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
     render(
       <>
         <FootnotesLayout
+          copyLimit={undefined}
           usj={usjWithTwoNotes}
           showMarkers
           useWebViewState={useWebViewStateMock}
@@ -488,6 +491,7 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
     };
     const { rerender } = render(
       <FootnotesLayout
+        copyLimit={undefined}
         {...props}
         editingFootnoteIndex={1}
         renderEditingFootnote={() => <input data-testid="row-editor" />}
@@ -499,7 +503,7 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
     expect(onPaneFocusChange).toHaveBeenLastCalledWith(true);
 
     rerender(
-      <FootnotesLayout {...props}>
+      <FootnotesLayout copyLimit={undefined} {...props}>
         <div />
       </FootnotesLayout>,
     );
@@ -543,6 +547,7 @@ describe('FootnotesLayout editing seam', () => {
     const { rerender } = renderPane({ onSelectedFootnoteChange });
     rerender(
       <FootnotesLayout
+        copyLimit={undefined}
         usj={usjWithTwoNotes}
         showMarkers
         useWebViewState={useWebViewStateMock}
@@ -567,7 +572,12 @@ describe('FootnotesLayout editing seam', () => {
       onSelectedFootnoteChange,
     };
     const { rerender } = render(
-      <FootnotesLayout {...props} usj={usjWithTwoNotes} focusRequest={{ index: 1 }}>
+      <FootnotesLayout
+        copyLimit={undefined}
+        {...props}
+        usj={usjWithTwoNotes}
+        focusRequest={{ index: 1 }}
+      >
         <div />
       </FootnotesLayout>,
     );
@@ -586,7 +596,12 @@ describe('FootnotesLayout editing seam', () => {
       ],
     };
     rerender(
-      <FootnotesLayout {...props} usj={usjWithOneNote} focusRequest={{ index: 1 }}>
+      <FootnotesLayout
+        copyLimit={undefined}
+        {...props}
+        usj={usjWithOneNote}
+        focusRequest={{ index: 1 }}
+      >
         <div />
       </FootnotesLayout>,
     );
@@ -661,7 +676,7 @@ describe('FootnotesLayout pane focus reporting', () => {
       usj: usjWithTwoNotes,
     };
     const { rerender } = render(
-      <FootnotesLayout {...props}>
+      <FootnotesLayout copyLimit={undefined} {...props}>
         <div />
       </FootnotesLayout>,
     );
@@ -670,6 +685,7 @@ describe('FootnotesLayout pane focus reporting', () => {
 
     rerender(
       <FootnotesLayout
+        copyLimit={undefined}
         {...props}
         editingFootnoteIndex={1}
         renderEditingFootnote={() => <RowEditor />}
@@ -717,7 +733,12 @@ describe('FootnotesLayout selection across USJ changes', () => {
       onSelectedFootnoteChange,
     };
     const { rerender } = render(
-      <FootnotesLayout {...props} usj={usjWithTwoNotes} focusRequest={{ index: 1 }}>
+      <FootnotesLayout
+        copyLimit={undefined}
+        {...props}
+        usj={usjWithTwoNotes}
+        focusRequest={{ index: 1 }}
+      >
         <div />
       </FootnotesLayout>,
     );
@@ -729,7 +750,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
     // A fresh USJ object with identical content (what a PDP echo looks like over IPC).
     const echo: Usj = JSON.parse(JSON.stringify(usjWithTwoNotes));
     rerender(
-      <FootnotesLayout {...props} usj={echo} focusRequest={{ index: 1 }}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={echo} focusRequest={{ index: 1 }}>
         <div />
       </FootnotesLayout>,
     );
@@ -748,7 +769,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       focusRequest: { index: 1 },
     };
     const { rerender } = render(
-      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={usjWithTwoNotes}>
         <div />
       </FootnotesLayout>,
     );
@@ -757,7 +778,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
 
     const echo: Usj = JSON.parse(JSON.stringify(usjWithTwoNotes));
     rerender(
-      <FootnotesLayout {...props} usj={echo}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={echo}>
         <div />
       </FootnotesLayout>,
     );
@@ -779,7 +800,12 @@ describe('FootnotesLayout selection across USJ changes', () => {
       renderEditingFootnote: () => <div data-testid="row-editor" />,
     };
     const { rerender } = render(
-      <FootnotesLayout {...props} usj={usjWithTwoNotes} focusRequest={{ index: 1 }}>
+      <FootnotesLayout
+        copyLimit={undefined}
+        {...props}
+        usj={usjWithTwoNotes}
+        focusRequest={{ index: 1 }}
+      >
         <div />
       </FootnotesLayout>,
     );
@@ -805,7 +831,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       ],
     };
     rerender(
-      <FootnotesLayout {...props} usj={edited} focusRequest={{ index: 1 }}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={edited} focusRequest={{ index: 1 }}>
         <div />
       </FootnotesLayout>,
     );
@@ -828,6 +854,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
     };
     const { rerender } = render(
       <FootnotesLayout
+        copyLimit={undefined}
         {...props}
         usj={usjWithTwoNotes}
         editingFootnoteIndex={1}
@@ -839,7 +866,11 @@ describe('FootnotesLayout selection across USJ changes', () => {
     onSelectedFootnoteChange.mockClear();
 
     rerender(
-      <FootnotesLayout {...props} usj={usjWithNotes('alpha', 'beta typed more')}>
+      <FootnotesLayout
+        copyLimit={undefined}
+        {...props}
+        usj={usjWithNotes('alpha', 'beta typed more')}
+      >
         <div />
       </FootnotesLayout>,
     );
@@ -865,6 +896,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
     const usjWithThreeNotes = usjWithNotes('alpha', 'beta', 'gamma');
     const { rerender } = render(
       <FootnotesLayout
+        copyLimit={undefined}
         {...props}
         usj={usjWithThreeNotes}
         editingFootnoteIndex={1}
@@ -878,7 +910,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
     // Editing ends with no document change: the same `usj` object reference, so the parse effect
     // does not run this update.
     rerender(
-      <FootnotesLayout {...props} usj={usjWithThreeNotes}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={usjWithThreeNotes}>
         <div />
       </FootnotesLayout>,
     );
@@ -886,7 +918,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
     // An unrelated notes change: the first note is deleted, so index 1 - still the selection - now
     // holds "gamma", a genuinely different note from the "beta" that was being edited.
     rerender(
-      <FootnotesLayout {...props} usj={usjWithNotes('beta', 'gamma')}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={usjWithNotes('beta', 'gamma')}>
         <div />
       </FootnotesLayout>,
     );
@@ -910,7 +942,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
       focusRequest: { index: 1 },
     };
     const { rerender } = render(
-      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={usjWithTwoNotes}>
         <div />
       </FootnotesLayout>,
     );
@@ -919,6 +951,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
     // Start editing the already-selected row on a later update (not at mount).
     rerender(
       <FootnotesLayout
+        copyLimit={undefined}
         {...props}
         usj={usjWithTwoNotes}
         editingFootnoteIndex={1}
@@ -932,6 +965,7 @@ describe('FootnotesLayout selection across USJ changes', () => {
     // A live-apply content edit to the row being edited.
     rerender(
       <FootnotesLayout
+        copyLimit={undefined}
         {...props}
         usj={usjWithNotes('alpha', 'beta typed more')}
         editingFootnoteIndex={1}
@@ -965,7 +999,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       renderEditingFootnote: () => <RowEditor />,
     };
     const { rerender } = render(
-      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={usjWithTwoNotes}>
         <div />
       </FootnotesLayout>,
     );
@@ -990,7 +1024,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       ],
     };
     rerender(
-      <FootnotesLayout {...props} usj={edited}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={edited}>
         <div />
       </FootnotesLayout>,
     );
@@ -1014,7 +1048,12 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       renderEditingFootnote: () => <RowEditor />,
     };
     const { rerender } = render(
-      <FootnotesLayout {...props} usj={usjWithTwoNotes} editingFootnoteIndex={1}>
+      <FootnotesLayout
+        copyLimit={undefined}
+        {...props}
+        usj={usjWithTwoNotes}
+        editingFootnoteIndex={1}
+      >
         <div />
       </FootnotesLayout>,
     );
@@ -1023,6 +1062,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
     // The web view moves the index and publishes the document in the same update.
     rerender(
       <FootnotesLayout
+        copyLimit={undefined}
         {...props}
         usj={usjWithNotes('new', 'alpha', 'beta')}
         editingFootnoteIndex={2}
@@ -1043,7 +1083,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       onClose: () => {},
     };
     const { rerender } = render(
-      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={usjWithTwoNotes}>
         <div />
       </FootnotesLayout>,
     );
@@ -1069,7 +1109,7 @@ describe('FootnotesLayout list identity across USJ changes', () => {
       ],
     };
     rerender(
-      <FootnotesLayout {...props} usj={withThree}>
+      <FootnotesLayout copyLimit={undefined} {...props} usj={withThree}>
         <div />
       </FootnotesLayout>,
     );
@@ -1162,5 +1202,73 @@ describe('FootnotesLayout content zoom marker', () => {
     );
     expect(unlabelled).not.toBeNull();
     expect(unlabelled).not.toHaveAttribute('data-platform-content-zoom-label');
+  });
+});
+
+/** A chapter with one footnote, so the pane lists it. */
+const USJ_WITH_FOOTNOTE: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        'Verse text',
+        {
+          type: 'note',
+          marker: 'f',
+          caller: '+',
+          content: [{ type: 'char', marker: 'ft', content: ['The footnote text'] }],
+        },
+      ],
+    },
+  ],
+};
+
+/** Selects everything in the footnotes pane, copies, and returns what was put on the clipboard. */
+function copyWholePane(container: HTMLElement) {
+  const pane = container.querySelector('[data-platform-content-zoom-root="footnotes"]');
+  if (!pane) throw new Error('footnotes pane not rendered');
+  const range = document.createRange();
+  range.selectNodeContents(pane);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+  const setData = vi.fn();
+  const notCancelled = fireEvent.copy(pane, { clipboardData: { setData } });
+  window.getSelection()?.removeAllRanges();
+  return { setData, isCancelled: !notCancelled, selectedText: range.toString() };
+}
+
+describe('FootnotesLayout copy limit', () => {
+  it('shortens a copy from the pane to the copy limit', () => {
+    const { container } = renderPane({ usj: USJ_WITH_FOOTNOTE, copyLimit: 5 });
+
+    const { setData, isCancelled, selectedText } = copyWholePane(container);
+
+    expect(selectedText.length).toBeGreaterThan(5);
+    expect(isCancelled).toBe(true);
+    expect(setData).toHaveBeenCalledTimes(1);
+    const [format, text] = setData.mock.calls[0];
+    expect(format).toBe('text/plain');
+    expect(text).toHaveLength(5);
+  });
+
+  it('copies nothing from the pane while the copy limit is 0', () => {
+    const { container } = renderPane({ usj: USJ_WITH_FOOTNOTE, copyLimit: 0 });
+
+    const { setData, isCancelled } = copyWholePane(container);
+
+    expect(isCancelled).toBe(true);
+    expect(setData).not.toHaveBeenCalled();
+  });
+
+  it('leaves a copy from the pane alone when there is no copy limit', () => {
+    const { container } = renderPane({ usj: USJ_WITH_FOOTNOTE, copyLimit: undefined });
+
+    const { setData, isCancelled } = copyWholePane(container);
+
+    expect(isCancelled).toBe(false);
+    expect(setData).not.toHaveBeenCalled();
   });
 });

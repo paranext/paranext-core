@@ -75,6 +75,7 @@ describe('ResourceCellView row smoke', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<span>Blessed are the poor in spirit</span>}
         />
         <ResourceCellView
@@ -83,6 +84,7 @@ describe('ResourceCellView row smoke', () => {
           label="ASV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={undefined}
         />
         <ResourceCellView
@@ -91,6 +93,7 @@ describe('ResourceCellView row smoke', () => {
           label="KJV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={undefined}
         />
       </>,
@@ -122,6 +125,7 @@ describe('ResourceCellView row smoke', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={undefined}
       />,
     );
@@ -139,6 +143,7 @@ describe('ResourceCellView row smoke', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={undefined}
       />,
     );
@@ -160,6 +165,7 @@ describe('ResourceCellView row smoke', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<span>Blessed are the poor in spirit</span>}
         />
         <ResourceCellView
@@ -168,6 +174,7 @@ describe('ResourceCellView row smoke', () => {
           label="עברית"
           textDirection="rtl"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<span>אַשְׁרֵי הָאִישׁ</span>}
         />
         <ResourceCellView
@@ -176,6 +183,7 @@ describe('ResourceCellView row smoke', () => {
           label="العربية"
           textDirection="rtl"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<span>طُوبَى لِلْمَسَاكِينِ</span>}
         />
       </>,
@@ -203,6 +211,7 @@ describe('ResourceCellView name display', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<span>In the beginning</span>}
       />,
@@ -221,6 +230,7 @@ describe('ResourceCellView name display', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<span>In the beginning</span>}
       />,
@@ -240,6 +250,7 @@ describe('ResourceCellView name display', () => {
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<span>אַשְׁרֵי</span>}
       />,
@@ -260,6 +271,7 @@ describe('ResourceCellView name display', () => {
         label="KJV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={undefined}
       />,
@@ -276,6 +288,7 @@ describe('ResourceCellView name display', () => {
         label="ASV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={undefined}
       />,
@@ -292,6 +305,7 @@ describe('ResourceCellView name display', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         emptyMessage={localizedStrings[EMPTY_KEY]}
         editor={undefined}
@@ -309,6 +323,7 @@ describe('ResourceCellView name display', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<span>In the beginning</span>}
       />,
@@ -326,6 +341,7 @@ describe('ResourceCellView name display', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<span>Blessed</span>}
       />,
     );
@@ -401,6 +417,7 @@ describe('ResourceCellView right-click menu', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay={nameDisplay}
         />,
@@ -422,6 +439,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         nameDisplay="header"
         showDragHandle
@@ -441,6 +459,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={{ ...menuStrings, [NOT_INSTALLED_KEY]: 'Resource not installed' }}
+        copyLimit={undefined}
         editor={undefined}
       />,
     );
@@ -466,6 +485,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
       />,
     );
@@ -493,6 +513,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
       />,
     );
@@ -530,6 +551,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
       />,
     );
@@ -541,6 +563,328 @@ describe('ResourceCellView right-click menu', () => {
     expect(writeText).toHaveBeenCalledWith('selected text');
 
     getSelectionSpy.mockRestore();
+  });
+
+  it('shortens the copied text to the copy limit', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'abcdefgh',
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyLimit={4}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('abcd');
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('writes nothing to the clipboard when the copy limit is 0', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'abcdefgh',
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyLimit={0}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).not.toHaveBeenCalled();
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('copies only the part of a selection inside the right-clicked cell', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    renderCells(
+      <>
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-web"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>unlimited verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-asv"
+          label="ASV"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          editor={<span>limited verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+          copyLimit={3}
+        />
+      </>,
+    );
+
+    // A selection dragged from the first cell's text into the second cell's.
+    const unlimitedText = screen.getByText('unlimited verse').firstChild;
+    const limitedText = screen.getByText('limited verse').firstChild;
+    if (!unlimitedText || !limitedText) throw new Error('verse text nodes not rendered');
+    const range = document.createRange();
+    range.setStart(unlimitedText, 0);
+    range.setEnd(limitedText, 'limited verse'.length);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    fireEvent.contextMenu(screen.getByText('unlimited verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('unlimited verse');
+
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it.each([
+    ['a character outside the Basic Multilingual Plane', 'a\u{1E900}b', 'a'],
+    ['a base letter and its combining mark', 'aéb', 'a'],
+    ['a cluster that ends exactly at the copy limit', 'éab', 'é'],
+  ])('does not split %s at the copy limit', async (_name, selectedText, expectedText) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => selectedText,
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyLimit={2}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledWith(expectedText);
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('copies under the copy limit in force when the menu opened, even if it grows before Copy', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'abcdefgh',
+    } as Selection);
+
+    const cellWithLimit = (copyLimit: number | undefined) => (
+      <div>
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={copyLimit}
+          editor={<span>verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+      </div>
+    );
+    try {
+      const { rerender } = render(cellWithLimit(3));
+
+      fireEvent.contextMenu(screen.getByText('verse'));
+      // Another view moves the scroll group to a chapter with no limit while the menu is open.
+      rerender(cellWithLimit(undefined));
+      await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+      expect(writeText).toHaveBeenCalledWith('abc');
+    } finally {
+      getSelectionSpy.mockRestore();
+    }
+  });
+
+  it.each(['header', 'inline'] as const)(
+    "does not count the cell's own name when a selection is dragged in from another cell (%s layout)",
+    async (nameDisplay) => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        writable: true,
+        configurable: true,
+      });
+
+      renderCells(
+        <>
+          <ResourceCellView
+            state="ready"
+            zoomArea="resource-web"
+            label="WEB"
+            textDirection="ltr"
+            localizedStrings={menuStrings}
+            copyLimit={undefined}
+            editor={<span>first verse</span>}
+            zoomMenuLabels={zoomMenuLabels}
+            nameDisplay={nameDisplay}
+          />
+          <ResourceCellView
+            state="ready"
+            zoomArea="resource-asv"
+            label="ASV"
+            textDirection="ltr"
+            localizedStrings={menuStrings}
+            copyLimit={100}
+            editor={<span>second verse</span>}
+            zoomMenuLabels={zoomMenuLabels}
+            nameDisplay={nameDisplay}
+          />
+        </>,
+      );
+
+      // A selection dragged from the first cell's text to the end of the second cell's, crossing the
+      // second cell's name.
+      const firstText = screen.getByText('first verse').firstChild;
+      const secondText = screen.getByText('second verse').firstChild;
+      if (!firstText || !secondText) throw new Error('verse text nodes not rendered');
+      const range = document.createRange();
+      range.setStart(firstText, 0);
+      range.setEnd(secondText, 'second verse'.length);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+
+      fireEvent.contextMenu(screen.getByText('second verse'));
+      await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+      expect(writeText).toHaveBeenCalledWith('second verse');
+
+      window.getSelection()?.removeAllRanges();
+    },
+  );
+
+  it('keeps the direction of a backward selection that crosses cells', () => {
+    renderCells(
+      <>
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-web"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>first verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-asv"
+          label="ASV"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>second verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+      </>,
+    );
+
+    // Dragged upward: from the end of the second cell's text back into the first cell's.
+    const firstText = screen.getByText('first verse').firstChild;
+    const secondText = screen.getByText('second verse').firstChild;
+    if (!firstText || !secondText) throw new Error('verse text nodes not rendered');
+    const selection = window.getSelection();
+    if (!selection) throw new Error('no selection');
+    selection.setBaseAndExtent(secondText, 'second verse'.length, firstText, 2);
+
+    // jsdom moves the selection onto any element that takes focus, which a browser does not, and
+    // the menu takes focus as it opens.
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
+    try {
+      fireEvent.contextMenu(screen.getByText('first verse'));
+    } finally {
+      focusSpy.mockRestore();
+    }
+
+    expect(selection.anchorNode).toBe(secondText);
+    expect(selection.anchorOffset).toBe('second verse'.length);
+    expect(selection.focusNode).toBe(firstText);
+    expect(selection.focusOffset).toBe(2);
+
+    selection.removeAllRanges();
   });
 });
 
@@ -555,6 +899,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay={nameDisplay}
           zoomMenuLabels={zoomMenuLabels}
@@ -579,6 +924,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         zoomMenuLabels={zoomMenuLabels}
         canZoomIn={false}
@@ -601,6 +947,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           zoomMenuLabels={zoomMenuLabels}
           canZoomIn
@@ -629,6 +976,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         zoomMenuLabels={zoomMenuLabels}
         onZoomIn={onZoomIn}
@@ -662,6 +1010,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay="inline"
           zoomMenuLabels={zoomMenuLabels}
@@ -692,6 +1041,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay="inline"
           zoomMenuLabels={zoomMenuLabels}
@@ -725,6 +1075,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         nameDisplay="header"
         zoomMenuLabels={zoomMenuLabels}
@@ -746,6 +1097,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         nameDisplay="header"
         zoomMenuLabels={zoomMenuLabels}
@@ -776,6 +1128,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         nameDisplay="inline"
         zoomMenuLabels={zoomMenuLabels}
@@ -800,6 +1153,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay="header"
           zoomMenuLabels={zoomMenuLabels}
@@ -918,6 +1272,7 @@ describe('ResourceCellView reorder grip', () => {
         label="Genesis"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<span>In the beginning</span>}
         showDragHandle
         reorderHandleId="gen"
@@ -946,6 +1301,7 @@ describe('ResourceCellView reorder grip', () => {
         label="Genesis"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<span>In the beginning</span>}
         showDragHandle
         reorderHandleId="gen"
@@ -968,6 +1324,7 @@ describe('ResourceCellView reorder grip', () => {
         label="Genesis"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<span>In the beginning</span>}
         showDragHandle
       />,
@@ -987,6 +1344,7 @@ describe('ResourceCellView content zoom marker', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>marked verse</span>}
         nameDisplay={nameDisplay}
         showDragHandle
@@ -1055,6 +1413,7 @@ describe('ResourceCellView content zoom marker', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse-blocks</span>}
         contentOverflow="visible"
         zoomTarget="blocks"
@@ -1088,6 +1447,7 @@ describe('ResourceCellView header drag source', () => {
     label: 'Genesis',
     textDirection: 'ltr',
     localizedStrings,
+    copyLimit: undefined,
     editor: <span>In the beginning</span>,
   };
 
@@ -1122,6 +1482,7 @@ describe('ResourceCellView content scroll ownership', () => {
     label: 'WEB',
     textDirection: 'ltr',
     localizedStrings,
+    copyLimit: undefined,
     editor: <div data-testid="editor" />,
   };
 
