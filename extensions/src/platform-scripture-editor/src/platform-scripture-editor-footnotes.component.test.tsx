@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { UseWebViewStateHook } from '@papi/core';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -62,7 +62,12 @@ describe('FootnotesLayout content zoom marker', () => {
     ['trailing pane position', trailingStub],
   ])('marks the footnotes area exactly once, as "footnotes" (%s)', (_label, useWebViewState) => {
     const { container } = render(
-      <FootnotesLayout usj={EMPTY_USJ} showMarkers useWebViewState={useWebViewState}>
+      <FootnotesLayout
+        usj={EMPTY_USJ}
+        showMarkers
+        useWebViewState={useWebViewState}
+        copyLimit={undefined}
+      >
         <div data-testid="editor-child" />
       </FootnotesLayout>,
     );
@@ -95,6 +100,7 @@ describe('FootnotesLayout content zoom marker', () => {
         showMarkers
         useWebViewState={bottomStub}
         zoomAreaLabel="Footnotes"
+        copyLimit={undefined}
       >
         <div />
       </FootnotesLayout>,
@@ -103,12 +109,106 @@ describe('FootnotesLayout content zoom marker', () => {
     expect(marked).toHaveAttribute('data-platform-content-zoom-label', 'Footnotes');
 
     rerender(
-      <FootnotesLayout usj={EMPTY_USJ} showMarkers useWebViewState={bottomStub}>
+      <FootnotesLayout
+        usj={EMPTY_USJ}
+        showMarkers
+        useWebViewState={bottomStub}
+        copyLimit={undefined}
+      >
         <div />
       </FootnotesLayout>,
     );
     const unlabelled = container.querySelector('[data-platform-content-zoom-root="footnotes"]');
     expect(unlabelled).not.toBeNull();
     expect(unlabelled).not.toHaveAttribute('data-platform-content-zoom-label');
+  });
+});
+
+/** A chapter with one footnote, so the pane lists it. */
+const USJ_WITH_FOOTNOTE: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        'Verse text',
+        {
+          type: 'note',
+          marker: 'f',
+          caller: '+',
+          content: [{ type: 'char', marker: 'ft', content: ['The footnote text'] }],
+        },
+      ],
+    },
+  ],
+};
+
+/** Selects everything in the footnotes pane, copies, and returns what was put on the clipboard. */
+function copyWholePane(container: HTMLElement) {
+  const pane = container.querySelector('[data-platform-content-zoom-root="footnotes"]');
+  if (!pane) throw new Error('footnotes pane not rendered');
+  const range = document.createRange();
+  range.selectNodeContents(pane);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+  const setData = vi.fn();
+  const notCancelled = fireEvent.copy(pane, { clipboardData: { setData } });
+  window.getSelection()?.removeAllRanges();
+  return { setData, isCancelled: !notCancelled, selectedText: range.toString() };
+}
+
+describe('FootnotesLayout copy limit', () => {
+  it('shortens a copy from the pane to the copy limit', () => {
+    const { container } = render(
+      <FootnotesLayout
+        usj={USJ_WITH_FOOTNOTE}
+        showMarkers
+        useWebViewState={bottomStub}
+        copyLimit={5}
+      />,
+    );
+
+    const { setData, isCancelled, selectedText } = copyWholePane(container);
+
+    expect(selectedText.length).toBeGreaterThan(5);
+    expect(isCancelled).toBe(true);
+    expect(setData).toHaveBeenCalledTimes(1);
+    const [format, text] = setData.mock.calls[0];
+    expect(format).toBe('text/plain');
+    expect(text).toHaveLength(5);
+  });
+
+  it('copies nothing from the pane while the copy limit is 0', () => {
+    const { container } = render(
+      <FootnotesLayout
+        usj={USJ_WITH_FOOTNOTE}
+        showMarkers
+        useWebViewState={bottomStub}
+        copyLimit={0}
+      />,
+    );
+
+    const { setData, isCancelled } = copyWholePane(container);
+
+    expect(isCancelled).toBe(true);
+    expect(setData).not.toHaveBeenCalled();
+  });
+
+  it('leaves a copy from the pane alone when there is no copy limit', () => {
+    const { container } = render(
+      <FootnotesLayout
+        usj={USJ_WITH_FOOTNOTE}
+        showMarkers
+        useWebViewState={bottomStub}
+        copyLimit={undefined}
+      />,
+    );
+
+    const { setData, isCancelled } = copyWholePane(container);
+
+    expect(isCancelled).toBe(false);
+    expect(setData).not.toHaveBeenCalled();
   });
 });

@@ -991,6 +991,37 @@ declare module 'platform-scripture' {
 
   // #endregion Scripture Edit Permissions Types
 
+  // #region Copy Limit Types
+
+  /** Data types for limiting how much text can be copied at once */
+  export type CopyLimitProjectInterfaceDataTypes = {
+    /**
+     * Read-only. Maximum number of UTF-16 code units (JavaScript string length, not grapheme
+     * clusters) that may be copied at once from each chapter of the selected book, indexed by
+     * chapter number (index 0 is unused). A missing entry, or an `undefined` result, means no
+     * limit. An implementation may impose a per-chapter limit on some texts. Copy surfaces showing
+     * this project's text should enforce it. Subscribe to react to changes; do not assume a cached
+     * value stays valid.
+     *
+     * The selector names the book (`book`) and the versification the caller works in
+     * (`versificationStr`); its `chapterNum` and `verseNum` are ignored, so pass `1` for both. The
+     * result is indexed by chapter in that versification, so a caller can index it with the chapter
+     * number of the reference it fetches chapter text with. Omit `versificationStr` to get the
+     * result indexed in the project's own versification.
+     */
+    BookCopyLimits: DataProviderDataType<
+      SerializedVerseRef,
+      (number | undefined)[] | undefined,
+      never
+    >;
+  };
+
+  /** Provides per-chapter copy limits for this project */
+  export type ICopyLimitProjectDataProvider =
+    IProjectDataProvider<CopyLimitProjectInterfaceDataTypes>;
+
+  // #endregion Copy Limit Types
+
   // #region Find History Types
 
   /**
@@ -2982,6 +3013,7 @@ declare module 'papi-shared-types' {
     ITextConnectionSettingsProjectDataProvider,
     IUserEditorSettingsProjectDataProvider,
     IScriptureEditPermissionsProjectDataProvider,
+    ICopyLimitProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     IInventoryDataProvider,
@@ -3016,6 +3048,7 @@ declare module 'papi-shared-types' {
     'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;
     'platformScripture.userEditorSettings': IUserEditorSettingsProjectDataProvider;
     'platformScripture.scriptureEditPermissions': IScriptureEditPermissionsProjectDataProvider;
+    'platformScripture.CopyLimit': ICopyLimitProjectDataProvider;
   }
 
   export interface DataProviders {

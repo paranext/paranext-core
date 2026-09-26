@@ -25,4 +25,5 @@ public static class ProjectInterfaces
     public const string SCRIPTURE_EDIT_PERMISSIONS = "platformScripture.scriptureEditPermissions";
     public const string VERSIFICATION = "platformScripture.Versification";
     public const string PT9_INTERLINEAR = "platformScripture.Pt9Interlinear";
+    public const string COPY_LIMIT = "platformScripture.CopyLimit";
 }

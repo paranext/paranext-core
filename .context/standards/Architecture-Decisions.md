@@ -1545,6 +1545,49 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Only the zoomability is held per open menu, not the whole item list, because Power mode's window targets arrive after the menu opens.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
 
+## adr-copy-limit-rule-lives-downstream: The copy-limit mechanism ships in public code; the rule that drives it ships in a private patch
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** Paratext 9 limits how much text can be copied at once from some texts, and its rule
+  was in closed code. Platform.Bible (`paranext-core`) is open source, so the rule cannot live in
+  this repo in any form.
+- **Decision:** Public code provides only the mechanism, and answers "no limit" everywhere:
+  - a read-only project data type, `platformScripture.CopyLimit` / `BookCopyLimits`, one array per
+    book with one entry per chapter;
+  - a core hook, `useChapterCopyLimit`, that subscribes once per book and resolves the limit for
+    the chapter on screen;
+  - the editor option `EditorOptions.copyLimit`, whose plugin shortens an over-limit copy or cut
+    and blocks the Select All shortcut while a limit is set;
+  - an unknown limit — still loading, or the request failed — blocks copying for every text.
+
+  The Paratext 10 Studio patch supplies the actual rule by replacing the public "no limit" answer.
+- **Alternatives:**
+  - **A private extension implementing the whole feature** — rejected: it cannot tell "no
+    provider is installed" apart from "the answer just hasn't arrived yet."
+  - **The rule itself in public code** — rejected per the Product Owner's preference, given P10 is
+    open source.
+  - **Limiting the selection as it is made**, rather than at copy time — not chosen: Paratext 9
+    limits at copy time, and this keeps parity with it.
+  - **A per-chapter data type** (one request per chapter instead of per book) — rejected: it would
+    cause a blocked moment on every chapter change while the new chapter's limit is fetched.
+- **Consequences:**
+  - TSDoc and other public-facing docs describe only what a caller can observe — never the rule
+    itself. See `adr-closed-source-command-doc-altitude` for the same altitude discipline applied
+    to a different closed-source-backed command.
+  - Public tests exercise the mechanism with arbitrary limits, not real ones.
+  - Copy limits are refetched on every update the Paratext project data provider sends.
+  - A view passes a limit of `0` while its displayed chapter's text is still loading, because the
+    per-book limit can arrive before the new chapter's text does — so a chapter navigation blocks
+    copying for a moment even on an unlimited text.
+  - The `BookCopyLimits` selector carries the caller's book and versification. The downstream
+    rule answers per chapter of the project's own versification, and C# re-indexes that answer
+    into the requested versification, so a view indexes it with the same chapter number it fetches
+    text with. A requested chapter that spans several project chapters, in its own book or in
+    another book its verses map into, takes the smallest of their limits.
+
+- **Source:** [PT-4730](https://paratextstudio.atlassian.net/browse/PT-4730).
+
 ## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
 
 - **Date:** 2026-09-04

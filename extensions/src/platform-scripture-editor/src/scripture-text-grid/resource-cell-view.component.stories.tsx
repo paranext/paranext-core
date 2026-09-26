@@ -114,6 +114,7 @@ export const Downloading: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={undefined}
       />
     </CellBox>
@@ -133,6 +134,7 @@ export const Failed: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={undefined}
       />
     </CellBox>
@@ -154,6 +156,7 @@ export const BookNotAvailable: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={undefined}
       />
     </CellBox>
@@ -174,6 +177,7 @@ export const NotInstalled: Story = {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={undefined}
       />
     </CellBox>
@@ -190,10 +194,48 @@ export const Ready: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<SampleChapter />}
       />
     </CellBox>
   ),
+};
+
+/**
+ * A chapter with a copy limit of 0: text is selected and the right-click menu is open, but the
+ * limit leaves nothing to copy, so **Copy** is disabled.
+ */
+export const CopyLimitedMenuOpen: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={0}
+        editor={<SampleChapter />}
+      />
+    </CellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const verse = canvas.getByText(/Blessed are the poor in spirit/);
+    await step('Select a verse', async () => {
+      window.getSelection()?.selectAllChildren(verse);
+    });
+    await step('Open the right-click menu', async () => {
+      await userEvent.pointer({ keys: '[MouseRight]', target: verse });
+    });
+    await step('Assert Copy is disabled', async () => {
+      // The right-click menu is portaled out of the story's canvas.
+      const menu = within(within(document.body).getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: /^copy$/i })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
 };
 
 /** A right-to-left resource: the cell honors the resource's own `dir`, independent of the UI locale. */
@@ -206,6 +248,7 @@ export const ReadyRightToLeft: Story = {
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<SampleChapter rtl />}
       />
     </CellBox>
@@ -222,6 +265,7 @@ export const VerseReady: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<SampleVerse />}
       />
@@ -239,6 +283,7 @@ export const VerseEmpty: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         emptyMessage={localizedStrings[EMPTY_KEY]}
         editor={undefined}
@@ -257,6 +302,7 @@ export const VerseRightToLeft: Story = {
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<SampleVerse rtl />}
       />
@@ -278,6 +324,7 @@ export const VerseInlineWrapping: Story = {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={
           <div style={{ fontFamily: 'serif', lineHeight: 1.7 }}>
@@ -302,6 +349,7 @@ export const VerseNotInstalled: Story = {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={undefined}
       />
@@ -319,6 +367,7 @@ export const VerseDownloading: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={undefined}
       />
@@ -336,6 +385,7 @@ export const VerseFailed: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={undefined}
       />
@@ -356,6 +406,7 @@ export const VerseLongName: Story = {
         label="New International Version 2011"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<SampleVerse />}
       />
@@ -376,6 +427,7 @@ export const VerseLongNameNarrowPane: Story = {
         label="New International Version 2011"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<SampleVerse />}
       />
@@ -393,6 +445,7 @@ export const VerseLongNameRightToLeft: Story = {
         label="תרגום השבעים המלא לפי מהדורת רלפס"
         textDirection="rtl"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<SampleVerse rtl />}
       />
@@ -413,6 +466,7 @@ export const VerseLongNameNarrowPaneRightToLeft: Story = {
         label="תרגום השבעים המלא לפי מהדורת רלפס"
         textDirection="rtl"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<SampleVerse rtl />}
       />
@@ -436,6 +490,7 @@ export const PartialFailureRow: Story = {
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<SampleChapter />}
         />
       </div>
@@ -446,6 +501,7 @@ export const PartialFailureRow: Story = {
           label="ASV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={undefined}
         />
       </div>
@@ -456,6 +512,7 @@ export const PartialFailureRow: Story = {
           label="NIV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={undefined}
         />
       </div>
@@ -466,6 +523,7 @@ export const PartialFailureRow: Story = {
           label="KJV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={undefined}
         />
       </div>
@@ -497,6 +555,7 @@ export const ZoomMenus: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<SampleChapter />}
         canZoomIn
         canZoomOut
@@ -520,6 +579,7 @@ export const ZoomOptionsOpen: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<SampleChapter />}
         canZoomIn
         canZoomOut
@@ -556,6 +616,7 @@ export const AtMaxZoomMenuOpen: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<SampleChapter />}
         canZoomIn={false}
         canZoomOut
@@ -593,6 +654,7 @@ export const AtMinZoomMenuOpen: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<SampleChapter />}
         canZoomIn
         canZoomOut={false}
@@ -629,6 +691,7 @@ export const ResetDisabledWithoutOwnLevel: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<SampleChapter />}
         canZoomIn
         canZoomOut
@@ -666,6 +729,7 @@ export const LongLabel: Story = {
         label="World English Bible Revised 2023 Study Edition"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<SampleChapter />}
         zoomMenuLabels={zoomMenuLabels}
       />
@@ -687,6 +751,7 @@ export const ReadyWithDragHandle: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         showDragHandle
         reorderHandleLabel="Reorder WEB"
         reorderHint="Drag or press arrow keys to reorder"
@@ -709,6 +774,7 @@ export const ReadyRightToLeftWithDragHandle: Story = {
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         showDragHandle
         reorderHandleLabel="Reorder עברית"
         reorderHint="Drag or press arrow keys to reorder"
@@ -732,6 +798,7 @@ export const MixedDirectionRow: Story = {
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<SampleChapter />}
         />
       </div>
@@ -742,6 +809,7 @@ export const MixedDirectionRow: Story = {
           label="עברית"
           textDirection="rtl"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<SampleChapter rtl />}
         />
       </div>
@@ -752,6 +820,7 @@ export const MixedDirectionRow: Story = {
           label="العربية"
           textDirection="rtl"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={
             <div style={{ fontFamily: 'serif', lineHeight: 1.7 }}>
               <p style={{ margin: '0 0 8px' }}>
@@ -779,6 +848,7 @@ export const NoVersesToAlign: Story = {
         label="HBKENG"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         emptyMessage={localizedStrings[NO_VERSES_TO_SHOW_KEY]}
         contentOverflow="visible"
         editor={<SampleChapter />}
@@ -802,6 +872,7 @@ export const ContentScrolledByAncestor: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         contentOverflow="visible"
         editor={<SampleChapter />}
       />

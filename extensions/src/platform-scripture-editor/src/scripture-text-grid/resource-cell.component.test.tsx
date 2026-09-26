@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
 import { ResourceCell } from './resource-cell.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import { useChapterCopyLimit } from '../copy-limit/use-chapter-copy-limit.hook';
 
 const {
   mockUseProjectData,
@@ -35,10 +36,30 @@ const {
   };
 });
 
-vi.mock('@papi/frontend', () => ({ logger: { warn: vi.fn(), info: vi.fn() } }));
+const providersByKey = new Map<string, { key: string }>();
+function providerFor(key: string) {
+  let provider = providersByKey.get(key);
+  if (!provider) {
+    provider = { key };
+    providersByKey.set(key, provider);
+  }
+  return provider;
+}
+
+vi.mock('@papi/frontend', () => ({
+  default: {
+    projectLookup: {
+      getMetadataForProject: async () => ({ projectInterfaces: ['platformScripture.CopyLimit'] }),
+    },
+  },
+  logger: { warn: vi.fn(), info: vi.fn() },
+}));
 vi.mock('@papi/frontend/react', () => ({
   useProjectData: (...a: unknown[]) => mockUseProjectData(...a),
   useProjectSetting: (...a: unknown[]) => mockUseProjectSetting(...a),
+  // One stable provider object per project, as the real hook resolves one per project.
+  useProjectDataProvider: (projectInterface: string, projectId?: string) =>
+    providerFor(`${projectInterface}:${projectId}`),
   useLocalizedStrings: () => [
     {
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
@@ -172,9 +193,18 @@ const combinedOpeningChapterUsj = usxStringToUsj(`<?xml version="1.0" encoding="
 </usx>
 `);
 
-// 3-tuple [data, setData, isLoading].
-function setUsjResult(value: unknown, isLoading = false) {
-  mockUseProjectData.mockReturnValue({ ChapterUSJ: () => [value, vi.fn(), isLoading] });
+// 3-tuple [data, setData, isLoading]. `copyLimits` defaults to an unlimited (`undefined` value)
+// result so existing tests that don't care about the copy limit keep seeing `copyLimit: undefined`
+// in the editor options.
+function setUsjResult(
+  value: unknown,
+  isLoading = false,
+  copyLimits: [unknown, unknown, boolean] = [undefined, vi.fn(), false],
+) {
+  mockUseProjectData.mockReturnValue({
+    ChapterUSJ: () => [value, vi.fn(), isLoading],
+    BookCopyLimits: () => copyLimits,
+  });
 }
 
 /**
@@ -203,6 +233,17 @@ function renderResourceCell(
   setUsjResult(chapterUsj ?? chapter, false);
   render(<ResourceCell {...props} {...rest} />);
 }
+
+// The copy limit looks up each project's metadata once per web view. Settle that lookup for this
+// file's project up front, so no test ends with it still in flight.
+beforeAll(async () => {
+  setUsjResult(chapter, false);
+  const { unmount } = renderHook(() =>
+    useChapterCopyLimit(props.resourceRef.projectId, scrRef, 'applied-by-caller'),
+  );
+  await act(async () => {});
+  unmount();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -286,6 +327,78 @@ describe('ResourceCell', () => {
     expect(screen.getByText('WEB')).toBeInTheDocument();
     expect(screen.queryByRole('gridcell')).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('ResourceCell copy limit', () => {
+  it('passes the resolved chapter copy limit into the editor options', async () => {
+    setUsjResult(chapter, false, [[undefined, 7], vi.fn(), false]);
+    render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 7 }),
+      ),
+    );
+  });
+
+  it('passes the copy limit into the editor options in aligned mode too, beside the view', async () => {
+    setUsjResult(twoVerseChapterUsj, false, [[undefined, 7], vi.fn(), false]);
+    render(
+      <ResourceCell
+        {...props}
+        viewMode="aligned"
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 2 }}
+      />,
+    );
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          copyLimit: 7,
+          view: expect.objectContaining({ viewOptionsFor: 'block-verse' }),
+        }),
+      ),
+    );
+  });
+
+  it('blocks copying on the render that changes chapter, before the new chapter text is asked for', async () => {
+    // The mocked fetch never reports loading, as on the render before `useProjectData`'s effect
+    // marks the new chapter as loading.
+    setUsjResult(chapter, false, [[undefined, 7, 12], vi.fn(), false]);
+    const { rerender } = render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 7 }),
+      ),
+    );
+    const rendersBeforeChange = capturedEditorOptions.mock.calls.length;
+
+    rerender(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 2 }} />);
+
+    const [[optionsOnChange]] = capturedEditorOptions.mock.calls.slice(rendersBeforeChange);
+    expect(optionsOnChange).toEqual(expect.objectContaining({ copyLimit: 0 }));
+
+    rerender(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 2 }} />);
+    expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ copyLimit: 12 }),
+    );
+  });
+
+  // `useChapterCopyLimit` resolves the NEW chapter's limit immediately (book-level limits are
+  // pre-loaded), while the chapter TEXT keeps showing the PREVIOUS chapter until its own fetch
+  // resolves — the round trip during which the old text must not be copyable under the new
+  // chapter's (possibly larger) limit. `deriveCellState` already forces `'downloading'` whenever
+  // the chapter fetch's own `isLoading` is true, regardless of whether stale content is in hand
+  // (see the "re-feeds the editor when a read finishes with the same chapter already in hand" test
+  // above), so Editorial never mounts during that window and no limit — right or wrong — can leak
+  // through it. This pins that guarantee for the copy-limit round trip specifically, with a real
+  // (non-zero) limit already resolved, so a future change to `deriveCellState` that let a loading
+  // cell fall through to `'ready'` would be caught here rather than silently exposing stale text
+  // under the wrong limit.
+  it('never mounts the editor while the chapter text is loading, even once the limit is known', () => {
+    setUsjResult(chapter, true, [[undefined, 7], vi.fn(), false]);
+    render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    expect(capturedEditorOptions).not.toHaveBeenCalled();
   });
 });
 

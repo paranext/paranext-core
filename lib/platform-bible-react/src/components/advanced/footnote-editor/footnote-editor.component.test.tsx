@@ -264,6 +264,40 @@ describe('FootnoteEditor width lock', () => {
   });
 });
 
+describe('FootnoteEditor Copy button', () => {
+  function clickCopy(copyLimit: number | undefined) {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+    const { editorInput, getByRole } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+      copyLimit,
+    });
+    editorInput.textContent = 'note text';
+    act(() => {
+      getByRole('button', { name: '%footnoteEditor_copyButton_tooltip%' }).click();
+    });
+    return writeText;
+  }
+
+  it('copies the whole note when there is no copy limit', () => {
+    expect(clickCopy(undefined)).toHaveBeenCalledWith('note text');
+  });
+
+  it('copies only as much of the note as the copy limit allows', () => {
+    const writeText = clickCopy(4);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('note');
+  });
+
+  it('copies nothing while the copy limit is 0', () => {
+    expect(clickCopy(0)).not.toHaveBeenCalled();
+  });
+});
+
 describe('FootnoteEditor context menu', () => {
   it('hands its editor no context-menu container, so the menu stays at interface scale', () => {
     renderFootnoteEditor({ view: editableView });
