@@ -975,7 +975,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   would flash the Text Collection forward and then away; and the module-level pending slot adds
   hidden coupling with a forgot-to-clear failure mode. **Register a public command** like the other
   four — rejected as surface area for nobody: the Text Collection has no menu entry and no external
-  caller.
+  caller. *(Superseded by `adr-menu-per-mode-layout-via-mode-gated-columns`: PT-4534 registers
+  `platformScriptureEditor.showTextCollectionPanel` and gives it a Simple-mode menu entry, so this
+  alternative is what shipped.)*
 - **Consequences:** The scroll group's source project is now documented at its call site as *not* an
   active-editor signal, which is the trap that produced this bug; any future panel that reaches for
   it should be re-pointed explicitly instead. *(Amended 2026-09-18: that call site is gone — PT-4238
@@ -3374,6 +3376,80 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   removes a ring the user can see is confirmed by hand in the running app.
 - **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
   found not to work in the shipped runtime.
+
+## adr-menu-per-mode-layout-via-mode-gated-columns: A menu's per-mode layout is built from mode-gated items in mode-specific columns
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** Simple's scripture editor Project menu needed a different section structure from
+  Power's (Project / Edit ▸ / View / Insert / Tools / Quality checks vs Project / Edit / Options /
+  Tools / Insert), with Power
+  unchanged. Both modes are served from one menu document, and `hiddenInterfaceModes` exists on
+  items only; columns and groups have no per-mode switch.
+- **Decision:** A mode that needs its own sections gets its own columns (e.g.
+  `platformScriptureEditor.simpleView`, `simpleTools`) holding items hidden in the other mode, and
+  items that belong only to the other mode's sections gain `hiddenInterfaceModes` for this one.
+  Items identical in both modes stay shared (the Insert column). Column orders interleave with
+  decimals (4.5, 5.5) because orders must be unique per menu. Empty-column suppression
+  (`adr-menu-section-headings-from-column-labels`) makes each mode's unused columns vanish.
+  Simple's Comments entry is a new item that fronts the third-column Comments tab; the Power item
+  (`legacyCommentManager.openCommentList`, which opens a separate Comment List web view) stays
+  hidden in Simple. The Edit flyout's
+  Undo/Redo/Cut/Copy/Paste are menu command ids handled inside
+  the editor web view (`menuCommandHandler`) through `EditorRef`, not PAPI commands: they act on that
+  web view's own editor, and the clipboard needs the click's user activation, which a PAPI round
+  trip loses.
+- **Alternatives:** `hiddenInterfaceModes` on columns/groups — rejected for now: a schema change
+  plus a change to the shared mode-filtering pipeline every menu consumer runs, for one consumer's
+  need (unlike `isHeaderHidden` in the 2026-09-23 amendment below, which is render-only and which
+  the menubar ignores). Per-mode menu documents — rejected: duplicates every
+  shared item and splits the contribution surface. Reordering Power to match Simple — rejected:
+  Power must not change. Un-hiding the Power Comments item in Simple — rejected: it opens a
+  different web view from the tab Simple's Tools section points at.
+- **Consequences:** A few items are declared twice (once per mode), so a command change must touch
+  both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
+  and order, and checks that a command served in both modes carries the same label in each, so a
+  missed, reordered or relabelled copy fails there. Simple's Tools order is pinned to the
+  third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
+  Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
+  it to a Simple column removes its only entry point: Simple now has no menu route at all to the
+  four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
+  no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
+  (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
+  manual footnotes pane: Show footnotes opens it and it stays open. The Edit flyout's ids are not
+  registered commands, and `KeyboardShortcutEntry.command` is typed to registered commands, so
+  those items cannot show a shortcut hint even though Ctrl+Z, Ctrl+Y and the clipboard chords work
+  in the editor.
+- **Amended 2026-09-23 (PT-4534, review of #2847):** Three changes to Simple's menu.
+  - **Edit ▸ has a section of its own, with no heading,** between Project and View. The v0 demo
+    (https://10simple-project-menu.vercel.app/) renders it that way: the Edit submenu sits outside
+    the Project group, between two dividers. The ticket's 2026-09-18 transcription had listed it
+    inside Project. So columns take an optional `isHeaderHidden` flag: `TabDropdownMenu` still
+    divides that section and keeps its label as a visually hidden heading that names the group, the
+    same `aria-labelledby` route every headed section uses. It names the section only while two or
+    more sections are shown, like every heading. The section's label is "Edit", the same as its only
+    item, so a screen reader announces "Edit" twice; that is deliberate, since a column must have a
+    real label and the section holds nothing but the Edit flyout. Rejected for the unheaded section:
+    making a column's `label` optional — the menubar needs it to open the column, and the section
+    would lose its accessible name; an empty localized string as the label — it hides the heading by
+    accident of the data, not by intent, and still leaves the section unnamed; an `aria-label` on the
+    group instead of a hidden heading — a second naming mechanism beside `aria-labelledby`, and the
+    only `aria-label` on a menu group in the repo.
+  - **Simple shows Open Checks, under a Quality checks section,** as product asked on 2026-09-23. In
+    Simple it opens the Checks side panel as a tab in the third column rather than a split beside the
+    editor, and fronts that tab on later clicks (`adr-simple-column-3-tools-open-on-demand`). The
+    Checking assistant the v0 design names is left out of Simple until PT-4734 integrates the
+    assistant itself. The four Inventories and Markers Checklist stay Power-only, so Simple still
+    has no menu route to them.
+  - **Per-pane zoom (`platform.webViewContentZoomIn`/`Out`/`Reset`) is Simple-only, in a Zoom
+    section of its own** (`platformScriptureEditor.zoomSection`), which lands between Edit and View.
+    The editor's tab title is hidden in Simple, so this menu is its only mouse route to zoom; Power
+    reaches zoom from the tab menu instead (`adr-simple-mode-tab-menu-offers-zoom-only`). The zoom
+    items stay out of the Options column: every other item there is Power-only, and a column is
+    served whenever ANY of its items is visible, so a single ungated item there would put the whole
+    Options column — heading and all — back into Simple. Anything added to a Power-only column
+    needs `hiddenInterfaceModes` even when the command itself is harmless in Simple.
+- **Source:** PT-4534 (parent PT-4530); decisions recorded on the ticket 2026-09-18 and 2026-09-23.
 
 ## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
 
@@ -6601,6 +6677,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   reach for.
 - **Source:** PT-4466, deferred from PT-4344 (PR #2701).
 
+## adr-simple-column-3-tools-open-on-demand: An on-demand tool joins Simple's third column as one pinned tab, reused on every later open
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** Simple's three columns are fixed. Checks, opened from Simple's Quality checks menu
+  section, was opened as `{ type: 'panel', direction: 'right' }` beside the editor, which split the
+  editor's column into a new pane on every click. Checks is not part of Simple's starting layout,
+  and nothing before it added a web view to the third column while the app runs.
+- **Decision:** In Simple, the opener first probes with `{ existingId: '?', createNewIfNotFound:
+  false }` and brings an existing tab to the front, reloading it only if it shows another project
+  or editor. If there is none, it opens `{ type: 'tab', parentTabGroupId: 'simple-panel-resources' }`,
+  the third column's rc-dock panel id. The extension cannot import renderer source, so it keeps a
+  copy of that id (`simple-resources-panel-id.const.ts` in `platform-scripture`), and
+  `simple-layout.data.test.ts` fails if the copy drifts from `SIMPLE_PANEL_ID_RESOURCES`. The tab is
+  pinned like its neighbors (`isClosable: false` in Simple, and listed in
+  `FIXED_LAYOUT_WEBVIEW_GROUPS` under `TAB_GROUP_RESOURCES`). An open tab follows a project switch the
+  way Find does, through `platformScripture.updateChecksSidePanelProject`, except that, like the
+  Text Collection, it does not follow a published resource (`updateRelatedChecksSidePanel` reads
+  `platform.isPublished`, not `isEditable`, so an `Editable=F` translation project is followed).
+  Power keeps the panel beside the editor, and deliberately does not probe either, so each click
+  still opens another panel there: layout is free-form in Power, and extra panels are the user's to
+  close. Reference: `open-checks-side-panel.utils.ts`.
+- **Alternatives:** A static tab in `simple-layout.data.ts` or a `default-layout-supplement.json`
+  entry — rejected: both change what every Simple user sees at startup for a tool few open. A
+  `panel` layout targeting a third-column tab — rejected: it splits the third column instead. A
+  closable tab — rejected for now: its rc-dock group would be `TAB_GROUP` inside a
+  `TAB_GROUP_RESOURCES` panel, a mix whose drag and lock behavior is unverified. Moving the panel id
+  into `src/shared` so the extension can import it — rejected: it would grow `papi.d.ts` for one
+  constant.
+- **Consequences:** Once opened, the Checks tab stays until the Simple layout is next rebuilt
+  (for example on restart or a mode switch). If the copied panel id drifts and the test is skipped,
+  the dock logs a warning and falls back to its default placement, which can add a pane on top of a
+  column. The next on-demand third-column tool should reuse this shape and its panel-id constant.
+- **Source:** PT-4534 (review of #2847).
+
 ## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
 - **Date:** 2026-08-19
@@ -8081,6 +8192,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   once concrete), at `PRDs/donna-multi-monitor/2026-08-07-small-items-ledger.md` under the shared
   PRD folder. Not a repo path; named here so a later reader knows the entry is real and where to
   ask for it, not so they can open it from a clone.
+
+## adr-web-view-load-focus-skips-hidden-tabs: A web view focuses its tab on load only when the tab is shown
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Every web view calls `windowService.setFocus({ focusType: 'tab', id })` when its
+  iframe loads, and that focus makes the tab the active one in its group. A reload with
+  `bringToFront: false` keeps the tab where it is, but the reload remounts the iframe, so the tab
+  came to the front anyway once its content loaded. In Simple mode a project switch reloads the
+  Find and Checks tabs in Column 3 this way, and whichever loaded last took the column from the tab
+  the user was on.
+- **Decision:** `web-view.component.tsx` skips the on-load focus when the iframe has no client
+  rects. rc-dock keeps an inactive tab's pane mounted with `display: none`, so a hidden tab's iframe
+  has none. A tab that was asked to come to the front is already active by the time its content
+  loads, so its focus is unchanged.
+- **Alternatives:** A dock method answering whether a tab is its group's active tab — rejected: it
+  widens `PapiDockLayout`, which is in `papi.d.ts`, for one renderer caller. Carrying the reload's
+  `bringToFront` to the component — rejected: the component remounts from the tab definition and
+  has no record of why it loaded. Stopping the Checks re-point from reloading — rejected: it fixes
+  Checks only, and Find has the same problem.
+- **Consequences:** A web view that loads while hidden takes no focus, including one restored with
+  the layout at startup into an inactive tab. It is focused when the user brings the tab forward.
+  The mount-time focus in `platform-panel.component.tsx` is unchanged, since a reload does not
+  remount the panel.
+- **Source:** PT-4534 (review of #2847), found checking the Checks tab in the running app.
 
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 

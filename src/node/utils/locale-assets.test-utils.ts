@@ -6,7 +6,7 @@ import type { LanguageStrings, LocalizedStringDataContribution } from 'platform-
 // platform shell's own assets in `assets/localization/` (locale files plus the `metadata.json`
 // sidecar) and the `localizedStrings` contributions declared by bundled extensions in
 // `extensions/src/`. Lives under src/node/ rather than src/shared/ because it touches the
-// filesystem, so it is Node-process-only code. Named `.test-helper.ts` (not `.test.ts`) so vitest
+// filesystem, so it is Node-process-only code. Named `.test-utils.ts` (not `.test.ts`) so vitest
 // does not collect it as a suite.
 //
 // Sibling hand-rolled readers of the same contribution files, which these helpers deliberately do
@@ -26,7 +26,7 @@ const EXTENSIONS_DIR = resolve(__dirname, '../../../extensions/src');
  * `src/extension-host/services/extension.service.ts`, matched on the manifest `name` field. Keys
  * that exist only in one of these must NOT count as shipped.
  */
-const DEV_ONLY_EXTENSION_NAMES: readonly string[] = [
+export const DEV_ONLY_EXTENSION_NAMES: readonly string[] = [
   'c-sharp-provider-test',
   'evil',
   'helloSomeone',

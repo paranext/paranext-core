@@ -61,10 +61,15 @@ const getGroupContent = (
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
-        return (
-          <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
-            <TooltipTrigger asChild>
-              {'command' in item ? (
+        // `DropdownMenuSub` is a Radix context provider that renders no DOM node of its own, so a
+        // `TooltipTrigger asChild` wrapped around it drops every cloned prop (including
+        // `aria-describedby`) instead of reaching the trigger that actually renders. The submenu
+        // branch attaches the tooltip to `DropdownMenuSubTrigger` itself instead, which is the
+        // element the tooltip needs to describe anyway.
+        if ('command' in item) {
+          return (
+            <Tooltip key={`tooltip-${item.label}-${item.command}`}>
+              <TooltipTrigger asChild>
                 <DropdownMenuItem
                   key={`dropdown-menu-item-${item.label}-${item.command}`}
                   onClick={() => {
@@ -82,25 +87,38 @@ const getGroupContent = (
                   )}
                   {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
                 </DropdownMenuItem>
-              ) : (
-                <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
-                  <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
+              </TooltipTrigger>
+              {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
+            </Tooltip>
+          );
+        }
 
-                  <DropdownMenuPortal>
-                    <DropdownMenuSubContent>
-                      {getGroupContent(
-                        groups,
-                        items,
-                        getSubMenuGroupKeyForMenuItemId(groups, item.id),
-                        onSelectMenuItem,
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuPortal>
-                </DropdownMenuSub>
-              )}
-            </TooltipTrigger>
-            {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
-          </Tooltip>
+        // Only wrap the trigger when there is a tooltip: `TooltipTrigger asChild` clones its own
+        // `data-state` and `data-slot` onto the trigger, hiding the submenu's open state from
+        // `data-open:` styles
+        const subTrigger = <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>;
+        return (
+          <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
+            {item.tooltip ? (
+              <Tooltip>
+                <TooltipTrigger asChild>{subTrigger}</TooltipTrigger>
+                <TooltipContent>{item.tooltip}</TooltipContent>
+              </Tooltip>
+            ) : (
+              subTrigger
+            )}
+
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent>
+                {getGroupContent(
+                  groups,
+                  items,
+                  getSubMenuGroupKeyForMenuItemId(groups, item.id),
+                  onSelectMenuItem,
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
         );
       });
 
@@ -147,7 +165,8 @@ export type TabDropdownMenuProps = {
  * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
  * the next by a line; columns without items are left out. Groups within a column are not
  * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
- * row. With `showSectionHeadings`, each section is headed by its column label.
+ * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
+ * sets `isHeaderHidden`, whose label names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -204,12 +223,20 @@ export default function TabDropdownMenu({
             hideFocusRing(triggerRef.current ?? undefined);
         }}
       >
-        {sections.map(({ columnKey, label }, index) => {
+        {sections.map(({ columnKey, label, isHeaderHidden }, index) => {
           const headingId = `${headingIdPrefix}-${columnKey}`;
           return (
             <Fragment key={columnKey}>
               <DropdownMenuGroup aria-labelledby={showHeadings ? headingId : undefined}>
-                {showHeadings && <DropdownMenuLabel id={headingId}>{label}</DropdownMenuLabel>}
+                {showHeadings && (
+                  // A section shown without its heading keeps it for assistive technology only
+                  <DropdownMenuLabel
+                    id={headingId}
+                    className={isHeaderHidden ? 'tw:sr-only' : undefined}
+                  >
+                    {label}
+                  </DropdownMenuLabel>
+                )}
                 <TooltipProvider>
                   {getGroupContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
                 </TooltipProvider>

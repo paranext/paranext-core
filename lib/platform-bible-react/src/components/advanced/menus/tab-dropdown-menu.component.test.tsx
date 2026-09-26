@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { QUIET_FOCUS_ATTRIBUTE } from '@/utils/focus.util';
 import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
+import { persistDirection } from '@/utils/dir-helper.util';
 import TabDropdownMenu from './tab-dropdown-menu.component';
 
 // The hasPointerCapture / scrollIntoView shims this menu needs in jsdom are installed repo-wide by
@@ -17,6 +18,44 @@ beforeAll(() => {
 
 // userEvent-driven Radix menus can take seconds per click on a contended Windows CI worker
 vi.setConfig({ testTimeout: 20_000 });
+
+beforeEach(() => {
+  persistDirection('ltr');
+});
+
+/** Menu data with a single submenu, shaped like the Edit flyout's editSubmenu/editActions group. */
+const SUBMENU_MENU: Localized<MultiColumnMenu> = {
+  columns: { 'test.project': { label: 'Project', order: 1 } },
+  groups: {
+    'test.top': { column: 'test.project', order: 1 },
+    'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+  },
+  items: [
+    {
+      id: 'test.editSubmenu',
+      label: 'Edit',
+      localizeNotes: '',
+      group: 'test.top',
+      order: 1,
+    },
+    {
+      label: 'Undo',
+      localizeNotes: '',
+      group: 'test.editActions',
+      order: 1,
+      command: 'test.undo',
+    },
+  ],
+};
+
+/** A second action for the flyout in {@link SUBMENU_MENU}, for tests that move between items. */
+const REDO_ITEM: Localized<MultiColumnMenu>['items'][number] = {
+  label: 'Redo',
+  localizeNotes: '',
+  group: 'test.editActions',
+  order: 2,
+  command: 'test.redo',
+};
 
 /**
  * Shaped like the scripture editor's Project menu, including its empty Info column. Column keys are
@@ -63,6 +102,15 @@ const EDITOR_MENU: Localized<MultiColumnMenu> = {
       command: 'platformScriptureEditor.insertFootnoteAtSelection',
     },
   ],
+};
+
+/** {@link EDITOR_MENU} with its Edit column set to show no heading */
+const EDITOR_MENU_WITH_HIDDEN_EDIT_HEADER: Localized<MultiColumnMenu> = {
+  ...EDITOR_MENU,
+  columns: {
+    ...EDITOR_MENU.columns,
+    'platformScriptureEditor.edit': { label: 'Edit', order: 2, isHeaderHidden: true },
+  },
 };
 
 async function openMenu(menuData: Localized<MultiColumnMenu>, showSectionHeadings = true) {
@@ -136,6 +184,41 @@ describe('TabDropdownMenu', () => {
     expect(screen.getAllByRole('separator')).toHaveLength(2);
   });
 
+  it('shows a column that sets isHeaderHidden with no heading, but still names and divides it', async () => {
+    await openMenu(EDITOR_MENU_WITH_HIDDEN_EDIT_HEADER);
+
+    // Positive control: the neighboring sections keep their visible headings
+    expect(screen.getByText('Project')).not.toHaveClass('tw:sr-only');
+    expect(screen.getByText('Insert')).not.toHaveClass('tw:sr-only');
+    // jsdom applies no styles, so the class is the observable part of "visually hidden"
+    expect(screen.getByText('Edit')).toHaveClass('tw:sr-only');
+    const edit = screen.getByRole('group', { name: 'Edit' });
+    expect(within(edit).getByRole('menuitem', { name: /^Find/ })).toBeInTheDocument();
+    expect(screen.getAllByRole('separator')).toHaveLength(2);
+  });
+
+  it('names no section, isHeaderHidden or not, without `showSectionHeadings`', async () => {
+    await openMenu(EDITOR_MENU_WITH_HIDDEN_EDIT_HEADER, false);
+
+    const sections = screen.getAllByRole('group');
+    // Positive control: all three sections render, so there is something to be unnamed
+    expect(sections).toHaveLength(3);
+    sections.forEach((section) => expect(section).not.toHaveAccessibleName());
+    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+  });
+
+  it('names no section when a column that sets isHeaderHidden is the only one with items', async () => {
+    await openMenu({
+      ...EDITOR_MENU_WITH_HIDDEN_EDIT_HEADER,
+      items: EDITOR_MENU.items.filter((item) => item.group === 'platformScriptureEditor.find'),
+    });
+
+    const section = screen.getByRole('group');
+    expect(within(section).getByRole('menuitem', { name: /^Find/ })).toBeInTheDocument();
+    expect(section).not.toHaveAccessibleName();
+    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+  });
+
   it('shows no heading when only one section has items', async () => {
     await openMenu({
       ...EDITOR_MENU,
@@ -171,6 +254,109 @@ describe('TabDropdownMenu', () => {
     const find = screen.getByRole('menuitem', { name: /^Find/ });
     // jsdom computes no bidi, so the class that isolates the hint is the checkable part
     expect(within(find).getByText('Ctrl+F')).toHaveClass('tw:[unicode-bidi:plaintext]');
+  });
+
+  it('opens a flyout and reaches its items by keyboard', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onSelectMenuItem = vi.fn();
+    render(
+      <TabDropdownMenu
+        menuData={{ ...SUBMENU_MENU, items: [...SUBMENU_MENU.items, REDO_ITEM] }}
+        onSelectMenuItem={onSelectMenuItem}
+        tabLabel="Project"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    editTrigger.focus();
+    await user.keyboard('{ArrowRight}');
+    const undo = await screen.findByRole('menuitem', { name: 'Undo' });
+    await waitFor(() => expect(undo).toHaveFocus());
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(onSelectMenuItem).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'test.redo' }),
+    );
+  });
+
+  it('opens a flyout with ArrowLeft in RTL', async () => {
+    persistDirection('rtl');
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu menuData={SUBMENU_MENU} onSelectMenuItem={() => {}} tabLabel="Project" />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    editTrigger.focus();
+    await user.keyboard('{ArrowLeft}');
+    const undo = await screen.findByRole('menuitem', { name: 'Undo' });
+    await waitFor(() => expect(undo).toHaveFocus());
+  });
+
+  it("reports an open flyout's state on its trigger", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu menuData={SUBMENU_MENU} onSelectMenuItem={() => {}} tabLabel="Project" />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    editTrigger.focus();
+    await user.keyboard('{ArrowRight}');
+    await screen.findByRole('menuitem', { name: 'Undo' });
+
+    expect(editTrigger).toHaveAttribute('data-state', 'open');
+    expect(editTrigger).toHaveAttribute('data-slot', 'dropdown-menu-sub-trigger');
+  });
+
+  it("shows a submenu item's tooltip on hover", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const [editSubmenu, ...editActions] = SUBMENU_MENU.items;
+    render(
+      <TabDropdownMenu
+        menuData={{
+          ...SUBMENU_MENU,
+          items: [{ ...editSubmenu, tooltip: 'Edit actions' }, ...editActions],
+        }}
+        onSelectMenuItem={() => {}}
+        tabLabel="Project"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    await user.hover(editTrigger);
+
+    expect(await screen.findAllByText('Edit actions')).not.toHaveLength(0);
+  });
+
+  it('points the submenu trigger chevron right in LTR', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu menuData={SUBMENU_MENU} onSelectMenuItem={() => {}} tabLabel="Project" />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+
+    expect(editTrigger.querySelector('.tabler-icon-chevron-right')).not.toBeNull();
+    expect(editTrigger.querySelector('.tabler-icon-chevron-left')).toBeNull();
+  });
+
+  it('points the submenu trigger chevron left in RTL, toward the flyout it opens', async () => {
+    persistDirection('rtl');
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TabDropdownMenu menuData={SUBMENU_MENU} onSelectMenuItem={() => {}} tabLabel="Project" />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+
+    expect(editTrigger.querySelector('.tabler-icon-chevron-left')).not.toBeNull();
+    expect(editTrigger.querySelector('.tabler-icon-chevron-right')).toBeNull();
   });
 });
 
