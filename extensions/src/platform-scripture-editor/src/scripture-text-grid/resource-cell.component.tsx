@@ -5,9 +5,8 @@ import {
   EditorRef,
   getViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { useExtraValidMarkers } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -18,6 +17,7 @@ import {
 } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
+import { useChapterUsjWithCopyLimit } from '../copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { deriveCellState } from './resource-cell.utils';
 import {
   CHAPTER_EMPTY_KEY,
@@ -113,24 +113,16 @@ export function ResourceCell({
   // the `<style>` element it injects, so cells showing different commentaries do not fight.
   useCommentaryMarkerStyles(resourceRef.projectId);
 
-  // #region Chapter fetch — data method returns [data, setData, isLoading]; isLoading is index 2.
-  // `projectId` may be undefined for unavailable resources; both hooks must still be called
-  // unconditionally (Rules of Hooks). The hooks accept undefined and return loading/empty state.
-  const [usjPossiblyError, , isLoading] = useProjectData(
-    'platformScripture.USJ_Chapter',
-    resourceRef.projectId,
-  ).ChapterUSJ(
-    useMemo(
-      () => ({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum,
-        verseNum: 1,
-        versificationStr: scrRef.versificationStr,
-      }),
-      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
-    ),
-    EMPTY_USJ,
-  );
+  // #region Chapter fetch and copy limit
+  // `projectId` may be undefined for unavailable resources; the hook must still be called
+  // unconditionally (Rules of Hooks). The editor is not mounted while `deriveCellState` below
+  // reports `'downloading'`, but that reads the fetch's own loading flag, which is still unset on
+  // the render that changes chapter, so the copy limit blocks copying on that render as well.
+  const {
+    usjPossiblyError,
+    isUsjLoading: isLoading,
+    copyLimit,
+  } = useChapterUsjWithCopyLimit(resourceRef.projectId, scrRef);
   // #endregion
 
   // #region Text direction (unwrapped)
@@ -216,10 +208,11 @@ export function ResourceCell({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      copyLimit,
       ...(viewMode === 'aligned' ? { view: getViewOptions(BLOCK_VERSE_VIEW_MODE) } : {}),
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, viewMode, extraValidMarkers],
+    [textDirection, copyLimit, viewMode, extraValidMarkers],
   );
   // Only the USJ fed to the editor is resolved — `scrRef` passes through untouched. Keying the memo
   // on the resolved verse (not scrRef.verseNum) also keeps 1:0 -> 1:1 from re-feeding identical
@@ -297,6 +290,7 @@ export function ResourceCell({
       zoomArea={zoomArea}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
+      copyLimit={copyLimit}
       emptyMessage={emptyMessage}
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
       // In the aligned grid the single scroll port is the grid root; see `contentOverflow`.

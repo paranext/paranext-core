@@ -117,6 +117,7 @@ internal class LocalParatextProjects : IDisposable
         ProjectInterfaces.USER_EDITOR_SETTINGS,
         ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS,
         ProjectInterfaces.VERSIFICATION,
+        ProjectInterfaces.COPY_LIMIT,
     ];
 
     private static readonly List<string> s_paratextUnpublishedProjectInterfaces =

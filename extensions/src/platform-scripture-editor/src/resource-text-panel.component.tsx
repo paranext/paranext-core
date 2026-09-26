@@ -195,6 +195,8 @@ export type ResourceTextPanelProps = {
   isUsjLoading: boolean;
   /** The displayed resource's text direction. Applied to the editor only, never to the messages. */
   textDirection: EditorOptions['textDirection'];
+  /** The editor's copy limit for the chapter on screen. See `EditorOptions.copyLimit`. */
+  copyLimit: EditorOptions['copyLimit'];
   /**
    * Whether a user-initiated pick is in flight, which this panel renders as "Selecting…". Distinct
    * from `isInstalling`, where the user picked nothing and a configured resource is just
@@ -257,6 +259,7 @@ export function ResourceTextPanel({
   usjPossiblyError,
   isUsjLoading,
   textDirection,
+  copyLimit,
   isSelecting,
   isInstalling,
   installFailed,
@@ -349,9 +352,10 @@ export function ResourceTextPanel({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      copyLimit,
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, extraValidMarkers],
+    [textDirection, copyLimit, extraValidMarkers],
   );
 
   // `contentState` and `isBlankChapter` are deps because the content-area branches below UNMOUNT

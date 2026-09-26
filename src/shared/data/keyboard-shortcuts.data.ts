@@ -325,6 +325,26 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: 'F12', windows: 'F12', linux: 'F12' },
     locations: ['src/main/main.ts'],
   },
+  // The handler is the scripture-editors repo's CopyLimitPlugin; the listed files supply the copy
+  // limit that turns it on. It blocks the shortcut anywhere on the page, not only in the editor.
+  // The macOS Edit menu's Select All is a native menu command it cannot block; a copy after it is
+  // still shortened to the limit.
+  {
+    id: 'scripture-select-all-disabled-copy-limited',
+    purpose:
+      'In texts that limit copying, and in any text while its chapter or copy limit is loading or cannot be read, Select All does nothing (except in a text field)',
+    category: 'Editing',
+    context:
+      'Scripture editor and Resource Viewer, Bible texts and Commentaries panels, Text Collection, and Model text panel, for a copy-limited text or a text still loading',
+    keys: { macOS: '⌘A', windows: 'Ctrl+A', linux: 'Ctrl+A' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/copy-limit/use-chapter-copy-limit.hook.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/resource-text-panel.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell.component.tsx',
+      'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
+    ],
+  },
   {
     id: 'scripture-markers-menu',
     purpose: 'Open the inline markers menu',

@@ -4550,6 +4550,18 @@ export declare function collapseMiddleWords(text: string, numberOfTokensToKeepBe
  * @returns `text` surrounded by the isolate code points.
  */
 export declare function isolateBidi(text: string): string;
+/**
+ * Shortens `text` to at most `copyLimit` UTF-16 code units without splitting a grapheme cluster: a
+ * character outside the Basic Multilingual Plane, a base letter with its combining marks, or a
+ * conjunct. Clusters come from `unicode-segmenter`, as for the rest of this package. The result is
+ * the longest start of `text` that fits and ends at a cluster boundary, so it can be shorter than
+ * `copyLimit`.
+ *
+ * @param text The text to shorten.
+ * @param copyLimit The most UTF-16 code units the result may have, or `undefined` for no limit.
+ * @returns `text` itself when it fits or there is no limit, otherwise its longest start that fits.
+ */
+export declare function truncateToCopyLimit(text: string, copyLimit: number | undefined): string;
 /** Options for calculating resizable pane size limits. */
 export type PaneSizeLimitsOptions = {
 	/**

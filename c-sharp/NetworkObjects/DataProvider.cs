@@ -72,6 +72,14 @@ internal abstract class DataProvider : NetworkObject
     }
 
     /// <summary>
+    /// Called on the data scope of every update event this provider sends, before it is sent.
+    /// Override to add data types that must be refreshed whenever other data changes. Receives the
+    /// scope as the caller passed it (<c>"*"</c>, a data type, or a list of data types) and returns
+    /// the scope to send. Defaults to returning <paramref name="dataScope"/> unchanged.
+    /// </summary>
+    protected virtual object ExpandDataUpdateScope(object dataScope) => dataScope;
+
+    /// <summary>
     /// Notify all processes on the network that this data provider has new data.
     ///
     /// This method transforms the data scope in the same way that `data-provider`service.ts`'s
@@ -84,6 +92,8 @@ internal abstract class DataProvider : NetworkObject
     {
         if (dataScope == null)
             return;
+
+        dataScope = ExpandDataUpdateScope(dataScope);
 
         // The final computed data scope to send out in the update event. Based on dataScope
         object dataScopeResult;

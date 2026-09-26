@@ -5,7 +5,9 @@ import * as React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
-import type { WebViewProps } from '@papi/core';
+import type { UseWebViewScrollGroupScrRefHook, WebViewProps } from '@papi/core';
+import { usePromise } from 'platform-bible-react';
+import type { PickerResource } from './downloaded-resources.utils';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -18,7 +20,10 @@ const {
   mockUseResourcePickerResources,
   mockUseInstallDblResource,
   mockUseProjectData,
+  mockUseProjectDataProvider,
   mockFindCachedDblResource,
+  capturedResourceTextPanelProps,
+  realUsePromise,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockUseDblResourceAutoInstall: vi.fn(),
@@ -26,7 +31,12 @@ const {
   mockUseResourcePickerResources: vi.fn(),
   mockUseInstallDblResource: vi.fn(),
   mockUseProjectData: vi.fn(),
+  mockUseProjectDataProvider: vi.fn(),
   mockFindCachedDblResource: vi.fn(),
+  /** Collects the props passed to `ResourceTextPanel` on every render. */
+  capturedResourceTextPanelProps: vi.fn(),
+  /** The real `usePromise`, which the copy-limit tests need in place of the stub below. */
+  realUsePromise: { current: undefined as unknown },
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -37,6 +47,11 @@ vi.mock('@papi/frontend', () => ({
     },
     commands: {
       sendCommand: vi.fn(() => Promise.resolve([])),
+    },
+    projectLookup: {
+      getMetadataForProject: vi.fn(async () => ({
+        projectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.CopyLimit'],
+      })),
     },
   },
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -69,7 +84,7 @@ vi.mock('@papi/frontend/react', () => ({
     false,
   ],
   useDataProvider: vi.fn(() => undefined),
-  useProjectDataProvider: vi.fn(() => undefined),
+  useProjectDataProvider: (...args: unknown[]) => mockUseProjectDataProvider(...args),
   useProjectData: (...args: unknown[]) => mockUseProjectData(...args),
   useProjectSetting: vi.fn(() => ['ltr', false]),
   useSetting: vi.fn(() => ['simple', false]),
@@ -80,6 +95,7 @@ vi.mock('@papi/frontend/react', () => ({
 // platform-bible-react — keep UI components real; stub hooks that hit runtime
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
+  realUsePromise.current = original.usePromise;
   return {
     ...original,
     useExtraValidMarkers: () => [],
@@ -109,6 +125,20 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
     return <div data-testid="editorial" />;
   }),
 }));
+
+// Captures the props handed to the real ResourceTextPanel component on every render, then renders
+// it for real — so the other tests below keep exercising real behavior while the copy-limit
+// tests can assert on the prop the web view computed.
+vi.mock('./resource-text-panel.component', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./resource-text-panel.component')>();
+  return {
+    ...original,
+    ResourceTextPanel: (props: React.ComponentProps<typeof original.ResourceTextPanel>) => {
+      capturedResourceTextPanelProps(props);
+      return <original.ResourceTextPanel {...props} />;
+    },
+  };
+});
 
 // Local hooks — mock at module boundaries so tests control the data the component sees
 vi.mock('./use-effective-resource-reference-list.hook', () => ({
@@ -259,7 +289,11 @@ function resetPanelHooks() {
   });
   mockUseResourcePickerResources.mockReturnValue([[], false]);
   mockUseInstallDblResource.mockImplementation(() => vi.fn(async () => {}));
-  mockUseProjectData.mockReturnValue({ ChapterUSJ: vi.fn(() => [undefined, false]) });
+  mockUseProjectData.mockReturnValue({
+    ChapterUSJ: vi.fn(() => [undefined, false]),
+    BookCopyLimits: vi.fn(() => [undefined, vi.fn(), false]),
+  });
+  mockUseProjectDataProvider.mockReturnValue(undefined);
   mockFindCachedDblResource.mockReturnValue(undefined);
   // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
   setUsjSpy.mockClear();
@@ -380,8 +414,23 @@ describe('ResourceTextPanel — install against a stale catalog', () => {
     // One identity for the whole test: the hook reads a new installer as a reason to install again.
     const installResource = vi.fn(async () => {});
     mockUseInstallDblResource.mockReturnValue(installResource);
-    mockUseProjectData.mockImplementation((_dataProviderSource: unknown, resourceProjectId) => ({
-      ChapterUSJ: () => [resourceProjectId ? CHAPTER_USJ : undefined, vi.fn(), false],
+    // The chapter is read through the provider resolved for the resource's project.
+    const chapterProviders = new Map<string, { projectId: string }>();
+    mockUseProjectDataProvider.mockImplementation(
+      (projectInterface: string, resourceProjectId: string | undefined) => {
+        if (projectInterface !== 'platformScripture.USJ_Chapter' || !resourceProjectId)
+          return undefined;
+        let provider = chapterProviders.get(resourceProjectId);
+        if (!provider) {
+          provider = { projectId: resourceProjectId };
+          chapterProviders.set(resourceProjectId, provider);
+        }
+        return provider;
+      },
+    );
+    mockUseProjectData.mockImplementation((_projectInterface: unknown, chapterProvider) => ({
+      ChapterUSJ: () => [chapterProvider ? CHAPTER_USJ : undefined, vi.fn(), false],
+      BookCopyLimits: () => [undefined, vi.fn(), false],
     }));
     mockUseEffectiveResourceReferenceList.mockReturnValue({
       status: 'ready',
@@ -436,6 +485,137 @@ describe('ResourceTextPanel — install against a stale catalog', () => {
     rerender(<ResourceTextPanel {...props} />);
 
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalledWith(CHAPTER_USJ));
-    expect(mockUseProjectData).toHaveBeenLastCalledWith('platformScripture.USJ_Chapter', 'WEB1');
+    const chapterReads = mockUseProjectData.mock.calls.filter(
+      ([projectInterface]) => projectInterface === 'platformScripture.USJ_Chapter',
+    );
+    expect(chapterReads.at(-1)).toEqual([
+      'platformScripture.USJ_Chapter',
+      chapterProviders.get('WEB1'),
+    ]);
+    expect(chapterProviders.get('WEB1')).toBeDefined();
+  });
+});
+
+/** A Bible text the picker offers, so the panel shows its chapter and asks for its copy limits. */
+const SELECTED_RESOURCE: PickerResource = {
+  reference: { type: 'project', name: 'RES', id: 'resource-project-id' },
+  source: 'user',
+  isAdminLocked: false,
+  type: 'ScriptureResource',
+  installed: true,
+  projectId: 'resource-project-id',
+};
+
+/**
+ * Renders the panel showing `SELECTED_RESOURCE` at `chapterNum` with the given `useProjectData`
+ * methods, and returns a function that renders it again at another chapter.
+ */
+function renderSelectedResource(projectDataMethods: Record<string, unknown>, chapterNum: number) {
+  mockUseProjectData.mockReturnValue(projectDataMethods);
+  mockUseResourcePickerResources.mockReturnValue([[SELECTED_RESOURCE], false]);
+  vi.mocked(usePromise).mockImplementation(
+    // The copy limit waits on a metadata lookup through `usePromise`, which this file stubs for
+    // the resource catalog; the hoisted holder can only type the real hook as `unknown`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    realUsePromise.current as typeof usePromise,
+  );
+  mockUseEffectiveResourceReferenceList.mockReturnValue({
+    status: 'ready',
+    list: { dataVersion: '1.0.0', items: [] },
+  });
+
+  const propsAt = (chapter: number) =>
+    makeProps({
+      useWebViewScrollGroupScrRef: vi.fn<UseWebViewScrollGroupScrRefHook>(() => [
+        { book: 'GEN', chapterNum: chapter, verseNum: 1, versificationStr: 'English' },
+        vi.fn(),
+        undefined,
+        vi.fn(),
+        undefined,
+      ]),
+    });
+  const ResourceTextPanel = getResourceTextPanel();
+  const { rerender } = render(<ResourceTextPanel {...propsAt(chapterNum)} />);
+  return (chapter: number) => rerender(<ResourceTextPanel {...propsAt(chapter)} />);
+}
+
+const STALE_USJ = { type: 'USJ', version: '3.1', content: [] };
+
+describe('ResourceTextPanel — copy limit', () => {
+  afterEach(() => {
+    vi.mocked(usePromise).mockImplementation(() => [undefined, false]);
+  });
+
+  it('passes the chapter copy limit resolved by the hook down to the panel component', async () => {
+    renderSelectedResource(
+      {
+        ChapterUSJ: vi.fn(() => [STALE_USJ, vi.fn(), false]),
+        BookCopyLimits: vi.fn(() => [[undefined, 9], vi.fn(), false]),
+      },
+      1,
+    );
+
+    await waitFor(() =>
+      expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 9 }),
+      ),
+    );
+  });
+
+  // `useChapterCopyLimit` resolves the NEW chapter's limit immediately (book-level limits are
+  // pre-loaded), but `useProjectData` keeps serving the PREVIOUS chapter's text
+  // (`usjPossiblyError`) until its own fetch resolves — and unlike the Scripture Text Grid's
+  // `ResourceCell`, this panel's content-state resolution does not hide the editor while that
+  // fetch is in flight (`resolveResourceContentState` only inspects the USJ value, never the
+  // loading flag), so the stale chapter stays mounted and would otherwise be copyable under the
+  // new chapter's — possibly larger — limit for the whole round trip.
+  it('forces the copy limit to 0 while this chapter is loading, even though the limit is already known', async () => {
+    // A defined (non-`undefined`, non-error) value — the PREVIOUS chapter's stale USJ, which
+    // `useProjectData` keeps serving while `isUsjLoading` is true — so `resolveResourceContentState`
+    // resolves `'ready'` rather than `'loading'`, matching what actually keeps the editor mounted.
+    const methods = {
+      ChapterUSJ: vi.fn(() => [STALE_USJ, vi.fn(), false]),
+      BookCopyLimits: vi.fn(() => [[undefined, 9], vi.fn(), false]),
+    };
+    const renderAtChapter = renderSelectedResource(methods, 1);
+    await waitFor(() =>
+      expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 9 }),
+      ),
+    );
+
+    methods.ChapterUSJ.mockImplementation(() => [STALE_USJ, vi.fn(), true]);
+    renderAtChapter(1);
+
+    expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ copyLimit: 0 }),
+    );
+  });
+
+  it('blocks copying on the render that changes chapter, before the new chapter text is asked for', async () => {
+    // The mocked fetch never reports loading, as on the render before `useProjectData`'s effect
+    // marks the new chapter as loading.
+    const renderAtChapter = renderSelectedResource(
+      {
+        ChapterUSJ: vi.fn(() => [STALE_USJ, vi.fn(), false]),
+        BookCopyLimits: vi.fn(() => [[undefined, 9, 12], vi.fn(), false]),
+      },
+      1,
+    );
+    await waitFor(() =>
+      expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 9 }),
+      ),
+    );
+    const rendersBeforeChange = capturedResourceTextPanelProps.mock.calls.length;
+
+    renderAtChapter(2);
+
+    const [[propsOnChange]] = capturedResourceTextPanelProps.mock.calls.slice(rendersBeforeChange);
+    expect(propsOnChange).toEqual(expect.objectContaining({ copyLimit: 0 }));
+    renderAtChapter(2);
+    expect(capturedResourceTextPanelProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ copyLimit: 12 }),
+    );
   });
 });

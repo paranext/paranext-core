@@ -167,6 +167,7 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     usjPossiblyError: SAMPLE_USJ,
     isUsjLoading: false,
     textDirection: 'ltr',
+    copyLimit: undefined,
     isSelecting: false,
     isInstalling: false,
     installFailed: false,

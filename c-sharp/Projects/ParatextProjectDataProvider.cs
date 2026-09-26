@@ -182,6 +182,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getFinalVerseNumbersInBook", GetFinalVerseNumbersInBook));
         retVal.Add(("setFinalVerseNumbersInBook", SetFinalVerseNumbersInBook));
 
+        retVal.Add(("getBookCopyLimits", GetBookCopyLimits));
+        retVal.Add(("setBookCopyLimits", SetBookCopyLimits));
+
         // PT9 interlinear methods are only registered when this PDP advertises
         // platformScripture.Pt9Interlinear. Published PDPs do not advertise it, so they skip
         // registration entirely instead of exposing methods their interface list never promised.
@@ -2500,6 +2503,30 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         SendDataUpdateEvent("*", "full project updated event");
     }
 
+    /// <summary>
+    /// Adds <see cref="ProjectDataType.BOOK_COPY_LIMITS"/> to every update this provider sends, so
+    /// copy limits are refetched whenever any project data changes. <c>"*"</c> already covers every
+    /// data type, and a scope the base class would not send (an empty list or a blank string) is
+    /// passed through unchanged.
+    /// </summary>
+    protected override object ExpandDataUpdateScope(object dataScope)
+    {
+        List<string>? dataTypes = dataScope switch
+        {
+            string dataType when !string.IsNullOrWhiteSpace(dataType) && dataType != "*" =>
+            [
+                dataType,
+            ],
+            List<string> list when list.Count > 0 => [.. list],
+            _ => null,
+        };
+        if (dataTypes == null)
+            return dataScope;
+        if (!dataTypes.Contains(ProjectDataType.BOOK_COPY_LIMITS))
+            dataTypes.Add(ProjectDataType.BOOK_COPY_LIMITS);
+        return dataTypes;
+    }
+
     #endregion
 
     #region USFM
@@ -2712,6 +2739,33 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     public bool SetFinalVerseNumbersInBook(int bookNum, int[] value) =>
         throw new NotSupportedException(VersificationReadOnlyMessage);
+
+    #endregion
+
+    #region Copy Limit (platformScripture.CopyLimit)
+
+    /// <summary>
+    /// Maximum number of UTF-16 code units that may be copied at once from each chapter of the book
+    /// <paramref name="verseRef"/> names, indexed by chapter number in <paramref name="verseRef"/>'s
+    /// versification (index 0 unused), or <c>null</c> for no limit. A <paramref name="verseRef"/>
+    /// with no versification means the project's own. Its chapter and verse are ignored. Read-only.
+    /// </summary>
+    public int?[]? GetBookCopyLimits(VerseRef verseRef)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        var projectVersification = scrText.Settings.Versification;
+        var requestVersification = verseRef.Versification ?? projectVersification;
+        return CopyLimitVersificationMapper.MapToVersification(
+            bookNum => ResourceCopyLimit.GetBookCopyLimits(scrText, bookNum),
+            verseRef.BookNum,
+            projectVersification,
+            requestVersification
+        );
+    }
+
+    /// <summary>Read-only — always throws.</summary>
+    public bool SetBookCopyLimits(VerseRef verseRef, int?[]? value) =>
+        throw new NotSupportedException("Copy limits are read-only.");
 
     #endregion
 

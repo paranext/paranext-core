@@ -111,6 +111,8 @@ import {
 import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
+import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
+import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import {
   StructureProtectionButton,
@@ -2527,6 +2529,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
     useMemo(() => ({ whichUpdates: '*' }), []),
   );
+
+  // The copy limit is resolved here, below the chapter subscription, because it depends on whether
+  // the chapter text is loading (see `blockCopyWhileChapterLoads`). No project source: this web
+  // view's project changes only by reloading it, which remounts it.
+  const isChapterTextLoading = useIsProjectDataLoading(chapterUsjSelector, isUsjFromPdpLoading);
+  const copyLimit = useChapterCopyLimit(projectId, scrRef, isChapterTextLoading);
+  /** `options` with the chapter's copy limit, for every copy surface the editor's text reaches. */
+  const editorOptionsWithCopyLimit = useMemo<EditorOptions>(
+    () => ({ ...options, copyLimit }),
+    [options, copyLimit],
+  );
   // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
   // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
   // re-parsing (and re-logging) it each time is pure waste.
@@ -3759,7 +3772,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               ref={editorRef}
               scrRef={scrRef}
               onScrRefChange={setScrRefNoScroll}
-              options={options}
+              options={editorOptionsWithCopyLimit}
               logger={logger}
               onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
               onSelectionChange={handleSelectionChange}
@@ -4034,6 +4047,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   showMarkers={options.view?.markerMode !== 'hidden'}
                   focusRequest={footnotePaneFocusRequest}
                   zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
+                  copyLimit={editorOptionsWithCopyLimit.copyLimit}
                 >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                   <OutPortal node={editorPortalNode} />
@@ -4083,7 +4097,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onClose={onFootnoteEditorClose}
             onNoteEdit={onFootnoteEditorNoteEdit}
             scrRef={scrRef}
-            editorOptions={options}
+            editorOptions={editorOptionsWithCopyLimit}
             defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
             localizedStrings={localizedStrings}
             parentEditorRef={editorRef}
