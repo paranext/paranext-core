@@ -401,6 +401,24 @@ describe('a remedy the gate would reject is not offered', () => {
   // A conjunction leaves `detected` undefined, so this printed a placeholder asking the reader for
   // something already on the line above. What such an exception must record is the compound
   // expression - the shape all three conjunction entries in the closure carry.
+  it('tells the reader to credit each operand when one file stacks several grants', () => {
+    // `posthog-node`'s shape: MIT declared, and a LICENSE stacking an Apache-2.0 grant over MIT
+    // grants that nothing identifies. The reader records the conjunction by hand, so the template
+    // cannot know one is coming, and without `copyrightByOperand` every operand's canonical text is
+    // credited to the file's first notice.
+    const message = describeBlock(
+      {
+        ...block,
+        name: 'stacked-pkg',
+        reason: 'LICENSE could not be identified (NOASSERTION)',
+        detected: 'NOASSERTION',
+      },
+      POLICY,
+    );
+    expect(message).toContain('"copyrightByOperand"');
+    expect(message).toContain('first notice');
+  });
+
   it('records the declared expression for a conjunction rather than a placeholder', () => {
     const message = describeBlock(
       {

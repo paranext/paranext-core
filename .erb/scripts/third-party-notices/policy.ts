@@ -579,6 +579,7 @@ function applyException(
   key: string,
   version: string,
   sha256: string | undefined,
+  text: string | undefined,
   allowed: Set<string>,
   copyleft: Set<string>,
 ): BlockedFields | undefined {
@@ -675,16 +676,21 @@ function applyException(
   // under, so one keyed by an id the recorded expression does not contain - a typo, or an operand
   // since dropped from `spdx` - would never be printed, and the operand it was meant for would fall
   // back to the package's first notice with nothing to say the correction had been lost. An empty
-  // value would print a credit line naming nobody.
+  // value would print a credit line naming nobody. A single-identifier expression is refused for
+  // the same reason: `render.ts` reproduces canonical texts beside a package's own file only for a
+  // multi-operand expression (`spdxIdsOf(...).length > 1`), and an exception is always pinned to a
+  // file, so a credit recorded on one identifier clears the gate and then appears nowhere.
   const byOperand = entry.copyrightByOperand;
+  const creditEntries = typeof byOperand === 'object' && byOperand ? Object.entries(byOperand) : [];
   if (byOperand !== undefined) {
-    const entries = typeof byOperand === 'object' && byOperand ? Object.entries(byOperand) : [];
-    const stray = entries.map(([id]) => id).filter((id) => !recorded.ids.includes(id));
-    const empty = entries
+    const stray = creditEntries.map(([id]) => id).filter((id) => !recorded.ids.includes(id));
+    const empty = creditEntries
       .filter(([, notice]) => typeof notice !== 'string' || !notice.trim())
       .map(([id]) => id);
     let problem: string | undefined;
-    if (!entries.length) problem = 'is not a non-empty object keyed by operand';
+    if (!creditEntries.length) problem = 'is not a non-empty object keyed by operand';
+    else if (recorded.ids.length < 2)
+      problem = `is recorded on the single-identifier expression ${entry.spdx}, whose row is described by the package's own license file and prints no per-operand credit`;
     else if (stray.length)
       problem = `names ${stray.join(', ')}, which ${entry.spdx} does not contain`;
     else if (empty.length) problem = `gives ${empty.join(', ')} no notice`;
@@ -704,6 +710,25 @@ function applyException(
     return blocked(
       `a reviewed exception exists for ${key}@${version} but its recorded textSha256 is stale ` +
         `(recorded ${entry.textSha256}, found ${sha256}). The license text changed since it was reviewed.`,
+    );
+  // A credit is hand-typed, and the document prints it verbatim as the copyright notice an operand
+  // is granted under - so each holder it names must be one the pinned text actually states. The
+  // hash pins the file, not what was typed from it. `; ` separates holders within one credit, and
+  // whitespace is collapsed on both sides because the file wraps and indents its notices freely.
+  const collapse = (value: string) => value.replace(/\s+/g, ' ').trim();
+  const stated = collapse(text ?? '');
+  const unstated = creditEntries.flatMap(([, notice]) =>
+    String(notice)
+      .split(';')
+      .map(collapse)
+      .filter((holder) => holder && !stated.includes(holder)),
+  );
+  if (unstated.length)
+    return blocked(
+      `the reviewed exception for ${key}@${version} credits ` +
+        `${unstated.map((holder) => `"${holder}"`).join(', ')}, which its pinned license text does ` +
+        'not state. Each notice in copyrightByOperand is printed as a copyright notice, so it must ' +
+        'be copied from the package\'s license file; separate several notices with "; ".',
     );
   return {
     verdict: 'excepted',
@@ -1611,11 +1636,19 @@ type Instruments = {
 function readInstruments(
   ctx: ClassifyContext,
   signals: DetectedSignals,
-  sha256: string | undefined,
+  pinned: DetectedFile | undefined,
 ): Instruments {
   const { key, version, policy, allowed, copyleft, declared } = ctx;
   const { files } = signals;
-  const exception = applyException(policy, key, version, sha256, allowed, copyleft);
+  const exception = applyException(
+    policy,
+    key,
+    version,
+    pinned?.sha256,
+    pinned?.text,
+    allowed,
+    copyleft,
+  );
   // A curated override records what a human established about a package whose own metadata
   // establishes nothing - the SIL packages whose nuspecs declare no license at all, and the
   // Windows-only ICU runtime that no restore on this machine resolves. Unless it links to a
@@ -1782,7 +1815,7 @@ export function classify({
     usableById,
   };
 
-  const { exception, overridable } = readInstruments(ctx, signals, sha256);
+  const { exception, overridable } = readInstruments(ctx, signals, pinned);
 
   // The upstream tool could not establish the license. Never a permissive result. Requires an
   // actual array: `{}.length` is `undefined`, which duck-types as "no errors" and would silently

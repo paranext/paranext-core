@@ -102,7 +102,7 @@
       "reason": "Declared as a root runtime dependency, but its only import in src/main/main.ts is commented out, so webpack compiles no module for it and electron-builder does not pack it either - release/app/package.json, whose closure is the one packed unbundled, declares no dependencies. Nothing this repository distributes contains it."
     }
   },
-  "exceptionsNote": "A reviewed determination that clears one blocked package. Keyed by ecosystem:name and pinned to the exact license TEXT: the block returns the moment the package changes its license text, which is what a determination read off that text can no longer stand for. `version` records which version the determination was read against, so it stays re-checkable; it is provenance, not part of the key - a version bump that leaves the text byte-identical changes nothing this entry asserts. `copyrightByOperand` is optional and for a conjunction whose operands are granted by different holders: it maps an operand's SPDX id to the notice that operand is granted under, which is printed beside that operand's canonical text instead of the first notice in the package's file. Each key must be an operand of `spdx`.",
+  "exceptionsNote": "A reviewed determination that clears one blocked package. Keyed by ecosystem:name and pinned to the exact license TEXT: the block returns the moment the package changes its license text, which is what a determination read off that text can no longer stand for. `version` records which version the determination was read against, so it stays re-checkable; it is provenance, not part of the key - a version bump that leaves the text byte-identical changes nothing this entry asserts. `copyrightByOperand` is optional and for a conjunction whose operands are granted by different holders: it maps an operand's SPDX id to the notice that operand is granted under, which is printed beside that operand's canonical text instead of the first notice in the package's file. Each key must be an operand of `spdx`, which must name more than one identifier; each value is copied from the pinned license file, several notices separated by `; `, and a notice the file does not state is refused.",
   "exceptions": [
     {
       "package": "npm:bowser",
@@ -126,19 +126,19 @@
       "package": "npm:posthog-node",
       "version": "5.51.1",
       "spdx": "(Apache-2.0 AND MIT)",
-      "reason": "package.json declares MIT, but LICENSE is the Apache-2.0 grant (PostHog and Mixpanel) followed by MIT grants for code vendored from Sentry, Meta, Expo and AgentCat, so no single-license matcher identifies it; both operands are on the allowed list.",
-      "reviewer": "rolf_heij@sil.org",
-      "date": "2026-09-23",
+      "reason": "package.json declares MIT, but LICENSE is the Apache-2.0 grant (PostHog and Mixpanel) followed by MIT grants for code vendored from Sentry, Meta, Expo and AgentCat, so no single-license matcher identifies it; both operands are on the allowed list. The Apache-2.0 operand is granted under the PostHog and Mixpanel notices at the head of the file, and the MIT operand under the Sentry, Meta, Expo and AgentCat notices of the grants below it, which is what copyrightByOperand records.",
+      "reviewer": "tj_couch@sil.org",
+      "date": "2026-09-28",
       "textSha256": "a4a2a1ca3b22fe608ea29144452418e4a91f11ca44666a8a91cb72ec0a70f6ee",
       "copyrightByOperand": {
-        "Apache-2.0": "Copyright 2020 Posthog / Hiberly, Inc. Copyright 2015 Mixpanel, Inc.",
+        "Apache-2.0": "Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.",
         "MIT": "Copyright (c) 2012 Functional Software, Inc. dba Sentry; Copyright (c) 2017 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.; Copyright (c) 2015-present 650 Industries, Inc. (aka Expo); Copyright (c) 2025 AgentCat, Inc. (formerly MCPcat)"
       }
     },
     {
       "package": "npm:@posthog/core",
       "version": "1.55.2",
-      "spdx": "(MIT AND Apache-2.0)",
+      "spdx": "(Apache-2.0 AND MIT)",
       "reason": "package.json declares MIT, but LICENSE is the posthog-js monorepo's: the Apache-2.0 grant for the repository, then a section stating that @posthog/core itself is MIT (PostHog), followed by the MIT grant for its TraceKit-derived error-tracking parser, the Apache-2.0 notice for its vendored uuidv7 (LiosK), and MIT grants for code vendored from Sentry, Meta, Expo and AgentCat. The package ships the uuidv7 and Sentry-derived code (src/vendor/uuidv7.ts, src/error-tracking/) and compiles both into dist/, so both operands apply; no single-license matcher identifies the file, and both are on the allowed list.",
       "reviewer": "tj_couch@sil.org",
       "date": "2026-09-28",

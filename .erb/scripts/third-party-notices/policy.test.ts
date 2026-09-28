@@ -35,9 +35,9 @@ const POLICY = {
   exceptions: NO_EXCEPTIONS,
 };
 
-const detected = (spdxId: string, confidence = 100, sha256 = 'abc') => ({
+const detected = (spdxId: string, confidence = 100, sha256 = 'abc', text = 'text') => ({
   dir: '/x',
-  files: [{ filename: 'LICENSE', spdxId, matcher: 'exact', confidence, sha256, text: 'text' }],
+  files: [{ filename: 'LICENSE', spdxId, matcher: 'exact', confidence, sha256, text }],
 });
 
 // For the multi-file reconciliation cases: each entry is [filename, spdxId], defaulting to 100%
@@ -846,13 +846,29 @@ describe('classify', () => {
   describe('copyrightByOperand', () => {
     // `posthog-node`'s shape: one file stacking an Apache-2.0 grant (PostHog) over MIT grants for
     // vendored code (Sentry and others), so the package's first notice belongs to one operand only.
-    const withCredits = (copyrightByOperand: Exception['copyrightByOperand']) => ({
+    // The stacked file's notices, as they appear in it: the Apache-2.0 grant first, then the MIT
+    // grants further down, each on its own line.
+    const STACKED_TEXT = [
+      'Copyright 2020 Stacked, Inc.',
+      '',
+      'Apache License, Version 2.0 ...',
+      '',
+      'Copyright (c) 2012 Sentry',
+      'Copyright (c) Meta Platforms, Inc.',
+      '    and affiliates.',
+      '',
+      'Permission is hereby granted ...',
+    ].join('\n');
+    const withCredits = (
+      copyrightByOperand: Exception['copyrightByOperand'],
+      spdx = '(Apache-2.0 AND MIT)',
+    ) => ({
       ...POLICY,
       exceptions: [
         {
           package: 'npm:stacked',
           version: '1.0.0',
-          spdx: '(Apache-2.0 AND MIT)',
+          spdx,
           reason: 'two grants in one file',
           reviewer: 'x@y',
           date: '2026-08-20',
@@ -861,13 +877,16 @@ describe('classify', () => {
         },
       ],
     });
-    const classifyWith = (copyrightByOperand: Exception['copyrightByOperand']) =>
+    const classifyWith = (
+      copyrightByOperand: Exception['copyrightByOperand'],
+      { spdx, text = STACKED_TEXT }: { spdx?: string; text?: string } = {},
+    ) =>
       classify({
         ...base,
         name: 'stacked',
-        policy: withCredits(copyrightByOperand),
+        policy: withCredits(copyrightByOperand, spdx),
         declaredField: 'MIT',
-        detection: detected('NOASSERTION', 100, 'abc'),
+        detection: detected('NOASSERTION', 100, 'abc', text),
       });
 
     it('carries the recorded credits onto the verdict the exception clears to', () => {
@@ -895,6 +914,31 @@ describe('classify', () => {
       expect(classifyWith({}).verdict).toBe('blocked');
       // A hand-edited policy file can hold a bare string here, which the type cannot express.
       expect(classifyWith(JSON.parse('"Copyright X"')).verdict).toBe('blocked');
+    });
+
+    it('refuses credits on a single-identifier expression, where no credit line reads them', () => {
+      // A single-identifier row that ships its own text is described by that text alone, so a
+      // recorded credit would clear the gate and then appear nowhere in the document.
+      const v = classifyWith({ MIT: 'Copyright (c) 2012 Sentry' }, { spdx: 'MIT' });
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('single-identifier');
+    });
+
+    it('refuses a credit naming a holder the pinned license text does not state', () => {
+      const v = classifyWith({ MIT: 'Copyright (c) 2012 Sentry; Copyright (c) 2019 Sentyr' });
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('"Copyright (c) 2019 Sentyr"');
+      expect(v.reason).not.toContain('"Copyright (c) 2012 Sentry"');
+    });
+
+    it('matches each holder across the line breaks and indentation the text wraps it with', () => {
+      const credits = {
+        'Apache-2.0': 'Copyright 2020 Stacked, Inc.',
+        MIT: 'Copyright (c) 2012 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.',
+      };
+      const v = classifyWith(credits);
+      expect(v.verdict).toBe('excepted');
+      expect(v.copyrightByOperand).toEqual(credits);
     });
   });
 

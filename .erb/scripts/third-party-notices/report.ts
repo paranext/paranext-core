@@ -161,6 +161,13 @@ function exceptionRemedy(
     '',
     '  Every identifier in "spdx" has to be on the policy\'s "allowed" list and absent from its',
     '  "copyleft" list; a conjunction is checked one operand at a time.',
+    // Unconditional, because the case it covers is one the template cannot see coming: a file
+    // stacking several grants is typically declared as ONE of them and identified as nothing, and
+    // the reader writes the conjunction into "spdx" by hand.
+    '  If "spdx" is a conjunction whose operands are granted by different copyright holders, also',
+    '  record "copyrightByOperand", mapping each operand to the notice(s) copied from this file',
+    '  (separate several with "; "); otherwise every operand\u2019s text is credited to the file\u2019s',
+    '  first notice. Leave it out for a single identifier: it would never be printed.',
     '  The exception is pinned to this exact license TEXT. If the package changes it, the block',
     '  returns and the exception must be reviewed again. "version" records what you read, so a',
     '  later reader can check the determination against the same thing; it does not pin anything.',

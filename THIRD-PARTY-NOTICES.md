@@ -2617,10 +2617,9 @@ below, paired with no copyright notice — there was no package to read one from
 | Apache-2.0 | 5 |
 | ISC | 5 |
 | BSD-3-Clause (reviewed exception) | 3 |
-| (Apache-2.0 AND MIT) (reviewed exception) | 1 |
+| (Apache-2.0 AND MIT) (reviewed exception) | 2 |
 | (BSD-3-Clause AND Apache-2.0) (reviewed exception) | 1 |
 | (ISC AND MIT) (reviewed exception) | 1 |
-| (MIT AND Apache-2.0) (reviewed exception) | 1 |
 | (MIT AND Zlib) (reviewed exception) | 1 |
 | 0BSD | 1 |
 | Apache-2.0 (elected from (MPL-2.0 OR Apache-2.0)) | 1 |
@@ -2679,7 +2678,7 @@ identifiers": `fsevents@2.3.3`.
 | `@lexical/text` | 0.43.0 | MIT |
 | `@lexical/utils` | 0.43.0 | MIT |
 | `@lexical/yjs` | 0.43.0 | MIT |
-| `@posthog/core` | 1.55.2 | (MIT AND Apache-2.0) (reviewed exception) |
+| `@posthog/core` | 1.55.2 | (Apache-2.0 AND MIT) (reviewed exception) |
 | `@radix-ui/number` | 1.1.1 | MIT |
 | `@radix-ui/primitive` | 1.1.3 | MIT |
 | `@radix-ui/react-accessible-icon` | 1.1.7 | MIT |
@@ -8626,7 +8625,7 @@ rather than left blank.
 
 - `@posthog/core@1.55.2` (npm) — Copyright 2021-2023 LiosK
 - `chroma-js@3.2.0` (npm) — Copyright (c) 2011-2025, Gregor Aisch All rights reserved.
-- `posthog-node@5.51.1` (npm) — Copyright 2020 Posthog / Hiberly, Inc. Copyright 2015 Mixpanel, Inc.
+- `posthog-node@5.51.1` (npm) — Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.
 - `rc-new-window@0.1.13` (npm) — no copyright notice — an npm manifest has no field for one, and it bundles no license file to carry one
 - `CsvHelper@33.1.0` (NuGet) — Copyright © 2009-2024 Josh Close
 - `Microsoft.Extensions.ObjectPool@5.0.10` (NuGet) — © Microsoft Corporation. All rights reserved.

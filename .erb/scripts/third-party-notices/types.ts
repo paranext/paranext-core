@@ -117,8 +117,10 @@ export type Exception = {
    * file - which, for a file stacking several grants, belongs to one of them. `posthog-node`'s
    * LICENSE opens with PostHog's Apache-2.0 notice and carries its MIT grants for code vendored
    * from Sentry, Meta, Expo and AgentCat further down, so without this the MIT section credits
-   * PostHog. Every key must be an operand of `spdx` (`applyException` refuses one that is not); an
-   * operand with no key keeps the package's own notice.
+   * PostHog. Every key must be an operand of `spdx`, and `spdx` must name more than one identifier,
+   * since a single-identifier row prints no per-operand credit. Each value is one or more notices
+   * copied from the pinned license file and separated by `; `; `applyException` refuses a notice
+   * the file does not state. An operand with no key keeps the package's own notice.
    */
   copyrightByOperand?: Record<string, string>;
 };
