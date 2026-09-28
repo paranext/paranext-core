@@ -843,6 +843,61 @@ describe('classify', () => {
     expect(v.spdxId).toBe('(BSD-3-Clause AND Apache-2.0)');
   });
 
+  describe('copyrightByOperand', () => {
+    // `posthog-node`'s shape: one file stacking an Apache-2.0 grant (PostHog) over MIT grants for
+    // vendored code (Sentry and others), so the package's first notice belongs to one operand only.
+    const withCredits = (copyrightByOperand: Exception['copyrightByOperand']) => ({
+      ...POLICY,
+      exceptions: [
+        {
+          package: 'npm:stacked',
+          version: '1.0.0',
+          spdx: '(Apache-2.0 AND MIT)',
+          reason: 'two grants in one file',
+          reviewer: 'x@y',
+          date: '2026-08-20',
+          textSha256: 'abc',
+          copyrightByOperand,
+        },
+      ],
+    });
+    const classifyWith = (copyrightByOperand: Exception['copyrightByOperand']) =>
+      classify({
+        ...base,
+        name: 'stacked',
+        policy: withCredits(copyrightByOperand),
+        declaredField: 'MIT',
+        detection: detected('NOASSERTION', 100, 'abc'),
+      });
+
+    it('carries the recorded credits onto the verdict the exception clears to', () => {
+      const credits = { MIT: 'Copyright (c) 2012 Sentry' };
+      const v = classifyWith(credits);
+      expect(v.verdict).toBe('excepted');
+      expect(v.copyrightByOperand).toEqual(credits);
+    });
+
+    it('refuses a key that is not an operand of the recorded expression', () => {
+      // A typo, or an operand since dropped from `spdx`, would otherwise never be printed - and
+      // the operand it was meant for would silently keep the package's first notice.
+      const v = classifyWith({ MIT: 'Copyright (c) 2012 Sentry', 'BSD-3-Clause': 'Copyright X' });
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('names BSD-3-Clause');
+    });
+
+    it('refuses an operand given no notice', () => {
+      const v = classifyWith({ MIT: '  ' });
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('gives MIT no notice');
+    });
+
+    it('refuses an empty or non-object value', () => {
+      expect(classifyWith({}).verdict).toBe('blocked');
+      // A hand-edited policy file can hold a bare string here, which the type cannot express.
+      expect(classifyWith(JSON.parse('"Copyright X"')).verdict).toBe('blocked');
+    });
+  });
+
   it('ignores an exception whose text hash no longer matches', () => {
     // An exception must not outlive the text it was granted for. If the package changes its
     // license, the hash stops matching and the block returns rather than being silently carried.
@@ -1397,7 +1452,7 @@ describe('notices-policy.json', () => {
   // legal determinations, so a change in either is worth noticing here and updating deliberately.
   it('generates a case for every election and every exception the shipped policy carries', () => {
     expect(Object.keys(policy.elections)).toHaveLength(3);
-    expect(policy.exceptions).toHaveLength(17);
+    expect(policy.exceptions).toHaveLength(18);
   });
 
   Object.entries(policy.elections).forEach(([key, election]) => {

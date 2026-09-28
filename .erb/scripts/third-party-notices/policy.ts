@@ -436,7 +436,12 @@ type ParsedDeclaration = Extract<Declared, { ok: true }>;
  * fields in `CommonFields` are spread alongside. Saying these functions return a whole `Verdict`
  * would claim they fill in evidence they deliberately leave to the caller.
  */
-type BlockedFields = { verdict: Verdict['verdict']; spdxId: string | undefined; reason: string };
+type BlockedFields = {
+  verdict: Verdict['verdict'];
+  spdxId: string | undefined;
+  reason: string;
+  copyrightByOperand?: Record<string, string>;
+};
 
 /**
  * The evidence fields every verdict carries, whatever the outcome.
@@ -666,6 +671,30 @@ function applyException(
         'records which license an unidentifiable text actually is; it cannot admit terms the ' +
         'policy does not allow.',
     );
+  // A per-operand credit is printed beside that operand's canonical text as the notice it is made
+  // under, so one keyed by an id the recorded expression does not contain - a typo, or an operand
+  // since dropped from `spdx` - would never be printed, and the operand it was meant for would fall
+  // back to the package's first notice with nothing to say the correction had been lost. An empty
+  // value would print a credit line naming nobody.
+  const byOperand = entry.copyrightByOperand;
+  if (byOperand !== undefined) {
+    const entries = typeof byOperand === 'object' && byOperand ? Object.entries(byOperand) : [];
+    const stray = entries.map(([id]) => id).filter((id) => !recorded.ids.includes(id));
+    const empty = entries
+      .filter(([, notice]) => typeof notice !== 'string' || !notice.trim())
+      .map(([id]) => id);
+    let problem: string | undefined;
+    if (!entries.length) problem = 'is not a non-empty object keyed by operand';
+    else if (stray.length)
+      problem = `names ${stray.join(', ')}, which ${entry.spdx} does not contain`;
+    else if (empty.length) problem = `gives ${empty.join(', ')} no notice`;
+    if (problem)
+      return blocked(
+        `the reviewed exception for ${key}@${version} records a copyrightByOperand that ` +
+          `${problem}. Each key must be an operand of the recorded spdx expression, and each ` +
+          'value the copyright notice that operand is granted under.',
+      );
+  }
   if (!sha256 || !entry.textSha256)
     return blocked(
       `a reviewed exception exists for ${key}@${version} but the exception is not hash-pinned - ` +
@@ -676,7 +705,12 @@ function applyException(
       `a reviewed exception exists for ${key}@${version} but its recorded textSha256 is stale ` +
         `(recorded ${entry.textSha256}, found ${sha256}). The license text changed since it was reviewed.`,
     );
-  return { verdict: 'excepted', spdxId: entry.spdx, reason: `reviewed exception: ${entry.reason}` };
+  return {
+    verdict: 'excepted',
+    spdxId: entry.spdx,
+    reason: `reviewed exception: ${entry.reason}`,
+    ...(byOperand ? { copyrightByOperand: byOperand } : {}),
+  };
 }
 
 /**
