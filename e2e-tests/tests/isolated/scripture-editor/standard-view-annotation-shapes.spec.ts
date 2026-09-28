@@ -298,7 +298,10 @@ test.describe('scripture editor annotation shapes', () => {
       const paragraph = paragraphWith('beginning of his signs');
       const milestone = paragraph.locator('span.ms[data-marker="qt-s"]');
       await expect(milestone).toHaveCount(1, { timeout: 15_000 });
-      await expect(paragraph.locator('.attribute-run')).toHaveText(`\\qt-s${NBSP}|Pilate\\*`);
+      // Raw `textContent`, not `toHaveText`: that normalizes whitespace, NBSP included, so it
+      // would accept a plain space where the separator byte belongs.
+      const attributeRun = paragraph.locator('.attribute-run');
+      expect(await attributeRun.textContent()).toBe(`\\qt-s${NBSP}|Pilate\\*`);
 
       // The typed milestone split verse 11's text in place: text before, the milestone, text after.
       const paragraphIndex = paragraphIndexOf(verseEleven);
@@ -336,7 +339,7 @@ test.describe('scripture editor annotation shapes', () => {
 
       await expectMarkTexts('across-milestone', [wordBefore, wordAfter]);
       await expect(milestone).toHaveCount(1);
-      await expect(paragraph.locator('.attribute-run')).toHaveText(`\\qt-s${NBSP}|Pilate\\*`);
+      expect(await attributeRun.textContent()).toBe(`\\qt-s${NBSP}|Pilate\\*`);
       await expect(editorInput.locator('mark .ms, mark .attribute-run')).toHaveCount(0);
 
       const saved = await saveAndReadChapter('probemilestone');
