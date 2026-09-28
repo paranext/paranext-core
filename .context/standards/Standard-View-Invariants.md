@@ -176,9 +176,14 @@ a range over a marker glyph, a verse or chapter number, a note caller, or an att
 (`['lemma'] propertyOffset …`); the editor holds it on those bytes (same CSS classes as a `<mark>`,
 plus `display-annotation`, painted whole) and never changes the document for it. `getUsj()` never
 carries it, and `setUsj` drops every annotation, so the host re-applies from its own anchors —
-`annotationInfoByIdRef` in `platform-scripture-editor.web-view.tsx` keeps each range. An
-annotation held only on display bytes reports `onRemove` once (`"removed"` or `"destroyed"`); one
-that holds text reports per `<mark>`, as before.
+`annotationInfoByIdRef` in `platform-scripture-editor.web-view.tsx` keeps each range. Each `<mark>`
+reports its own `onRemove` (one call per `<mark>`); display bytes report only when no `<mark>`
+does. `removeAnnotation` (or setting the id again) reports `"removed"` once from display bytes when
+no `<mark>` holds the annotation. `"destroyed"` comes from display bytes — once, when the last one
+leaves — only for an annotation that never held a `<mark>`. One that held a `<mark>` at any moment
+since it was set, including a range set over a pending edit that the settle carries onto display
+bytes, reports its destruction only through its marks: once they are gone, nothing reports the
+later loss of its display bytes.
 
 **A position names the byte in front of which it sits, and snaps LEFT in BOTH directions.** It maps
 through whatever contains that byte on its own side; where one side has bytes the other lacks, the
