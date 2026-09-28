@@ -3110,16 +3110,43 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Open the checks side panel next to a scripture editor.
+     * Open the checks side panel for a scripture editor.
+     *
+     * In Power mode a new panel is docked to the right of the editor tab on every call. In Simple
+     * mode there is one Checks tab, in the third (Resources & Tools) column: the first call adds
+     * it, and later calls bring it to the front, re-pointing it first if it shows a different
+     * project or editor.
      *
      * @param editorWebViewId Id of the triggering editor's web view — not a project id. The
      *   editor's project and scroll group are resolved from it internally via
-     *   `papi.webViews.getOpenWebViewDefinition`, and the panel is placed relative to that editor
-     *   tab.
-     * @returns Id of the newly opened checks side panel web view, or `undefined` if no editor web
-     *   view id was provided or the web view has no project (nothing is opened in that case).
+     *   `papi.webViews.getOpenWebViewDefinition`, and in Power mode the panel is placed relative to
+     *   that editor tab.
+     * @returns Id of the opened, re-pointed, or fronted checks side panel web view, or `undefined`
+     *   if no editor web view id was provided or the web view has no project (nothing is opened in
+     *   that case).
      */
     'platformScripture.openChecksSidePanel': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Re-point an already-open checks side panel at a different project, so it checks that project
+     * instead of the one it was opened for.
+     *
+     * Creates nothing: when no checks side panel is open this does nothing and returns `undefined`.
+     * Use `platformScripture.openChecksSidePanel` to open one. Never brings the panel to the
+     * front.
+     *
+     * @param projectId Id of the project the checks side panel should check from now on.
+     * @param editorWebViewId Id of the editor web view the panel should act on: the one it focuses,
+     *   and whose text it selects when a result is clicked. Pass this whenever the re-point
+     *   accompanies a new or replaced editor, since a replaced editor tab mints a new id. Omit to
+     *   leave the id the panel already holds untouched.
+     * @returns Id of the checks side panel web view, or `undefined` if none was open or the
+     *   re-point did not take.
+     */
+    'platformScripture.updateChecksSidePanelProject': (
+      projectId: string,
       editorWebViewId?: string | undefined,
     ) => Promise<string | undefined>;
 

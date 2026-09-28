@@ -1414,13 +1414,14 @@ export function resolveGridProviderProjectId(
  * - Never follows a published resource (see `isProjectPublished`): a resource has no collection of
  *   its own, so following it would cost a reload, and the in-memory state it drops, for an empty
  *   panel. The rule lives here rather than in a caller so every re-point path applies it.
- * - Never creates a panel when none is open. The Text Collection has no open command and no menu
- *   entry: its only open path is the default-layout supplement, which puts it in Column 3 from
- *   startup. So "not open" means the tab was closed in Power mode or the
- *   `platformScriptureEditor.enableScriptureTextGrid` setting is off, and neither is a state a
- *   project switch should reverse. (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels`
- *   for an editor-column switch and `finalizeProjectSwitch` for a Power→Simple one — so this guard
- *   is a contract, not a hot path.)
+ * - Never creates a panel when none is open, unlike the Text Collection's menu command
+ *   (`platformScriptureEditor.showTextCollectionPanel`), which does create one on demand. A project
+ *   switch closing a tab the user deliberately closed in Power mode, or one the
+ *   `platformScriptureEditor.enableScriptureTextGrid` setting has kept from ever existing, is not
+ *   something a re-point should reverse — only a direct request to show the panel should create it.
+ *   (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels` for an editor-column switch
+ *   and `finalizeProjectSwitch` for a Power→Simple one — so this guard is a contract, not a hot
+ *   path.)
  * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
  *   the grid's in-memory React state for no gain. State held through `useWebViewState` —
  *   `viewMode`, per-cell zoom — survives, since a reload reuses the same web view id.
@@ -1548,6 +1549,51 @@ export async function updateRelatedFindPanel(
     );
   } catch (e) {
     papi.logger.warn(`Error updating find panel project: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Re-points an open Checks side panel at `projectId`, the Checks counterpart of
+ * {@link updateRelatedFindPanel} and called at the same point for the same reason: the panel holds
+ * the editor's web view id to focus the editor and select a clicked result, so it needs the id of
+ * the editor the switch produced.
+ *
+ * Creates nothing. In Simple mode Checks joins Column 3 only when the user opens it, and a project
+ * switch is not a request to open it.
+ *
+ * Never follows a published resource (see `isProjectPublished`), the same rule as
+ * {@link updateRelatedTextCollectionPanel}: a resource is not something the user checks, so Checks
+ * stays on the translation project. A translation project with editing switched off is followed
+ * like any other.
+ *
+ * Only Simple mode re-points Checks, read fresh here for the same reason as in
+ * {@link updateRelatedFindPanel}. In Power mode each Checks panel is docked beside the editor it was
+ * opened for, so re-pointing "the" open one would retarget whichever editor's panel the probe
+ * happened to find.
+ *
+ * Never throws: a failure here is logged and swallowed, because the project switch itself has
+ * already succeeded by this point.
+ *
+ * @param papi The instance of papi to read the interface mode and project kind with and send the
+ *   command
+ * @param projectId The id of the project Checks should check from now on
+ * @param editorWebViewId Id of the editor web view the switch produced
+ */
+export async function updateRelatedChecksSidePanel(
+  papi: typeof PapiBackend,
+  projectId: string,
+  editorWebViewId: string | undefined,
+): Promise<void> {
+  try {
+    if ((await papi.settings.get('platform.interfaceMode')) !== 'simple') return;
+    if (await isProjectPublished(papi, projectId)) return;
+    await papi.commands.sendCommand(
+      'platformScripture.updateChecksSidePanelProject',
+      projectId,
+      editorWebViewId,
+    );
+  } catch (e) {
+    papi.logger.warn(`Error updating checks side panel project: ${getErrorMessage(e)}`);
   }
 }
 

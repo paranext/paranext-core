@@ -22,6 +22,7 @@ import {
   updateRelatedFindPanel,
   buildScriptureTextGridWebView,
   resolveGridProviderProjectId,
+  updateRelatedChecksSidePanel,
   updateRelatedTextCollectionPanel,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
   type OpenEditorDispatch,
@@ -3891,6 +3892,50 @@ describe('openOrUpdateRelatedPanels', () => {
 });
 
 // #endregion openOrUpdateRelatedPanels
+
+describe('updateRelatedChecksSidePanel', () => {
+  it.each([
+    ['an editable project', EDITABLE_PROJECT],
+    ['a translation project with editing switched off', READ_ONLY_PROJECT],
+  ])(
+    're-points the Checks side panel at %s with the new editor id',
+    async (_label, projectKind) => {
+      const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], projectKind);
+
+      await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+      expect(mockSendCommand.mock.calls).toEqual([
+        ['platformScripture.updateChecksSidePanelProject', 'proj-b', 'editor-2'],
+      ]);
+    },
+  );
+
+  it('does not follow a published resource', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], PUBLISHED_RESOURCE);
+
+    await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('does nothing in Power mode, where each Checks panel belongs to the editor it was opened for', async () => {
+    const { papi, mockSendCommand, mockSettingsGet } = createRelatedPanelsMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSettingsGet).toHaveBeenCalledWith('platform.interfaceMode');
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('logs and swallows a rejection, since the project switch has already succeeded', async () => {
+    const { papi, mockSendCommand, mockWarn } = createRelatedPanelsMockPapi();
+    mockSendCommand.mockRejectedValue(new Error('platformScripture is down'));
+
+    await expect(updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2')).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platformScripture is down'));
+  });
+});
 
 describe('getTabTitleProjectName', () => {
   /** A PAPI whose `platform.base` PDP returns the settings this test hands it. */

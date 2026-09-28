@@ -144,6 +144,7 @@ import {
   scrollToAnnotation,
   scrollToVerse,
 } from './editor-dom.util';
+import { handleEditMenuCommand, isEditMenuCommand } from './edit-menu-actions.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
@@ -201,6 +202,8 @@ import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import {
   commitVersionHistorySnapshot,
+  EDIT_ACTION_BLOCKED_KEY,
+  notifyEditMenuActionBlocked,
   notifySyncEditBlocked as sendSyncEditBlockedNotification,
   SYNC_EDIT_BLOCKED_KEY,
 } from './editor-side-effects.utils';
@@ -286,6 +289,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // bar's removal action shows the same notice through the same helper and deliberately does not
   // re-list the key.
   SYNC_EDIT_BLOCKED_KEY,
+  // Same reasoning as SYNC_EDIT_BLOCKED_KEY above, for the Edit flyout's blocked-action notice.
+  EDIT_ACTION_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
@@ -3595,6 +3600,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
+      // The Edit flyout acts on this editor, and the clipboard needs the click's user activation,
+      // so it runs here rather than as a PAPI command
+      if (isEditMenuCommand(projectMenuCommand.command)) {
+        handleEditMenuCommand(
+          projectMenuCommand.command,
+          editorRef.current ?? undefined,
+          { isReadOnly: isReadOnlyEffective, isDurablyReadOnly, isSyncBlocked },
+          {
+            notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
+            notifySyncEditBlocked,
+            restoreSelectionIfLost: (editor) =>
+              restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
+            onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
+            focusEditor: () => requestAnimationFrame(() => editorRef.current?.focus()),
+          },
+        );
+        return;
+      }
       // Find is the one menu command that needs more than the tab id: it carries this tab's current
       // text selection so the Find panel pre-fills and searches it, matching Ctrl+F. The source
       // project is deliberately left off — `openFind` resolves it from this editor's own web view
@@ -3613,11 +3636,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           );
         return;
       }
-      // Assuming that the project menu command is one of the registered command handlers in papi
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
+      papi.commands
+        // Assuming that the project menu command is one of the registered command handlers in papi
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        .sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId)
+        .catch((e) =>
+          logger.warn(
+            `Failed to run ${projectMenuCommand.command} from the editor tab menu: ${getErrorMessage(e)}`,
+          ),
+        );
     },
-    [getMenuFindSelectionText, webViewId],
+    [
+      getMenuFindSelectionText,
+      isDurablyReadOnly,
+      isReadOnlyEffective,
+      isSyncBlocked,
+      localizedStrings,
+      notifySyncEditBlocked,
+      webViewId,
+    ],
   );
 
   function renderEditor() {

@@ -1696,6 +1696,15 @@ export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
 export type MenuColumnWithHeader = OrderedExtensibleContainer & {
 	/** Key that represents the text of the header text of the column */
 	label: LocalizeKey;
+	/**
+	 * Set to `true` to show this column's items without its header text in the menu that opens when
+	 * you click on the top left corner of a tab (`topMenu`), which heads each section with its
+	 * column's header. While that menu shows two or more sections, the label still names this section
+	 * for assistive technology; a section left on its own, including one left alone by interface-mode
+	 * filtering, gets neither a heading nor a name. Give it a real label regardless. The application
+	 * menubar ignores this, because there the header is what opens the column.
+	 */
+	isHeaderHidden?: boolean;
 };
 export type MenuItemBase = OrderedItem & {
 	/** Menu group to which this menu item belongs */
@@ -1938,6 +1947,10 @@ export declare const menuDocumentSchema: {
 							type: string;
 						};
 						isExperimental: {
+							description: string;
+							type: string;
+						};
+						isHeaderHidden: {
 							description: string;
 							type: string;
 						};
