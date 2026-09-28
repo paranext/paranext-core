@@ -42,7 +42,7 @@ export async function resolveDblCatalog(
   // compatibility whitelist dropped every row. It is still no catalog: resolving it as `available`
   // would overwrite the cached one, in memory and on disk, with nothing.
   if (resources.length === 0)
-    throw new Error('The DBL resource catalog fetch returned no resources');
+    throw new Error('The DBL resource catalog fetch returned no compatible resources');
 
   return { status: 'available', resources };
 }

@@ -45,6 +45,7 @@ internal class DblResourcesDataProvider(
 
     #region Internal classes
 
+    // Internal (not private) so tests can inspect what GetDblResources returns.
     internal class DblResourceData(
         string DblEntryUid,
         string DisplayName,
@@ -294,6 +295,7 @@ internal class DblResourcesDataProvider(
     /// A list with some information about all available resources on the DBL, for the purpose of
     /// presenting the resources and their installation status on the front-end
     /// </returns>
+    /// <remarks>Internal (not private) so tests can call it.</remarks>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
     internal Task<List<DblResourceData>> GetDblResources(JsonElement _ignore) =>
         // Offload the DBL catalog fetch to a background thread. This is a blocking, unbounded
