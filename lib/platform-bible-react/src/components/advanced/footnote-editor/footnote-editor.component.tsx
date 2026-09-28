@@ -379,17 +379,20 @@ export default function FootnoteEditor({
    * "ready to type immediately". `0` is this editor's own note index; it always holds exactly one
    * note (see the other `getNoteOps(0)` call sites below).
    *
-   * The editor resolves an offset against its own nodes (`EditorRef.selectNoteTextOffset`), over
-   * the note's CONTENT text — the same characters `FootnoteItem` renders in a row's
-   * `.textual-note-body`, and the origin {@link FootnoteCaretPosition} defines. Nothing here
-   * measures the DOM, so the placement needs no deferral: the note it addresses exists as soon as
-   * the load's `applyUpdate` has run, and because the caret becomes the editor's OWN remembered
-   * selection, a `focus()` alongside re-asserts it rather than overwriting it.
+   * The editor resolves a position against its own nodes (`EditorRef.selectNoteTextOffset`), over
+   * the note's CONTENT text and its runs' markers — the same text `FootnoteItem` renders in a row's
+   * `.textual-note-body`, addressed as {@link FootnoteCaretPosition} defines. Nothing here measures
+   * the DOM, so the placement needs no deferral: the note it addresses exists as soon as the load's
+   * `applyUpdate` has run, and because the caret becomes the editor's OWN remembered selection, a
+   * `focus()` alongside re-asserts it rather than overwriting it.
    */
   const placeInitialCaret = useCallback(() => {
     const caretPosition = initialCaretPositionRef.current;
     if (caretPosition !== undefined && caretPosition !== 'end')
-      editorRef.current?.selectNoteTextOffset(0, caretPosition.utf16Offset, caretPosition.field);
+      editorRef.current?.selectNoteTextOffset(0, caretPosition.utf16Offset, {
+        field: caretPosition.field,
+        glyph: caretPosition.glyph,
+      });
     else editorRef.current?.selectNote(0);
   }, []);
 

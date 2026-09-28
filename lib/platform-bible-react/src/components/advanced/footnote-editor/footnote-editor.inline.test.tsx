@@ -848,7 +848,10 @@ describe('FootnoteEditor inline live-apply', () => {
       renderEditor({ inline: true, initialCaretPosition: { utf16Offset: 7 } });
       await vi.runAllTimersAsync();
 
-      expect(editorRefMock.selectNoteTextOffset).toHaveBeenCalledWith(0, 7, undefined);
+      expect(editorRefMock.selectNoteTextOffset).toHaveBeenCalledWith(0, 7, {
+        field: undefined,
+        glyph: undefined,
+      });
       expect(editorRefMock.selectNote).not.toHaveBeenCalled();
     });
 
@@ -857,7 +860,24 @@ describe('FootnoteEditor inline live-apply', () => {
       renderEditor({ inline: true, initialCaretPosition: { utf16Offset: 2, field: 'category' } });
       await vi.runAllTimersAsync();
 
-      expect(editorRefMock.selectNoteTextOffset).toHaveBeenCalledWith(0, 2, 'category');
+      expect(editorRefMock.selectNoteTextOffset).toHaveBeenCalledWith(0, 2, {
+        field: 'category',
+        glyph: undefined,
+      });
+    });
+
+    it('passes on a position inside a marker', async () => {
+      vi.useFakeTimers();
+      renderEditor({
+        inline: true,
+        initialCaretPosition: { utf16Offset: 4, glyph: { index: 1, offset: 2 } },
+      });
+      await vi.runAllTimersAsync();
+
+      expect(editorRefMock.selectNoteTextOffset).toHaveBeenCalledWith(0, 4, {
+        field: undefined,
+        glyph: { index: 1, offset: 2 },
+      });
     });
 
     it("lands at the end of the note's text for 'end'", async () => {
@@ -880,7 +900,10 @@ describe('FootnoteEditor inline live-apply', () => {
         initialCaretPosition: { utf16Offset: 7 },
       });
       await vi.runAllTimersAsync();
-      expect(editorRefMock.selectNoteTextOffset).toHaveBeenCalledWith(0, 7, undefined);
+      expect(editorRefMock.selectNoteTextOffset).toHaveBeenCalledWith(0, 7, {
+        field: undefined,
+        glyph: undefined,
+      });
       editorRefMock.selectNoteTextOffset.mockClear();
       editorRefMock.selectNote.mockClear();
 

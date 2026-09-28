@@ -144,6 +144,13 @@ Every keyboard handler change here must also update `src/shared/data/keyboard-sh
   onto the note as an attribute, so anything rendering a footnote from `content` alone drops it
   silently. `footnote-item.component.tsx` reads the field and renders the run after the caller, in
   the file's own order.
+- **A click on a pane row lands the row editor's caret on the same character — markers included.**
+  `getCaretPositionFromClick` and `EditorRef.selectNoteTextOffset` walk the same sequence: content
+  text counted as an offset, and a run's marker glyphs (`\ft`, `\ft*`, `\+nd`, unmatched markers,
+  and `\cat`/`\cat*` in the category field) addressed by their order among the glyphs at that
+  offset. Both skip the note's own marker, caller and closing marker, every NBSP separator, and
+  attribute text. A change to what `FootnoteItem` renders as a `.marker` (or to what the editor
+  renders as a glyph) has to change the other side too, or clicks land off by the difference.
 - **In Standard view, the same component runs `inline` inside the footnotes pane — there is no
   popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
   live-apply re-keys the note in the parent editor, so the host must re-sync its session key from

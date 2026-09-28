@@ -1,38 +1,109 @@
 import { FootnoteCaretPosition } from './footnotes.types';
 
-/** Row classes whose text is display rather than note content (see {@link isDisplayText}). */
-const DISPLAY_ONLY_CLASSES = ['marker', 'note-category', 'note-placeholder'];
+/** The no-break space `FootnoteItem` renders after an opening marker, inside its `.marker` span. */
+const MARKER_SEPARATOR = '\u00a0';
 
 /**
- * Whether a text node inside the note body is rendered display rather than note text.
+ * What a text node inside the row's `.textual-note-body` is, as the caret offset origin
+ * ({@link FootnoteCaretPosition}) counts it:
  *
- * Three kinds of display ride inside `.textual-note-body`:
+ * - `content`: the note's text, in runs and written directly in the note alike.
+ * - `glyph`: a run's opening or closing marker, a nested span's, or an unmatched marker - a `.marker`
+ *   span's text, whose opening form carries its display separator (see {@link glyphLength}).
+ * - `category`: anything in the `\cat …\cat*` run, which is a field on the note rather than part of
+ *   its `content` and is addressed through its own `field` (see `categoryPosition`).
+ * - `display`: text no file byte backs the way the editor renders it - the note's own closing marker
+ *   (`.note-closer`, the end of the note's shell), and the U+FEFF `FootnoteItem` renders for a note
+ *   with no content at all (`.note-placeholder`), so the row keeps its height and stays clickable.
  *
- * - `.marker` spans: `FootnoteItem` renders USFM markers as visible text, but a marker is display,
- *   not content.
- * - `.note-category`: the whole `\cat …\cat*` run, glyphs AND value. The category is a FIELD on the
- *   note rather than part of its `content`, so it is outside the offset origin even though the
- *   value is the note's own data (a click on the value maps to the category instead - see
- *   `getCaretPositionFromClick`); the row also supplies a separating space of its own there when
- *   markers are hidden, which no file byte backs.
- * - `.note-placeholder`: the U+FEFF `FootnoteItem` renders for a note with no content at all, so the
- *   row keeps its height and stays clickable. No file byte backs it either, so counting it would
- *   resolve a click on an EMPTY note to offset 1.
- *
- * All three are outside the offset origin {@link FootnoteCaretPosition} defines, and the editor
- * excludes its own rendering of each from that same origin (`EditorRef.selectNoteTextOffset` skips
- * marker nodes and `attribute`-typed text, which is what the category's display run is built as,
- * and an empty note has nothing to walk). Both sides must, or an offset captured over the row
- * resolves off by the length of everything the two renderings disagree about before the click.
+ * The editor classifies its own rendering of the note the same way
+ * (`EditorRef.selectNoteTextOffset` counts content text and run glyphs, and skips the shell, the
+ * category run and every NBSP it adds). Both sides must, or a position captured over the row
+ * resolves off by everything the two renderings disagree about before the click.
  */
-function isDisplayText(node: Node, body: HTMLElement): boolean {
+type RowTextKind = 'content' | 'glyph' | 'category' | 'display';
+
+function classify(node: Node, body: HTMLElement): RowTextKind {
+  let kind: RowTextKind = 'content';
   let ancestor = node.parentElement;
   while (ancestor && ancestor !== body) {
     const { classList } = ancestor;
-    if (DISPLAY_ONLY_CLASSES.some((className) => classList.contains(className))) return true;
+    if (classList.contains('note-category')) return 'category';
+    if (classList.contains('note-closer') || classList.contains('note-placeholder'))
+      return 'display';
+    if (classList.contains('marker')) kind = 'glyph';
     ancestor = ancestor.parentElement;
   }
-  return false;
+  return kind;
+}
+
+/** The walker's next text node, or `undefined` past the last one. */
+function nextText(walker: TreeWalker): Text | undefined {
+  // A walker created with SHOW_TEXT only yields Text nodes
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return (walker.nextNode() as Text | null) ?? undefined;
+}
+
+/** A marker glyph's own text length: its display separator, if it has one, excluded. */
+function glyphLength(node: Text): number {
+  return node.data.endsWith(MARKER_SEPARATOR)
+    ? node.data.length - MARKER_SEPARATOR.length
+    : node.data.length;
+}
+
+/**
+ * The position of a click on the `\cat …\cat*` run: in the value, or in one of the run's two
+ * glyphs, which sit at the value's start (`\cat`) and end (`\cat*`). The markers-hidden separator
+ * space after the value has no editor counterpart and falls to the start of the content after it.
+ */
+function categoryPosition(category: Element, node: Text, offset: number): FootnoteCaretPosition {
+  const value = category.querySelector('.note-category-value');
+  if (value?.contains(node)) return { utf16Offset: offset, field: 'category' };
+  const glyph = node.parentElement?.closest('.marker');
+  if (!value || !glyph || !category.contains(glyph)) return { utf16Offset: 0 };
+  const isOpener = glyph === category.querySelector('.marker');
+  const valueLength = value.textContent?.length ?? 0;
+  const at = isOpener ? 0 : valueLength;
+  // On the opener's separator: the start of the value it introduces.
+  if (offset > glyphLength(node)) return { utf16Offset: at, field: 'category' };
+  // An empty value leaves both glyphs at offset 0, the closer second.
+  const index = !isOpener && valueLength === 0 ? 1 : 0;
+  return { utf16Offset: at, field: 'category', glyph: { index, offset } };
+}
+
+/**
+ * The position `offset` characters into `target`, counted over `body` (see {@link RowTextKind}).
+ * Glyphs are addressed by the content offset they sit at and their order there, so the content
+ * offsets are the same whether or not the row shows markers.
+ */
+function positionAt(body: HTMLElement, target: Text, offset: number): FootnoteCaretPosition {
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  let contentOffset = 0;
+  let glyphIndex = 0;
+  for (let node = nextText(walker); node; node = nextText(walker)) {
+    const kind = classify(node, body);
+    if (kind === 'category') {
+      if (node === target) {
+        const category = node.parentElement?.closest('.note-category');
+        return category ? categoryPosition(category, node, offset) : { utf16Offset: 0 };
+      }
+    } else if (kind === 'display') {
+      // Display text resolves to the start of the content that follows it.
+      if (node === target) return { utf16Offset: contentOffset };
+    } else if (kind === 'glyph') {
+      if (node === target)
+        // On an opening glyph's separator: the start of the content it introduces.
+        return offset > glyphLength(node)
+          ? { utf16Offset: contentOffset }
+          : { utf16Offset: contentOffset, glyph: { index: glyphIndex, offset } };
+      glyphIndex += 1;
+    } else {
+      if (node === target) return { utf16Offset: contentOffset + offset };
+      contentOffset += node.data.length;
+      if (node.data.length > 0) glyphIndex = 0;
+    }
+  }
+  return 'end';
 }
 
 /** The first text node at or inside `node`, or `undefined` when it holds no text. */
@@ -55,15 +126,16 @@ function firstTextNodeWithin(node: Node): Text | undefined {
  * caret-where-you-clicked). Uses the browser caret APIs; positions land only at valid caret
  * boundaries, so graphemes are never split.
  *
+ * A click on a marker lands inside that marker, which the note editor renders as editable text; a
+ * click on the note's own marker or caller (the row's header cell) lands right after the caller,
+ * the first place in the note the user can type.
+ *
  * @param clientX Viewport X of the click (from the mouse event).
  * @param clientY Viewport Y of the click.
- * @param rowElement The row's root element; the offset is computed over the text of its
- *   `.textual-note-body` descendant - the note's text, in character runs and written directly in
- *   the note alike, excluding the caller (rendered in the row's header cell), the rendered USFM
- *   markers, the `\cat` category run and the empty-note placeholder (see `isDisplayText`).
- * @returns A flat UTF-16 offset into the note body text, an offset into the `\cat` category value
- *   (`field: 'category'`) for a click on the category, or `'end'` when the click cannot be mapped
- *   (no browser support, click outside the body text, empty note).
+ * @param rowElement The row's root element; the position is computed over the text of its
+ *   `.textual-note-body` descendant (see {@link RowTextKind}).
+ * @returns The position (see {@link FootnoteCaretPosition}), or `'end'` when the click cannot be
+ *   mapped (no browser support, click outside the row's text).
  */
 export function getCaretPositionFromClick(
   clientX: number,
@@ -89,7 +161,12 @@ export function getCaretPositionFromClick(
       offset = range.startOffset;
     }
   }
-  if (!offsetNode || !body.contains(offsetNode)) return 'end';
+  if (!offsetNode) return 'end';
+  if (rowElement.querySelector('.textual-note-header')?.contains(offsetNode)) {
+    const first = firstTextNodeWithin(body);
+    return first ? positionAt(body, first, 0) : 'end';
+  }
+  if (!body.contains(offsetNode)) return 'end';
   // A click that is inside the body's box but over none of its text - the gaps a multi-paragraph
   // note's flex column leaves between its lines, or the space below the last one - reports the
   // CONTAINER and an index into its children rather than a text node. Resolve that to the start of
@@ -104,36 +181,7 @@ export function getCaretPositionFromClick(
     offset = 0;
   }
   if (offsetNode.nodeType !== Node.TEXT_NODE) return 'end';
-
-  // The `\cat` category is outside the content origin, but its value is text the row editor can
-  // put a caret in: a click on the value lands there, and one on the `\cat` opener lands at the
-  // value's start, the nearest place to its right the user can type. The closer and the separator
-  // space after it fall through to the content that follows.
-  const category = offsetNode.parentElement?.closest('.note-category');
-  if (category && body.contains(category)) {
-    const value = category.querySelector('.note-category-value');
-    if (value?.contains(offsetNode)) return { utf16Offset: offset, field: 'category' };
-    const glyph = offsetNode.parentElement?.closest('.marker');
-    if (value && glyph && glyph === category.firstElementChild)
-      return { utf16Offset: 0, field: 'category' };
-  }
-
-  // Flat offset = lengths of all body text nodes before the clicked one, plus the in-node offset.
-  // Display text is skipped so this origin matches the editor's (see `isDisplayText`).
-  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-  let accumulated = 0;
-  let node = walker.nextNode();
-  while (node) {
-    // A click on display text itself resolves to the start of the content that follows it
-    if (isDisplayText(node, body)) {
-      if (node === offsetNode) return { utf16Offset: accumulated };
-    } else {
-      if (node === offsetNode) return { utf16Offset: accumulated + offset };
-      // TreeWalker with SHOW_TEXT only yields Text nodes
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      accumulated += (node as Text).data.length;
-    }
-    node = walker.nextNode();
-  }
-  return 'end';
+  // nodeType narrows this to a Text node
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return positionAt(body, offsetNode as Text, offset);
 }

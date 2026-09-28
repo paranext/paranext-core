@@ -195,6 +195,21 @@ describe('FootnoteItem marker fidelity', () => {
     expect(renderBodyText(unclosedNote)).not.toContain('\\f*');
   });
 
+  it('renders an unmatched marker once, as written', () => {
+    const footnote: MarkerObject = {
+      type: 'note',
+      marker: 'f',
+      caller: '+',
+      content: [
+        { type: 'char', marker: 'ft', content: ['text'] },
+        { type: 'unmatched', marker: 'f*' },
+      ],
+    };
+    const text = renderBodyText(footnote);
+    expect(text).toContain('\\f*');
+    expect(text).not.toContain('\\f**');
+  });
+
   it('prefixes a nested character marker with a plus', () => {
     const footnote: MarkerObject = {
       type: 'note',

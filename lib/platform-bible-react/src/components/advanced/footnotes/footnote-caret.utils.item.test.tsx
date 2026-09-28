@@ -130,4 +130,67 @@ describe('getCaretPositionFromClick against a real FootnoteItem', () => {
     // 'See'.length (3) + 1 into '.'.
     expect(getCaretPositionFromClick(10, 10, row)).toEqual({ utf16Offset: 4 });
   });
+
+  describe("clicks on a real row's markers and header", () => {
+    /** `\\f + \\cat People\\cat*\\fr 1:1\\fr*\\ft a\\ft*\\f*` */
+    const markedNote: MarkerObject = {
+      type: 'note',
+      marker: 'f',
+      caller: '+',
+      category: 'People',
+      content: [
+        { type: 'char', marker: 'fr', content: ['1:1'] },
+        { type: 'char', marker: 'ft', content: ['a'] },
+      ],
+    };
+
+    function clickOn(node: Node | null | undefined, offset: number) {
+      // jsdom has no layout: stub the browser caret API to a known position
+      caretApiDocument().caretPositionFromPoint = vi
+        .fn()
+        .mockReturnValue({ offsetNode: node, offset });
+    }
+
+    const markerTexts = (row: HTMLElement) =>
+      Array.from(row.querySelectorAll('.textual-note-body .marker'));
+
+    it('lands in the marker clicked, not at the text after it', () => {
+      const row = renderItem(markedNote);
+      const ftCloser = markerTexts(row).find((marker) => marker.textContent === '\\ft*');
+      clickOn(ftCloser?.firstChild, 2);
+      // `1:1` + `a` = 4, and `\\ft*` is the only marker there.
+      expect(getCaretPositionFromClick(10, 10, row)).toEqual({
+        utf16Offset: 4,
+        glyph: { index: 0, offset: 2 },
+      });
+    });
+
+    it('lands right after the \\cat* closer, not past the \\fr that follows it', () => {
+      const row = renderItem(markedNote);
+      const catCloser = markerTexts(row).find((marker) => marker.textContent === '\\cat*');
+      clickOn(catCloser?.firstChild, '\\cat*'.length);
+      expect(getCaretPositionFromClick(10, 10, row)).toEqual({
+        utf16Offset: 'People'.length,
+        field: 'category',
+        glyph: { index: 0, offset: '\\cat*'.length },
+      });
+    });
+
+    it("treats the note's own closing marker as the end of its text", () => {
+      const row = renderItem(markedNote);
+      const noteCloser = markerTexts(row).find((marker) => marker.textContent === '\\f*');
+      clickOn(noteCloser?.firstChild, 1);
+      expect(getCaretPositionFromClick(10, 10, row)).toEqual({ utf16Offset: 4 });
+    });
+
+    it('lands a click on the header just after the caller, at the start of the category', () => {
+      const row = renderItem(markedNote);
+      clickOn(row.querySelector('.textual-note-header .note-caller')?.firstChild, 0);
+      expect(getCaretPositionFromClick(10, 10, row)).toEqual({
+        utf16Offset: 0,
+        field: 'category',
+        glyph: { index: 0, offset: 0 },
+      });
+    });
+  });
 });

@@ -7,8 +7,8 @@ import { FootnoteItemProps } from './footnotes.types';
 /**
  * PT9 separates a marker from the text it introduces with a no-break space (`Standard.xslt`'s
  * `openmarker`), so a wrapping row never strands a marker at the end of a line. It is rendered
- * INSIDE the `.marker` span - unlike PT9, which emits it as a sibling - so that everything a caret
- * offset must skip as marker chrome is reachable from one selector (see `isDisplayText` in
+ * INSIDE the `.marker` span - unlike PT9, which emits it as a sibling - so that a click on a marker
+ * and on the separator after it are told apart from the one span (see `RowTextKind` in
  * `footnote-caret.utils.ts`).
  */
 const MARKER_SEPARATOR = '\u00a0';
@@ -74,7 +74,7 @@ function renderParagraphs(
       // eslint-disable-next-line react/no-array-index-key
       <p className="notetext" key={`${parentMarker ?? 'note'}-p${i}`}>
         {/* Display, not content: an empty note has no text, so the placeholder that keeps the
-            line clickable must stay outside the caret offset origin (`isDisplayText` in
+            line clickable must stay outside the caret offset origin (`RowTextKind` in
             `footnote-caret.utils.ts` recognizes it by this class). */}
         {isFirst && !hasBodyContent && (
           <span className="note-placeholder">{ZERO_WIDTH_NO_BREAK_SPACE}</span>
@@ -129,6 +129,15 @@ function renderMarkerObject(
   isNested = false,
 ): React.ReactNode {
   const { marker } = markerObj;
+  // A marker with nothing to match - a closer typed where no run or note is open to close, `\f*`
+  // in a note that ended before it - is one marker in the text, spelled exactly as written
+  // (a nested one's `+` included), not a run with an opener and a closer of its own.
+  if (markerObj.type === 'unmatched')
+    return (
+      <span key={key} className="marker">
+        {`\\${marker}`}
+      </span>
+    );
   // PT9 prefixes a character marker nested inside another character marker with `+`
   // (`Standard.xslt`'s `openmarkernospace`), matching how USFM 3.0 writes nested runs.
   const markerName = `${isNested ? '+' : ''}${marker}`;
@@ -163,17 +172,20 @@ export function FootnoteItem({
 
   // The separator after the note's own marker sits BETWEEN the header's spans rather than inside
   // the `.marker` glyph, which `.marker-visible .marker` draws at 0.7em - a space kept inside it is
-  // drawn at 0.7em too and reads as `\f+`. The header is outside the caret origin
-  // (`getCaretPositionFromClick` walks `.textual-note-body` only), so unlike the body's markers it
-  // is free to keep its separator out of the span.
+  // drawn at 0.7em too and reads as `\f+`. The header is outside the caret origin (a click
+  // anywhere on it lands just after the caller - see `getCaretPositionFromClick`), so unlike the
+  // body's markers it is free to keep its separator out of the span.
   const footnoteOpening = showMarkers ? (
     <span className="marker">{`\\${footnote.marker}`}</span>
   ) : undefined;
 
-  // An unclosed note (written with no `\f*`) has no closing marker to show, as with a run.
+  // An unclosed note (written with no `\f*`) has no closing marker to show, as with a run. Marked
+  // as the note's own closer: it ends the note's shell, which the note editor governs through its own
+  // controls, so a click on it is not a click in a marker the user can edit (`RowTextKind` in
+  // `footnote-caret.utils.ts`).
   const footnoteClosing =
     showMarkers && isRunClosed(footnote) ? (
-      <span className="marker">{`\\${footnote.marker}*`}</span>
+      <span className="marker note-closer">{`\\${footnote.marker}*`}</span>
     ) : undefined;
 
   // PT9 renders a study-Bible note's category at the head of the note text as its own marked-up
@@ -185,14 +197,14 @@ export function FootnoteItem({
     // visible either way; the `\cat` glyphs are marker display and follow the same switch every
     // other marker in this component does.
     //
-    // The class is also what keeps the whole run out of the content caret origin (`isDisplayText`
+    // The class is also what keeps the whole run out of the content caret origin (`RowTextKind`
     // in `footnote-caret.utils.ts`): the category is a FIELD on the note, not part of its
     // `content`, and the editor builds its own category display as `attribute`-typed text, which
-    // `EditorRef.selectNoteTextOffset` skips. A click in the value maps to the category instead.
+    // `EditorRef.selectNoteTextOffset` skips. A click in the run maps to the category instead.
     <span className="note-category">
       {showMarkers && <span className="marker">{`\\cat${MARKER_SEPARATOR}`}</span>}
-      {/* Its own span so a click can tell the value, which the row editor can put a caret in,
-          from the glyphs and separator around it (see `getCaretPositionFromClick`). */}
+      {/* Its own span so a click can tell the value from the glyphs and separator around it
+          (see `getCaretPositionFromClick`). */}
       <span className="note-category-value">{footnote.category}</span>
       {showMarkers && <span className="marker">\cat*</span>}
       {/* With the closing glyph hidden nothing separates the value from the run that follows it
