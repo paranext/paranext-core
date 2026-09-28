@@ -278,11 +278,60 @@ namespace TestParanextDataProvider.Projects
 
             Assert.Multiple(() =>
             {
-                // "" rather than null: the answer an absent document has always given, so no caller
-                // can tell the difference - only the side effect is gone
+                // "" rather than null: an absent document reads the same as an empty one
                 Assert.That(data, Is.EqualTo(""));
                 // A read that created the document would leave a zero-byte file under shared/**
                 // for Send/Receive to commit to every clone, with no delete API to take it back
+                Assert.That(provider.GetStoredStreamNames(), Is.Empty);
+            });
+        }
+
+        [Test]
+        public void SetExtensionData_WriteLockUnavailable_CreatesNothing()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            // Held by a writer that refuses to give it up, so the write cannot obtain the lock
+            WriteLock heldLock = WriteLockManager.Default.ObtainLock(
+                WriteScope.EntireProject(_scrText),
+                lockRequestHandler: (_, args) =>
+                    args.LockResult = LockRequestResult.PermanentFailure
+            );
+
+            try
+            {
+                Assert.Throws<InvalidOperationException>(
+                    () => SetExtensionData(provider, "myExtension", "blocked.json", "data")
+                );
+                // A document created before the lock was refused would be an empty file under
+                // shared/** for Send/Receive to commit to every clone
+                Assert.That(provider.GetStoredStreamNames(), Is.Empty);
+            }
+            finally
+            {
+                heldLock.Release();
+            }
+        }
+
+        [Test]
+        public void ExtensionData_WhitespaceExtensionName_IsRejectedByGetAndSet()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            var scope = new ProjectDataScope
+            {
+                ProjectID = _projectDetails.Metadata.Id,
+                ExtensionName = "   ",
+                DataQualifier = "data.json",
+            };
+
+            // The same check the listing makes: a whitespace-only name is no extension's name, and
+            // since Windows trims trailing spaces from a path segment, where it points would differ
+            // by platform
+            Assert.Multiple(() =>
+            {
+                Assert.Throws<InvalidDataException>(() => provider.GetExtensionData(scope));
+                Assert.Throws<InvalidDataException>(() => provider.SetExtensionData(scope, "data"));
                 Assert.That(provider.GetStoredStreamNames(), Is.Empty);
             });
         }

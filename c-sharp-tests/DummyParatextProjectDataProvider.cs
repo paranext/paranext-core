@@ -105,10 +105,16 @@ namespace TestParanextDataProvider
                 _streamName = streamName;
             }
 
+            /// <summary>
+            /// A new, empty stream. It is recorded at once rather than on dispose, as a file opened
+            /// with <see cref="FileMode.OpenOrCreate"/> exists before anything is written to it, so
+            /// tests see a stream that is created and then abandoned.
+            /// </summary>
             public InMemoryFile(DummyParatextProjectDataProvider owner, string streamName)
             {
                 _owner = owner;
                 _streamName = streamName;
+                _owner._inMemoryFiles[streamName] = [];
             }
 
             protected override void Dispose(bool disposing)

@@ -415,7 +415,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public override object? GetExtensionData(ProjectDataScope scope)
     {
-        if (string.IsNullOrEmpty(scope.ExtensionName))
+        if (string.IsNullOrWhiteSpace(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
@@ -438,14 +438,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public override bool SetExtensionData(ProjectDataScope scope, string data)
     {
         using var _ = EnterSyncWriteScope();
-        if (string.IsNullOrEmpty(scope.ExtensionName))
+        if (string.IsNullOrWhiteSpace(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
-
-        Stream? dataStream =
-            GetExtensionStream(scope, true)
-            ?? throw new InvalidDataException("Unable to create extension data");
 
         ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         RunWithinLock(
@@ -454,6 +450,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             {
                 if (!writeLock.Active)
                     throw new InvalidOperationException("Write lock is not active");
+                // Opened only once the lock is held: opening creates the document, and one created
+                // for a write that then cannot proceed is an empty file Send/Receive would commit
+                using Stream dataStream =
+                    GetExtensionStream(scope, createIfNotExists: true)
+                    ?? throw new InvalidDataException("Unable to create extension data");
                 dataStream.SetLength(0);
                 using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
                 textWriter.Write(data);
@@ -501,8 +502,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidDataException("Must provide an extension name");
         EnsureExtensionNameStaysInItsOwnDirectory(scope.ExtensionName);
 
-        // Scoped to this extension's own data so a project's thousands of other files are never
-        // walked, and so no other extension's layout is exposed
+        // Scoped to the named extension's directory so the listing is confined to that extension's
+        // data and a project's thousands of other files are never walked
         return CreateExtensionStreamManager()
             .GetExistingDataStreamNames(GetExtensionDataRoot(scope));
     }
