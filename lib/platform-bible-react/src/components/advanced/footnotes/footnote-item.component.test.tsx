@@ -186,6 +186,15 @@ describe('FootnoteItem marker fidelity', () => {
     expect(renderBodyText(footnote)).not.toContain('\\ft*');
   });
 
+  it("omits the note's own closing marker for a note written with no \\f*", () => {
+    const unclosedNote: MarkerObject & { closed: string } = {
+      ...closedRunNote,
+      closed: 'false',
+    };
+    expect(renderBodyText(closedRunNote)).toContain('\\f*');
+    expect(renderBodyText(unclosedNote)).not.toContain('\\f*');
+  });
+
   it('prefixes a nested character marker with a plus', () => {
     const footnote: MarkerObject = {
       type: 'note',

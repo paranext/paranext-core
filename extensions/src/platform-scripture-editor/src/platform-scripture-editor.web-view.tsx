@@ -180,6 +180,7 @@ import {
   isMissingBookError,
   isMissingBookInfoOnScreen,
   isOverrunProjectIdParse,
+  isUnclosedNoteOp,
   openCommentListAndSelectThreadSafe,
   parseMissingBookError,
   resolveAddChapterNumberClick,
@@ -190,7 +191,6 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
   shouldEndPaneNoteEditOnRowSelect,
-  shouldHandCaretInNoteToPane,
   shouldPublishPaneDocument,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
@@ -3681,6 +3681,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         if (surface === 'none') return;
 
         if (surface === 'pane') {
+          // An unclosed note is typed or pasted straight into the text, which shows it expanded
+          // and edits it in place as PT9 does; the user goes on typing there.
+          if (isUnclosedNoteOp(noteOp)) return;
           const index = editorRef.current?.getNoteIndex(insertedNodeKey);
           if (index === undefined) {
             logger.warn(
@@ -3692,15 +3695,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // The pane may not be rendered yet: it mounts on the next render with this row already
           // marked as the editing row, and the row editor places its caret as it mounts.
           if (!footnotesPaneVisibleRef.current) setFootnotesPaneVisible(true);
-          // A note typed or pasted into the text can leave the caret inside it; the row editor
-          // takes it from there rather than from the end of the note.
-          const noteCaret = editorRef.current?.getNoteCaret();
-          let caret: FootnoteCaretPosition = 'end';
-          if (noteCaret?.noteKey === insertedNodeKey) {
-            const { utf16Offset, field } = noteCaret;
-            caret = field ? { utf16Offset, field } : { utf16Offset };
-          }
-          startPaneNoteEdit(index, insertedNodeKey, noteOp, caret, true);
+          startPaneNoteEdit(index, insertedNodeKey, noteOp, 'end', true);
           return;
         }
 
@@ -3978,45 +3973,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // #endregion Debounced Save Scheduling
 
-  /** `Date.now()` of the last click or keystroke in the Scripture text. */
-  const textGestureAtRef = useRef(0);
-  const noteTextGesture = useCallback(() => {
-    textGestureAtRef.current = Date.now();
-  }, []);
-
-  /**
-   * Standard view: a caret the user has put inside a note in the text (an unclosed note, the only
-   * kind the text shows the content of) moves into the footnotes pane's row editor at the same
-   * place in the note, revealing the pane if it is hidden. See `shouldHandCaretInNoteToPane` for
-   * when it does and does not.
-   */
-  const handCaretInNoteToPane = useCallback(() => {
-    const noteCaret = editorRef.current?.getNoteCaret();
-    if (
-      !noteCaret ||
-      !shouldHandCaretInNoteToPane({
-        isStandardView: viewTypeRef.current === 'standard',
-        isReadOnly: isReadOnlyEffectiveRef.current,
-        isTextFocused: !!editorRef.current?.isFocused(),
-        isChapterLoaded: editorChapterKeyRef.current === toBookChapterKey(scrRefRef.current),
-        isPaletteOpen: paletteSession.current !== undefined,
-        msSinceTextGesture: Date.now() - textGestureAtRef.current,
-        noteCaretNoteKey: noteCaret.noteKey,
-        editingNoteKey: editingNoteKey.current,
-      })
-    )
-      return;
-    if (!footnotesPaneVisibleRef.current) {
-      setFootnotesPaneVisible(true);
-      // The row editor opens on an index into the LIVE document; hand the pane that document now
-      // rather than a render later, as a caller click that reveals the pane does.
-      const editorUsj = editorRef.current?.getUsj();
-      if (editorUsj) replacePaneDocument(editorUsj);
-    }
-    const { noteIndex, utf16Offset, field } = noteCaret;
-    handleFootnoteEditRequested(noteIndex, field ? { utf16Offset, field } : { utf16Offset });
-  }, [handleFootnoteEditRequested, replacePaneDocument, setFootnotesPaneVisible]);
-
   /**
    * Handle selection changes in the editor. Updates the local ref and notifies the backend so it
    * can track the current selection and emit events.
@@ -4027,9 +3983,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const handleSelectionChange = useCallback(
     async (change: SelectionRange | undefined) => {
       currentSelectionRef.current = change;
-      // Decided after the editor's update finishes: this runs inside the editor's selection
-      // change, and the hand-off moves the text's caret itself (see `navigateToNote`).
-      setTimeout(handCaretInNoteToPane, 0);
 
       // Convert to ScriptureRangeUsjVerseRefChapterLocation format
       let scriptureSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
@@ -4061,7 +4014,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         logger.debug(`Failed to notify backend of selection change: ${getErrorMessage(e)}`);
       }
     },
-    [scrRef, webViewId, handCaretInNoteToPane],
+    [scrRef, webViewId],
   );
 
   // Sync editor content with PDP data. The write-in-flight guard (`currentlyWritingUsjToPdp`) is
@@ -4527,29 +4480,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             by the zoom factor and land away from the verse. The wrapper holds no text itself. */}
         <ContentZoomRoot>
           <EditorKeyboardShortcuts editorRef={editorRef}>
-            {/* Layout-neutral: only here to hear clicks and keystrokes in the text (see
-                `handCaretInNoteToPane`). */}
-            <div
-              className="tw:contents"
-              onPointerDownCapture={noteTextGesture}
-              onKeyDownCapture={noteTextGesture}
-            >
-              <Editorial
-                ref={editorRef}
-                scrRef={scrRef}
-                onScrRefChange={setScrRefNoScroll}
-                options={options}
-                logger={logger}
-                onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
-                onSelectionChange={handleSelectionChange}
-                onStateChange={(state) => {
-                  setCanUndo(state.canUndo);
-                  setCanRedo(state.canRedo);
-                  setBlockMarker(state.blockMarker);
-                  setContextMarker(state.contextMarker);
-                }}
-              />
-            </div>
+            <Editorial
+              ref={editorRef}
+              scrRef={scrRef}
+              onScrRefChange={setScrRefNoScroll}
+              options={options}
+              logger={logger}
+              onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
+              onSelectionChange={handleSelectionChange}
+              onStateChange={(state) => {
+                setCanUndo(state.canUndo);
+                setCanRedo(state.canRedo);
+                setBlockMarker(state.blockMarker);
+                setContextMarker(state.contextMarker);
+              }}
+            />
           </EditorKeyboardShortcuts>
         </ContentZoomRoot>
       </TwoStepDeleteTooltipOverlay>

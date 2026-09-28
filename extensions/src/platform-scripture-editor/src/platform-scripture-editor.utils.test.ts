@@ -4,7 +4,7 @@ import type PapiBackend from '@papi/backend';
 import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import type { EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { DeltaOpInsertNoteEmbed, EditorRef } from '@eten-tech-foundation/platform-editor';
 import {
   USJ_TYPE,
   USJ_VERSION,
@@ -48,10 +48,9 @@ import {
   resolveResourceContentState,
   resolveCallerHighlight,
   resolveNoteEditingSurface,
+  isUnclosedNoteOp,
   shouldEndPaneNoteEditOnRowSelect,
-  shouldHandCaretInNoteToPane,
   shouldPublishPaneDocument,
-  TEXT_GESTURE_WINDOW_MS,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -3350,40 +3349,17 @@ describe('resolveCallerHighlight', () => {
   });
 });
 
-describe('shouldHandCaretInNoteToPane', () => {
-  const handOff = {
-    isStandardView: true,
-    isReadOnly: false,
-    isTextFocused: true,
-    isChapterLoaded: true,
-    isPaletteOpen: false,
-    msSinceTextGesture: 10,
-    noteCaretNoteKey: 'note-1',
-    editingNoteKey: undefined,
-  };
-
-  it('moves a caret the user just put inside a note in Standard view to the row editor', () => {
-    expect(shouldHandCaretInNoteToPane(handOff)).toBe(true);
+describe('isUnclosedNoteOp', () => {
+  const noteOp = (extra: object): DeltaOpInsertNoteEmbed => ({
+    insert: { note: { style: 'f', caller: '+', ...extra } },
   });
 
-  it('moves it when a session is open on a different note', () => {
-    expect(shouldHandCaretInNoteToPane({ ...handOff, editingNoteKey: 'note-2' })).toBe(true);
+  it('recognizes a note written with no closing marker', () => {
+    expect(isUnclosedNoteOp(noteOp({ closed: 'false' }))).toBe(true);
   });
 
-  it.each([
-    ['the caret is in no note', { noteCaretNoteKey: undefined }],
-    ['the row editor is already open on that note', { editingNoteKey: 'note-1' }],
-    ['another view edits notes in a popover', { isStandardView: false }],
-    ['the text is read-only', { isReadOnly: true }],
-    ['the text does not hold focus', { isTextFocused: false }],
-    ['a new chapter is still loading', { isChapterLoaded: false }],
-    ['a marker palette is open in the text', { isPaletteOpen: true }],
-    [
-      'the editor parked the caret with no click or keystroke behind it',
-      { msSinceTextGesture: TEXT_GESTURE_WINDOW_MS + 1 },
-    ],
-  ])('leaves the caret alone when %s', (_label, override) => {
-    expect(shouldHandCaretInNoteToPane({ ...handOff, ...override })).toBe(false);
+  it('treats a note with no closed attribute as closed', () => {
+    expect(isUnclosedNoteOp(noteOp({}))).toBe(false);
   });
 });
 

@@ -17,9 +17,9 @@ const MARKER_SEPARATOR = '\u00a0';
 const ZERO_WIDTH_NO_BREAK_SPACE = '\ufeff';
 
 /**
- * USJ carries `closed: 'false'` on character runs that the source did not explicitly close
- * (mirroring USX's `closed` attribute), but `MarkerObject` does not declare the property. PT9 shows
- * a run's closing marker only when the run is closed (`Standard.xslt`'s `closemarker`).
+ * USJ carries `closed: 'false'` on character runs and notes that the source did not explicitly
+ * close (mirroring USX's `closed` attribute), but `MarkerObject` does not declare the property. PT9
+ * shows a run's closing marker only when the run is closed (`Standard.xslt`'s `closemarker`).
  */
 function isRunClosed(markerObj: MarkerObject): boolean {
   // Narrow read of a property USJ produces but the published MarkerObject type omits
@@ -170,9 +170,11 @@ export function FootnoteItem({
     <span className="marker">{`\\${footnote.marker}`}</span>
   ) : undefined;
 
-  const footnoteClosing = showMarkers ? (
-    <span className="marker">{`\\${footnote.marker}*`}</span>
-  ) : undefined;
+  // An unclosed note (written with no `\f*`) has no closing marker to show, as with a run.
+  const footnoteClosing =
+    showMarkers && isRunClosed(footnote) ? (
+      <span className="marker">{`\\${footnote.marker}*`}</span>
+    ) : undefined;
 
   // PT9 renders a study-Bible note's category at the head of the note text as its own marked-up
   // run (`StandardNotes.xslt`), and shows it in its formatted pane too - there as raw `\cat …\cat*`

@@ -51,7 +51,11 @@ import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
 // extension activation. See platform-scripture-editor.web-view.utils.ts's header.
-import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
+import type {
+  DeltaOp,
+  DeltaOpInsertNoteEmbed,
+  EditorRef,
+} from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
@@ -236,57 +240,16 @@ export function shouldEndPaneNoteEditOnRowSelect({
 }
 
 /**
- * How recently the user must have clicked or typed in the Scripture text for a caret that lands
- * inside a note to count as theirs (see {@link shouldHandCaretInNoteToPane}).
- */
-export const TEXT_GESTURE_WINDOW_MS = 1000;
-
-/**
- * Decides whether a caret that has come to rest inside a note in the Scripture text moves into the
- * footnotes pane's row editor, at the same place in the note. Standard view shows a note's content
- * in the text only while the note is unclosed (PT9's `opennote`); everywhere else it edits notes in
- * the pane, and the row editor is what keeps the note's marker and caller out of reach of a stray
- * keystroke, so the caret goes there instead of staying in the text. This departs from PT9, which
- * edits an unclosed note inline.
+ * Whether a note insert-embed op is an UNCLOSED note (`closed: "false"`, written with no `\f*`).
+ * The text shows such a note expanded and edits it in place, as PT9 does its `opennote`.
  *
- * Only a caret the user put there moves: one that follows a click or a keystroke in the text. The
- * editor also parks its caret by itself - returning focus from the pane, landing past a note whose
- * end is its paragraph's end - and moving that one would send the user straight back into the note
- * they just left.
- *
- * @param options.isStandardView Whether the editor is showing Standard view
- * @param options.isReadOnly Whether the text is read-only, which edits notes nowhere
- * @param options.isTextFocused Whether the Scripture text holds DOM focus
- * @param options.isChapterLoaded Whether the text shows the chapter the reference names
- * @param options.isPaletteOpen Whether a marker palette session is open in the text
- * @param options.msSinceTextGesture Time since the last click or keystroke in the text
- * @param options.noteCaretNoteKey The note the caret is in, or `undefined` when it is in none
- * @param options.editingNoteKey The note a note-editing session is open on, if any
- * @returns Whether to open the row editor on the caret's note at the caret's position
+ * @param noteOp A note insert-embed op
+ * @returns Whether the note is unclosed
  */
-export function shouldHandCaretInNoteToPane({
-  isStandardView,
-  isReadOnly,
-  isTextFocused,
-  isChapterLoaded,
-  isPaletteOpen,
-  msSinceTextGesture,
-  noteCaretNoteKey,
-  editingNoteKey,
-}: {
-  isStandardView: boolean;
-  isReadOnly: boolean;
-  isTextFocused: boolean;
-  isChapterLoaded: boolean;
-  isPaletteOpen: boolean;
-  msSinceTextGesture: number;
-  noteCaretNoteKey: string | undefined;
-  editingNoteKey: string | undefined;
-}): boolean {
-  if (!isStandardView || isReadOnly || !isTextFocused || !isChapterLoaded || isPaletteOpen)
-    return false;
-  if (msSinceTextGesture > TEXT_GESTURE_WINDOW_MS) return false;
-  return noteCaretNoteKey !== undefined && noteCaretNoteKey !== editingNoteKey;
+export function isUnclosedNoteOp(noteOp: DeltaOpInsertNoteEmbed): boolean {
+  // `closed` rides on the embed as an unknown attribute; the embed's type does not declare it.
+  const { note } = noteOp.insert;
+  return !!note && 'closed' in note && note.closed === 'false';
 }
 
 /** Snapshot of the state a collapsed-note caller click decides against. */
