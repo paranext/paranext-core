@@ -46,8 +46,9 @@ These belong to no subset; run them by path (see "How to run").
 - `overlay/` (one Electron per test) — tests for the project-switch transition overlay
 - `scripture-editor/` (one Electron per test) — tests for scripture editor behaviors that need a real
   editor in a real window: which view a project opens in, marker and paragraph-style palette
-  triggers, attribute-display settle, type-through save echo, and settled annotation/selection
-  positions
+  triggers, attribute-display settle, type-through save echo, settled annotation/selection
+  positions, and annotations that span verse numbers, milestones, char span openers and paragraph
+  breaks
 - `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
 - `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
 - `verse-navigation/` (one Electron per worker) — tests for verse navigation keyboard shortcuts
