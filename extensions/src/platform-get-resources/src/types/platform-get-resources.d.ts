@@ -4,7 +4,12 @@ declare module 'platform-get-resources' {
   import type { DblResourceData } from 'platform-bible-utils';
 
   export type GetResourcesDataTypes = {
-    /** List of information about resources that are available from the DBL */
+    /**
+     * List of information about resources that are available from the DBL.
+     *
+     * Rejects when the DBL cannot be reached (for example offline) or the user registration is not
+     * valid. An empty list never stands in for "offline".
+     */
     DblResources: DataProviderDataType<undefined, DblResourceData[], never>;
   };
 

@@ -48,7 +48,7 @@ const localizedStrings = {
   [FAILED_KEY]: 'Download failed',
   [EMPTY_KEY]: 'No text for this verse',
   [BOOK_NOT_AVAILABLE_KEY]: 'Book not in this text',
-  [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this text is installed",
+  [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this resource is installed",
 };
 
 /** The zoom area the cells under test mark their text with. */
@@ -157,7 +157,9 @@ describe('ResourceCellView row smoke', () => {
       />,
     );
     expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
-    expect(screen.getByText("Couldn't check whether this text is installed")).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
     expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
   });
@@ -434,7 +436,7 @@ describe('ResourceCellView right-click menu', () => {
     [
       'whose install could not be checked',
       'unverified',
-      "Couldn't check whether this text is installed",
+      "Couldn't check whether this resource is installed",
     ],
   ] as const)('leaves the browser menu alone on a cell %s', (_, state, text) => {
     renderCells(
@@ -446,7 +448,7 @@ describe('ResourceCellView right-click menu', () => {
         localizedStrings={{
           ...menuStrings,
           [NOT_INSTALLED_KEY]: 'Resource not installed',
-          [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this text is installed",
+          [INSTALL_UNVERIFIED_KEY]: "Couldn't check whether this resource is installed",
         }}
         editor={undefined}
       />,

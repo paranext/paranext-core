@@ -64,6 +64,11 @@ import {
 } from './scripture-text-grid/scripture-text-grid.component';
 import { toGridResources, type GridResource } from './scripture-text-grid/grid-resources.utils';
 import {
+  CATALOG_ERROR_KEY,
+  CATALOG_RETRY_KEY,
+} from './scripture-text-grid/catalog-retry-banner.const';
+import { useCatalogRetryState } from './scripture-text-grid/use-catalog-retry-state.hook';
+import {
   getGridBodyState,
   shouldShowCatalogRetryBanner,
 } from './scripture-text-grid/grid-body-state.utils';
@@ -92,8 +97,6 @@ const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
-const CATALOG_ERROR_KEY = '%webView_scriptureTextGrid_catalogUnavailable%';
-const CATALOG_RETRY_KEY = '%webView_scriptureTextGrid_retry%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 // Screen-reader announcements for the chapter-context split opening/closing.
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
@@ -293,14 +296,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // Keeps the retry banner (and the focused button) mounted through a retry it started: the
   // refetch clears the error at once, which would otherwise remove the banner mid-click.
-  const [isRetryingCatalog, setIsRetryingCatalog] = useState(false);
-  useEffect(() => {
-    if (hasCatalogSettled) setIsRetryingCatalog(false);
-  }, [hasCatalogSettled]);
-  const retryCatalogFromBanner = useCallback(() => {
-    setIsRetryingCatalog(true);
-    refetchCatalog();
-  }, [refetchCatalog]);
+  const { isRetrying: isRetryingCatalog, retry: retryCatalogFromBanner } = useCatalogRetryState(
+    hasCatalogSettled,
+    refetchCatalog,
+  );
 
   const cachedResources = useMemo(
     () => (catalog?.status === 'available' ? catalog.resources : undefined),
@@ -333,7 +332,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // Collection sources, resolved to the row's `{ resourceId, projectId, label }` shape. The selector returns
   // already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
-    () => toGridResources(orderedReferences, cachedResources ?? [], installLookup, hasCatalogError),
+    () =>
+      toGridResources(orderedReferences, cachedResources ?? [], { installLookup, hasCatalogError }),
     [orderedReferences, cachedResources, installLookup, hasCatalogError],
   );
 

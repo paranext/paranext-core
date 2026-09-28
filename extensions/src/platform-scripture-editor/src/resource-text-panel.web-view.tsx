@@ -216,12 +216,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // This panel also offers locally-downloaded resources that are not referenced yet, so an empty
   // referenced list is only genuinely empty once those rows have arrived and none of them matched.
   let readiness: ResourcePanelReadiness = listReadiness;
-  if (listReadiness === 'empty') {
-    if (arePickerResourcesLoading) readiness = 'loading';
-    else if (filteredResources.length > 0) readiness = 'configured';
-  } else if (listReadiness === 'catalogError') {
-    // A failed catalog must not hide rows that resolved without it — the downloaded extras above
-    // are read straight off disk, so they can be correct even while the catalog fetch is down.
+  // Neither an empty referenced list nor a failed catalog may hide the downloaded extras: they are
+  // read straight off disk, so they can be correct even while the catalog fetch is down.
+  if (listReadiness === 'empty' || listReadiness === 'catalogError') {
     if (arePickerResourcesLoading) readiness = 'loading';
     else if (filteredResources.length > 0) readiness = 'configured';
   }

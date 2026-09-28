@@ -2,7 +2,7 @@ import type { DblResourceData } from 'platform-bible-utils';
 import type { DblResourceInstallStatus } from 'platform-get-resources';
 import { isDblResourceReference } from '../resource-reference.utils';
 import type { BibleTextReference } from '../scripture-text-grid-contents.utils';
-import { findCachedDblResource } from './dbl-resource-lookup.utils';
+import { findCachedDblResource, isSameDblEntryUid } from './dbl-resource-lookup.utils';
 
 /**
  * Why a grid resource has no project to render. Absent when it has one.
@@ -62,17 +62,16 @@ export function toInstallLookup(
 }
 
 /**
- * The project id the disk scan reported for a uid, if any. Case-insensitive because uid casing
- * differs by source (see `indexDblResourcesByUid`); own keys only because the map is deserialized
- * JSON, and a uid spelling an `Object.prototype` member must not resolve to a function.
+ * The project id the disk scan reported for a uid, if any, matched by {@link isSameDblEntryUid}. Own
+ * keys only because the map is deserialized JSON, and a uid spelling an `Object.prototype` member
+ * must not resolve to a function.
  */
 function findInstalledProjectId(
   installedProjectIds: DblResourceInstallStatus,
   uid: string,
 ): string | undefined {
-  const wanted = uid.toLowerCase();
-  const key = Object.keys(installedProjectIds).find(
-    (candidate) => candidate.toLowerCase() === wanted,
+  const key = Object.keys(installedProjectIds).find((candidate) =>
+    isSameDblEntryUid(candidate, uid),
   );
   const projectId = key === undefined ? undefined : installedProjectIds[key];
   return projectId || undefined;
@@ -112,13 +111,17 @@ export function needsInstallLookup(
  * `unresolvedReason`, so it stays visible in the grid and in View Options. It is `unverified` only
  * when the catalog failed (`hasCatalogError`), so a build with no DBL credentials says "not
  * installed".
+ *
+ * @param options.installLookup The disk scan's answer; defaults to unanswered.
+ * @param options.hasCatalogError Whether the catalog fetch failed; defaults to `false`.
  */
 export function toGridResources(
   references: BibleTextReference[],
   dblResources: DblResourceData[],
-  installLookup: InstallLookup = UNANSWERED,
-  hasCatalogError = false,
+  options?: { installLookup?: InstallLookup; hasCatalogError?: boolean },
 ): GridResource[] {
+  const installLookup = options?.installLookup ?? UNANSWERED;
+  const hasCatalogError = options?.hasCatalogError ?? false;
   return references.map((reference): GridResource => {
     const base = { resourceId: reference.id, label: reference.name };
     if (!isDblResourceReference(reference)) return { ...base, projectId: reference.id };

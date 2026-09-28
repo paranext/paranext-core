@@ -46,7 +46,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_status_installUnverified%':
-        "Couldn't check whether this text is installed",
+        "Couldn't check whether this resource is installed",
       '%webView_scriptureTextGrid_cell_status_bookNotAvailable%': 'Book not in this text',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
       '%webView_scriptureTextGrid_cell_copy%': 'Copy',
@@ -265,7 +265,9 @@ describe('ResourceCell', () => {
       />,
     );
     expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
-    expect(screen.getByText("Couldn't check whether this text is installed")).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
   });
   it('shows the Spinner and neutral loading message while downloading', () => {
@@ -778,7 +780,9 @@ describe('ResourceCell zoom menu', () => {
       </>,
     );
     expect(screen.getByRole('button', { name: 'Zoom options for WEB' })).toBeInTheDocument();
-    expect(screen.getByText("Couldn't check whether this text is installed")).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't check whether this resource is installed"),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Zoom options for NIV' })).not.toBeInTheDocument();
   });
 });
