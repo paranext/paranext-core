@@ -1177,10 +1177,9 @@ export type FootnoteLayout = "horizontal" | "vertical";
  * The offset origin is the note's CONTENT: every character run the note contains (including a
  * leading `fr`/`xo` target reference, which PT9's notes pane and `FootnoteItem` alike render inline
  * at the head of the note text), AND text written directly in the note, alongside its runs rather
- * than inside one. It excludes everything that is display rather than content — the caller
- * (`FootnoteItem` renders it in a separate header div), the USFM markers themselves (`.marker`
- * spans) and the note's `\cat` category, which is a field on the note rather than part of its
- * content (see `isDisplayText` in `footnote-caret.utils.ts`).
+ * than inside one. It excludes the caller (`FootnoteItem` renders it in a separate header div), the
+ * USFM markers themselves and the note's `\cat` category, which is a field on the note rather than
+ * part of its content (see `RowTextKind` in `footnote-caret.utils.ts`).
  *
  * That origin is the note's USJ text, NOT any one rendering of it, which is what lets a position
  * captured over a read-only row resolve inside a live editor: the editor adds its own display
@@ -1195,12 +1194,24 @@ export type FootnoteLayout = "horizontal" | "vertical";
  *   APIs (`caretPositionFromPoint`), which only produce positions at valid caret boundaries, so
  *   surrogate pairs and combining sequences are never split by construction. An offset past the
  *   available text resolves to `'end'`.
- * - `{ utf16Offset, field: 'category' }`: an offset into the note's `\cat` category value instead,
- *   which is outside the content origin above but still text the user can edit.
+ * - `field: 'category'`: the offset is into the note's `\cat` category value instead, which is
+ *   outside the content origin above but still text the user can edit.
+ * - `glyph`: the caret is inside a marker the note editor shows as editable text - a run's opening or
+ *   closing marker (`\ft`, `\ft*`, `\+nd`), an unmatched marker, or `\cat`/`\cat*` - rather than in
+ *   text. `glyph.index` says which of the markers sitting at `utf16Offset` (from 0: `\fr*\ft` puts
+ *   two between the same two characters; `\cat` sits at the category's start and `\cat*` at its
+ *   end), and `glyph.offset` how far into that marker's own text, its trailing separator excluded.
+ *   Addressing markers relative to the content offset keeps every content offset the same whether
+ *   or not a rendering shows markers. The note's own marker, caller and closing marker are never
+ *   addressed: the note editor governs those through its own controls.
  */
 export type FootnoteCaretPosition = "end" | {
 	utf16Offset: number;
 	field?: "category";
+	glyph?: {
+		index: number;
+		offset: number;
+	};
 };
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
@@ -1333,15 +1344,16 @@ export interface FootnoteListProps {
  * caret-where-you-clicked). Uses the browser caret APIs; positions land only at valid caret
  * boundaries, so graphemes are never split.
  *
+ * A click on a marker lands inside that marker, which the note editor renders as editable text; a
+ * click on the note's own marker or caller (the row's header cell) lands right after the caller,
+ * the first place in the note the user can type.
+ *
  * @param clientX Viewport X of the click (from the mouse event).
  * @param clientY Viewport Y of the click.
- * @param rowElement The row's root element; the offset is computed over the text of its
- *   `.textual-note-body` descendant - the note's text, in character runs and written directly in
- *   the note alike, excluding the caller (rendered in the row's header cell), the rendered USFM
- *   markers, the `\cat` category run and the empty-note placeholder (see `isDisplayText`).
- * @returns A flat UTF-16 offset into the note body text, an offset into the `\cat` category value
- *   (`field: 'category'`) for a click on the category, or `'end'` when the click cannot be mapped
- *   (no browser support, click outside the body text, empty note).
+ * @param rowElement The row's root element; the position is computed over the text of its
+ *   `.textual-note-body` descendant (see {@link RowTextKind}).
+ * @returns The position (see {@link FootnoteCaretPosition}), or `'end'` when the click cannot be
+ *   mapped (no browser support, click outside the row's text).
  */
 export declare function getCaretPositionFromClick(clientX: number, clientY: number, rowElement: HTMLElement): FootnoteCaretPosition;
 /**
