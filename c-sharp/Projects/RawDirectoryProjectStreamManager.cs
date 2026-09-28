@@ -86,9 +86,13 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             // yields directories too - it is not Directory.GetFiles.
             ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
             // Consulted only for directories: never descend into a symlink or junction. A FILE that
-            // is a link is still included above, because GetDataStream reads through it.
+            // is a link is still included above, because GetDataStream reads through it. The
+            // attribute alone is not the test: cloud-sync placeholder DIRECTORIES carry ReparsePoint
+            // too, and skipping them would hide everything beneath them. LinkTarget is non-null only
+            // for a real link, and the attribute check keeps that lookup off ordinary directories.
             ShouldRecursePredicate = (ref FileSystemEntry entry) =>
-                (entry.Attributes & FileAttributes.ReparsePoint) == 0,
+                (entry.Attributes & FileAttributes.ReparsePoint) == 0
+                || new DirectoryInfo(entry.ToFullPath()).LinkTarget == null,
         };
 
         return
