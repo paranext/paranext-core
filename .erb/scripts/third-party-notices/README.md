@@ -158,6 +158,9 @@ and why every escape instrument is pinned.
 - An exception is pinned to one text hash, so the block returns the moment the package changes its
   license text — and the entry has to be reviewed again. `version` records what the determination
   was read against; it does not gate.
+- An exception recording a conjunction whose operands are granted by different holders (one file
+  stacking several grants) records `copyrightByOperand`, so each operand's canonical text is
+  credited to the holder that grants it rather than to whichever notice the file states first.
 - Only one `exceptions` entry per package. Re-review edits the entry in place; appending a second
   leaves the stale one in force, and `loadPolicy` refuses the file.
 

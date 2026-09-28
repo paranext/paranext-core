@@ -333,6 +333,30 @@ describe('render', () => {
     ).toThrow(/twinned@2\.0\.0/);
   });
 
+  it('credits each operand of a conjunction with the notice a reviewed exception records for it', () => {
+    // `posthog-node`'s LICENSE opens with PostHog's Apache-2.0 notice and carries its MIT grants
+    // (Sentry, Meta, ...) further down, so the file's first notice is right for one operand only.
+    const out = render({
+      ...report,
+      verdicts: report.verdicts.map((row) =>
+        row.name === 'delta'
+          ? {
+              ...row,
+              copyright: 'Copyright (c) 2021 Delta',
+              copyrightByOperand: { Zlib: 'Copyright (C) 1995 Jean-loup Gailly and Mark Adler' },
+            }
+          : row,
+      ),
+    });
+    expect(out).toMatch(
+      /### Zlib — canonical text[^#]*`delta@4\.0\.0` \(npm\) — Copyright \(C\) 1995 Jean-loup Gailly/,
+    );
+    // An operand the exception records nothing for keeps the package's own notice.
+    expect(out).toMatch(
+      /### MIT — canonical text[^#]*`delta@4\.0\.0` \(npm\) — Copyright \(c\) 2021 Delta/,
+    );
+  });
+
   it('reproduces every operand of a conjunction, including one the package ships no text for', () => {
     // `spdxId` is not always a bare identifier: a reviewed exception records the whole expression.
     // An exact corpus lookup on the field matches nothing for a compound one, which leaves
