@@ -31,11 +31,13 @@
  *   ordinary character and no palette reopens. Because they commit, neither `*` nor `\` is a filter
  *   character — a close-tag entry can no longer be narrowed to by typing its trailing `*`, since
  *   pressing `*` commits the end state that entry would have applied.
- * - `'enter'` — FOCUSED Enter-split menu (collapsed caret). Barely driven by this table: the menu is
- *   always focused with no key forwarding (the overlay's own input owns every key), so the only
- *   keys that reach the table are the ones typed during the sub-frame race before the overlay wins
- *   focus. Enter (commit) and Escape (dismiss) are claimed there, because letting them through
- *   reaches the document; every other key passes through untouched (see `ForwardedSessionKind`).
+ * - `'enter'` — Enter-split menu (collapsed caret), forwarded like the other kinds. It was once
+ *   excluded from this table on the grounds that the overlay is always focused and owns every key
+ *   itself; PT-4611 measured the opposite in the running app — the overlay never wins focus, so the
+ *   pass-through meant to cover a sub-frame race lasted the whole session and every typed character
+ *   was inserted into the SCRIPTURE TEXT under the open palette. Filter characters, Backspace and
+ *   the arrows are claimed here. Space has no typed-literal commit for this kind: it is claimed and
+ *   closes the palette (see the Space branch).
  * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may land
  *   while it is open, because typing would replace the wrapped selection. Space commits the item
  *   the typed filter names EXACTLY, ignoring case and the `+` nesting prefix
@@ -87,10 +89,9 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   commits the marker the user literally typed, `*` commits it as a CLOSING marker, and `\`
  *   commits and immediately reopens the palette so `\qt-s\qt-e` is one flow.
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
- *   the split creates. Its only commit is the highlighted item. Always a FOCUSED palette with no
- *   key forwarding, so the forwarding table drives only the two keys that decide the session's
- *   fate, and only while the overlay is still winning focus; the kind otherwise exists for
- *   session-tracking (re-entrancy guards, token cleanup) in the session owners.
+ *   the split creates. Its only commit is the highlighted item (Enter or Tab). Forwarded, so the
+ *   table owns its filter characters, Backspace and arrows; nothing it accepts may reach the
+ *   document, because the overlay cannot rely on holding browser focus (PT-4188, PT-4611).
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
  *   selection in the marker the filter names exactly (ignoring case and the `+` nesting prefix);
@@ -202,15 +203,16 @@ export function isImeCompositionKeyEvent(event: MarkerPaletteKeyEvent): boolean 
 }
 
 /**
- * The session kinds whose FILTER and per-key semantics this forwarding table drives. `'enter'` is
- * deliberately absent: the Enter-split palette is always FOCUSED with no key forwarding
- * (`openEnterPalette`'s own doc — nothing lands on the Enter keypress itself), which makes per-kind
- * `'enter'` filter entries here dead code and a drift trap. An `'enter'` session still reaches
- * {@link handleMarkerPaletteSessionKeyDown} during the sub-frame race before the overlay takes
- * focus, where Enter and Escape are claimed so they cannot reach the document; nothing else about
- * an `'enter'` session is table-driven.
+ * The session kinds whose FILTER and per-key semantics this forwarding table drives — every kind.
+ *
+ * `'enter'` was excluded until PT-4611, on the premise that the Enter-split palette is always
+ * FOCUSED and its own input owns every key, so only the sub-frame race before the overlay took
+ * focus could reach this table. That premise does not hold: the overlay never wins that race, so
+ * the keys this table passed through landed in the document instead. Keeping every kind forwarded
+ * means no palette depends on holding browser focus, which is the constraint PT-4188 documented
+ * (Lexical re-grabs focus on every reconcile).
  */
-export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, 'enter'>;
+export type ForwardedSessionKind = MarkerPaletteSessionKind;
 
 const FILTER_CHAR_REGEX: Record<ForwardedSessionKind, RegExp> = {
   // USFM marker characters that filter the palette. Hyphens (milestones `ts-s`/`ts-e`, `qt-s`,
@@ -219,6 +221,7 @@ const FILTER_CHAR_REGEX: Record<ForwardedSessionKind, RegExp> = {
   // caret it is the CLOSING-marker commit key (see the `*` branch below), so it can never reach
   // the filter.
   backslash: /^[a-z0-9+-]$/i,
+  enter: /^[a-z0-9+-]$/i,
   selection: /^[a-z0-9+-]$/i,
 };
 
@@ -294,30 +297,23 @@ export function handleMarkerPaletteSessionKeyDown(
   driver: MarkerPaletteSessionDriver,
 ): MarkerPaletteKeyOutcome {
   const { kind } = session;
-  if (kind === 'enter') {
-    // The Enter-split palette is always FOCUSED with no key forwarding (see
-    // ForwardedSessionKind), so its keys never legitimately reach this table — the only way in
-    // is the sub-frame race between the session being recorded and the overlay taking focus.
-    // That race is real and lasts up to twenty animation frames (the palette's own focus retry
-    // loop), which is well inside a two-keystroke Enter-Enter.
+
+  if (kind === 'enter' && (isImeCompositionKeyEvent(event) || event.key === 'Dead')) {
+    // Product ruling (Vladimir, PT-4611): PT9's palette "just ignores non-basic-Latin", and PT10
+    // matches. So a composition or dead key neither commits nor dismisses — the palette stays open.
     //
-    // The two keys that decide the session's fate are claimed there, because passing them through
-    // is not neutral: an Enter reaching Lexical performs the unmarked plain split this palette
-    // exists to prevent, AND leaves the palette open behind it with nothing committed. Both do
-    // exactly what the overlay's own input would have done had it won the race. Every other key is
-    // still passed through — the palette owns them once it has focus, and the filter it would have
-    // built is not reconstructible from here.
-    if (event.key === 'Enter') {
-      claim(event);
-      driver.commit();
-      return 'ended';
-    }
-    if (event.key === 'Escape') {
-      claim(event);
-      driver.dismiss();
-      return 'ended';
-    }
-    return 'passed';
+    // What actually stops the character reaching the document is NOT this branch: the web view
+    // makes the editor non-editable for the life of a session (`setPaletteInputLock`), because
+    // neither interception point works in this Electron build — `beforeinput` for
+    // `insertCompositionText` reports `cancelable: false`, and `compositionstart` accepts
+    // `preventDefault()` and composes anyway. Both were measured; see PT-4611.
+    //
+    // This branch exists because the lock changes how the key is DELIVERED: with the element
+    // non-editable the browser starts no composition, so the dead key arrives as an ordinary
+    // keydown carrying the physical key code rather than 229 — which means it no longer hits the
+    // web view's `isComposing || keyCode === 229` early return and does reach this table. Without
+    // this branch it would fall through to the commit/dismiss paths below.
+    return 'continue';
   }
 
   if (isImeCompositionKeyEvent(event)) {
@@ -336,7 +332,29 @@ export function handleMarkerPaletteSessionKeyDown(
     return 'passed';
   }
 
+  if (
+    kind === 'enter' &&
+    (event.key === 'Enter' || event.key === 'Tab') &&
+    (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
+  ) {
+    // Product ruling on PT-4611: only selecting a marker may change the scripture text, and a
+    // MODIFIED Enter/Tab is not a selection — only an unmodified one on the highlighted item is.
+    // Shift counts: the chord guard below tests ctrl/meta/alt only, so Shift+Enter and Shift+Tab
+    // used to fall through and commit, and Shift+Tab is "focus previous" everywhere else.
+    //
+    // Claimed rather than passed, because the web view claims Enter in EVERY modifier state when it
+    // opens this palette (PT9 parity), so an unclaimed one reaching Lexical would perform the
+    // unmarked plain split this palette exists to prevent.
+    claim(event);
+    return 'continue';
+  }
+
   if ((event.ctrlKey || event.metaKey || event.altKey) && !event.getModifierState?.('AltGraph')) {
+    // An 'enter' session keeps a paragraph split pending, so a chord must not tear it down: let
+    // Cmd+S/Cmd+V do their normal job and leave the palette — and the split — alone. (Its own
+    // Enter/Tab chords were handled above.)
+    if (kind === 'enter') return 'passed';
+
     // A real chord (Ctrl+C, Cmd+V, …): never ingest it into the filter, and normally never claim
     // it — let it do its normal job. The palette is no longer relevant to what happens next. AltGr
     // is the exception: on Windows/Linux a character typed WITH AltGr held reports `ctrlKey &&
@@ -373,7 +391,10 @@ export function handleMarkerPaletteSessionKeyDown(
     const matches = filterAndRankPaletteItems(
       session.items.map((item) => ({ label: item.marker })),
       session.filter,
-      kind === 'backslash' ? 'passive' : 'active',
+      // 'selection' is the only FOCUSED palette left: it holds real focus over a selection, so
+      // cmdk owns its list and containment matching applies. The forwarded kinds are host-driven
+      // (passive), and their commit must agree with the list the host filtered (PT-4611).
+      kind === 'selection' ? 'active' : 'passive',
     );
     if (matches.length === 0) {
       // P9 parity: Enter over a zero-match filter does NOTHING and the palette stays open — the
@@ -390,6 +411,16 @@ export function handleMarkerPaletteSessionKeyDown(
     claim(event); // keep Lexical (and anything else) from acting on Escape
     driver.dismiss();
     return 'ended';
+  }
+
+  if (kind === 'enter' && (event.key === ' ' || event.key === '*' || event.key === '\\')) {
+    // Product ruling on PT-4611: ONLY selecting a marker may change the scripture text. These are
+    // all `\` palette gestures — Space commits the marker the user typed there, `*` its closing
+    // form, `\` commits-and-reopens — and none of them is a selection here. Claimed, so nothing
+    // reaches the document; ignored rather than dismissing, so the pending split is not discarded
+    // either. The palette stays open and the user chooses an item or escapes.
+    claim(event);
+    return 'continue';
   }
 
   if (event.key === ' ') {
@@ -485,6 +516,15 @@ export function handleMarkerPaletteSessionKeyDown(
     return 'ended';
   }
 
+  if (kind === 'enter' && event.key === 'Backspace' && session.filter === '') {
+    // PT-4611: for every other kind an empty-filter Backspace closes the menu, which is harmless
+    // there — nothing is pending. Here it would discard the paragraph split the web view is
+    // withholding, and the claim means it does not delete a document character either. Only Escape
+    // dismisses this palette, so Backspace with nothing typed simply does nothing.
+    claim(event);
+    return 'continue';
+  }
+
   if (event.key === 'Backspace' && session.filter === '') {
     // Editor-palette parity: with nothing typed there is nothing to widen — Backspace closes the
     // menu. Claimed: nothing of the palette's ever landed, so an unclaimed Backspace would eat a
@@ -507,6 +547,17 @@ export function handleMarkerPaletteSessionKeyDown(
   // Any other key: what's about to land no longer matches what the palette is offering. The
   // selection session still claims it (nothing may replace the wrapped selection); the others let
   // it land.
+  if (kind === 'enter') {
+    // 'enter' holds the user's paragraph split PENDING (the web view claimed the Enter and withheld
+    // it), so a key that lands here does double damage: it lands in the scripture text AND the
+    // split is discarded with it. That is the same requirement 'selection' has — nothing may land —
+    // except that dismissing is destructive here too, so the key is claimed and simply ignored and
+    // the palette stays open. Reached by everything outside FILTER_CHAR_REGEX's ASCII alphabet:
+    // punctuation, every non-Latin script, accented Latin, and the navigation keys.
+    claim(event);
+    return 'continue';
+  }
+
   if (kind === 'selection') claim(event);
   driver.dismiss();
   return 'ended';

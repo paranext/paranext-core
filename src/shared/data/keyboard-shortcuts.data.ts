@@ -344,9 +344,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Space commits what was TYPED, not the highlighted entry: at a collapsed caret it materializes
     // the typed marker; over a selection it wraps only on an exact (case-insensitive) match and
-    // otherwise closes without touching the selection. (The Enter-triggered paragraph menu is a
-    // focused palette the forwarding table does not drive; its Space behavior is the overlay
-    // input's own.)
+    // otherwise closes without touching the selection. In the Enter-triggered paragraph menu Space
+    // does NOTHING: only selecting a marker may change the scripture text there (PT-4611 product
+    // ruling), so Space is claimed — nothing lands — and the menu stays open.
     keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -358,9 +358,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Enter and Tab are one commit gesture, matching the editor package's own menus. Over a
     // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open). Enter also
-    // commits the Enter-triggered paragraph menu — normally through the overlay's own input, and
-    // through the forwarding table during the frames before that input wins focus, so an
-    // Enter-Enter cannot reach the document.
+    // commits the Enter-triggered paragraph menu, through the forwarding table that now drives it.
+    // Only an UNMODIFIED Enter (or Tab) commits there: a chorded Ctrl/Cmd/Alt+Enter is claimed but
+    // inert, because only selecting a marker may change the scripture text (PT-4611 ruling).
     keys: { macOS: '⏎ / ⇥', windows: 'Enter / Tab', linux: 'Enter / Tab' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -387,8 +387,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
     // with no terminating space. Over a non-collapsed selection the selected content is replaced,
-    // which is what typing a closing marker by hand has always done. Not offered in the
-    // Enter-triggered paragraph menu.
+    // which is what typing a closing marker by hand has always done. In the Enter-triggered
+    // paragraph menu it is claimed but inert: it is not a paragraph-marker gesture, and letting it
+    // through discarded the pending split (PT-4611).
     keys: { macOS: '*', windows: '*', linux: '*' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },

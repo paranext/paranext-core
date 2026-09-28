@@ -235,7 +235,16 @@ export interface EditingSessionActivityInput {
  * close path, keeping popover state consistent) and stop deferring.
  *
  * A palette session carries no time bound here: its lifecycle is owned by the overlay service's
- * show promise, which always settles (select, dismiss, or replacement rejection).
+ * show promise, which settles on select, dismiss, or replacement rejection.
+ *
+ * That guarantee is weaker since PT-4611. An `'enter'` session used to be dismissed by any
+ * unrelated keystroke; now only Escape, a commit, a chapter change, or a gesture that reaches the
+ * overlay service closes one, because nothing may implicitly discard the paragraph split it is
+ * holding. So a palette left open and untouched keeps `isActive` true — deferring incoming PDP
+ * updates and skipping the debounced save — for as long as it stays open. It is at least visible on
+ * screen while that is true, unlike an orphaned note-session key, which is why this still has no
+ * bound; if that proves insufficient, give palette sessions the same refreshed-at treatment the
+ * note session has rather than reinstating dismiss-on-any-key.
  *
  * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
  *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear

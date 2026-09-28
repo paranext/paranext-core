@@ -529,6 +529,17 @@ export function OverlayCommandPalettePresentational({
     />
   );
 
+  // PT-4611: passive mode renders plain elements instead of cmdk items, so cmdk's own
+  // `scrollIntoView` on the selected item never runs — the host-driven highlight moved with the
+  // arrows while the visible rows stayed put, and Enter then committed a marker the user had never
+  // seen (reproduced: `\li2`, ~15 rows below the fold). Keep the highlighted row in view here.
+  // `block: 'nearest'` so a row that is already visible does not jump the list under the pointer.
+  const highlightedDomId = highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined;
+  useEffect(() => {
+    if (!passive || !highlightedDomId) return;
+    document.getElementById(highlightedDomId)?.scrollIntoView({ block: 'nearest' });
+  }, [passive, highlightedDomId]);
+
   const paletteContent = passive ? (
     <Command
       data-overlay-command-palette
@@ -658,7 +669,18 @@ export function OverlayCommandPalettePresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-command-palette
-        className="tw:p-0"
+        // PT-4611: the `Command` inside already paints the whole panel — opaque `bg-popover`, a 1px
+        // border, and `rounded-xl!`. PopoverContent's own base paints a second one at the same rect
+        // (`bg-popover`, `ring-1 ring-foreground/10`, `rounded-lg`), so both were stacked, and
+        // because the radii differ (lg = base radius, xl = base + 4px) the outer's corners, ring and
+        // shadow showed around the inner's border as a second panel edge — on every open of every
+        // palette, which is what PT-4611 reported as "two palettes stacked".
+        //
+        // Keep only the drop shadow here (this IS the floating surface): transparent background,
+        // no ring (the inner's border is the one outline), and `rounded-xl` to match the inner's
+        // `!important` radius rather than PopoverContent's own `rounded-lg`, so the shadow hugs the
+        // panel's real silhouette.
+        className="tw:rounded-xl tw:bg-transparent tw:p-0 tw:ring-0"
         side={side}
         align="start"
         sideOffset={4}

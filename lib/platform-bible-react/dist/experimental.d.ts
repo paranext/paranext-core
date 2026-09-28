@@ -1084,10 +1084,9 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   commits the marker the user literally typed, `*` commits it as a CLOSING marker, and `\`
  *   commits and immediately reopens the palette so `\qt-s\qt-e` is one flow.
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
- *   the split creates. Its only commit is the highlighted item. Always a FOCUSED palette with no
- *   key forwarding, so the forwarding table drives only the two keys that decide the session's
- *   fate, and only while the overlay is still winning focus; the kind otherwise exists for
- *   session-tracking (re-entrancy guards, token cleanup) in the session owners.
+ *   the split creates. Its only commit is the highlighted item (Enter or Tab). Forwarded, so the
+ *   table owns its filter characters, Backspace and arrows; nothing it accepts may reach the
+ *   document, because the overlay cannot rely on holding browser focus (PT-4188, PT-4611).
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
  *   selection in the marker the filter names exactly (ignoring case and the `+` nesting prefix);
@@ -1180,15 +1179,16 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
  */
 export type MarkerPaletteKeyOutcome = "passed" | "continue" | "ended";
 /**
- * The session kinds whose FILTER and per-key semantics this forwarding table drives. `'enter'` is
- * deliberately absent: the Enter-split palette is always FOCUSED with no key forwarding
- * (`openEnterPalette`'s own doc — nothing lands on the Enter keypress itself), which makes per-kind
- * `'enter'` filter entries here dead code and a drift trap. An `'enter'` session still reaches
- * {@link handleMarkerPaletteSessionKeyDown} during the sub-frame race before the overlay takes
- * focus, where Enter and Escape are claimed so they cannot reach the document; nothing else about
- * an `'enter'` session is table-driven.
+ * The session kinds whose FILTER and per-key semantics this forwarding table drives — every kind.
+ *
+ * `'enter'` was excluded until PT-4611, on the premise that the Enter-split palette is always
+ * FOCUSED and its own input owns every key, so only the sub-frame race before the overlay took
+ * focus could reach this table. That premise does not hold: the overlay never wins that race, so
+ * the keys this table passed through landed in the document instead. Keeping every kind forwarded
+ * means no palette depends on holding browser focus, which is the constraint PT-4188 documented
+ * (Lexical re-grabs focus on every reconcile).
  */
-export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, "enter">;
+export type ForwardedSessionKind = MarkerPaletteSessionKind;
 /**
  * Every `KeyboardEvent.key` this table acts on for `kind` — the list a session hands to its palette
  * as the `keys` of its `PaletteKeyForwarding` declaration so the palette forwards exactly these
